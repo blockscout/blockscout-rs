@@ -14,8 +14,8 @@ use entity::{
     tokens,
 };
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, JoinType, PartialModelTrait, QueryFilter,
-    QuerySelect, QueryTrait,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IntoSimpleExpr, JoinType, PartialModelTrait,
+    QueryFilter, QuerySelect, QueryTrait,
     prelude::Expr,
     sea_query::{OnConflict, Query},
 };
@@ -101,8 +101,8 @@ where
 
     let order_keys = vec![
         KeySpec::desc_nulls_last(fiat_balance_query()),
-        KeySpec::desc(Expr::col(Column::Value).into()),
-        KeySpec::desc(Expr::col(Column::Id).into()),
+        KeySpec::desc(Column::Value.into_simple_expr()),
+        KeySpec::desc(Column::Id.into_simple_expr()),
     ];
 
     paginate_query(
@@ -161,8 +161,8 @@ where
         .to_owned();
 
     let order_keys = vec![
-        KeySpec::desc(Expr::col(Column::Value).into()),
-        KeySpec::desc(Expr::col(Column::AddressHash).into()),
+        KeySpec::desc(Column::Value.into_simple_expr()),
+        KeySpec::desc(Column::AddressHash.into_simple_expr()),
     ];
     let page_token = page_token.map(|(v, a)| (v, a.to_vec()));
 

@@ -32,15 +32,15 @@ async fn test_list_nfts() {
     };
 
     let response: proto::ListNftsResponse =
-        test_server::send_get_request(&base, "/api/v1/nfts?q=test&chain_id=1&page_size=20").await;
+        test_server::send_get_request(&base, "/api/v1/nfts?q=test&page_size=10").await;
 
-    assert_eq!(response.items.len(), 20);
+    assert_eq!(response.items.len(), 10);
     assert!(response.items.iter().all(validate_nft));
 
     let page_token = response.next_page_params.unwrap().page_token;
     let response: proto::ListNftsResponse = test_server::send_get_request(
         &base,
-        &format!("/api/v1/nfts?q=test&chain_id=1&page_size=20&page_token={page_token}"),
+        &format!("/api/v1/nfts?q=test&page_size=10&page_token={page_token}"),
     )
     .await;
 

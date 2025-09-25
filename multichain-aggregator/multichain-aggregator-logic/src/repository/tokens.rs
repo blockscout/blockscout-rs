@@ -18,8 +18,8 @@ use alloy_primitives::Address;
 use entity::tokens::{Column, Entity};
 use rust_decimal::Decimal;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel, JoinType,
-    PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, Select, TransactionError,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel, IntoSimpleExpr,
+    JoinType, PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, Select, TransactionError,
     TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
 
@@ -275,12 +275,12 @@ where
     .to_owned();
 
     let order_keys = vec![
-        KeySpec::desc_nulls_last(Expr::col(Column::CirculatingMarketCap).into()),
-        KeySpec::desc_nulls_last(Expr::col(Column::FiatValue).into()),
-        KeySpec::desc_nulls_last(Expr::col(Column::HoldersCount).into()),
-        KeySpec::asc(Expr::col(Column::Name).into()),
-        KeySpec::asc(Expr::col(Column::AddressHash).into()),
-        KeySpec::asc(Expr::col(Column::ChainId).into()),
+        KeySpec::desc_nulls_last(Column::CirculatingMarketCap.into_simple_expr()),
+        KeySpec::desc_nulls_last(Column::FiatValue.into_simple_expr()),
+        KeySpec::desc_nulls_last(Column::HoldersCount.into_simple_expr()),
+        KeySpec::asc(Column::Name.into_simple_expr()),
+        KeySpec::asc(Column::AddressHash.into_simple_expr()),
+        KeySpec::asc(Column::ChainId.into_simple_expr()),
     ];
     let page_token = page_token.map(|(m, f, h, n, a, c)| (m, f, h, n, a.to_vec(), c));
 
@@ -297,7 +297,7 @@ where
                 a.holders_count,
                 a.name.clone(),
                 *a.address_hash,
-                a.chain_id,
+                a.chain_info.chain_id,
             )
         },
     )

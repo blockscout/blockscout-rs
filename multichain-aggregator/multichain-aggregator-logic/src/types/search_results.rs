@@ -61,7 +61,7 @@ impl QuickSearchResult {
                 (transactions, |e: &Hash| e.chain_id),
                 (block_numbers, |e: &ChainBlockNumber| e.chain_id),
                 (dapps, |e: &MarketplaceDapp| e.chain_id),
-                (tokens, |e: &AggregatedToken| e.chain_id),
+                (tokens, |e: &AggregatedToken| e.chain_info.chain_id),
                 (nfts, |e: &Address| e.chain_id)
             ]
         );

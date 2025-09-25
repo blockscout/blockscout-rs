@@ -96,6 +96,7 @@ impl SearchTerm {
                     db,
                     vec![address],
                     Some(active_chain_ids.clone()),
+                    None,
                     1,
                     None,
                 )
@@ -164,6 +165,7 @@ impl SearchTerm {
                         db,
                         addresses,
                         Some(active_chain_ids.clone()),
+                        None,
                         QUICK_SEARCH_NUM_ITEMS,
                         None,
                     )

@@ -165,8 +165,8 @@ impl TryFrom<AggregatedAddressInfo> for proto::Address {
     type Error = ParseError;
 
     fn try_from(v: AggregatedAddressInfo) -> Result<Self, Self::Error> {
-        let chain_id = match v.chain_infos.as_slice() {
-            [chain_info] => chain_info.chain_id.to_string(),
+        let chain_info = match v.chain_infos.as_slice() {
+            [chain_info] => chain_info,
             _ => {
                 return Err(ParseError::Custom(
                     "address info should have exactly one chain info".to_string(),
@@ -177,7 +177,10 @@ impl TryFrom<AggregatedAddressInfo> for proto::Address {
         Ok(Self {
             hash: v.hash.to_string(),
             domain_info: v.domain_info.map(|d| d.into()),
-            chain_id,
+            chain_id: chain_info.chain_id.to_string(),
+            contract_name: chain_info.contract_name.clone(),
+            is_contract: Some(chain_info.is_contract),
+            is_verified_contract: Some(chain_info.is_verified),
             ..Default::default()
         })
     }
@@ -195,12 +198,15 @@ pub struct ChainAddressInfo {
 
 impl From<ChainAddressInfo> for proto::Address {
     fn from(v: ChainAddressInfo) -> Self {
-        let chain_id = v.chain_info.chain_id.to_string();
+        let chain_info = v.chain_info;
 
         Self {
             hash: v.hash.to_string(),
             domain_info: v.domain_info.map(|d| d.into()),
-            chain_id,
+            chain_id: chain_info.chain_id.to_string(),
+            contract_name: chain_info.contract_name.clone(),
+            is_contract: Some(chain_info.is_contract),
+            is_verified_contract: Some(chain_info.is_verified),
             ..Default::default()
         }
     }

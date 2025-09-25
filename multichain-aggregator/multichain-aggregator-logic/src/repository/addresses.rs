@@ -15,7 +15,7 @@ use sea_orm::{
     ActiveValue::NotSet,
     ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
     IntoSimpleExpr, Iterable, JoinType, Order, PartialModelTrait, QueryFilter, QuerySelect,
-    QueryTrait, RelationDef,
+    QueryTrait, RelationDef, Select,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
@@ -151,87 +151,6 @@ where
     Ok(addresses)
 }
 
-pub async fn list<C>(
-    db: &C,
-    addresses: Vec<AddressAlloy>,
-    contract_name_query: Option<String>,
-    chain_ids: Vec<ChainId>,
-    token_types: Option<Vec<db_enum::TokenType>>,
-    page_size: u64,
-    page_token: Option<(AddressAlloy, ChainId)>,
-) -> Result<(Vec<Model>, Option<(AddressAlloy, ChainId)>), DbErr>
-where
-    C: ConnectionTrait,
-{
-    let addresses_cte_iden = Alias::new("addresses").into_iden();
-    let addresses_cte = prepare_address_search_cte(contract_name_query, addresses_cte_iden.clone());
-
-    let base_select = QuerySelect::query(&mut Entity::find())
-        .from_clear()
-        .from(addresses_cte_iden)
-        .apply_if(
-            (!chain_ids.is_empty()).then_some(chain_ids),
-            |q, chain_ids| {
-                q.and_where(Column::ChainId.is_in(chain_ids));
-            },
-        )
-        .apply_if(token_types, |q, token_types| {
-            if !token_types.is_empty() {
-                q.and_where(Column::TokenType.is_in(token_types));
-            } else {
-                q.and_where(Column::TokenType.is_null());
-            }
-        })
-        .apply_if(
-            (!addresses.is_empty()).then_some(addresses),
-            |q, addresses| {
-                q.and_where(
-                    Column::Hash.is_in(
-                        addresses
-                            .into_iter()
-                            .map(|a| a.to_vec())
-                            .collect::<Vec<_>>(),
-                    ),
-                );
-            },
-        )
-        .apply_if(page_token, |q, page_token| {
-            q.and_where(
-                Expr::tuple([
-                    Column::Hash.into_simple_expr(),
-                    Column::ChainId.into_simple_expr(),
-                ])
-                .gte(Expr::tuple([
-                    page_token.0.as_slice().into(),
-                    page_token.1.into(),
-                ])),
-            );
-        })
-        .order_by_columns(vec![
-            (Column::Hash, Order::Asc),
-            (Column::ChainId, Order::Asc),
-        ])
-        .limit(page_size + 1)
-        .to_owned();
-
-    let query = WithClause::new()
-        .cte(addresses_cte)
-        .to_owned()
-        .query(base_select);
-
-    let addresses = Model::find_by_statement(db.get_database_backend().build(&query))
-        .all(db)
-        .await?;
-
-    match addresses.get(page_size as usize) {
-        Some(a) => Ok((
-            addresses[..page_size as usize].to_vec(),
-            Some((parse_db_address(a.hash.as_slice()), a.chain_id)),
-        )),
-        None => Ok((addresses, None)),
-    }
-}
-
 fn coin_balances_rel() -> RelationDef {
     Entity::belongs_to(address_coin_balances::Entity)
         .from((Column::Hash, Column::ChainId))
@@ -264,10 +183,44 @@ where
     Ok(address_info)
 }
 
+fn base_address_infos_query(
+    addresses: Vec<AddressAlloy>,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+    contract_name_query: Option<String>,
+) -> Select<Entity> {
+    Entity::find()
+        .select_only()
+        .join(JoinType::LeftJoin, coin_balances_rel())
+        .apply_if(
+            (!addresses.is_empty()).then_some(addresses),
+            |q, addresses| {
+                q.filter(
+                    Column::Hash.is_in(
+                        addresses
+                            .into_iter()
+                            .map(|a| a.to_vec())
+                            .collect::<Vec<_>>(),
+                    ),
+                )
+            },
+        )
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(Column::ChainId.is_in(cluster_chain_ids))
+        })
+        .apply_if(contract_name_query, |q, query| {
+            let ts_query = prepare_ts_query(&query);
+            q.filter(Expr::cust_with_expr(
+                "to_tsvector('english', contract_name) @@ to_tsquery($1)",
+                ts_query,
+            ))
+        })
+}
+
 pub async fn list_aggregated_address_infos<C>(
     db: &C,
     addresses: Vec<AddressAlloy>,
     cluster_chain_ids: Option<Vec<ChainId>>,
+    contract_name_query: Option<String>,
     page_size: u64,
     page_token: Option<AddressAlloy>,
 ) -> Result<(Vec<AggregatedAddressInfo>, Option<AddressAlloy>), DbErr>
@@ -275,20 +228,7 @@ where
     C: ConnectionTrait,
 {
     let address_infos = AggregatedAddressInfo::select_cols(
-        Entity::find()
-            .select_only()
-            .join(JoinType::LeftJoin, coin_balances_rel())
-            .filter(
-                Column::Hash.is_in(
-                    addresses
-                        .into_iter()
-                        .map(|a| a.to_vec())
-                        .collect::<Vec<_>>(),
-                ),
-            )
-            .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
-                q.filter(Column::ChainId.is_in(cluster_chain_ids))
-            })
+        base_address_infos_query(addresses, cluster_chain_ids, contract_name_query)
             .group_by(Column::Hash),
     )
     .as_query()
@@ -312,28 +252,18 @@ pub async fn list_chain_address_infos<C>(
     db: &C,
     addresses: Vec<AddressAlloy>,
     cluster_chain_ids: Option<Vec<ChainId>>,
+    contract_name_query: Option<String>,
     page_size: u64,
     page_token: Option<(AddressAlloy, ChainId)>,
 ) -> Result<(Vec<ChainAddressInfo>, Option<(AddressAlloy, ChainId)>), DbErr>
 where
     C: ConnectionTrait,
 {
-    let address_infos = ChainAddressInfo::select_cols(
-        Entity::find()
-            .select_only()
-            .join(JoinType::LeftJoin, coin_balances_rel())
-            .filter(
-                Column::Hash.is_in(
-                    addresses
-                        .into_iter()
-                        .map(|a| a.to_vec())
-                        .collect::<Vec<_>>(),
-                ),
-            )
-            .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
-                q.filter(Column::ChainId.is_in(cluster_chain_ids))
-            }),
-    )
+    let address_infos = ChainAddressInfo::select_cols(base_address_infos_query(
+        addresses,
+        cluster_chain_ids,
+        contract_name_query,
+    ))
     .as_query()
     .to_owned();
 
@@ -352,10 +282,6 @@ where
         |a: &ChainAddressInfo| (*a.hash, a.chain_info.chain_id),
     )
     .await
-}
-
-fn parse_db_address(hash: &[u8]) -> AddressAlloy {
-    AddressAlloy::try_from(hash).expect("db address should be valid")
 }
 
 fn non_primary_columns() -> impl Iterator<Item = Column> {

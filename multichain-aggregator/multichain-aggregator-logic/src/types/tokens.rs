@@ -13,6 +13,7 @@ use sea_orm::{
     sea_query::SimpleExpr,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
 
@@ -119,12 +120,12 @@ pub struct AggregatedToken {
     pub total_supply: Option<BigDecimal>,
     pub holders_count: Option<i64>,
     pub transfers_count: Option<i64>,
-    #[sea_orm(
-        from_expr = r#"Expr::cust_with_expr("jsonb_build_array($1)", token_chain_infos_expr())"#
-    )]
-    pub chain_infos: Vec<ChainInfo>,
+    #[sea_orm(from_expr = r#"token_chain_infos_expr()"#)]
+    pub chain_info: ChainInfo,
     #[sea_orm(from_expr = r#"entity::addresses::Column::IsVerifiedContract.if_null(false)"#)]
     pub is_verified_contract: bool,
+    #[sea_orm(from_expr = r#"entity::addresses::Column::ContractName"#)]
+    pub contract_name: Option<String>,
 }
 
 #[derive(Debug, Clone, FromJsonQueryResult, Serialize, Deserialize)]
@@ -158,11 +159,10 @@ impl TryFrom<AggregatedToken> for proto::AggregatedTokenInfo {
             exchange_rate: value.fiat_value.map(|f| f.to_string()),
             holders_count: value.holders_count.map(|h| h.to_string()),
             total_supply: value.total_supply.map(|t| t.to_plain_string()),
-            chain_infos: value
-                .chain_infos
-                .into_iter()
-                .map(|c| (c.chain_id.to_string(), c.into()))
-                .collect(),
+            chain_infos: BTreeMap::from([(
+                value.chain_info.chain_id.to_string(),
+                value.chain_info.into(),
+            )]),
         })
     }
 }
@@ -174,8 +174,24 @@ impl From<AggregatedToken> for proto::Token {
             name: v.name,
             symbol: v.symbol,
             icon_url: v.icon_url,
-            chain_id: v.chain_id.to_string(),
+            chain_id: v.chain_info.chain_id.to_string(),
             is_verified_contract: v.is_verified_contract,
+        }
+    }
+}
+
+impl From<AggregatedToken> for proto::Address {
+    fn from(v: AggregatedToken) -> Self {
+        Self {
+            hash: v.address_hash.to_string(),
+            contract_name: v.contract_name,
+            token_name: v.name,
+            token_type: db_token_type_to_proto_token_type(v.token_type).into(),
+            is_contract: Some(true),
+            is_verified_contract: Some(v.is_verified_contract),
+            is_token: Some(true),
+            chain_id: v.chain_info.chain_id.to_string(),
+            domain_info: None,
         }
     }
 }

@@ -19,7 +19,7 @@ use crate::{
     types::{
         ChainId,
         address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
-        addresses::{Address, AggregatedAddressInfo, ChainAddressInfo},
+        addresses::{AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
@@ -508,14 +508,14 @@ impl Cluster {
             return Ok((vec![], None));
         }
 
-        // TODO: optimize contract name query. Current queries are too slow.
-        let (addresses, _contract_name_query) = self.prepare_addresses_query(query).await?;
+        let (addresses, contract_name_query) = self.prepare_addresses_query(query).await?;
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
         let (mut addresses, page_token) = addresses::list_aggregated_address_infos(
             &self.db,
             addresses,
             Some(chain_ids),
+            contract_name_query,
             page_size,
             page_token,
         )
@@ -537,14 +537,14 @@ impl Cluster {
             return Ok((vec![], None));
         }
 
-        // TODO: optimize contract name query. Current queries are too slow.
-        let (addresses, _contract_name_query) = self.prepare_addresses_query(query).await?;
+        let (addresses, contract_name_query) = self.prepare_addresses_query(query).await?;
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
         let (mut addresses, page_token) = addresses::list_chain_address_infos(
             &self.db,
             addresses,
             Some(chain_ids),
+            contract_name_query,
             page_size,
             page_token,
         )
@@ -611,40 +611,40 @@ impl Cluster {
         query: String,
         chain_ids: Vec<ChainId>,
         page_size: u64,
-        page_token: Option<(AddressAlloy, ChainId)>,
-    ) -> Result<(Vec<Address>, Option<(AddressAlloy, ChainId)>), ServiceError> {
-        let (addresses, contract_name_query) =
-            if let Ok(address) = alloy_primitives::Address::from_str(&query) {
-                (vec![address], None)
-            } else {
-                (vec![], Some(query.to_string()))
-            };
-
-        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
-
-        let (addresses, page_token) = addresses::list(
-            &self.db,
-            addresses,
-            contract_name_query,
+        page_token: Option<ListClusterTokensPageToken>,
+    ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
+        self.search_tokens_cached(
+            query,
             chain_ids,
-            Some(vec![TokenType::Erc721, TokenType::Erc1155]),
+            vec![TokenType::Erc721, TokenType::Erc1155],
             page_size,
             page_token,
         )
-        .await?;
-
-        let addresses = addresses
-            .into_iter()
-            .map(Address::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok((addresses, page_token))
+        .await
     }
 
     pub async fn search_token_infos_cached(
         &self,
         query: String,
         chain_ids: Vec<ChainId>,
+        page_size: u64,
+        page_token: Option<ListClusterTokensPageToken>,
+    ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
+        self.search_tokens_cached(
+            query,
+            chain_ids,
+            vec![TokenType::Erc20],
+            page_size,
+            page_token,
+        )
+        .await
+    }
+
+    pub async fn search_tokens_cached(
+        &self,
+        query: String,
+        chain_ids: Vec<ChainId>,
+        token_types: Vec<TokenType>,
         page_size: u64,
         page_token: Option<ListClusterTokensPageToken>,
     ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
@@ -660,11 +660,25 @@ impl Cluster {
             };
 
         let is_first_page = page_token.is_none();
-        let key = format!("{}:{}:{}", self.name, query, page_size);
+        let key = {
+            let chain_ids_key = chain_ids
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            let token_types_key = token_types
+                .iter()
+                .map(|t| format!("{:?}", t))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "{}:{}:{}:{}:{}",
+                self.name, query, chain_ids_key, token_types_key, page_size
+            )
+        };
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
         let db = self.db.clone();
-        let token_types = vec![TokenType::Erc20];
 
         let get = || async move {
             tokens::list_aggregated_tokens(
@@ -712,20 +726,15 @@ impl Cluster {
     pub async fn search_domains_cached(
         &self,
         query: String,
-        chain_ids: Vec<ChainId>,
+        _chain_ids: Vec<ChainId>, // NOTE: required for backward compatibility
         page_size: u64,
         page_token: Option<String>,
     ) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
-        let primary_chain_id = match chain_ids.first() {
-            Some(chain_id) => *chain_id,
-            None => return Ok(Default::default()),
-        };
-
         let key = format!(
             "{}:{}:{}:{}:{}",
             query,
             self.bens_protocols.map(|p| p.join(",")).unwrap_or_default(),
-            primary_chain_id,
+            self.domain_primary_chain_id,
             page_size,
             page_token.clone().unwrap_or_default(),
         );
@@ -735,7 +744,7 @@ impl Cluster {
                 self.bens_client.clone(),
                 query,
                 self.bens_protocols,
-                primary_chain_id,
+                self.domain_primary_chain_id,
                 page_size,
                 page_token,
             )
