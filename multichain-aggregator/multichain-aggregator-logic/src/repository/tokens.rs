@@ -297,7 +297,7 @@ where
                 a.holders_count,
                 a.name.clone(),
                 *a.address_hash,
-                a.chain_id,
+                a.chain_info.chain_id,
             )
         },
     )

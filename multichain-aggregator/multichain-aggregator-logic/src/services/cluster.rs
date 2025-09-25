@@ -19,7 +19,7 @@ use crate::{
     types::{
         ChainId,
         address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
-        addresses::{Address, AggregatedAddressInfo, ChainAddressInfo},
+        addresses::{AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
@@ -611,34 +611,16 @@ impl Cluster {
         query: String,
         chain_ids: Vec<ChainId>,
         page_size: u64,
-        page_token: Option<(AddressAlloy, ChainId)>,
-    ) -> Result<(Vec<Address>, Option<(AddressAlloy, ChainId)>), ServiceError> {
-        let (addresses, contract_name_query) =
-            if let Ok(address) = alloy_primitives::Address::from_str(&query) {
-                (vec![address], None)
-            } else {
-                (vec![], Some(query.to_string()))
-            };
-
-        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
-
-        let (addresses, page_token) = addresses::list(
-            &self.db,
-            addresses,
-            contract_name_query,
+        page_token: Option<ListClusterTokensPageToken>,
+    ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
+        self.search_tokens_cached(
+            query,
             chain_ids,
-            Some(vec![TokenType::Erc721, TokenType::Erc1155]),
+            vec![TokenType::Erc721, TokenType::Erc1155],
             page_size,
             page_token,
         )
-        .await?;
-
-        let addresses = addresses
-            .into_iter()
-            .map(Address::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok((addresses, page_token))
+        .await
     }
 
     pub async fn search_token_infos_cached(
