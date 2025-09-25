@@ -25,6 +25,7 @@ use multichain_aggregator_logic::{
         },
         channel::Channel,
         cluster::{Cluster, DecodedCalldataCache},
+        coin_price::build_coin_price_cache,
         quick_search::DomainSearchCache,
     },
 };
@@ -182,7 +183,12 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .clusters
         .into_iter()
         .map(|(name, cluster)| {
-            let chain_ids = cluster.chain_ids.into_iter().collect::<HashSet<_>>();
+            let chain_ids = cluster
+                .chain_ids
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
             if chain_ids.is_empty() {
                 panic!("cluster {name} has no chain_ids");
             }
@@ -200,12 +206,15 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     (*id, Arc::new(client))
                 })
                 .collect::<BTreeMap<_, _>>();
+            let coin_price_cache = redis_cache.as_ref().cloned().map(build_coin_price_cache);
+
             (
                 name.clone(),
                 Cluster::new(
                     repo.read_db().clone(),
+                    name,
                     chain_ids,
-                    blockscout_clients,
+                    Arc::new(blockscout_clients),
                     decoded_calldata_cache.clone(),
                     settings.service.quick_search_chains.clone(),
                     dapp_client.clone(),
@@ -215,6 +224,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     settings.service.domain_primary_chain_id,
                     domain_search_cache.clone(),
                     marketplace_enabled_cache.clone(),
+                    coin_price_cache.clone(),
                 ),
             )
         })
@@ -224,6 +234,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         MULTICHAIN_CLUSTER_ID.to_string(),
         Cluster::new(
             repo.read_db().clone(),
+            MULTICHAIN_CLUSTER_ID.to_string(),
             Default::default(),
             Default::default(),
             decoded_calldata_cache.clone(),
@@ -235,6 +246,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             settings.service.domain_primary_chain_id,
             domain_search_cache.clone(),
             marketplace_enabled_cache.clone(),
+            None,
         ),
     );
     let cluster_explorer = Arc::new(ClusterExplorer::new(clusters, settings.service.api.clone()));

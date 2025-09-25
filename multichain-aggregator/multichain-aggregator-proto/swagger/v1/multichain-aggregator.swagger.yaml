@@ -1497,6 +1497,12 @@ definitions:
         type: boolean
       has_interop_message_transfers:
         type: boolean
+      coin_balance:
+        type: string
+        description: Sum of coin balances across all chains.
+      exchange_rate:
+        type: string
+        description: Exchange rate of the cluster native coin.
   v1GetAddressResponseChainInfo:
     type: object
     properties:

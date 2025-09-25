@@ -155,6 +155,10 @@ message GetAddressResponse {
   map<string, ChainInfo> chain_infos = 2;
   bool has_tokens = 3;
   bool has_interop_message_transfers = 4;
+  // Sum of coin balances across all chains.
+  string coin_balance = 5;
+  // Exchange rate of the cluster native coin.
+  optional string exchange_rate = 6;
 }
 
 message ListAddressTokensRequest {
