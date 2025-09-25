@@ -718,20 +718,15 @@ impl Cluster {
     pub async fn search_domains_cached(
         &self,
         query: String,
-        chain_ids: Vec<ChainId>,
+        _chain_ids: Vec<ChainId>, // NOTE: required for backward compatibility
         page_size: u64,
         page_token: Option<String>,
     ) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
-        let primary_chain_id = match chain_ids.first() {
-            Some(chain_id) => *chain_id,
-            None => return Ok(Default::default()),
-        };
-
         let key = format!(
             "{}:{}:{}:{}:{}",
             query,
             self.bens_protocols.map(|p| p.join(",")).unwrap_or_default(),
-            primary_chain_id,
+            self.domain_primary_chain_id,
             page_size,
             page_token.clone().unwrap_or_default(),
         );
@@ -741,7 +736,7 @@ impl Cluster {
                 self.bens_client.clone(),
                 query,
                 self.bens_protocols,
-                primary_chain_id,
+                self.domain_primary_chain_id,
                 page_size,
                 page_token,
             )
