@@ -4,8 +4,5 @@ url = "postgres://postgres:postgres@localhost:5432/postgres"
 [service.dapp_client]
 url = "http://localhost:8080/"
 
-[service.token_info_client]
-url = "http://localhost:8080/"
-
 [service.bens_client]
 url = "http://localhost:8080/"

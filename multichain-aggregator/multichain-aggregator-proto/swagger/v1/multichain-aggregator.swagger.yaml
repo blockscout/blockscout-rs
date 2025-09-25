@@ -697,6 +697,10 @@ paths:
           items:
             type: string
           collectionFormat: multi
+        - name: query
+          in: query
+          required: false
+          type: string
         - name: page_size
           in: query
           required: false

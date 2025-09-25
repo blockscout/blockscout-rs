@@ -16,7 +16,7 @@ use blockscout_service_launcher::{
 };
 use migration::Migrator;
 use multichain_aggregator_logic::{
-    clients::{bens, blockscout, dapp, token_info},
+    clients::{bens, blockscout, dapp},
     metrics,
     services::{
         chains::{
@@ -24,9 +24,8 @@ use multichain_aggregator_logic::{
             list_active_chains_cached,
         },
         channel::Channel,
-        cluster::{Cluster, DecodedCalldataCache},
+        cluster::{Cluster, DecodedCalldataCache, DomainSearchCache, TokenSearchCache},
         coin_price::build_coin_price_cache,
-        quick_search::DomainSearchCache,
     },
 };
 use recache::stores::redis::RedisStore;
@@ -117,7 +116,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     }
 
     let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;
-    let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
     let bens_client = bens::new_client(settings.service.bens_client.url)?;
 
     let marketplace_enabled_cache = MarketplaceEnabledCache::new();
@@ -144,33 +142,41 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         None
     };
 
-    let domain_search_cache = if let Some(cache_settings) = &settings.cache
-        && cache_settings.domain_search_cache.enabled
-        && let Some(redis_cache) = &redis_cache
-    {
-        let cache_name = "domain_search";
-        let cache_builder = DomainSearchCache::builder(Arc::clone(redis_cache))
-            .default_ttl(cache_settings.domain_search_cache.ttl)
-            .maybe_default_refresh_ahead(cache_settings.domain_search_cache.refresh_ahead);
-        let cache = add_cache_metrics!(cache_builder, cache_name).build();
-        Some(cache)
-    } else {
-        None
-    };
+    macro_rules! build_cache {
+        ($settings:expr, $cache_type:ident, $cache_id:ident, $cache_name:expr) => {
+            if let Some(cache_settings) = &$settings.cache
+                && cache_settings.$cache_id.enabled
+                && let Some(redis_cache) = &redis_cache
+            {
+                let cache_builder = $cache_type::builder(Arc::clone(redis_cache))
+                    .default_ttl(cache_settings.$cache_id.ttl)
+                    .maybe_default_refresh_ahead(cache_settings.$cache_id.refresh_ahead);
+                let cache = add_cache_metrics!(cache_builder, $cache_name).build();
+                Some(cache)
+            } else {
+                None
+            }
+        };
+    }
 
-    let decoded_calldata_cache = if let Some(cache_settings) = &settings.cache
-        && cache_settings.decoded_calldata_cache.enabled
-        && let Some(redis_cache) = &redis_cache
-    {
-        let cache_name = "decoded_calldata";
-        let cache_builder = DecodedCalldataCache::builder(Arc::clone(redis_cache))
-            .default_ttl(cache_settings.decoded_calldata_cache.ttl)
-            .maybe_default_refresh_ahead(cache_settings.decoded_calldata_cache.refresh_ahead);
-        let cache = add_cache_metrics!(cache_builder, cache_name).build();
-        Some(cache)
-    } else {
-        None
-    };
+    let domain_search_cache = build_cache!(
+        settings,
+        DomainSearchCache,
+        domain_search_cache,
+        "domain_search"
+    );
+    let decoded_calldata_cache = build_cache!(
+        settings,
+        DecodedCalldataCache,
+        decoded_calldata_cache,
+        "decoded_calldata"
+    );
+    let token_search_cache = build_cache!(
+        settings,
+        TokenSearchCache,
+        token_search_cache,
+        "token_search"
+    );
 
     let chain_urls = list_active_chains_cached(repo.read_db(), &[ChainSource::Repository])
         .await?
@@ -218,11 +224,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     decoded_calldata_cache.clone(),
                     settings.service.quick_search_chains.clone(),
                     dapp_client.clone(),
-                    token_info_client.clone(),
                     bens_client.clone(),
                     settings.service.bens_protocols.clone().map(|p| &*p.leak()),
                     settings.service.domain_primary_chain_id,
                     domain_search_cache.clone(),
+                    token_search_cache.clone(),
                     marketplace_enabled_cache.clone(),
                     coin_price_cache.clone(),
                 ),
@@ -240,11 +246,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             decoded_calldata_cache.clone(),
             settings.service.quick_search_chains.clone(),
             dapp_client.clone(),
-            token_info_client.clone(),
             bens_client.clone(),
             settings.service.bens_protocols.clone().map(|p| &*p.leak()),
             settings.service.domain_primary_chain_id,
             domain_search_cache.clone(),
+            token_search_cache.clone(),
             marketplace_enabled_cache.clone(),
             None,
         ),

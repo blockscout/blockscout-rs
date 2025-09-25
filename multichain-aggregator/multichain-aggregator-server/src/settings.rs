@@ -8,6 +8,8 @@ use serde_with::{StringWithSeparator, formats::CommaSeparator, serde_as};
 use std::{collections::HashMap, time};
 use url::Url;
 
+const ONE_HOUR: time::Duration = time::Duration::from_secs(60 * 60);
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
@@ -37,6 +39,8 @@ pub struct CacheSettings {
     pub domain_search_cache: CacheEntrySettings,
     #[serde(default = "default_decoded_calldata_cache")]
     pub decoded_calldata_cache: CacheEntrySettings,
+    #[serde(default = "default_token_search_cache")]
+    pub token_search_cache: CacheEntrySettings,
 }
 
 #[serde_as]
@@ -62,7 +66,6 @@ pub struct RedisSettings {
 #[serde(deny_unknown_fields)]
 pub struct ServiceSettings {
     pub dapp_client: HttpApiClientSettings,
-    pub token_info_client: HttpApiClientSettings,
     pub bens_client: HttpApiClientSettings,
     #[serde(default)]
     pub api: ApiSettings,
@@ -143,9 +146,6 @@ impl Settings {
                 dapp_client: HttpApiClientSettings {
                     url: Url::parse("http://localhost:8050").unwrap(),
                 },
-                token_info_client: HttpApiClientSettings {
-                    url: Url::parse("http://localhost:8051").unwrap(),
-                },
                 bens_client: HttpApiClientSettings {
                     url: Url::parse("http://localhost:8052").unwrap(),
                 },
@@ -203,18 +203,25 @@ fn default_enabled() -> bool {
 }
 
 fn default_decoded_calldata_cache() -> CacheEntrySettings {
-    let hour = 60 * 60;
-    let ttl = time::Duration::from_secs(hour);
     CacheEntrySettings {
         enabled: default_enabled(),
-        ttl,
+        ttl: ONE_HOUR,
         refresh_ahead: None,
     }
 }
 
 fn default_domain_search_cache() -> CacheEntrySettings {
-    let hour = 60 * 60;
-    let ttl = time::Duration::from_secs(6 * hour);
+    let ttl = 6 * ONE_HOUR;
+    let refresh_ahead = ttl / 5; // 20% of ttl
+    CacheEntrySettings {
+        enabled: default_enabled(),
+        ttl,
+        refresh_ahead: Some(refresh_ahead),
+    }
+}
+
+fn default_token_search_cache() -> CacheEntrySettings {
+    let ttl = 6 * ONE_HOUR;
     let refresh_ahead = ttl / 5; // 20% of ttl
     CacheEntrySettings {
         enabled: default_enabled(),

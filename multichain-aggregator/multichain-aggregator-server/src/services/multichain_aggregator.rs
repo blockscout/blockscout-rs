@@ -170,7 +170,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         &self,
         request: Request<ListTokensRequest>,
     ) -> Result<Response<ListTokensResponse>, Status> {
-        paginated_multichain_endpoint!(self, request, search_tokens, ListTokensResponse)
+        paginated_multichain_endpoint!(self, request, search_token_infos_cached, ListTokensResponse)
     }
 
     async fn list_dapps(

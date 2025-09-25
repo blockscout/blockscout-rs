@@ -9,8 +9,6 @@ url = "postgres://postgres:admin@localhost:9433/multichain_aggregator"
 create_database = true
 run_migrations = true
 
-[service.token_info_client]
-url = "https://contracts-info.services.blockscout.com"
 [service.dapp_client]
 url = "https://admin-rs.services.blockscout.com"
 [service.bens_client]

@@ -1,11 +1,9 @@
 use crate::{
     error::ServiceError,
     repository::addresses,
-    services::{MIN_QUERY_LENGTH, chains, cluster::Cluster, macros::preload_domain_info},
+    services::{MIN_QUERY_LENGTH, cluster::Cluster, macros::preload_domain_info},
     types::{ChainId, domains::Domain, hashes::HashType, search_results::QuickSearchResult},
 };
-use api_client_framework::HttpApiClient;
-use recache::{handler::CacheHandler, stores::redis::RedisStore};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::instrument;
@@ -49,18 +47,10 @@ pub async fn quick_search(
     Ok(results)
 }
 
-pub type DomainSearchCache = CacheHandler<RedisStore, String, (Vec<Domain>, Option<String>)>;
-
 pub struct SearchContext<'a> {
     pub cluster: &'a Cluster,
     pub db: Arc<DatabaseConnection>,
-    pub dapp_client: &'a HttpApiClient,
-    pub token_info_client: &'a HttpApiClient,
-    pub bens_client: &'a HttpApiClient,
-    pub bens_protocols: Option<&'static [String]>,
     pub domain_primary_chain_id: ChainId,
-    pub marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
-    pub domain_search_cache: Option<&'a DomainSearchCache>,
     pub is_aggregated: bool,
 }
 
@@ -139,9 +129,9 @@ impl SearchTerm {
                 results.dapps.extend(dapps);
             }
             SearchTerm::TokenInfo(query) => {
-                let (tokens, _) = search_context
+                let (mut tokens, _) = search_context
                     .cluster
-                    .search_tokens(
+                    .search_token_infos_cached(
                         query,
                         active_chain_ids,
                         // TODO: temporary increase number of tokens to improve search quality
@@ -151,6 +141,9 @@ impl SearchTerm {
                         None,
                     )
                     .await?;
+
+                // clean up tokens with no name or symbol
+                tokens.retain(|t| t.name.is_some() && t.symbol.is_some());
 
                 results.tokens.extend(tokens);
             }

@@ -4,6 +4,7 @@ use crate::{
         macros::{is_distinct_from, update_if_not_null},
         paginate_query,
         pagination::KeySpec,
+        prepare_ts_query,
     },
     types::{
         ChainId,
@@ -17,7 +18,7 @@ use alloy_primitives::Address;
 use entity::tokens::{Column, Entity};
 use rust_decimal::Decimal;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel, JoinType,
     PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, Select, TransactionError,
     TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
@@ -181,13 +182,21 @@ where
 // Select query for nested `AggregatedToken` struct
 // This query converts a single-chain token into a multichain format
 pub fn base_normal_tokens_query(
+    addresses: Vec<Address>,
     chain_ids: Vec<ChainId>,
     token_types: Vec<TokenType>,
+    search_query: Option<String>,
 ) -> Select<Entity> {
+    let addresses_rel = Entity::belongs_to(entity::addresses::Entity)
+        .from((Column::AddressHash, Column::ChainId))
+        .to((
+            entity::addresses::Column::Hash,
+            entity::addresses::Column::ChainId,
+        ))
+        .into();
+
     Entity::find()
-        .select_only()
-        // Use raw injected enum value to avoid suboptimal query plans
-        .filter(Expr::cust("token_type <> 'ERC-7802'::token_type"))
+        .join(JoinType::LeftJoin, addresses_rel)
         .apply_if(
             (!chain_ids.is_empty()).then_some(chain_ids),
             |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
@@ -196,6 +205,27 @@ pub fn base_normal_tokens_query(
             (!token_types.is_empty()).then_some(token_types),
             |q, token_types| q.filter(Column::TokenType.is_in(token_types)),
         )
+        .apply_if(search_query, |q, search_query| {
+            let ts_query = prepare_ts_query(&search_query);
+            q.filter(Expr::cust_with_expr(
+                "to_tsvector('english', symbol || ' ' || name) @@ to_tsquery($1)",
+                ts_query,
+            ))
+        })
+        .apply_if(
+            (!addresses.is_empty()).then_some(addresses),
+            |q, addresses| {
+                q.filter(
+                    Column::AddressHash.is_in(
+                        addresses
+                            .into_iter()
+                            .map(|a| a.to_vec())
+                            .collect::<Vec<_>>(),
+                    ),
+                )
+            },
+        )
+        .select_only()
 }
 
 pub async fn get_aggregated_token<C>(
@@ -206,8 +236,7 @@ pub async fn get_aggregated_token<C>(
 where
     C: ConnectionTrait + TransactionTrait,
 {
-    let token = base_normal_tokens_query(vec![chain_id], vec![])
-        .filter(Column::AddressHash.eq(address_hash.as_slice()))
+    let token = base_normal_tokens_query(vec![address_hash], vec![chain_id], vec![], None)
         .into_partial_model::<AggregatedToken>()
         .one(db)
         .await?;
@@ -226,17 +255,24 @@ pub type ListClusterTokensPageToken = (
 
 pub async fn list_aggregated_tokens<C>(
     db: &C,
+    addresses: Vec<Address>,
     chain_ids: Vec<ChainId>,
     token_types: Vec<TokenType>,
+    query: Option<String>,
     page_size: u64,
     page_token: Option<ListClusterTokensPageToken>,
 ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), DbErr>
 where
     C: ConnectionTrait + TransactionTrait,
 {
-    let query = AggregatedToken::select_cols(base_normal_tokens_query(chain_ids, token_types))
-        .as_query()
-        .to_owned();
+    let query = AggregatedToken::select_cols(base_normal_tokens_query(
+        addresses,
+        chain_ids,
+        token_types,
+        query,
+    ))
+    .as_query()
+    .to_owned();
 
     let order_keys = vec![
         KeySpec::desc_nulls_last(Expr::col(Column::CirculatingMarketCap).into()),
