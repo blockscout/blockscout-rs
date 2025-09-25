@@ -661,12 +661,20 @@ impl Cluster {
 
         let is_first_page = page_token.is_none();
         let key = {
+            let chain_ids_key = chain_ids
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
             let token_types_key = token_types
                 .iter()
                 .map(|t| format!("{:?}", t))
                 .collect::<Vec<_>>()
                 .join(",");
-            format!("{}:{}:{}:{}", self.name, query, token_types_key, page_size)
+            format!(
+                "{}:{}:{}:{}:{}",
+                self.name, query, chain_ids_key, token_types_key, page_size
+            )
         };
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
