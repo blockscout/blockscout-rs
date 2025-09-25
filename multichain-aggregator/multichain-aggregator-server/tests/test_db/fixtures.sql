@@ -85,11 +85,10 @@ SELECT
         ELSE NULL
     END,
     6,
-    CAST(CASE mod(n, 4)
+    CAST(CASE mod(n, 7)
             WHEN 0 THEN 'ERC-20'
             WHEN 1 THEN 'ERC-721'
-            WHEN 2 THEN 'ERC-1155'
-            ELSE 'ERC-404'
+            ELSE 'ERC-1155'
         END AS token_type
     )
 FROM generate_series(0, 999) n;
