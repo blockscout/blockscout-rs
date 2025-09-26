@@ -2,12 +2,8 @@ use super::ChainId;
 use crate::{
     error::ParseError,
     types::{
-        addresses::{Address, AggregatedAddressInfo},
-        block_ranges::ChainBlockNumber,
-        dapp::MarketplaceDapp,
-        domains::Domain,
-        hashes::Hash,
-        tokens::AggregatedToken,
+        addresses::AggregatedAddressInfo, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp,
+        domains::Domain, hashes::Hash, tokens::AggregatedToken,
     },
 };
 use multichain_aggregator_proto::blockscout::{
@@ -23,7 +19,7 @@ pub struct QuickSearchResult {
     pub block_numbers: Vec<ChainBlockNumber>,
     pub dapps: Vec<MarketplaceDapp>,
     pub tokens: Vec<AggregatedToken>,
-    pub nfts: Vec<Address>,
+    pub nfts: Vec<AggregatedToken>,
     pub domains: Vec<Domain>,
 }
 
@@ -62,7 +58,7 @@ impl QuickSearchResult {
                 (block_numbers, |e: &ChainBlockNumber| e.chain_id),
                 (dapps, |e: &MarketplaceDapp| e.chain_id),
                 (tokens, |e: &AggregatedToken| e.chain_info.chain_id),
-                (nfts, |e: &Address| e.chain_id)
+                (nfts, |e: &AggregatedToken| e.chain_info.chain_id)
             ]
         );
 

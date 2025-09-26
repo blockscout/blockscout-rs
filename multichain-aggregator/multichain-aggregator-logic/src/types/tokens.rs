@@ -109,7 +109,6 @@ pub fn token_chain_infos_expr() -> SimpleExpr {
 #[sea_orm(entity = "Entity", from_query_result)]
 pub struct AggregatedToken {
     pub address_hash: SeaOrmAddress,
-    pub chain_id: ChainId,
     pub name: Option<String>,
     pub symbol: Option<String>,
     pub decimals: Option<i16>,

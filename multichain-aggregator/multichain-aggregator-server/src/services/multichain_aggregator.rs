@@ -125,7 +125,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         &self,
         request: Request<ListNftsRequest>,
     ) -> Result<Response<ListNftsResponse>, Status> {
-        paginated_multichain_endpoint!(self, request, search_nfts, ListNftsResponse)
+        paginated_multichain_endpoint!(self, request, search_nfts_cached, ListNftsResponse)
     }
 
     async fn list_transactions(

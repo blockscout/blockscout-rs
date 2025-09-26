@@ -261,7 +261,7 @@ impl ClusterExplorerService for ClusterExplorer {
         &self,
         request: Request<SearchByQueryRequest>,
     ) -> Result<Response<SearchNftsResponse>, Status> {
-        paginated_list_by_query_endpoint!(self, request, search_nfts, SearchNftsResponse)
+        paginated_list_by_query_endpoint!(self, request, search_nfts_cached, SearchNftsResponse)
     }
 
     async fn search_transactions(
