@@ -8,14 +8,12 @@ use crate::{
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
     address_coin_balances,
-    addresses::{Column, Entity, Model},
+    addresses::{ActiveModel, Column, Entity, Model},
     sea_orm_active_enums as db_enum,
 };
 use sea_orm::{
-    ActiveValue::NotSet,
-    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
-    IntoSimpleExpr, Iterable, JoinType, Order, PartialModelTrait, QueryFilter, QuerySelect,
-    QueryTrait, RelationDef, Select,
+    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoSimpleExpr,
+    JoinType, Order, PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, RelationDef, Select,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
@@ -28,18 +26,18 @@ where
     C: ConnectionTrait,
 {
     addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
-    let addresses = addresses.into_iter().map(|address| {
-        let model: Model = address.into();
-        let mut active = model.into_active_model();
-        active.created_at = NotSet;
-        active.updated_at = NotSet;
-        active
-    });
+    let addresses = addresses.into_iter().map(ActiveModel::from);
 
     Entity::insert_many(addresses)
         .on_conflict(
             OnConflict::columns([Column::Hash, Column::ChainId])
-                .update_columns(non_primary_columns())
+                .update_columns([
+                    Column::Hash,
+                    Column::ChainId,
+                    Column::ContractName,
+                    Column::IsContract,
+                    Column::IsVerifiedContract,
+                ])
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
@@ -282,13 +280,4 @@ where
         |a: &ChainAddressInfo| (*a.hash, a.chain_info.chain_id),
     )
     .await
-}
-
-fn non_primary_columns() -> impl Iterator<Item = Column> {
-    Column::iter().filter(|col| {
-        !matches!(
-            col,
-            Column::Hash | Column::ChainId | Column::CreatedAt | Column::UpdatedAt
-        )
-    })
 }

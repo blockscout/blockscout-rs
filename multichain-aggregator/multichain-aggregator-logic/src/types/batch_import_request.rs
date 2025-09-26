@@ -237,18 +237,14 @@ impl TryFrom<(ChainId, proto::batch_import_request::AddressImport)> for Address 
         (chain_id, a): (ChainId, proto::batch_import_request::AddressImport),
     ) -> Result<Self, Self::Error> {
         let hash = a.hash.parse()?;
-        let token_type = proto_token_type_to_db_token_type(a.token_type());
 
         Ok(Self {
             chain_id,
             hash,
             domain_info: None,
             contract_name: a.contract_name,
-            token_name: a.token_name,
-            token_type,
             is_contract: a.is_contract.unwrap_or(false),
             is_verified_contract: a.is_verified_contract.unwrap_or(false),
-            is_token: a.is_token.unwrap_or(false),
         })
     }
 }
