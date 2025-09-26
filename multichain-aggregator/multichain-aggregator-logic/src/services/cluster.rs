@@ -606,7 +606,7 @@ impl Cluster {
         Ok((addresses, contract_name_query))
     }
 
-    pub async fn search_nfts(
+    pub async fn search_nfts_cached(
         &self,
         query: String,
         chain_ids: Vec<ChainId>,

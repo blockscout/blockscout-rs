@@ -61,6 +61,7 @@ pub enum SearchTerm {
     BlockNumber(alloy_primitives::BlockNumber),
     Dapp(String),
     TokenInfo(String),
+    Nft(String),
     Domain(String),
 }
 
@@ -148,6 +149,14 @@ impl SearchTerm {
 
                 results.tokens.extend(tokens);
             }
+            SearchTerm::Nft(query) => {
+                let (nfts, _) = search_context
+                    .cluster
+                    .search_nfts_cached(query, active_chain_ids, QUICK_SEARCH_NUM_ITEMS, None)
+                    .await?;
+
+                results.nfts.extend(nfts);
+            }
             SearchTerm::Domain(query) => {
                 let (domains, _) = search_context
                     .cluster
@@ -205,6 +214,7 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
 
     if query.len() >= MIN_QUERY_LENGTH {
         terms.push(SearchTerm::TokenInfo(query.to_string()));
+        terms.push(SearchTerm::Nft(query.to_string()));
         terms.push(SearchTerm::Domain(query.to_string()));
     }
 
@@ -237,6 +247,7 @@ mod tests {
             parse_search_terms("0x00"),
             vec![
                 SearchTerm::TokenInfo("0x00".to_string()),
+                SearchTerm::Nft("0x00".to_string()),
                 SearchTerm::Domain("0x00".to_string()),
                 SearchTerm::Dapp("0x00".to_string()),
             ]
@@ -247,6 +258,7 @@ mod tests {
             vec![
                 SearchTerm::BlockNumber(1234),
                 SearchTerm::TokenInfo("1234".to_string()),
+                SearchTerm::Nft("1234".to_string()),
                 SearchTerm::Domain("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
             ]
@@ -256,6 +268,7 @@ mod tests {
             parse_search_terms("test.domain"),
             vec![
                 SearchTerm::TokenInfo("test.domain".to_string()),
+                SearchTerm::Nft("test.domain".to_string()),
                 SearchTerm::Domain("test.domain".to_string()),
                 SearchTerm::Dapp("test.domain".to_string()),
             ]
