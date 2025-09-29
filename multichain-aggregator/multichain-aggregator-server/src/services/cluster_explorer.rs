@@ -162,13 +162,8 @@ impl ClusterExplorerService for ClusterExplorer {
             )
             .await?;
 
-        let items = tokens
-            .into_iter()
-            .map(|t| t.try_into().map_err(ServiceError::from))
-            .collect::<Result<Vec<_>, _>>()?;
-
         Ok(Response::new(ListAddressTokensResponse {
-            items,
+            items: tokens.into_iter().map(|t| t.into()).collect(),
             next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
@@ -196,10 +191,7 @@ impl ClusterExplorerService for ClusterExplorer {
             .await?;
 
         Ok(Response::new(ListClusterTokensResponse {
-            items: tokens
-                .into_iter()
-                .map(|t| t.try_into().map_err(ServiceError::from))
-                .collect::<Result<Vec<_>, _>>()?,
+            items: tokens.into_iter().map(|t| t.into()).collect(),
             next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
@@ -217,9 +209,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let token = cluster.get_aggregated_token(address, chain_id).await?;
 
         Ok(Response::new(GetAggregatedTokenResponse {
-            token: token
-                .map(|t| t.try_into().map_err(ServiceError::from))
-                .transpose()?,
+            token: token.map(|t| t.into()),
         }))
     }
 

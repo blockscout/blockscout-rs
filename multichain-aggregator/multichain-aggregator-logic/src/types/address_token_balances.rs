@@ -114,14 +114,12 @@ pub struct ChainValue {
     pub value: BigDecimal,
 }
 
-impl TryFrom<AggregatedAddressTokenBalance>
+impl From<AggregatedAddressTokenBalance>
     for proto::list_address_tokens_response::AggregatedTokenBalanceInfo
 {
-    type Error = ParseError;
-
-    fn try_from(v: AggregatedAddressTokenBalance) -> Result<Self, Self::Error> {
-        Ok(Self {
-            token: Some(v.token.try_into()?),
+    fn from(v: AggregatedAddressTokenBalance) -> Self {
+        Self {
+            token: Some(v.token.into()),
             token_id: v.token_id.map(|t| t.to_string()),
             value: v.value.to_plain_string(),
             chain_values: v
@@ -129,6 +127,6 @@ impl TryFrom<AggregatedAddressTokenBalance>
                 .into_iter()
                 .map(|c| (c.chain_id.to_string(), c.value.to_plain_string()))
                 .collect(),
-        })
+        }
     }
 }
