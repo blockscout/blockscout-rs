@@ -120,6 +120,8 @@ message AggregatedTokenInfo {
   message ChainInfo {
     optional string holders_count = 1;
     optional string total_supply = 2;
+    bool is_verified = 3;
+    optional string contract_name = 4;
   }
 
   string address_hash = 1;

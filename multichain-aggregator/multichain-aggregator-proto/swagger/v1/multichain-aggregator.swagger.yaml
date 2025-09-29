@@ -1343,6 +1343,10 @@ definitions:
         type: string
       total_supply:
         type: string
+      is_verified:
+        type: boolean
+      contract_name:
+        type: string
   v1BatchImportRequest:
     type: object
     properties:
