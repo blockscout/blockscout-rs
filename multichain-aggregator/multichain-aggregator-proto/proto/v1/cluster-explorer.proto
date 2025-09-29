@@ -259,12 +259,12 @@ message SearchAddressesResponse {
 }
 
 message SearchNftsResponse {
-  repeated blockscout.multichainAggregator.v1.Address items = 1;
+  repeated AggregatedTokenInfo items = 1;
   blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
 }
 
 message SearchTokensResponse {
-  repeated blockscout.multichainAggregator.v1.Token items = 1;
+  repeated AggregatedTokenInfo items = 1;
   blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
 }
 
@@ -289,7 +289,7 @@ message ClusterQuickSearchResponse {
   repeated blockscout.multichainAggregator.v1.Hash transactions = 3;
   repeated blockscout.multichainAggregator.v1.ChainBlockNumber block_numbers = 4;
   repeated blockscout.multichainAggregator.v1.MarketplaceDapp dapps = 5;
-  repeated blockscout.multichainAggregator.v1.Token tokens = 6;
-  repeated blockscout.multichainAggregator.v1.Address nfts = 7;
+  repeated AggregatedTokenInfo tokens = 6;
+  repeated AggregatedTokenInfo nfts = 7;
   repeated blockscout.multichainAggregator.v1.Domain domains = 8;
 }

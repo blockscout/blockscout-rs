@@ -1447,12 +1447,12 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Token'
+          $ref: '#/definitions/v1AggregatedTokenInfo'
       nfts:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Address'
+          $ref: '#/definitions/v1AggregatedTokenInfo'
       domains:
         type: array
         items:
@@ -1859,7 +1859,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Address'
+          $ref: '#/definitions/v1AggregatedTokenInfo'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1SearchTokensResponse:
@@ -1869,7 +1869,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Token'
+          $ref: '#/definitions/v1AggregatedTokenInfo'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1SearchTransactionsResponse:

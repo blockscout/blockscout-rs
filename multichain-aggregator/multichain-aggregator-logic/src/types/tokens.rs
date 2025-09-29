@@ -1,6 +1,5 @@
 use super::ChainId;
 use crate::{
-    error::ParseError,
     proto,
     types::{addresses::db_token_type_to_proto_token_type, sea_orm_wrappers::SeaOrmAddress},
 };
@@ -143,11 +142,9 @@ impl From<ChainInfo> for proto::aggregated_token_info::ChainInfo {
     }
 }
 
-impl TryFrom<AggregatedToken> for proto::AggregatedTokenInfo {
-    type Error = ParseError;
-
-    fn try_from(value: AggregatedToken) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<AggregatedToken> for proto::AggregatedTokenInfo {
+    fn from(value: AggregatedToken) -> Self {
+        Self {
             address_hash: value.address_hash.to_string(),
             circulating_market_cap: value.circulating_market_cap.map(|c| c.to_string()),
             decimals: value.decimals.map(|d| d.to_string()),
@@ -162,7 +159,7 @@ impl TryFrom<AggregatedToken> for proto::AggregatedTokenInfo {
                 value.chain_info.chain_id.to_string(),
                 value.chain_info.into(),
             )]),
-        })
+        }
     }
 }
 
