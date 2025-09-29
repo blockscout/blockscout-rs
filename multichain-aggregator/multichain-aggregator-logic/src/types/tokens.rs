@@ -95,11 +95,15 @@ impl IntoActiveModel<ActiveModel> for UpdateTokenType {
 
 pub fn token_chain_infos_expr() -> SimpleExpr {
     Expr::cust_with_exprs(
-        "jsonb_build_object('chain_id',$1,'holders_count',$2,'total_supply',$3)",
+        "jsonb_build_object('chain_id',$1,'holders_count',$2,'total_supply',$3,'is_verified_contract',$4,'contract_name',$5)",
         [
             Column::ChainId.into_simple_expr(),
             Column::HoldersCount.into_simple_expr(),
             Column::TotalSupply.into_simple_expr(),
+            entity::addresses::Column::IsVerifiedContract
+                .if_null(false)
+                .into_simple_expr(),
+            entity::addresses::Column::ContractName.into_simple_expr(),
         ],
     )
 }
@@ -120,10 +124,6 @@ pub struct AggregatedToken {
     pub transfers_count: Option<i64>,
     #[sea_orm(from_expr = r#"token_chain_infos_expr()"#)]
     pub chain_info: ChainInfo,
-    #[sea_orm(from_expr = r#"entity::addresses::Column::IsVerifiedContract.if_null(false)"#)]
-    pub is_verified_contract: bool,
-    #[sea_orm(from_expr = r#"entity::addresses::Column::ContractName"#)]
-    pub contract_name: Option<String>,
 }
 
 #[derive(Debug, Clone, FromJsonQueryResult, Serialize, Deserialize)]
@@ -131,6 +131,8 @@ pub struct ChainInfo {
     pub chain_id: ChainId,
     pub holders_count: Option<BigDecimal>,
     pub total_supply: Option<BigDecimal>,
+    pub is_verified_contract: bool,
+    pub contract_name: Option<String>,
 }
 
 impl From<ChainInfo> for proto::aggregated_token_info::ChainInfo {
@@ -138,6 +140,8 @@ impl From<ChainInfo> for proto::aggregated_token_info::ChainInfo {
         Self {
             holders_count: value.holders_count.map(|h| h.to_string()),
             total_supply: value.total_supply.map(|t| t.to_plain_string()),
+            is_verified: value.is_verified_contract,
+            contract_name: value.contract_name,
         }
     }
 }
@@ -171,7 +175,7 @@ impl From<AggregatedToken> for proto::Token {
             symbol: v.symbol,
             icon_url: v.icon_url,
             chain_id: v.chain_info.chain_id.to_string(),
-            is_verified_contract: v.is_verified_contract,
+            is_verified_contract: v.chain_info.is_verified_contract,
         }
     }
 }
@@ -180,11 +184,11 @@ impl From<AggregatedToken> for proto::Address {
     fn from(v: AggregatedToken) -> Self {
         Self {
             hash: v.address_hash.to_string(),
-            contract_name: v.contract_name,
+            contract_name: v.chain_info.contract_name,
             token_name: v.name,
             token_type: db_token_type_to_proto_token_type(v.token_type).into(),
             is_contract: Some(true),
-            is_verified_contract: Some(v.is_verified_contract),
+            is_verified_contract: Some(v.chain_info.is_verified_contract),
             is_token: Some(true),
             chain_id: v.chain_info.chain_id.to_string(),
             domain_info: None,
