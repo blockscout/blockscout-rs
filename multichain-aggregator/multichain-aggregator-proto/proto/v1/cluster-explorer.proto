@@ -282,7 +282,8 @@ message SearchDappsResponse {
 
 message ClusterQuickSearchRequest {
   string cluster_id = 1;
-  string q = 2; 
+  string q = 2;
+  bool unlimited_per_chain = 3;
 }
 
 message ClusterQuickSearchResponse {

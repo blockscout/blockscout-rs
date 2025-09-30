@@ -328,7 +328,9 @@ impl ClusterExplorerService for ClusterExplorer {
         let inner = request.into_inner();
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let result = cluster.quick_search(inner.q, true).await?;
+        let result = cluster
+            .quick_search(inner.q, true, inner.unlimited_per_chain)
+            .await?;
 
         Ok(Response::new(
             result.try_into().map_err(ServiceError::from)?,

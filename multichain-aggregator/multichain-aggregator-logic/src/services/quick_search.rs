@@ -17,6 +17,7 @@ pub async fn quick_search(
     query: String,
     priority_chain_ids: &[ChainId],
     search_context: &SearchContext<'_>,
+    unlimited_per_chain: bool,
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
@@ -41,7 +42,9 @@ pub async fn quick_search(
         results.flatten_aggregated_addresses();
     }
 
-    let mut results = results.filter_and_sort_entities_by_priority(priority_chain_ids);
+    if !unlimited_per_chain {
+        results = results.filter_and_sort_entities_by_priority(priority_chain_ids);
+    }
     results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize, QUICK_SEARCH_ENTITY_LIMIT);
 
     Ok(results)

@@ -220,7 +220,10 @@ message BatchImportRequest {
 
 message BatchImportResponse { string status = 1; }
 
-message QuickSearchRequest { string q = 1; }
+message QuickSearchRequest {
+  string q = 1;
+  bool unlimited_per_chain = 2;
+}
 
 message QuickSearchResponse {
   repeated Address addresses = 1;

@@ -56,7 +56,10 @@ fn compile(
         .field_attribute("BatchImportRequest.tokens", "#[serde(default)]")
         .field_attribute("BatchImportRequest.AddressImport.token_type", "#[serde(default)]")
         .field_attribute("BatchImportRequest.TokenImport.Metadata.token_type", "#[serde(default)]")
+        // Other Optional fields
         .field_attribute("ListAddressTokensRequest.type", "#[serde(default)]")
+        .field_attribute("QuickSearchRequest.unlimited_per_chain", "#[serde(default)]")
+        .field_attribute("ClusterQuickSearchRequest.unlimited_per_chain", "#[serde(default)]")
         .extern_path(".google.protobuf", "::prost-wkt-types");
 
     prepare_comma_separated_fields(
