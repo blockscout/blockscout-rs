@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
-const QUICK_SEARCH_ENTITY_LIMIT: usize = 5;
+const QUICK_SEARCH_DEFAULT_ENTITY_LIMIT: usize = 5;
 
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip_all, level = "info", fields(query = query))]
@@ -45,7 +45,14 @@ pub async fn quick_search(
     if !unlimited_per_chain {
         results = results.filter_and_sort_entities_by_priority(priority_chain_ids);
     }
-    results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize, QUICK_SEARCH_ENTITY_LIMIT);
+
+    let total_limit = QUICK_SEARCH_NUM_ITEMS as usize;
+    let entity_limit = if unlimited_per_chain {
+        total_limit
+    } else {
+        QUICK_SEARCH_DEFAULT_ENTITY_LIMIT
+    };
+    results.balance_entities(total_limit, entity_limit);
 
     Ok(results)
 }
