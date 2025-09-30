@@ -665,6 +665,10 @@ paths:
           in: query
           required: false
           type: string
+        - name: unlimited_per_chain
+          in: query
+          required: false
+          type: boolean
       tags:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/tokens:
@@ -940,6 +944,10 @@ paths:
           in: query
           required: false
           type: string
+        - name: unlimited_per_chain
+          in: query
+          required: false
+          type: boolean
       tags:
         - MultichainAggregatorService
   /api/v1/tokens:

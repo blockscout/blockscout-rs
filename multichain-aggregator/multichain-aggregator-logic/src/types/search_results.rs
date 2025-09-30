@@ -228,6 +228,8 @@ fn evenly_take_elements<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_primitives::B256;
+    use entity::sea_orm_active_enums::HashType;
 
     #[test]
     fn test_evenly_take_elements() {
@@ -236,5 +238,42 @@ mod tests {
         assert_eq!(evenly_take_elements([30, 20, 10], 50), [20, 20, 10]);
         assert_eq!(evenly_take_elements([8, 9, 5], 100), [8, 9, 5]);
         assert_eq!(evenly_take_elements([3, 2, 1], 0), [0, 0, 0]);
+    }
+
+    #[test]
+    fn test_filter_and_sort_entities_by_priority() {
+        let result = QuickSearchResult {
+            blocks: vec![
+                Hash {
+                    chain_id: 3,
+                    hash: B256::from([0u8; 32]),
+                    hash_type: HashType::Block,
+                },
+                Hash {
+                    chain_id: 2,
+                    hash: B256::from([1u8; 32]),
+                    hash_type: HashType::Block,
+                },
+                Hash {
+                    chain_id: 2,
+                    hash: B256::from([2u8; 32]),
+                    hash_type: HashType::Block,
+                },
+                Hash {
+                    chain_id: 1,
+                    hash: B256::from([2u8; 32]),
+                    hash_type: HashType::Block,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let chain_ids: Vec<_> = result
+            .filter_and_sort_entities_by_priority(&[2, 1])
+            .blocks
+            .iter()
+            .map(|h| h.chain_id)
+            .collect();
+        assert_eq!(chain_ids, vec![2, 1, 3]);
     }
 }

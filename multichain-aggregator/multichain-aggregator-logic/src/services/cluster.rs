@@ -829,6 +829,7 @@ impl Cluster {
         &self,
         query: String,
         is_aggregated: bool,
+        unlimited_per_chain: bool,
     ) -> Result<QuickSearchResult, ServiceError> {
         let context = SearchContext {
             cluster: self,
@@ -836,7 +837,13 @@ impl Cluster {
             domain_primary_chain_id: self.domain_primary_chain_id,
             is_aggregated,
         };
-        let result = quick_search::quick_search(query, &self.quick_search_chains, &context).await?;
+        let result = quick_search::quick_search(
+            query,
+            &self.quick_search_chains,
+            &context,
+            unlimited_per_chain,
+        )
+        .await?;
         Ok(result)
     }
 }

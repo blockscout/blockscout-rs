@@ -161,7 +161,9 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let cluster = self.get_multichain_cluster()?;
-        let res = cluster.quick_search(inner.q, false).await?;
+        let res = cluster
+            .quick_search(inner.q, false, inner.unlimited_per_chain)
+            .await?;
 
         Ok(Response::new(res.try_into().unwrap()))
     }
