@@ -447,3 +447,16 @@ mod success_tests {
         test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 }
+
+mod regression_tests {
+    use super::*;
+    use solidity_types::StandardJson;
+
+    #[tokio::test]
+    async fn constructor_arguments_and_abstract_contract() {
+        let test_case = solidity_types::from_file::<StandardJson>(
+            "constructor_arguments_and_abstract_contract",
+        );
+        test_success(&test_case, BytecodeType::CreationInput).await;
+    }
+}

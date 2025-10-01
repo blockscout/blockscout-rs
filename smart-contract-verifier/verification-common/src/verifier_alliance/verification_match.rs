@@ -272,14 +272,13 @@ impl<'a> MatchBuilder<'a> {
             None if !constructor_arguments.is_empty() => {
                 self.invalid_constructor_arguments = true;
             }
+            None => {}
             Some(constructor)
-                if constructor
-                    .abi_decode_input(constructor_arguments, true)
+                if try_decode_constructor_arguments(&constructor, constructor_arguments)
                     .is_err() =>
             {
                 self.invalid_constructor_arguments = true;
             }
-            None => {}
             Some(_constructor) if constructor_arguments.is_empty() => {}
             Some(_constructor) => {
                 self.compiled_code.extend(constructor_arguments);
@@ -292,4 +291,23 @@ impl<'a> MatchBuilder<'a> {
 
         Ok(self)
     }
+}
+
+/// A simple `alloy_json_abi::abi_decode_input` does not verify that the whole data are used during decoding.
+/// This function makes sure that no data are left after.
+///
+/// If not validate that then abstract contracts
+/// That is required, as all remaining bytes must correspond to constructor arguments in order for verification to succeed.
+fn try_decode_constructor_arguments(
+    constructor: &alloy_json_abi::Constructor,
+    data: &[u8],
+) -> Result<Vec<alloy_dyn_abi::DynSolValue>, alloy_dyn_abi::Error> {
+    let decoded_input = constructor.abi_decode_input(data, true)?;
+    let encoded_data = constructor.abi_encode_input(&decoded_input)?;
+    if data != encoded_data {
+        return Err(alloy_dyn_abi::Error::custom(
+            "not all data has been used for decoding",
+        ));
+    }
+    Ok(decoded_input)
 }
