@@ -269,7 +269,9 @@ mod types {
                     .contracts
                     .into_iter()
                     .next()
-                    .unwrap();
+                    .expect(
+                    "number of output-json contracts must correspond to the number of input files (=1)",
+                );
                 let (_, contract_name) = split_file_and_contract_names(name);
                 let contract: solc::Contract = output.try_into()?;
 

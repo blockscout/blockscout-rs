@@ -54,9 +54,9 @@ async fn test_setup(
 
     let prefix = format!("{CONTRACTS_DIR}/{dir}");
     let suffix = if input.is_yul { "yul" } else { "sol" };
-    input.file_path = Some(format!("{prefix}/source.{suffix}"));
+    let file_path = format!("{prefix}/source.{suffix}");
 
-    let file_path = input.file_path.clone().unwrap();
+    input.file_path = Some(file_path.clone());
     input.source_code =
         Some(input.source_code.clone().unwrap_or_else(|| {
             fs::read_to_string(&file_path).expect("Error while reading source")
