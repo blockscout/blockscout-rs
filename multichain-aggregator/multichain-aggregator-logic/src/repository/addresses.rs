@@ -8,17 +8,12 @@ use crate::{
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
     address_coin_balances,
-    addresses::{ActiveModel, Column, Entity, Model},
-    sea_orm_active_enums as db_enum,
+    addresses::{ActiveModel, Column, Entity},
 };
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoSimpleExpr,
-    JoinType, Order, PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, RelationDef, Select,
-    prelude::Expr,
-    sea_query::{
-        Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
-        WithClause,
-    },
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IntoSimpleExpr, JoinType, PartialModelTrait,
+    QueryFilter, QuerySelect, QueryTrait, RelationDef, Select, prelude::Expr,
+    sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), DbErr>
@@ -46,107 +41,6 @@ where
         .await?;
 
     Ok(())
-}
-
-fn prepare_address_search_cte(
-    contract_name_query: Option<String>,
-    cte_name: impl IntoIden,
-) -> CommonTableExpression {
-    // Materialize addresses CTE when searching by contract_name.
-    // Otherwise, query planner chooses a suboptimal plan.
-    // If query is not provided, this CTE will be folded by the optimizer.
-    let is_cte_materialized = contract_name_query.is_some();
-
-    CommonTableExpression::new()
-        .query(
-            Query::select()
-                .column(ColumnRef::Asterisk)
-                .from(Entity.table_ref())
-                .apply_if(contract_name_query, |q, query| {
-                    let ts_query = prepare_ts_query(&query);
-                    q.and_where(Expr::cust_with_expr(
-                        "to_tsvector('english', contract_name) @@ to_tsquery($1)",
-                        ts_query,
-                    ));
-                })
-                // Apply a hard limit in case we materialize the CTE
-                .apply_if(is_cte_materialized.then_some(10_000), |q, limit| {
-                    q.limit(limit);
-                })
-                .to_owned(),
-        )
-        .materialized(is_cte_materialized)
-        .table_name(cte_name)
-        .to_owned()
-}
-
-pub async fn uniform_chain_search<C>(
-    db: &C,
-    contract_name_query: String,
-    token_types: Option<Vec<db_enum::TokenType>>,
-    limit: u64,
-) -> Result<Vec<Model>, DbErr>
-where
-    C: ConnectionTrait,
-{
-    if limit == 0 {
-        return Ok(vec![]);
-    }
-
-    let ts_rank_ordering = Expr::cust_with_expr(
-        "ts_rank(to_tsvector('english', contract_name), to_tsquery($1))",
-        prepare_ts_query(&contract_name_query),
-    );
-
-    let addresses_cte_iden = Alias::new("addresses").into_iden();
-    let addresses_cte =
-        prepare_address_search_cte(Some(contract_name_query), addresses_cte_iden.clone());
-
-    let row_number = Expr::custom_keyword(Alias::new("ROW_NUMBER()"));
-    let ranked_addresses_iden = Alias::new("ranked_addresses").into_iden();
-    let ranked_addresses_cte = CommonTableExpression::new()
-        .query(
-            Query::select()
-                .column(ColumnRef::TableAsterisk(addresses_cte_iden.clone()))
-                .expr_window_as(
-                    row_number,
-                    WindowStatement::partition_by(Column::ChainId)
-                        .order_by_expr(ts_rank_ordering, Order::Desc)
-                        .order_by(Column::Hash, Order::Asc)
-                        .to_owned(),
-                    Alias::new("rn"),
-                )
-                .from(addresses_cte_iden.clone())
-                .apply_if(token_types, |q, token_types| {
-                    if !token_types.is_empty() {
-                        q.and_where(Column::TokenType.is_in(token_types));
-                    } else {
-                        q.and_where(Column::TokenType.is_null());
-                    }
-                })
-                .to_owned(),
-        )
-        .table_name(ranked_addresses_iden.clone())
-        .to_owned();
-
-    let base_select = Query::select()
-        .column(ColumnRef::Asterisk)
-        .from(ranked_addresses_iden)
-        .and_where(Expr::col(Alias::new("rn")).eq(1))
-        .limit(limit)
-        .to_owned();
-
-    let query = WithClause::new()
-        .cte(addresses_cte)
-        .cte(ranked_addresses_cte)
-        .to_owned()
-        .query(base_select);
-
-    let addresses = Model::find_by_statement(db.get_database_backend().build(&query))
-        .all(db)
-        .await?;
-
-    Ok(addresses)
 }
 
 fn coin_balances_rel() -> RelationDef {
