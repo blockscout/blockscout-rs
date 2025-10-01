@@ -1,21 +1,26 @@
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, ConnectionTrait, DbErr, EntityName,
-    EntityTrait, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, Value,
+    EntityTrait, IdenStatic, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, Value,
     prelude::Expr,
     sea_query::{
-        Alias, ColumnRef, CommonTableExpression, Func, IntoIden, Query, UpdateStatement, ValueTuple,
+        Alias, ColumnRef, CommonTableExpression, Func, IntoIden, Query, SimpleExpr,
+        UpdateStatement, ValueTuple,
     },
 };
 use thiserror::Error;
 
-pub async fn batch_update<C, A>(db: &C, models: impl IntoIterator<Item = A>) -> Result<(), DbErr>
+pub async fn batch_update<C, A>(
+    db: &C,
+    models: impl IntoIterator<Item = A>,
+    expr_cols: impl IntoIterator<Item = (<A::Entity as EntityTrait>::Column, SimpleExpr)>,
+) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
     A: ActiveModelTrait,
 {
     let models = models.into_iter().collect::<Vec<_>>();
     let models_count = models.len();
-    let query = match prepare_batch_update_query(models.into_iter()) {
+    let query = match prepare_batch_update_query_with_expr_cols(models.into_iter(), expr_cols) {
         Ok(query) => query,
         Err(PrepareBatchUpdateError::NoColumnsToUpdate) => {
             return Ok(());
@@ -48,15 +53,19 @@ pub enum PrepareBatchUpdateError<A> {
 
 // This is a modified version of the sea-orm batch insert query builder
 // but adjusted for partial update queries.
+// `expr_cols` can be used to update columns with custom expressions, that can reference previous
+// values.
 // Note: Partial updates are handled by coalescing the original value with the new value.
 // This implies that explicitly setting an ActiveValue to None will not overwrite the original value.
 // https://github.com/SeaQL/sea-orm/blob/c87c0145f56e171b89a3967f95d8b6b7b743bd89/src/query/insert.rs#L173-L238
-fn prepare_batch_update_query<A>(
+fn prepare_batch_update_query_with_expr_cols<A>(
     models: impl IntoIterator<Item = A>,
+    expr_cols: impl IntoIterator<Item = (<A::Entity as EntityTrait>::Column, SimpleExpr)>,
 ) -> Result<UpdateStatement, PrepareBatchUpdateError<A>>
 where
     A: ActiveModelTrait,
 {
+    let expr_cols = expr_cols.into_iter().collect::<Vec<_>>();
     let cte_name = Alias::new("updates").into_iden();
 
     let mut columns_to_update: Vec<_> = <A::Entity as EntityTrait>::Column::iter()
@@ -106,6 +115,7 @@ where
         .iter()
         .cloned()
         .filter(|c| <A::Entity as EntityTrait>::PrimaryKey::from_column(*c).is_none())
+        .filter(|c| !expr_cols.iter().any(|(col, _)| col.as_str() == c.as_str()))
         .collect::<Vec<_>>();
 
     if update_columns.is_empty() {
@@ -134,16 +144,19 @@ where
         .collect::<Vec<_>>();
 
     // Map table columns to value columns
-    let update_columns_mapping = update_columns.iter().map(|c| {
-        (
-            *c,
-            Func::coalesce([
-                c.save_as(Expr::col((cte_name.clone(), *c))),
-                c.into_simple_expr(),
-            ])
-            .into(),
-        )
-    });
+    let update_columns_mapping = update_columns
+        .iter()
+        .map(|c| {
+            (
+                *c,
+                Func::coalesce([
+                    c.save_as(Expr::col((cte_name.clone(), *c))),
+                    c.into_simple_expr(),
+                ])
+                .into(),
+            )
+        })
+        .chain(expr_cols.iter().map(|(col, expr)| (*col, expr.clone())));
 
     // Match rows from CTE with rows from the table by primary key
     let mut conditions = Condition::all();
@@ -195,6 +208,7 @@ mod tests {
         pub f_2: Vec<u8>,
         pub f_3: Option<String>,
         pub f_4: Option<String>,
+        pub f_5: Option<DateTime>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -209,7 +223,7 @@ mod tests {
             ..Default::default()
         };
         assert!(matches!(
-            prepare_batch_update_query(vec![incomplete_pk_model]),
+            prepare_batch_update_query_with_expr_cols(vec![incomplete_pk_model], vec![]),
             Err(PrepareBatchUpdateError::PrimaryKeyNotSet(_))
         ));
 
@@ -219,7 +233,7 @@ mod tests {
             ..Default::default()
         };
         assert!(matches!(
-            prepare_batch_update_query(vec![empty_update]),
+            prepare_batch_update_query_with_expr_cols(vec![empty_update], vec![]),
             Err(PrepareBatchUpdateError::NoColumnsToUpdate)
         ));
 
@@ -235,6 +249,7 @@ mod tests {
                 f_2: Set(vec![1, 2, 3]),
                 f_3: NotSet,
                 f_4: NotSet,
+                f_5: NotSet,
             },
             ActiveModel {
                 id_1: Set(1),
@@ -243,9 +258,23 @@ mod tests {
                 f_2: Set(vec![4, 5, 6]),
                 f_3: Set(Some("test".to_string())),
                 f_4: NotSet,
+                f_5: NotSet,
             },
         ];
-        let query = prepare_batch_update_query(models).unwrap();
+        let query = prepare_batch_update_query_with_expr_cols(
+            models,
+            vec![(
+                Column::F5,
+                Expr::cust_with_exprs(
+                    "GREATEST($1, $2)",
+                    [
+                        Column::F5.into_simple_expr(),
+                        Expr::current_timestamp().into(),
+                    ],
+                ),
+            )],
+        )
+        .unwrap();
         assert_eq!(query.to_string(PostgresQueryBuilder), [
             r#"WITH "updates" ("id_1", "id_2", "f_1", "f_2", "f_3") AS"#,
             r#"(SELECT * FROM"#,
@@ -253,7 +282,8 @@ mod tests {
             r#"UPDATE "test_model" SET"#,
             r#""f_1" = COALESCE("updates"."f_1", "test_model"."f_1"),"#,
             r#""f_2" = COALESCE("updates"."f_2", "test_model"."f_2"),"#,
-            r#""f_3" = COALESCE("updates"."f_3", "test_model"."f_3")"#,
+            r#""f_3" = COALESCE("updates"."f_3", "test_model"."f_3"),"#,
+            r#""f_5" = GREATEST("test_model"."f_5", CURRENT_TIMESTAMP)"#,
             r#"FROM "updates""#,
             r#"WHERE "test_model"."id_1" = "updates"."id_1" AND "test_model"."id_2" = "updates"."id_2""#,
         ].join(" "));
