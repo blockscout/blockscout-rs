@@ -279,6 +279,7 @@ impl<'a> MatchBuilder<'a> {
             {
                 self.invalid_constructor_arguments = true;
             }
+            Some(_constructor) if constructor_arguments.is_empty() => {}
             Some(_constructor) => {
                 self.compiled_code.extend(constructor_arguments);
                 self.transformations
