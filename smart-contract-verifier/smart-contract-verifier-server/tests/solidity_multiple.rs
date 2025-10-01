@@ -54,10 +54,13 @@ async fn test_setup(
 
     let prefix = format!("{CONTRACTS_DIR}/{dir}");
     let suffix = if input.is_yul { "yul" } else { "sol" };
-    let contract_path = format!("{prefix}/source.{suffix}");
-    input.source_code = Some(input.source_code.clone().unwrap_or_else(|| {
-        fs::read_to_string(&contract_path).expect("Error while reading source")
-    }));
+    let file_path = format!("{prefix}/source.{suffix}");
+
+    input.file_path = Some(file_path.clone());
+    input.source_code =
+        Some(input.source_code.clone().unwrap_or_else(|| {
+            fs::read_to_string(&file_path).expect("Error while reading source")
+        }));
     input.creation_tx_input = if !input.ignore_creation_tx_input {
         Some(input.creation_tx_input.clone().unwrap_or_else(|| {
             fs::read_to_string(format!("{prefix}/creation_tx_input"))
@@ -95,7 +98,7 @@ async fn test_setup(
         "bytecode": bytecode,
         "bytecodeType": bytecode_type,
         "compilerVersion": input.compiler_version,
-        "sourceFiles": BTreeMap::from([(contract_path, input.source_code.as_ref().unwrap())]),
+        "sourceFiles": BTreeMap::from([(file_path, input.source_code.as_ref().unwrap())]),
         "evmVersion": input.evm_version,
         "libraries": input.contract_libraries,
         "optimizationRuns": input.optimization_runs
@@ -145,6 +148,8 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         .abi
         .as_ref()
         .map(|abi| serde_json::from_str(abi));
+    let file_path = input.file_path.expect("Set `Some` on test_setup");
+    assert_eq!(result_source.file_name, file_path, "Invalid file path");
     assert_eq!(
         result_source.contract_name, input.contract_name,
         "Invalid contract name"
@@ -247,9 +252,12 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid number of sources"
     );
     assert_eq!(
-        result_source.source_files.into_iter().next().unwrap().1,
-        input.source_code.expect("Set `Some` on test_setup"),
-        "Invalid source"
+        result_source.source_files,
+        BTreeMap::from([(
+            file_path,
+            input.source_code.expect("Set `Some` on test_setup")
+        )]),
+        "Invalid source files"
     );
 
     verification_response_clone
@@ -655,8 +663,8 @@ mod bytecode_parts_tests {
             .expect("Was unpacked successfully inside test_success");
 
         let expected_creation_tx_input_parts = vec![
-            BytecodePart {r#type: "main".into(), data: "0x608060405234801561001057600080fd5b5060df8061001f6000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600".into()},
-            BytecodePart {r#type: "meta".into(), data: "0xa165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c80029".into() }
+            BytecodePart { r#type: "main".into(), data: "0x608060405234801561001057600080fd5b5060df8061001f6000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600".into() },
+            BytecodePart { r#type: "meta".into(), data: "0xa165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c80029".into() }
         ];
         super::assert_eq!(
             expected_creation_tx_input_parts,
@@ -665,8 +673,8 @@ mod bytecode_parts_tests {
         );
 
         let expected_deployed_bytecode_parts = vec![
-            BytecodePart {r#type: "main".into(), data: "0x6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600".into()},
-            BytecodePart {r#type: "meta".into(), data: "0xa165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c80029".into() }
+            BytecodePart { r#type: "main".into(), data: "0x6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600".into() },
+            BytecodePart { r#type: "meta".into(), data: "0xa165627a7a72305820b127de36a4e02cfe83fe4ccce7cfdbe00e4a2da70d71c3b2d0be5097bcfb94c80029".into() }
         ];
         super::assert_eq!(
             expected_deployed_bytecode_parts,
@@ -685,10 +693,10 @@ mod bytecode_parts_tests {
             .expect("Was unpacked successfully inside test_success");
 
         let expected_creation_tx_input_parts = vec![
-            BytecodePart {r#type: "main".into(), data: "0x608060405234801561001057600080fd5b506040516100206020820161004e565b601f1982820381018352601f909101166040528051610048916000916020919091019061005a565b5061012d565b605c8061017a83390190565b828054610066906100f3565b90600052602060002090601f01602090048101928261008857600085556100ce565b82601f106100a157805160ff19168380011785556100ce565b828001600101855582156100ce579182015b828111156100ce5782518255916020019190600101906100b3565b506100da9291506100de565b5090565b5b808211156100da57600081556001016100df565b600181811c9082168061010757607f821691505b60208210810361012757634e487b7160e01b600052602260045260246000fd5b50919050565b603f8061013b6000396000f3fe6080604052600080fdfe".into()},
-            BytecodePart {r#type: "meta".into(), data: "0xa26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e0033".into() },
-            BytecodePart {r#type: "main".into(), data: "0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfe".into()},
-            BytecodePart {r#type: "meta".into(), data: "0xa2646970667358221220708123f84ee8016bdaaab1461b231024c52e14bd1f9c02b522c3c057528434dd64736f6c634300080e0033".into() }
+            BytecodePart { r#type: "main".into(), data: "0x608060405234801561001057600080fd5b506040516100206020820161004e565b601f1982820381018352601f909101166040528051610048916000916020919091019061005a565b5061012d565b605c8061017a83390190565b828054610066906100f3565b90600052602060002090601f01602090048101928261008857600085556100ce565b82601f106100a157805160ff19168380011785556100ce565b828001600101855582156100ce579182015b828111156100ce5782518255916020019190600101906100b3565b506100da9291506100de565b5090565b5b808211156100da57600081556001016100df565b600181811c9082168061010757607f821691505b60208210810361012757634e487b7160e01b600052602260045260246000fd5b50919050565b603f8061013b6000396000f3fe6080604052600080fdfe".into() },
+            BytecodePart { r#type: "meta".into(), data: "0xa26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e0033".into() },
+            BytecodePart { r#type: "main".into(), data: "0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfe".into() },
+            BytecodePart { r#type: "meta".into(), data: "0xa2646970667358221220708123f84ee8016bdaaab1461b231024c52e14bd1f9c02b522c3c057528434dd64736f6c634300080e0033".into() }
         ];
         super::assert_eq!(
             expected_creation_tx_input_parts,
@@ -697,8 +705,8 @@ mod bytecode_parts_tests {
         );
 
         let expected_deployed_bytecode_parts = vec![
-            BytecodePart {r#type: "main".into(), data: "0x6080604052600080fdfe".into()},
-            BytecodePart {r#type: "meta".into(), data: "0xa26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e0033".into() }
+            BytecodePart { r#type: "main".into(), data: "0x6080604052600080fdfe".into() },
+            BytecodePart { r#type: "meta".into(), data: "0xa26469706673582212205c9c5bb56fb32b38e31f567bf368712fd0bd017cf3b36663c99b9fa32ddf41ae64736f6c634300080e0033".into() }
         ];
         super::assert_eq!(
             expected_deployed_bytecode_parts,
