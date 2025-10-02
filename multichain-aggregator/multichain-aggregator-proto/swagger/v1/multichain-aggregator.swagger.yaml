@@ -1055,19 +1055,11 @@ definitions:
     properties:
       hash:
         type: string
-      ens_name:
-        type: string
       contract_name:
         type: string
-      token_name:
-        type: string
-      token_type:
-        $ref: '#/definitions/v1TokenType'
       is_contract:
         type: boolean
       is_verified_contract:
-        type: boolean
-      is_token:
         type: boolean
   BatchImportRequestAddressTokenBalanceImport:
     type: object

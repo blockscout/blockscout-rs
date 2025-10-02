@@ -107,13 +107,9 @@ message ChainBlockNumber {
 message BatchImportRequest {
   message AddressImport {
     string hash = 1;
-    optional string ens_name = 2;
-    optional string contract_name = 3;
-    optional string token_name = 4;
-    TokenType token_type = 5;
-    optional bool is_contract = 6;
-    optional bool is_verified_contract = 7;
-    optional bool is_token = 8;
+    optional string contract_name = 2;
+    optional bool is_contract = 3;
+    optional bool is_verified_contract = 4;
   }
 
   message HashImport {
