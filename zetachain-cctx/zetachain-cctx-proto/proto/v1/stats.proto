@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package blockscout.zetachainCctx.v1;
+option go_package = "github.com/blockscout/blockscout-rs/zetachain-cctx";
+
+
+service Stats {
+  rpc GetSyncProgress(GetSyncProgressRequest) returns (GetSyncProgressResponse) {}
+}
+
+message GetSyncProgressRequest {
+
+}
+
+message GetSyncProgressResponse {
+  int64 historic_watermark_timestamp = 1;
+  int64 historic_lag = 2; // difference between current time and historic watermark timestamp
+  int64 pending_status_updates_count  = 3;
+  int64 pending_cctxs_count           = 4;
+  int64 realtime_gaps_count           = 5; // number of gaps in realtime stream
+}
