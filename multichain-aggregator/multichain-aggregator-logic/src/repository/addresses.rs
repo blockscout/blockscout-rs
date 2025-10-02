@@ -27,8 +27,6 @@ where
         .on_conflict(
             OnConflict::columns([Column::Hash, Column::ChainId])
                 .update_columns([
-                    Column::Hash,
-                    Column::ChainId,
                     Column::ContractName,
                     Column::IsContract,
                     Column::IsVerifiedContract,
