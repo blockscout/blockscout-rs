@@ -30,6 +30,8 @@ export function handleMintedDomain(event: MintedDomainEvent): void {
   domain.registrant = event.params.owner.toHex();
   domain.subdomainCount = 0;
   domain.isMigrated = true;
+  domain.storedOffchain = false;
+  domain.resolvedWithWildcard = false;
 
   let ownerId = event.params.owner.toHex();
   let owner = Account.load(ownerId);
@@ -87,6 +89,8 @@ export function handleTransfer(event: TransferEvent): void {
     );
     domain.subdomainCount = 0;
     domain.isMigrated = true;
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
   }
   let transfer = new Transfer(event.transaction.hash.toHex());
   transfer.domain = domain.id;
