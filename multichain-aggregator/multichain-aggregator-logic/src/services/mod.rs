@@ -28,7 +28,7 @@ pub mod macros {
     macro_rules! preload_domain_info {
         ($cluster:expr, $addresses:expr) => {
             let domain_infos = $cluster
-                .get_domain_info($addresses.iter().map(|a| *a.hash))
+                .get_domain_info_batch($addresses.iter().map(|a| *a.hash))
                 .await;
 
             $addresses

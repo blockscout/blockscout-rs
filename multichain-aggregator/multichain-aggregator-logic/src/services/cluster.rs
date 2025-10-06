@@ -792,28 +792,37 @@ impl Cluster {
 
     pub async fn get_domain_info(
         &self,
+        address: alloy_primitives::Address,
+    ) -> Result<Option<DomainInfo>, ServiceError> {
+        let request = bens_proto::GetAddressRequest {
+            address: address.to_string(),
+            chain_id: self.domain_primary_chain_id,
+            protocol_id: None,
+        };
+
+        let res = self
+            .bens_client
+            .request(&get_address::GetAddress { request })
+            .await
+            .inspect_err(|err| {
+                tracing::error!(
+                    error = ?err,
+                    address = ?address,
+                    "failed to preload domain info"
+                );
+            });
+
+        let domain_info = res.map(DomainInfo::try_from)??;
+
+        Ok(Some(domain_info))
+    }
+
+    pub async fn get_domain_info_batch(
+        &self,
         addresses: impl IntoIterator<Item = alloy_primitives::Address>,
     ) -> HashMap<alloy_primitives::Address, DomainInfo> {
         let jobs = addresses.into_iter().map(|address| async move {
-            let request = bens_proto::GetAddressRequest {
-                address: address.to_string(),
-                chain_id: self.domain_primary_chain_id,
-                protocol_id: None,
-            };
-
-            let res = self
-                .bens_client
-                .request(&get_address::GetAddress { request })
-                .await
-                .inspect_err(|err| {
-                    tracing::error!(
-                        error = ?err,
-                        address = ?address,
-                        "failed to preload domain info"
-                    );
-                });
-
-            let domain_info = res.map(DomainInfo::try_from).ok()?.ok()?;
+            let domain_info = self.get_domain_info(address).await.ok()??;
 
             Some((address, domain_info))
         });
