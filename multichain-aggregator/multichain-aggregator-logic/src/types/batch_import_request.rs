@@ -121,47 +121,31 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
             .inspect_err(|e| {
                 tracing::error!(error = ?e, "failed to parse chain id");
             })?;
+
+        macro_rules! try_into_vec {
+            ($value: expr) => {
+                $value
+                    .into_iter()
+                    .map(|v| (chain_id, v.clone()).try_into().inspect_err(|e| {
+                        tracing::error!(error = ?e, "failed to parse {}: {:?}", stringify!($value), v);
+                    }))
+                    .collect::<Result<Vec<_>, _>>()?
+            };
+        }
+
         Ok(Self {
             block_ranges: value
                 .block_ranges
                 .into_iter()
                 .map(|br| (chain_id, br).into())
                 .collect(),
-            hashes: value
-                .hashes
-                .into_iter()
-                .map(|h| (chain_id, h).try_into())
-                .collect::<Result<Vec<_>, _>>()?,
-            addresses: value
-                .addresses
-                .into_iter()
-                .map(|a| (chain_id, a).try_into())
-                .collect::<Result<Vec<_>, _>>()?,
-            interop_messages: value
-                .interop_messages
-                .into_iter()
-                .map(|m| InteropMessage::try_from((chain_id, m)))
-                .collect::<Result<Vec<_>, _>>()?,
-            address_coin_balances: value
-                .address_coin_balances
-                .into_iter()
-                .map(|cb| (chain_id, cb).try_into())
-                .collect::<Result<Vec<_>, _>>()?,
-            address_token_balances: value
-                .address_token_balances
-                .into_iter()
-                .map(|atb| (chain_id, atb).try_into())
-                .collect::<Result<Vec<_>, _>>()?,
-            tokens: value
-                .tokens
-                .into_iter()
-                .map(|t| (chain_id, t).try_into())
-                .collect::<Result<Vec<_>, _>>()?,
-            counters: value
-                .counters
-                .into_iter()
-                .map(|c| Counters::try_from((chain_id, c)))
-                .collect::<Result<Vec<_>, _>>()?,
+            hashes: try_into_vec!(value.hashes),
+            addresses: try_into_vec!(value.addresses),
+            interop_messages: try_into_vec!(value.interop_messages),
+            address_coin_balances: try_into_vec!(value.address_coin_balances),
+            address_token_balances: try_into_vec!(value.address_token_balances),
+            tokens: try_into_vec!(value.tokens),
+            counters: try_into_vec!(value.counters),
         })
     }
 }

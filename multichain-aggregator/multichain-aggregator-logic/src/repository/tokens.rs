@@ -135,7 +135,12 @@ where
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
     let active_models = updates.into_iter().map(|m| m.into_active_model());
-    batch_update(db, active_models).await?;
+    batch_update(
+        db,
+        active_models,
+        [(Column::UpdatedAt, Expr::current_timestamp().into())],
+    )
+    .await?;
 
     Ok(())
 }
@@ -149,7 +154,12 @@ where
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
     let active_models = updates.into_iter().map(|m| m.into_active_model());
-    batch_update(db, active_models).await?;
+    batch_update(
+        db,
+        active_models,
+        [(Column::UpdatedAt, Expr::current_timestamp().into())],
+    )
+    .await?;
 
     Ok(())
 }
@@ -163,7 +173,12 @@ where
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
     let active_models = updates.into_iter().map(|m| m.into_active_model());
-    batch_update(db, active_models).await?;
+    batch_update(
+        db,
+        active_models,
+        [(Column::UpdatedAt, Expr::current_timestamp().into())],
+    )
+    .await?;
 
     Ok(())
 }
@@ -174,7 +189,12 @@ where
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
     let active_models = updates.into_iter().map(|m| m.into_active_model());
-    batch_update(db, active_models).await?;
+    batch_update(
+        db,
+        active_models,
+        [(Column::UpdatedAt, Expr::current_timestamp().into())],
+    )
+    .await?;
 
     Ok(())
 }
