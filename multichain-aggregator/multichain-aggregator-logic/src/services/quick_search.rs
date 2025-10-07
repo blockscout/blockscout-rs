@@ -113,7 +113,7 @@ impl SearchTerm {
                 if let Some(mut address) = address {
                     let domain_info = search_context
                         .cluster
-                        .get_domain_info(*address.hash)
+                        .get_domain_info_cached(*address.hash)
                         .await?;
 
                     if let Some(domain_info) = domain_info {

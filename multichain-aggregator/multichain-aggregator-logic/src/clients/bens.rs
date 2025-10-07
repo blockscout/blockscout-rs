@@ -99,3 +99,24 @@ pub mod get_address {
         }
     }
 }
+
+pub mod get_protocols {
+    use super::*;
+    use bens_proto::blockscout::bens::v1::{GetProtocolsRequest, GetProtocolsResponse};
+
+    pub struct GetProtocols {
+        pub request: GetProtocolsRequest,
+    }
+
+    impl Endpoint for GetProtocols {
+        type Response = GetProtocolsResponse;
+
+        fn method(&self) -> Method {
+            Method::GET
+        }
+
+        fn path(&self) -> String {
+            format!("/api/v1/{}/protocols", self.request.chain_id)
+        }
+    }
+}

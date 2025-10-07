@@ -24,7 +24,10 @@ use multichain_aggregator_logic::{
             list_active_chains_cached,
         },
         channel::Channel,
-        cluster::{Cluster, DecodedCalldataCache, DomainSearchCache, TokenSearchCache},
+        cluster::{
+            Cluster, DecodedCalldataCache, DomainInfoCache, DomainProtocolsCache,
+            DomainSearchCache, TokenSearchCache,
+        },
         coin_price::build_coin_price_cache,
     },
 };
@@ -165,6 +168,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         domain_search_cache,
         "domain_search"
     );
+    let domain_info_cache =
+        build_cache!(settings, DomainInfoCache, domain_info_cache, "domain_info");
+    let domain_protocols_cache = build_cache!(
+        settings,
+        DomainProtocolsCache,
+        domain_protocols_cache,
+        "domain_protocols"
+    );
     let decoded_calldata_cache = build_cache!(
         settings,
         DecodedCalldataCache,
@@ -228,6 +239,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     settings.service.bens_protocols.clone().map(|p| &*p.leak()),
                     settings.service.domain_primary_chain_id,
                     domain_search_cache.clone(),
+                    domain_info_cache.clone(),
+                    domain_protocols_cache.clone(),
                     token_search_cache.clone(),
                     marketplace_enabled_cache.clone(),
                     coin_price_cache.clone(),
@@ -250,6 +263,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             settings.service.bens_protocols.clone().map(|p| &*p.leak()),
             settings.service.domain_primary_chain_id,
             domain_search_cache.clone(),
+            domain_info_cache.clone(),
+            domain_protocols_cache.clone(),
             token_search_cache.clone(),
             marketplace_enabled_cache.clone(),
             None,

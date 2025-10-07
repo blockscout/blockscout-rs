@@ -2,12 +2,54 @@ use crate::{error::ParseError, proto};
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProtocolInfo {
+    pub id: String,
+    pub short_name: String,
+    pub title: String,
+    pub description: String,
+    pub deployment_blockscout_base_url: String,
+    pub tld_list: Vec<String>,
+    pub icon_url: Option<String>,
+    pub docs_url: Option<String>,
+}
+
+impl From<bens_proto::ProtocolInfo> for ProtocolInfo {
+    fn from(protocol: bens_proto::ProtocolInfo) -> Self {
+        Self {
+            id: protocol.id,
+            short_name: protocol.short_name,
+            title: protocol.title,
+            description: protocol.description,
+            deployment_blockscout_base_url: protocol.deployment_blockscout_base_url,
+            tld_list: protocol.tld_list,
+            icon_url: protocol.icon_url,
+            docs_url: protocol.docs_url,
+        }
+    }
+}
+
+impl From<ProtocolInfo> for proto::ProtocolInfo {
+    fn from(protocol: ProtocolInfo) -> Self {
+        Self {
+            id: protocol.id,
+            short_name: protocol.short_name,
+            title: protocol.title,
+            description: protocol.description,
+            deployment_blockscout_base_url: protocol.deployment_blockscout_base_url,
+            tld_list: protocol.tld_list,
+            icon_url: protocol.icon_url,
+            docs_url: protocol.docs_url,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Domain {
     pub address: Option<alloy_primitives::Address>,
     pub name: String,
     pub expiry_date: Option<String>,
-    pub protocol: serde_json::Value,
+    pub protocol: ProtocolInfo,
 }
 
 impl TryFrom<bens_proto::Domain> for Domain {
@@ -18,28 +60,32 @@ impl TryFrom<bens_proto::Domain> for Domain {
             .resolved_address
             .map(|address| address.hash.parse().map_err(ParseError::from))
             .transpose()?;
+        let protocol = domain
+            .protocol
+            .ok_or_else(|| ParseError::Custom("protocol is missing".to_string()))?
+            .into();
 
         Ok(Self {
             name: domain.name,
             address,
             expiry_date: domain.expiry_date,
-            protocol: serde_json::to_value(
-                domain
-                    .protocol
-                    .ok_or_else(|| ParseError::Custom("protocol is missing".to_string()))?,
-            )
-            .map_err(ParseError::from)?,
+            protocol,
         })
     }
 }
 
 impl From<Domain> for proto::Domain {
     fn from(v: Domain) -> Self {
+        // convert protocol to prost_wkt struct
+        let protocol = serde_json::from_value(
+            serde_json::to_value(v.protocol).expect("failed to serialize protocol"),
+        )
+        .expect("failed to deserialize protocol");
         Self {
             address: v.address.map(|a| a.to_checksum(None)),
             name: v.name,
             expiry_date: v.expiry_date,
-            protocol: serde_json::from_value(v.protocol).expect("failed to deserialize protocol"),
+            protocol,
         }
     }
 }
@@ -49,7 +95,7 @@ pub struct DomainInfo {
     pub address: alloy_primitives::Address,
     pub name: String,
     pub expiry_date: Option<String>,
-    pub protocol: serde_json::Value,
+    pub protocol: ProtocolInfo,
     pub names_count: u32,
 }
 
@@ -66,13 +112,14 @@ impl TryFrom<bens_proto::GetAddressResponse> for DomainInfo {
             .ok_or_else(|| ParseError::Custom("address is missing".to_string()))??;
         let protocol = domain
             .protocol
-            .ok_or_else(|| ParseError::Custom("protocol is missing".to_string()))?;
+            .ok_or_else(|| ParseError::Custom("protocol is missing".to_string()))?
+            .into();
 
         Ok(Self {
             name: domain.name,
             address,
             expiry_date: domain.expiry_date,
-            protocol: serde_json::to_value(protocol).map_err(ParseError::from)?,
+            protocol,
             names_count: res.resolved_domains_count as u32,
         })
     }
@@ -95,6 +142,30 @@ impl From<DomainInfo> for Domain {
             address: Some(v.address),
             name: v.name,
             expiry_date: v.expiry_date,
+            protocol: v.protocol,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BasicDomainInfo {
+    pub name: String,
+    pub protocol: String,
+}
+
+impl From<DomainInfo> for BasicDomainInfo {
+    fn from(v: DomainInfo) -> Self {
+        Self {
+            name: v.name,
+            protocol: v.protocol.short_name,
+        }
+    }
+}
+
+impl From<BasicDomainInfo> for proto::BasicDomainInfo {
+    fn from(v: BasicDomainInfo) -> Self {
+        Self {
+            name: v.name,
             protocol: v.protocol,
         }
     }

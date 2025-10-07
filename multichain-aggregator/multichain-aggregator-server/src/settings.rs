@@ -37,6 +37,10 @@ pub struct CacheSettings {
     pub redis: RedisSettings,
     #[serde(default = "default_domain_search_cache")]
     pub domain_search_cache: CacheEntrySettings,
+    #[serde(default = "default_domain_info_cache")]
+    pub domain_info_cache: CacheEntrySettings,
+    #[serde(default = "default_domain_protocols_cache")]
+    pub domain_protocols_cache: CacheEntrySettings,
     #[serde(default = "default_decoded_calldata_cache")]
     pub decoded_calldata_cache: CacheEntrySettings,
     #[serde(default = "default_token_search_cache")]
@@ -212,6 +216,26 @@ fn default_decoded_calldata_cache() -> CacheEntrySettings {
 
 fn default_domain_search_cache() -> CacheEntrySettings {
     let ttl = 6 * ONE_HOUR;
+    let refresh_ahead = ttl / 5; // 20% of ttl
+    CacheEntrySettings {
+        enabled: default_enabled(),
+        ttl,
+        refresh_ahead: Some(refresh_ahead),
+    }
+}
+
+fn default_domain_info_cache() -> CacheEntrySettings {
+    let ttl = 6 * ONE_HOUR;
+    let refresh_ahead = ttl / 5; // 20% of ttl
+    CacheEntrySettings {
+        enabled: default_enabled(),
+        ttl,
+        refresh_ahead: Some(refresh_ahead),
+    }
+}
+
+fn default_domain_protocols_cache() -> CacheEntrySettings {
+    let ttl = 24 * ONE_HOUR;
     let refresh_ahead = ttl / 5; // 20% of ttl
     CacheEntrySettings {
         enabled: default_enabled(),

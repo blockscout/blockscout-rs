@@ -235,6 +235,20 @@ impl ClusterExplorerService for ClusterExplorer {
         }))
     }
 
+    async fn list_domain_protocols(
+        &self,
+        request: Request<ListDomainProtocolsRequest>,
+    ) -> Result<Response<ListDomainProtocolsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let protocols = cluster.get_protocols_cached().await?;
+
+        Ok(Response::new(ListDomainProtocolsResponse {
+            items: protocols.into_iter().map(|p| p.into()).collect(),
+        }))
+    }
+
     async fn search_addresses(
         &self,
         request: Request<SearchByQueryRequest>,
