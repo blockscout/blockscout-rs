@@ -124,6 +124,11 @@
       "subgraph_path": "../subgraphs/taiko-subgraph",
       "subgraph_name": "taiko-subgraph",
       "network": "taiko-mainnet"
+    },
+    "zns-unichain": {
+      "subgraph_path": "../subgraphs/zns-subgraph",
+      "subgraph_name": "zns-unichain-subgraph",
+      "network": "unichain-mainnet"
     }
   }
 }

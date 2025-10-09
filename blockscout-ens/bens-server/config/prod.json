@@ -224,7 +224,8 @@
           "url": "https://unichain.blockscout.com"
         },
         "use_protocols": [
-          "ens"
+          "ens",
+          "zns-unichain"
         ]
       },
       "1301": {
@@ -234,6 +235,12 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "1868": {
+        "blockscout": {
+          "url": "https://soneium.blockscout.com/"
+        },
+        "use_protocols": ["ens"]
       },
       "239": {
         "blockscout": {
@@ -265,6 +272,22 @@
         },
         "use_protocols": [
           "arb"
+        ]
+      },
+      "695569": {
+        "blockscout": {
+          "url": "https://explorer.pyropechain.com/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "3735928814": {
+        "blockscout": {
+          "url": "https://eden.blockscout.com/"
+        },
+        "use_protocols": [
+          "ens"
         ]
       },
       "167000": {
@@ -518,6 +541,22 @@
           "docs_url": "https://docs.znsconnect.io/"
         }
       },
+      "zns-unichain": {
+        "tld_list": ["defi"],
+        "network_id": 130,
+        "subgraph_name": "zns-unichain-subgraph",
+        "address_resolve_technique": "all_domains",
+        "specific": {
+          "type": "ens_like"
+        },
+        "meta": {
+          "short_name": "ZNS",
+          "title": "ZNS Connect Domains",
+          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
+          "docs_url": "https://docs.znsconnect.io/"
+        }
+      },
       "d3-connect-shib": {
         "tld_list": ["shib"],
         "network_id": 109,
@@ -711,7 +750,7 @@
       "taiko": {
         "tld_list": ["taiko"],
         "network_id": 167000,
-        "subgraph_name": "mint-subgraph",
+        "subgraph_name": "taiko-subgraph",
         "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "ens_like",

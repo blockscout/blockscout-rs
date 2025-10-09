@@ -105,3 +105,10 @@ provider = [
     { label = "taiko-mainnet", url = "https://taiko.drpc.org", features = [] }
 ]
 shard = "primary"
+
+
+[chains.unichain-mainnet]
+provider = [
+    { label = "unichain-mainnet", url = "https://rpc.poolz.finance/unichain", features = [] }
+]
+shard = "primary"

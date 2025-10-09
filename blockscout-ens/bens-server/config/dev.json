@@ -27,6 +27,14 @@
         ],
         "rpc_url": "https://www.shibrpc.com"
       },
+      "130": {
+        "blockscout": {
+          "url": "https://unichain.blockscout.com"
+        },
+        "use_protocols": [
+          "zns-unichain"
+        ]
+      },
       "157": {
         "blockscout": {
           "url": "https://puppyscan.shib.io/"
@@ -226,6 +234,22 @@
           "description": "SPACE ID is a universal domain name and identity platform",
           "icon_url": "https://i.imgur.com/yYc2C6V.png",
           "docs_url": "https://docs.space.id/"
+        }
+      },
+      "zns-unichain": {
+        "tld_list": ["defi"],
+        "network_id": 130,
+        "subgraph_name": "zns-unichain-subgraph",
+        "address_resolve_technique": "all_domains",
+        "specific": {
+          "type": "ens_like"
+        },
+        "meta": {
+          "short_name": "ZNS",
+          "title": "ZNS Connect Domains",
+          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
+          "docs_url": "https://docs.znsconnect.io/"
         }
       }
     }
