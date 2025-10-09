@@ -18,6 +18,8 @@ export function createEventID(event: ethereum.Event): string {
     .concat("-")
     .concat(event.transaction.index.toString())
     .concat("-")
+    .concat(event.logIndex.toString())
+    .concat("-")
     .concat(event.transactionLogIndex.toString());
 }
 
