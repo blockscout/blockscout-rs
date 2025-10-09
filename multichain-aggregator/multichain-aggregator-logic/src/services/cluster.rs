@@ -1,6 +1,6 @@
 use crate::{
     clients::{
-        bens::{get_address, lookup_domain_name},
+        bens::{get_address, get_protocols, lookup_domain_name},
         blockscout,
     },
     error::{ParseError, ServiceError},
@@ -23,7 +23,7 @@ use crate::{
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
-        domains::{Domain, DomainInfo},
+        domains::{Domain, DomainInfo, ProtocolInfo},
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
         search_results::QuickSearchResult,
@@ -44,6 +44,8 @@ use std::{
 
 pub type DecodedCalldataCache = CacheHandler<RedisStore, String, serde_json::Value>;
 pub type DomainSearchCache = CacheHandler<RedisStore, String, (Vec<Domain>, Option<String>)>;
+pub type DomainInfoCache = CacheHandler<RedisStore, String, Option<DomainInfo>>;
+pub type DomainProtocolsCache = CacheHandler<RedisStore, String, Vec<ProtocolInfo>>;
 pub type TokenSearchCache =
     CacheHandler<RedisStore, String, (Vec<AggregatedToken>, Option<ListClusterTokensPageToken>)>;
 pub type BlockscoutClients = Arc<BTreeMap<ChainId, Arc<HttpApiClient>>>;
@@ -60,6 +62,8 @@ pub struct Cluster {
     bens_protocols: Option<&'static [String]>,
     domain_primary_chain_id: ChainId,
     domain_search_cache: Option<DomainSearchCache>,
+    domain_info_cache: Option<DomainInfoCache>,
+    domain_protocols_cache: Option<DomainProtocolsCache>,
     token_search_cache: Option<TokenSearchCache>,
     marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
     coin_price_cache: Option<CoinPriceCache>,
@@ -79,6 +83,8 @@ impl Cluster {
         bens_protocols: Option<&'static [String]>,
         domain_primary_chain_id: ChainId,
         domain_search_cache: Option<DomainSearchCache>,
+        domain_info_cache: Option<DomainInfoCache>,
+        domain_protocols_cache: Option<DomainProtocolsCache>,
         token_search_cache: Option<TokenSearchCache>,
         marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
         coin_price_cache: Option<CoinPriceCache>,
@@ -95,6 +101,8 @@ impl Cluster {
             bens_protocols,
             domain_primary_chain_id,
             domain_search_cache,
+            domain_info_cache,
+            domain_protocols_cache,
             token_search_cache,
             marketplace_enabled_cache,
             coin_price_cache,
@@ -266,7 +274,7 @@ impl Cluster {
         .await?
         .unwrap_or_else(|| AggregatedAddressInfo::default(address.into()));
 
-        let (has_tokens, has_interop_message_transfers, coin_price) = futures::join!(
+        let (has_tokens, has_interop_message_transfers, coin_price, domain_info) = futures::join!(
             address_token_balances::check_if_tokens_at_address(
                 &self.db,
                 address,
@@ -278,6 +286,7 @@ impl Cluster {
                 cluster_chain_ids,
             ),
             self.fetch_coin_price_cached(),
+            self.get_domain_info_cached(address),
         );
 
         address_info.has_tokens = has_tokens?;
@@ -288,6 +297,7 @@ impl Cluster {
             })
             .ok()
             .flatten();
+        address_info.domain_info = domain_info?;
 
         Ok(address_info)
     }
@@ -790,30 +800,31 @@ impl Cluster {
         .await
     }
 
-    pub async fn get_domain_info(
+    pub async fn get_domain_info_cached(
+        &self,
+        address: alloy_primitives::Address,
+    ) -> Result<Option<DomainInfo>, ServiceError> {
+        let key = format!("{}:{}", self.name, address);
+
+        let get = || {
+            get_domain_info(
+                self.bens_client.clone(),
+                address,
+                self.domain_primary_chain_id,
+            )
+        };
+
+        let domain_info = maybe_cache_lookup!(self.domain_info_cache.as_ref(), key, get)?;
+
+        Ok(domain_info)
+    }
+
+    pub async fn get_domain_info_batch_cached(
         &self,
         addresses: impl IntoIterator<Item = alloy_primitives::Address>,
     ) -> HashMap<alloy_primitives::Address, DomainInfo> {
         let jobs = addresses.into_iter().map(|address| async move {
-            let request = bens_proto::GetAddressRequest {
-                address: address.to_string(),
-                chain_id: self.domain_primary_chain_id,
-                protocol_id: None,
-            };
-
-            let res = self
-                .bens_client
-                .request(&get_address::GetAddress { request })
-                .await
-                .inspect_err(|err| {
-                    tracing::error!(
-                        error = ?err,
-                        address = ?address,
-                        "failed to preload domain info"
-                    );
-                });
-
-            let domain_info = res.map(DomainInfo::try_from).ok()?.ok()?;
+            let domain_info = self.get_domain_info_cached(address).await.ok()??;
 
             Some((address, domain_info))
         });
@@ -823,6 +834,13 @@ impl Cluster {
             .into_iter()
             .flatten()
             .collect()
+    }
+
+    pub async fn get_protocols_cached(&self) -> Result<Vec<ProtocolInfo>, ServiceError> {
+        let key = format!("{}:domain_protocols", self.name);
+        let get = || get_protocols(self.bens_client.clone(), self.domain_primary_chain_id);
+        let protocols = maybe_cache_lookup!(self.domain_protocols_cache.as_ref(), key, get)?;
+        Ok(protocols)
     }
 
     pub async fn quick_search(
@@ -846,6 +864,44 @@ impl Cluster {
         .await?;
         Ok(result)
     }
+}
+
+async fn get_domain_info(
+    bens_client: HttpApiClient,
+    address: alloy_primitives::Address,
+    chain_id: ChainId,
+) -> Result<Option<DomainInfo>, ServiceError> {
+    let request = bens_proto::GetAddressRequest {
+        address: address.to_string(),
+        chain_id,
+        protocol_id: None,
+    };
+
+    let res = bens_client
+        .request(&get_address::GetAddress { request })
+        .await
+        .inspect_err(|err| {
+            tracing::error!(
+                error = ?err,
+                address = ?address,
+                "failed to preload domain info"
+            );
+        })?;
+
+    let domain_info = DomainInfo::try_from(res).ok();
+
+    Ok(domain_info)
+}
+
+pub async fn get_protocols(
+    bens_client: HttpApiClient,
+    chain_id: ChainId,
+) -> Result<Vec<ProtocolInfo>, ServiceError> {
+    let request = bens_proto::GetProtocolsRequest { chain_id };
+    let res = bens_client
+        .request(&get_protocols::GetProtocols { request })
+        .await?;
+    Ok(res.items.into_iter().map(|p| p.into()).collect())
 }
 
 pub async fn search_domains(

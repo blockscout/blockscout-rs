@@ -222,6 +222,25 @@ paths:
           type: string
       tags:
         - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/domain-protocols:
+    get:
+      operationId: ClusterExplorerService_ListDomainProtocols
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDomainProtocolsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/messages:
     get:
       operationId: ClusterExplorerService_ListInteropMessages
@@ -1347,6 +1366,13 @@ definitions:
         type: boolean
       contract_name:
         type: string
+  v1BasicDomainInfo:
+    type: object
+    properties:
+      name:
+        type: string
+      protocol:
+        type: string
   v1BatchImportRequest:
     type: object
     properties:
@@ -1511,6 +1537,11 @@ definitions:
       exchange_rate:
         type: string
         description: Exchange rate of the cluster native coin.
+      domains:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1BasicDomainInfo'
   v1GetAddressResponseChainInfo:
     type: object
     properties:
@@ -1682,6 +1713,14 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1MarketplaceDapp'
+  v1ListDomainProtocolsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ProtocolInfo'
   v1ListDomainsResponse:
     type: object
     properties:
@@ -1763,6 +1802,27 @@ definitions:
       page_size:
         type: integer
         format: int64
+  v1ProtocolInfo:
+    type: object
+    properties:
+      id:
+        type: string
+      short_name:
+        type: string
+      title:
+        type: string
+      description:
+        type: string
+      deployment_blockscout_base_url:
+        type: string
+      tld_list:
+        type: array
+        items:
+          type: string
+      icon_url:
+        type: string
+      docs_url:
+        type: string
   v1QuickSearchResponse:
     type: object
     properties:

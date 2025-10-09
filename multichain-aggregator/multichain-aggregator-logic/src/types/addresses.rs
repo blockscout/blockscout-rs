@@ -2,7 +2,10 @@ use super::ChainId;
 use crate::{
     error::ParseError,
     proto,
-    types::{domains::DomainInfo, sea_orm_wrappers::SeaOrmAddress},
+    types::{
+        domains::{BasicDomainInfo, DomainInfo},
+        sea_orm_wrappers::SeaOrmAddress,
+    },
 };
 use bigdecimal::BigDecimal;
 use entity::{
@@ -143,6 +146,11 @@ impl From<AggregatedAddressInfo> for proto::GetAddressResponse {
             has_interop_message_transfers: v.has_interop_message_transfers,
             coin_balance,
             exchange_rate: v.exchange_rate,
+            domains: v
+                .domain_info
+                .map(BasicDomainInfo::from)
+                .map(|d| vec![d.into()])
+                .unwrap_or_default(),
         }
     }
 }

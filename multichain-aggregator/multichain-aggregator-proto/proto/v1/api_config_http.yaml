@@ -71,6 +71,9 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListTokenHolders
       get: /api/v1/clusters/{cluster_id}/tokens/{address_hash}/holders
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListDomainProtocols
+      get: /api/v1/clusters/{cluster_id}/domain-protocols
+
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchAddresses
       get: /api/v1/clusters/{cluster_id}/search/addresses
 

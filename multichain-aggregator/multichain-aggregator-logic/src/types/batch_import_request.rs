@@ -114,7 +114,13 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
     type Error = ServiceError;
 
     fn try_from(value: proto::BatchImportRequest) -> Result<Self, Self::Error> {
-        let chain_id = value.chain_id.parse().map_err(ParseError::from)?;
+        let chain_id = value
+            .chain_id
+            .parse()
+            .map_err(ParseError::from)
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, "failed to parse chain id");
+            })?;
 
         macro_rules! try_into_vec {
             ($value: expr) => {

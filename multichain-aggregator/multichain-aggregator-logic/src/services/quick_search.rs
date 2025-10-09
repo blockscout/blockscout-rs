@@ -103,26 +103,25 @@ impl SearchTerm {
                 results.transactions.extend(transactions);
             }
             SearchTerm::AddressHash(address) => {
-                let (mut addresses, _) = addresses::list_aggregated_address_infos(
+                let address = addresses::get_aggregated_address_info(
                     db,
-                    vec![address],
+                    address,
                     Some(active_chain_ids.clone()),
-                    None,
-                    1,
-                    None,
                 )
                 .await?;
 
-                preload_domain_info!(search_context.cluster, addresses);
+                if let Some(mut address) = address {
+                    let domain_info = search_context
+                        .cluster
+                        .get_domain_info_cached(*address.hash)
+                        .await?;
 
-                let domains = addresses
-                    .iter()
-                    .filter_map(|a| a.domain_info.clone())
-                    .map(Domain::from)
-                    .collect::<Vec<_>>();
-
-                results.domains.extend(domains);
-                results.addresses.extend(addresses);
+                    if let Some(domain_info) = domain_info {
+                        address.domain_info = Some(domain_info.clone());
+                        results.domains.extend(vec![Domain::from(domain_info)]);
+                    }
+                    results.addresses.extend(vec![address]);
+                };
             }
             SearchTerm::BlockNumber(block_number) => {
                 let (block_numbers, _) = search_context
