@@ -1,0 +1,42 @@
+[package]
+name = "interchain-indexer-server"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+interchain-indexer-proto = { workspace = true }
+interchain-indexer-logic = { workspace = true }
+interchain-indexer-migration = { workspace = true }
+actix-web = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+blockscout-service-launcher = { workspace = true, features = ["database-1" ] }
+config = { workspace = true }
+sea-orm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
+tonic = { workspace = true }
+tracing = { workspace = true }
+env-collector = { workspace = true }
+convert-trait = { workspace = true }
+
+# # Uncomment if needed
+# ethers = { workspace = true }
+# blockscout-display-bytes = { workspace = true }
+# serde_with = { workspace = true }
+
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database"] }
+pretty_assertions = { workspace = true }
+reqwest = { workspace = true, features = ["json"]}
+# # Uncomment if needed
+# mockall = { workspace = true }
+# bytes = { workspace = true }
+# hex = { workspace = true }
+# rand = { workspace = true }
+# rstest = { workspace = true }
+# sea-orm = { workspace = true }
+# tokio-stream = { workspace = true }

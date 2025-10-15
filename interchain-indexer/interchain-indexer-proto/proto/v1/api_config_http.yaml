@@ -1,0 +1,18 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    
+    - selector: blockscout.interchainIndexer.v1.InterchainService.InterchainServiceCreate
+      post: /api/v1/interchain_service:create
+      body: "*"
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.InterchainServiceSearch
+      get: /api/v1/interchain_service:search
+    
+    #################### Health ####################
+
+    - selector: blockscout.interchainIndexer.v1.Health.Check
+      get: /health
+

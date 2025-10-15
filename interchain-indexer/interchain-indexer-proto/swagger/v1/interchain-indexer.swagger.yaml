@@ -1,0 +1,168 @@
+swagger: "2.0"
+info:
+  title: Interchain Indexer service
+  version: 0.1.1
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
+tags:
+  - name: InterchainService
+  - name: Health
+host: interchain-indexer.services.blockscout.com
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/interchain_service:create:
+    post:
+      operationId: InterchainService_InterchainServiceCreate
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1InterchainServiceCreateResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1InterchainServiceCreateRequest'
+      tags:
+        - InterchainService
+      security:
+        - ApiKeyAuth: []
+  /api/v1/interchain_service:search:
+    get:
+      operationId: InterchainService_InterchainServiceSearch
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1InterchainServiceSearchResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: filter_1
+          in: query
+          required: false
+          type: string
+        - name: filter_2
+          in: query
+          required: false
+          type: string
+        - name: filter_3
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1InterchainServiceCreateRequest:
+    type: object
+    properties:
+      foo:
+        type: string
+      bar:
+        type: string
+      timestamp:
+        type: string
+        format: int64
+      map:
+        type: object
+        additionalProperties:
+          type: string
+      url:
+        type: string
+  v1InterchainServiceCreateResponse:
+    type: object
+    properties:
+      item:
+        $ref: '#/definitions/v1Item'
+  v1InterchainServiceSearchResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Item'
+  v1Item:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: x-api-key
+    in: header
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs
