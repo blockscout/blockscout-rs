@@ -32,7 +32,6 @@ dataSources:
           handler: handleNewResolver
         - event: NewTTL(indexed bytes32,uint64)
           handler: handleNewTTL
-
   - kind: ethereum/contract
     name: PublicResolver
     network: base-mainnet
@@ -103,7 +102,6 @@ dataSources:
           handler: handleNameRenewed
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleNameTransferred
-
   - kind: ethereum/contract
     name: BASERegistrarController
     network: base-mainnet
@@ -122,7 +120,8 @@ dataSources:
         - name: BASERegistrarController
           file: ./abis/BASERegistrarController.json
       eventHandlers:
-        - event: NameRegistered(string,indexed bytes32,indexed address,uint256,uint256,uint256)
+        - event: NameRegistered(string,indexed bytes32,indexed
+            address,uint256,uint256,uint256)
           handler: handleNameRegisteredByController
         - event: NameRenewed(string,indexed bytes32,uint256,uint256)
           handler: handleNameRenewedByController
