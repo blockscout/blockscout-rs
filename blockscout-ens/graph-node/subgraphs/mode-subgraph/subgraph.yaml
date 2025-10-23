@@ -6,11 +6,11 @@ schema:
 dataSources:
   - kind: ethereum/contract
     name: Registry
-    network: mode-sepolia
+    network: mode-mainnet
     source:
       abi: Registry
-      address: "0xbF736C9845FaeC121D2E9c07F1419CBA068EC232"
-      startBlock: 7047345
+      address: "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17"
+      startBlock: 1367969
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -34,10 +34,10 @@ dataSources:
           handler: handleNewTTL
   - kind: ethereum/contract
     name: Resolver
-    network: mode-sepolia
+    network: mode-mainnet
     source:
       abi: Resolver
-      startBlock: 7047411
+      startBlock: 1392793
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -74,11 +74,11 @@ dataSources:
           handler: handleTextChanged
   - kind: ethereum/contract
     name: Base
-    network: mode-sepolia
+    network: mode-mainnet
     source:
       abi: Base
-      address: "0xca3a57e014937c29526de98e4a8a334a7d04792b"
-      startBlock: 7207798
+      address: "0x2ad86eeec513ac16804bb05310214c3fd496835b"
+      startBlock: 2691415
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -101,11 +101,11 @@ dataSources:
           handler: handleNameTransferred
   - kind: ethereum/contract
     name: RegistrarController
-    network: mode-sepolia
+    network: mode-mainnet
     source:
       abi: RegistrarController
-      address: "0xc5005a0027ccd013622940202693795973991dd4"
-      startBlock: 7047379
+      address: "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7"
+      startBlock: 1367998
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6

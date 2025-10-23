@@ -28,6 +28,8 @@ export function handleExpirationChanged(event: ExpirationChangedEvent): void {
         domain.isMigrated = true;
         domain.subdomainCount = 0;
         domain.owner = EMPTY_ADDRESS;
+        domain.storedOffchain = false;
+        domain.resolvedWithWildcard = false;
     }
     domain.expiryDate = event.params.expirationTime;
     domain.save();

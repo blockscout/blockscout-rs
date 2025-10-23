@@ -21,6 +21,8 @@ function createDomain(node: string, timestamp: BigInt): Domain {
     domain.isMigrated = true;
     domain.createdAt = timestamp;
     domain.subdomainCount = 0;
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
   }
   return domain;
 }
@@ -81,6 +83,8 @@ function _handleNewOwner(event: NewOwnerEvent, isMigrated: boolean): void {
     domain = new Domain(subnode);
     domain.createdAt = event.block.timestamp;
     domain.subdomainCount = 0;
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
   }
 
   if (domain.parent === null && parent !== null) {

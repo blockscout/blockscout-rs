@@ -6,11 +6,11 @@ schema:
 dataSources:
   - kind: ethereum/contract
     name: Registry
-    network: shibarium
+    network: shibarium-testnet
     source:
       abi: Registry
-      address: "0xDe74799371Ceac11A0F52BA2694392A391D0dA18"
-      startBlock: 3473390
+      address: "0x1443bC2bBAB07437BCF9C577b647523A736bB33E"
+      startBlock: 1927346
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -34,11 +34,11 @@ dataSources:
           handler: handleTransfer
   - kind: ethereum/contract
     name: Resolver
-    network: shibarium
+    network: shibarium-testnet
     source:
       abi: Resolver
-      address: "0x8b9d58e6915A71Dd782F5111c886377Df1d5cBe5"
-      startBlock: 8954971
+      address: "0xae6Bdf6e9edA0bA60F97390e70a545e91B5E8bf2"
+      startBlock: 6806860
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
