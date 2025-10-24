@@ -40,6 +40,7 @@ url = { workspace = true }
 futures = { workspace = true }
 recache = { workspace = true }
 amplify = { workspace = true }
+base32ct = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }
