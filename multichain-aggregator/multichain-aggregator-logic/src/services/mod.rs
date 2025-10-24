@@ -4,6 +4,7 @@ pub mod channel;
 pub mod cluster;
 pub mod coin_price;
 pub mod dapp_search;
+pub mod filecoin;
 pub mod import;
 pub mod quick_search;
 

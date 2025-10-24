@@ -13,6 +13,7 @@ use crate::{
         self, MIN_QUERY_LENGTH,
         coin_price::{CoinPriceCache, try_fetch_coin_price},
         dapp_search,
+        filecoin::try_filecoin_address_to_evm_address,
         macros::{maybe_cache_lookup, preload_domain_info},
         quick_search::{self, SearchContext},
     },
@@ -576,7 +577,10 @@ impl Cluster {
             // 3. Otherwise, fallback to a contract name search
             // TODO: support joint paginated search for domain names without TLD and contract names;
             // we need to first handle all pages for domains and then switch to contract names
-            if let Ok(address) = alloy_primitives::Address::from_str(&query) {
+            if let Some(address) = alloy_primitives::Address::from_str(&query)
+                .ok()
+                .or_else(|| try_filecoin_address_to_evm_address(&query))
+            {
                 (vec![address], None)
             } else if domain_name_with_tld_regex().is_match(&query) {
                 let domains = self
