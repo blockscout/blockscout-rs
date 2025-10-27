@@ -217,7 +217,7 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     if let Some(address) = query
         .parse::<alloy_primitives::Address>()
         .ok()
-        .or(try_filecoin_address_to_evm_address(query))
+        .or_else(|| try_filecoin_address_to_evm_address(query))
     {
         terms.push(SearchTerm::TokenInfo(address.to_string()));
         terms.push(SearchTerm::AddressHash(address));

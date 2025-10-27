@@ -2,6 +2,7 @@ use alloy_primitives::Address;
 use base32ct::{Base32Unpadded, Encoding};
 use std::str::FromStr;
 
+// Based on https://docs.filecoin.io/smart-contracts/filecoin-evm-runtime/address-types#converting-to-a-0x-style-address
 pub fn try_filecoin_address_to_evm_address(address: &str) -> Option<Address> {
     // ID addresses
     if let Some(actor_id) = address.strip_prefix("f0") {
