@@ -44,7 +44,13 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
 
   let label = uint256ToByteArray(event.params.id);
   let registration = new Registration(label.toHex());
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+  
+  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domain = Domain.load(domainId);
+  
+  if (domain == null) {
+    return;
+  }
 
   registration.domain = domain.id;
   registration.registrationDate = event.block.timestamp;
@@ -99,7 +105,11 @@ function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
     return;
   }
 
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domain = Domain.load(domainId);
+  if (domain == null) {
+    return;
+  }
   if (domain.labelName !== name) {
     domain.labelName = name;
     domain.name = name + ".eth";
@@ -115,8 +125,16 @@ function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
 
 export function handleNameRenewed(event: NameRenewedEvent): void {
   let label = uint256ToByteArray(event.params.id);
-  let registration = Registration.load(label.toHex())!;
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+  let registration = Registration.load(label.toHex());
+  if (registration == null) {
+    return;
+  }
+  
+  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domain = Domain.load(domainId);
+  if (domain == null) {
+    return;
+  }
 
   registration.expiryDate = event.params.expires;
   domain.expiryDate = event.params.expires.plus(GRACE_PERIOD_SECONDS);
@@ -140,7 +158,11 @@ export function handleNameTransferred(event: TransferEvent): void {
   let registration = Registration.load(label.toHex());
   if (registration == null) return;
 
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domain = Domain.load(domainId);
+  if (domain == null) {
+    return;
+  }
 
   registration.registrant = account.id;
   domain.registrant = account.id;

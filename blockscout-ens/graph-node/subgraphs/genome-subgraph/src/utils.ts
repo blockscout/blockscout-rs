@@ -2,7 +2,7 @@ import { BigInt, ByteArray, Bytes, crypto, ethereum, log } from "@graphprotocol/
 import { Account, Domain } from "../generated/schema";
 
 // @ts-ignore
-const NETWORK = "{{network}}"
+const NETWORK = "gnosis-mainnet"
 
 
 // note that this has is not the same as nodehash(gno):
@@ -83,6 +83,8 @@ export function concat(a: ByteArray, b: ByteArray): ByteArray {
     let domain = Domain.load(node);
     if (domain == null) {
       domain = new Domain(node);
+      domain.storedOffchain = false;
+      domain.resolvedWithWildcard = false;
       domain.save();
     }
   

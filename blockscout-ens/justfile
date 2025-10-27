@@ -7,6 +7,8 @@ db-user := env_var_or_default('DB_USER', "graph-node")
 db-password := env_var_or_default('DB_PASSWORD', "let-me-in")
 db-name := env_var_or_default('DB_NAME', "graph-node")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+export SQLX_OFFLINE := "true"
+
 
 docker-name := env_var_or_default('DOCKER_NAME', "bens-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
@@ -61,3 +63,7 @@ run:
 
 run-dev:
     dotenv -e .env.dev -- just run
+
+
+check-envs:
+    cargo run --bin check-envs

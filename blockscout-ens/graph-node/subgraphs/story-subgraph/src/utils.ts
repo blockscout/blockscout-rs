@@ -78,6 +78,8 @@ export function concat(a: ByteArray, b: ByteArray): ByteArray {
     let domain = Domain.load(node);
     if (domain == null) {
       domain = new Domain(node);
+      domain.storedOffchain = false;
+      domain.resolvedWithWildcard = false;
       domain.save();
     }
 

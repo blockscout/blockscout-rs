@@ -48,7 +48,11 @@ function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
     return;
   }
 
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domain = Domain.load(domainId);
+  if (domain == null) {
+    return;
+  }
   if (domain.labelName !== name) {
     domain.labelName = name;
     domain.name = name + BASE_NODE;
