@@ -1014,6 +1014,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
 
 [[package]]
+name = "base32ct"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d6c3fda01099034364d46377293dd759c00e24d40143710e288ec0302e9541"
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3309,6 +3315,7 @@ dependencies = [
  "anyhow",
  "api-client-framework",
  "async-trait",
+ "base32ct",
  "base64 0.22.1",
  "bens-proto",
  "bigdecimal",

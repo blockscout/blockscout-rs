@@ -1,7 +1,10 @@
 use crate::{
     error::ServiceError,
     repository::addresses,
-    services::{MIN_QUERY_LENGTH, cluster::Cluster, macros::preload_domain_info},
+    services::{
+        MIN_QUERY_LENGTH, cluster::Cluster, filecoin::try_filecoin_address_to_evm_address,
+        macros::preload_domain_info,
+    },
     types::{ChainId, domains::Domain, hashes::HashType, search_results::QuickSearchResult},
 };
 use sea_orm::DatabaseConnection;
@@ -211,7 +214,11 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
         terms.push(SearchTerm::Hash(hash));
         return terms;
     }
-    if let Ok(address) = query.parse::<alloy_primitives::Address>() {
+    if let Some(address) = query
+        .parse::<alloy_primitives::Address>()
+        .ok()
+        .or_else(|| try_filecoin_address_to_evm_address(query))
+    {
         terms.push(SearchTerm::TokenInfo(address.to_string()));
         terms.push(SearchTerm::AddressHash(address));
         return terms;
