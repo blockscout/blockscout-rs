@@ -1,6 +1,6 @@
 use crate::proto::{interchain_service_server::*, *};
 use convert_trait::TryConvert;
-use interchain_indexer_logic::{ApiError, plus};
+use interchain_indexer_logic::ApiError;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -16,21 +16,20 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<InterchainServiceCreateRequest>,
     ) -> Result<Response<InterchainServiceCreateResponse>, Status> {
         let (_metadata, _, request) = request.into_parts();
-        let request: InterchainServiceCreateRequestInternal =
+        let _request: InterchainServiceCreateRequestInternal =
             TryConvert::try_convert(request).map_err(ApiError::Convert)?;
         todo!()
     }
 
     async fn interchain_service_search(
         &self,
-        request: Request<InterchainServiceSearchRequest>,
+        _request: Request<InterchainServiceSearchRequest>,
     ) -> Result<Response<InterchainServiceSearchResponse>, Status> {
         let items = (0..10)
             .map(|i| {
-                let id = plus(i, i);
                 Item {
-                    id: id.to_string(),
-                    name: format!("Item #{}", id),
+                    id: i.to_string(),
+                    name: format!("Item #{}", i),
                 }
             })
             .collect();

@@ -17,6 +17,7 @@ interchain-indexer-proto = { path = "./interchain-indexer-proto" }
 blockscout-service-launcher = { version = "0.20.0" }
 sea-orm = { version = "1.1.14", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "postgres-array"] }
 sea-orm-migration = { version = "1.1.14", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+alloy = { version = "1.0", features = ["default"] }
 async-std = { version = "1.12.0" }
 actix-web = { version = "4.2" }
 anyhow = { version = "1.0" }
@@ -24,7 +25,7 @@ async-trait = { version = "0.1" }
 config = { version = "0.15" }
 serde = { version = "1.0" }
 serde_json = { version = "1.0.96" }
-tokio = { version = "1.23", features = ["full"] }
+tokio = { version = "1.47", features = ["full"] }
 tonic = { version = "0.12", features = ["tls", "tls-roots"] }
 tracing = { version = "0.1" }
 blockscout-display-bytes = { version = "1.1.0" }
