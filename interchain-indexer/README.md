@@ -13,6 +13,24 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 - Supports various bridge types and native interop mechanisms via pluggable workers.
 - Maintains its own database schema optimized for interchain data representation.
 - Can operate without relying on single-chain Blockscout instances.
+- Provides a set of endpoints for querying interchain messages and transfers.
+
+## Common Design Principles
+
+1. The service works across multiple networks (a cluster) and can index several bridges.
+    - **Maximal variant:** multiple networks with heterogeneous cross-chain mechanisms (e.g., Optimism Superchain with native interop and lock/mint bridges).
+    - **Base variant:** two networks connected by one bridge (e.g., Gnosis ↔ Ethereum via OmniBridge).
+    - **Minimal variant:** indexing L1 → L2 deposits within a single L2.
+2. The service must operate **independently** from Blockscout instances. Integration should be optional and not a dependency.
+3. It should focus on **cross-chain interactions**, primarily token transfers, while retaining other metadata for potential future use and schema migrations.
+4. Configuration (networks, bridges, contracts) should be stored as JSON in a local database, not as environment variables.
+5. Each cross-chain mechanism's indexing logic should be implemented as a **plugin**, not a config parameter, to ensure scalability.
+6. Planned workers:
+    - **CrosschainIndexer** indexes a single bridge and optionally combines the BridgeContractIndexer and MessageCollector entities.
+    - **BridgeContractIndexer** collects raw on-chain events for each bridge contract and stores them in `bridge_txs`.
+    - **MessageCollector** processes raw events into structured cross-chain messages and transfers.
+    - **TokenFetcher** fetches metadata for newly encountered tokens.
+    - **Renderer** serves processed data to users and external consumers.
 
 ## Envs
 
