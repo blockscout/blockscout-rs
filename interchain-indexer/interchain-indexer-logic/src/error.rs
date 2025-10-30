@@ -9,7 +9,6 @@ pub enum ApiError {
     Internal(#[from] anyhow::Error),
 }
 
-
 impl From<ApiError> for Status {
     fn from(error: ApiError) -> Self {
         let code = match &error {

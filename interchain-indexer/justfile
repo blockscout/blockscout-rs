@@ -64,11 +64,23 @@ migrate-fresh-generate-entities *args:
     just migrate-fresh
     just generate-entities {{args}}
 
+# wipe DB
+flush-database:
+    sea-orm-cli migrate -d tac-operation-lifecycle-migration reset
+
+# apply the basic formatting 
+format:
+    cargo sort --workspace
+    cargo fmt --all -- --config imports_granularity=Crate
+
+# check and lint the code
+check:
+    cargo check
+    cargo clippy --all --all-targets --all-features -- -D warnings
 
 insert-test-data:
      docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} < interchain-indexer-migration/src/mock_data/test_data.sql
     
-
 
 check-envs:
     cargo run --bin check-envs -- --validate-only

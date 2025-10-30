@@ -3,14 +3,10 @@ name = "interchain-indexer-logic"
 version = "0.1.0"
 edition = "2024"
 
-
 [dependencies]
-interchain-indexer-entity = { workspace = true }
 anyhow = { workspace = true }
 blockscout-display-bytes = { workspace = true }
-tracing = { workspace = true }
-thiserror = { workspace = true }
-tonic = { workspace = true }
+interchain-indexer-entity = { workspace = true }
 
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
@@ -18,8 +14,9 @@ sea-orm = { workspace = true, features = [
     "macros",
     "postgres-array",
 ] }
-
-
+thiserror = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }
 ## Uncomment this if needed
 #ethabi = { workspace = true }
 #ethers-core = { workspace = true }
@@ -43,6 +40,6 @@ blockscout-service-launcher = { workspace = true, features = [
     "test-database", "database-1"
     
 ] }
+interchain-indexer-migration = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
-interchain-indexer-migration = { workspace = true }

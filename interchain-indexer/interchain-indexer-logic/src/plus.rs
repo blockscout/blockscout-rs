@@ -22,7 +22,6 @@ pub fn plus(a: i32, b: i32) -> i32 {
     sum
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

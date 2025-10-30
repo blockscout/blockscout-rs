@@ -1,5 +1,5 @@
+use env_collector::{EnvCollectorSettingsBuilder, PrefixFilter, run_env_collector_cli};
 use interchain_indexer_server::Settings;
-use env_collector::{run_env_collector_cli, EnvCollectorSettingsBuilder, PrefixFilter};
 
 fn main() {
     run_env_collector_cli::<Settings>(

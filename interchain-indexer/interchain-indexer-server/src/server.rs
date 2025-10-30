@@ -1,20 +1,15 @@
 use crate::{
     proto::{
         health_actix::route_health, health_server::HealthServer,
+        interchain_service_actix::route_interchain_service,
+        interchain_service_server::InterchainServiceServer,
     },
-    services::{
-        HealthService
-    },
+    services::{HealthService, InterchainServiceImpl},
     settings::Settings,
 };
-use blockscout_service_launcher::{
-    database,
-    launcher, launcher::LaunchSettings, tracing};
+use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use migration::Migrator;
 use std::sync::Arc;
-use crate::services::InterchainServiceImpl;
-use crate::proto::interchain_service_server::InterchainServiceServer;
-use crate::proto::interchain_service_actix::route_interchain_service;
 const SERVICE_NAME: &str = "interchain_indexer";
 
 #[derive(Clone)]
@@ -22,21 +17,24 @@ struct Router {
     // TODO: add services here
     health: Arc<HealthService>,
     interchain_service: Arc<InterchainServiceImpl>,
-    }
+}
 
 impl Router {
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
         tonic::transport::Server::builder()
             .add_service(HealthServer::from_arc(self.health.clone()))
-            .add_service(InterchainServiceServer::from_arc(self.interchain_service.clone()))
-            }
+            .add_service(InterchainServiceServer::from_arc(
+                self.interchain_service.clone(),
+            ))
+    }
 }
 
 impl launcher::HttpRouter for Router {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config.configure(|config| route_health(config, self.health.clone()));
-        service_config.configure(|config| route_interchain_service(config, self.interchain_service.clone()));
-        }
+        service_config
+            .configure(|config| route_interchain_service(config, self.interchain_service.clone()));
+    }
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
@@ -45,13 +43,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
 
     let db = Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
-    let interchain_service = Arc::new(InterchainServiceImpl {
-        db: db.clone(),
-        });
+    let interchain_service = Arc::new(InterchainServiceImpl { db: db.clone() });
     let router = Router {
         health,
         interchain_service,
-        };
+    };
 
     let grpc_router = router.grpc_router();
     let http_router = router;

@@ -32,15 +32,13 @@ fn compile(
         .retain_enum_prefix()
         .extern_path(".google.protobuf", "::prost_wkt_types")
         ;
-        let default_fields: &[&str] = &[
-
-        ];
-        for default_field in default_fields {
-            config.field_attribute(
-                format!(".blockscout.interchain-indexer.v1.{default_field}"),
-                "#[serde(default)]",
-            );
-        }
+    let default_fields: &[&str] = &[];
+    for default_field in default_fields {
+        config.field_attribute(
+            format!(".blockscout.interchain-indexer.v1.{default_field}"),
+            "#[serde(default)]",
+        );
+    }
     config.compile_protos(protos, includes)?;
     let descriptor_bytes = fs::read(descriptor_file).unwrap();
     let descriptor = FileDescriptorSet::decode(&descriptor_bytes[..]).unwrap();
