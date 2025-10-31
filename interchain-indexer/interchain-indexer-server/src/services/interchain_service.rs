@@ -26,11 +26,9 @@ impl InterchainService for InterchainServiceImpl {
         _request: Request<InterchainServiceSearchRequest>,
     ) -> Result<Response<InterchainServiceSearchResponse>, Status> {
         let items = (0..10)
-            .map(|i| {
-                Item {
-                    id: i.to_string(),
-                    name: format!("Item #{}", i),
-                }
+            .map(|i| Item {
+                id: i.to_string(),
+                name: format!("Item #{}", i),
             })
             .collect();
         let response = InterchainServiceSearchResponse { items };
