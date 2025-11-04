@@ -3,11 +3,13 @@ use crate::{
         health_actix::route_health, health_server::HealthServer,
         interchain_service_actix::route_interchain_service,
         interchain_service_server::InterchainServiceServer,
+        interchain_statistics_service_server::InterchainStatisticsServiceServer,
     },
-    services::{HealthService, InterchainServiceImpl},
+    services::{HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl},
     settings::Settings,
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
+use interchain_indexer_logic::InterchainDatabase;
 use migration::Migrator;
 use std::sync::Arc;
 const SERVICE_NAME: &str = "interchain_indexer";
@@ -17,6 +19,7 @@ struct Router {
     // TODO: add services here
     health: Arc<HealthService>,
     interchain_service: Arc<InterchainServiceImpl>,
+    stats_service: Arc<InterchainStatisticsServiceImpl>,
 }
 
 impl Router {
@@ -25,6 +28,9 @@ impl Router {
             .add_service(HealthServer::from_arc(self.health.clone()))
             .add_service(InterchainServiceServer::from_arc(
                 self.interchain_service.clone(),
+            ))
+            .add_service(InterchainStatisticsServiceServer::from_arc(
+                self.stats_service.clone(),
             ))
     }
 }
@@ -42,11 +48,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let db = Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
+    let db_connection = Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
+    let db = Arc::new(InterchainDatabase::new(db_connection));
     let interchain_service = Arc::new(InterchainServiceImpl { db: db.clone() });
+    let stats_service = Arc::new(InterchainStatisticsServiceImpl { db: db.clone() });
     let router = Router {
         health,
         interchain_service,
+        stats_service,
     };
 
     let grpc_router = router.grpc_router();

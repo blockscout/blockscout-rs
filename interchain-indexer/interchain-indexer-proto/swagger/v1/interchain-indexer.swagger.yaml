@@ -8,6 +8,7 @@ info:
     email: support@blockscout.com
 tags:
   - name: InterchainService
+  - name: InterchainStatisticsService
   - name: Health
 host: interchain-indexer.services.blockscout.com
 schemes:
@@ -17,55 +18,159 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/interchain_service:create:
-    post:
-      operationId: InterchainService_InterchainServiceCreate
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1InterchainServiceCreateResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v1InterchainServiceCreateRequest'
-      tags:
-        - InterchainService
-      security:
-        - ApiKeyAuth: []
-  /api/v1/interchain_service:search:
+  /api/v1/interchain/messages:
     get:
-      operationId: InterchainService_InterchainServiceSearch
+      operationId: InterchainService_GetMessages
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1InterchainServiceSearchResponse'
+            $ref: '#/definitions/v1GetMessagesResponse'
         default:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: filter_1
+        - name: q
+          description: multisesarch ability
           in: query
           required: false
           type: string
-        - name: filter_2
+        - name: page_token
           in: query
           required: false
           type: string
-        - name: filter_3
+        - name: direction
           in: query
           required: false
           type: string
       tags:
         - InterchainService
+  /api/v1/interchain/messages/{message_id}:
+    get:
+      operationId: InterchainService_GetMessageDetails
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1InterchainMessage'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/transfers:
+    get:
+      operationId: InterchainService_GetTransfers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          description: multisesarch ability
+          in: query
+          required: false
+          type: string
+        - name: page_token
+          in: query
+          required: false
+          type: string
+        - name: direction
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/transfers:byMessage/{message_id}:
+    get:
+      operationId: InterchainService_GetTransfersByMessage
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/transfers:byTx/{tx_hash}:
+    get:
+      operationId: InterchainService_GetTransfersByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/stats/common:
+    get:
+      operationId: InterchainStatisticsService_GetCommonStatistics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetCommonStatisticsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: timestamp
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - InterchainStatisticsService
+  /api/v1/stats/daily:
+    get:
+      operationId: InterchainStatisticsService_GetDailyStatistics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetDailyStatisticsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: timestamp
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - InterchainStatisticsService
   /health:
     get:
       summary: |-
@@ -117,46 +222,137 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
-  v1HealthCheckResponse:
+  v1GetCommonStatisticsResponse:
     type: object
     properties:
-      status:
-        $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1InterchainServiceCreateRequest:
-    type: object
-    properties:
-      foo:
-        type: string
-      bar:
-        type: string
       timestamp:
         type: string
-        format: int64
-      map:
-        type: object
-        additionalProperties:
-          type: string
-      url:
+        format: uint64
+      total_messages:
         type: string
-  v1InterchainServiceCreateResponse:
+        format: uint64
+      total_transfers:
+        type: string
+        format: uint64
+  v1GetDailyStatisticsResponse:
     type: object
     properties:
-      item:
-        $ref: '#/definitions/v1Item'
-  v1InterchainServiceSearchResponse:
+      timestamp:
+        type: string
+        format: uint64
+      daily_messages:
+        type: string
+        format: uint64
+      daily_transfers:
+        type: string
+        format: uint64
+  v1GetMessagesResponse:
     type: object
     properties:
       items:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Item'
-  v1Item:
+          $ref: '#/definitions/v1InterchainMessage'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+      prev_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1GetTransfersResponse:
     type: object
     properties:
-      id:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1InterchainTransfer'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+      prev_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1InterchainMessage:
+    type: object
+    properties:
+      bridge_name:
+        type: string
+      message_id:
+        type: string
+      status:
+        type: string
+      source_chain_id:
+        type: string
+      sender:
+        type: string
+      source_transaction_hash:
+        type: string
+      send_timestamp:
+        type: string
+      destination_chain_id:
+        type: string
+      recipient:
+        type: string
+      destination_transaction_hash:
+        type: string
+      receive_timestamp:
+        type: string
+      payload:
+        type: string
+      extra:
+        type: object
+        additionalProperties:
+          type: string
+        title: additional parsed data
+  v1InterchainTransfer:
+    type: object
+    properties:
+      bridge_name:
+        type: string
+      message_id:
+        type: string
+      status:
+        type: string
+      source_token:
+        $ref: '#/definitions/v1TokenInfo'
+      source_amount:
+        type: string
+      source_transaction_hash:
+        type: string
+      sender:
+        type: string
+      destination_token:
+        $ref: '#/definitions/v1TokenInfo'
+      destination_amount:
+        type: string
+      destination_transaction_hash:
+        type: string
+      recipient:
+        type: string
+  v1Pagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+      direction:
+        type: string
+  v1TokenInfo:
+    type: object
+    properties:
+      chain_id:
+        type: string
+      address:
         type: string
       name:
+        type: string
+      symbol:
+        type: string
+      decimals:
+        type: string
+      icon_url:
         type: string
 securityDefinitions:
   ApiKeyAuth:

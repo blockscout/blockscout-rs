@@ -1,37 +1,89 @@
 use crate::proto::{interchain_service_server::*, *};
 use convert_trait::TryConvert;
-use interchain_indexer_logic::ApiError;
-use sea_orm::DatabaseConnection;
+use interchain_indexer_logic::{ApiError, InterchainDatabase};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 pub struct InterchainServiceImpl {
-    pub db: Arc<DatabaseConnection>,
+    pub db: Arc<InterchainDatabase>,
+}
+
+impl InterchainServiceImpl {
+    pub fn new(db: Arc<InterchainDatabase>) -> Self {
+        Self { db }
+    }
 }
 
 #[async_trait::async_trait]
 impl InterchainService for InterchainServiceImpl {
-    async fn interchain_service_create(
+    async fn get_messages(
         &self,
-        request: Request<InterchainServiceCreateRequest>,
-    ) -> Result<Response<InterchainServiceCreateResponse>, Status> {
-        let (_metadata, _, request) = request.into_parts();
-        let _request: InterchainServiceCreateRequestInternal =
-            TryConvert::try_convert(request).map_err(ApiError::Convert)?;
-        todo!()
-    }
-
-    async fn interchain_service_search(
-        &self,
-        _request: Request<InterchainServiceSearchRequest>,
-    ) -> Result<Response<InterchainServiceSearchResponse>, Status> {
-        let items = (0..10)
-            .map(|i| Item {
-                id: i.to_string(),
-                name: format!("Item #{}", i),
-            })
-            .collect();
-        let response = InterchainServiceSearchResponse { items };
+        _request: Request<GetMessagesRequest>,
+    ) -> Result<Response<GetMessagesResponse>, Status> {
+        let response = GetMessagesResponse {
+            items: vec![],
+            next_page_params: None,
+            prev_page_params: None
+        };
         Ok(Response::new(response))
     }
+
+    async fn get_message_details(
+        &self,
+        _request: Request<GetMessageDetailsRequest>,
+    ) -> Result<Response<InterchainMessage>, Status> {
+        let response = InterchainMessage {
+            ..Default::default()
+        };
+        Ok(Response::new(response))
+    }
+
+    async fn get_messages_by_transaction(
+        &self,
+        _request: Request<GetMessagesByTransactionRequest>,
+    ) -> Result<Response<GetMessagesResponse>, Status> {
+        let response = GetMessagesResponse {
+            items: vec![],
+            next_page_params: None,
+            prev_page_params: None
+        };
+        Ok(Response::new(response))
+    }
+
+    async fn get_transfers(
+        &self,
+        _request: Request<GetTransfersRequest>,
+    ) -> Result<Response<GetTransfersResponse>, Status> {
+        let response = GetTransfersResponse {
+            items: vec![],
+            next_page_params: None,
+            prev_page_params: None,
+        };
+        Ok(Response::new(response))
+    }
+
+    async fn get_transfers_by_message(
+        &self,
+        _request: Request<GetTransfersByMessageRequest>,
+    ) -> Result<Response<GetTransfersResponse>, Status> {
+        let response = GetTransfersResponse {
+            items: vec![],
+            next_page_params: None,
+            prev_page_params: None
+        };
+        Ok(Response::new(response))
+    }
+
+    async fn get_transfers_by_transaction(
+        &self,
+        _request: Request<GetTransfersByTransactionRequest>,
+    ) -> Result<Response<GetTransfersResponse>, Status> {
+        let response = GetTransfersResponse {
+            items: vec![],
+            next_page_params: None,
+            prev_page_params: None
+        };
+        Ok(Response::new(response))
+    }
+
 }

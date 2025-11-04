@@ -3,13 +3,34 @@ config_version: 3
 
 http:
   rules:
-    
-    - selector: blockscout.interchainIndexer.v1.InterchainService.InterchainServiceCreate
-      post: /api/v1/interchain_service:create
-      body: "*"
+    #################### Messages & Transfers####################
 
-    - selector: blockscout.interchainIndexer.v1.InterchainService.InterchainServiceSearch
-      get: /api/v1/interchain_service:search
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessages
+      get: /api/v1/interchain/messages
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessageDetails
+      get: /api/v1/interchain/messages/{message_id}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessageByTransaction
+      get: /api/v1/interchain/messages:byTx/{tx_hash}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfers
+      get: /api/v1/interchain/transfers
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfersByMessage
+      get: /api/v1/interchain/transfers:byMessage/{message_id}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfersByTransaction
+      get: /api/v1/interchain/transfers:byTx/{tx_hash}
+
+
+    #################### Statistics ####################
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetCommonStatistics
+      get: /api/v1/stats/common
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetDailyStatistics
+      get: /api/v1/stats/daily
     
     #################### Health ####################
 
