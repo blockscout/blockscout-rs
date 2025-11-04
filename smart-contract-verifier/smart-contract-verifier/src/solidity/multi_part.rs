@@ -110,7 +110,7 @@ mod helpers {
         artifacts::{BytecodeHash, SettingsMetadata},
     };
     use semver::VersionReq;
-    use std::{collections::BTreeMap, ffi::OsStr, path::PathBuf};
+    use std::{collections::BTreeMap, ffi::OsStr};
 
     pub fn input_from_sources_and_settings(
         sources: artifacts::Sources,
@@ -119,7 +119,7 @@ mod helpers {
         let mut solidity_sources = BTreeMap::new();
         let mut yul_sources = BTreeMap::new();
         for (path, source) in sources {
-            if path == PathBuf::from(".yul") || path.extension() == Some(OsStr::new("yul")) {
+            if &path == ".yul" || path.extension() == Some(OsStr::new("yul")) {
                 yul_sources.insert(path, source);
             } else {
                 solidity_sources.insert(path, source);

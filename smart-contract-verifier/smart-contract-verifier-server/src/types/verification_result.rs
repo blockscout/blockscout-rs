@@ -64,10 +64,10 @@ pub fn process_verification_result(
             {
                 full_creation_and_runtime_match = Some(verifying_contract)
             }
-            (Some(creation_match), None) if creation_match.metadata_match => {
+            (Some(creation_match), _) if creation_match.metadata_match => {
                 full_creation_only_match = Some(verifying_contract)
             }
-            (None, Some(runtime_match)) if runtime_match.metadata_match => {
+            (_, Some(runtime_match)) if runtime_match.metadata_match => {
                 full_runtime_only_match = Some(verifying_contract)
             }
             _ => {}
@@ -82,10 +82,10 @@ pub fn process_verification_result(
         (Some(full_creation_and_runtime_match), _, _) => full_creation_and_runtime_match,
         (None, Some(full_creation_only_match), _) => full_creation_only_match,
         (None, None, Some(full_runtime_only_match)) => full_runtime_only_match,
-        _ => value.iter().next().unwrap(),
+        _ => value.first().unwrap(),
     };
 
-    let extra_data = into_extra_data(&verifying_contract);
+    let extra_data = into_extra_data(verifying_contract);
     let source = try_into_source(verifying_contract.clone())?;
 
     let response = v2::VerifyResponse {
