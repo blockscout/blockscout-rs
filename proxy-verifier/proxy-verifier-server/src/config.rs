@@ -37,7 +37,7 @@ impl ChainsSettings {
         self.0
     }
 
-    pub fn insertion_iter(&self) -> indexmap::map::Iter<String, ChainSettings> {
+    pub fn insertion_iter(&self) -> indexmap::map::Iter<'_, String, ChainSettings> {
         self.inner().get_range(..).unwrap().iter()
     }
 
