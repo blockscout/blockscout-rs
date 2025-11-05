@@ -13,6 +13,7 @@ use verification_common::{
     verifier_alliance::{CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts},
 };
 
+#[derive(Clone, Debug)]
 pub struct VerifyingContract {
     pub fully_qualified_name: FullyQualifiedName,
     pub language: Language,
