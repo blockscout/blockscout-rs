@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package blockscout.interchainIndexer.v1;
 
-option go_package = "github.com/blockscout/blockscout-rs/tac-operation-lifecycle";
+option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
 
 service InterchainStatisticsService {
     rpc GetCommonStatistics(GetCommonStatisticsRequest) returns (GetCommonStatisticsResponse) {}

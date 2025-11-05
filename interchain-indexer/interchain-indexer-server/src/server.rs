@@ -10,6 +10,7 @@ use crate::{
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use interchain_indexer_logic::InterchainDatabase;
+use interchain_indexer_proto::blockscout::interchain_indexer::v1::interchain_statistics_service_actix::route_interchain_statistics_service;
 use migration::Migrator;
 use std::sync::Arc;
 const SERVICE_NAME: &str = "interchain_indexer";
@@ -40,6 +41,9 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config
             .configure(|config| route_interchain_service(config, self.interchain_service.clone()));
+        service_config.configure(|config| {
+            route_interchain_statistics_service(config, self.stats_service.clone())
+        });
     }
 }
 
@@ -48,10 +52,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let db_connection = Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
+    let db_connection =
+        Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
     let db = Arc::new(InterchainDatabase::new(db_connection));
-    let interchain_service = Arc::new(InterchainServiceImpl { db: db.clone() });
-    let stats_service = Arc::new(InterchainStatisticsServiceImpl { db: db.clone() });
+    let interchain_service = Arc::new(InterchainServiceImpl::new(db.clone()));
+    let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(db.clone()));
     let router = Router {
         health,
         interchain_service,

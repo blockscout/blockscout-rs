@@ -3,7 +3,6 @@ use interchain_indexer_logic::InterchainDatabase;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
-
 pub struct InterchainStatisticsServiceImpl {
     pub db: Arc<InterchainDatabase>,
 }

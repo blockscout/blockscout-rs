@@ -1,6 +1,5 @@
 use crate::proto::{interchain_service_server::*, *};
-use convert_trait::TryConvert;
-use interchain_indexer_logic::{ApiError, InterchainDatabase};
+use interchain_indexer_logic::InterchainDatabase;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -23,7 +22,7 @@ impl InterchainService for InterchainServiceImpl {
         let response = GetMessagesResponse {
             items: vec![],
             next_page_params: None,
-            prev_page_params: None
+            prev_page_params: None,
         };
         Ok(Response::new(response))
     }
@@ -45,7 +44,7 @@ impl InterchainService for InterchainServiceImpl {
         let response = GetMessagesResponse {
             items: vec![],
             next_page_params: None,
-            prev_page_params: None
+            prev_page_params: None,
         };
         Ok(Response::new(response))
     }
@@ -69,7 +68,7 @@ impl InterchainService for InterchainServiceImpl {
         let response = GetTransfersResponse {
             items: vec![],
             next_page_params: None,
-            prev_page_params: None
+            prev_page_params: None,
         };
         Ok(Response::new(response))
     }
@@ -81,9 +80,8 @@ impl InterchainService for InterchainServiceImpl {
         let response = GetTransfersResponse {
             items: vec![],
             next_page_params: None,
-            prev_page_params: None
+            prev_page_params: None,
         };
         Ok(Response::new(response))
     }
-
 }

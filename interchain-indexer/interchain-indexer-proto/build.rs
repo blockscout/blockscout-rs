@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &[
             "proto/v1/interchain_indexer.proto",
             "proto/v1/stats.proto",
-            "proto/v1/health.proto"
+            "proto/v1/health.proto",
         ],
         &["proto", "../../proto"],
         gens,
