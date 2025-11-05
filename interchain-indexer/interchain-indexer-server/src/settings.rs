@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use blockscout_service_launcher::{
     database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
@@ -8,6 +10,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
+    pub chains_config: PathBuf,
+    pub bridges_config: PathBuf,
+
     #[serde(default)]
     pub server: ServerSettings,
     #[serde(default)]
@@ -26,6 +31,8 @@ impl ConfigSettings for Settings {
 impl Settings {
     pub fn default(database_url: String) -> Self {
         Self {
+            chains_config: PathBuf::from("config/omnibridge/chains.json"),
+            bridges_config: PathBuf::from("config/omnibridge/bridges.json"),
             server: Default::default(),
             metrics: Default::default(),
             tracing: Default::default(),
