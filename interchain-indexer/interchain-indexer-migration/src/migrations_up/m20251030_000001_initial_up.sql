@@ -115,8 +115,10 @@ CREATE TABLE crosschain_transfers (
   type                transfer_type, -- erc20/erc721/native/erc1155  
   token_src_chain_id  BIGINT NOT NULL REFERENCES chains(id),
   token_dst_chain_id  BIGINT NOT NULL REFERENCES chains(id),
-  amount              NUMERIC(78,0) NOT NULL, -- store raw integer amount
-  decimals            SMALLINT NOT NULL, -- token decimals (from the any side of interaction)
+  src_decimals        SMALLINT NOT NULL, -- token decimals (from the any side of interaction)
+  dst_decimals        SMALLINT NOT NULL, -- token decimals (from the any side of interaction)
+  src_amount          NUMERIC(78,0) NOT NULL, -- store raw integer amount
+  dst_amount          NUMERIC(78,0) NOT NULL, -- store raw integer amount
   token_src_address   BYTEA NOT NULL, -- token contract on token_chain_id
   token_dst_address   BYTEA NOT NULL, -- token contract on token_chain_id
   sender_address      BYTEA, -- source address (on src chain)
