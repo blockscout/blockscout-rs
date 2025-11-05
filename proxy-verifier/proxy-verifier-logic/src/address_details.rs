@@ -121,13 +121,16 @@ async fn fetch_and_apply_smart_contract_endpoint_response(
         Error::internal("Error while retrieving smart-contract details")
     })?;
 
-    let runtime_code = smart_contract.deployed_bytecode.ok_or_else(|| {
-        tracing::warn!(
-            contract_address = address_details.address.to_hex(),
-            "Address is contract, but does not contain runtime code"
-        );
-        Error::no_runtime_code()
-    })?;
+    let runtime_code = smart_contract
+        .deployed_bytecode
+        .filter(|code| !code.is_empty())
+        .ok_or_else(|| {
+            tracing::warn!(
+                contract_address = address_details.address.to_hex(),
+                "Address is contract, but does not contain runtime code"
+            );
+            Error::no_runtime_code()
+        })?;
     address_details.runtime_code = runtime_code.into();
     address_details.creation_code = smart_contract.creation_bytecode.map(|value| value.into());
 
