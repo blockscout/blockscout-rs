@@ -1,0 +1,16 @@
+[
+    {
+        "chain_id": 43114,
+        "name": "Avalanche C-Chain",
+        "native_id": "0x0427d4b22a2a78bcddd456742caf91b56badbff985ee19aef14573e7343fd652",
+        "icon": "",
+        "rpcs": []
+    },
+    {
+        "chain_id": 8021,
+        "name": "NUMINE Mainnet",
+        "native_id": "0xd32cc4660bcf8fa7971589f666fddb5ab22aee7e75dcb30b19829a65d4fb0063",
+        "icon": "",
+        "rpcs": []
+    }
+]

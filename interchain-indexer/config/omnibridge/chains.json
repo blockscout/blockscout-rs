@@ -3,12 +3,14 @@
         "chain_id": 1,
         "name": "Ethereum",
         "native_id": null,
-        "icon": ""
+        "icon": "",
+        "rpcs": []
     },
     {
         "chain_id": 100,
         "name": "Gnosis",
         "native_id": null,
-        "icon": ""
+        "icon": "",
+        "rpcs": []
     }
 ]
