@@ -18,9 +18,12 @@ use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 ///  - SERVICE_UNKNOWN: Used only by the Watch method.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum HealthCheckResponseServingStatus {
     #[serde(rename = "UNKNOWN")]
+    #[default]
     Unknown,
 
     #[serde(rename = "SERVING")]
@@ -44,11 +47,5 @@ impl std::fmt::Display for HealthCheckResponseServingStatus {
 
             Self::ServiceUnknown => write!(f, "SERVICE_UNKNOWN"),
         }
-    }
-}
-
-impl Default for HealthCheckResponseServingStatus {
-    fn default() -> HealthCheckResponseServingStatus {
-        Self::Unknown
     }
 }
