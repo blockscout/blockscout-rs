@@ -1,12 +1,10 @@
 use crate::{
-    proto::{
+    load_bridges_from_file, load_chains_from_file, proto::{
         health_actix::route_health, health_server::HealthServer,
         interchain_service_actix::route_interchain_service,
         interchain_service_server::InterchainServiceServer,
         interchain_statistics_service_server::InterchainStatisticsServiceServer,
-    },
-    services::{HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl},
-    settings::Settings,
+    }, services::{HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl}, settings::Settings
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use interchain_indexer_logic::InterchainDatabase;
@@ -55,6 +53,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let db_connection =
         Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
     let db = Arc::new(InterchainDatabase::new(db_connection));
+
+    // TODO: read chains and bridges from json config files
+    //let chains = load_chains_from_file(&settings.chains_config).unwrap();
+    //let bridges = load_bridges_from_file(&settings.bridges_config).unwrap();
+
+    // TODO: run indexer for each bridge
+
+
     let interchain_service = Arc::new(InterchainServiceImpl::new(db.clone()));
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(db.clone()));
     let router = Router {

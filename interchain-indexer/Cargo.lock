@@ -3616,11 +3616,13 @@ version = "0.1.0"
 dependencies = [
  "actix-prost-convert-trait",
  "actix-web",
+ "alloy",
  "anyhow",
  "async-trait",
  "blockscout-service-launcher",
  "config 0.15.18",
  "env-collector",
+ "interchain-indexer-entity",
  "interchain-indexer-logic",
  "interchain-indexer-migration",
  "interchain-indexer-proto",

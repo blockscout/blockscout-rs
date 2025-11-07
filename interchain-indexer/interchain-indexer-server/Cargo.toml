@@ -5,12 +5,14 @@ edition = "2024"
 
 [dependencies]
 actix-web = { workspace = true }
+alloy = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = ["database-1" ] }
 config = { workspace = true }
 convert-trait = { workspace = true }
 env-collector = { workspace = true }
+interchain-indexer-entity = { workspace = true }
 interchain-indexer-logic = { workspace = true }
 interchain-indexer-migration = { workspace = true }
 interchain-indexer-proto = { workspace = true }
