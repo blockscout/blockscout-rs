@@ -2,9 +2,10 @@ use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
 };
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, prelude::Expr, sea_query::OnConflict,
+    ActiveValue, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
+    TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 pub struct InterchainDatabase {
     db: Arc<DatabaseConnection>,
@@ -55,32 +56,80 @@ impl InterchainDatabase {
     }
 
     // CONFIGURATION TABLE: bridges
+    // Updating the name of a bridge with an existing ID is prohibited
+    // Renaming a bridge is allowed only via a direct SQL request
     pub async fn upsert_bridges(&self, bridges: Vec<bridges::ActiveModel>) -> anyhow::Result<()> {
-        if bridges.is_empty() {
-            return Ok(());
-        }
+        // Extract id and name from input bridges for validation
+        let bridge_id_name_map: HashMap<i32, String> = bridges
+            .iter()
+            .filter_map(|bridge| match (&bridge.id, &bridge.name) {
+                (ActiveValue::Set(id), ActiveValue::Set(name)) => Some((*id, name.clone())),
+                _ => None,
+            })
+            .collect();
 
-        match bridges::Entity::insert_many(bridges)
-            .on_conflict(
-                OnConflict::column(bridges::Column::Id)
-                    .update_columns([
-                        bridges::Column::Name,
-                        bridges::Column::Type,
-                        bridges::Column::Enabled,
-                        bridges::Column::ApiUrl,
-                        bridges::Column::UiUrl,
-                    ])
-                    .to_owned(),
-            )
-            .exec(self.db.as_ref())
-            .await
-        {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                tracing::error!(err =? e, "Failed to upsert bridges");
-                Err(e.into())
+        // Check existing bridges and validate id+name match
+        let bridge_ids: Vec<i32> = bridge_id_name_map.keys().copied().collect();
+        if !bridge_ids.is_empty() {
+            match bridges::Entity::find()
+                .filter(bridges::Column::Id.is_in(bridge_ids))
+                .all(self.db.as_ref())
+                .await
+            {
+                Ok(existing_bridges) => {
+                    for existing in existing_bridges {
+                        if let Some(expected_name) = bridge_id_name_map.get(&existing.id)
+                            && existing.name != *expected_name
+                        {
+                            let err_msg = format!(
+                                "Bridge with id {} exists but has different name: expected '{}', found '{}'",
+                                existing.id, expected_name, existing.name
+                            );
+                            tracing::error!("{}", err_msg);
+                            return Err(anyhow::anyhow!(err_msg));
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(err =? e, "Failed to check existing bridges");
+                    return Err(e.into());
+                }
             }
         }
+
+        self.db
+            .transaction::<_, (), DbErr>(|tx| {
+                Box::pin(async move {
+                    // First, disable all existing bridges
+                    // The upsert below will set the appropriate enabled flags for bridges in the input list
+                    bridges::Entity::update_many()
+                        .col_expr(bridges::Column::Enabled, Expr::value(false))
+                        .exec(tx)
+                        .await?;
+
+                    // Next proceed with upsert (if any)
+                    if !bridges.is_empty() {
+                        bridges::Entity::insert_many(bridges)
+                            .on_conflict(
+                                OnConflict::column(bridges::Column::Id)
+                                    .update_columns([
+                                        bridges::Column::Type,
+                                        bridges::Column::Enabled,
+                                        bridges::Column::ApiUrl,
+                                        bridges::Column::UiUrl,
+                                    ])
+                                    .to_owned(),
+                            )
+                            .exec(tx)
+                            .await?;
+                    }
+
+                    Ok(())
+                })
+            })
+            .await?;
+
+        Ok(())
     }
 
     pub async fn get_all_bridges(&self) -> anyhow::Result<Vec<bridges::Model>> {
@@ -104,16 +153,21 @@ impl InterchainDatabase {
 
         match bridge_contracts::Entity::insert_many(bridge_contracts)
             .on_conflict(
-                OnConflict::column(bridge_contracts::Column::Id)
-                    .update_columns([
-                        bridge_contracts::Column::BridgeId,
-                        bridge_contracts::Column::ChainId,
-                        bridge_contracts::Column::Address,
-                        bridge_contracts::Column::Version,
-                        bridge_contracts::Column::Abi,
-                        bridge_contracts::Column::StartedAtBlock,
-                    ])
-                    .to_owned(),
+                OnConflict::columns([
+                    bridge_contracts::Column::BridgeId,
+                    bridge_contracts::Column::ChainId,
+                    bridge_contracts::Column::Address,
+                    bridge_contracts::Column::Version,
+                ])
+                .update_columns([
+                    bridge_contracts::Column::Abi,
+                    bridge_contracts::Column::StartedAtBlock,
+                ])
+                .value(
+                    bridge_contracts::Column::UpdatedAt,
+                    Expr::current_timestamp(),
+                )
+                .to_owned(),
             )
             .exec(self.db.as_ref())
             .await

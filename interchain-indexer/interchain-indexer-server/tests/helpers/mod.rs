@@ -1,6 +1,7 @@
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use interchain_indexer_server::Settings;
 use reqwest::Url;
+use std::path::PathBuf;
 
 pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     let db_name = format!("{db_prefix}_{test_name}");
@@ -17,6 +18,13 @@ where
         settings.metrics.enabled = false;
         settings.tracing.enabled = false;
         settings.jaeger.enabled = false;
+
+        // Resolve config paths relative to workspace root
+        // CARGO_MANIFEST_DIR points to interchain-indexer-server/, so we go up one level
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir.parent().unwrap();
+        settings.chains_config = workspace_root.join("config/omnibridge/chains.json");
+        settings.bridges_config = workspace_root.join("config/omnibridge/bridges.json");
 
         (settings_setup(settings), base)
     };

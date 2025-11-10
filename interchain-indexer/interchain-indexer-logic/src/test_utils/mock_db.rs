@@ -165,8 +165,10 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            amount: Set(Decimal::new(1000000000000000000, 0)), // 1 token with 18 decimals
-            decimals: Set(18),
+            src_decimals: Set(18),
+            dst_decimals: Set(18),
+            src_amount: Set(Decimal::new(1000000000000000000, 0)), // 1 token with 18 decimals
+            dst_amount: Set(Decimal::new(1000000000000000000, 0)), // 1 token with 18 decimals
             token_src_address: Set(address!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
                 .as_slice()
                 .to_vec()),
@@ -193,8 +195,10 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            amount: Set(Decimal::new(5000000000000000000, 0)), // 5 tokens with 18 decimals
-            decimals: Set(18),
+            src_decimals: Set(18),
+            dst_decimals: Set(18),
+            src_amount: Set(Decimal::new(5000000000000000000, 0)), // 5 tokens with 18 decimals
+            dst_amount: Set(Decimal::new(5000000000000000000, 0)), // 5 tokens with 18 decimals
             token_src_address: Set(address!("0xdAC17F958D2ee523a2206206994597C13D831ec7")
                 .as_slice()
                 .to_vec()),
@@ -221,10 +225,12 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             r#type: Set(Some(TransferType::Native)),
             token_src_chain_id: Set(100),
             token_dst_chain_id: Set(1),
-            amount: Set(Decimal::new(100000000000000000, 0)), // 0.1 native token with 18 decimals
-            decimals: Set(18),
-            token_src_address: Set(vec![0; 20]), // Zero address for native token
-            token_dst_address: Set(vec![0; 20]), // Zero address for native token
+            src_decimals: Set(18),
+            dst_decimals: Set(18),
+            src_amount: Set(Decimal::new(100000000000000000, 0)), // 0.1 native token with 18 decimals
+            dst_amount: Set(Decimal::new(100000000000000000, 0)), // 0.1 native token with 18 decimals
+            token_src_address: Set(vec![0; 20]),                  // Zero address for native token
+            token_dst_address: Set(vec![0; 20]),                  // Zero address for native token
             sender_address: Set(Some(
                 address!("0x6B175474E89094C44Da98b954EedeAC495271d0F")
                     .as_slice()
@@ -245,8 +251,10 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             r#type: Set(Some(TransferType::Erc721)),
             token_src_chain_id: Set(100),
             token_dst_chain_id: Set(1),
-            amount: Set(Decimal::new(1, 0)), // 1 NFT
-            decimals: Set(0),
+            src_decimals: Set(0),
+            dst_decimals: Set(0),
+            src_amount: Set(Decimal::new(1, 0)), // 1 NFT
+            dst_amount: Set(Decimal::new(1, 0)), // 1 NFT
             token_src_address: Set(address!("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599")
                 .as_slice()
                 .to_vec()),
@@ -273,8 +281,10 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             r#type: Set(Some(TransferType::Erc1155)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            amount: Set(Decimal::new(10, 0)), // 10 tokens
-            decimals: Set(0),
+            src_decimals: Set(0),
+            dst_decimals: Set(0),
+            src_amount: Set(Decimal::new(10, 0)), // 10 tokens
+            dst_amount: Set(Decimal::new(10, 0)), // 10 tokens
             token_src_address: Set(address!("0x86C80a8aa58e0A4fa09A69624c31Ab2a6CAD56b8")
                 .as_slice()
                 .to_vec()),

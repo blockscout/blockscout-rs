@@ -5,7 +5,7 @@ mod services;
 mod settings;
 
 pub use config::{
-    load_bridges_from_file, load_chains_from_file, BridgeConfig, ChainConfig,
+    BridgeConfig, BridgeContractConfig, ChainConfig, load_bridges_from_file, load_chains_from_file,
 };
 pub use server::run;
 pub use settings::Settings;

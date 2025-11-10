@@ -6,11 +6,13 @@ use crate::{
         interchain_statistics_service_server::InterchainStatisticsServiceServer,
     }, services::{HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl}, settings::Settings
 };
-use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
+use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing as bs_tracing};
+use interchain_indexer_entity::{bridge_contracts, bridges, chains};
 use interchain_indexer_logic::InterchainDatabase;
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::interchain_statistics_service_actix::route_interchain_statistics_service;
 use migration::Migrator;
 use std::sync::Arc;
+use tracing;
 const SERVICE_NAME: &str = "interchain_indexer";
 
 #[derive(Clone)]
@@ -46,7 +48,7 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    bs_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
 
@@ -54,12 +56,58 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
     let db = Arc::new(InterchainDatabase::new(db_connection));
 
-    // TODO: read chains and bridges from json config files
-    //let chains = load_chains_from_file(&settings.chains_config).unwrap();
-    //let bridges = load_bridges_from_file(&settings.bridges_config).unwrap();
+    // Reading chains and bridges from json config files
+    let chains = load_chains_from_file(&settings.chains_config).unwrap();
+    let bridges = load_bridges_from_file(&settings.bridges_config).unwrap();
+
+    // Populate database with the chains, bridges and bridge contracts
+    db.upsert_chains(
+        chains
+            .clone()
+            .into_iter()
+            .map(chains::ActiveModel::from)
+            .collect::<Vec<chains::ActiveModel>>(),
+    )
+    .await?;
+    db.upsert_bridges(
+        bridges
+            .clone()
+            .iter()
+            .map(|b| bridges::ActiveModel::from(b.clone()))
+            .collect::<Vec<bridges::ActiveModel>>(),
+    )
+    .await?;
+    let bridge_contracts: Vec<bridge_contracts::ActiveModel> = bridges
+        .iter()
+        .flat_map(|bridge| {
+            bridge
+                .contracts
+                .iter()
+                .map(move |contract| contract.to_active_model(bridge.bridge_id))
+        })
+        .collect();
+    if !bridge_contracts.is_empty() {
+        db.upsert_bridge_contracts(bridge_contracts.clone()).await?;
+    }
+
+    tracing::info!(
+        "Loaded {} chains ({}), {} bridges ({}) and {} bridge contracts from JSON files",
+        chains.len(),
+        chains
+            .iter()
+            .map(|c| c.name.clone())
+            .collect::<Vec<String>>()
+            .join(", "),
+        bridges.len(),
+        bridges
+            .iter()
+            .map(|b| b.name.clone())
+            .collect::<Vec<String>>()
+            .join(", "),
+        bridge_contracts.len(),
+    );
 
     // TODO: run indexer for each bridge
-
 
     let interchain_service = Arc::new(InterchainServiceImpl::new(db.clone()));
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(db.clone()));

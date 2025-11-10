@@ -15,9 +15,12 @@ pub struct Model {
     pub r#type: Option<TransferType>,
     pub token_src_chain_id: i64,
     pub token_dst_chain_id: i64,
+    pub src_decimals: i16,
+    pub dst_decimals: i16,
     #[sea_orm(column_type = "Decimal(Some((78, 0)))")]
-    pub amount: Decimal,
-    pub decimals: i16,
+    pub src_amount: Decimal,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))")]
+    pub dst_amount: Decimal,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub token_src_address: Vec<u8>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]

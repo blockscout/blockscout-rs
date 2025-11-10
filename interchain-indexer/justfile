@@ -68,7 +68,7 @@ migrate-fresh-generate-entities *args:
 
 # wipe DB
 flush-database:
-    sea-orm-cli migrate -d tac-operation-lifecycle-migration reset
+    sea-orm-cli migrate -d interchain-indexer-migration reset
 
 # apply the basic formatting 
 format:
