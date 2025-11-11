@@ -23,6 +23,7 @@ actix-web = { version = "4.2" }
 anyhow = { version = "1.0" }
 async-trait = { version = "0.1" }
 config = { version = "0.15" }
+governor = { version = "0.10.0" }
 serde = { version = "1.0" }
 serde_json = { version = "1.0.96" }
 tokio = { version = "1.47", features = ["full"] }
@@ -41,6 +42,7 @@ reqwest = { version = "0.12.5", features = ["json"] }
 reqwest-middleware = { version = "0.3.3" }
 reqwest-retry = { version = "0.6.1" }
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
+parking_lot = { version = "0.12" }
 prost-wkt-build = { version = "0.6" }
 prost-wkt = { version = "0.6.0" }
 prost-types = { version = "0.13" }

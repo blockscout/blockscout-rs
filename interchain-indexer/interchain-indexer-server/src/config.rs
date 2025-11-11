@@ -3,10 +3,12 @@ use anyhow::{Context, Result};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
 };
+use interchain_indexer_logic::{NodeConfig, PoolConfig, ProviderPool};
 use sea_orm::{ActiveValue, prelude::Json};
 use serde::{Deserialize, Deserializer};
 use serde_json;
-use std::{collections::HashMap, path::Path, str::FromStr};
+use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct BridgeConfig {
@@ -208,6 +210,108 @@ pub fn load_bridges_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<BridgeConfi
         .with_context(|| format!("Failed to parse bridges config JSON: {:?}", path.as_ref()))?;
 
     Ok(bridges)
+}
+
+/// Create ProviderPool objects from ChainConfig.
+/// Returns a HashMap mapping chain_id (as u64) to ProviderPool.
+/// Only enabled RPC providers are included in each pool.
+pub async fn create_provider_pools_from_chains(
+    chains: Vec<ChainConfig>,
+) -> Result<HashMap<u64, Arc<ProviderPool>>> {
+    let mut pools = HashMap::new();
+
+    // Default pool configuration
+    let pool_config = PoolConfig {
+        health_period: Duration::from_secs(30),
+        max_block_lag: 100,
+    };
+
+    // Default node configuration values
+    const DEFAULT_MAX_RPS: u32 = 10;
+    const DEFAULT_ERROR_THRESHOLD: u32 = 3;
+    const DEFAULT_COOLDOWN_SECS: u64 = 60;
+
+    for chain in chains {
+        let chain_id_u64 = chain.chain_id as u64;
+        let mut node_configs = Vec::new();
+
+        // Extract enabled RPC providers from the chain config
+        for rpc_map in &chain.rpcs {
+            for (provider_name, rpc_config) in rpc_map {
+                // Only include enabled providers
+                if !rpc_config.enabled {
+                    continue;
+                }
+
+                // Build the URL (handle API key placeholders if needed)
+                let url = build_rpc_url(&rpc_config.url, &rpc_config.api_key)?;
+
+                let node_config = NodeConfig {
+                    name: format!("{}-{}", chain.name, provider_name),
+                    http_url: url,
+                    max_rps: DEFAULT_MAX_RPS,
+                    error_threshold: DEFAULT_ERROR_THRESHOLD,
+                    cooldown: Duration::from_secs(DEFAULT_COOLDOWN_SECS),
+                };
+
+                node_configs.push(node_config);
+            }
+        }
+
+        // Create ProviderPool for this chain if we have any nodes
+        if !node_configs.is_empty() {
+            match ProviderPool::new_with_config(node_configs, pool_config.clone()).await {
+                Ok(pool) => {
+                    tracing::info!(
+                        chain_id = chain_id_u64,
+                        chain_name = chain.name,
+                        "Created ProviderPool for chain"
+                    );
+                    pools.insert(chain_id_u64, pool);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        chain_id = chain_id_u64,
+                        chain_name = chain.name,
+                        err = ?e,
+                        "Failed to create ProviderPool for chain, skipping"
+                    );
+                }
+            }
+        } else {
+            tracing::warn!(
+                chain_id = chain_id_u64,
+                chain_name = chain.name,
+                "No enabled RPC providers found for chain, skipping ProviderPool creation"
+            );
+        }
+    }
+
+    Ok(pools)
+}
+
+/// Build RPC URL, handling API key placeholders if present.
+/// Note: This is a simplified implementation. In production, you might want to:
+/// - Read API keys from environment variables
+/// - Support different API key locations (query, header, URL)
+fn build_rpc_url(url: &str, api_key_config: &Option<ApiKeyConfig>) -> Result<String> {
+    let final_url = url.to_string();
+
+    // If API key is configured, we need to handle it
+    // For now, we'll just use the URL as-is and log a warning if API key is needed
+    // In a real implementation, you would:
+    // 1. Read the API key from environment variables
+    // 2. Insert it into the URL based on the location (query, header, or URL placeholder)
+    if let Some(api_key) = api_key_config {
+        tracing::warn!(
+            url = url,
+            location = api_key.location,
+            name = api_key.name,
+            "API key configuration found but not yet implemented. URL used as-is."
+        );
+    }
+
+    Ok(final_url)
 }
 
 #[cfg(test)]

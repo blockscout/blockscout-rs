@@ -7,8 +7,9 @@ edition = "2024"
 alloy = { workspace = true }
 anyhow = { workspace = true }
 blockscout-display-bytes = { workspace = true }
+governor = { workspace = true }
 interchain-indexer-entity = { workspace = true }
-
+parking_lot = { workspace = true }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
