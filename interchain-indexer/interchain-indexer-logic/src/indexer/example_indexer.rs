@@ -2,17 +2,15 @@ use anyhow::Error;
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
-use tokio::task::JoinHandle;
-use tokio::time::sleep;
+use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info, warn};
 
-use crate::{InterchainDatabase, ProviderPool};
-use crate::indexer::crosschain_indexer::CrosschainIndexer;
+use crate::{InterchainDatabase, ProviderPool, indexer::crosschain_indexer::CrosschainIndexer, provider_pool};
 
 /// Example implementation of CrosschainIndexer trait.
 #[allow(dead_code)]
@@ -138,29 +136,15 @@ impl ExampleIndexer {
         for contract in contracts {
             // Convert i64 chain_id to u64 for HashMap lookup
             let chain_id_u64 = contract.chain_id as u64;
-            if let Some(_provider_pool) = providers.get(&chain_id_u64) {
-                // Example: Use the provider pool to make requests
-                // In a real implementation, you would:
-                // 1. Get the current block number
-                // 2. Query for events/logs from the bridge contract
-                // 3. Process and store cross-chain messages/transfers
-                //
-                // Example usage pattern:
-                // let block_number = provider_pool
-                //     .request(|provider| async move {
-                //         provider.get_block_number().await
-                //     })
-                //     .await?;
-                //
-                // Then use the block number to query for events and process them
-
-                // Placeholder: In a real implementation, you would process the results here
-                // and store cross-chain messages/transfers in the database
-                info!(
+            if let Some(provider_pool) = providers.get(&chain_id_u64) {
+                // Placeholder: just demonstration the usage of the provider pool
+                // In real implementation, the logic would be more complex
+                let block_number = provider_pool.get_block_number().await?;
+                tracing::info!(
                     bridge_id = bridge_id,
                     chain_id = contract.chain_id,
-                    contract_address = ?contract.address,
-                    "Would process contract here"
+                    block_number = block_number,
+                    "Indexer example processing iteration"
                 );
             } else {
                 warn!(

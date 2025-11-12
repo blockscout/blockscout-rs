@@ -118,11 +118,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             "avalanchenative" => {
                 // TODO: start Avalanche indexer
                 ExampleIndexer::new(db.clone(), bridge.bridge_id, chains_providers.clone())
-            },
+            }
             "omnibridge" => {
                 // TODO: start OmniBridge indexer
                 ExampleIndexer::new(db.clone(), bridge.bridge_id, chains_providers.clone())
-            },
+            }
             _ => {
                 tracing::error!("Unsupported indexer: {}", bridge.indexer);
                 return;

@@ -8,9 +8,11 @@ alloy = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 blockscout-display-bytes = { workspace = true }
+## Uncomment this if needed
+#ethabi = { workspace = true }
+#ethers-core = { workspace = true }
+futures = { workspace = true }
 governor = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 interchain-indexer-entity = { workspace = true }
 parking_lot = { workspace = true }
 sea-orm = { workspace = true, features = [
@@ -19,11 +21,9 @@ sea-orm = { workspace = true, features = [
     "macros",
     "postgres-array",
 ] }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
-## Uncomment this if needed
-#ethabi = { workspace = true }
-#ethers-core = { workspace = true }
-#futures = { workspace = true }
 #hex = { workspace = true }
 #keccak-hash = { workspace = true }
 #lazy_static = { workspace = true }

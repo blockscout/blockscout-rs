@@ -1,24 +1,29 @@
 use std::{
+    collections::HashMap,
     num::NonZeroU32,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
 
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::future;
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use thiserror::Error;
 use tokio::time::sleep;
 
-use governor::{clock::DefaultClock, Quota, RateLimiter, state::direct::NotKeyed, state::InMemoryState};
+use governor::{
+    Quota, RateLimiter,
+    clock::DefaultClock,
+    state::{InMemoryState, direct::NotKeyed},
+};
 
-use alloy::network::Ethereum;
-use alloy::providers::Provider;
+use alloy::{network::Ethereum, providers::Provider};
 
 /// Abstracts the minimal RPC we need for the pool.
 #[async_trait]
@@ -66,91 +71,14 @@ impl RpcProvider for RealRpcProvider {
     }
 }
 
-/// Mock provider for testing.
-/// Allows deterministic control over provider behavior.
-#[cfg(test)]
-#[derive(Clone)]
-pub struct MockRpcProvider {
-    block_number: Arc<RwLock<u64>>,
-    should_fail: Arc<RwLock<bool>>,
-    responses: Arc<RwLock<std::collections::HashMap<String, Value>>>,
-}
-
-#[cfg(test)]
-impl MockRpcProvider {
-    /// Create a new mock provider with an initial block number.
-    pub fn new(initial_block: u64) -> Self {
-        Self {
-            block_number: Arc::new(RwLock::new(initial_block)),
-            should_fail: Arc::new(RwLock::new(false)),
-            responses: Arc::new(RwLock::new(std::collections::HashMap::new())),
-        }
-    }
-
-    /// Set the block number that will be returned by get_block_number().
-    pub fn set_block_number(&self, block: u64) {
-        *self.block_number.write() = block;
-    }
-
-    /// Get the current block number.
-    pub fn get_block_number_sync(&self) -> u64 {
-        *self.block_number.read()
-    }
-
-    /// Set whether the provider should fail on requests.
-    pub fn set_should_fail(&self, fail: bool) {
-        *self.should_fail.write() = fail;
-    }
-
-    /// Check if the provider is configured to fail.
-    pub fn should_fail(&self) -> bool {
-        *self.should_fail.read()
-    }
-
-    /// Set a response for a specific method.
-    pub fn set_response(&self, method: &str, response: Value) {
-        self.responses.write().insert(method.to_string(), response);
-    }
-}
-
-#[cfg(test)]
-#[async_trait]
-impl RpcProvider for MockRpcProvider {
-    async fn get_block_number(&self) -> Result<u64> {
-        if self.should_fail() {
-            Err(anyhow::anyhow!("Mock provider configured to fail"))
-        } else {
-            Ok(self.get_block_number_sync())
-        }
-    }
-
-    async fn request(&self, method: &str, _params: Value) -> Result<Value> {
-        if self.should_fail() {
-            return Err(anyhow::anyhow!("Mock provider configured to fail"));
-        }
-
-        // Check if there's a custom response for this method
-        if let Some(response) = self.responses.read().get(method) {
-            return Ok(response.clone());
-        }
-
-        // Default behavior: for eth_blockNumber, return the current block number
-        if method == "eth_blockNumber" {
-            let block_number = self.get_block_number_sync();
-            return Ok(serde_json::json!(format!("0x{:x}", block_number)));
-        }
-
-        Err(anyhow::anyhow!("Unsupported method: {}", method))
-    }
-}
-
 /// Per-node static config.
 #[derive(Clone)]
 pub struct NodeConfig {
     pub name: String,
     pub http_url: String,
     pub max_rps: u32,         // max requests per second for this node
-    pub error_threshold: u32, // consecutive errors before temporary disable
+    pub error_threshold: u32, // consecutive errors before temporary cooldown
+    pub cooldown_threshold: u32, // the number of cooldowns before exiting the role of the primary node
     pub cooldown: Duration,   // how long node stays disabled
 }
 
@@ -167,13 +95,14 @@ struct Node {
     cfg: NodeConfig,
     provider: Arc<dyn RpcProvider>,
     limiter: RateLimiter<NotKeyed, InMemoryState, DefaultClock>, // per-node rate limiter
-    state: RwLock<NodeState>,         // health & last block snapshot
+    state: RwLock<NodeState>,                                    // health & last block snapshot
 }
 
 #[derive(Clone, Copy, Debug)]
 struct NodeState {
     disabled_until: Option<Instant>,
     consecutive_errors: u32,
+    cooldowns_count: u32,
     last_block: Option<u64>,
     last_block_ts: Option<Instant>,
 }
@@ -183,6 +112,7 @@ impl Default for NodeState {
         Self {
             disabled_until: None,
             consecutive_errors: 0,
+            cooldowns_count: 0,
             last_block: None,
             last_block_ts: None,
         }
@@ -200,8 +130,8 @@ pub enum PoolError {
 pub struct ProviderPool {
     nodes: Vec<Arc<Node>>,
     cfg: PoolConfig,
-    /// Rolling round-robin index (not performance-critical, protected by RwLock).
-    rr_idx: RwLock<usize>,
+    /// The first node is primary by default. It can be switch in case of a lot of errors.
+    primary_idx: RwLock<usize>,
     /// Cached network head (max of nodes' last_block). Updated only by the health task.
     cached_head: AtomicU64,
 }
@@ -210,40 +140,21 @@ impl ProviderPool {
     /// Create pool and spawn internal health task (self-contained).
     /// Uses real HTTP providers from the node config URLs.
     pub async fn new_with_config(node_cfgs: Vec<NodeConfig>, cfg: PoolConfig) -> Result<Arc<Self>> {
-        let mut providers: Vec<Arc<dyn RpcProvider>> = Vec::with_capacity(node_cfgs.len());
-        for nc in &node_cfgs {
-            // Build HTTP provider
-            let http = alloy::providers::ProviderBuilder::new()
-                .connect_http(nc.http_url.parse()?);
-            providers.push(Arc::new(RealRpcProvider::new(Box::new(http))));
-        }
+        let providers: Vec<Arc<dyn RpcProvider>> = node_cfgs
+            .iter()
+            .map(|nc| {
+                // Build HTTP provider
+                let http =
+                    alloy::providers::ProviderBuilder::new().connect_http(nc.http_url.parse()?);
+                Ok(Arc::new(RealRpcProvider::new(Box::new(http))) as Arc<dyn RpcProvider>)
+            })
+            .collect::<Result<Vec<_>>>()?;
         Self::new_with_providers(node_cfgs, providers, cfg).await
     }
 
-    /// Create pool with custom providers (useful for testing with mocks).
-    #[cfg(test)]
-    pub async fn new_with_mock_providers(
-        node_cfgs: Vec<NodeConfig>,
-        mock_providers: Vec<MockRpcProvider>,
-        cfg: PoolConfig,
-    ) -> Result<Arc<Self>> {
-        if node_cfgs.len() != mock_providers.len() {
-            return Err(anyhow::anyhow!(
-                "Mismatch: {} node configs but {} providers",
-                node_cfgs.len(),
-                mock_providers.len()
-            ));
-        }
-
-        let providers: Vec<Arc<dyn RpcProvider>> = mock_providers
-            .into_iter()
-            .map(|p| Arc::new(p) as Arc<dyn RpcProvider>)
-            .collect();
-        Self::new_with_providers(node_cfgs, providers, cfg).await
-    }
-
-    /// Internal method to create pool with RPC providers.
-    async fn new_with_providers(
+    /// Helper method to create pool with pre-created RPC providers.
+    /// Exposed publicly to initializing with mock providers for testing.
+    pub(crate) async fn new_with_providers(
         node_cfgs: Vec<NodeConfig>,
         providers: Vec<Arc<dyn RpcProvider>>,
         cfg: PoolConfig,
@@ -256,24 +167,27 @@ impl ProviderPool {
             ));
         }
 
-        let mut nodes = Vec::with_capacity(node_cfgs.len());
-        for (nc, provider) in node_cfgs.into_iter().zip(providers.into_iter()) {
-            // Per-node RPS limiter
-            let limiter = RateLimiter::direct(Quota::per_second(
-                NonZeroU32::new(nc.max_rps.max(1)).unwrap(), // avoid zero
-            ));
-            nodes.push(Arc::new(Node {
-                cfg: nc,
-                provider,
-                limiter,
-                state: RwLock::new(NodeState::default()),
-            }));
-        }
+        let nodes: Vec<Arc<Node>> = node_cfgs
+            .into_iter()
+            .zip(providers.into_iter())
+            .map(|(nc, provider)| {
+                // Per-node RPS limiter
+                let limiter = RateLimiter::direct(Quota::per_second(
+                    NonZeroU32::new(nc.max_rps.max(1)).unwrap(), // avoid zero
+                ));
+                Arc::new(Node {
+                    cfg: nc,
+                    provider,
+                    limiter,
+                    state: RwLock::new(NodeState::default()),
+                })
+            })
+            .collect();
 
         let pool = Arc::new(Self {
             nodes,
             cfg,
-            rr_idx: RwLock::new(0),
+            primary_idx: RwLock::new(0),
             cached_head: AtomicU64::new(0),
         });
 
@@ -295,11 +209,14 @@ impl ProviderPool {
 
     /// Health tick: refresh block numbers, revive nodes after cooldown, update cached head.
     async fn health_tick(&self) {
-        let mut max_head: u64 = self.cached_head.load(Ordering::Relaxed);
+        let initial_head = self.cached_head.load(Ordering::Relaxed);
+        let now = Instant::now();
 
-        for n in &self.nodes {
-            let now = Instant::now();
-            let should_probe = {
+        // Determine which nodes should be probed
+        let should_probe_flags: Vec<bool> = self
+            .nodes
+            .iter()
+            .map(|n| {
                 let mut st = n.state.write();
 
                 // If cooldown expired, allow trying the node again.
@@ -312,23 +229,55 @@ impl ProviderPool {
 
                 // Check if we should probe (node is not disabled)
                 st.disabled_until.is_none()
-            };
+            })
+            .collect();
 
-            // Probe block number only if node is not disabled.
-            if should_probe {
-                // Best-effort: ignore failures here, handled by error counters during real requests.
-                if let Ok(bn) = n.provider.get_block_number().await {
-                    let mut st = n.state.write();
-                    st.last_block = Some(bn);
-                    st.last_block_ts = Some(now);
-                    if bn > max_head {
-                        max_head = bn;
+        // Process async operations simultaneously for all nodes that should be probed
+        // Collect futures along with their node indices for proper mapping
+        let (indices, block_number_futures): (Vec<usize>, Vec<_>) = self
+            .nodes
+            .iter()
+            .zip(should_probe_flags.iter())
+            .enumerate()
+            .filter_map(|(idx, (n, &should_probe))| {
+                if should_probe {
+                    Some((idx, n.provider.get_block_number()))
+                } else {
+                    None
+                }
+            })
+            .unzip();
+
+        // Await all block number requests in parallel
+        let block_number_results = future::join_all(block_number_futures).await;
+
+        // Create a mapping from node index to result for efficient lookup
+        let result_map: HashMap<usize, &Result<u64>> = indices
+            .iter()
+            .zip(block_number_results.iter())
+            .map(|(&idx, result)| (idx, result))
+            .collect();
+
+        // Process results and update node states
+        let max_head = self
+            .nodes
+            .iter()
+            .zip(should_probe_flags.iter())
+            .enumerate()
+            .fold(initial_head, |current_max, (idx, (n, &should_probe))| {
+                if should_probe {
+                    if let Some(Ok(bn)) = result_map.get(&idx) {
+                        let bn = *bn; // Copy the u64 value
+                        let mut st = n.state.write();
+                        st.last_block = Some(bn);
+                        st.last_block_ts = Some(now);
+                        return current_max.max(bn);
                     }
                 }
-            }
-        }
+                current_max
+            });
 
-        // Update cached network head once per tick (not per request).
+        // Update cached network head
         self.cached_head.store(max_head, Ordering::Relaxed);
     }
 
@@ -365,6 +314,12 @@ impl ProviderPool {
         if st.consecutive_errors >= node.cfg.error_threshold {
             st.disabled_until = Some(Instant::now() + node.cfg.cooldown);
             st.consecutive_errors = 0; // reset after entering cooldown
+            st.cooldowns_count += 1;
+            if st.cooldowns_count >= node.cfg.cooldown_threshold {
+                let mut primary = self.primary_idx.write();
+                *primary = (*primary + 1) % self.nodes.len();
+                tracing::warn!("Primary Node {} has been cooldowned too many times. Switching primary to the next node.", node.cfg.name);
+            }
         }
     }
 
@@ -375,37 +330,23 @@ impl ProviderPool {
         st.disabled_until = None;
     }
 
-    /// Pick the next node using round-robin over healthy, non-rate-limited nodes.
+    /// Pick the first available node (over healthy, non-rate-limited nodes).
     fn pick_node(&self) -> Option<Arc<Node>> {
         let len = self.nodes.len();
         if len == 0 {
             return None;
         }
 
-        // Round-robin start index
-        let start = {
-            let mut idx = self.rr_idx.write();
-            let cur = *idx;
-            *idx = (*idx + 1) % len;
-            cur
-        };
+        let start = *self.primary_idx.read();
 
-        // Single pass over all nodes
-        for i in 0..len {
-            let node = &self.nodes[(start + i) % len];
-
-            // Health & lag checks
-            if !self.is_node_available(node) {
-                continue;
-            }
-
-            // Rate limit check (non-blocking). If limited, try next node.
-            if node.limiter.check().is_ok() {
-                return Some(node.clone());
-            }
-        }
-
-        None
+        // Single pass over all nodes - find first available and non-rate-limited node
+        (0..len)
+            .map(|i| &self.nodes[(start + i) % len])
+            .find(|node| {
+                // Health & lag checks
+                self.is_node_available(node) && node.limiter.check().is_ok()
+            })
+            .map(|node| node.clone())
     }
 
     /// Generic request: execute a JSON-RPC method with a selected provider.
@@ -420,9 +361,7 @@ impl ProviderPool {
                 continue;
             };
 
-            // For real providers, use with_provider. For mocks, return an error.
-            // Note: In tests, mocks are primarily for testing health checks via get_block_number.
-            // For testing request/get_logs, use real providers or test those separately.
+            // Send request to the selected node
             match node.provider.request(method, params.clone()).await {
                 Ok(v) => {
                     self.mark_ok(&node);
@@ -442,10 +381,15 @@ impl ProviderPool {
 
     /// Generic request with automatic deserialization.
     /// Execute a JSON-RPC method and deserialize the response to the specified type.
-    pub async fn request_typed<T: DeserializeOwned + Send>(&self, method: &str, params: Value) -> Result<T, PoolError> {
+    pub async fn request_typed<T: DeserializeOwned + Send>(
+        &self,
+        method: &str,
+        params: Value,
+    ) -> Result<T, PoolError> {
         let value = self.request(method, params).await?;
-        serde_json::from_value(value)
-            .map_err(|e| PoolError::Inner(anyhow::anyhow!("Failed to deserialize response: {:?}", e)))
+        serde_json::from_value(value).map_err(|e| {
+            PoolError::Inner(anyhow::anyhow!("Failed to deserialize response: {:?}", e))
+        })
     }
 
     /// Get the current block number from a healthy node.
@@ -480,30 +424,14 @@ impl ProviderPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn create_test_node_config(name: &str, url: &str) -> NodeConfig {
-        NodeConfig {
-            name: name.to_string(),
-            http_url: url.to_string(),
-            max_rps: 10,
-            error_threshold: 3,
-            cooldown: Duration::from_secs(1),
-        }
-    }
-
-    fn create_test_pool_config() -> PoolConfig {
-        PoolConfig {
-            health_period: Duration::from_millis(100),
-            max_block_lag: 10,
-        }
-    }
+    use crate::test_utils::{
+        MockRpcProvider, create_pool_with_mock_providers, create_test_node,
+        create_test_node_with_id, create_test_pool_config,
+    };
 
     #[tokio::test]
     async fn test_pool_creation() {
-        let node_cfgs = vec![
-            create_test_node_config("node1", "http://127.0.0.1:8545"),
-            create_test_node_config("node2", "http://127.0.0.1:8546"),
-        ];
+        let node_cfgs = vec![create_test_node_with_id(1), create_test_node_with_id(2)];
         let pool_cfg = create_test_pool_config();
 
         let pool = ProviderPool::new_with_config(node_cfgs, pool_cfg).await;
@@ -519,10 +447,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_pool_creation_invalid_url() {
-        let node_cfgs = vec![create_test_node_config("node1", "not-a-url")];
+        let mut cfg = create_test_node();
+        cfg.http_url = "not-a-url".to_string();
         let pool_cfg = create_test_pool_config();
 
-        let pool = ProviderPool::new_with_config(node_cfgs, pool_cfg).await;
+        let pool = ProviderPool::new_with_config(vec![cfg], pool_cfg).await;
         assert!(pool.is_err());
     }
 
@@ -533,9 +462,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = pool
-            .request("eth_blockNumber", serde_json::json!([]))
-            .await;
+        let result = pool.request("eth_blockNumber", serde_json::json!([])).await;
 
         assert!(matches!(result, Err(PoolError::NoHealthyNodes)));
     }
@@ -543,9 +470,9 @@ mod tests {
     #[tokio::test]
     async fn test_get_block_number() {
         let mock = MockRpcProvider::new(12345);
-        let node_cfgs = vec![create_test_node_config("mock1", "http://mock1")];
+        let node_cfgs = vec![create_test_node()];
         let pool_cfg = create_test_pool_config();
-        let pool = ProviderPool::new_with_mock_providers(node_cfgs, vec![mock], pool_cfg)
+        let pool = create_pool_with_mock_providers(node_cfgs, vec![mock], pool_cfg)
             .await
             .unwrap();
 
@@ -556,15 +483,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_tick_updates_cached_head() {
-        let node_cfgs = vec![create_test_node_config(
-            "node1",
-            "http://127.0.0.1:9999",
-        )];
+        let node_cfgs = vec![create_test_node()];
+        let mock = MockRpcProvider::new(42);
         let pool_cfg = PoolConfig {
             health_period: Duration::from_millis(50),
             max_block_lag: 10,
         };
-        let pool = ProviderPool::new_with_config(node_cfgs, pool_cfg)
+        let pool = create_pool_with_mock_providers(node_cfgs, vec![mock], pool_cfg)
             .await
             .unwrap();
 
@@ -573,56 +498,50 @@ mod tests {
 
         // Cached head might still be 0 if provider fails, but the method should work
         let head = pool.read_cached_head();
-        // Head could be None (0) if provider fails, or Some(value) if it succeeds
-        assert!(head.is_none() || head.is_some());
+        assert_eq!(head, Some(42));
     }
 
     #[tokio::test]
-    async fn test_node_config_defaults() {
-        let config = create_test_node_config("test", "http://127.0.0.1:8545");
-        assert_eq!(config.name, "test");
-        assert_eq!(config.http_url, "http://127.0.0.1:8545");
-        assert_eq!(config.max_rps, 10);
-        assert_eq!(config.error_threshold, 3);
-        assert_eq!(config.cooldown, Duration::from_secs(1));
-    }
-
-    #[tokio::test]
-    async fn test_pool_config() {
-        let config = create_test_pool_config();
-        assert_eq!(config.health_period, Duration::from_millis(100));
-        assert_eq!(config.max_block_lag, 10);
-    }
-
-    #[tokio::test]
-    async fn test_multiple_nodes_round_robin() {
+    async fn test_multiple_nodes() {
         let mocks = vec![
             MockRpcProvider::new(1000),
             MockRpcProvider::new(2000),
             MockRpcProvider::new(3000),
         ];
         let node_cfgs = vec![
-            create_test_node_config("mock1", "http://mock1"),
-            create_test_node_config("mock2", "http://mock2"),
-            create_test_node_config("mock3", "http://mock3"),
+            create_test_node_with_id(1),
+            create_test_node_with_id(2),
+            create_test_node_with_id(3),
         ];
         let pool_cfg = create_test_pool_config();
-        let pool = ProviderPool::new_with_mock_providers(node_cfgs, mocks, pool_cfg)
+        let pool = create_pool_with_mock_providers(node_cfgs, mocks, pool_cfg)
             .await
             .unwrap();
 
-        // Make multiple requests to test round-robin
-        for _ in 0..5 {
-            let _ = pool.get_block_number().await;
-        }
+        // Make multiple requests in parallel to check the rate limiter
+        let requests: Vec<_> = (0..30)
+            .map(|_| pool.get_block_number())
+            .collect();
+        let results = future::join_all(requests).await;
 
-        // If we get here without panicking, round-robin is working
-        assert!(true);
+        // Verify all requests succeeded
+        let block_numbers: Vec<u64> = results
+            .into_iter()
+            .map(|r| r.expect("Request should succeed"))
+            .collect();
+
+        // Verify we got different results (should distribute across nodes)
+        let unique_values: std::collections::HashSet<u64> = block_numbers.iter().copied().collect();
+        assert!(
+            unique_values.len() == 3,
+            "RateLimiter should distribute requests across nodes. Got: {:?}",
+            block_numbers
+        );
     }
 
     #[tokio::test]
     async fn test_zero_max_rps_handled() {
-        let mut node_cfg = create_test_node_config("node1", "http://127.0.0.1:9999");
+        let mut node_cfg = create_test_node();
         node_cfg.max_rps = 0; // Should be handled (maxed to 1)
 
         let pool_cfg = create_test_pool_config();
@@ -637,23 +556,16 @@ mod tests {
         // Create mock providers with deterministic block numbers
         let mock1 = MockRpcProvider::new(1000);
         let mock2 = MockRpcProvider::new(1005);
-        
-        let node_cfgs = vec![
-            create_test_node_config("mock1", "http://mock1"),
-            create_test_node_config("mock2", "http://mock2"),
-        ];
+
+        let node_cfgs = vec![create_test_node_with_id(1), create_test_node_with_id(2)];
         let pool_cfg = PoolConfig {
             health_period: Duration::from_millis(50),
             max_block_lag: 10,
         };
-        
-        let pool = ProviderPool::new_with_mock_providers(
-            node_cfgs,
-            vec![mock1, mock2],
-            pool_cfg,
-        )
-        .await
-        .unwrap();
+
+        let pool = create_pool_with_mock_providers(node_cfgs, vec![mock1, mock2], pool_cfg)
+            .await
+            .unwrap();
 
         // Wait for health tick to run
         sleep(Duration::from_millis(150)).await;
@@ -668,20 +580,16 @@ mod tests {
     async fn test_mock_provider_update_block_number() {
         let mock = MockRpcProvider::new(1000);
         let mock_clone = mock.clone();
-        
-        let node_cfgs = vec![create_test_node_config("mock1", "http://mock1")];
+
+        let node_cfgs = vec![create_test_node()];
         let pool_cfg = PoolConfig {
             health_period: Duration::from_millis(50),
             max_block_lag: 10,
         };
-        
-        let pool = ProviderPool::new_with_mock_providers(
-            node_cfgs,
-            vec![mock],
-            pool_cfg,
-        )
-        .await
-        .unwrap();
+
+        let pool = create_pool_with_mock_providers(node_cfgs, vec![mock], pool_cfg)
+            .await
+            .unwrap();
 
         // Wait for initial health check
         sleep(Duration::from_millis(150)).await;
@@ -689,7 +597,7 @@ mod tests {
 
         // Update mock block number
         mock_clone.set_block_number(2000);
-        
+
         // Wait for next health check
         sleep(Duration::from_millis(150)).await;
         assert_eq!(pool.read_cached_head(), Some(2000));
@@ -699,26 +607,36 @@ mod tests {
     async fn test_mock_provider_failure() {
         let mock = MockRpcProvider::new(1000);
         mock.set_should_fail(true);
-        
-        let node_cfgs = vec![create_test_node_config("mock1", "http://mock1")];
+
+        let node_cfgs = vec![create_test_node()];
         let pool_cfg = PoolConfig {
             health_period: Duration::from_millis(50),
             max_block_lag: 10,
         };
-        
-        let pool = ProviderPool::new_with_mock_providers(
-            node_cfgs,
-            vec![mock],
-            pool_cfg,
-        )
-        .await
-        .unwrap();
+
+        let pool = create_pool_with_mock_providers(node_cfgs, vec![mock.clone()], pool_cfg)
+            .await
+            .unwrap();
 
         // Wait for health check
         sleep(Duration::from_millis(150)).await;
 
-        // Head should remain 0 (or None) since the provider fails
+        // Head should remain None since the provider fails
         let head = pool.read_cached_head();
-        assert!(head.is_none() || head == Some(0));
+        assert!(head.is_none());
+
+        // Restore the mock provider (set should_fail to false)
+        mock.set_should_fail(false);
+
+        // Wait for next health check
+        sleep(Duration::from_millis(150)).await;
+
+        // Now the block number should be retrieved correctly
+        let head_after_restore = pool.read_cached_head();
+        assert_eq!(head_after_restore, Some(1000));
+
+        // Also verify we can get block number directly
+        let block_number = pool.get_block_number().await;
+        assert_eq!(block_number.unwrap(), 1000);
     }
 }

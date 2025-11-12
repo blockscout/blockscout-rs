@@ -26,6 +26,7 @@ config = { version = "0.15" }
 governor = { version = "0.10.0" }
 serde = { version = "1.0" }
 serde_json = { version = "1.0.96" }
+futures = { version = "0.3" }
 tokio = { version = "1.47", features = ["full"] }
 tonic = { version = "0.12", features = ["tls", "tls-roots"] }
 tracing = { version = "0.1" }

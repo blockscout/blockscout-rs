@@ -7,8 +7,7 @@ use interchain_indexer_logic::{NodeConfig, PoolConfig, ProviderPool};
 use sea_orm::{ActiveValue, prelude::Json};
 use serde::{Deserialize, Deserializer};
 use serde_json;
-use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
-use std::time::Duration;
+use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration};
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct BridgeConfig {
@@ -174,14 +173,26 @@ pub struct ChainConfig {
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct RpcProviderConfig {
     pub url: String,
-    #[serde(default = "default_enabled")]
+    #[serde(default = "default_rpc_enabled")]
     pub enabled: bool,
+    #[serde(default = "default_max_rps")]
+    max_rps: u32,
+    #[serde(default = "default_error_threshold")]
+    error_threshold: u32,
     #[serde(default)]
     pub api_key: Option<ApiKeyConfig>,
 }
 
-fn default_enabled() -> bool {
+fn default_rpc_enabled() -> bool {
     true
+}
+
+fn default_max_rps() -> u32 {
+    10
+}
+
+fn default_error_threshold() -> u32 {
+    3
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -229,6 +240,7 @@ pub async fn create_provider_pools_from_chains(
     // Default node configuration values
     const DEFAULT_MAX_RPS: u32 = 10;
     const DEFAULT_ERROR_THRESHOLD: u32 = 3;
+    const DEFAULT_COOLDOWN_THRESHOLD: u32 = 1;
     const DEFAULT_COOLDOWN_SECS: u64 = 60;
 
     for chain in chains {
@@ -251,6 +263,7 @@ pub async fn create_provider_pools_from_chains(
                     http_url: url,
                     max_rps: DEFAULT_MAX_RPS,
                     error_threshold: DEFAULT_ERROR_THRESHOLD,
+                    cooldown_threshold: DEFAULT_COOLDOWN_THRESHOLD,
                     cooldown: Duration::from_secs(DEFAULT_COOLDOWN_SECS),
                 };
 

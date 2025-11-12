@@ -3593,6 +3593,7 @@ dependencies = [
  "async-trait",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
+ "futures",
  "governor",
  "interchain-indexer-entity",
  "interchain-indexer-migration",
