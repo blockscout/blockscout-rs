@@ -6,8 +6,11 @@ edition = "2024"
 [dependencies]
 alloy = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 governor = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 interchain-indexer-entity = { workspace = true }
 parking_lot = { workspace = true }
 sea-orm = { workspace = true, features = [

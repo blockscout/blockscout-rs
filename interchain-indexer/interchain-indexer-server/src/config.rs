@@ -330,7 +330,7 @@ mod tests {
         let bridges = load_bridges_from_file(&path).unwrap();
 
         assert_eq!(bridges.len(), 1);
-        assert_eq!(bridges[0].bridge_id, 1);
+        assert_eq!(bridges[0].bridge_id, 2);
         assert_eq!(bridges[0].name, "Avalanche ICTT");
         assert_eq!(bridges[0].bridge_type, "lockmint");
         assert_eq!(bridges[0].contracts.len(), 2);

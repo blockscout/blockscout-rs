@@ -3590,6 +3590,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
+ "async-trait",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "governor",
@@ -3599,6 +3600,8 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "sea-orm",
+ "serde",
+ "serde_json",
  "thiserror 2.0.17",
  "tokio",
  "tonic",
