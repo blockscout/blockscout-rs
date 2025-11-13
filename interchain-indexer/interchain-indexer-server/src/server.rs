@@ -8,7 +8,7 @@ use crate::{
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing as bs_tracing};
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
-use interchain_indexer_logic::{InterchainDatabase, crosschain_indexer::CrosschainIndexer, example_indexer::{self, ExampleIndexer}};
+use interchain_indexer_logic::{InterchainDatabase, crosschain_indexer::CrosschainIndexer, example_indexer::ExampleIndexer};
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::interchain_statistics_service_actix::route_interchain_statistics_service;
 use migration::Migrator;
 use std::sync::Arc;

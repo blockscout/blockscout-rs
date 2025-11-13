@@ -10,7 +10,7 @@ use std::{
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info, warn};
 
-use crate::{InterchainDatabase, ProviderPool, indexer::crosschain_indexer::CrosschainIndexer, provider_pool};
+use crate::{InterchainDatabase, ProviderPool, indexer::crosschain_indexer::CrosschainIndexer};
 
 /// Example implementation of CrosschainIndexer trait.
 #[allow(dead_code)]
@@ -140,6 +140,7 @@ impl ExampleIndexer {
                 // Placeholder: just demonstration the usage of the provider pool
                 // In real implementation, the logic would be more complex
                 let block_number = provider_pool.get_block_number().await?;
+                //let chain_id = provider_pool.request("eth_chainId", None).await?;
                 tracing::info!(
                     bridge_id = bridge_id,
                     chain_id = contract.chain_id,
