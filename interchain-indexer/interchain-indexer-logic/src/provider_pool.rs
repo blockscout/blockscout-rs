@@ -23,7 +23,7 @@ use governor::{
     state::{InMemoryState, direct::NotKeyed},
 };
 
-use alloy::{network::Ethereum, providers::Provider};
+use alloy::{network::Ethereum, providers::{Provider, ProviderBuilder}, rpc::client::RpcClient};
 
 /// Abstracts the minimal RPC we need for the pool.
 #[async_trait]
@@ -33,22 +33,21 @@ pub trait RpcProvider: Send + Sync + 'static {
     async fn request(&self, method: &str, params: Value) -> Result<Value>;
 }
 
-/// Wrapper around real alloy Provider to implement RpcProvider trait.
-#[derive(Clone)]
-pub struct RealRpcProvider {
-    inner: Arc<dyn Provider<Ethereum> + Send + Sync>,
+pub struct RealRpcProvider<P: Provider<Ethereum> + Send + Sync + Clone> {
+    inner: P,
 }
 
-impl RealRpcProvider {
-    pub fn new(provider: Box<dyn Provider<Ethereum> + Send + Sync>) -> Self {
-        Self {
-            inner: Arc::from(provider),
-        }
+impl<P: Provider<Ethereum> + Send + Sync + Clone> RealRpcProvider<P> {
+    pub fn new(provider: P) -> Self {
+        Self { inner: provider }
     }
 }
 
 #[async_trait]
-impl RpcProvider for RealRpcProvider {
+impl<P> RpcProvider for RealRpcProvider<P>
+where
+    P: Provider<Ethereum> + Send + Sync + Clone + 'static,
+{
     async fn get_block_number(&self) -> Result<u64> {
         self.inner
             .get_block_number()
@@ -63,7 +62,6 @@ impl RpcProvider for RealRpcProvider {
         match method {
             "eth_blockNumber" => {
                 let block_number = self.get_block_number().await?;
-                // Convert to JSON-RPC response format
                 Ok(serde_json::json!(format!("0x{:x}", block_number)))
             }
             _ => Err(anyhow::anyhow!("Unsupported method: {}", method)),
@@ -89,6 +87,25 @@ pub struct PoolConfig {
     pub health_period: Duration,
     /// Maximum allowed lag vs. observed network head (in blocks). If a node lags more, it's skipped.
     pub max_block_lag: u64,
+    /// Number of retries for failed requests (0 = no retries)
+    /// Retry logic is implemented on the pool level, not on the node level.
+    pub retry_count: u32,
+    /// Initial delay for exponential backoff retries (in milliseconds)
+    pub retry_initial_delay_ms: u64,
+    /// Maximum delay for exponential backoff retries (in milliseconds)
+    pub retry_max_delay_ms: u64,
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self {
+            health_period: Duration::from_millis(1000),
+            max_block_lag: 20,
+            retry_count: 10,
+            retry_initial_delay_ms: 50,
+            retry_max_delay_ms: 500,
+        }
+    }
 }
 
 struct Node {
@@ -143,10 +160,10 @@ impl ProviderPool {
         let providers: Vec<Arc<dyn RpcProvider>> = node_cfgs
             .iter()
             .map(|nc| {
-                // Build HTTP provider
-                let http =
-                    alloy::providers::ProviderBuilder::new().connect_http(nc.http_url.parse()?);
-                Ok(Arc::new(RealRpcProvider::new(Box::new(http))) as Arc<dyn RpcProvider>)
+                //let retry_layer = RetryBackoffLayer::new(3, 500, 100);
+                let client = RpcClient::builder().http(nc.http_url.parse()?);
+                let provider = ProviderBuilder::new().connect_client(client);
+                Ok(Arc::new(RealRpcProvider::new(Box::new(provider))) as Arc<dyn RpcProvider>)
             })
             .collect::<Result<Vec<_>>>()?;
         Self::new_with_providers(node_cfgs, providers, cfg).await
@@ -349,34 +366,80 @@ impl ProviderPool {
             .map(|node| node.clone())
     }
 
-    /// Generic request: execute a JSON-RPC method with a selected provider.
-    /// Returns the raw JSON-RPC response as a Value.
-    pub async fn request(&self, method: &str, params: Value) -> Result<Value, PoolError> {
-        // Try up to N nodes (N = number of nodes)
-        for _ in 0..self.nodes.len() {
+    /// Generic provider operation executor with retry logic, error handling, and batching support.
+    /// The operation closure can perform any operation, which supported by RpcProvider trait.
+    /// This function centralizes all provider-related operations and handles:
+    /// - Node selection (starting from primary node)
+    /// - Retry logic
+    /// - Error tracking and node health management
+    /// - Automatic failover to next node on errors
+    async fn execute_provider_operation<F, Fut, T>(
+        &self,
+        operation: F,
+    ) -> Result<T, PoolError>
+    where
+        F: Fn(Arc<Node>) -> Fut,
+        Fut: std::future::Future<Output = Result<T>>,
+    {
+        if self.nodes.len() == 0 {
+            // don't wait if there's nothing to wait for :)
+            return Err(PoolError::NoHealthyNodes);
+        }
+
+        const PICK_NODE_DELAY_MS: u64 = 10;
+        const PICK_NODE_MAX_ATTEMPTS: u32 = 1000;
+
+        let mut operation_attempt = 0;
+        let mut pick_node_attempt = 0;
+        while pick_node_attempt < PICK_NODE_MAX_ATTEMPTS &&
+            operation_attempt <= self.cfg.retry_count
+        {
             let Some(node) = self.pick_node() else {
-                // No healthy/non-limited nodes available now.
-                // Small backoff to avoid spinning; then retry another pass.
-                sleep(Duration::from_millis(10)).await;
+                // No healthy/non-limited nodes available now, wait and try again.
+                sleep(Duration::from_millis(PICK_NODE_DELAY_MS)).await;
+                pick_node_attempt += 1;
                 continue;
             };
 
-            // Send request to the selected node
-            match node.provider.request(method, params.clone()).await {
-                Ok(v) => {
+            pick_node_attempt = 0;
+
+            // Try to execute the operation on the selected node
+            match operation(node.clone()).await {
+                Ok(result) => {
                     self.mark_ok(&node);
-                    return Ok(v);
+                    return Ok(result);
                 }
-                Err(_) => {
-                    // Count error and try the next node.
+                Err(e) => {
                     self.mark_error(&node);
-                    // Short jitter between attempts.
-                    sleep(Duration::from_millis(5)).await;
+
+                    if operation_attempt >= self.cfg.retry_count {
+                        return Err(PoolError::Inner(e.into()));
+                    } else {
+                        let delay_ms = (self.cfg.retry_initial_delay_ms
+                            * (1u64 << operation_attempt.min(5)))
+                            .min(self.cfg.retry_max_delay_ms);
+                        sleep(Duration::from_millis(delay_ms)).await;
+                    }
                 }
             }
+
+            operation_attempt += 1;
         }
 
         Err(PoolError::NoHealthyNodes)
+    }
+
+    /// Generic request: execute a JSON-RPC method with a selected provider.
+    /// Returns the raw JSON-RPC response as a Value.
+    pub async fn request(&self, method: &str, params: Value) -> Result<Value, PoolError> {
+        let method = method.to_string();
+        let params = params.clone();
+        self.execute_provider_operation(move |node| {
+            let method = method.clone();
+            let params = params.clone();
+            async move { node.provider.request(&method, params).await }
+        })
+        .await
     }
 
     /// Generic request with automatic deserialization.
@@ -394,30 +457,11 @@ impl ProviderPool {
 
     /// Get the current block number from a healthy node.
     pub async fn get_block_number(&self) -> Result<u64, PoolError> {
-        // Try up to N nodes (N = number of nodes)
-        for _ in 0..self.nodes.len() {
-            let Some(node) = self.pick_node() else {
-                // No healthy/non-limited nodes available now.
-                // Small backoff to avoid spinning; then retry another pass.
-                sleep(Duration::from_millis(10)).await;
-                continue;
-            };
-
-            match node.provider.get_block_number().await {
-                Ok(v) => {
-                    self.mark_ok(&node);
-                    return Ok(v);
-                }
-                Err(_) => {
-                    // Count error and try the next node.
-                    self.mark_error(&node);
-                    // Short jitter between attempts.
-                    sleep(Duration::from_millis(5)).await;
-                }
-            }
-        }
-
-        Err(PoolError::NoHealthyNodes)
+        self.execute_provider_operation(|node| {
+            let provider = node.provider.clone();
+            async move { provider.get_block_number().await }
+        })
+        .await
     }
 }
 
@@ -485,10 +529,7 @@ mod tests {
     async fn test_health_tick_updates_cached_head() {
         let node_cfgs = vec![create_test_node()];
         let mock = MockRpcProvider::new(42);
-        let pool_cfg = PoolConfig {
-            health_period: Duration::from_millis(50),
-            max_block_lag: 10,
-        };
+        let pool_cfg = create_test_pool_config();
         let pool = create_pool_with_mock_providers(node_cfgs, vec![mock], pool_cfg)
             .await
             .unwrap();
@@ -558,10 +599,7 @@ mod tests {
         let mock2 = MockRpcProvider::new(1005);
 
         let node_cfgs = vec![create_test_node_with_id(1), create_test_node_with_id(2)];
-        let pool_cfg = PoolConfig {
-            health_period: Duration::from_millis(50),
-            max_block_lag: 10,
-        };
+        let pool_cfg = create_test_pool_config();
 
         let pool = create_pool_with_mock_providers(node_cfgs, vec![mock1, mock2], pool_cfg)
             .await
@@ -582,10 +620,7 @@ mod tests {
         let mock_clone = mock.clone();
 
         let node_cfgs = vec![create_test_node()];
-        let pool_cfg = PoolConfig {
-            health_period: Duration::from_millis(50),
-            max_block_lag: 10,
-        };
+        let pool_cfg = create_test_pool_config();
 
         let pool = create_pool_with_mock_providers(node_cfgs, vec![mock], pool_cfg)
             .await
@@ -609,10 +644,7 @@ mod tests {
         mock.set_should_fail(true);
 
         let node_cfgs = vec![create_test_node()];
-        let pool_cfg = PoolConfig {
-            health_period: Duration::from_millis(50),
-            max_block_lag: 10,
-        };
+        let pool_cfg = create_test_pool_config();
 
         let pool = create_pool_with_mock_providers(node_cfgs, vec![mock.clone()], pool_cfg)
             .await

@@ -100,7 +100,7 @@ pub fn create_test_node_with_id(id: u32) -> NodeConfig {
 pub fn create_test_pool_config() -> PoolConfig {
     PoolConfig {
         health_period: Duration::from_millis(100),
-        max_block_lag: 10,
+        ..Default::default()
     }
 }
 

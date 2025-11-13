@@ -235,10 +235,13 @@ pub async fn create_provider_pools_from_chains(
     let pool_config = PoolConfig {
         health_period: Duration::from_secs(30),
         max_block_lag: 100,
+        retry_count: 3,
+        retry_initial_delay_ms: 5,
+        retry_max_delay_ms: 100,
     };
 
     // Default node configuration values
-    const DEFAULT_MAX_RPS: u32 = 10;
+    const DEFAULT_MAX_RPS: u32 = 1;
     const DEFAULT_ERROR_THRESHOLD: u32 = 3;
     const DEFAULT_COOLDOWN_THRESHOLD: u32 = 1;
     const DEFAULT_COOLDOWN_SECS: u64 = 60;
