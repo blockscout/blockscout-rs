@@ -2,13 +2,13 @@
 
 use std::{sync::Arc, time::Duration};
 
-use anyhow::Result;
+use crate::{NodeConfig, PoolConfig, ProviderPool};
 use alloy::{
-    providers::{DynProvider, Provider, ProviderBuilder},
     network::Ethereum,
+    providers::{DynProvider, Provider, ProviderBuilder},
     transports::mock::Asserter,
 };
-use crate::{NodeConfig, PoolConfig, ProviderPool};
+use anyhow::Result;
 
 /// Create a basic test node config with deterministic params.
 pub fn create_test_node() -> NodeConfig {

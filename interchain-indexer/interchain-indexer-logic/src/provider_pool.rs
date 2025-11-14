@@ -2,8 +2,8 @@ use std::{
     collections::HashMap,
     num::NonZeroU32,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -11,19 +11,20 @@ use std::{
 use anyhow::Result;
 use futures::future;
 use parking_lot::RwLock;
-use serde::de::DeserializeOwned;
+use rand::seq::IndexedRandom;
 use serde_json::Value;
 use thiserror::Error;
 use tokio::time::sleep;
 
 use governor::{
-    clock::DefaultClock,
-    state::{direct::NotKeyed, InMemoryState},
     Quota, RateLimiter,
+    clock::DefaultClock,
+    state::{InMemoryState, direct::NotKeyed},
 };
 
 use alloy::{
-    network::Ethereum, providers::{DynProvider, Provider, ProviderBuilder, layers::CallBatchLayer}
+    network::Ethereum,
+    providers::{DynProvider, Provider, ProviderBuilder, layers::CallBatchLayer},
 };
 
 /// Per-node static config.
@@ -131,9 +132,9 @@ impl ProviderPool {
                     .connect_http(url)
                     .erased();
 
-                let limiter = RateLimiter::direct(
-                    Quota::per_second(NonZeroU32::new(nc.max_rps.max(1)).unwrap()),
-                );
+                let limiter = RateLimiter::direct(Quota::per_second(
+                    NonZeroU32::new(nc.max_rps.max(1)).unwrap(),
+                ));
 
                 Ok(Arc::new(Node {
                     cfg: nc,
@@ -176,9 +177,9 @@ impl ProviderPool {
             .into_iter()
             .zip(providers.into_iter())
             .map(|(nc, provider)| {
-                let limiter = RateLimiter::direct(
-                    Quota::per_second(NonZeroU32::new(nc.max_rps.max(1)).unwrap()),
-                );
+                let limiter = RateLimiter::direct(Quota::per_second(
+                    NonZeroU32::new(nc.max_rps.max(1)).unwrap(),
+                ));
                 Arc::new(Node {
                     cfg: nc,
                     provider,
@@ -301,11 +302,7 @@ impl ProviderPool {
     /// Read cached head; None if zero (not yet measured).
     fn read_cached_head(&self) -> Option<u64> {
         let v = self.cached_head.load(Ordering::Relaxed);
-        if v == 0 {
-            None
-        } else {
-            Some(v)
-        }
+        if v == 0 { None } else { Some(v) }
     }
 
     /// Mark node error and apply cooldown if threshold exceeded.
@@ -335,19 +332,37 @@ impl ProviderPool {
         st.disabled_until = None;
     }
 
-    /// Pick the first available node (healthy and not rate-limited), starting from primary.
-    fn pick_node(&self) -> Option<Arc<Node>> {
+    /// Pick the first available node (healthy and not rate-limited), starting from the primary one.
+    /// If ignore_limiter is true, randomly selects from all available nodes.
+    fn pick_node(&self, ignore_limiter: bool) -> Option<Arc<Node>> {
         let len = self.nodes.len();
         if len == 0 {
+            // don't look for anything in a vacuum :)
             return None;
         }
 
-        let start = *self.primary_idx.read();
+        if !ignore_limiter {
+            // Sequential selection starting from primary node
+            let start = *self.primary_idx.read();
 
-        (0..len)
-            .map(|i| &self.nodes[(start + i) % len])
-            .find(|node| self.is_node_available(node) && node.limiter.check().is_ok())
-            .cloned()
+            // return None if there are no available and non-saturated nodes
+            (0..len)
+                .map(|i| &self.nodes[(start + i) % len])
+                .find(|node| self.is_node_available(node) && node.limiter.check().is_ok())
+                .cloned()
+        } else {
+            // If we should ignore he rate limiter, we need to pick a random node from the available ones
+            // to balance the load in case of all nodes are saturated
+            let available_nodes: Vec<_> = self
+                .nodes
+                .iter()
+                .filter(|node| self.is_node_available(node))
+                .collect();
+
+            available_nodes
+                .choose(&mut rand::rng())
+                .map(|arc_node| Arc::clone(arc_node))
+        }
     }
 
     /// Generic provider operation executor with retry logic, error handling, and failover.
@@ -362,45 +377,74 @@ impl ProviderPool {
         }
 
         const PICK_NODE_DELAY_MS: u64 = 10;
-        const PICK_NODE_MAX_ATTEMPTS: u32 = 1000;
 
-        let mut operation_attempt: u32 = 0;
-        let mut pick_node_attempt: u32 = 0;
+        let mut attempt: u32 = 0;
 
-        while pick_node_attempt < PICK_NODE_MAX_ATTEMPTS
-            && operation_attempt <= self.cfg.retry_count
-        {
-            let Some(node) = self.pick_node() else {
-                sleep(Duration::from_millis(PICK_NODE_DELAY_MS)).await;
-                pick_node_attempt += 1;
-                continue;
-            };
-
-            pick_node_attempt = 0;
-
-            match operation(node.provider.clone()).await {
-                Ok(result) => {
-                    self.mark_ok(&node);
+        while attempt <= self.cfg.retry_count {
+            // Try to get a node that is available and not rate-limited
+            if let Some(node) = self.pick_node(false) {
+                if let Some(result) = self.run_on_node(node, &operation, &mut attempt).await? {
                     return Ok(result);
                 }
-                Err(e) => {
-                    self.mark_error(&node);
 
-                    if operation_attempt >= self.cfg.retry_count {
-                        return Err(PoolError::Inner(e.into()));
-                    }
+                // run_on_node already bumped `attempt` and applied backoff if needed.
+                continue;
+            }
 
-                    let delay_ms = (self.cfg.retry_initial_delay_ms
-                        * (1u64 << operation_attempt.min(5)))
-                        .min(self.cfg.retry_max_delay_ms);
-                    sleep(Duration::from_millis(delay_ms)).await;
+            // Try to get any healthy node ignoring the rate limiter
+            // it's a case when all nodes are saturated => we should wait when node becomes ready
+            if let Some(node) = self.pick_node(true) {
+                // wait until the node is ready to accept requests
+                node.limiter.until_ready().await;
+
+                if let Some(result) = self.run_on_node(node, &operation, &mut attempt).await? {
+                    return Ok(result);
                 }
             }
 
-            operation_attempt += 1;
+            tokio::time::sleep(Duration::from_millis(PICK_NODE_DELAY_MS)).await;
         }
 
         Err(PoolError::NoHealthyNodes)
+    }
+
+    /// Internal helper: run operation on a given node, update node state, handle retries & backoff.
+    async fn run_on_node<F, Fut, T>(
+        &self,
+        node: Arc<Node>,
+        operation: &F,
+        attempt: &mut u32,
+    ) -> Result<Option<T>, PoolError>
+    where
+        F: Fn(DynProvider<Ethereum>) -> Fut + Send + Sync,
+        Fut: std::future::Future<Output = Result<T>> + Send,
+        T: Send,
+    {
+        let provider = node.provider.clone();
+
+        match operation(provider).await {
+            Ok(result) => {
+                self.mark_ok(&node);
+                Ok(Some(result))
+            }
+            Err(e) => {
+                self.mark_error(&node);
+
+                if *attempt >= self.cfg.retry_count {
+                    return Err(PoolError::Inner(e.into()));
+                }
+
+                *attempt += 1;
+
+                // Exponential backoff with cap.
+                let delay_ms = (self.cfg.retry_initial_delay_ms * (1u64 << (*attempt - 1).min(5)))
+                    .min(self.cfg.retry_max_delay_ms);
+
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+
+                Ok(None)
+            }
+        }
     }
 
     /// Making arbitrary JSON-RPC request
@@ -431,7 +475,8 @@ impl ProviderPool {
                 .get_block_number()
                 .await
                 .map_err(|e| anyhow::anyhow!("Provider error: {:?}", e))
-        }).await
+        })
+        .await
     }
 
     // TODO: implement getLogs, call smart contract and other typical operations
@@ -440,15 +485,14 @@ impl ProviderPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
+    use alloy::{providers, providers::mock::Asserter};
     use futures::future;
+    use rstest::rstest;
+    use std::time::Duration;
 
     use crate::test_utils::{
-        create_mock_provider_with_asserter,
-        create_pool_with_mock_providers,
-        create_test_node,
-        create_test_node_with_id,
-        create_test_pool_config,
+        create_mock_provider_with_asserter, create_pool_with_mock_providers, create_test_node,
+        create_test_node_with_id, create_test_pool_config,
     };
 
     #[tokio::test]
@@ -536,57 +580,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_multiple_nodes() {
-        let node_cfgs = vec![
-            create_test_node_with_id(1),
-            create_test_node_with_id(2),
-            create_test_node_with_id(3),
-        ];
-        let pool_cfg = create_test_pool_config();
-
-        // Create three mock providers with distinct block numbers.
-        let (asserter1, provider1) = create_mock_provider_with_asserter();
-        let (asserter2, provider2) = create_mock_provider_with_asserter();
-        let (asserter3, provider3) = create_mock_provider_with_asserter();
-
-        let bns = [1000u64, 2000u64, 3000u64];
-
-        // For simplicity, push a bunch of successes for each provider so both
-        // health ticks and get_block_number() calls have enough data.
-        (0..50).for_each(|_| {
-            asserter1.push_success(&bns[0]);
-            asserter2.push_success(&bns[1]);
-            asserter3.push_success(&bns[2]);
-        });
-
-        let pool = create_pool_with_mock_providers(
-            node_cfgs,
-            vec![provider1, provider2, provider3],
-            pool_cfg,
-        )
-        .await
-        .unwrap();
-
-        // Make multiple requests in parallel to hit rate limiter and load balancing.
-        let requests: Vec<_> = (0..30).map(|_| pool.get_block_number()).collect();
-        let results = future::join_all(requests).await;
-
-        let block_numbers: Vec<u64> = results
-            .into_iter()
-            .map(|r| r.expect("Request should succeed"))
-            .collect();
-
-        let unique_values: std::collections::HashSet<u64> =
-            block_numbers.iter().copied().collect();
-
-        assert!(
-            unique_values.len() == 3,
-            "Expected responses from all three nodes. Got: {:?}",
-            block_numbers
-        );
-    }
-
-    #[tokio::test]
     async fn test_zero_max_rps_handled() {
         let mut node_cfg = create_test_node();
         node_cfg.max_rps = 0; // Should be handled (maxed to 1)
@@ -615,13 +608,9 @@ mod tests {
             asserter2.push_success(&bn2);
         });
 
-        let pool = create_pool_with_mock_providers(
-            node_cfgs,
-            vec![provider1, provider2],
-            pool_cfg,
-        )
-        .await
-        .unwrap();
+        let pool = create_pool_with_mock_providers(node_cfgs, vec![provider1, provider2], pool_cfg)
+            .await
+            .unwrap();
 
         // Wait for health tick to run.
         tokio::time::sleep(Duration::from_millis(150)).await;
@@ -696,5 +685,71 @@ mod tests {
         // Also verify we can get block number directly.
         let block_number = pool.get_block_number().await;
         assert_eq!(block_number.unwrap(), 1000);
+    }
+
+    #[rstest]
+    #[case(1, 5, 2)]
+    #[case(3, 21, 10)]
+    #[case(3, 30, 10)]
+    #[case(3, 300, 30)]
+    #[case(10, 1000, 50)]
+    #[tokio::test]
+    async fn test_load_balancing(
+        #[case] num_nodes: usize,
+        #[case] num_requests: usize,
+        #[case] rps: u32,
+    ) {
+        let node_cfgs: Vec<_> = (0..num_nodes)
+            .map(|i| {
+                let mut cfg = create_test_node_with_id(i as u32);
+                cfg.max_rps = rps;
+                cfg
+            })
+            .collect();
+        let (asserters, providers): (Vec<Asserter>, Vec<providers::DynProvider<Ethereum>>) = (0
+            ..num_nodes)
+            .map(|_| create_mock_provider_with_asserter())
+            .unzip();
+        let mut pool_cfg = create_test_pool_config();
+        pool_cfg.health_period = Duration::from_secs(100);
+
+        let bns = (1..num_nodes + 1).map(|i| i * 1000).collect::<Vec<_>>();
+
+        // For simplicity, push a bunch of successes for each provider so both
+        // health ticks and get_block_number() calls have enough data.
+        // Push more than num_requests to account for health ticks and potential retries.
+        (0..num_requests * 2).for_each(|_| {
+            asserters.iter().enumerate().for_each(|(i, asserter)| {
+                asserter.push_success(&bns[i]);
+            });
+        });
+
+        let pool = create_pool_with_mock_providers(node_cfgs, providers, pool_cfg)
+            .await
+            .unwrap();
+
+        // Make multiple requests in parallel to hit rate limiter and load balancing.
+        let requests: Vec<_> = (0..num_requests).map(|_| pool.get_block_number()).collect();
+        let results = future::join_all(requests).await;
+
+        let block_numbers: Vec<u64> = results
+            .into_iter()
+            .map(|r| r.expect("Request should succeed"))
+            .collect();
+
+        let unique_values: std::collections::HashSet<u64> = block_numbers.iter().copied().collect();
+
+        // Compute how many unique nodes should have been hit
+        // (at most, the number of nodes; but if not enough requests, could be less)
+        // Use integers to avoid f32 Ord issue
+        let expected_nodes_used =
+            ((num_requests as f32 / rps as f32).ceil() as usize).min(num_nodes);
+
+        assert!(
+            unique_values.len() == expected_nodes_used,
+            "Expected responses from {} unique nodes. Got: {:?}",
+            expected_nodes_used,
+            block_numbers
+        );
     }
 }

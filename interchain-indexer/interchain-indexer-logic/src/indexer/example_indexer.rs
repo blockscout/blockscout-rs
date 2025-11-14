@@ -1,10 +1,11 @@
 use alloy::{
-    primitives::{Address, U64, U128, U256, address}, providers::Provider
+    primitives::{Address, U256},
+    providers::Provider,
 };
-use std::str::FromStr;
 use anyhow::Error;
 use std::{
     collections::HashMap,
+    str::FromStr,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -148,20 +149,22 @@ impl ExampleIndexer {
             if let Some(provider_pool) = providers.get(&chain_id_u64) {
                 // The following lines make no sense
                 // It's just demonstrate the usage of the provider pool
-                
+
                 // Using predefined routines of the provider pool
                 let block_number = provider_pool.get_block_number().await?;
-                
+
                 // Using custom method without parameters
                 let chain_id = provider_pool
                     .request("eth_chainId", serde_json::json!([]))
                     .await?;
 
-                
                 // Using custom method with parameters
                 let test_address = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045";
                 let balance_val = provider_pool
-                    .request("eth_getBalance", serde_json::json!([test_address, "latest"]))
+                    .request(
+                        "eth_getBalance",
+                        serde_json::json!([test_address, "latest"]),
+                    )
                     .await?;
                 let balance = value_to_u256(balance_val)?;
 
@@ -170,13 +173,15 @@ impl ExampleIndexer {
                 // and several others that are supported by the Multicall3 contract
                 let (bn, bl) = provider_pool
                     .execute_provider_operation(|provider| async move {
-                        let (bn, bl) =
-                            tokio::join!(provider.get_block_number(), provider.get_balance(Address::from_str(test_address)?));
-                        
+                        let (bn, bl) = tokio::join!(
+                            provider.get_block_number(),
+                            provider.get_balance(Address::from_str(test_address)?)
+                        );
+
                         Ok((bn?, bl?))
                     })
                     .await?;
-                    
+
                 //let chain_id = provider_pool.request("eth_chainId", None).await?;
                 tracing::info!(
                     bridge_id = bridge_id,

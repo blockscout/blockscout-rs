@@ -18,6 +18,7 @@ futures = { workspace = true }
 governor = { workspace = true }
 interchain-indexer-entity = { workspace = true }
 parking_lot = { workspace = true }
+rand = { workspace = true }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
