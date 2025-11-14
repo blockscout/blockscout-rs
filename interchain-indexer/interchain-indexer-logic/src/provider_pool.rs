@@ -23,8 +23,7 @@ use governor::{
 };
 
 use alloy::{
-    providers::{DynProvider, Provider, ProviderBuilder},
-   network::Ethereum,
+    network::Ethereum, providers::{DynProvider, Provider, ProviderBuilder, layers::CallBatchLayer}
 };
 
 /// Per-node static config.
@@ -36,6 +35,10 @@ pub struct NodeConfig {
     pub error_threshold: u32,    // consecutive errors before temporary cooldown
     pub cooldown_threshold: u32, // the number of cooldowns before exiting the role of the primary node
     pub cooldown: Duration,      // how long node stays disabled
+
+    // be aware on this field: it reduces RPS to the node by the factor of (1 / batching_wait_period)
+    // 0 means no batching
+    pub batching_wait: Duration, // batch collecting period (CallBatchLayer) in microseconds
 }
 
 /// Global pool config.
@@ -124,6 +127,7 @@ impl ProviderPool {
                 let url = nc.http_url.parse()?;
 
                 let provider = ProviderBuilder::new()
+                    .layer(CallBatchLayer::new().wait(nc.batching_wait))
                     .connect_http(url)
                     .erased();
 
@@ -347,9 +351,9 @@ impl ProviderPool {
     }
 
     /// Generic provider operation executor with retry logic, error handling, and failover.
-    async fn execute_provider_operation<F, Fut, T>(&self, operation: F) -> Result<T, PoolError>
+    pub async fn execute_provider_operation<F, Fut, T>(&self, operation: F) -> Result<T, PoolError>
     where
-        F: Fn(Arc<Node>) -> Fut,
+        F: Fn(DynProvider<Ethereum>) -> Fut + Send + Sync,
         Fut: std::future::Future<Output = Result<T>> + Send,
         T: Send,
     {
@@ -374,7 +378,7 @@ impl ProviderPool {
 
             pick_node_attempt = 0;
 
-            match operation(node.clone()).await {
+            match operation(node.provider.clone()).await {
                 Ok(result) => {
                     self.mark_ok(&node);
                     return Ok(result);
@@ -405,11 +409,13 @@ impl ProviderPool {
         let params_raw = serde_json::value::to_raw_value(&params)
             .map_err(|e| anyhow::anyhow!("Failed to serialize params: {:?}", e))?;
 
-        self.execute_provider_operation(|node| {
+        self.execute_provider_operation(move |provider| {
             let method = method.clone();
             let params_raw = params_raw.clone();
             async move {
-                let response = node.provider.raw_request_dyn(method.into(), &params_raw).await
+                let response = provider
+                    .raw_request_dyn(method.into(), &params_raw)
+                    .await
                     .map_err(|e| anyhow::anyhow!("Provider error: {:?}", e))?;
                 serde_json::from_str(response.get())
                     .map_err(|e| anyhow::anyhow!("Failed to deserialize response: {:?}", e))
@@ -420,14 +426,12 @@ impl ProviderPool {
 
     /// Get the current block number from a healthy node.
     pub async fn get_block_number(&self) -> Result<u64, PoolError> {
-        self.execute_provider_operation(|node| async move {
-            // Alloy provider's `get_block_number` returns a future-like ProviderCall.
-            node.provider
+        self.execute_provider_operation(|provider| async move {
+            provider
                 .get_block_number()
                 .await
                 .map_err(|e| anyhow::anyhow!("Provider error: {:?}", e))
-        })
-        .await
+        }).await
     }
 
     // TODO: implement getLogs, call smart contract and other typical operations

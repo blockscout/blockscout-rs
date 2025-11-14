@@ -1,3 +1,7 @@
+use alloy::{
+    primitives::{Address, U64, U128, U256, address}, providers::Provider
+};
+use std::str::FromStr;
 use anyhow::Error;
 use std::{
     collections::HashMap,
@@ -11,6 +15,11 @@ use tokio::{task::JoinHandle, time::sleep};
 use tracing::{error, info, warn};
 
 use crate::{InterchainDatabase, ProviderPool, indexer::crosschain_indexer::CrosschainIndexer};
+
+fn value_to_u256(v: serde_json::Value) -> anyhow::Result<U256> {
+    let num: U256 = serde_json::from_value(v)?;
+    Ok(num.to())
+}
 
 /// Example implementation of CrosschainIndexer trait.
 #[allow(dead_code)]
@@ -137,14 +146,45 @@ impl ExampleIndexer {
             // Convert i64 chain_id to u64 for HashMap lookup
             let chain_id_u64 = contract.chain_id as u64;
             if let Some(provider_pool) = providers.get(&chain_id_u64) {
-                // Placeholder: just demonstration the usage of the provider pool
-                // In real implementation, the logic would be more complex
+                // The following lines make no sense
+                // It's just demonstrate the usage of the provider pool
+                
+                // Using predefined routines of the provider pool
                 let block_number = provider_pool.get_block_number().await?;
+                
+                // Using custom method without parameters
+                let chain_id = provider_pool
+                    .request("eth_chainId", serde_json::json!([]))
+                    .await?;
+
+                
+                // Using custom method with parameters
+                let test_address = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045";
+                let balance_val = provider_pool
+                    .request("eth_getBalance", serde_json::json!([test_address, "latest"]))
+                    .await?;
+                let balance = value_to_u256(balance_val)?;
+
+                // Aggregating eth_call operations into a single request (multicall)
+                // Note: there are supported eth_call methods,
+                // and several others that are supported by the Multicall3 contract
+                let (bn, bl) = provider_pool
+                    .execute_provider_operation(|provider| async move {
+                        let (bn, bl) =
+                            tokio::join!(provider.get_block_number(), provider.get_balance(Address::from_str(test_address)?));
+                        
+                        Ok((bn?, bl?))
+                    })
+                    .await?;
+                    
                 //let chain_id = provider_pool.request("eth_chainId", None).await?;
                 tracing::info!(
                     bridge_id = bridge_id,
-                    chain_id = contract.chain_id,
+                    chain_id =? chain_id,
                     block_number = block_number,
+                    balance =? balance,
+                    bn =? bn,
+                    bl =? bl,
                     "Indexer example processing iteration"
                 );
             } else {

@@ -245,6 +245,7 @@ pub async fn create_provider_pools_from_chains(
     const DEFAULT_ERROR_THRESHOLD: u32 = 3;
     const DEFAULT_COOLDOWN_THRESHOLD: u32 = 1;
     const DEFAULT_COOLDOWN_SECS: u64 = 60;
+    const DEFAULT_BATCHING_WAIT_MICROSECS: u64 = 60;
 
     for chain in chains {
         let chain_id_u64 = chain.chain_id as u64;
@@ -268,6 +269,7 @@ pub async fn create_provider_pools_from_chains(
                     error_threshold: DEFAULT_ERROR_THRESHOLD,
                     cooldown_threshold: DEFAULT_COOLDOWN_THRESHOLD,
                     cooldown: Duration::from_secs(DEFAULT_COOLDOWN_SECS),
+                    batching_wait: Duration::from_micros(DEFAULT_BATCHING_WAIT_MICROSECS),
                 };
 
                 node_configs.push(node_config);
