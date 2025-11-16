@@ -23,7 +23,8 @@
         "rpcs": [
             {
                 "avalanche": {
-                    "url": "https://subnets.avax.network/numi/mainnet/rpc"
+                    "url": "https://subnets.avax.network/numi/mainnet/rpc",
+                    "multicall_batching_us": 0
                 }
             }
         ]

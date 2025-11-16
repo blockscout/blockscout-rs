@@ -23,8 +23,9 @@ use governor::{
 };
 
 use alloy::{
-    network::Ethereum,
+    network::Ethereum, primitives::{Address, FixedBytes},
     providers::{DynProvider, Provider, ProviderBuilder, layers::CallBatchLayer},
+    rpc::types::{Filter, Log}
 };
 
 /// Per-node static config.
@@ -37,9 +38,10 @@ pub struct NodeConfig {
     pub cooldown_threshold: u32, // the number of cooldowns before exiting the role of the primary node
     pub cooldown: Duration,      // how long node stays disabled
 
+    // Multicall3-based batching
     // be aware on this field: it reduces RPS to the node by the factor of (1 / batching_wait_period)
-    // 0 means no batching
-    pub batching_wait: Duration, // batch collecting period (CallBatchLayer) in microseconds
+    // 0 means Multicall3 batching is disabled
+    pub multicall_batching_wait: Duration, // batch collecting period (CallBatchLayer) in microseconds
 }
 
 /// Global pool config.
@@ -127,10 +129,16 @@ impl ProviderPool {
             .map(|nc| -> Result<Arc<Node>> {
                 let url = nc.http_url.parse()?;
 
-                let provider = ProviderBuilder::new()
-                    .layer(CallBatchLayer::new().wait(nc.batching_wait))
-                    .connect_http(url)
-                    .erased();
+                let provider = if nc.multicall_batching_wait > Duration::ZERO {
+                    ProviderBuilder::new()
+                        .layer(CallBatchLayer::new().wait(nc.multicall_batching_wait))
+                        .connect_http(url)
+                        .erased()
+                } else {
+                    ProviderBuilder::new()
+                        .connect_http(url)
+                        .erased()
+                };
 
                 let limiter = RateLimiter::direct(Quota::per_second(
                     NonZeroU32::new(nc.max_rps.max(1)).unwrap(),
@@ -317,10 +325,15 @@ impl ProviderPool {
             if st.cooldowns_count >= node.cfg.cooldown_threshold {
                 let mut primary = self.primary_idx.write();
                 *primary = (*primary + 1) % self.nodes.len();
-                tracing::warn!(
-                    "Primary node {} has been cooldowned too many times. Switching primary to the next node.",
-                    node.cfg.name
-                );
+
+                if self.nodes.len() > 1 {
+                    let next_node = &self.nodes[*primary];
+                    tracing::warn!(
+                        "Primary node {} has been cooldowned too many times. Switching primary to {}.",
+                        node.cfg.name,
+                        next_node.cfg.name
+                    );
+                }
             }
         }
     }
@@ -479,7 +492,41 @@ impl ProviderPool {
         .await
     }
 
-    // TODO: implement getLogs, call smart contract and other typical operations
+    // Get logs with filtering by block number, address, and event
+    // `event` should be a normalized event name (e.g. 'Transfer(address,address,uint256)')
+    // or a valid event signature (32-bytes hex string, 0x-prefixed optionally)
+    pub async fn get_logs(
+        &self,
+        from_block: u64,
+        to_block: Option<u64>,
+        address: Option<Address>,
+        event: Option<String>,
+    ) -> Result<Vec<Log>, PoolError> {
+        let mut filter = Filter::new().from_block(from_block);
+        if let Some(to_block) = to_block {
+            filter = filter.to_block(to_block);
+        }
+        if let Some(address) = address {
+            filter = filter.address(address);
+        }
+        if let Some(event) = &event {
+            if let Ok(topic) = event.parse::<FixedBytes<32>>() {
+                filter = filter.event_signature(topic);
+            } else {
+                filter = filter.event(event.as_str());
+            }
+        }
+        
+        self.execute_provider_operation(move |provider| {
+            let filter = filter.clone(); // Move filter into closure scope
+            async move {
+                provider.get_logs(&filter)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Provider error: {:?}", e))
+            }
+        })
+        .await
+    }
 }
 
 #[cfg(test)]

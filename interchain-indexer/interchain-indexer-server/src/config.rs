@@ -179,6 +179,8 @@ pub struct RpcProviderConfig {
     max_rps: u32,
     #[serde(default = "default_error_threshold")]
     error_threshold: u32,
+    #[serde(default = "default_multicall_batching_us")]
+    multicall_batching_us: u64,
     #[serde(default)]
     pub api_key: Option<ApiKeyConfig>,
 }
@@ -193,6 +195,10 @@ fn default_max_rps() -> u32 {
 
 fn default_error_threshold() -> u32 {
     3
+}
+
+fn default_multicall_batching_us() -> u64 {
+    60
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -233,7 +239,7 @@ pub async fn create_provider_pools_from_chains(
 
     // Default pool configuration
     let pool_config = PoolConfig {
-        health_period: Duration::from_secs(30),
+        health_period: Duration::from_secs(1),
         max_block_lag: 100,
         retry_count: 3,
         retry_initial_delay_ms: 5,
@@ -241,11 +247,8 @@ pub async fn create_provider_pools_from_chains(
     };
 
     // Default node configuration values
-    const DEFAULT_MAX_RPS: u32 = 1;
-    const DEFAULT_ERROR_THRESHOLD: u32 = 3;
     const DEFAULT_COOLDOWN_THRESHOLD: u32 = 1;
     const DEFAULT_COOLDOWN_SECS: u64 = 60;
-    const DEFAULT_BATCHING_WAIT_MICROSECS: u64 = 60;
 
     for chain in chains {
         let chain_id_u64 = chain.chain_id as u64;
@@ -263,13 +266,13 @@ pub async fn create_provider_pools_from_chains(
                 let url = build_rpc_url(&rpc_config.url, &rpc_config.api_key)?;
 
                 let node_config = NodeConfig {
-                    name: format!("{}-{}", chain.name, provider_name),
+                    name: format!("{}[{}]", chain.name, provider_name),
                     http_url: url,
-                    max_rps: DEFAULT_MAX_RPS,
-                    error_threshold: DEFAULT_ERROR_THRESHOLD,
+                    max_rps: rpc_config.max_rps,
+                    error_threshold: rpc_config.error_threshold,
                     cooldown_threshold: DEFAULT_COOLDOWN_THRESHOLD,
                     cooldown: Duration::from_secs(DEFAULT_COOLDOWN_SECS),
-                    batching_wait: Duration::from_micros(DEFAULT_BATCHING_WAIT_MICROSECS),
+                    multicall_batching_wait: Duration::from_micros(rpc_config.multicall_batching_us),
                 };
 
                 node_configs.push(node_config);
@@ -317,9 +320,6 @@ fn build_rpc_url(url: &str, api_key_config: &Option<ApiKeyConfig>) -> Result<Str
 
     // If API key is configured, we need to handle it
     // For now, we'll just use the URL as-is and log a warning if API key is needed
-    // In a real implementation, you would:
-    // 1. Read the API key from environment variables
-    // 2. Insert it into the URL based on the location (query, header, or URL placeholder)
     if let Some(api_key) = api_key_config {
         tracing::warn!(
             url = url,

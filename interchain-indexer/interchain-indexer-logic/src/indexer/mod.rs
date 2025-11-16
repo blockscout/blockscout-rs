@@ -1,2 +1,2 @@
 pub mod crosschain_indexer;
-pub mod example_indexer;
+pub mod example;

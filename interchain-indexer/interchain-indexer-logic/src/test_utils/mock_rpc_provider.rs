@@ -19,7 +19,7 @@ pub fn create_test_node() -> NodeConfig {
         error_threshold: 3,
         cooldown_threshold: 3,
         cooldown: Duration::from_millis(100),
-        batching_wait: Duration::ZERO,
+        multicall_batching_wait: Duration::ZERO,
     }
 }
 

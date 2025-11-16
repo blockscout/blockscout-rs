@@ -34,8 +34,8 @@ stop-test-postgres:
 
 run:
     INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
-    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/omnibridge/chains.json \
-    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/omnibridge/bridges.json \
+    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/avalanche/chains.json \
+    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/avalanche/bridges.json \
     cargo run --bin interchain-indexer-server
 
 run-dev:
