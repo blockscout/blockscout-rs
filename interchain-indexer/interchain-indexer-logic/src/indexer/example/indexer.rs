@@ -13,9 +13,14 @@ use std::{
     time::Duration,
 };
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
-use crate::{InterchainDatabase, ProviderPool, indexer::crosschain_indexer::CrosschainIndexer};
+use crate::{
+    InterchainDatabase,
+    ProviderPool,
+    example::settings::ExampleIndexerSettings,
+    indexer::crosschain_indexer::CrosschainIndexer
+};
 
 fn value_to_u256(v: serde_json::Value) -> anyhow::Result<U256> {
     let num: U256 = serde_json::from_value(v)?;
@@ -28,17 +33,20 @@ pub struct ExampleIndexer {
     db: Arc<InterchainDatabase>,
     bridge_id: i32,
     providers: HashMap<u64, Arc<ProviderPool>>,
+    /// Indexer-specific settings
+    settings: ExampleIndexerSettings,
     /// Flag to control the indexing loop
     is_running: Arc<AtomicBool>,
     /// Handle to the indexing task for graceful shutdown
     indexing_handle: parking_lot::RwLock<Option<JoinHandle<()>>>,
 }
 
-impl CrosschainIndexer for ExampleIndexer {
-    fn new(
+impl ExampleIndexer {
+    pub fn new(
         db: Arc<InterchainDatabase>,
         bridge_id: i32,
         providers: HashMap<u64, Arc<ProviderPool>>,
+        settings: ExampleIndexerSettings,
     ) -> Result<Self, Error> {
         info!(
             bridge_id = bridge_id,
@@ -50,10 +58,14 @@ impl CrosschainIndexer for ExampleIndexer {
             db,
             bridge_id,
             providers,
+            settings,
             is_running: Arc::new(AtomicBool::new(false)),
             indexing_handle: parking_lot::RwLock::new(None),
         })
     }
+}
+
+impl CrosschainIndexer for ExampleIndexer {
 
     fn start_indexing(&self) -> Result<(), Error> {
         if self.is_running.load(Ordering::Acquire) {
@@ -70,6 +82,8 @@ impl CrosschainIndexer for ExampleIndexer {
         let providers = self.providers.clone();
         let is_running = self.is_running.clone();
 
+        let fetch_interval = self.settings.fetch_interval;
+
         // Spawn the indexing task
         let handle = tokio::spawn(async move {
             info!(bridge_id = bridge_id, "Indexing task started");
@@ -79,10 +93,10 @@ impl CrosschainIndexer for ExampleIndexer {
                 match Self::indexing_loop_iteration(&db, bridge_id, &providers).await {
                     Ok(_) => {
                         // Successfully processed, wait before next iteration
-                        sleep(Duration::from_secs(1)).await;
+                        sleep(fetch_interval).await;
                     }
                     Err(e) => {
-                        error!(
+                        tracing::error!(
                             bridge_id = bridge_id,
                             err = ?e,
                             "Error in indexing loop iteration"
@@ -142,6 +156,8 @@ impl ExampleIndexer {
             "Processing bridge contracts"
         );
 
+        let mut prev_block_number = 0;
+
         // Example: Process each contract on its respective chain
         for contract in contracts {
             // Convert i64 chain_id to u64 for HashMap lookup
@@ -182,6 +198,21 @@ impl ExampleIndexer {
                     })
                     .await?;
 
+                let transfers_cnt = if prev_block_number != 0 {
+                    let logs = provider_pool.get_logs(
+                        block_number, 
+                        None, 
+                        None, 
+                        Some("Transfer(address,address,uint256)".to_string())
+                    ).await?;
+
+                    logs.len()
+                } else {
+                    0
+                };
+
+                prev_block_number = block_number;
+
                 //let chain_id = provider_pool.request("eth_chainId", None).await?;
                 tracing::info!(
                     bridge_id = bridge_id,
@@ -190,6 +221,7 @@ impl ExampleIndexer {
                     balance =? balance,
                     bn =? bn,
                     bl =? bl,
+                    transfers_cnt =? transfers_cnt,
                     "Indexer example processing iteration"
                 );
             } else {
