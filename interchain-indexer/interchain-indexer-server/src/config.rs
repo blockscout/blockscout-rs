@@ -4,7 +4,7 @@ use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
 };
 use interchain_indexer_logic::{NodeConfig, PoolConfig, build_layered_http_provider};
-use sea_orm::{ActiveValue, prelude::Json};
+use sea_orm::{ActiveValue, entity::ActiveEnum, prelude::Json};
 use serde::{Deserialize, Deserializer};
 use serde_json;
 use std::{collections::HashMap, path::Path, str::FromStr, time::Duration};
@@ -44,20 +44,10 @@ where
     Ok(addr.as_slice().to_vec())
 }
 
-/// Getting type of bridge (BridgeType enum)
-impl BridgeConfig {
-    pub fn bridge_type_enum(&self) -> Option<BridgeType> {
-        match self.bridge_type.as_str() {
-            "lockmint" => Some(BridgeType::Lockmint),
-            _ => None,
-        }
-    }
-}
-
 /// Convert BridgeConfig to bridges::ActiveModel for database operations
 impl From<BridgeConfig> for bridges::ActiveModel {
     fn from(config: BridgeConfig) -> Self {
-        let bridge_type = config.bridge_type_enum();
+        let bridge_type = BridgeType::try_from_value(&config.bridge_type).ok();
         bridges::ActiveModel {
             id: ActiveValue::Set(config.bridge_id),
             name: ActiveValue::Set(config.name),
@@ -77,12 +67,7 @@ impl From<bridges::Model> for BridgeConfig {
         BridgeConfig {
             bridge_id: model.id,
             name: model.name,
-            bridge_type: model
-                .r#type
-                .map(|t| match t {
-                    BridgeType::Lockmint => "lockmint".to_string(),
-                })
-                .unwrap_or_default(),
+            bridge_type: model.r#type.map(|t| t.to_value()).unwrap_or_default(),
             indexer: String::new(), // Not stored in database
             enabled: model.enabled,
             api_url: model.api_url,
@@ -357,22 +342,6 @@ mod tests {
         assert_eq!(bridges[0].contracts[0].chain_id, 43114);
         assert_eq!(bridges[0].contracts[0].version, 1);
         assert_eq!(bridges[0].contracts[0].started_at_block, 42526120);
-    }
-
-    #[test]
-    fn test_bridge_type_enum() {
-        let bridge = BridgeConfig {
-            bridge_id: 1,
-            name: "Test".to_string(),
-            bridge_type: "lockmint".to_string(),
-            indexer: "Test".to_string(),
-            enabled: true,
-            api_url: None,
-            ui_url: None,
-            contracts: vec![],
-        };
-
-        assert_eq!(bridge.bridge_type_enum(), Some(BridgeType::Lockmint));
     }
 
     #[test]
