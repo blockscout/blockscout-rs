@@ -2,7 +2,7 @@
     {
         "bridge_id": 2,
         "name": "Avalanche ICTT",
-        "type": "lockmint",
+        "type": "avalanche_native",
         "indexer": "AvalancheNative",
         "enabled": true,
         "api_url": null,
