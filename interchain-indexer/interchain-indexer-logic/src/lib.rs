@@ -1,7 +1,10 @@
 mod database;
 mod error;
 
-#[cfg(any(test, feature = "test-utils"))]
+// pub mod event_handler;
+pub mod indexers;
+pub mod log_stream;
+#[cfg(any(test))]
 pub mod test_utils;
 
 pub use database::*;

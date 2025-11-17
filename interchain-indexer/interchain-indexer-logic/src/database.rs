@@ -1,5 +1,6 @@
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
+    indexer_checkpoints,
 };
 use sea_orm::{
     ActiveValue, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
@@ -7,8 +8,9 @@ use sea_orm::{
 };
 use std::{collections::HashMap, sync::Arc};
 
+#[derive(Clone)]
 pub struct InterchainDatabase {
-    db: Arc<DatabaseConnection>,
+    pub db: Arc<DatabaseConnection>,
 }
 
 impl InterchainDatabase {
@@ -53,6 +55,27 @@ impl InterchainDatabase {
                 Err(e.into())
             }
         }
+    }
+
+    /// Load a map of native blockchain IDs (normalized with 0x prefix) to chain id.
+    ///
+    /// This is useful for pre-populating per-batch caches so handlers don't need to
+    /// hit the database for every log. Only chains with a non-null `native_id` are
+    /// included.
+    pub async fn load_native_id_map(&self) -> anyhow::Result<HashMap<String, i64>> {
+        chains::Entity::find()
+            .filter(chains::Column::NativeId.is_not_null())
+            .all(self.db.as_ref())
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .filter_map(|row| (row.native_id?, row.id).into())
+                    .collect::<HashMap<_, _>>()
+            })
+            .map_err(|e| {
+                tracing::error!(err =? e, "Failed to load native id -> chain id map");
+                e.into()
+            })
     }
 
     // CONFIGURATION TABLE: bridges
@@ -254,6 +277,22 @@ impl InterchainDatabase {
                 Err(e.into())
             }
         }
+    }
+
+    // INDEXER TABLE: indexer_checkpoints
+    /// Get checkpoint for a specific bridge and chain
+    pub async fn get_checkpoint(
+        &self,
+        bridge_id: u64,
+        chain_id: u64,
+    ) -> anyhow::Result<Option<indexer_checkpoints::Model>> {
+        indexer_checkpoints::Entity::find()
+            .filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id))
+            .filter(indexer_checkpoints::Column::ChainId.eq(chain_id))
+            .one(self.db.as_ref())
+            .await
+            .inspect_err(|e| tracing::error!(err =? e, "failed to query checkpoint from database"))
+            .map_err(|e| e.into())
     }
 }
 

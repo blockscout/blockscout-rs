@@ -31,8 +31,8 @@ impl ConfigSettings for Settings {
 impl Settings {
     pub fn default(database_url: String) -> Self {
         Self {
-            chains_config: PathBuf::from("config/omnibridge/chains.json"),
-            bridges_config: PathBuf::from("config/omnibridge/bridges.json"),
+            chains_config: PathBuf::from("config/avalanche1/chains.json"),
+            bridges_config: PathBuf::from("config/avalanche/bridges.json"),
             server: Default::default(),
             metrics: Default::default(),
             tracing: Default::default(),

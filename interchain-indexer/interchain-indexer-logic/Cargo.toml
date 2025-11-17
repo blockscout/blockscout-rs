@@ -19,8 +19,11 @@ thiserror = { workspace = true }
 ## Uncomment this if needed
 #ethabi = { workspace = true }
 #ethers-core = { workspace = true }
-#futures = { workspace = true }
-#hex = { workspace = true }
+futures = { version = "0.3" }
+hex = { version = "0.4" }
+hex-literal = { version = "0.4" }
+chrono = { version = "0.4" }
+async-stream = { version = "0.3" }
 #keccak-hash = { workspace = true }
 #lazy_static = { workspace = true }
 #mismatch = { workspace = true }
@@ -33,13 +36,14 @@ tokio = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
 #tonic = { workspace = true, features = ["tls-roots"] }
-#tracing-subscriber = { workspace = true, features = ["env-filter"]}
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
-blockscout-service-launcher = { workspace = true, features = [ 
-    
-    "test-database", "database-1"
-    
+blockscout-service-launcher = { workspace = true, features = [
+
+    "test-database",
+    "database-1",
+
 ] }
 interchain-indexer-migration = { workspace = true }
 pretty_assertions = { workspace = true }

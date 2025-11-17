@@ -12,7 +12,7 @@ CREATE TABLE chains (
   updated_at  TIMESTAMP DEFAULT now()
 );
 
-CREATE TYPE bridge_type AS ENUM ('lockmint');
+CREATE TYPE bridge_type AS ENUM ('lockmint', 'avalanche_native');
 
 -- bridges: supported bridges list (OmniBridge, LayerZero, Wormhole ...)
 CREATE TABLE bridges (
