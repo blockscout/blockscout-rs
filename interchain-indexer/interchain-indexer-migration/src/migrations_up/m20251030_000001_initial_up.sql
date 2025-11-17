@@ -1,7 +1,7 @@
 -- chains: supported chains list (e.g. Ethereum, Gnosis, Avalanche...)
 CREATE TABLE chains (
   id          BIGINT PRIMARY KEY, -- the classic EVM chain_id, 8 bytes long
-											            -- or arbitrary unique number if not applicable
+                                  -- or arbitrary unique number if not applicable
   name        TEXT NOT NULL UNIQUE,
   native_id   TEXT, -- the optional original network identifier,
                     -- for cases where the chain_id is not applicable
@@ -92,8 +92,8 @@ CREATE TABLE crosschain_messages (
   last_update_timestamp TIMESTAMP DEFAULT now(), -- in real world (blockchain time), not when indexed
   src_chain_id          BIGINT NOT NULL REFERENCES chains(id),
   dst_chain_id          BIGINT NULL REFERENCES chains(id),
-  src_tx_hash           BYTEA,  -- can be NULL, beacause we may not index source chain
-  dst_tx_hash           BYTEA,  -- can be NULL, beacause we may not index destination chain
+  src_tx_hash           BYTEA,  -- can be NULL, because we may not index source chain
+  dst_tx_hash           BYTEA,  -- can be NULL, because we may not index destination chain
   sender_address        BYTEA, -- source address (on src chain)
   recipient_address     BYTEA, -- destination address (on dst chain)
   payload               BYTEA, -- raw message payload, bridge-specific fields
