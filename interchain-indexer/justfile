@@ -66,6 +66,9 @@ migrate-fresh-generate-entities *args:
     just migrate-fresh
     just generate-entities {{args}}
 
+psql:
+    psql ${DATABASE_URL}
+
 # wipe DB
 flush-database:
     sea-orm-cli migrate -d interchain-indexer-migration reset
@@ -82,7 +85,6 @@ check:
 
 insert-test-data:
      docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} < interchain-indexer-migration/src/mock_data/test_data.sql
-    
 
 check-envs:
     cargo run --bin check-envs -- --validate-only

@@ -4,11 +4,11 @@ use crate::{
         interchain_service_actix::route_interchain_service,
         interchain_service_server::InterchainServiceServer,
         interchain_statistics_service_server::InterchainStatisticsServiceServer,
-    }, services::{HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl}, settings::Settings
+    }, services::{HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl}, settings::Settings, spawn_configured_indexers
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing as bs_tracing};
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
-use interchain_indexer_logic::{InterchainDatabase, crosschain_indexer::CrosschainIndexer, example::indexer::ExampleIndexer};
+use interchain_indexer_logic::InterchainDatabase;
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::interchain_statistics_service_actix::route_interchain_statistics_service;
 use migration::Migrator;
 use std::sync::Arc;
@@ -54,7 +54,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let db_connection =
         Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
-    let db = Arc::new(InterchainDatabase::new(db_connection));
+    let interchain_db = InterchainDatabase::new(db_connection);
+    let db = Arc::new(interchain_db.clone());
 
     // Reading chains and bridges from json config files
     let chains = load_chains_from_file(&settings.chains_config).unwrap();
@@ -107,40 +108,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridge_contracts.len(),
     );
 
-    // Create layered provider objects for each chain
-    // The provider for the chain is shared between all indexers on that chain
     let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
 
-    bridges.iter().for_each(|bridge| {
-        let indexer = match bridge.indexer.to_lowercase().as_str() {
-            "avalanchenative" => {
-                // TODO: start Avalanche indexer
-                ExampleIndexer::new(
-                    db.clone(),
-                    bridge.bridge_id,
-                    chains_providers.clone(),
-                    settings.example_indexer.clone(),
-                )
-            }
-            "omnibridge" => {
-                // TODO: start OmniBridge indexer
-                ExampleIndexer::new(
-                    db.clone(),
-                    bridge.bridge_id,
-                    chains_providers.clone(),
-                    settings.example_indexer.clone(),
-                )
-            }
-            _ => {
-                tracing::error!("Unsupported indexer: {}", bridge.indexer);
-                return;
-            }
-        };
-
-        if let Err(e) = indexer.unwrap().start_indexing() {
-            tracing::error!("Failed to start indexing for bridge {}: {}", bridge.name, e);
-        }
-    });
+    let indexer_handles =
+        spawn_configured_indexers(interchain_db.clone(), &bridges, &chains, &chains_providers)?;
 
     let interchain_service = Arc::new(InterchainServiceImpl::new(db.clone()));
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(db.clone()));
@@ -160,5 +131,12 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         graceful_shutdown: Default::default(),
     };
 
-    launcher::launch(launch_settings, http_router, grpc_router).await
+    let launch_result = launcher::launch(launch_settings, http_router, grpc_router).await;
+
+    for handle in indexer_handles {
+        handle.abort();
+        let _ = handle.await;
+    }
+
+    launch_result
 }
