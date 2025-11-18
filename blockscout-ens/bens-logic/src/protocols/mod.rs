@@ -14,8 +14,8 @@ pub enum ProtocolError {
     InvalidName { name: String, reason: String },
     #[error("protocol not found: {0}")]
     ProtocolNotFound(String),
-    #[error("too many protocols. specifed {specifed} but maximum is {max}")]
-    TooManyProtocols { specifed: usize, max: usize },
+    #[error("too many protocols. specified {specified} but maximum is {max}")]
+    TooManyProtocols { specified: usize, max: usize },
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
 }

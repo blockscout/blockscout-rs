@@ -312,9 +312,9 @@ impl Protocoler {
             let deduped = protocols.into_iter().collect::<HashSet<_>>();
             let protocols = self.protocols_by_slugs(deduped)?;
             if let Some(protocols) = NonEmpty::from_vec(protocols) {
-                if protocols.len() > MAX_NETWORKS_LIMIT {
+                if protocols.len() > MAX_PROTOCOLS_FROM_USER_INPUT {
                     return Err(ProtocolError::TooManyProtocols {
-                        specifed: protocols.len(),
+                        specified: protocols.len(),
                         max: MAX_PROTOCOLS_FROM_USER_INPUT,
                     });
                 }
