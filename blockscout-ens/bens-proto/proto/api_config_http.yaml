@@ -24,7 +24,7 @@ http:
       post: /api/v1/addresses:batch-resolve
       body: "*"
 
-    - selector: blockscout.bens.v1.MultichainDomains.GetMutlichainProtocols
+    - selector: blockscout.bens.v1.MultichainDomains.GetMultichainProtocols
       get: /api/v1/protocols
 
     #################### DomainsExtractor ####################

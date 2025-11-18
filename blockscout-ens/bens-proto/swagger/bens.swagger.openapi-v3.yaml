@@ -424,8 +424,8 @@ paths:
         schema:
           format: int64
           type: string
-      - description: comma separated list of protocol ids. Default is ENS protocol
-          only
+      - description: Protocol id of domain, default is first priority protocol on
+          that chain
         in: query
         name: protocol_id
         schema:
@@ -467,8 +467,8 @@ paths:
         schema:
           format: int64
           type: string
-      - description: comma separated list of protocol ids. Default is ENS protocol
-          only
+      - description: Protocol id of domain, default is first priority protocol on
+          that chain
         in: query
         name: protocol_id
         schema:
@@ -577,7 +577,7 @@ paths:
       - MultichainDomains
   /api/v1/protocols:
     get:
-      operationId: MultichainDomains_GetMutlichainProtocols
+      operationId: MultichainDomains_GetMultichainProtocols
       parameters:
       - description: The chain (network) where to get protocols
         in: query

@@ -23,7 +23,7 @@ service MultichainDomains {
   // Perform batch resolving of list of addresses to names for blockscout backend requests
   rpc BatchResolveAddressesMultichain(BatchResolveAddressesMultichainRequest) returns (BatchResolveAddressNamesResponse) {}
   // Get list of supported protocols
-  rpc GetMutlichainProtocols(GetProtocolsMultichainRequest) returns (GetProtocolsResponse) {}
+  rpc GetMultichainProtocols(GetProtocolsMultichainRequest) returns (GetProtocolsResponse) {}
 }
 
 
@@ -34,7 +34,7 @@ message GetDomainNameMultichainRequest {
   string name = 1;
   // The chain (network) where domain search should be done
   optional int64 chain_id = 2;
-  // comma separated list of protocol ids. Default is ENS protocol only
+  // Protocol id of domain, default is first priority protocol on that chain
   optional string protocol_id = 3;
   // Filtering field to remove expired names
   bool only_active = 4 [(google.api.field_behavior) = OPTIONAL];
@@ -45,7 +45,7 @@ message ListDomainEventsMultichainRequest {
   string name = 1;
   // The chain (network) where domain search should be done
   optional int64 chain_id = 2;
-  // comma separated list of protocol ids. Default is ENS protocol only
+  // Protocol id of domain, default is first priority protocol on that chain
   optional string protocol_id = 3;
   // Sorting field. Default is `timestamp`
   string sort = 4 [(google.api.field_behavior) = OPTIONAL];

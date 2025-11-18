@@ -143,7 +143,7 @@ impl MultichainDomains for MultichainDomainsService {
         Ok(tonic::Response::new(response))
     }
 
-    async fn get_mutlichain_protocols(
+    async fn get_multichain_protocols(
         &self,
         request: tonic::Request<GetProtocolsMultichainRequest>,
     ) -> Result<tonic::Response<GetProtocolsResponse>, tonic::Status> {

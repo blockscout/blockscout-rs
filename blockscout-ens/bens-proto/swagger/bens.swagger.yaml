@@ -168,7 +168,7 @@ paths:
           type: string
           format: int64
         - name: protocol_id
-          description: comma separated list of protocol ids. Default is ENS protocol only
+          description: Protocol id of domain, default is first priority protocol on that chain
           in: query
           required: false
           type: string
@@ -205,7 +205,7 @@ paths:
           type: string
           format: int64
         - name: protocol_id
-          description: comma separated list of protocol ids. Default is ENS protocol only
+          description: Protocol id of domain, default is first priority protocol on that chain
           in: query
           required: false
           type: string
@@ -292,7 +292,7 @@ paths:
   /api/v1/protocols:
     get:
       summary: Get list of supported protocols
-      operationId: MultichainDomains_GetMutlichainProtocols
+      operationId: MultichainDomains_GetMultichainProtocols
       responses:
         "200":
           description: A successful response.
