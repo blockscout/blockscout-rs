@@ -144,8 +144,10 @@ impl InterchainDatabase {
 
     pub async fn get_bridge(&self, bridge_id: i32) -> anyhow::Result<Option<bridges::Model>> {
         match bridges::Entity::find()
-        .filter(bridges::Column::Id.eq(bridge_id))
-        .one(self.db.as_ref()).await {
+            .filter(bridges::Column::Id.eq(bridge_id))
+            .one(self.db.as_ref())
+            .await
+        {
             Ok(Some(result)) => Ok(Some(result)),
             Ok(None) => {
                 tracing::error!(bridge_id =? bridge_id, "Bridge not found");
@@ -154,7 +156,7 @@ impl InterchainDatabase {
             Err(e) => {
                 tracing::error!(err =? e, bridge_id =? bridge_id, "Failed to fetch the bridge");
                 Err(e.into())
-            },
+            }
         }
     }
 

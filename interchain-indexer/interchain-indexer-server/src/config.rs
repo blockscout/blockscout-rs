@@ -1,13 +1,13 @@
-use alloy::primitives::Address;
+use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
 };
-use interchain_indexer_logic::{NodeConfig, PoolConfig, ProviderPool};
+use interchain_indexer_logic::{NodeConfig, PoolConfig, build_layered_http_provider};
 use sea_orm::{ActiveValue, prelude::Json};
 use serde::{Deserialize, Deserializer};
 use serde_json;
-use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::Path, str::FromStr, time::Duration};
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct BridgeConfig {
@@ -229,12 +229,12 @@ pub fn load_bridges_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<BridgeConfi
     Ok(bridges)
 }
 
-/// Create ProviderPool objects from ChainConfig.
-/// Returns a HashMap mapping chain_id (as u64) to ProviderPool.
+/// Create layered Alloy providers from ChainConfig definitions.
+/// Returns a HashMap mapping chain_id (as u64) to a DynProvider.
 /// Only enabled RPC providers are included in each pool.
 pub async fn create_provider_pools_from_chains(
     chains: Vec<ChainConfig>,
-) -> Result<HashMap<u64, Arc<ProviderPool>>> {
+) -> Result<HashMap<u64, DynProvider<Ethereum>>> {
     let mut pools = HashMap::new();
 
     // Default pool configuration
@@ -272,30 +272,32 @@ pub async fn create_provider_pools_from_chains(
                     error_threshold: rpc_config.error_threshold,
                     cooldown_threshold: DEFAULT_COOLDOWN_THRESHOLD,
                     cooldown: Duration::from_secs(DEFAULT_COOLDOWN_SECS),
-                    multicall_batching_wait: Duration::from_micros(rpc_config.multicall_batching_us),
+                    multicall_batching_wait: Duration::from_micros(
+                        rpc_config.multicall_batching_us,
+                    ),
                 };
 
                 node_configs.push(node_config);
             }
         }
 
-        // Create ProviderPool for this chain if we have any nodes
+        // Create layered provider for this chain if we have any nodes
         if !node_configs.is_empty() {
-            match ProviderPool::new_with_config(node_configs, pool_config.clone()).await {
-                Ok(pool) => {
+            match build_layered_http_provider(node_configs, pool_config.clone()) {
+                Ok(provider) => {
                     tracing::info!(
                         chain_id = chain_id_u64,
                         chain_name = chain.name,
-                        "Created ProviderPool for chain"
+                        "Created layered provider for chain"
                     );
-                    pools.insert(chain_id_u64, pool);
+                    pools.insert(chain_id_u64, provider);
                 }
                 Err(e) => {
                     tracing::warn!(
                         chain_id = chain_id_u64,
                         chain_name = chain.name,
                         err = ?e,
-                        "Failed to create ProviderPool for chain, skipping"
+                        "Failed to create layered provider for chain, skipping"
                     );
                 }
             }
@@ -303,7 +305,7 @@ pub async fn create_provider_pools_from_chains(
             tracing::warn!(
                 chain_id = chain_id_u64,
                 chain_name = chain.name,
-                "No enabled RPC providers found for chain, skipping ProviderPool creation"
+                "No enabled RPC providers found for chain, skipping provider creation"
             );
         }
     }

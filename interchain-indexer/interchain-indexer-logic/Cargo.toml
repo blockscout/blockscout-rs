@@ -8,6 +8,7 @@ test-utils = []
 
 [dependencies]
 alloy = { workspace = true }
+alloy-json-rpc = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 blockscout-display-bytes = { workspace = true }
@@ -28,6 +29,7 @@ sea-orm = { workspace = true, features = [
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tower = { workspace = true }
 #hex = { workspace = true }
 #keccak-hash = { workspace = true }
 #lazy_static = { workspace = true }

@@ -107,19 +107,29 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridge_contracts.len(),
     );
 
-    // Create ProviderPool objects for each chain
-    // The provider pool for the chain is shared between all indexers on that chain
+    // Create layered provider objects for each chain
+    // The provider for the chain is shared between all indexers on that chain
     let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
 
     bridges.iter().for_each(|bridge| {
         let indexer = match bridge.indexer.to_lowercase().as_str() {
             "avalanchenative" => {
                 // TODO: start Avalanche indexer
-                ExampleIndexer::new(db.clone(), bridge.bridge_id, chains_providers.clone(), settings.example_indexer.clone())
+                ExampleIndexer::new(
+                    db.clone(),
+                    bridge.bridge_id,
+                    chains_providers.clone(),
+                    settings.example_indexer.clone(),
+                )
             }
             "omnibridge" => {
                 // TODO: start OmniBridge indexer
-                ExampleIndexer::new(db.clone(), bridge.bridge_id, chains_providers.clone(), settings.example_indexer.clone())
+                ExampleIndexer::new(
+                    db.clone(),
+                    bridge.bridge_id,
+                    chains_providers.clone(),
+                    settings.example_indexer.clone(),
+                )
             }
             _ => {
                 tracing::error!("Unsupported indexer: {}", bridge.indexer);
