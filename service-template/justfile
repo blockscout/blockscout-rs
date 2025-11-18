@@ -80,19 +80,10 @@ check-envs:
 generate-envs:
     cargo run --bin check-envs
 
-_maybe_download_gen_script:
-    #!/bin/bash
-    if [ ! -f {{project-name}}-proto/convert-swagger-v2-to-v3.py ]; then
-        echo "{{project-name}}-proto/convert-swagger-v2-to-v3.py does not exist, downloading..."
-        curl -fsSL https://gist.githubusercontent.com/sevenzing/defe3376947ed5a57cb68dafabc407bc/raw/e4ba3c11e11b06ab8aa193ff15154c6fdadb799c/convert-swagger-v2-to-v3.py -o {{project-name}}-proto/convert-swagger-v2-to-v3.py
-    fi
-
 gen-swagger-v3:
-    just _maybe_download_gen_script
     python3 {{project-name}}-proto/convert-swagger-v2-to-v3.py --service-name {{project-name}} --swagger-dir={{project-name}}-proto/swagger/v1
 
 check-swagger-v3:
-    just _maybe_download_gen_script
     python3 {{project-name}}-proto/convert-swagger-v2-to-v3.py --service-name {{project-name}} --swagger-dir={{project-name}}-proto/swagger/v1 --validate-only
 
     

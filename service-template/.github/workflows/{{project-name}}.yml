@@ -101,6 +101,25 @@ jobs:
       ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
       {% endraw %}
 
+  check-swagger:
+    name: Verify that the swagger is relevant
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip' # caching pip dependencies
+
+      - name: Install pip dependencies
+        run: pip install -r {{project-name}}-proto/requirements.txt
+
+      - name: Swagger v3 check
+        run: python {{project-name}}-proto/convert-swagger-v2-to-v3.py --swagger-dir={{project-name}}-proto/swagger/v1 --service-name {{project-name}} --validate-only
+
   {%- if types %}
   publish_types_package:
     name: Publish types package
