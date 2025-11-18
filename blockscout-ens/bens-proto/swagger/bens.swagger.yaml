@@ -289,6 +289,28 @@ paths:
           type: string
       tags:
         - MultichainDomains
+  /api/v1/protocols:
+    get:
+      summary: Get list of supported protocols
+      operationId: MultichainDomains_GetMutlichainProtocols
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetProtocolsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where to get protocols
+          in: query
+          required: false
+          type: string
+          format: int64
+      tags:
+        - MultichainDomains
   /api/v1/{chain_id}/addresses/{address}:
     get:
       summary: Get detailed information about main domain of requested address

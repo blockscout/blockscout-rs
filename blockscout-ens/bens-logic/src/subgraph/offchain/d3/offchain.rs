@@ -30,7 +30,7 @@ pub async fn maybe_offchain_resolution(
         }
         Err(err) => {
             tracing::error!(
-                name = name.inner.name,
+                name = name.inner.name(),
                 error = err.to_string(),
                 "failed to resolve d3 name"
             );
@@ -86,7 +86,7 @@ async fn get_offchain_resolution(
     address_resolve_technique: &AddressResolveTechnique,
 ) -> Result<DomainInfoFromOffchainResolution, anyhow::Error> {
     let resolve_result =
-        alloy_ccip_read::d3::resolve_d3_name(reader, resolver_address, &name.inner.name, "")
+        alloy_ccip_read::d3::resolve_d3_name(reader, resolver_address, name.inner.name(), "")
             .await?;
     let addr = resolve_result.addr.into_value();
     let addr2name = match address_resolve_technique {
@@ -102,7 +102,7 @@ async fn get_offchain_resolution(
                     .protocol_specific
                     .empty_label_hash(),
             )
-            .map(|name| name.name)
+            .map(|name| name.name().to_string())
             .ok()
         }
         AddressResolveTechnique::ReverseRegistry | AddressResolveTechnique::AllDomains => None,
@@ -111,8 +111,8 @@ async fn get_offchain_resolution(
     let expiry_date = metadata.get_expiration_date();
 
     Ok(DomainInfoFromOffchainResolution {
-        id: name.inner.id.clone(),
-        name: name.inner.name.clone(),
+        id: name.inner.id().to_string(),
+        name: name.inner.name().to_string(),
         addr,
         resolver_address,
         expiry_date,

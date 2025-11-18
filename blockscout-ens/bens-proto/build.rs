@@ -24,35 +24,36 @@ fn compile(
         )
         .extern_path(".google.protobuf", "::prost_wkt_types");
 
-
-    default_fields(&mut config, &[
-        "GetDomainRequest.only_active",
-        "ListDomainEventsRequest.sort",
-        "ListDomainEventsRequest.order",
-        "LookupDomainNameRequest.only_active",
-        "LookupDomainNameRequest.sort",
-        "LookupDomainNameRequest.order",
-        "LookupAddressRequest.only_active",
-        "LookupAddressRequest.sort",
-        "LookupAddressRequest.order",
-        "GetDomainNameMultichainRequest.only_active",
-        "LookupDomainNameMultichainRequest.only_active",
-        "LookupDomainNameMultichainRequest.sort",
-        "LookupDomainNameMultichainRequest.order",
-        "LookupAddressMultichainRequest.only_active",
-        "LookupAddressMultichainRequest.sort",
-        "LookupAddressMultichainRequest.order",
-    ]);
+    default_fields(
+        &mut config,
+        &[
+            "GetDomainRequest.only_active",
+            "ListDomainEventsRequest.sort",
+            "ListDomainEventsRequest.order",
+            "LookupDomainNameRequest.only_active",
+            "LookupDomainNameRequest.sort",
+            "LookupDomainNameRequest.order",
+            "LookupAddressRequest.only_active",
+            "LookupAddressRequest.sort",
+            "LookupAddressRequest.order",
+            "GetDomainNameMultichainRequest.only_active",
+            "LookupDomainNameMultichainRequest.only_active",
+            "LookupDomainNameMultichainRequest.sort",
+            "LookupDomainNameMultichainRequest.order",
+            "LookupAddressMultichainRequest.only_active",
+            "LookupAddressMultichainRequest.sort",
+            "LookupAddressMultichainRequest.order",
+            "ListDomainEventsMultichainRequest.sort",
+            "ListDomainEventsMultichainRequest.order",
+        ],
+    );
     config.compile_protos(protos, includes)?;
     Ok(())
 }
 
 fn default_fields(config: &mut Config, fields: &[&str]) {
     for field in fields {
-        config.field_attribute(
-            field,
-            "#[serde(default)]"
-        );
+        config.field_attribute(field, "#[serde(default)]");
     }
 }
 

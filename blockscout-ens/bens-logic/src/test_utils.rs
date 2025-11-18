@@ -104,6 +104,7 @@ pub async fn mocked_networks_and_protocols(
         (
             1,
             Network {
+                network_id: 1,
                 blockscout_client: client.clone(),
                 use_protocols: vec!["ens".to_string()],
                 rpc_url: None,
@@ -112,6 +113,7 @@ pub async fn mocked_networks_and_protocols(
         (
             10200,
             Network {
+                network_id: 10200,
                 blockscout_client: client.clone(),
                 use_protocols: vec!["genome".to_string()],
                 rpc_url: None,
@@ -120,6 +122,7 @@ pub async fn mocked_networks_and_protocols(
         (
             1337,
             Network {
+                network_id: 1337,
                 blockscout_client: client.clone(),
                 use_protocols: vec!["ens".to_string(), "genome".to_string()],
                 rpc_url: None,

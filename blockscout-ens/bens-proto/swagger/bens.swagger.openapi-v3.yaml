@@ -575,6 +575,32 @@ paths:
         Sorted by `registration_date`
       tags:
       - MultichainDomains
+  /api/v1/protocols:
+    get:
+      operationId: MultichainDomains_GetMutlichainProtocols
+      parameters:
+      - description: The chain (network) where to get protocols
+        in: query
+        name: chain_id
+        schema:
+          format: int64
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1GetProtocolsResponse'
+          description: A successful response.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+          description: An unexpected error response.
+      summary: Get list of supported protocols
+      tags:
+      - MultichainDomains
   /api/v1/{chain_id}/addresses/{address}:
     get:
       operationId: DomainsExtractor_GetAddress

@@ -3,6 +3,7 @@ syntax = "proto3";
 package blockscout.bens.v1;
 
 import "protoc-gen-openapiv2/options/annotations.proto";
+import "google/api/field_behavior.proto";
 import "types.proto";
 
 option go_package = "github.com/blockscout/blockscout-rs/bens";

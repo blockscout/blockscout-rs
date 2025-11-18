@@ -27,7 +27,10 @@ stop-postgres:
     docker rm -f {{docker-name}}
 
 graph-node-start:
-    docker-compose --file graph-node/docker-compose.yml up -d
+    # Try docker compose (V2) first, fallback to docker-compose (V1)
+    @command -v docker > /dev/null && docker compose version > /dev/null 2>&1 && \
+        docker compose --file graph-node/docker-compose.yml up -d || \
+        docker-compose --file graph-node/docker-compose.yml up -d
     sleep 6
     ./graph-node/rainbow.small.sh
 
@@ -35,7 +38,10 @@ graph-node-clean:
     rm -rf graph-node/data
 
 graph-node-stop:
-    docker-compose --file graph-node/docker-compose.yml down
+    # Try docker compose (V2) first, fallback to docker-compose (V1)
+    @command -v docker > /dev/null && docker compose version > /dev/null 2>&1 && \
+        docker compose --file graph-node/docker-compose.yml down || \
+        docker-compose --file graph-node/docker-compose.yml down
 
 deploy-subgraph *args:
     (cd graph-node/deployer && python3 deployer.py {{args}})
@@ -63,6 +69,21 @@ run:
 
 run-dev:
     dotenv -e .env.dev -- just run
+
+_maybe_download_gen_script:
+    #!/bin/bash
+    if [ ! -f bens-proto/convert-swagger-v2-to-v3.py ]; then
+        echo "bens-proto/convert-swagger-v2-to-v3.py does not exist, downloading..."
+        curl -fsSL https://gist.githubusercontent.com/sevenzing/defe3376947ed5a57cb68dafabc407bc/raw/e4ba3c11e11b06ab8aa193ff15154c6fdadb799c/convert-swagger-v2-to-v3.py -o bens-proto/convert-swagger-v2-to-v3.py
+    fi
+
+gen-swagger-v3:
+    just _maybe_download_gen_script
+    python3 bens-proto/convert-swagger-v2-to-v3.py --service-name bens --swagger-dir=bens-proto/swagger
+
+check-swagger-v3:
+    just _maybe_download_gen_script
+    python3 bens-proto/convert-swagger-v2-to-v3.py --service-name bens --swagger-dir=bens-proto/swagger --validate-only
 
 
 check-envs:

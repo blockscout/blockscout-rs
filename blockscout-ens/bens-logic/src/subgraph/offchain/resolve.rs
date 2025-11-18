@@ -38,7 +38,7 @@ pub async fn offchain_resolve(
             was_cached: true, ..
         } => {
             tracing::debug!(
-                name = from_user.inner.name,
+                name = from_user.inner.name(),
                 "domain was cached by ram cache, skip it"
             );
         }
@@ -52,7 +52,7 @@ pub async fn offchain_resolve(
 #[cached(
     key = "String",
     convert = r#"{
-            format!("{}-{}",  from_user.deployed_protocol.protocol.info.slug, from_user.inner.id)
+            format!("{}-{}",  from_user.deployed_protocol.protocol.info.slug, from_user.inner.id())
         }"#,
     time = 900, // 15 * 60 seconds = 15 minutes
     size = 500,

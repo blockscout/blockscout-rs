@@ -3,6 +3,7 @@ syntax = "proto3";
 package blockscout.bens.v1;
 
 import "protoc-gen-openapiv2/options/annotations.proto";
+import "google/api/field_behavior.proto";
 import "types.proto";
 import "domains_extractor.proto";
 
@@ -21,6 +22,8 @@ service MultichainDomains {
   rpc GetAddressMultichain(GetAddressMultichainRequest) returns (GetAddressResponse) {}
   // Perform batch resolving of list of addresses to names for blockscout backend requests
   rpc BatchResolveAddressesMultichain(BatchResolveAddressesMultichainRequest) returns (BatchResolveAddressNamesResponse) {}
+  // Get list of supported protocols
+  rpc GetMutlichainProtocols(GetProtocolsMultichainRequest) returns (GetProtocolsResponse) {}
 }
 
 
@@ -76,9 +79,9 @@ message LookupAddressMultichainRequest {
   // comma separated list of protocol ids. Default is ENS protocol only
   optional string protocols = 3;
   // Include domains resolved to the address
-  bool resolved_to = 4 [(google.api.field_behavior) = OPTIONAL];
+  bool resolved_to = 4;
   // Include domains owned by the address
-  bool owned_by = 5 [(google.api.field_behavior) = OPTIONAL];
+  bool owned_by = 5;
   // Filtering field to remove expired domains
   bool only_active = 6 [(google.api.field_behavior) = OPTIONAL];
   // Sorting field. Default is `registration_date`
@@ -106,4 +109,9 @@ message BatchResolveAddressesMultichainRequest {
   optional int64 chain_id = 2;
   // comma separated list of protocol ids. Default is ENS protocol only
   optional string protocols = 3;
+}
+
+message GetProtocolsMultichainRequest {
+  // The chain (network) where to get protocols
+  optional int64 chain_id = 1;
 }
