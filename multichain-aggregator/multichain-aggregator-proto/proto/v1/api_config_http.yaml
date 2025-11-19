@@ -101,6 +101,9 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.QuickSearch
       get: /api/v1/clusters/{cluster_id}/search:quick
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.CheckRedirect
+      get: /api/v1/clusters/{cluster_id}/search:check-redirect
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check
