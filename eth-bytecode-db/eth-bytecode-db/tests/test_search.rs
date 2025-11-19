@@ -245,7 +245,7 @@ async fn test_partial_search_bytecodes() {
             let partial_matches =
                 eth_bytecode_db_find_contract(db.as_ref(), BytecodeType::CreationInput, data)
                     .await
-                    .expect("unkown contract should not give error");
+                    .expect("unknown contract should not give error");
             assert!(
                 partial_matches.is_empty(),
                 "found some contact, but bytecode is unknow"
