@@ -71,7 +71,7 @@ async fn resolve_addr_reverse_cached(
 ) -> Result<Vec<DomainWithAddress>, DbErr> {
     let addr_reverse_hashes = addresses
         .iter()
-        .map(|addr| DomainName::addr_reverse(addr).id)
+        .map(|addr| DomainName::addr_reverse(addr).id().to_string())
         .collect::<Vec<String>>();
     let addr_reverse_domains =
         sql::AddrReverseNamesView::batch_search_addresses(pool, protocols, &addr_reverse_hashes)
@@ -81,12 +81,13 @@ async fn resolve_addr_reverse_cached(
         .into_iter()
         .filter_map(|row| {
             let addr = Address::from_str(&row.resolved_address).ok()?;
-            let addr_reverse_id = DomainName::addr_reverse(&addr).id;
+            let addr_reverse_id = DomainName::addr_reverse(&addr).id().to_string();
             if addr_reverse_id == row.reversed_domain_id {
                 Some(DomainWithAddress {
                     id: row.domain_id,
                     domain_name: row.name,
                     resolved_address: row.resolved_address,
+                    protocol_slug: row.protocol_slug,
                 })
             } else {
                 None

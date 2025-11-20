@@ -1,56 +1,67 @@
-use super::pagination::{DomainPaginationInput, Order};
 use crate::{
     entity::subgraph::domain::{DetailedDomain, Domain},
-    protocols::{Network, Protocol},
+    protocols::{Network, Protocol, ProtocolError},
+    subgraph::{sql::DbErr, DomainPaginationInput, Order},
 };
 use alloy::primitives::Address;
 use nonempty::NonEmpty;
 use sea_query::{Alias, IntoIden};
 use serde::Deserialize;
 use std::{fmt::Display, str::FromStr};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum SubgraphReadError {
+    #[error("failed to get protocol info: {0}")]
+    Protocol(#[from] ProtocolError),
+    #[error("Db err")]
+    DbErr(#[from] DbErr),
+    #[error("internal error: {0}")]
+    Internal(#[from] anyhow::Error),
+}
 
 #[derive(Debug, Clone)]
 pub struct GetDomainInput {
-    pub network_id: i64,
     pub name: String,
-    pub only_active: bool,
+    pub network_id: Option<i64>,
     pub protocol_id: Option<String>,
+    pub only_active: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct GetDomainHistoryInput {
-    pub network_id: i64,
     pub name: String,
+    pub network_id: Option<i64>,
+    pub protocol_id: Option<String>,
     pub sort: EventSort,
     pub order: Order,
-    pub protocol_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct LookupDomainInput {
-    pub network_id: i64,
     pub name: Option<String>,
     pub only_active: bool,
+    pub network_id: Option<i64>,
+    pub protocols: Option<NonEmpty<String>>,
     pub pagination: DomainPaginationInput,
-    pub maybe_filter_protocols: Option<NonEmpty<String>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct LookupAddressInput {
-    pub network_id: i64,
     pub address: Address,
     pub resolved_to: bool,
     pub owned_by: bool,
     pub only_active: bool,
+    pub network_id: Option<i64>,
+    pub protocols: Option<NonEmpty<String>>,
     pub pagination: DomainPaginationInput,
-    pub maybe_filter_protocols: Option<NonEmpty<String>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct GetAddressInput {
-    pub network_id: i64,
     pub address: Address,
-    pub protocol_id: Option<String>,
+    pub network_id: Option<i64>,
+    pub protocols: Option<NonEmpty<String>>,
 }
 
 impl Default for DomainPaginationInput {
@@ -66,8 +77,9 @@ impl Default for DomainPaginationInput {
 
 #[derive(Debug, Clone)]
 pub struct BatchResolveAddressNamesInput {
-    pub network_id: i64,
     pub addresses: Vec<Address>,
+    pub network_id: Option<i64>,
+    pub protocols: Option<NonEmpty<String>>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]

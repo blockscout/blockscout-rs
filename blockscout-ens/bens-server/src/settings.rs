@@ -40,6 +40,8 @@ pub struct SubgraphsReaderSettings {
     pub networks: HashMap<i64, NetworkSettings>,
     #[serde(default = "default_refresh_cache_schedule")]
     pub refresh_cache_schedule: String,
+    #[serde(default)]
+    pub refresh_cache_disabled: bool,
 }
 
 fn default_refresh_cache_schedule() -> String {
@@ -52,6 +54,7 @@ impl Default for SubgraphsReaderSettings {
             networks: Default::default(),
             protocols: Default::default(),
             refresh_cache_schedule: default_refresh_cache_schedule(),
+            refresh_cache_disabled: false,
         }
     }
 }

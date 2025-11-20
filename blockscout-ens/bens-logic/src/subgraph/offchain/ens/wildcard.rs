@@ -32,7 +32,7 @@ pub async fn maybe_wildcard_resolution(
         }
         Err(err) => {
             tracing::error!(
-                name = from_user.inner.name,
+                name = from_user.inner.name(),
                 error = ?err,
                 "error while trying wildcard resolution"
             );
@@ -55,7 +55,7 @@ async fn try_wildcard_resolution(
         .context("resolve using ccip call")?;
     if !result.addr.is_zero() {
         let maybe_domain_to_update = maybe_existing_domain.and_then(|domain| {
-            if domain.id == from_user.inner.id {
+            if domain.id == from_user.inner.id() {
                 Some(domain)
             } else {
                 None
@@ -125,7 +125,7 @@ async fn any_resolver_in_db(
     for name in names {
         let maybe_domain = found_parent_domains
             .iter()
-            .find(|d| d.name.as_ref() == Some(&name.inner.name));
+            .find(|d| d.name.as_deref() == Some(name.inner.name()));
         if let Some(domain) = maybe_domain {
             let maybe_resolver = domain
                 .resolver

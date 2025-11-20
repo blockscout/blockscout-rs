@@ -36,6 +36,7 @@ async fn main() -> Result<(), anyhow::Error> {
         (
             1,
             Network {
+                network_id: 1,
                 blockscout_client: Arc::new(eth_client),
                 use_protocols: vec!["ens".to_string()],
                 rpc_url: None,
@@ -44,6 +45,7 @@ async fn main() -> Result<(), anyhow::Error> {
         (
             30,
             Network {
+                network_id: 30,
                 blockscout_client: Arc::new(rootstock_client),
                 use_protocols: vec!["rns".to_string()],
                 rpc_url: None,
@@ -175,8 +177,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let now = Instant::now();
     let result = reader
         .batch_resolve_address_names(BatchResolveAddressNamesInput {
-            network_id: 1,
             addresses,
+            network_id: Some(1),
+            protocols: None,
         })
         .await
         .expect("failed to quick resolve");

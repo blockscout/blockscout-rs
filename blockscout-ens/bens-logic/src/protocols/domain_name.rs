@@ -2,36 +2,88 @@ use super::{hash_name::hash_ens_domain_name, ProtocolError, Tld};
 use crate::{hex, protocols::protocoler::DeployedProtocol};
 use alloy::primitives::{keccak256, Address, B256};
 
+const SEPARATOR: char = '.';
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DomainName {
-    pub id: String,
-    pub id_bytes: B256,
-    pub label_name: String,
-    pub name: String,
-    pub empty_label_hash: Option<B256>,
-    pub tld: Tld,
+pub struct CleanName {
+    name: String,
+    tld: Tld,
+    label_name: String,
 }
 
-const SEPARATOR: char = '.';
+impl CleanName {
+    pub fn new(initial_name: &str) -> Result<Self, ProtocolError> {
+        let normalized = ens_normalize(initial_name)?;
+        let (label_name, _) = normalized
+            .split_once(SEPARATOR)
+            .unwrap_or((&normalized, ""));
+        let tld = Tld::from_domain_name(&normalized).ok_or_else(|| ProtocolError::InvalidName {
+            name: initial_name.to_string(),
+            reason: "tld not found".to_string(),
+        })?;
+
+        Ok(Self {
+            label_name: label_name.to_string(),
+            name: normalized,
+            tld,
+        })
+    }
+
+    pub fn tld(&self) -> &Tld {
+        &self.tld
+    }
+
+    pub fn label_name(&self) -> &str {
+        &self.label_name
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn level(&self) -> usize {
+        self.name().chars().filter(|c| *c == SEPARATOR).count() + 1
+    }
+
+    pub fn iter_parts(&self) -> impl Iterator<Item = &str> {
+        self.name().split(SEPARATOR)
+    }
+
+    pub fn labelhash(&self) -> B256 {
+        keccak256(self.label_name().as_bytes())
+    }
+
+    pub fn append_tld(self, tld: Tld) -> Self {
+        let old_name = self.name;
+        let old_label_name = self.label_name;
+        let new_name = format!("{}.{}", old_name, tld.0);
+        Self {
+            name: new_name,
+            tld,
+            label_name: old_label_name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DomainName {
+    id: String,
+    id_bytes: B256,
+    clean: CleanName,
+    empty_label_hash: Option<B256>,
+}
 
 impl DomainName {
     pub fn new(name: &str, empty_label_hash: Option<B256>) -> Result<Self, ProtocolError> {
-        let name = ens_normalize(name)?;
-        let (label_name, _) = name.split_once(SEPARATOR).unwrap_or((&name, ""));
-
-        let id_bytes = hash_ens_domain_name(&name, empty_label_hash);
+        let clean = CleanName::new(name)?;
+        let id_bytes = hash_ens_domain_name(clean.name(), empty_label_hash);
         let id = hex(id_bytes);
-        let tld = Tld::from_domain_name(&name).ok_or_else(|| ProtocolError::InvalidName {
-            name: name.clone(),
-            reason: "tld not found".to_string(),
-        })?;
+
         Ok(Self {
             id,
             id_bytes,
-            label_name: label_name.to_string(),
-            name: name.to_string(),
+            clean,
             empty_label_hash,
-            tld,
         })
     }
 
@@ -39,6 +91,22 @@ impl DomainName {
         let label_name = format!("{addr:x}");
         let name = format!("{label_name}.addr.reverse");
         Self::new(&name, None).expect("addr.reverse is always valid")
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn id_bytes(&self) -> &B256 {
+        &self.id_bytes
+    }
+
+    pub fn clean(&self) -> &CleanName {
+        &self.clean
+    }
+
+    pub fn empty_label_hash(&self) -> Option<&B256> {
+        self.empty_label_hash.as_ref()
     }
 
     /// Returns true if level of domain is greater than 1
@@ -49,16 +117,16 @@ impl DomainName {
     }
 
     pub fn level(&self) -> usize {
-        self.name.chars().filter(|c| *c == SEPARATOR).count() + 1
+        self.clean.level()
     }
 
     pub fn iter_parts(&self) -> impl Iterator<Item = &str> {
-        self.name.split(SEPARATOR)
+        self.clean.iter_parts()
     }
 
     /// Returns an iterator over the parent names of the domain, including the domain itself
     pub fn iter_parents_with_self(&self) -> impl Iterator<Item = Self> {
-        alloy_ccip_read::utils::iter_parent_names(&self.name)
+        alloy_ccip_read::utils::iter_parent_names(self.clean.name())
             .into_iter()
             .map(|name| {
                 Self::new(name, self.empty_label_hash).expect("parent name is already normalized")
@@ -67,12 +135,20 @@ impl DomainName {
             .into_iter()
     }
 
+    pub fn label_name(&self) -> &str {
+        self.clean.label_name()
+    }
+
     pub fn labelhash(&self) -> B256 {
-        keccak256(self.label_name.as_bytes())
+        self.clean.labelhash()
     }
 
     pub fn tld(&self) -> &Tld {
-        &self.tld
+        self.clean.tld()
+    }
+
+    pub fn name(&self) -> &str {
+        self.clean.name()
     }
 }
 
@@ -115,16 +191,21 @@ impl<'a> DomainNameOnProtocol<'a> {
     }
 }
 
-// TODO: implement https://docs.ens.domains/ensip/15 here
 fn ens_normalize(name: &str) -> Result<String, ProtocolError> {
-    let name = name.trim().trim_matches(SEPARATOR);
-    if name.is_empty() {
+    let trimmed = name.trim().trim_matches(SEPARATOR);
+    let normalized = ens_normalize_rs::EnsNameNormalizer::default()
+        .normalize(trimmed)
+        .map_err(|e| ProtocolError::InvalidName {
+            name: name.to_string(),
+            reason: e.to_string(),
+        })?;
+    if normalized.is_empty() {
         return Err(ProtocolError::InvalidName {
             name: name.to_string(),
             reason: "empty name".to_string(),
         });
     }
-    Ok(name.to_string())
+    Ok(normalized)
 }
 
 #[cfg(test)]
@@ -184,12 +265,19 @@ mod tests {
                 "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
                 "🏴󠁧󠁢󠁥󠁮󠁧󠁿.eth",
             ),
+            (
+                "LEVVV.ETH",
+                None,
+                "0x38a7804a53792b0cdefe3e7271b0b85422d620ea4a82df7b7bf750a6d4b297a4",
+                "levvv",
+                "levvv.eth",
+            ),
         ] {
             let domain_name =
                 DomainName::new(name, empty_label_hash).expect("failed to build domain name");
             assert_eq!(domain_name.id, expected_id);
-            assert_eq!(domain_name.label_name, expected_label);
-            assert_eq!(domain_name.name, expected_name)
+            assert_eq!(domain_name.label_name(), expected_label);
+            assert_eq!(domain_name.name(), expected_name);
         }
     }
 
@@ -202,7 +290,7 @@ mod tests {
             "0x397426edefbcd650b9878aabf579977fd0b2c4dd5b09beca41e055ca2273e743",
         );
         assert_eq!(
-            domain_name.label_name,
+            domain_name.label_name(),
             "43c960fa130e3eb58e7aaf65f46f76b5c607c3a9"
         )
     }
@@ -212,7 +300,7 @@ mod tests {
         let domain_name = DomainName::new("5.fourth.third.vitalik.eth", None).unwrap();
         let parents = domain_name
             .iter_parents_with_self()
-            .map(|d| d.name)
+            .map(|d| d.clean.name().to_string())
             .collect::<Vec<_>>();
         assert_eq!(
             parents,

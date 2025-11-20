@@ -34,6 +34,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 url = { workspace = true, features = ["serde"] }
 blockscout-endpoint-swagger = { workspace = true }
+derive-new = { workspace = true }
 
 [dev-dependencies]
 bens-logic = { workspace = true, features = ["test-utils"] }

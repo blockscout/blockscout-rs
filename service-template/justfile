@@ -79,3 +79,11 @@ check-envs:
 
 generate-envs:
     cargo run --bin check-envs
+
+gen-swagger-v3:
+    python3 {{project-name}}-proto/convert-swagger-v2-to-v3.py --service-name {{project-name}} --swagger-dir={{project-name}}-proto/swagger/v1
+
+check-swagger-v3:
+    python3 {{project-name}}-proto/convert-swagger-v2-to-v3.py --service-name {{project-name}} --swagger-dir={{project-name}}-proto/swagger/v1 --validate-only
+
+    

@@ -3,13 +3,15 @@ syntax = "proto3";
 package blockscout.bens.v1;
 
 import "protoc-gen-openapiv2/options/annotations.proto";
+import "google/api/field_behavior.proto";
+import "types.proto";
 
 option go_package = "github.com/blockscout/blockscout-rs/bens";
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {
     title: "Blockscout ENS";
-    version: "1.3.0";
+    version: "1.5.0";
     contact: {
       name: "Blockscout";
       url: "https://blockscout.com";
@@ -17,11 +19,13 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
     };
   };
   host: "bens.services.blockscout.com"
+  schemes: [HTTPS]
   external_docs: {
     url: "https://github.com/blockscout/blockscout-rs";
     description: "More about blockscout microservices";
   }
 };
+
 
 
 service DomainsExtractor {
@@ -39,106 +43,6 @@ service DomainsExtractor {
   rpc BatchResolveAddressNames(BatchResolveAddressNamesRequest) returns (BatchResolveAddressNamesResponse) {}
   // Get list of supported protocols
   rpc GetProtocols(GetProtocolsRequest) returns (GetProtocolsResponse) {}
-}
-
-message Domain {
-  // Unique id for the domain, also known as nodehash
-  string id = 1;
-  // The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
-  string name = 2;
-  // Optional. Resolved address of this domain
-  optional Address resolved_address = 3;
-  // The account that owns the domain
-  Address owner = 4;
-  // Optional. Owner of NameWrapper NFT
-  optional Address wrapped_owner = 7;
-  // Optional. RFC 3339 datetime of expiry date.
-  string registration_date = 5;
-  // Optional. RFC 3339 datetime  of expiry date. None means never expires
-  optional string expiry_date = 6;
-  // Protocol that domain belongs to
-  ProtocolInfo protocol = 8;
-}
-
-message DetailedDomain {
-  // Unique id for the domain, also known as nodehash
-  string id = 1;
-  // The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
-  string name = 2;
-  // List of NFT tokens related to this domain
-  repeated Token tokens = 11;
-  // The account that owns the domain
-  Address owner = 4;
-  // Optional. Resolved address of this domain
-  optional Address resolved_address = 5;
-  // Optional. The account that owns the ERC721 NFT for the domain
-  optional Address registrant = 6;
-  // Optional. Owner of NameWrapper NFT
-  optional Address wrapped_owner = 10;
-  // Optional. RFC 3339 datetime  of expiry date.
-  string registration_date = 7;
-  // Optional. RFC 3339 datetime  of expiry date. None means never expires
-  optional string expiry_date = 8;
-  // Map chain -> resolved_address that contains other blockchain addresses.
-  // This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
-  map<string, string> other_addresses = 9;
-  // Information about protocol that domain belongs to
-  ProtocolInfo protocol = 12;
-  bool stored_offchain = 13;
-  bool resolved_with_wildcard = 14;
-  optional Address resolver_address = 15;
-}
-
-message ProtocolInfo {
-  string id = 1;
-  string short_name = 2;
-  string title = 3;
-  string description = 4;
-  string deployment_blockscout_base_url = 8;
-  repeated string tld_list = 5;
-  optional string icon_url = 6;
-  optional string docs_url = 7;
-}
-
-
-
-message DomainEvent {
-  // Transaction hash where action occured
-  string transaction_hash = 1;
-  // Timestamp of this transaction
-  string timestamp = 2;
-  ///Sender of transaction
-  Address from_address = 3;
-  // Optional. Action name
-  optional string action = 4;
-}
-
-message Token {
-  string id = 1;
-  string contract_hash = 2;
-  TokenType type = 3;
-}
-
-enum TokenType {
-  NATIVE_DOMAIN_TOKEN = 0;
-  WRAPPED_DOMAIN_TOKEN = 1;
-}
-
-message Address {
-  string hash = 1;
-  // Optional. ENS name of the sender (resolved from hash)
-  optional string ens_domain_name = 2;
-}
-
-enum Order {
-  ORDER_UNSPECIFIED = 0;
-  ASC = 1;
-  DESC = 2;
-}
-
-message Pagination {
-  string page_token = 1;
-  uint32 page_size = 2;
 }
 
 /************************************************/
