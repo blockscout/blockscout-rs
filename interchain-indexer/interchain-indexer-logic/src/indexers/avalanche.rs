@@ -273,13 +273,18 @@ async fn process_batch(
                         .map_err(|e| DbErr::Custom(e.to_string()))?;
                 }
 
+                let min_block = batch
+                    .first()
+                    .and_then(|log| log.block_number)
+                    .ok_or_else(|| DbErr::Custom("missing block number".to_string()))?
+                    as i64;
                 let max_block = batch
                     .last()
                     .and_then(|log| log.block_number)
                     .ok_or_else(|| DbErr::Custom("missing block number".to_string()))?
                     as i64;
 
-                update_cursors(bridge_id, chain_id, max_block, tx).await?;
+                update_cursors(bridge_id, chain_id, min_block, max_block, tx).await?;
 
                 Ok(())
             })
@@ -587,10 +592,10 @@ async fn handle_message_execution_failed(
     Ok(())
 }
 
-// TODO: bug with max_block
 async fn update_cursors(
     bridge_id: i32,
     chain_id: i64,
+    min_block: i64,
     max_block: i64,
     tx: &DatabaseTransaction,
 ) -> Result<(), DbErr> {
@@ -598,7 +603,7 @@ async fn update_cursors(
         bridge_id: ActiveValue::Set(bridge_id as i64),
         chain_id: ActiveValue::Set(chain_id),
         catchup_min_block: ActiveValue::Set(0),
-        catchup_max_block: ActiveValue::Set(max_block),
+        catchup_max_block: ActiveValue::Set(min_block),
         finality_cursor: ActiveValue::Set(0),
         realtime_cursor: ActiveValue::Set(max_block),
         created_at: ActiveValue::NotSet,
@@ -611,9 +616,7 @@ async fn update_cursors(
         ])
         .value(
             indexer_checkpoints::Column::CatchupMaxBlock,
-            Expr::cust(
-                "GREATEST(indexer_checkpoints.catchup_max_block, EXCLUDED.catchup_max_block)",
-            ),
+            Expr::cust("LEAST(indexer_checkpoints.catchup_max_block, EXCLUDED.catchup_max_block)"),
         )
         .value(
             indexer_checkpoints::Column::RealtimeCursor,
@@ -628,7 +631,7 @@ async fn update_cursors(
     .exec(tx)
     .await?;
 
-    tracing::debug!(bridge_id, chain_id, max_block, "Updated cursors");
+    tracing::debug!(bridge_id, chain_id, min_block, max_block, "updated cursors",);
 
     Ok(())
 }
