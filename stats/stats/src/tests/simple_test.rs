@@ -148,6 +148,7 @@ where
     let mut parameters = UpdateParameters {
         stats_db: &db,
         is_multichain_mode: multichain_mode,
+        multichain_filter: None,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: zetachain_cctx.as_deref(),
@@ -201,6 +202,7 @@ pub async fn dirty_force_update_and_check<C>(
     let parameters = UpdateParameters {
         stats_db: db,
         is_multichain_mode: false,
+        multichain_filter: None,
         indexer_db: blockscout,
         indexer_applied_migrations: IndexerMigrations::latest(),
         second_indexer_db: None,
@@ -301,6 +303,7 @@ async fn ranged_test_chart_inner<C>(
     let mut parameters = UpdateParameters {
         stats_db: &db,
         is_multichain_mode: false,
+        multichain_filter: None,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: None,
@@ -346,6 +349,7 @@ pub async fn simple_test_counter<C>(
         update_time,
         IndexerMigrations::latest(),
         false,
+        None,
         false,
     )
     .await;
@@ -356,6 +360,7 @@ pub async fn simple_test_counter_multichain<C>(
     test_name: &str,
     expected: &str,
     update_time: Option<NaiveDateTime>,
+    multichain_filter: Option<Vec<u64>>,
 ) where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
@@ -365,6 +370,7 @@ pub async fn simple_test_counter_multichain<C>(
         update_time,
         IndexerMigrations::latest(),
         true,
+        multichain_filter,
         false,
     )
     .await;
@@ -385,6 +391,7 @@ where
         update_time,
         IndexerMigrations::latest(),
         false,
+        None,
         true,
     )
     .await;
@@ -411,7 +418,7 @@ pub async fn simple_test_counter_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations, false, false)
+        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations, false, None, false)
             .await;
     }
 }
@@ -422,6 +429,7 @@ async fn simple_test_counter_inner<C>(
     update_time: Option<NaiveDateTime>,
     migrations: IndexerMigrations,
     multichain_mode: bool,
+    multichain_filter: Option<Vec<u64>>,
     connect_zetachain_cctx: bool,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
@@ -440,6 +448,7 @@ where
     let mut parameters = UpdateParameters {
         stats_db: &db,
         is_multichain_mode: multichain_mode,
+        multichain_filter: multichain_filter,
         indexer_db: &indexer,
         indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
@@ -485,6 +494,7 @@ where
     let parameters = UpdateParameters {
         stats_db: &db,
         is_multichain_mode: false,
+        multichain_filter: None,
         indexer_db: &blockscout,
         indexer_applied_migrations: IndexerMigrations::latest(),
         second_indexer_db: None,

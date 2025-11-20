@@ -6,7 +6,7 @@ use blockscout_service_launcher::{
 };
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
-use serde_with::{DisplayFromStr, serde_as};
+use serde_with::{DisplayFromStr, serde_as, StringWithSeparator, formats::CommaSeparator};
 use stats::{
     ChartProperties,
     counters::{
@@ -76,6 +76,9 @@ pub struct Settings {
     /// It takes precedence over other chart-related flags like `enable_all_arbitrum`,
     /// `enable_all_op_stack`, `enable_all_eip_7702`.
     pub multichain_mode: bool,
+    /// Filter by chain ids for multichain mode.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
+    pub multichain_filter: Option<Vec<u64>>,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -140,6 +143,7 @@ impl Default for Settings {
             enable_all_eip_7702: false,
             enable_zetachain_cctx: false,
             multichain_mode: false,
+            multichain_filter: Default::default(),
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),

@@ -64,6 +64,7 @@ mod tests {
             "update_total_multichain_addresses",
             "920",
             None,
+            None,
         )
         .await;
 
@@ -71,6 +72,7 @@ mod tests {
             "update_total_multichain_addresses",
             "825",
             Some(dt("2023-02-02T00:00:00")),
+            None,
         )
         .await;
     }

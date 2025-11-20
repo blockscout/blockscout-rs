@@ -59,6 +59,7 @@ mod tests {
             "update_total_interop_transfers",
             "3",
             None,
+            None,
         )
         .await;
 
@@ -66,6 +67,7 @@ mod tests {
             "update_total_interop_transfers",
             "1",
             Some(dt("2022-11-09T23:59:59")),
+            None,
         )
         .await;
     }

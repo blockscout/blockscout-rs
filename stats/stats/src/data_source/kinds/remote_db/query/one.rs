@@ -56,14 +56,18 @@ pub trait StatementFromUpdateTime: DatabaseChoice {
         update_time: DateTime<Utc>,
         completed_migrations: &IndexerMigrations,
     ) -> Statement;
+
+    fn get_statement_with_context(
+        _cx: &UpdateContext<'_>,
+        update_time: DateTime<Utc>,
+        completed_migrations: &IndexerMigrations,
+    ) -> Statement {
+        Self::get_statement(update_time, completed_migrations)
+    }
 }
 
 /// Just like `PullOne` but timespan is taken from update time
-pub struct PullOneNowValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
-where
-    S: StatementFromUpdateTime,
-    Resolution: Timespan + Ord + Send,
-    Value: Send + TryGetable;
+pub struct PullOneNowValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>);
 
 impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneNowValue<S, Resolution, Value>
 where
@@ -77,7 +81,7 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
-        let statement = S::get_statement(cx.time, &cx.indexer_applied_migrations);
+        let statement = S::get_statement_with_context(cx, cx.time, &cx.indexer_applied_migrations);
         let timespan = Resolution::from_date(cx.time.date_naive());
         let value = find_one_value::<_, WrappedValue<Value>>(S::get_db(cx)?, statement)
             .await?

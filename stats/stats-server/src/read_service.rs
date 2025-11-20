@@ -276,6 +276,7 @@ impl ReadService {
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &self.db,
                 false,
+                None,
                 &self.indexer,
                 migrations,
                 self.second_indexer_db.as_deref(),

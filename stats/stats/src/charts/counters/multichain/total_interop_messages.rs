@@ -58,6 +58,7 @@ mod tests {
             "update_total_interop_messages",
             "6",
             None,
+            None,
         )
         .await;
 
@@ -65,6 +66,7 @@ mod tests {
             "update_total_interop_messages",
             "4",
             Some(dt("2022-11-15T12:00:00")),
+            None,
         )
         .await;
     }
