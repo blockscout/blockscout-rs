@@ -17,7 +17,7 @@ impl StatementFromUpdateTime for TotalMultichainAddressesStatement {
             "#,
             [cx.time.into()],
             "chain_id",
-            &cx.multichain_filter,
+            cx.multichain_filter,
         )
     }
 }

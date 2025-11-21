@@ -42,7 +42,7 @@ impl StatementFromRange for AccountsGrowthMultichainStatement {
             "#,
             [from_timestamp.into(), to_timestamp.into()],
             "c.chain_id",
-            &cx.multichain_filter,
+            cx.multichain_filter,
         )
     }
 }

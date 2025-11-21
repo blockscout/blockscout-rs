@@ -18,7 +18,7 @@ impl StatementFromUpdateTime for TotalMultichainTxnsStatement {
             "#,
             [cx.time.into()],
             "chain_id",
-            &cx.multichain_filter,
+            cx.multichain_filter,
         )
     }
 }
