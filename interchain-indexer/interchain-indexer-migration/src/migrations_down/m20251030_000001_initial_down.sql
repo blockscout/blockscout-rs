@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS pending_messages;
 DROP TABLE IF EXISTS indexer_failures;
 DROP TABLE IF EXISTS indexer_checkpoints;
 DROP TABLE IF EXISTS crosschain_transfers;

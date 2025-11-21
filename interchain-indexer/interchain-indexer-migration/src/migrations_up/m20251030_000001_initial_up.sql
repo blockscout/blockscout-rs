@@ -172,3 +172,16 @@ CREATE TABLE indexer_failures (
   updated_at   TIMESTAMP DEFAULT now()
 );
 
+-- pending_messages: temporary storage for destination events that arrive before source events
+-- This prevents creating crosschain_messages rows with NULL init_timestamp
+CREATE TABLE pending_messages (
+  message_id   BIGINT NOT NULL,
+  bridge_id    INTEGER NOT NULL REFERENCES bridges(id),
+  payload      JSONB NOT NULL,  -- full event data from destination
+  created_at   TIMESTAMP DEFAULT now(),
+  
+  PRIMARY KEY (message_id, bridge_id)
+);
+
+CREATE INDEX idx_pending_stale ON pending_messages(created_at);
+

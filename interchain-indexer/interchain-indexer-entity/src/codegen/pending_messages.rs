@@ -3,18 +3,15 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "indexer_checkpoints")]
+#[sea_orm(table_name = "pending_messages")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub bridge_id: i64,
+    pub message_id: i64,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub chain_id: i64,
-    pub catchup_min_block: i64,
-    pub catchup_max_block: i64,
-    pub finality_cursor: i64,
-    pub realtime_cursor: i64,
+    pub bridge_id: i32,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub payload: Json,
     pub created_at: Option<DateTime>,
-    pub updated_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -27,25 +24,11 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Bridges,
-    #[sea_orm(
-        belongs_to = "super::chains::Entity",
-        from = "Column::ChainId",
-        to = "super::chains::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Chains,
 }
 
 impl Related<super::bridges::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Bridges.def()
-    }
-}
-
-impl Related<super::chains::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Chains.def()
     }
 }
 
