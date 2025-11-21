@@ -1,19 +1,21 @@
-use std::{collections::HashSet, ops::Range};
+use std::ops::Range;
 
-use crate::chart_prelude::*;
+use crate::{chart_prelude::*, utils::sql_with_multichain_filter_opt};
 
 pub struct TxnsGrowthMultichainStatement;
 impl_db_choice!(TxnsGrowthMultichainStatement, UsePrimaryDB);
 
 impl StatementFromRange for TxnsGrowthMultichainStatement {
-    fn get_statement(
+    fn get_statement_with_context(
+        cx: &UpdateContext<'_>,
         range: Option<Range<DateTime<Utc>>>,
-        _: &IndexerMigrations,
-        _: &HashSet<ChartKey>,
     ) -> Statement {
         let from_timestamp = range.as_ref().map(|r| r.start).unwrap_or_else(Utc::now);
         let to_timestamp = range.as_ref().map(|r| r.end).unwrap_or_else(Utc::now);
-        let sql = r#"
+
+        sql_with_multichain_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                 WITH filtered_dates AS (
                     SELECT DISTINCT c.date
                     FROM counters_global_imported c
@@ -28,6 +30,7 @@ impl StatementFromRange for TxnsGrowthMultichainStatement {
                     JOIN counters_global_imported c
                         ON c.date <= d.date
                     AND c.total_transactions_number IS NOT NULL
+                    {multichain_filter}
                     ORDER BY c.chain_id, d.date, c.date DESC
                 )
                 SELECT
@@ -36,12 +39,10 @@ impl StatementFromRange for TxnsGrowthMultichainStatement {
                 FROM latest_per_chain l
                 GROUP BY l.date
                 ORDER BY l.date;
-            "#
-        .to_string();
-        Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            sql,
-            vec![from_timestamp.into(), to_timestamp.into()],
+            "#,
+            [from_timestamp.into(), to_timestamp.into()],
+            "c.chain_id",
+            cx.multichain_filter,
         )
     }
 }
@@ -143,6 +144,20 @@ mod tests {
                 ("2023-02-03", "150"),
                 ("2023-02-04", "210"),
             ],
+            None,
+        )
+        .await;
+
+        simple_test_chart_multichain::<TxnsGrowthMultichain>(
+            "update_txns_growth_multichain",
+            vec![
+                ("2022-12-28", "44"),
+                ("2023-01-01", "51"),
+                ("2023-02-02", "73"),
+                ("2023-02-03", "115"),
+                ("2023-02-04", "155"),
+            ],
+            Some(vec![1, 3]),
         )
         .await;
     }
@@ -153,6 +168,14 @@ mod tests {
         simple_test_chart_multichain::<TxnsGrowthMultichainWeekly>(
             "update_txns_growth_multichain_weekly",
             vec![("2022-12-26", "76"), ("2023-01-30", "210")],
+            None,
+        )
+        .await;
+
+        simple_test_chart_multichain::<TxnsGrowthMultichainWeekly>(
+            "update_txns_growth_multichain_weekly",
+            vec![("2022-12-26", "14"), ("2023-01-30", "46")],
+            Some(vec![1]),
         )
         .await;
     }
@@ -167,6 +190,18 @@ mod tests {
                 ("2023-01-01", "76"),
                 ("2023-02-01", "210"),
             ],
+            None,
+        )
+        .await;
+
+        simple_test_chart_multichain::<TxnsGrowthMultichainMonthly>(
+            "update_txns_growth_multichain_monthly",
+            vec![
+                ("2022-12-01", "22"),
+                ("2023-01-01", "25"),
+                ("2023-02-01", "55"),
+            ],
+            Some(vec![2]),
         )
         .await;
     }
@@ -177,6 +212,14 @@ mod tests {
         simple_test_chart_multichain::<TxnsGrowthMultichainYearly>(
             "update_txns_growth_multichain_yearly",
             vec![("2022-01-01", "66"), ("2023-01-01", "210")],
+            None,
+        )
+        .await;
+
+        simple_test_chart_multichain::<TxnsGrowthMultichainYearly>(
+            "update_txns_growth_multichain_yearly",
+            vec![("2022-01-01", "33"), ("2023-01-01", "109")],
+            Some(vec![3]),
         )
         .await;
     }

@@ -6,7 +6,7 @@ use blockscout_service_launcher::{
 };
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
-use serde_with::{DisplayFromStr, serde_as, StringWithSeparator, formats::CommaSeparator};
+use serde_with::{DisplayFromStr, StringWithSeparator, formats::CommaSeparator, serde_as};
 use stats::{
     ChartProperties,
     counters::{

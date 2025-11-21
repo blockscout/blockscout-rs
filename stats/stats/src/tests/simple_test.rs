@@ -46,6 +46,7 @@ where
         expected,
         IndexerMigrations::latest(),
         false,
+        None,
         false,
     )
     .await;
@@ -59,6 +60,7 @@ where
 pub async fn simple_test_chart_multichain<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
+    multichain_filter: Option<Vec<u64>>,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
@@ -69,6 +71,7 @@ where
         expected,
         IndexerMigrations::latest(),
         true,
+        multichain_filter,
         false,
     )
     .await
@@ -90,7 +93,8 @@ pub async fn simple_test_chart_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false, false).await;
+        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false, None, false)
+            .await;
     }
 }
 
@@ -110,6 +114,7 @@ where
         expected,
         IndexerMigrations::latest(),
         false,
+        None,
         true,
     )
     .await;
@@ -129,6 +134,7 @@ async fn simple_test_chart_inner<C>(
     expected: Vec<(&str, &str)>,
     migrations: IndexerMigrations,
     multichain_mode: bool,
+    multichain_filter: Option<Vec<u64>>,
     connect_zetachain_cctx: bool,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
@@ -148,7 +154,7 @@ where
     let mut parameters = UpdateParameters {
         stats_db: &db,
         is_multichain_mode: multichain_mode,
-        multichain_filter: None,
+        multichain_filter: multichain_filter,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: zetachain_cctx.as_deref(),
@@ -418,8 +424,16 @@ pub async fn simple_test_counter_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations, false, None, false)
-            .await;
+        simple_test_counter_inner::<C>(
+            &test_name,
+            expected,
+            update_time,
+            migrations,
+            false,
+            None,
+            false,
+        )
+        .await;
     }
 }
 

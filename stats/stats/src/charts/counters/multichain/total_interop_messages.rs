@@ -8,7 +8,6 @@ impl_db_choice!(TotalInteropMessagesStatement, UsePrimaryDB);
 
 impl StatementFromUpdateTime for TotalInteropMessagesStatement {
     fn get_statement_with_context(cx: &UpdateContext<'_>) -> sea_orm::Statement {
-
         let mut query = interop_messages::Entity::find()
             .select_only()
             .filter(interop_messages::Column::Timestamp.lte(cx.time));

@@ -62,7 +62,7 @@ mod tests {
         simple_test_counter_multichain::<TotalMultichainTxns>(
             "update_total_multichain_txns",
             "210",
-            None,   
+            None,
             None,
         )
         .await;
@@ -71,14 +71,14 @@ mod tests {
             "update_total_multichain_txns",
             "101",
             Some(dt("2023-02-02T00:00:00")),
-            None
+            None,
         )
         .await;
 
         simple_test_counter_multichain::<TotalMultichainTxns>(
             "update_total_multichain_txns",
             "155",
-            None,   
+            None,
             Some(vec![1, 3]),
         )
         .await;

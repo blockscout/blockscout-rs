@@ -131,8 +131,6 @@ macro_rules! sql_with_range_filter_opt {
 
 pub(crate) use sql_with_range_filter_opt;
 
-// had to make macro because otherwise can't use `statement_with_filter_placeholder`
-// in `format!` :(
 /// Add multichain filter statement, if `multichain_filter` provided and not empty.
 ///
 /// `statement_with_filter_placeholder` must have `multichain_filter` named parameter
@@ -183,6 +181,71 @@ macro_rules! sql_with_multichain_filter_opt {
 }
 
 pub(crate) use sql_with_multichain_filter_opt;
+
+/// Add both range and multichain filter statements (if provided).
+///
+/// `statement_with_filter_placeholder` must have both `filter` and `multichain_filter` named parameters
+/// `filter_by` is a column/property(?) in SQL used to generate string for the range filter
+/// (typically a timestamp column)
+/// `multichain_filter_by` is a column/property(?) in SQL used to generate string for the multichain filter
+/// (typically "chain_id")
+///
+/// all subsequent arguments (after `multichain_filter` will be passed to `format!` macro to the
+/// resulting statement). of course do not pass user-supplied data there.
+macro_rules! sql_with_range_and_multichain_filters {
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        [$($value: expr),* $(,)?],
+        $filter_by:expr,
+        $range:expr,
+        $multichain_filter_by:expr,
+        $multichain_filter:expr, $($args:tt)*
+    ) => {
+        {
+            let mut values = ::std::vec![ $($value),* ];
+            let filter_arg_number_start = values.len()+1;
+            let (range_filter_str, range_filter_values) = $crate::utils::produce_filter_and_values(
+                $range, $filter_by, filter_arg_number_start
+            );
+            values.extend(range_filter_values.into_iter());
+            let multichain_filter_arg_number_start = values.len()+1;
+            let (multichain_filter_str, multichain_filter_values) = $crate::utils::produce_multichain_filter_and_values(
+                $multichain_filter.as_ref(), $multichain_filter_by, multichain_filter_arg_number_start
+            );
+            values.extend(multichain_filter_values.into_iter());
+            let sql = ::std::format!(
+                $statement_with_filter_placeholder,
+                filter=range_filter_str,
+                multichain_filter=multichain_filter_str,
+                $($args)*
+            );
+            ::sea_orm::Statement::from_sql_and_values($db_backend, &sql, values)
+        }
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        [$($value: expr),* $(,)?],
+        $filter_by:expr,
+        $range:expr,
+        $multichain_filter_by:expr,
+        $multichain_filter:expr
+    ) => {
+        {
+            sql_with_range_and_multichain_filters!($db_backend,
+                $statement_with_filter_placeholder,
+                [$($value),*],
+                $filter_by,
+                $range,
+                $multichain_filter_by,
+                $multichain_filter,
+            )
+        }
+    };
+}
+
+pub(crate) use sql_with_range_and_multichain_filters;
 
 macro_rules! singleton_groups {
     ($($chart: ident),+ $(,)?) => {

@@ -59,9 +59,7 @@ pub trait StatementFromUpdateTime: DatabaseChoice {
         panic!("not implemented for this statement")
     }
 
-    fn get_statement_with_context(
-        cx: &UpdateContext<'_>,
-    ) -> Statement {
+    fn get_statement_with_context(cx: &UpdateContext<'_>) -> Statement {
         Self::get_statement(cx.time, &cx.indexer_applied_migrations)
     }
 }
