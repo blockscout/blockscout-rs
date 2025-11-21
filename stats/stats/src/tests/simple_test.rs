@@ -154,7 +154,7 @@ where
     let mut parameters = UpdateParameters {
         stats_db: &db,
         is_multichain_mode: multichain_mode,
-        multichain_filter: multichain_filter,
+        multichain_filter,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: zetachain_cctx.as_deref(),
@@ -462,7 +462,7 @@ where
     let mut parameters = UpdateParameters {
         stats_db: &db,
         is_multichain_mode: multichain_mode,
-        multichain_filter: multichain_filter,
+        multichain_filter,
         indexer_db: &indexer,
         indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),

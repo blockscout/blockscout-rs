@@ -109,11 +109,7 @@ where
     ) -> Result<TimespanValue<NaiveDate, Value>, ChartError> {
         let update_time = cx.time;
         let range_24h = interval_24h(update_time);
-        let query = S::get_statement(
-            Some(inclusive_range_to_exclusive(range_24h)),
-            &cx.indexer_applied_migrations,
-            &cx.enabled_update_charts_recursive,
-        );
+        let query = S::get_statement_with_context(cx, Some(inclusive_range_to_exclusive(range_24h)));
 
         let value = find_one_value_cached(S::get_db(cx)?, &cx.cache, query)
             .await?

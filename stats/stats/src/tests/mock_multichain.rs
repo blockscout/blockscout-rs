@@ -7,7 +7,6 @@ use multichain_aggregator_entity::{
     addresses, block_ranges, chains, counters_global_imported, interop_messages,
     interop_messages_transfers,
 };
-use num_traits::ToPrimitive;
 use sea_orm::{ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 
 pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date: NaiveDate) {

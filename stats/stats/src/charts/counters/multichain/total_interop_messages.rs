@@ -12,15 +12,13 @@ impl StatementFromUpdateTime for TotalInteropMessagesStatement {
             .select_only()
             .filter(interop_messages::Column::Timestamp.lte(cx.time));
 
-        if let Some(filter) = &cx.multichain_filter {
-            if !filter.is_empty() {
-                let chain_ids: Vec<i64> = filter.iter().map(|&id| id as i64).collect();
-                query = query.filter(
-                    Condition::any()
-                        .add(interop_messages::Column::InitChainId.is_in(chain_ids.clone()))
-                        .add(interop_messages::Column::RelayChainId.is_in(chain_ids)),
-                );
-            }
+        if let Some(filter) = &cx.multichain_filter && !filter.is_empty() {
+            let chain_ids: Vec<i64> = filter.iter().map(|&id| id as i64).collect();
+            query = query.filter(
+                Condition::any()
+                    .add(interop_messages::Column::InitChainId.is_in(chain_ids.clone()))
+                    .add(interop_messages::Column::RelayChainId.is_in(chain_ids)),
+            );
         }
 
         query

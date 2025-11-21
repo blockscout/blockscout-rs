@@ -159,6 +159,7 @@ impl EnabledChartSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 pub struct CounterInfo<ChartSettings> {
     pub id: String,
     #[serde(flatten)]
@@ -167,6 +168,7 @@ pub struct CounterInfo<ChartSettings> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 pub struct LineChartInfo<ChartSettings> {
     pub id: String,
     #[serde(flatten)]

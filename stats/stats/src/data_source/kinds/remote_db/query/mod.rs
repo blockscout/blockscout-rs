@@ -78,9 +78,5 @@ fn yesterday_statement<DailyDataStatement: StatementFromRange>(
 ) -> Result<Statement, ChartError> {
     let today = yesterday.saturating_add(TimespanDuration::from_days(1));
     let yesterday_range = day_start(&yesterday)..day_start(&today);
-    Ok(DailyDataStatement::get_statement(
-        Some(yesterday_range),
-        &cx.indexer_applied_migrations,
-        &cx.enabled_update_charts_recursive,
-    ))
+    Ok(DailyDataStatement::get_statement_with_context(cx, Some(yesterday_range)))
 }
