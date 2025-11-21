@@ -53,16 +53,16 @@ where
 
 pub trait StatementFromUpdateTime: DatabaseChoice {
     fn get_statement(
-        update_time: DateTime<Utc>,
-        completed_migrations: &IndexerMigrations,
-    ) -> Statement;
+        _update_time: DateTime<Utc>,
+        _completed_migrations: &IndexerMigrations,
+    ) -> Statement {
+        panic!("not implemented for this statement")
+    }
 
     fn get_statement_with_context(
-        _cx: &UpdateContext<'_>,
-        update_time: DateTime<Utc>,
-        completed_migrations: &IndexerMigrations,
+        cx: &UpdateContext<'_>,
     ) -> Statement {
-        Self::get_statement(update_time, completed_migrations)
+        Self::get_statement(cx.time, &cx.indexer_applied_migrations)
     }
 }
 
@@ -81,7 +81,7 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
-        let statement = S::get_statement_with_context(cx, cx.time, &cx.indexer_applied_migrations);
+        let statement = S::get_statement_with_context(cx);
         let timespan = Resolution::from_date(cx.time.date_naive());
         let value = find_one_value::<_, WrappedValue<Value>>(S::get_db(cx)?, statement)
             .await?

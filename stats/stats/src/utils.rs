@@ -47,6 +47,38 @@ pub(crate) fn produce_filter_and_values(
     }
 }
 
+/// Used inside [`sql_with_multichain_filter_opt`]
+///
+/// `filter_arg_number_start = len(arg)+1 // (length of other args + 1)`
+/// `filter_by` - column/property(?) name in SQL (typically "chain_id")
+///
+/// ### Results
+/// Vec should be appended to the args.
+/// String should be inserted in places for filter.
+pub(crate) fn produce_multichain_filter_and_values(
+    multichain_filter: Option<&Vec<u64>>,
+    filter_by: &str,
+    filter_arg_number_start: usize,
+) -> (String, Vec<Value>) {
+    if let Some(filter) = multichain_filter {
+        if !filter.is_empty() {
+            let placeholders: Vec<String> = (0..filter.len())
+                .map(|i| format!("${}", filter_arg_number_start + i))
+                .collect();
+            let filter_str = format!(" AND {filter_by} IN ({})", placeholders.join(", "));
+            let filter_values: Vec<Value> = filter
+                .iter()
+                .map(|chain_id| Value::BigInt(Some(*chain_id as i64)))
+                .collect();
+            (filter_str, filter_values)
+        } else {
+            ("".to_owned(), vec![])
+        }
+    } else {
+        ("".to_owned(), vec![])
+    }
+}
+
 // had to make macro because otherwise can't use `statement_with_filter_placeholder`
 // in `format!` :(
 /// Add filter statement, if `range` provided.
@@ -98,6 +130,59 @@ macro_rules! sql_with_range_filter_opt {
 }
 
 pub(crate) use sql_with_range_filter_opt;
+
+// had to make macro because otherwise can't use `statement_with_filter_placeholder`
+// in `format!` :(
+/// Add multichain filter statement, if `multichain_filter` provided and not empty.
+///
+/// `statement_with_filter_placeholder` must have `multichain_filter` named parameter
+/// `filter_by` is a column/property(?) in SQL used to generate string for `multichain_filter`
+/// (typically "chain_id")
+///
+/// all subsequent arguments (after `multichain_filter` will be passed to `format!` macro to the
+/// resulting statement). of course do not pass user-supplied data there.
+macro_rules! sql_with_multichain_filter_opt {
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        [$($value: expr),* $(,)?],
+        $filter_by:expr,
+        $multichain_filter:expr, $($args:tt)*
+    ) => {
+        {
+            let mut values = ::std::vec![ $($value),* ];
+            let filter_arg_number_start = values.len()+1;
+            let (filter_str, filter_values) = $crate::utils::produce_multichain_filter_and_values(
+                $multichain_filter.as_ref(), $filter_by, filter_arg_number_start
+            );
+            values.extend(filter_values.into_iter());
+            let sql = ::std::format!(
+                $statement_with_filter_placeholder,
+                multichain_filter=filter_str,
+                $($args)*
+            );
+            ::sea_orm::Statement::from_sql_and_values($db_backend, &sql, values)
+        }
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        [$($value: expr),* $(,)?],
+        $filter_by:expr,
+        $multichain_filter:expr
+    ) => {
+        {
+            sql_with_multichain_filter_opt!($db_backend,
+                $statement_with_filter_placeholder,
+                [$($value),*],
+                $filter_by,
+                $multichain_filter,
+            )
+        }
+    };
+}
+
+pub(crate) use sql_with_multichain_filter_opt;
 
 macro_rules! singleton_groups {
     ($($chart: ident),+ $(,)?) => {
