@@ -13,10 +13,12 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub bridge_id: i32,
     pub status: MessageStatus,
-    pub init_timestamp: Option<DateTime>,
+    pub init_timestamp: DateTime,
     pub last_update_timestamp: Option<DateTime>,
     pub src_chain_id: i64,
     pub dst_chain_id: Option<i64>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub native_id: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub src_tx_hash: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]

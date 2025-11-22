@@ -352,11 +352,12 @@ async fn handle_send_cross_chain_message(
 
     let message = crosschain_messages::ActiveModel {
         id: ActiveValue::Set(id),
+        native_id: ActiveValue::Set(Some(event.messageID.as_slice().to_vec())),
         bridge_id: ActiveValue::Set(bridge_id),
         status: ActiveValue::Set(MessageStatus::Initiated),
         src_chain_id: ActiveValue::Set(chain_id),
         dst_chain_id: ActiveValue::Set(dst_chain_id),
-        init_timestamp: ActiveValue::Set(Some(now)),
+        init_timestamp: ActiveValue::Set(now),
         last_update_timestamp: ActiveValue::Set(Some(now)),
         src_tx_hash: ActiveValue::Set(Some(tx_hash.as_slice().to_vec())),
         sender_address: ActiveValue::Set(Some(sender_bytes)),
@@ -428,6 +429,7 @@ async fn handle_receive_cross_chain_message(
     };
 
     let update_columns = vec![
+        crosschain_messages::Column::NativeId,
         crosschain_messages::Column::SrcChainId,
         crosschain_messages::Column::DstChainId,
         crosschain_messages::Column::DstTxHash,

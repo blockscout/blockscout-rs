@@ -2,7 +2,7 @@ DROP TABLE IF EXISTS indexer_failures;
 DROP TABLE IF EXISTS indexer_checkpoints;
 DROP TABLE IF EXISTS crosschain_transfers;
 DROP TABLE IF EXISTS crosschain_messages;
-DROP TABLE IF EXISTS bridge_txs;
+DROP TABLE IF EXISTS indexer_staging;
 DROP TABLE IF EXISTS tokens;
 DROP TABLE IF EXISTS bridge_contracts;
 DROP TABLE IF EXISTS bridges;

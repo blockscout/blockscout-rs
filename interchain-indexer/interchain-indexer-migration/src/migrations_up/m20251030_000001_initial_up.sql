@@ -59,22 +59,25 @@ CREATE TABLE tokens (
   UNIQUE(chain_id, address)
 );
 
--- bridge_txs: bridge txs (containing raw logs). Indexer workers will put data here
---             and may remove rows which are not needed anymore
--- [!] This table has a padding-optimized field order.
-CREATE TABLE bridge_txs (
+-- indexer_staging: Indexer Persistent Storage.
+-- It's a internal table which can be used by any indexer to store
+-- arbitrary data which should be restored in case of service failure
+-- or regular rebooting. So it's some kind of in-memory cache persistent snapshot.
+-- The content and structure of the item is totally on indexer side.
+-- This table just provides a typical fields which could be useful in typycal cases
+-- NOTE: Do not use this table intensively since it can affect the database performance
+CREATE TABLE indexer_staging (
   created_at       TIMESTAMP DEFAULT now(),
   updated_at       TIMESTAMP DEFAULT now(),
   
-  id               BIGSERIAL PRIMARY KEY,
-  message_id       BIGINT NOT NULL,   -- each bridge transaction should be linked with another one via this field
-                                      -- should be extracted by indexer from log or calldata before putting record here
+  id               BIGINT PRIMARY KEY,
   bridge_id        INTEGER NOT NULL REFERENCES bridges(id),
-  contract_id      BIGINT REFERENCES bridge_contracts(id),
-  block_number     BIGINT NOT NULL,
-  timestamp        TIMESTAMP NOT NULL,
-  tx_hash          BYTEA NOT NULL,
-  data             BYTEA   -- we will store needed log data here regarding to the concrete indexer logic
+  --message_id       BIGINT NOT NULL,   -- each bridge transaction should be linked with another one via this field
+                                      -- should be extracted by indexer from log or calldata before putting record here
+  contract_id      BIGINT REFERENCES bridge_contracts(id), -- optional, pointing to contract where associated item was collected from
+  block_number     BIGINT, -- optional, which block contains associated data
+  tx_hash          BYTEA,
+  data             BYTEA   -- the item
 );
 
 CREATE TYPE message_status AS ENUM ('initiated', 'completed', 'failed');
@@ -88,10 +91,17 @@ CREATE TABLE crosschain_messages (
   id                    BIGINT NOT NULL,
   bridge_id             INTEGER NOT NULL REFERENCES bridges(id),
   status                message_status NOT NULL DEFAULT 'initiated', -- initiated, completed, failed
-  init_timestamp        TIMESTAMP DEFAULT now(), -- in real world (blockchain time), not when indexed
-  last_update_timestamp TIMESTAMP DEFAULT now(), -- in real world (blockchain time), not when indexed
+  init_timestamp        TIMESTAMP NOT NULL DEFAULT now(), -- when the message appeared in the real world
+                                                          -- (blockchain time), not when indexed.
+                                                          -- This is a sorting criteria so it SHOULD NOT be changed!
+                                                          -- If it's unable to index message originating event,
+                                                          -- the indexer should set the fake timestamp here
+                                                          -- (e.g. when it finalized on the destination blockchain)
+  last_update_timestamp TIMESTAMP DEFAULT now(), -- when the message got his final state in the real world
+                                                 -- (blockchain time), not when indexed.
   src_chain_id          BIGINT NOT NULL REFERENCES chains(id),
   dst_chain_id          BIGINT NULL REFERENCES chains(id),
+  native_id             BYTEA,  -- optional native ID
   src_tx_hash           BYTEA,  -- can be NULL, because we may not index source chain
   dst_tx_hash           BYTEA,  -- can be NULL, because we may not index destination chain
   sender_address        BYTEA, -- source address (on src chain)

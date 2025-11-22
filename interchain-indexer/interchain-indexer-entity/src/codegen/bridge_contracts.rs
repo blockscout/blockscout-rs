@@ -20,8 +20,6 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::bridge_txs::Entity")]
-    BridgeTxs,
     #[sea_orm(
         belongs_to = "super::bridges::Entity",
         from = "Column::BridgeId",
@@ -38,12 +36,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Chains,
-}
-
-impl Related<super::bridge_txs::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::BridgeTxs.def()
-    }
+    #[sea_orm(has_many = "super::indexer_staging::Entity")]
+    IndexerStaging,
 }
 
 impl Related<super::bridges::Entity> for Entity {
@@ -55,6 +49,12 @@ impl Related<super::bridges::Entity> for Entity {
 impl Related<super::chains::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Chains.def()
+    }
+}
+
+impl Related<super::indexer_staging::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::IndexerStaging.def()
     }
 }
 

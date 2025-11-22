@@ -24,25 +24,19 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::bridge_contracts::Entity")]
     BridgeContracts,
-    #[sea_orm(has_many = "super::bridge_txs::Entity")]
-    BridgeTxs,
     #[sea_orm(has_many = "super::crosschain_messages::Entity")]
     CrosschainMessages,
     #[sea_orm(has_many = "super::indexer_checkpoints::Entity")]
     IndexerCheckpoints,
     #[sea_orm(has_many = "super::indexer_failures::Entity")]
     IndexerFailures,
+    #[sea_orm(has_many = "super::indexer_staging::Entity")]
+    IndexerStaging,
 }
 
 impl Related<super::bridge_contracts::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::BridgeContracts.def()
-    }
-}
-
-impl Related<super::bridge_txs::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::BridgeTxs.def()
     }
 }
 
@@ -61,6 +55,12 @@ impl Related<super::indexer_checkpoints::Entity> for Entity {
 impl Related<super::indexer_failures::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::IndexerFailures.def()
+    }
+}
+
+impl Related<super::indexer_staging::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::IndexerStaging.def()
     }
 }
 

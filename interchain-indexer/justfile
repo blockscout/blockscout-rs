@@ -7,6 +7,7 @@ db-user := env_var_or_default('DB_USER', "postgres")
 db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "interchain_indexer")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+export RUST_LOG := env_var_or_default('RUST_LOG', "info")
 
 docker-name := env_var_or_default('DOCKER_NAME', "interchain-indexer-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
@@ -34,6 +35,7 @@ stop-test-postgres:
 
 run:
     INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
+    INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
     INTERCHAIN_INDEXER__CHAINS_CONFIG=config/avalanche/chains.json \
     INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/avalanche/bridges.json \
     cargo run --bin interchain-indexer-server

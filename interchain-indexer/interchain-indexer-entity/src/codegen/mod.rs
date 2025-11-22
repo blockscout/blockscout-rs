@@ -3,12 +3,12 @@
 pub mod prelude;
 
 pub mod bridge_contracts;
-pub mod bridge_txs;
 pub mod bridges;
 pub mod chains;
 pub mod crosschain_messages;
 pub mod crosschain_transfers;
 pub mod indexer_checkpoints;
 pub mod indexer_failures;
+pub mod indexer_staging;
 pub mod sea_orm_active_enums;
 pub mod tokens;
