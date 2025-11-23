@@ -1194,6 +1194,15 @@ impl ZetachainCctxDatabase {
                     )
                 })?
                 .into();
+
+            let observed_external_height:i64 = outbound_row
+                .try_get_by_index(12)
+                .map_err(|e| anyhow::anyhow!("outbound_row observed_external_height: {}", e))?;
+
+            let gas_used:i64 = outbound_row
+                .try_get_by_index(13)
+                .map_err(|e| anyhow::anyhow!("outbound_row gas_used: {}", e))?;
+
             outbounds.push(OutboundParamsProto {
                 receiver: outbound_row
                     .try_get_by_index::<String>(2)
@@ -1227,14 +1236,8 @@ impl ZetachainCctxDatabase {
                 ballot_index: outbound_row
                     .try_get_by_index::<String>(11)
                     .map_err(|e| anyhow::anyhow!("outbound_row ballot_index: {}", e))?,
-                observed_external_height: outbound_row
-                    .try_get_by_index::<i64>(12)
-                    .map_err(|e| anyhow::anyhow!("outbound_row observed_external_height: {}", e))?
-                    as u64,
-                gas_used: outbound_row
-                    .try_get_by_index::<i64>(13)
-                    .map_err(|e| anyhow::anyhow!("outbound_row gas_used: {}", e))?
-                    as u64,
+                observed_external_height: observed_external_height as u64,
+                gas_used: gas_used as u64,
                 effective_gas_price: outbound_row
                     .try_get_by_index::<String>(14)
                     .map_err(|e| anyhow::anyhow!("outbound_row effective_gas_price: {}", e))?,

@@ -5,7 +5,7 @@ use blockscout_service_launcher::{
 };
 use serde::{Deserialize, Serialize};
 use zetachain_cctx_logic::{client::RpcSettings, settings::IndexerSettings};
-
+use std::path::PathBuf;
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
@@ -28,6 +28,8 @@ pub struct Settings {
     pub restart_on_error: bool,
     #[serde(default = "default_restart_interval")]
     pub restart_interval: u64,
+    #[serde(default = "default_swagger_path")]
+    pub swagger_path: PathBuf,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
@@ -61,6 +63,10 @@ fn default_restart_interval() -> u64 {
     10000
 }
 
+fn default_swagger_path() -> PathBuf {
+    blockscout_endpoint_swagger::default_swagger_path_from_service_name("zetachain_cctx")
+}
+
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "ZETACHAIN_CCTX";
 }
@@ -83,6 +89,7 @@ impl Settings {
             websocket: Default::default(),
             restart_on_error: default_restart_on_error(),
             restart_interval: default_restart_interval(),
+            swagger_path: default_swagger_path(),
         }
     }
 }

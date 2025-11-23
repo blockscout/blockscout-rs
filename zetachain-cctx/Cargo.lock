@@ -60,6 +60,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-files"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c0d87f10d70e2948ad40e8edea79c8e77c6c66e0250a4c1f09b690465199576"
+dependencies = [
+ "actix-http",
+ "actix-service",
+ "actix-utils",
+ "actix-web",
+ "bitflags 2.9.1",
+ "bytes",
+ "derive_more",
+ "futures-core",
+ "http-range",
+ "log",
+ "mime",
+ "mime_guess",
+ "percent-encoding",
+ "pin-project-lite",
+ "v_htmlescape",
+]
+
+[[package]]
 name = "actix-http"
 version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -273,24 +296,6 @@ dependencies = [
  "time",
  "tracing",
  "url",
-]
-
-[[package]]
-name = "actix-web-actors"
-version = "4.3.1+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f98c5300b38fd004fe7d2a964f9a90813fdbe8a81fed500587e78b1b71c6f980"
-dependencies = [
- "actix",
- "actix-codec",
- "actix-http",
- "actix-web",
- "bytes",
- "bytestring",
- "futures-core",
- "pin-project-lite",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -862,6 +867,15 @@ dependencies = [
  "serde_json",
  "serde_with",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "blockscout-endpoint-swagger"
+version = "0.1.1"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=4a755c5#4a755c5ed2b7d1915f2bc8aa5bd14fdf953958e6"
+dependencies = [
+ "actix-files",
+ "actix-web",
 ]
 
 [[package]]
@@ -2028,6 +2042,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-range"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21dec9db110f5f872ed9699c3ecf50cf16f423502706ba5c72462e28d3157573"
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2559,6 +2579,16 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "mime_guess"
+version = "2.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
+dependencies = [
+ "mime",
+ "unicase",
+]
 
 [[package]]
 name = "minimal-lexical"
@@ -5115,6 +5145,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "unicase"
+version = "2.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75b844d17643ee918803943289730bec8aac480150456169e647ed0b576ba539"
+
+[[package]]
 name = "unicode-bidi"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5211,6 +5247,12 @@ dependencies = [
  "serde",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "v_htmlescape"
+version = "0.15.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e8257fbc510f0a46eb602c10215901938b5c2a7d5e70fc11483b1d3c9b5b18c"
 
 [[package]]
 name = "valuable"
@@ -5965,9 +6007,9 @@ dependencies = [
  "actix",
  "actix-phoenix-channel",
  "actix-web",
- "actix-web-actors",
  "anyhow",
  "async-trait",
+ "blockscout-endpoint-swagger",
  "blockscout-service-launcher",
  "chrono",
  "config 0.15.13",

@@ -12,6 +12,7 @@ fn main() {
             "ZETACHAIN_CCTX__TRACING",
             "ZETACHAIN_CCTX__JAEGER",
             "ZETACHAIN_CCTX__METRICS",
+            "ZETACHAIN_CCTX__SWAGGER_PATH",
         ]),
         None,
     );

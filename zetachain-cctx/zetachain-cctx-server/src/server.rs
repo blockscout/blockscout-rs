@@ -20,8 +20,10 @@ use sea_orm::DatabaseConnection;
 use zetachain_cctx_logic::{client::Client, database::ZetachainCctxDatabase, indexer::Indexer};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::stats_server::StatsServer;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tokio::time::Duration;
+
+use blockscout_endpoint_swagger::route_swagger;
 
 const SERVICE_NAME: &str = "zetachain_cctx";
 
@@ -32,6 +34,7 @@ struct Router {
     stats: Arc<StatsService>,
     token_info: Arc<TokenInfoService>,
     channel: Arc<ChannelCentral<Channel>>,
+    swagger_path: PathBuf,
 }
 
 impl Router {
@@ -52,6 +55,13 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_token_info(config, self.token_info.clone()));
         service_config
             .configure(|config| configure_channel_websocket_route(config, self.channel.clone()));
+        service_config.configure(|config| {
+            route_swagger(
+                config,
+                self.swagger_path.clone(),
+                "/api/v1/docs/swagger.yaml",
+            )
+        });
     }
 }
 
@@ -103,6 +113,7 @@ pub async fn run(
         stats,
         token_info,
         channel,
+        swagger_path: settings.swagger_path,
     };
 
     let grpc_router = router.grpc_router();
