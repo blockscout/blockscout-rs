@@ -9,4 +9,6 @@ members = [
 ]
 
 [workspace.dependencies]
-blockscout-service-launcher = "0.16.2"
+alloy = "1.1"
+blockscout-service-launcher = "0.20.0"
+tonic = "0.12"

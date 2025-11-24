@@ -13,13 +13,13 @@ user-ops-indexer-proto = { path = "../user-ops-indexer-proto" }
 actix-web = "4.2"
 anyhow = "1.0"
 async-trait = "0.1"
-blockscout-service-launcher = { workspace = true, features = ["database-1_0"] }
+blockscout-service-launcher = { workspace = true, features = ["database-1"] }
 sea-orm = "1.0.1"
 serde = "1.0"
 tokio = { version = "1.23", features = ["rt-multi-thread", "macros"] }
-tonic = "0.8"
+tonic = { workspace = true }
 tracing = "0.1"
-alloy = { version = "0.13.0", features = ["provider-ws", "provider-http"] }
+alloy = { workspace = true, features = ["provider-ws", "provider-http"] }
 blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }
 
 [dev-dependencies]
