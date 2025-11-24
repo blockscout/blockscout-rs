@@ -17,19 +17,20 @@ bens-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "741fc
 
 # web
 actix-phoenix-channel = "0.1.0"
-actix-prost = { version = "0.2.0" }
-actix-prost-build = { version = "0.2.0" }
-actix-prost-macros = { version = "0.2.0" }
+actix-prost = { git = "https://github.com/blockscout/actix-prost", branch = "lok52/bump-tonic"}
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", branch = "lok52/bump-tonic"}
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", branch = "lok52/bump-tonic"}
 actix-web = "4.2"
-blockscout-service-launcher = { version = "0.20.0", features = ["database-1"] }
-prost = "0.13"
-prost-build = "0.13"
-prost-wkt = "0.6.0"
-prost-wkt-types = "0.6.0"
-prost-wkt-build = "0.6.0"
+blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", branch = "lok52/launcher-bump-versions", features = ["database-1"] }
+prost = "0.14"
+prost-build = "0.14"
+prost-wkt = "0.7.0"
+prost-wkt-types = "0.7.0"
+prost-wkt-build = "0.7.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-tonic = "0.12"
-tonic-build = "0.12"
+tonic = "0.14"
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
 
 # db
 sea-orm = { version = "1.1.14", features = [
