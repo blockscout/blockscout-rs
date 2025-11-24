@@ -10,6 +10,10 @@ pub enum Error {
     CompilationFailed(String),
     #[error("{0}")]
     InvalidContract(String),
+    #[error("Your code is valid and verifies this contract (partial match). However, this contract is already partially verified and can only be reverified with a full (exact) match [{0}].")]
+    AlreadyFullyVerifiedContract(String),
+    #[error("Your code is valid and verifies this contract (partial match). However, this contract is already partially verified with identical functionality [{0}].")]
+    AlreadyPartiallyVerifiedContract(String),
     #[error("{0}")]
     Internal(String),
     #[error("{0}")]
@@ -24,6 +28,15 @@ impl Error {
     pub fn invalid_contract(message: impl Into<String>) -> Self {
         Self::InvalidContract(message.into())
     }
+
+    pub fn already_fully_verified_contract(url: &url::Url) -> Self {
+        Self::AlreadyFullyVerifiedContract(url.to_string())
+    }
+
+    pub fn already_partially_verified_contract(url: &url::Url) -> Self {
+        Self::AlreadyPartiallyVerifiedContract(url.to_string())
+    }
+
     pub fn internal(message: impl Into<String>) -> Self {
         Self::Internal(message.into())
     }
