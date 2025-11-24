@@ -1,29 +1,39 @@
+use crate::chart_prelude::*;
 use multichain_aggregator_entity::interop_messages;
 use sea_orm::Condition;
-
-use crate::chart_prelude::*;
 
 pub struct TotalInteropMessagesStatement;
 impl_db_choice!(TotalInteropMessagesStatement, UsePrimaryDB);
 
+/// Apply multichain filter to a query on the `interop_messages` table.
+pub fn apply_multichain_filter_to_interop_messages_query<Q>(
+    query: Q,
+    multichain_filter: Option<&Vec<u64>>,
+) -> Q
+where
+    Q: QueryFilter,
+{
+    if let Some(filter) = multichain_filter
+        && !filter.is_empty()
+    {
+        let chain_ids: Vec<i64> = filter.iter().map(|&id| id as i64).collect();
+        query.filter(
+            Condition::any()
+                .add(interop_messages::Column::InitChainId.is_in(chain_ids.clone()))
+                .add(interop_messages::Column::RelayChainId.is_in(chain_ids)),
+        )
+    } else {
+        query
+    }
+}
+
 impl StatementFromUpdateTime for TotalInteropMessagesStatement {
     fn get_statement_with_context(cx: &UpdateContext<'_>) -> sea_orm::Statement {
-        let mut query = interop_messages::Entity::find()
+        let query = interop_messages::Entity::find()
             .select_only()
             .filter(interop_messages::Column::Timestamp.lte(cx.time));
 
-        if let Some(filter) = &cx.multichain_filter
-            && !filter.is_empty()
-        {
-            let chain_ids: Vec<i64> = filter.iter().map(|&id| id as i64).collect();
-            query = query.filter(
-                Condition::any()
-                    .add(interop_messages::Column::InitChainId.is_in(chain_ids.clone()))
-                    .add(interop_messages::Column::RelayChainId.is_in(chain_ids)),
-            );
-        }
-
-        query
+        apply_multichain_filter_to_interop_messages_query(query, cx.multichain_filter.as_ref())
             .expr_as(Func::count(Asterisk.into_column_ref()), "value")
             .build(DbBackend::Postgres)
     }

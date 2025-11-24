@@ -57,6 +57,19 @@ jobs:
         with:
           swap-size-gb: 14
 
+      - name: Show disk usage
+        run: df -h
+
+      - name: Top directories
+        run: du -h -d1 /home/runner | sort -hr | head -n 20
+
+      - name: Clean cargo artifacts
+        run: |
+          rm -rf target/debug/deps
+          rm -rf ~/.cargo/registry/index
+          rm -rf ~/.cargo/registry/cache
+          rm -rf ~/.cargo/git
+
       - name: Build
         id: build
         if: steps.swapfile.outcome == 'success'
@@ -78,6 +91,7 @@ jobs:
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: steps.build.outcome == 'success'
+
 
       - name: DB tests
         run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored

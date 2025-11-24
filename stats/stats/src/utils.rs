@@ -60,20 +60,18 @@ pub(crate) fn produce_multichain_filter_and_values(
     filter_by: &str,
     filter_arg_number_start: usize,
 ) -> (String, Vec<Value>) {
-    if let Some(filter) = multichain_filter {
-        if !filter.is_empty() {
-            let placeholders: Vec<String> = (0..filter.len())
-                .map(|i| format!("${}", filter_arg_number_start + i))
-                .collect();
-            let filter_str = format!(" AND {filter_by} IN ({})", placeholders.join(", "));
-            let filter_values: Vec<Value> = filter
-                .iter()
-                .map(|chain_id| Value::BigInt(Some(*chain_id as i64)))
-                .collect();
-            (filter_str, filter_values)
-        } else {
-            ("".to_owned(), vec![])
-        }
+    if let Some(filter) = multichain_filter
+        && !filter.is_empty()
+    {
+        let placeholders: Vec<String> = (0..filter.len())
+            .map(|i| format!("${}", filter_arg_number_start + i))
+            .collect();
+        let filter_str = format!(" AND {filter_by} IN ({})", placeholders.join(", "));
+        let filter_values: Vec<Value> = filter
+            .iter()
+            .map(|chain_id| Value::BigInt(Some(*chain_id as i64)))
+            .collect();
+        (filter_str, filter_values)
     } else {
         ("".to_owned(), vec![])
     }

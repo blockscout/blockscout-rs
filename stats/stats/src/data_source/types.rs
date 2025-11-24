@@ -38,10 +38,10 @@ pub struct UpdateParameters<'a> {
 
 impl<'a> UpdateParameters<'a> {
     /// Parameter builder for just querying data (if no updates are expected)
+    /// Query parameters are just a subset of the update parameters,
+    /// which is why there are a few fields that are not applicable to query parameters.
     pub fn query_parameters(
         db: &'a DatabaseConnection,
-        is_multichain_mode: bool,
-        multichain_filter: Option<Vec<u64>>,
         indexer: &'a DatabaseConnection,
         indexer_applied_migrations: IndexerMigrations,
         second_indexer: Option<&'a DatabaseConnection>,
@@ -49,8 +49,8 @@ impl<'a> UpdateParameters<'a> {
     ) -> Self {
         Self {
             stats_db: db,
-            is_multichain_mode,
-            multichain_filter,
+            is_multichain_mode: false, // mode does not matter for query parameters
+            multichain_filter: None,   // the filter works only when updating the DB
             indexer_db: indexer,
             indexer_applied_migrations,
             second_indexer_db: second_indexer,
@@ -96,8 +96,6 @@ impl<'a> UpdateParameters<'a> {
     ) -> Self {
         UpdateParameters::query_parameters(
             db,
-            false,
-            None,
             indexer,
             IndexerMigrations::latest(),
             None,

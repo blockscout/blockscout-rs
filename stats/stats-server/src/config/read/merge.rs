@@ -6,7 +6,7 @@ use itertools::{Either, Itertools};
 use crate::config::{
     env::{self, charts::ChartSettingsOverwrite, layout::LineChartCategoryOrdered},
     json,
-    types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
+    types::{AllChartSettings, LineChartCategory},
 };
 use std::collections::{BTreeMap, btree_map::Entry};
 
@@ -100,8 +100,6 @@ macro_rules! impl_get_key {
     };
 }
 
-impl_get_key!(CounterInfo<C>);
-impl_get_key!(LineChartInfo<C>);
 impl_get_key!(LineChartCategory);
 
 /// Returns `target` with updated order of elements.

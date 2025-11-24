@@ -1,30 +1,21 @@
 use multichain_aggregator_entity::{interop_messages, interop_messages_transfers};
-use sea_orm::Condition;
 
-use crate::chart_prelude::*;
+use crate::{
+    chart_prelude::*,
+    counters::multichain::total_interop_messages::apply_multichain_filter_to_interop_messages_query,
+};
 
 pub struct TotalInteropTransfersStatement;
 impl_db_choice!(TotalInteropTransfersStatement, UsePrimaryDB);
 
 impl StatementFromUpdateTime for TotalInteropTransfersStatement {
     fn get_statement_with_context(cx: &UpdateContext<'_>) -> sea_orm::Statement {
-        let mut query = interop_messages_transfers::Entity::find()
+        let query = interop_messages_transfers::Entity::find()
             .select_only()
             .inner_join(interop_messages::Entity)
             .filter(interop_messages::Column::Timestamp.lte(cx.time));
 
-        if let Some(filter) = &cx.multichain_filter
-            && !filter.is_empty()
-        {
-            let chain_ids: Vec<i64> = filter.iter().map(|&id| id as i64).collect();
-            query = query.filter(
-                Condition::any()
-                    .add(interop_messages::Column::InitChainId.is_in(chain_ids.clone()))
-                    .add(interop_messages::Column::RelayChainId.is_in(chain_ids)),
-            );
-        }
-
-        query
+        apply_multichain_filter_to_interop_messages_query(query, cx.multichain_filter.as_ref())
             .expr_as(Func::count(Asterisk.into_column_ref()), "value")
             .build(DbBackend::Postgres)
     }
