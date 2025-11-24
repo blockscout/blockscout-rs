@@ -16,6 +16,7 @@ da-indexer-logic = { workspace = true }
 da-indexer-migration = { workspace = true }
 da-indexer-proto = { workspace = true }
 hex = { workspace = true }
+reqwest = { workspace = true }
 sea-orm = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }

@@ -4,6 +4,20 @@ use blockscout_display_bytes::ToHex;
 use reqwest::Url;
 use reqwest_middleware::{reqwest::StatusCode, ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("blob not found")]
+    NotFound,
+    #[error("proxy returned error: status_code={status_code}, error={error}")]
+    ProxyError {
+        status_code: StatusCode,
+        error: String,
+    },
+    #[error("{0:#?}")]
+    Internal(#[from] anyhow::Error),
+}
 
 #[derive(Clone)]
 pub struct Client {
@@ -26,11 +40,7 @@ impl Client {
         Client { inner_client }
     }
 
-    pub async fn request_blob(
-        &self,
-        base_url: Url,
-        commitment: &[u8],
-    ) -> Result<Option<Vec<u8>>, anyhow::Error> {
+    pub async fn request_blob(&self, base_url: Url, commitment: &[u8]) -> Result<Vec<u8>, Error> {
         let mut url = base_url;
         url.set_path(&format!("/get/{}", commitment.to_hex()));
         url.set_query(Some("commitment_mode=standard"));
@@ -42,16 +52,28 @@ impl Client {
             .await
             .context("failed to request blob from proxy")?;
 
-        let status_code = response.status();
-        match response.error_for_status() {
-            Err(_error) if status_code == StatusCode::NOT_FOUND => Ok(None),
-            Err(error) => Err(error).context("proxy returned error status code"),
-            Ok(response) => {
+        match response.status() {
+            StatusCode::OK => {
                 let data = response
                     .bytes()
                     .await
                     .context("failed to read blob body from proxy")?;
-                Ok(Some(data.to_vec()))
+                Ok(data.to_vec())
+            }
+            StatusCode::NOT_FOUND => Err(Error::NotFound),
+            status_code => {
+                let error = response
+                    .text()
+                    .await
+                    .context("failed to read body of error response")?;
+
+                // For some reason proxy returns 500 with specific body text when the requested blob is not found.
+                // Here we process such responses as we would like to return 404 for such blobs.
+                if status_code.is_server_error() && error.contains("all retrievers failed") {
+                    return Err(Error::NotFound);
+                }
+
+                Err(Error::ProxyError { status_code, error })
             }
         }
     }

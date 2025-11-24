@@ -16,6 +16,7 @@ use da_indexer_logic::{
 use da_indexer_proto::blockscout::da_indexer::v1::{
     EigenDaBlob, EigenDaV2Blob, GetEigenDaBlobRequest, GetEigenDaV2Blob,
 };
+use reqwest::StatusCode;
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 
@@ -112,23 +113,38 @@ impl EigenDaV2 for EigenDaService {
         }
 
         let proxy_base_url = parse_required_url("proxy_base_url", inner.proxy_base_url)?;
-        let maybe_proxy_blob = self
+        let proxy_blob_result = self
             .v2_proxy_client
             .request_blob(proxy_base_url, &commitment)
-            .await
-            .map_err(|err| {
-                tracing::error!(error = ?err, "failed to retrieve blob via the proxy");
-                Status::internal("failed to query blob")
-            })?;
+            .await;
+        // .map_err(|err| {
+        //     tracing::error!(error = ?err, "failed to retrieve blob via the proxy");
+        //     Status::internal(format!("failed to query blob; {err:?}"))
+        // })?;
 
-        match maybe_proxy_blob {
-            None => Err(Status::not_found("blob not found")),
-            Some(proxy_blob) => {
+        match proxy_blob_result {
+            Err(eigenda_proxy_client::Error::NotFound) => Err(Status::not_found("blob not found")),
+            Err(eigenda_proxy_client::Error::ProxyError { status_code, error }) => {
+                tracing::error!(
+                    status_code = status_code.to_string(),
+                    error = error,
+                    "failed to retrieve blob via the proxy - proxy returned error code"
+                );
+                Err(status_from_http_error_status_code(status_code, error))
+            }
+            Err(eigenda_proxy_client::Error::Internal(error)) => {
+                tracing::error!(
+                    error =? error,
+                    "failed to retrieve blob via proxy - internal error"
+                );
+                Err(Status::internal(error.to_string()))
+            }
+            Ok(blob) => {
                 blobs_v2::insert_commitment_with_data(
                     db,
                     self.s3_storage.as_ref(),
                     &commitment,
-                    proxy_blob.clone(),
+                    blob.clone(),
                 )
                 .await
                 .map_err(|err| {
@@ -137,7 +153,7 @@ impl EigenDaV2 for EigenDaService {
                 })?;
 
                 Ok(Response::new(EigenDaV2Blob {
-                    data: proxy_blob.to_hex(),
+                    data: blob.to_hex(),
                 }))
             }
         }
@@ -148,9 +164,28 @@ fn parse_required_url(
     field: &'static str,
     maybe_string: Option<String>,
 ) -> Result<url::Url, Status> {
-    match maybe_string {
+    let url = match maybe_string {
         None => Err(Status::invalid_argument(format!("{field} is missing"))),
         Some(string) => url::Url::parse(&string)
             .map_err(|err| Status::invalid_argument(format!("{field} is invalid url: {err}"))),
+    }?;
+
+    if !["http", "https"].contains(&url.scheme()) {
+        return Err(Status::invalid_argument(format!(
+            "{field} is invalid url: schema must be specified to be one of ['http', 'https']"
+        )));
+    }
+
+    Ok(url)
+}
+
+fn status_from_http_error_status_code(status_code: StatusCode, error: String) -> Status {
+    match status_code {
+        StatusCode::BAD_REQUEST => Status::invalid_argument(error),
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => Status::permission_denied(error),
+        StatusCode::REQUEST_TIMEOUT => Status::deadline_exceeded(error),
+        StatusCode::TOO_MANY_REQUESTS => Status::resource_exhausted(error),
+        status_code if status_code.is_client_error() => Status::internal(error),
+        _ => Status::unknown(error),
     }
 }
