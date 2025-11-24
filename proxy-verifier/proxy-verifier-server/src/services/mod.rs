@@ -233,6 +233,26 @@ fn process_results_response(
                 message: err.to_string(),
                 status: contract_validation_result::Status::InternalError.into(),
             },
+            Err(proxy_verifier_logic::Error::AlreadyPartiallyVerifiedContract(url)) => {
+                let message = format!(
+                    "Your code is valid and verifies this contract (partial match). However, this contract is already partially verified with identical functionality [{}].",
+                    url.replace('-', "-\u{2060}")
+                );
+                ContractVerificationResult {
+                    message,
+                    status: contract_verification_result::Status::Failure.into(),
+                }
+            }
+            Err(proxy_verifier_logic::Error::AlreadyFullyVerifiedContract(url)) => {
+                let message = format!(
+                    "Your code is valid and verifies this contract (partial match). However, this contract is already partially verified and can only be reverified with a full (exact) match [{}].",
+                    url.replace('-', "-\u{2060}")
+                );
+                ContractVerificationResult {
+                    message,
+                    status: contract_verification_result::Status::Failure.into(),
+                }
+            }
             Err(err) => ContractVerificationResult {
                 message: err.to_string(),
                 status: contract_verification_result::Status::Failure.into(),
