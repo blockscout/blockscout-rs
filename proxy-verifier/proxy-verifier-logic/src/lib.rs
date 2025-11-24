@@ -10,9 +10,9 @@ pub enum Error {
     CompilationFailed(String),
     #[error("{0}")]
     InvalidContract(String),
-    #[error("Your code is valid and verifies this contract (partial match). However, this contract is already partially verified and can only be reverified with a full (exact) match [{0}].")]
+    #[error("Your code is valid and verifies this contract (partial match). However, this contract is already partially verified and can only be reverified with a full (exact) match\n[{0}].")]
     AlreadyFullyVerifiedContract(String),
-    #[error("Your code is valid and verifies this contract (partial match). However, this contract is already partially verified with identical functionality [{0}].")]
+    #[error("Your code is valid and verifies this contract (partial match). However, this contract is already partially verified with identical functionality\n[{0}].")]
     AlreadyPartiallyVerifiedContract(String),
     #[error("{0}")]
     Internal(String),
