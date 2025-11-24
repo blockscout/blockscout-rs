@@ -51,17 +51,6 @@ jobs:
         with:
           working-directory: stats
 
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
       - name: Set Swap Space
         id: swapfile
         uses: pierotofy/set-swap-space@master
