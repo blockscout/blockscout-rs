@@ -157,22 +157,6 @@ impl EnabledChartSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CounterInfo<ChartSettings> {
-    pub id: String,
-    #[serde(flatten)]
-    pub settings: ChartSettings,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LineChartInfo<ChartSettings> {
-    pub id: String,
-    #[serde(flatten)]
-    pub settings: ChartSettings,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct LineChartCategory {

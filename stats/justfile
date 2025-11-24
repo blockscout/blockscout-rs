@@ -67,6 +67,7 @@ restart-generate-entities:
 
 run-multichain:
     STATS__MULTICHAIN_MODE=true \
+    STATS__MULTICHAIN_FILTER=10,130 \
     STATS__CHARTS_CONFIG=config/multichain/charts.json \
     STATS__LAYOUT_CONFIG=config/multichain/layout.json \
     STATS__UPDATE_GROUPS_CONFIG=config/multichain/update_groups.json \

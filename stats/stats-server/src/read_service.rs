@@ -275,7 +275,6 @@ impl ReadService {
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &self.db,
-                false,
                 &self.indexer,
                 migrations,
                 self.second_indexer_db.as_deref(),

@@ -51,6 +51,17 @@ jobs:
         with:
           working-directory: stats
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Set Swap Space
         id: swapfile
         uses: pierotofy/set-swap-space@master
@@ -78,6 +89,7 @@ jobs:
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: steps.build.outcome == 'success'
+
 
       - name: DB tests
         run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored

@@ -51,6 +51,7 @@ mod tests {
             "update_yesterday_txns_multichain",
             "0",
             Some(dt("2023-02-06T00:00:00")),
+            None,
         )
         .await;
 
@@ -58,6 +59,7 @@ mod tests {
             "update_yesterday_txns_multichain",
             "60",
             Some(dt("2023-02-05T00:00:00")),
+            None,
         )
         .await;
 
@@ -65,6 +67,7 @@ mod tests {
             "update_yesterday_txns_multichain",
             "49",
             Some(dt("2023-02-04T00:00:00")),
+            None,
         )
         .await;
     }

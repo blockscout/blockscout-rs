@@ -35,7 +35,7 @@ impl StatementFromRange for NewBuilderAccountsStatement {
         // All transactions from the beginning must be considered to calculate new builder accounts correctly.
         // E.g. if account was first active both before `range.start()` and within the range,
         // we don't want to count it within the range (as it's not a *new* account).
-        let range = range.map(|r| (min_timestamp..r.end));
+        let range = range.map(|r| min_timestamp..r.end);
 
         let mut args = vec![];
         let (tx_filter, new_args) = crate::utils::produce_filter_and_values(
