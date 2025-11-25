@@ -12,6 +12,7 @@ blockscout-service-launcher = { workspace = true, features = ["database-1" ] }
 config = { workspace = true }
 convert-trait = { workspace = true }
 env-collector = { workspace = true }
+hex = { workspace = true }
 interchain-indexer-entity = { workspace = true }
 interchain-indexer-logic = { workspace = true }
 interchain-indexer-migration = { workspace = true }

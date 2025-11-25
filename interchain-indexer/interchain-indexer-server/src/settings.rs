@@ -26,6 +26,9 @@ pub struct Settings {
     #[serde(default)]
     pub jaeger: JaegerSettings,
     pub database: DatabaseSettings,
+
+    #[serde(default)]
+    pub api: ApiSettings,
 }
 
 impl ConfigSettings for Settings {
@@ -48,6 +51,23 @@ impl Settings {
                 run_migrations: Default::default(),
                 connect_options: Default::default(),
             },
+            api: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct ApiSettings {
+    pub default_page_size: u32,
+    pub max_page_size: u32,
+}
+
+impl Default for ApiSettings {
+    fn default() -> Self {
+        Self {
+            default_page_size: 50,
+            max_page_size: 100,
         }
     }
 }

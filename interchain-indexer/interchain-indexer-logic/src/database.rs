@@ -3,10 +3,12 @@ use interchain_indexer_entity::{
     indexer_checkpoints,
 };
 use sea_orm::{
-    ActiveValue, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
-    TransactionTrait, prelude::Expr, sea_query::OnConflict,
+    ActiveValue, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
 use std::{collections::HashMap, sync::Arc};
+
+use crate::pagination::{MessagePaginationLogic, OutputPagination, PaginationDirection};
 
 #[derive(Clone)]
 pub struct InterchainDatabase {
@@ -266,17 +268,180 @@ impl InterchainDatabase {
     }
 
     // VIEW TABLE: crosschain_messages
-    // TBD: add pagination, filters, etc. Current implementation is just for tests only
-    pub async fn get_crosschain_messages(&self) -> anyhow::Result<Vec<crosschain_messages::Model>> {
-        match crosschain_messages::Entity::find()
-            .all(self.db.as_ref())
-            .await
-        {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                tracing::error!(err =? e, "Failed to fetch crosschain messages");
-                Err(e.into())
-            }
+    // Returns paginated list of crosschain messages with transfers for each message
+    pub async fn get_crosschain_messages(
+        &self,
+        page_size: usize,
+        _last_page: bool,
+        input_pagination: Option<MessagePaginationLogic>,
+    ) -> anyhow::Result<(
+        Vec<(crosschain_messages::Model, Vec<crosschain_transfers::Model>)>,
+        OutputPagination<MessagePaginationLogic>,
+    )> {
+        let limit = page_size.max(1) as u64;
+
+        let (items, pagination) = self
+            .db
+            .transaction(|tx| {
+                //let input_pagination = input_pagination; // move into async block
+                Box::pin(async move {
+                    // Determine requested direction: default is Next
+                    let requested_direction = input_pagination
+                        .map(|m| m.direction)
+                        .unwrap_or(PaginationDirection::Next);
+
+                    // Base query
+                    let mut query = crosschain_messages::Entity::find();
+
+                    // Apply keyset pagination if marker is provided
+                    if let Some(marker) = input_pagination {
+                        let marker_ts = marker.timestamp;
+                        let marker_id = marker.message_id as i64;
+                        let marker_bridge_id = marker.bridge_id as i32;
+
+                        let cond = match requested_direction {
+                            PaginationDirection::Next => {
+                                // Older messages: (ts, id, bridge_id) < marker
+                                Expr::col(crosschain_messages::Column::InitTimestamp)
+                                    .lt(marker_ts)
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker_ts)
+                                        .and(
+                                            Expr::col(crosschain_messages::Column::Id)
+                                                .lt(marker_id),
+                                        ))
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker_ts)
+                                        .and(
+                                            Expr::col(crosschain_messages::Column::Id)
+                                                .eq(marker_id),
+                                        )
+                                        .and(
+                                            Expr::col(crosschain_messages::Column::BridgeId)
+                                                .lt(marker_bridge_id),
+                                        ))
+                            }
+                            PaginationDirection::Prev => {
+                                // Newer messages: (ts, id, bridge_id) > marker
+                                Expr::col(crosschain_messages::Column::InitTimestamp)
+                                    .gt(marker_ts)
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker_ts)
+                                        .and(
+                                            Expr::col(crosschain_messages::Column::Id)
+                                                .gt(marker_id),
+                                        ))
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker_ts)
+                                        .and(
+                                            Expr::col(crosschain_messages::Column::Id)
+                                                .eq(marker_id),
+                                        )
+                                        .and(
+                                            Expr::col(crosschain_messages::Column::BridgeId)
+                                                .gt(marker_bridge_id),
+                                        ))
+                            }
+                        };
+
+                        query = query.filter(cond);
+                    }
+
+                    // Apply ordering depending on requested direction
+                    match requested_direction {
+                        PaginationDirection::Next => {
+                            // Newest first
+                            query = query
+                                .order_by_desc(crosschain_messages::Column::InitTimestamp)
+                                .order_by_desc(crosschain_messages::Column::Id)
+                                .order_by_desc(crosschain_messages::Column::BridgeId);
+                        }
+                        PaginationDirection::Prev => {
+                            // We fetch newer messages in ascending order and will reverse later
+                            query = query
+                                .order_by_asc(crosschain_messages::Column::InitTimestamp)
+                                .order_by_asc(crosschain_messages::Column::Id)
+                                .order_by_asc(crosschain_messages::Column::BridgeId);
+                        }
+                    }
+
+                    // Fetch one extra row to detect "has more"
+                    let mut messages: Vec<crosschain_messages::Model> =
+                        query.limit(limit + 1).all(tx).await?;
+
+                    let has_more = messages.len() as u64 > limit;
+
+                    if has_more {
+                        messages.truncate(limit as usize);
+                    }
+
+                    // For Prev we fetched in ascending order, but external API expects
+                    // consistent "newest first" order, so reverse here.
+                    if matches!(requested_direction, PaginationDirection::Prev) {
+                        messages.reverse();
+                    }
+
+                    // Load transfers for each message
+                    let mut result: Vec<(
+                        crosschain_messages::Model,
+                        Vec<crosschain_transfers::Model>,
+                    )> = Vec::with_capacity(messages.len());
+
+                    for msg in &messages {
+                        let transfers = crosschain_transfers::Entity::find()
+                            .filter(crosschain_transfers::Column::MessageId.eq(msg.id))
+                            .filter(crosschain_transfers::Column::BridgeId.eq(msg.bridge_id))
+                            .all(tx)
+                            .await?;
+
+                        result.push((msg.clone(), transfers));
+                    }
+
+                    let pagination = Self::build_pagination_from_messages(
+                        &messages,
+                        requested_direction,
+                        has_more,
+                    );
+
+                    Ok::<_, DbErr>((result, pagination))
+                })
+            })
+            .await?;
+
+        Ok((items, pagination))
+    }
+
+    /// Build OutputPagination from a page of messages.
+    ///
+    /// prev_marker is built from the first element (if exists) with direction = Prev.
+    /// next_marker is built from the last element (if exists) with direction = requested_direction,
+    /// but only if has_more == true.
+    fn build_pagination_from_messages(
+        messages: &[crosschain_messages::Model],
+        requested_direction: PaginationDirection,
+        has_more: bool,
+    ) -> OutputPagination<MessagePaginationLogic> {
+        let prev_marker = messages.first().map(|msg| MessagePaginationLogic {
+            timestamp: msg.init_timestamp,
+            message_id: msg.id as u64,
+            bridge_id: msg.bridge_id as u32,
+            direction: PaginationDirection::Prev,
+        });
+
+        let next_marker = if has_more {
+            messages.last().map(|msg| MessagePaginationLogic {
+                timestamp: msg.init_timestamp,
+                message_id: msg.id as u64,
+                bridge_id: msg.bridge_id as u32,
+                direction: requested_direction,
+            })
+        } else {
+            None
+        };
+
+        OutputPagination {
+            prev_marker,
+            next_marker,
         }
     }
 
@@ -353,7 +518,10 @@ mod tests {
         assert_eq!(bridge_contract.bridge_id, bridges[0].id);
         assert_eq!(bridge_contract.address, bridge_contracts[0].address);
 
-        let crosschain_messages = interchain_db.get_crosschain_messages().await.unwrap();
+        let (crosschain_messages, _) = interchain_db
+            .get_crosschain_messages(100, false, None)
+            .await
+            .unwrap();
         assert_eq!(crosschain_messages.len(), 4);
 
         let crosschain_transfers = interchain_db.get_crosschain_transfers().await.unwrap();

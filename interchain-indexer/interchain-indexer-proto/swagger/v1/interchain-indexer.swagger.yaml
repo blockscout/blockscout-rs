@@ -36,11 +36,19 @@ paths:
           in: query
           required: false
           type: string
-        - name: page_token
+        - name: page_size
+          description: items on a page
           in: query
           required: false
-          type: string
-        - name: direction
+          type: integer
+          format: int64
+        - name: last_page
+          description: if true, return only the last page
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: input pagination token
           in: query
           required: false
           type: string
@@ -307,6 +315,11 @@ definitions:
         additionalProperties:
           type: string
         title: additional parsed data
+      transfers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1InterchainTransfer'
   v1InterchainTransfer:
     type: object
     properties:
@@ -336,8 +349,6 @@ definitions:
     type: object
     properties:
       page_token:
-        type: string
-      direction:
         type: string
   v1TokenInfo:
     type: object

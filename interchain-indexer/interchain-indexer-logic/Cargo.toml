@@ -10,13 +10,22 @@ test-utils = []
 alloy = { workspace = true }
 alloy-json-rpc = { workspace = true }
 anyhow = { workspace = true }
+async-stream = { version = "0.3" }
 async-trait = { workspace = true }
+base64 = { version = "0.22", features = ["std"] }
 blockscout-display-bytes = { workspace = true }
+chrono = { version = "0.4" }
 ## Uncomment this if needed
 #ethabi = { workspace = true }
 #ethers-core = { workspace = true }
 futures = { workspace = true }
 governor = { workspace = true }
+#hex = { workspace = true }
+## Uncomment this if needed
+#ethabi = { workspace = true }
+#ethers-core = { workspace = true }
+hex = { version = "0.4" }
+hex-literal = { version = "0.4" }
 interchain-indexer-entity = { workspace = true }
 parking_lot = { workspace = true }
 rand = { workspace = true }
@@ -29,15 +38,6 @@ sea-orm = { workspace = true, features = [
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tower = { workspace = true }
-#hex = { workspace = true }
-## Uncomment this if needed
-#ethabi = { workspace = true }
-#ethers-core = { workspace = true }
-hex = { version = "0.4" }
-hex-literal = { version = "0.4" }
-chrono = { version = "0.4" }
-async-stream = { version = "0.3" }
 #keccak-hash = { workspace = true }
 #lazy_static = { workspace = true }
 #mismatch = { workspace = true }
@@ -48,6 +48,7 @@ async-stream = { version = "0.3" }
 #serde_json = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
+tower = { workspace = true }
 tracing = { workspace = true }
 #tonic = { workspace = true, features = ["tls-roots"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

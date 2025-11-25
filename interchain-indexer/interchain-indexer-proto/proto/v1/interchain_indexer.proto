@@ -49,42 +49,15 @@ service InterchainService {
   rpc GetTransfersByTransaction(GetTransfersByTransactionRequest) returns (GetTransfersResponse) {}
 }
 
-message Item {
-  string id = 1;
-  string name = 2;
-}
-
-message InterchainServiceCreateRequest {
-  string foo = 1;
-  optional string bar = 2;
-  int64 timestamp = 3;
-  map<string, string> map = 4;
-  optional string url = 5 [(convert_options.convert) = {type: "Option<url::Url>"}];
-}
-
-message InterchainServiceCreateResponse {
-  Item item = 1;
-}
-
-message InterchainServiceSearchRequest {
-  string filter_1 = 1;
-  string filter_2 = 2;
-  string filter_3 = 3;
-}
-
-message InterchainServiceSearchResponse {
-  repeated Item items = 1;
-}
-
 message Pagination {
   optional string page_token = 1;
-  optional string direction = 2;
 }
 
 message GetMessagesRequest {
   optional string q = 1;  // multisesarch ability
-  optional string page_token = 2;
-  optional string direction = 3;
+  optional uint32 page_size = 2; // items on a page
+  optional bool last_page = 3; // if true, return only the last page
+  optional string page_token = 4; // input pagination token
 }
 
 message GetMessageDetailsRequest {
@@ -112,6 +85,8 @@ message InterchainMessage {
   
   optional string payload = 12;
   map<string, string> extra = 13; // additional parsed data
+
+  repeated InterchainTransfer transfers = 14;
 }
 
 message GetMessagesResponse {
