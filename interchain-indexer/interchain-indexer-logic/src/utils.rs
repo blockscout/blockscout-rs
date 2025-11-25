@@ -5,6 +5,15 @@ const NANOS_PER_SEC: i64 = 1_000_000_000;
 // Serialize NaiveDateTime to 8 bytes (nanoseconds since Unix epoch)
 // This approach support dates up to 2262 year
 pub fn naive_datetime_to_bytes(dt: NaiveDateTime) -> anyhow::Result<[u8; 8]> {
+    Ok(naive_datetime_to_nanos(dt)?.to_be_bytes())
+}
+
+// Deserialize NaiveDateTime
+pub fn bytes_to_naive_datetime(bytes: [u8; 8]) -> anyhow::Result<NaiveDateTime> {
+    Ok(nanos_to_naive_datetime(i64::from_be_bytes(bytes))?)
+}
+
+pub fn naive_datetime_to_nanos(dt: NaiveDateTime) -> anyhow::Result<i64> {
     let secs = dt.and_utc().timestamp(); // i64 seconds since Unix epoch
     let nanos = dt.and_utc().timestamp_subsec_nanos(); // u32 nanoseconds
 
@@ -14,27 +23,41 @@ pub fn naive_datetime_to_bytes(dt: NaiveDateTime) -> anyhow::Result<[u8; 8]> {
         .and_then(|base| base.checked_add(nanos as i64))
         .ok_or_else(|| anyhow::anyhow!("NaiveDateTime is out of supported range for encoding"))?;
 
-    Ok(total_nanos.to_be_bytes())
+    Ok(total_nanos)
 }
 
-// Deserialize NaiveDateTime
-pub fn bytes_to_naive_datetime(bytes: [u8; 8]) -> anyhow::Result<NaiveDateTime> {
-    let total_nanos = i64::from_be_bytes(bytes);
-
-    let secs = total_nanos
-        .checked_div(NANOS_PER_SEC)
-        .ok_or_else(|| anyhow::anyhow!("Overflow while converting nanos to seconds"))?;
-
-    let nanos = (total_nanos
-        .checked_rem(NANOS_PER_SEC)
-        .ok_or_else(|| anyhow::anyhow!("Overflow while computing nanos remainder"))?)
-        as u32;
-
-    let dt = chrono::DateTime::from_timestamp(secs, nanos)
+pub fn nanos_to_naive_datetime(nanos: i64) -> anyhow::Result<NaiveDateTime> {
+    let secs = nanos / NANOS_PER_SEC;
+    let nanos = nanos % NANOS_PER_SEC;
+    let dt = chrono::DateTime::from_timestamp(secs, nanos as u32)
         .ok_or_else(|| anyhow::anyhow!("Failed to construct DateTime from timestamp"))?
         .naive_utc();
-
     Ok(dt)
+}
+
+pub fn to_hex_prefixed(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        String::new()
+    } else {
+        format!("0x{}", hex::encode(bytes))
+    }
+}
+
+pub fn u64_from_hex_prefixed(hex: &str) -> anyhow::Result<u64> {
+    let s = hex
+        .strip_prefix("0x")
+        .or_else(|| hex.strip_prefix("0X"))
+        .ok_or_else(|| anyhow::anyhow!("Hex value must start with 0x"))?;
+
+    if s.is_empty() {
+        return Err(anyhow::anyhow!("Hex literal is empty"));
+    }
+
+    u64::from_str_radix(s, 16).map_err(|e| anyhow::anyhow!("Invalid hex u64: {}", e))
+}
+
+pub fn hex_string_opt(data: Option<Vec<u8>>) -> Option<String> {
+    data.map(|data| to_hex_prefixed(data.as_slice()))
 }
 
 #[cfg(test)]

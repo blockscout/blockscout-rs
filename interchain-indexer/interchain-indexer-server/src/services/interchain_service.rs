@@ -2,6 +2,7 @@ use crate::{
     proto::{interchain_service_server::*, *},
     settings::ApiSettings,
 };
+use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
     crosschain_messages::Model as CrosschainMessageModel,
     crosschain_transfers::Model as CrosschainTransferModel, sea_orm_active_enums::MessageStatus,
@@ -9,18 +10,31 @@ use interchain_indexer_entity::{
 use interchain_indexer_logic::{
     InterchainDatabase,
     pagination::{ListMarker, MessagePaginationLogic, OutputPagination},
+    utils::{hex_string_opt, to_hex_prefixed},
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use tonic::{Request, Response, Status};
 
 pub struct InterchainServiceImpl {
     pub db: Arc<InterchainDatabase>,
+    pub bridges_names: HashMap<i32, String>,
     pub api_settings: ApiSettings,
 }
 
 impl InterchainServiceImpl {
-    pub fn new(db: Arc<InterchainDatabase>, api_settings: ApiSettings) -> Self {
-        Self { db, api_settings }
+    pub fn new(
+        db: Arc<InterchainDatabase>,
+        bridges_names: HashMap<i32, String>,
+        api_settings: ApiSettings,
+    ) -> Self {
+        Self {
+            db,
+            bridges_names,
+            api_settings,
+        }
     }
 
     fn extract_input_pagination(
@@ -49,18 +63,40 @@ impl InterchainServiceImpl {
         &self,
         pagination: &OutputPagination<MessagePaginationLogic>,
     ) -> Option<Pagination> {
-        pagination.next_marker.map(|marker| Pagination {
-            page_token: marker.token().ok(),
-        })
+        if self.api_settings.use_pagination_token {
+            pagination.next_marker.map(|marker| Pagination {
+                page_token: marker.token().ok(),
+                ..Default::default()
+            })
+        } else {
+            pagination.next_marker.map(|marker| Pagination {
+                timestamp: Some(marker.get_timestamp_ns().unwrap() as u64),
+                message_id: Some(marker.get_message_id()),
+                bridge_id: Some(marker.bridge_id),
+                direction: Some(marker.direction.to_string()),
+                ..Default::default()
+            })
+        }
     }
 
     fn produce_prev_pagination(
         &self,
         pagination: &OutputPagination<MessagePaginationLogic>,
     ) -> Option<Pagination> {
-        pagination.prev_marker.map(|marker| Pagination {
-            page_token: marker.token().ok(),
-        })
+        if self.api_settings.use_pagination_token {
+            pagination.prev_marker.map(|marker| Pagination {
+                page_token: marker.token().ok(),
+                ..Default::default()
+            })
+        } else {
+            pagination.prev_marker.map(|marker| Pagination {
+                timestamp: Some(marker.get_timestamp_ns().unwrap() as u64),
+                message_id: Some(marker.get_message_id()),
+                bridge_id: Some(marker.bridge_id),
+                direction: Some(marker.direction.to_string()),
+                ..Default::default()
+            })
+        }
     }
 
     fn message_model_to_proto(
@@ -68,85 +104,71 @@ impl InterchainServiceImpl {
         message: CrosschainMessageModel,
         transfers: Vec<CrosschainTransferModel>,
     ) -> InterchainMessage {
-        let status = message_status_to_str(&message.status).to_string();
         let message_id = message
             .native_id
             .as_ref()
             .map(|id| to_hex_prefixed(id.as_slice()))
             .unwrap_or_else(|| message.id.to_string());
-        let bridge_name = message.bridge_id.to_string();
-        let source_chain_id = message.src_chain_id.to_string();
-        let destination_chain_id = message
-            .dst_chain_id
-            .map(|id| id.to_string())
-            .unwrap_or_default();
-
-        let sender = hex_string(message.sender_address.as_ref());
-        let recipient = hex_string(message.recipient_address.as_ref());
-        let source_transaction_hash = hex_string(message.src_tx_hash.as_ref());
-        let destination_transaction_hash = hex_string(message.dst_tx_hash.as_ref());
-
-        let send_timestamp = message.init_timestamp.and_utc().timestamp().to_string();
-        let receive_timestamp = message
-            .last_update_timestamp
-            .map(|ts| ts.and_utc().timestamp().to_string());
-
+        let bridge_name = self
+            .bridges_names
+            .get(&message.bridge_id)
+            .cloned()
+            .unwrap_or("Unknown".to_string());
         let payload = message
             .payload
             .as_ref()
             .map(|payload| to_hex_prefixed(payload.as_slice()));
+        let source_transaction_hash = hex_string_opt(message.src_tx_hash);
+        let destination_transaction_hash = hex_string_opt(message.dst_tx_hash);
 
         let transfers = transfers
             .into_iter()
-            .map(|transfer| {
-                let sender = with_fallback(hex_string(transfer.sender_address.as_ref()), &sender);
-                let recipient =
-                    with_fallback(hex_string(transfer.recipient_address.as_ref()), &recipient);
-
-                InterchainTransfer {
-                    bridge_name: bridge_name.clone(),
-                    message_id: message_id.clone(),
-                    status: status.clone(),
-                    source_token: Some(TokenInfo {
-                        chain_id: transfer.token_src_chain_id.to_string(),
-                        address: to_hex_prefixed(transfer.token_src_address.as_slice()),
-                        name: String::new(),
-                        symbol: String::new(),
-                        decimals: transfer.src_decimals.to_string(),
-                        icon_url: String::new(),
-                    }),
-                    source_amount: Some(transfer.src_amount.to_string()),
-                    source_transaction_hash: option_string(source_transaction_hash.clone()),
-                    sender,
-                    destination_token: Some(TokenInfo {
-                        chain_id: transfer.token_dst_chain_id.to_string(),
-                        address: to_hex_prefixed(transfer.token_dst_address.as_slice()),
-                        name: String::new(),
-                        symbol: String::new(),
-                        decimals: transfer.dst_decimals.to_string(),
-                        icon_url: String::new(),
-                    }),
-                    destination_amount: Some(transfer.dst_amount.to_string()),
-                    destination_transaction_hash: option_string(
-                        destination_transaction_hash.clone(),
-                    ),
-                    recipient,
-                }
+            .map(|transfer| InterchainTransfer {
+                bridge_name: bridge_name.clone(),
+                message_id: message_id.clone(),
+                status: message_status_to_str(&message.status).to_string(),
+                source_token: Some(TokenInfo {
+                    chain_id: transfer.token_src_chain_id.to_string(),
+                    address: to_hex_prefixed(transfer.token_src_address.as_slice()),
+                    name: None,
+                    symbol: None,
+                    decimals: None,
+                    icon_url: None,
+                }),
+                source_amount: Some(transfer.src_amount.to_string()),
+                source_transaction_hash: source_transaction_hash.clone(),
+                sender: hex_string_opt(transfer.sender_address),
+                destination_token: Some(TokenInfo {
+                    chain_id: transfer.token_dst_chain_id.to_string(),
+                    address: to_hex_prefixed(transfer.token_dst_address.as_slice()),
+                    name: None,
+                    symbol: None,
+                    decimals: None,
+                    icon_url: None,
+                }),
+                destination_amount: Some(transfer.dst_amount.to_string()),
+                destination_transaction_hash: destination_transaction_hash.clone(),
+                recipient: hex_string_opt(transfer.recipient_address),
             })
             .collect();
 
         InterchainMessage {
             message_id,
-            status,
-            source_chain_id,
-            sender,
+            status: message_status_to_str(&message.status).to_string(),
+            source_chain_id: message.src_chain_id.to_string(),
+            sender: hex_string_opt(message.sender_address),
+            send_timestamp: db_datetime_to_string(message.init_timestamp),
             source_transaction_hash,
-            send_timestamp,
             bridge_name,
-            destination_chain_id,
-            recipient,
+            destination_chain_id: message
+                .dst_chain_id
+                .map(|id| id.to_string())
+                .unwrap_or_default(),
+            recipient: hex_string_opt(message.recipient_address),
+            receive_timestamp: message
+                .last_update_timestamp
+                .map(|ts| db_datetime_to_string(ts)),
             destination_transaction_hash,
-            receive_timestamp: receive_timestamp.unwrap_or_default(),
             payload,
             extra: BTreeMap::new(),
             transfers,
@@ -253,6 +275,11 @@ impl InterchainService for InterchainServiceImpl {
     }
 }
 
+fn db_datetime_to_string(ts: NaiveDateTime) -> String {
+    ts.and_utc()
+        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
 fn map_db_error(err: anyhow::Error) -> tonic::Status {
     tonic::Status::internal(err.to_string())
 }
@@ -262,29 +289,5 @@ fn message_status_to_str(status: &MessageStatus) -> &'static str {
         MessageStatus::Initiated => "initiated",
         MessageStatus::Completed => "completed",
         MessageStatus::Failed => "failed",
-    }
-}
-
-fn to_hex_prefixed(bytes: &[u8]) -> String {
-    if bytes.is_empty() {
-        String::new()
-    } else {
-        format!("0x{}", hex::encode(bytes))
-    }
-}
-
-fn hex_string(data: Option<&Vec<u8>>) -> String {
-    data.map(|bytes| to_hex_prefixed(bytes.as_slice()))
-        .unwrap_or_default()
-}
-
-fn option_string(value: String) -> Option<String> {
-    if value.is_empty() { None } else { Some(value) }
-}
-fn with_fallback(value: String, fallback: &str) -> String {
-    if value.is_empty() {
-        fallback.to_string()
-    } else {
-        value
     }
 }

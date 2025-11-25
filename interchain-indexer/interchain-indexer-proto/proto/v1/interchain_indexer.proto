@@ -49,8 +49,13 @@ service InterchainService {
   rpc GetTransfersByTransaction(GetTransfersByTransactionRequest) returns (GetTransfersResponse) {}
 }
 
+
 message Pagination {
   optional string page_token = 1;
+  optional uint64 timestamp = 2;
+  optional string message_id = 3;
+  optional uint32 bridge_id = 4;
+  optional string direction = 5;
 }
 
 message GetMessagesRequest {
@@ -74,14 +79,14 @@ message InterchainMessage {
   string status = 3;
   
   string source_chain_id = 4;
-  string sender = 5;
-  string source_transaction_hash = 6;
-  string send_timestamp = 7;
+  string send_timestamp = 5;
+  optional string sender = 6;
+  optional string source_transaction_hash = 7;
   
   string destination_chain_id = 8;
-  string recipient = 9;
-  string destination_transaction_hash = 10;
-  string receive_timestamp = 11;
+  optional string receive_timestamp = 9;
+  optional string recipient = 10;
+  optional string destination_transaction_hash = 11;
   
   optional string payload = 12;
   map<string, string> extra = 13; // additional parsed data
@@ -112,10 +117,10 @@ message GetTransfersByTransactionRequest {
 message TokenInfo {
   string chain_id = 1;
   string address = 2;
-  string name = 3;
-  string symbol = 4;
-  string decimals = 5;
-  string icon_url = 6;
+  optional string name = 3;
+  optional string symbol = 4;
+  optional string decimals = 5;
+  optional string icon_url = 6;
 }
 
 message InterchainTransfer {
@@ -126,13 +131,13 @@ message InterchainTransfer {
   optional TokenInfo source_token = 4;
   optional string source_amount = 5;
   optional string source_transaction_hash = 6;
-  string sender = 7;
+  optional string sender = 7;
 
 
   optional TokenInfo destination_token = 8;
   optional string destination_amount = 9;
   optional string destination_transaction_hash = 10;
-  string recipient = 11;
+  optional string recipient = 11;
   
 }
 

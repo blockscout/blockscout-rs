@@ -2,6 +2,7 @@ use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
     indexer_checkpoints,
 };
+use parking_lot::RwLock;
 use sea_orm::{
     ActiveValue, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
     QuerySelect, TransactionTrait, prelude::Expr, sea_query::OnConflict,
@@ -13,11 +14,16 @@ use crate::pagination::{MessagePaginationLogic, OutputPagination, PaginationDire
 #[derive(Clone)]
 pub struct InterchainDatabase {
     pub db: Arc<DatabaseConnection>,
+
+    bridges_names: Arc<RwLock<HashMap<i32, String>>>, // Lazy loaded bridge names
 }
 
 impl InterchainDatabase {
     pub fn new(db: Arc<DatabaseConnection>) -> Self {
-        Self { db }
+        Self {
+            db,
+            bridges_names: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     // CONFIGURATION TABLE: chains
@@ -165,6 +171,19 @@ impl InterchainDatabase {
                 Err(e.into())
             }
         }
+    }
+
+    pub async fn get_bridge_name(&self, bridge_id: i32) -> anyhow::Result<String> {
+        if self.bridges_names.read().is_empty() {
+            let bridges = self.get_all_bridges().await?;
+            *self.bridges_names.write() = bridges.into_iter().map(|b| (b.id, b.name)).collect();
+        }
+
+        self.bridges_names
+            .read()
+            .get(&bridge_id)
+            .cloned()
+            .ok_or(anyhow::anyhow!("Unknown bridge id: {}", bridge_id))
     }
 
     pub async fn get_bridge(&self, bridge_id: i32) -> anyhow::Result<Option<bridges::Model>> {

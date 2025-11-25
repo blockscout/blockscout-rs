@@ -3840,6 +3840,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-service-launcher",
+ "chrono",
  "config 0.15.18",
  "env-collector",
  "hex",

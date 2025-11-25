@@ -294,19 +294,19 @@ definitions:
         type: string
       source_chain_id:
         type: string
+      send_timestamp:
+        type: string
       sender:
         type: string
       source_transaction_hash:
         type: string
-      send_timestamp:
-        type: string
       destination_chain_id:
+        type: string
+      receive_timestamp:
         type: string
       recipient:
         type: string
       destination_transaction_hash:
-        type: string
-      receive_timestamp:
         type: string
       payload:
         type: string
@@ -349,6 +349,16 @@ definitions:
     type: object
     properties:
       page_token:
+        type: string
+      timestamp:
+        type: string
+        format: uint64
+      message_id:
+        type: string
+      bridge_id:
+        type: integer
+        format: int64
+      direction:
         type: string
   v1TokenInfo:
     type: object

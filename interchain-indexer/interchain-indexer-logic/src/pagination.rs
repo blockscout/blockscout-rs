@@ -2,7 +2,10 @@ use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
 
-use crate::utils::{bytes_to_naive_datetime, naive_datetime_to_bytes};
+use crate::utils::{
+    bytes_to_naive_datetime, naive_datetime_to_bytes, naive_datetime_to_nanos,
+    nanos_to_naive_datetime, to_hex_prefixed, u64_from_hex_prefixed,
+};
 
 pub trait ListMarker: Sized {
     fn from_token(t: &str) -> anyhow::Result<Self>;
@@ -30,18 +33,33 @@ pub enum PaginationDirection {
 }
 
 impl PaginationDirection {
-    fn to_u8(self) -> u8 {
-        match self {
-            PaginationDirection::Next => 0,
-            PaginationDirection::Prev => 1,
+    pub fn from_string(s: &str) -> Result<Self> {
+        match s {
+            "next" => Ok(PaginationDirection::Next),
+            "prev" => Ok(PaginationDirection::Prev),
+            _ => Err(anyhow::anyhow!("Invalid value for direction")),
         }
     }
 
-    fn from_u8(v: u8) -> Result<Self> {
+    pub fn from_u8(v: u8) -> Result<Self> {
         match v {
             0 => Ok(PaginationDirection::Next),
             1 => Ok(PaginationDirection::Prev),
             _ => Err(anyhow::anyhow!("Invalid value for direction")),
+        }
+    }
+
+    pub fn to_string(self) -> String {
+        match self {
+            PaginationDirection::Next => "next".to_string(),
+            PaginationDirection::Prev => "prev".to_string(),
+        }
+    }
+
+    pub fn to_u8(self) -> u8 {
+        match self {
+            PaginationDirection::Next => 0,
+            PaginationDirection::Prev => 1,
         }
     }
 }
@@ -52,6 +70,30 @@ pub struct MessagePaginationLogic {
     pub message_id: u64,
     pub bridge_id: u32,
     pub direction: PaginationDirection,
+}
+
+impl MessagePaginationLogic {
+    pub fn new(
+        timestamp_ns: i64,
+        message_id: String,
+        bridge_id: u32,
+        direction: PaginationDirection,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            timestamp: nanos_to_naive_datetime(timestamp_ns)?,
+            message_id: u64_from_hex_prefixed(&message_id)?,
+            bridge_id,
+            direction,
+        })
+    }
+
+    pub fn get_timestamp_ns(&self) -> anyhow::Result<i64> {
+        Ok(naive_datetime_to_nanos(self.timestamp)?)
+    }
+
+    pub fn get_message_id(&self) -> String {
+        to_hex_prefixed(&self.message_id.to_be_bytes())
+    }
 }
 
 impl ListMarker for MessagePaginationLogic {
