@@ -95,7 +95,7 @@ pub fn decode_execute_call_data(call_data: &Bytes) -> (Option<Address>, Option<B
         .any(|sig| call_data.starts_with(sig.as_slice()))
     {
         let res: sol_types::Result<(Address, U256, Bytes)> =
-            SolValue::abi_decode_params(&call_data[4..], false);
+            SolValue::abi_decode_params(&call_data[4..]);
         match res {
             Ok((execute_target, _, execute_call_data)) => {
                 (Some(execute_target), Some(execute_call_data))

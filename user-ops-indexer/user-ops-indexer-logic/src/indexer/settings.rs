@@ -1,11 +1,11 @@
 use crate::indexer::rpc_utils::TraceClient;
 use alloy::primitives::{address, Address};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::{formats::CommaSeparator, serde_as};
 use std::time;
 
 #[serde_as]
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct IndexerSettings {
     pub rpc_url: String,
@@ -32,7 +32,7 @@ pub struct IndexerSettings {
 }
 
 #[serde_as]
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct EntrypointsSettings {
     pub v06: bool,
@@ -47,7 +47,7 @@ pub struct EntrypointsSettings {
 }
 
 #[serde_as]
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct RealtimeIndexerSettings {
     pub enabled: bool,
@@ -60,7 +60,7 @@ pub struct RealtimeIndexerSettings {
     pub max_block_range: u32,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct PastRpcLogsIndexerSettings {
     pub enabled: bool,
@@ -69,7 +69,7 @@ pub struct PastRpcLogsIndexerSettings {
 }
 
 #[serde_as]
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct PastDbLogsIndexerSettings {
     pub enabled: bool,

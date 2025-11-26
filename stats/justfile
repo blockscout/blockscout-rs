@@ -53,7 +53,7 @@ start-postgres-and-build-tests:
     echo "finished postgres wait"
 
 check-envs:
-    VALIDATE_ONLY=true cargo run --bin env-docs-generation
+    cargo run --bin env-docs-generation -- --validate-only
 
 generate-envs:
     cargo run --bin env-docs-generation

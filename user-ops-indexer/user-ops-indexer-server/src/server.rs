@@ -8,7 +8,7 @@ use crate::{
     settings::Settings,
 };
 use blockscout_endpoint_swagger::route_swagger;
-use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
+use blockscout_service_launcher::launcher::{self, GracefulShutdownHandler, LaunchSettings};
 use sea_orm::DatabaseConnection;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
@@ -70,7 +70,8 @@ pub async fn run(
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: GracefulShutdownHandler::new(),
     };
 
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }

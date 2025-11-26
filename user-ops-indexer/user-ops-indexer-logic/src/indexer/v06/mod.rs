@@ -49,8 +49,8 @@ impl IndexerLogic for IndexerV06 {
     }
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool {
-        IEntrypointV06::handleOpsCall::abi_decode(calldata, true).is_ok()
-            || IEntrypointV06::handleAggregatedOpsCall::abi_decode(calldata, true).is_ok()
+        IEntrypointV06::handleOpsCall::abi_decode_validate(calldata).is_ok()
+            || IEntrypointV06::handleAggregatedOpsCall::abi_decode_validate(calldata).is_ok()
     }
 
     fn parse_user_ops(
@@ -61,7 +61,7 @@ impl IndexerLogic for IndexerV06 {
         calldata: &Bytes,
         bundle_logs: &[Log],
     ) -> anyhow::Result<Vec<UserOp>> {
-        let decoded_calldata = IEntrypointV06Calls::abi_decode(calldata, true)?;
+        let decoded_calldata = IEntrypointV06Calls::abi_decode_validate(calldata)?;
         let user_ops: Vec<ExtendedUserOperation> = match decoded_calldata {
             IEntrypointV06Calls::handleAggregatedOps(cd) => cd
                 .opsPerAggregator
