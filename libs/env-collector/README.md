@@ -63,7 +63,7 @@ This is a simple tool to collect possible environment variables from `Settings` 
     ```yaml
     [... other steps of `test` job ...]
     
-    - name: ENVs in doc tests
+    - name: Verify ENVs in README
       run: cargo run --bin check-envs -- --validate-only
     
     [... other steps of `test` job ...]
