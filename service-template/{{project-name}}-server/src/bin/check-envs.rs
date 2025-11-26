@@ -10,6 +10,8 @@ fn main() {
             .vars_filter(PrefixFilter::blacklist(&[
                 "{{CRATE_NAME}}__SERVER",
                 "{{CRATE_NAME}}__JAEGER",
+                "{{CRATE_NAME}}__METRICS",
+                "{{CRATE_NAME}}__TRACING"
             ]))
             .build()
             .expect("failed to build env collector settings"),

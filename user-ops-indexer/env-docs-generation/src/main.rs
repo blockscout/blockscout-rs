@@ -4,8 +4,8 @@ use user_ops_indexer_server::Settings;
 fn main() {
     let mut settings = EnvCollectorSettingsBuilder::default();
     settings
-        .service_name("USER_OPS_INDEXER".to_string())
-        .markdown_path("README.md".to_string());
+        .service_name("USER_OPS_INDEXER")
+        .markdown_path("README.md");
     run_env_collector_cli::<Settings>(
         settings
             .config_path("env-docs-generation/example-configs/service.json")
