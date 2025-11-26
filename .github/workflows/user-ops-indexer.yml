@@ -48,6 +48,13 @@ jobs:
         with:
           working-directory: user-ops-indexer
 
+      - name: Build
+        id: build
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
+
+      - name: Verify ENVs in README.md
+        run: cargo run --bin env-docs-generation -- --validate-inly
+
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
         if: success() || failure()

@@ -73,7 +73,7 @@ jobs:
         if: steps.swapfile.outcome == 'success'
         run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features --jobs $JOBS
 
-      - name: ENVs in documentation
+      - name: Verify ENVs in README.md
         run: cargo run --bin env-docs-generation
         env:
           VALIDATE_ONLY: true
