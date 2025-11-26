@@ -1,7 +1,7 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
-    indexer_checkpoints,
+    indexer_checkpoints, pending_messages,
 };
 use parking_lot::RwLock;
 use sea_orm::{
@@ -690,6 +690,74 @@ impl InterchainDatabase {
                 })
             })
             .await
+            .map_err(|e| e.into())
+    }
+
+    // STAGING TABLE: pending_messages
+    /// Insert or update a pending message (destination event arrived before source)
+    pub async fn upsert_pending_message(
+        &self,
+        message: pending_messages::ActiveModel,
+    ) -> anyhow::Result<()> {
+        pending_messages::Entity::insert(message)
+            .on_conflict(
+                OnConflict::columns([
+                    pending_messages::Column::MessageId,
+                    pending_messages::Column::BridgeId,
+                ])
+                .update_columns([pending_messages::Column::Payload])
+                .value(pending_messages::Column::CreatedAt, Expr::current_timestamp())
+                .to_owned(),
+            )
+            .exec(self.db.as_ref())
+            .await
+            .inspect_err(|e| tracing::error!(err =? e, "Failed to upsert pending message"))
+            .map(|_| ())
+            .map_err(|e| e.into())
+    }
+
+    /// Check if a pending message exists for the given message_id and bridge_id
+    pub async fn get_pending_message(
+        &self,
+        message_id: i64,
+        bridge_id: i32,
+    ) -> anyhow::Result<Option<pending_messages::Model>> {
+        pending_messages::Entity::find()
+            .filter(pending_messages::Column::MessageId.eq(message_id))
+            .filter(pending_messages::Column::BridgeId.eq(bridge_id))
+            .one(self.db.as_ref())
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    err =? e,
+                    message_id,
+                    bridge_id,
+                    "Failed to fetch pending message"
+                )
+            })
+            .map_err(|e| e.into())
+    }
+
+    /// Delete a pending message (called when both sides are found and message is promoted)
+    pub async fn delete_pending_message(
+        &self,
+        message_id: i64,
+        bridge_id: i32,
+    ) -> anyhow::Result<()> {
+        pending_messages::Entity::delete_many()
+            .filter(pending_messages::Column::MessageId.eq(message_id))
+            .filter(pending_messages::Column::BridgeId.eq(bridge_id))
+            .exec(self.db.as_ref())
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    err =? e,
+                    message_id,
+                    bridge_id,
+                    "Failed to delete pending message"
+                )
+            })
+            .map(|_| ())
             .map_err(|e| e.into())
     }
 }
