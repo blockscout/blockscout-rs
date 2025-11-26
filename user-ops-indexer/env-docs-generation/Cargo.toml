@@ -1,0 +1,8 @@
+[package]
+name = "env-docs-generation"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+user-ops-indexer-server = { path = "../user-ops-indexer-server" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "431b6bafe498d7a8b1bb1495d92a0bda7f05d006" } # latest main

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
+members = ["env-docs-generation",
     "user-ops-indexer-entity",
     "user-ops-indexer-logic",
     "user-ops-indexer-migration",

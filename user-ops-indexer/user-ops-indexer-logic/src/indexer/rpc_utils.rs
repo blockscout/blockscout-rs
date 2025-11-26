@@ -14,7 +14,7 @@ use alloy::{
     transports::{TransportErrorKind, TransportResult},
 };
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum NodeClient {
@@ -41,7 +41,7 @@ impl From<String> for NodeClient {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TraceClient {
     Debug,

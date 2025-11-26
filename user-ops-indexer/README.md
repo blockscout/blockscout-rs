@@ -56,6 +56,8 @@ cargo run --bin user-ops-indexer-server
 Here, we describe variables specific to this service. Variables common to all services can be
 found [here](../docs/common-envs.md).
 
+[anchor]: <> (anchors.envs.start)
+
 | Variable                                                                              | Required | Description                                                                                                                                                                                                         | Default value                                |
 | ------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | `USER_OPS_INDEXER__API__MAX_PAGE_SIZE`                                                |          | Max page size for API requests                                                                                                                                                                                      | `100`                                        |
@@ -90,6 +92,8 @@ found [here](../docs/common-envs.md).
 | `USER_OPS_INDEXER__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING_LEVEL`                     |          | SQLX logging level                                                                                                                                                                                                  | `debug`                                      |
 | `USER_OPS_INDEXER__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_LEVEL`     |          | SQLX logging level for slow statements warnings                                                                                                                                                                     | `off`                                        |
 | `USER_OPS_INDEXER__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_THRESHOLD` |          | Threshold duration for SQLX slow statements warnings                                                                                                                                                                | `1`                                          |
+
+[anchor]: <> (anchors.envs.end)
 
 ## Links
 
