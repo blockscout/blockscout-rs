@@ -4,8 +4,8 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::{Deserialize, Serialize};
-use zetachain_cctx_logic::{client::RpcSettings, settings::IndexerSettings};
 use std::path::PathBuf;
+use zetachain_cctx_logic::{client::RpcSettings, settings::IndexerSettings};
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {

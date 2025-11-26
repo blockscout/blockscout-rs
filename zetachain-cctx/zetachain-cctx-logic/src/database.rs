@@ -1195,11 +1195,11 @@ impl ZetachainCctxDatabase {
                 })?
                 .into();
 
-            let observed_external_height:i64 = outbound_row
+            let observed_external_height: i64 = outbound_row
                 .try_get_by_index(12)
                 .map_err(|e| anyhow::anyhow!("outbound_row observed_external_height: {}", e))?;
 
-            let gas_used:i64 = outbound_row
+            let gas_used: i64 = outbound_row
                 .try_get_by_index(13)
                 .map_err(|e| anyhow::anyhow!("outbound_row gas_used: {}", e))?;
 
