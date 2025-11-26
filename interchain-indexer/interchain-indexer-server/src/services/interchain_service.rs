@@ -2,6 +2,7 @@ use crate::{
     proto::{interchain_service_server::*, *},
     settings::ApiSettings,
 };
+use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
     crosschain_messages::Model as CrosschainMessageModel,
@@ -9,7 +10,7 @@ use interchain_indexer_entity::{
 };
 use interchain_indexer_logic::{
     InterchainDatabase,
-    pagination::{ListMarker, MessagePaginationLogic, OutputPagination},
+    pagination::{ListMarker, MessagePaginationLogic, OutputPagination, PaginationDirection},
     utils::{hex_string_opt, to_hex_prefixed},
 };
 use std::{
@@ -37,14 +38,49 @@ impl InterchainServiceImpl {
         }
     }
 
+    /// Input pagination can be either a token or a set of
+    /// timestamp, message_id, bridge_id and direction
+    /// (depending on the API settings)
     fn extract_input_pagination(
         &self,
         request: &GetMessagesRequest,
     ) -> anyhow::Result<Option<MessagePaginationLogic>> {
-        if let Some(pagination_token) = &request.page_token {
-            Ok(Some(MessagePaginationLogic::from_token(pagination_token)?))
+        if self.api_settings.use_pagination_token {
+            if let Some(pagination_token) = &request.page_token {
+                Ok(Some(MessagePaginationLogic::from_token(pagination_token)?))
+            } else {
+                Ok(None)
+            }
         } else {
-            Ok(None)
+            // let timestamp = request.timestamp;
+            // let message_id = request.message_id.clone();
+            // let bridge_id = request.bridge_id;
+            // let direction = request.direction.clone();
+
+            match (
+                request.timestamp,
+                request.message_id.clone(),
+                request.bridge_id,
+                request.direction.clone(),
+            ) {
+                // all input pagination parameters are provided
+                (Some(timestamp), Some(message_id), Some(bridge_id), Some(direction)) => {
+                    Ok(Some(MessagePaginationLogic::new(
+                        timestamp as i64,
+                        message_id,
+                        bridge_id,
+                        PaginationDirection::from_string(&direction)?,
+                    )?))
+                }
+
+                // no input pagination povided
+                (None, None, None, None) => Ok(None),
+
+                // some input pagination parameters are missing
+                _ => Err(anyhow!(
+                    "Pagination error: timestamp, message_id, bridge_id and direction must be provided together"
+                )),
+            }
         }
     }
 

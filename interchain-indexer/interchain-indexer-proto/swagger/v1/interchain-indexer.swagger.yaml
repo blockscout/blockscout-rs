@@ -48,7 +48,30 @@ paths:
           required: false
           type: boolean
         - name: page_token
-          description: input pagination token
+          description: |-
+            input pagination token - used by default
+            (packed version of the raw pagination parameters)
+          in: query
+          required: false
+          type: string
+        - name: timestamp
+          description: |-
+            Raw pagination parameters
+            (used when api.use_pagination_token=false)
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: message_id
+          in: query
+          required: false
+          type: string
+        - name: bridge_id
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: direction
           in: query
           required: false
           type: string

@@ -10,7 +10,7 @@ pub fn naive_datetime_to_bytes(dt: NaiveDateTime) -> anyhow::Result<[u8; 8]> {
 
 // Deserialize NaiveDateTime
 pub fn bytes_to_naive_datetime(bytes: [u8; 8]) -> anyhow::Result<NaiveDateTime> {
-    Ok(nanos_to_naive_datetime(i64::from_be_bytes(bytes))?)
+    nanos_to_naive_datetime(i64::from_be_bytes(bytes))
 }
 
 pub fn naive_datetime_to_nanos(dt: NaiveDateTime) -> anyhow::Result<i64> {

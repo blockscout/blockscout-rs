@@ -4,7 +4,7 @@
         "name": "Avalanche ICTT",
         "type": "avalanche_native",
         "indexer": "AvalancheNative",
-        "enabled": true,
+        "enabled": false,
         "api_url": null,
         "ui_url": null,
         "contracts": [

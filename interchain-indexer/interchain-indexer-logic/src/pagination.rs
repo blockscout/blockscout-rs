@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
@@ -26,7 +28,7 @@ impl<P: ListMarker> Default for OutputPagination<P> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PaginationDirection {
     Next,
     Prev,
@@ -49,18 +51,22 @@ impl PaginationDirection {
         }
     }
 
-    pub fn to_string(self) -> String {
-        match self {
-            PaginationDirection::Next => "next".to_string(),
-            PaginationDirection::Prev => "prev".to_string(),
-        }
-    }
-
     pub fn to_u8(self) -> u8 {
         match self {
             PaginationDirection::Next => 0,
             PaginationDirection::Prev => 1,
         }
+    }
+}
+
+
+impl fmt::Display for PaginationDirection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            PaginationDirection::Next => "next",
+            PaginationDirection::Prev => "prev",
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -88,7 +94,7 @@ impl MessagePaginationLogic {
     }
 
     pub fn get_timestamp_ns(&self) -> anyhow::Result<i64> {
-        Ok(naive_datetime_to_nanos(self.timestamp)?)
+        naive_datetime_to_nanos(self.timestamp)
     }
 
     pub fn get_message_id(&self) -> String {

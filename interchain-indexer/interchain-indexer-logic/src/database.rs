@@ -291,7 +291,7 @@ impl InterchainDatabase {
     pub async fn get_crosschain_messages(
         &self,
         page_size: usize,
-        _last_page: bool,
+        last_page: bool,
         input_pagination: Option<MessagePaginationLogic>,
     ) -> anyhow::Result<(
         Vec<(crosschain_messages::Model, Vec<crosschain_transfers::Model>)>,
@@ -305,20 +305,27 @@ impl InterchainDatabase {
                 //let input_pagination = input_pagination; // move into async block
                 Box::pin(async move {
                     // Determine requested direction: default is Next
-                    let requested_direction = input_pagination
-                        .map(|m| m.direction)
-                        .unwrap_or(PaginationDirection::Next);
+                    let query_direction = if last_page {
+                        // Request rows from the end of the table to get the last page
+                        // input pagination is ignored in this case
+                        PaginationDirection::Prev
+                    } else {
+                        // Default direction is Next
+                        input_pagination
+                            .map(|m| m.direction)
+                            .unwrap_or(PaginationDirection::Next)
+                    };
 
                     // Base query
                     let mut query = crosschain_messages::Entity::find();
 
-                    // Apply keyset pagination if marker is provided
-                    if let Some(marker) = input_pagination {
+                    // Apply keyset pagination if marker is provided (and not requested the last page)
+                    if !last_page && let Some(marker) = input_pagination {
                         let marker_ts = marker.timestamp;
                         let marker_id = marker.message_id as i64;
                         let marker_bridge_id = marker.bridge_id as i32;
 
-                        let cond = match requested_direction {
+                        let cond = match query_direction {
                             PaginationDirection::Next => {
                                 // Older messages: (ts, id, bridge_id) < marker
                                 Expr::col(crosschain_messages::Column::InitTimestamp)
@@ -367,7 +374,7 @@ impl InterchainDatabase {
                     }
 
                     // Apply ordering depending on requested direction
-                    match requested_direction {
+                    match query_direction {
                         PaginationDirection::Next => {
                             // Newest first
                             query = query
@@ -396,7 +403,7 @@ impl InterchainDatabase {
 
                     // For Prev we fetched in ascending order, but external API expects
                     // consistent "newest first" order, so reverse here.
-                    if matches!(requested_direction, PaginationDirection::Prev) {
+                    if matches!(query_direction, PaginationDirection::Prev) {
                         messages.reverse();
                     }
 
@@ -418,8 +425,9 @@ impl InterchainDatabase {
 
                     let pagination = Self::build_pagination_from_messages(
                         &messages,
-                        requested_direction,
+                        query_direction,
                         has_more,
+                        last_page,
                     );
 
                     Ok::<_, DbErr>((result, pagination))
@@ -431,15 +439,17 @@ impl InterchainDatabase {
     }
 
     /// Build OutputPagination from a page of messages.
-    ///
-    /// prev_marker is built from the first element (if exists) with direction = Prev.
-    /// next_marker is built from the last element (if exists) with direction = requested_direction,
-    /// but only if has_more == true.
+    /// prev_marker and next_marker are built from the first and last element (if exists) respectively.
+    /// We must take into account a few query parameters.
     fn build_pagination_from_messages(
         messages: &[crosschain_messages::Model],
-        requested_direction: PaginationDirection,
+        query_direction: PaginationDirection,
         has_more: bool,
+        last_page: bool,
     ) -> OutputPagination<MessagePaginationLogic> {
+        //We assume that new messages can appear in the database at any time,
+        // so the prev marker should always be returned based on the first message
+        // (except when there are no messages on the current page).
         let prev_marker = messages.first().map(|msg| MessagePaginationLogic {
             timestamp: msg.init_timestamp,
             message_id: msg.id as u64,
@@ -447,16 +457,21 @@ impl InterchainDatabase {
             direction: PaginationDirection::Prev,
         });
 
-        let next_marker = if has_more {
-            messages.last().map(|msg| MessagePaginationLogic {
-                timestamp: msg.init_timestamp,
-                message_id: msg.id as u64,
-                bridge_id: msg.bridge_id as u32,
-                direction: requested_direction,
-            })
-        } else {
-            None
-        };
+        // The next marker should not be returned if the last page is requested
+        // or if there are no more messages to fetch in the next direction.
+        // When the query direction is prev (backward), we assume that
+        // the next marker should always be returned.
+        let next_marker =
+            if !last_page && (query_direction == PaginationDirection::Prev || has_more) {
+                messages.last().map(|msg| MessagePaginationLogic {
+                    timestamp: msg.init_timestamp,
+                    message_id: msg.id as u64,
+                    bridge_id: msg.bridge_id as u32,
+                    direction: PaginationDirection::Next,
+                })
+            } else {
+                None
+            };
 
         OutputPagination {
             prev_marker,

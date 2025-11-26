@@ -38,7 +38,7 @@ run:
     INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
     INTERCHAIN_INDEXER__CHAINS_CONFIG=config/avalanche/chains.json \
     INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/avalanche/bridges.json \
-    INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN=false \
+    INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN=true \
     cargo run --bin interchain-indexer-server
 
 run-dev:
