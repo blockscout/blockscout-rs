@@ -41,9 +41,10 @@ impl From<String> for NodeClient {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TraceClient {
+    #[default]
     Debug,
     Trace,
 }
@@ -59,12 +60,6 @@ impl TraceClient {
             NodeClient::Reth => Self::Trace,
             NodeClient::Unknown => Self::Debug,
         }
-    }
-}
-
-impl Default for TraceClient {
-    fn default() -> Self {
-        Self::Debug
     }
 }
 

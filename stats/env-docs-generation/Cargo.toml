@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "431b6bafe498d7a8b1bb1495d92a0bda7f05d006" } # latest main
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "1e9d3c8a06f82626525217f6c2c51c1368868cd8" } # latest almost merged PR version
 stats-server = { path = "../stats-server" }

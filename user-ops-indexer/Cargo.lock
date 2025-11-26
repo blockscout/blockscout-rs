@@ -2628,8 +2628,8 @@ dependencies = [
 
 [[package]]
 name = "env-collector"
-version = "0.3.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=18135aff022e0f419505ce1d7000a9f2048e5222#18135aff022e0f419505ce1d7000a9f2048e5222"
+version = "0.3.1"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=1e9d3c8a06f82626525217f6c2c51c1368868cd8#1e9d3c8a06f82626525217f6c2c51c1368868cd8"
 dependencies = [
  "anyhow",
  "clap",

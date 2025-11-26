@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 user-ops-indexer-server = { path = "../user-ops-indexer-server" }
-env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "18135aff022e0f419505ce1d7000a9f2048e5222" } # patched version from PR branch
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "1e9d3c8a06f82626525217f6c2c51c1368868cd8" } # patched version from PR branch

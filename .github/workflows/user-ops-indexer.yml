@@ -53,7 +53,7 @@ jobs:
         run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
 
       - name: Verify ENVs in README.md
-        run: cargo run --bin env-docs-generation -- --validate-inly
+        run: cargo run --bin env-docs-generation -- --validate-only
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
