@@ -350,6 +350,23 @@ impl ClusterExplorerService for ClusterExplorer {
             result.try_into().map_err(ServiceError::from)?,
         ))
     }
+
+    async fn check_redirect(
+        &self,
+        request: Request<CheckRedirectRequest>,
+    ) -> Result<Response<CheckRedirectResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+
+        let redirect = cluster
+            .check_redirect(&inner.q)
+            .await?
+            .map(|r| r.into())
+            .unwrap_or_default();
+
+        Ok(Response::new(redirect))
+    }
 }
 
 #[allow(clippy::result_large_err)]

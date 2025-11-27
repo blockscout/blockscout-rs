@@ -187,6 +187,41 @@ impl TryFrom<QuickSearchResult> for cluster_proto::ClusterQuickSearchResponse {
     }
 }
 
+#[derive(strum::Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum RedirectType {
+    Block,
+    Transaction,
+    Address,
+}
+
+pub struct Redirect {
+    ty: RedirectType,
+    parameter: String,
+    chain_id: Option<ChainId>,
+}
+
+impl Redirect {
+    pub fn new(ty: RedirectType, parameter: impl ToString, chain_id: Option<ChainId>) -> Self {
+        Self {
+            ty,
+            parameter: parameter.to_string(),
+            chain_id,
+        }
+    }
+}
+
+impl From<Redirect> for cluster_proto::CheckRedirectResponse {
+    fn from(v: Redirect) -> Self {
+        Self {
+            redirect: true,
+            r#type: Some(v.ty.to_string()),
+            parameter: Some(v.parameter),
+            chain_id: v.chain_id.map(|c| c.to_string()),
+        }
+    }
+}
+
 fn evenly_take_elements<const N: usize>(
     mut lengths: [usize; N],
     mut remained: usize,
