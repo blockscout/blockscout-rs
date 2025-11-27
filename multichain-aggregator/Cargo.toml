@@ -17,11 +17,11 @@ bens-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "741fc
 
 # web
 actix-phoenix-channel = "0.1.0"
-actix-prost = { git = "https://github.com/blockscout/actix-prost", branch = "lok52/bump-tonic"}
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost", branch = "lok52/bump-tonic"}
-actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", branch = "lok52/bump-tonic"}
+actix-prost = { version = "0.3.0" }
+actix-prost-build = { version = "0.3.0" }
+actix-prost-macros = { version = "0.3.0" }
 actix-web = "4.2"
-blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs", branch = "lok52/launcher-bump-versions", features = ["database-1"] }
+blockscout-service-launcher = { version = "0.21.0", features = ["database-1"] }
 prost = "0.14"
 prost-build = "0.14"
 prost-wkt = "0.7.0"
