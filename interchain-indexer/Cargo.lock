@@ -3779,6 +3779,7 @@ dependencies = [
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "chrono",
+ "dashmap 6.1.0",
  "futures",
  "governor",
  "hex",

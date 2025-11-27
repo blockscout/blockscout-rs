@@ -15,6 +15,7 @@ async-trait = { workspace = true }
 base64 = { version = "0.22", features = ["std"] }
 blockscout-display-bytes = { workspace = true }
 chrono = { version = "0.4" }
+dashmap = { version = "6" }
 ## Uncomment this if needed
 #ethabi = { workspace = true }
 #ethers-core = { workspace = true }

@@ -1,6 +1,7 @@
 mod database;
 mod error;
 mod indexer;
+mod message_buffer;
 mod provider_layers;
 
 // pub mod event_handler;
