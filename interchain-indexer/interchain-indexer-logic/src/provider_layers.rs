@@ -209,25 +209,13 @@ struct Node<S> {
     state: RwLock<NodeState>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 struct NodeState {
     disabled_until: Option<Instant>,
     consecutive_errors: u32,
     cooldowns_count: u32,
     last_block: Option<u64>,
     last_block_ts: Option<Instant>,
-}
-
-impl Default for NodeState {
-    fn default() -> Self {
-        Self {
-            disabled_until: None,
-            consecutive_errors: 0,
-            cooldowns_count: 0,
-            last_block: None,
-            last_block_ts: None,
-        }
-    }
 }
 
 impl<S> PoolState<S>
@@ -401,11 +389,11 @@ where
         let mut probe_nodes = Vec::new();
         for node in &self.nodes {
             let mut state = node.state.write();
-            if let Some(until) = state.disabled_until {
-                if now >= until {
-                    state.disabled_until = None;
-                    state.consecutive_errors = 0;
-                }
+            if let Some(until) = state.disabled_until
+                && now >= until
+            {
+                state.disabled_until = None;
+                state.consecutive_errors = 0;
             }
 
             if state.disabled_until.is_none() {
@@ -425,13 +413,13 @@ where
 
         let mut max_head = initial_head;
         for (node, result) in results {
-            if let Ok(response) = result {
-                if let Some(block_number) = decode_block_number(response) {
-                    let mut state = node.state.write();
-                    state.last_block = Some(block_number);
-                    state.last_block_ts = Some(now);
-                    max_head = max_head.max(block_number);
-                }
+            if let Ok(response) = result
+                && let Some(block_number) = decode_block_number(response)
+            {
+                let mut state = node.state.write();
+                state.last_block = Some(block_number);
+                state.last_block_ts = Some(now);
+                max_head = max_head.max(block_number);
             }
         }
 
@@ -446,13 +434,12 @@ fn block_number_packet() -> RequestPacket {
 
 fn decode_block_number(response: ResponsePacket) -> Option<u64> {
     match response {
-        ResponsePacket::Single(res) => match res.payload.try_into_success().ok()? {
-            payload => {
-                let hex = serde_json::from_str::<String>(payload.get()).ok()?;
-                let trimmed = hex.trim_start_matches("0x");
-                u64::from_str_radix(trimmed, 16).ok()
-            }
-        },
+        ResponsePacket::Single(res) => {
+            let payload = res.payload.try_into_success().ok()?;
+            let hex = serde_json::from_str::<String>(payload.get()).ok()?;
+            let trimmed = hex.trim_start_matches("0x");
+            u64::from_str_radix(trimmed, 16).ok()
+        }
         _ => None,
     }
 }
@@ -521,7 +508,7 @@ mod tests {
         let id = req
             .as_single()
             .map(|serialized| serialized.meta().id.clone())
-            .unwrap_or_else(|| Id::Number(1_u64.into()));
+            .unwrap_or_else(|| Id::Number(1_u64));
 
         let payload = to_raw_value(&format!("0x{block:x}")).unwrap();
         let response = Response {
