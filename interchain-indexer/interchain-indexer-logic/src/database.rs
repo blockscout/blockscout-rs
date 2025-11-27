@@ -290,6 +290,7 @@ impl InterchainDatabase {
     // Returns paginated list of crosschain messages with transfers for each message
     pub async fn get_crosschain_messages(
         &self,
+        tx_hash: Option<Vec<u8>>,
         page_size: usize,
         last_page: bool,
         input_pagination: Option<MessagePaginationLogic>,
@@ -373,6 +374,15 @@ impl InterchainDatabase {
                         query = query.filter(cond);
                     }
 
+                    // Apply tx_hash filter if provided
+                    if let Some(tx_hash) = tx_hash.clone() {
+                        let tx_filter = Expr::col(crosschain_messages::Column::SrcTxHash)
+                            .eq(tx_hash.clone())
+                            .or(Expr::col(crosschain_messages::Column::DstTxHash).eq(tx_hash));
+
+                        query = query.filter(tx_filter);
+                    }
+
                     // Apply ordering depending on requested direction
                     match query_direction {
                         PaginationDirection::Next => {
@@ -423,12 +433,21 @@ impl InterchainDatabase {
                         result.push((msg.clone(), transfers));
                     }
 
-                    let pagination = Self::build_pagination_from_messages(
+                    let mut pagination = Self::build_pagination_from_messages(
                         &messages,
                         query_direction,
                         has_more,
                         last_page,
                     );
+
+                    if tx_hash.is_some() && input_pagination.is_none() {
+                        // Remove prev marker for a static list of messages
+                        // (we assume there are no more new messages appearing after the initial request)
+                        pagination = OutputPagination {
+                            prev_marker: None,
+                            next_marker: pagination.next_marker,
+                        };
+                    }
 
                     Ok::<_, DbErr>((result, pagination))
                 })
@@ -436,6 +455,47 @@ impl InterchainDatabase {
             .await?;
 
         Ok((items, pagination))
+    }
+
+    pub async fn get_crosschain_message(
+        &self,
+        message_id: Vec<u8>,
+    ) -> anyhow::Result<Option<(crosschain_messages::Model, Vec<crosschain_transfers::Model>)>>
+    {
+        self.db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    // the filter depends on the length of the message_id
+                    let f = if message_id.len() > 8 {
+                        // long IDs are always stored into the native_id column
+                        Expr::col(crosschain_messages::Column::NativeId).eq(message_id)
+                    } else {
+                        // IDs which fit in 8 bytes are stored in the PK
+                        // left-pad with zeros to 8 bytes and interpret as big-endian integer
+                        let mut buf = [0u8; 8];
+                        buf[(8 - message_id.len())..].copy_from_slice(message_id.as_slice());
+                        Expr::col(crosschain_messages::Column::Id).eq(i64::from_be_bytes(buf))
+                    };
+
+                    let query = crosschain_messages::Entity::find().filter(f);
+
+                    match query.one(tx).await {
+                        Ok(Some(msg)) => {
+                            let transfers = crosschain_transfers::Entity::find()
+                                .filter(crosschain_transfers::Column::MessageId.eq(msg.id))
+                                .filter(crosschain_transfers::Column::BridgeId.eq(msg.bridge_id))
+                                .all(tx)
+                                .await?;
+
+                            Ok(Some((msg, transfers)))
+                        }
+                        Ok(None) => Ok(None),
+                        Err(e) => Err(e),
+                    }
+                })
+            })
+            .await
+            .map_err(|e| e.into())
     }
 
     /// Build OutputPagination from a page of messages.
@@ -553,7 +613,7 @@ mod tests {
         assert_eq!(bridge_contract.address, bridge_contracts[0].address);
 
         let (crosschain_messages, _) = interchain_db
-            .get_crosschain_messages(100, false, None)
+            .get_crosschain_messages(None, 100, false, None)
             .await
             .unwrap();
         assert_eq!(crosschain_messages.len(), 4);

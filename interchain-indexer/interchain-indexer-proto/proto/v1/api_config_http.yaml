@@ -11,7 +11,7 @@ http:
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessageDetails
       get: /api/v1/interchain/messages/{message_id}
 
-    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessageByTransaction
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessagesByTransaction
       get: /api/v1/interchain/messages:byTx/{tx_hash}
 
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfers

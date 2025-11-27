@@ -37,13 +37,13 @@ paths:
           required: false
           type: string
         - name: page_size
-          description: items on a page
+          description: 'Items on a page: bounded by the API settings'
           in: query
           required: false
           type: integer
           format: int64
         - name: last_page
-          description: if true, return only the last page
+          description: If true, return only the last page (pagination token is ignored)
           in: query
           required: false
           type: boolean
@@ -58,20 +58,25 @@ paths:
           description: |-
             Raw pagination parameters
             (used when api.use_pagination_token=false)
+
+            Raw pagination field
           in: query
           required: false
           type: string
           format: uint64
         - name: message_id
+          description: Raw pagination field
           in: query
           required: false
           type: string
         - name: bridge_id
+          description: Raw pagination field
           in: query
           required: false
           type: integer
           format: int64
         - name: direction
+          description: Raw pagination field
           in: query
           required: false
           type: string
@@ -93,6 +98,69 @@ paths:
         - name: message_id
           in: path
           required: true
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/messages:byTx/{tx_hash}:
+    get:
+      operationId: InterchainService_GetMessagesByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            input pagination token - used by default
+            (packed version of the raw pagination parameters)
+          in: query
+          required: false
+          type: string
+        - name: timestamp
+          description: |-
+            Raw pagination parameters
+            (used when api.use_pagination_token=false)
+
+            Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: message_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+        - name: bridge_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: direction
+          description: Raw pagination field
+          in: query
+          required: false
           type: string
       tags:
         - InterchainService

@@ -60,6 +60,19 @@ pub fn hex_string_opt(data: Option<Vec<u8>>) -> Option<String> {
     data.map(|data| to_hex_prefixed(data.as_slice()))
 }
 
+pub fn vec_from_hex_prefixed(hexstring: &str) -> anyhow::Result<Vec<u8>> {
+    let s = hexstring
+        .strip_prefix("0x")
+        .or_else(|| hexstring.strip_prefix("0X"))
+        .ok_or_else(|| anyhow::anyhow!("Hex value must start with 0x"))?;
+
+    if !s.is_empty() {
+        Ok(hex::decode(s).map_err(|e| anyhow::anyhow!("Invalid hex string: {}", e))?)
+    } else {
+        Ok(vec![])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

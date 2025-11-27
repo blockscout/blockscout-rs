@@ -11,13 +11,68 @@ use interchain_indexer_entity::{
 use interchain_indexer_logic::{
     InterchainDatabase,
     pagination::{ListMarker, MessagePaginationLogic, OutputPagination, PaginationDirection},
-    utils::{hex_string_opt, to_hex_prefixed},
+    utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
 use tonic::{Request, Response, Status};
+
+macro_rules! pagination_params {
+    ($service:expr, $request:expr) => {{
+        let inner = $request.into_inner();
+        let api_settings = &$service.api_settings;
+
+        let input_pagination = if api_settings.use_pagination_token {
+            if let Some(pagination_token) = &inner.page_token {
+                Some(
+                    MessagePaginationLogic::from_token(pagination_token)
+                        .map_err(map_db_error)?,
+                )
+            } else {
+                None
+            }
+        } else {
+            match (
+                inner.timestamp,
+                inner.message_id.clone(),
+                inner.bridge_id,
+                inner.direction.clone(),
+            ) {
+                (Some(timestamp), Some(message_id), Some(bridge_id), Some(direction)) => {
+                    Some(
+                        MessagePaginationLogic::new(
+                            timestamp as i64,
+                            message_id,
+                            bridge_id,
+                            PaginationDirection::from_string(&direction)
+                                .map_err(map_db_error)?,
+                        )
+                        .map_err(map_db_error)?,
+                    )
+                }
+
+                (None, None, None, None) => None,
+
+                _ => {
+                    return Err(map_db_error(anyhow!(
+                        "Pagination error: timestamp, message_id, bridge_id and direction must be provided together"
+                    )))
+                }
+            }
+        };
+
+        let page_size = inner
+            .page_size
+            .unwrap_or(api_settings.default_page_size)
+            .clamp(1, api_settings.max_page_size) as usize;
+
+        let is_last_page = inner.last_page.unwrap_or(false);
+
+        Ok::<_, tonic::Status>((inner, input_pagination, page_size, is_last_page))
+    }};
+}
 
 pub struct InterchainServiceImpl {
     pub db: Arc<InterchainDatabase>,
@@ -36,63 +91,6 @@ impl InterchainServiceImpl {
             bridges_names,
             api_settings,
         }
-    }
-
-    /// Input pagination can be either a token or a set of
-    /// timestamp, message_id, bridge_id and direction
-    /// (depending on the API settings)
-    fn extract_input_pagination(
-        &self,
-        request: &GetMessagesRequest,
-    ) -> anyhow::Result<Option<MessagePaginationLogic>> {
-        if self.api_settings.use_pagination_token {
-            if let Some(pagination_token) = &request.page_token {
-                Ok(Some(MessagePaginationLogic::from_token(pagination_token)?))
-            } else {
-                Ok(None)
-            }
-        } else {
-            // let timestamp = request.timestamp;
-            // let message_id = request.message_id.clone();
-            // let bridge_id = request.bridge_id;
-            // let direction = request.direction.clone();
-
-            match (
-                request.timestamp,
-                request.message_id.clone(),
-                request.bridge_id,
-                request.direction.clone(),
-            ) {
-                // all input pagination parameters are provided
-                (Some(timestamp), Some(message_id), Some(bridge_id), Some(direction)) => {
-                    Ok(Some(MessagePaginationLogic::new(
-                        timestamp as i64,
-                        message_id,
-                        bridge_id,
-                        PaginationDirection::from_string(&direction)?,
-                    )?))
-                }
-
-                // no input pagination povided
-                (None, None, None, None) => Ok(None),
-
-                // some input pagination parameters are missing
-                _ => Err(anyhow!(
-                    "Pagination error: timestamp, message_id, bridge_id and direction must be provided together"
-                )),
-            }
-        }
-    }
-
-    fn extract_page_size(&self, request: &GetMessagesRequest) -> usize {
-        request
-            .page_size
-            .unwrap_or(self.api_settings.default_page_size)
-            .clamp(1, self.api_settings.max_page_size) as usize
-    }
-
-    fn extract_is_last_page(&self, request: &GetMessagesRequest) -> bool {
-        request.last_page.unwrap_or(false)
     }
 
     fn produce_next_pagination(
@@ -228,17 +226,12 @@ impl InterchainService for InterchainServiceImpl {
         &self,
         request: Request<GetMessagesRequest>,
     ) -> Result<Response<GetMessagesResponse>, Status> {
-        let inner = request.into_inner();
-        let input_pagination = self
-            .extract_input_pagination(&inner)
-            .map_err(map_db_error)?;
-
-        let page_size = self.extract_page_size(&inner);
-        let is_last_page = self.extract_is_last_page(&inner);
+        let (_inner, input_pagination, page_size, is_last_page) =
+            pagination_params!(self, request)?;
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_messages(page_size, is_last_page, input_pagination)
+            .get_crosschain_messages(None, page_size, is_last_page, input_pagination)
             .await
             .map_err(map_db_error)?;
 
@@ -254,22 +247,45 @@ impl InterchainService for InterchainServiceImpl {
 
     async fn get_message_details(
         &self,
-        _request: Request<GetMessageDetailsRequest>,
+        request: Request<GetMessageDetailsRequest>,
     ) -> Result<Response<InterchainMessage>, Status> {
-        let response = InterchainMessage {
-            ..Default::default()
-        };
+        let inner = request.into_inner();
+        let response = match self
+            .db
+            .get_crosschain_message(vec_from_hex_prefixed(&inner.message_id).map_err(map_db_error)?)
+            .await
+        {
+            Ok(Some((message, transfers))) => {
+                let message = self.message_model_to_proto(message, transfers);
+                Ok(message)
+            }
+            Ok(None) => Err(tonic::Status::not_found("Message not found")),
+            Err(e) => Err(map_db_error(e)),
+        }?;
+
         Ok(Response::new(response))
     }
 
     async fn get_messages_by_transaction(
         &self,
-        _request: Request<GetMessagesByTransactionRequest>,
+        request: Request<GetMessagesByTransactionRequest>,
     ) -> Result<Response<GetMessagesResponse>, Status> {
+        let (inner, input_pagination, page_size, is_last_page) = pagination_params!(self, request)?;
+
+        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(map_db_error)?;
+
+        let (items, output_pagination) = self
+            .db
+            .get_crosschain_messages(Some(tx_hash), page_size, is_last_page, input_pagination)
+            .await
+            .map_err(map_db_error)?;
+
+        let items = self.messages_logic_to_proto(items);
+
         let response = GetMessagesResponse {
-            items: vec![],
-            next_page_params: None,
-            prev_page_params: None,
+            items,
+            next_page_params: self.produce_next_pagination(&output_pagination),
+            prev_page_params: self.produce_prev_pagination(&output_pagination),
         };
         Ok(Response::new(response))
     }
