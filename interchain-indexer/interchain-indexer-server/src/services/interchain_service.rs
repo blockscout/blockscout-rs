@@ -8,9 +8,7 @@ use interchain_indexer_entity::{
     crosschain_transfers::Model as CrosschainTransferModel, sea_orm_active_enums::MessageStatus,
 };
 use interchain_indexer_logic::{
-    InterchainDatabase,
-    pagination::{ListMarker, MessagePaginationLogic, OutputPagination, PaginationDirection},
-    utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
+    InterchainDatabase, TokenInfoService, pagination::{ListMarker, MessagePaginationLogic, OutputPagination, PaginationDirection}, utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed}
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -77,6 +75,7 @@ macro_rules! pagination_params {
 
 pub struct InterchainServiceImpl {
     pub db: Arc<InterchainDatabase>,
+    pub token_info_service: Arc<TokenInfoService>,
     pub bridges_names: HashMap<i32, String>,
     pub api_settings: ApiSettings,
 }
@@ -84,11 +83,13 @@ pub struct InterchainServiceImpl {
 impl InterchainServiceImpl {
     pub fn new(
         db: Arc<InterchainDatabase>,
+        token_info_service: Arc<TokenInfoService>,
         bridges_names: HashMap<i32, String>,
         api_settings: ApiSettings,
     ) -> Self {
         Self {
             db,
+            token_info_service,
             bridges_names,
             api_settings,
         }

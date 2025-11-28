@@ -45,7 +45,6 @@ CREATE TABLE bridge_contracts (
 
 -- tokens: token registry
 CREATE TABLE tokens (
-  id            BIGSERIAL PRIMARY KEY,
   chain_id      BIGINT NOT NULL REFERENCES chains(id),
   address       BYTEA NOT NULL,
   symbol        TEXT,
@@ -56,7 +55,7 @@ CREATE TABLE tokens (
   created_at    TIMESTAMP DEFAULT now(),
   updated_at    TIMESTAMP DEFAULT now(),
 
-  UNIQUE(chain_id, address)
+  PRIMARY KEY (chain_id, address)
 );
 
 -- indexer_staging: Indexer Persistent Storage.

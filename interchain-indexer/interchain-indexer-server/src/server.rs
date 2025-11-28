@@ -8,7 +8,7 @@ use crate::{
 };
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing as bs_tracing};
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
-use interchain_indexer_logic::InterchainDatabase;
+use interchain_indexer_logic::{InterchainDatabase, TokenInfoService};
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::interchain_statistics_service_actix::route_interchain_statistics_service;
 use migration::Migrator;
 use std::sync::Arc;
@@ -110,11 +110,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
 
+    let token_info_service = Arc::new(TokenInfoService::new(db.clone(), chains_providers.clone()));
+
     let indexer_handles =
         spawn_configured_indexers(interchain_db.clone(), &bridges, &chains, &chains_providers)?;
 
     let interchain_service = Arc::new(InterchainServiceImpl::new(
         db.clone(),
+        token_info_service.clone(),
         bridges
             .iter()
             .map(|b| (b.bridge_id, b.name.clone()))

@@ -5,10 +5,13 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "tokens")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i64,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub chain_id: i64,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(
+        primary_key,
+        auto_increment = false,
+        column_type = "VarBinary(StringLen::None)"
+    )]
     pub address: Vec<u8>,
     #[sea_orm(column_type = "Text", nullable)]
     pub symbol: Option<String>,

@@ -1,7 +1,7 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
-    indexer_checkpoints, pending_messages,
+    indexer_checkpoints, pending_messages, tokens,
 };
 use parking_lot::RwLock;
 use sea_orm::sea_query::Func;
@@ -585,6 +585,42 @@ impl InterchainDatabase {
             .await
             .inspect_err(|e| tracing::error!(err =? e, "failed to query checkpoint from database"))
             .map_err(|e| e.into())
+    }
+
+    pub async fn get_token_info(
+        &self,
+        chain_id: u64,
+        address: Vec<u8>,
+    ) -> anyhow::Result<Option<tokens::Model>> {
+        tokens::Entity::find()
+            .filter(tokens::Column::ChainId.eq(chain_id))
+            .filter(tokens::Column::Address.eq(address))
+            .one(self.db.as_ref())
+            .await
+            .inspect_err(|e| tracing::error!(err =? e, "failed to query token info from database"))
+            .map_err(|e| e.into())
+    }
+
+    pub async fn upsert_token_info(
+        &self,
+        token_info: tokens::ActiveModel,
+    ) -> anyhow::Result<()> {
+        tokens::Entity::insert(token_info)
+        .on_conflict(
+            OnConflict::columns([tokens::Column::ChainId, tokens::Column::Address])
+            .update_columns([
+                tokens::Column::Name,
+                tokens::Column::Symbol,
+                tokens::Column::Decimals,
+                tokens::Column::TokenIcon
+                ])
+            .value(chains::Column::UpdatedAt, Expr::current_timestamp())
+            .to_owned()
+        )
+        .exec(self.db.as_ref())
+        .await?;
+
+        Ok(())
     }
 
     /// Statistics

@@ -701,7 +701,7 @@ mod tests {
         // Message should be flushed to final storage
         assert_eq!(buffer.hot.len(), 0, "Hot tier should be empty after flush");
 
-        let (messages, _) = db.get_crosschain_messages(100, false, None).await.unwrap();
+        let (messages, _) = db.get_crosschain_messages(None, 100, false, None).await.unwrap();
         assert_eq!(messages.len(), 1, "Message should be in final storage");
         assert_eq!(messages[0].0.id, 1);
     }
@@ -836,7 +836,7 @@ mod tests {
         buffer.run().await.unwrap();
 
         // msg1 should be flushed
-        let (messages, _) = db.get_crosschain_messages(100, false, None).await.unwrap();
+        let (messages, _) = db.get_crosschain_messages(None, 100, false, None).await.unwrap();
         assert_eq!(messages.len(), 1);
 
         // Due to the bounding logic:
@@ -916,7 +916,7 @@ mod tests {
             "Hot tier should be empty after capacity-triggered maintenance"
         );
 
-        let (messages, _) = db.get_crosschain_messages(100, false, None).await.unwrap();
+        let (messages, _) = db.get_crosschain_messages(None, 100, false, None).await.unwrap();
         assert_eq!(messages.len(), 3, "All messages should be in final storage");
     }
 
@@ -965,7 +965,7 @@ mod tests {
         buffer.run().await.unwrap();
 
         // Message should be in final storage
-        let (messages, _) = db.get_crosschain_messages(100, false, None).await.unwrap();
+        let (messages, _) = db.get_crosschain_messages(None, 100, false, None).await.unwrap();
         assert_eq!(messages.len(), 1);
 
         // Message should be deleted from pending
