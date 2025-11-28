@@ -14,6 +14,10 @@ use da_indexer_proto::blockscout::da_indexer::v1::{
 use sea_orm::DatabaseConnection;
 
 use da_indexer_logic::s3_storage::S3Storage;
+use da_indexer_proto::blockscout::da_indexer::v1::{
+    eigen_da_v2_service_actix::route_eigen_da_v2_service,
+    eigen_da_v2_service_server::EigenDaV2ServiceServer,
+};
 use std::{path::PathBuf, sync::Arc};
 
 const SERVICE_NAME: &str = "da_indexer";
@@ -32,6 +36,7 @@ impl Router {
             .add_service(HealthServer::from_arc(self.health.clone()))
             .add_service(CelestiaServiceServer::from_arc(self.celestia.clone()))
             .add_service(EigenDaServiceServer::from_arc(self.eigenda.clone()))
+            .add_service(EigenDaV2ServiceServer::from_arc(self.eigenda.clone()))
     }
 }
 
@@ -40,6 +45,7 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| route_celestia_service(config, self.celestia.clone()));
         service_config.configure(|config| route_eigen_da_service(config, self.eigenda.clone()));
+        service_config.configure(|config| route_eigen_da_v2_service(config, self.eigenda.clone()));
         service_config.configure(|config| {
             route_swagger(
                 config,
@@ -62,7 +68,11 @@ pub async fn run(
         s3_storage.clone(),
         l2_router,
     ));
-    let eigenda = Arc::new(EigenDaService::new(database_connection.clone(), s3_storage));
+    let eigenda = Arc::new(EigenDaService::new(
+        database_connection.clone(),
+        s3_storage,
+        settings.eigenda_v2_server,
+    ));
 
     let router = Router {
         health,
