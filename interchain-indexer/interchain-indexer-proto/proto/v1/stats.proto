@@ -17,13 +17,13 @@ message GetDailyStatisticsRequest {
 }
 
 message GetCommonStatisticsResponse {
-    uint64 timestamp = 1;
+    string timestamp = 1;
     uint64 total_messages = 2;
     uint64 total_transfers = 3;
 }
 
 message GetDailyStatisticsResponse {
-    uint64 timestamp = 1;
+    string timestamp = 1;
     uint64 daily_messages = 2;
     uint64 daily_transfers = 3;
 }

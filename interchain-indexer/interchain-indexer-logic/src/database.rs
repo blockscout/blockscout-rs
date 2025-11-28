@@ -1,15 +1,29 @@
+use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
     indexer_checkpoints,
 };
 use parking_lot::RwLock;
 use sea_orm::{
-    ActiveValue, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, TransactionTrait, prelude::Expr, sea_query::OnConflict,
+    ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, TransactionTrait,
+    prelude::Expr, sea_query::OnConflict,
 };
 use std::{collections::HashMap, sync::Arc};
 
 use crate::pagination::{MessagePaginationLogic, OutputPagination, PaginationDirection};
+
+pub struct InterchainTotalCounters {
+    pub timestamp: NaiveDateTime,
+    pub total_messages: u64,
+    pub total_transfers: u64,
+}
+
+pub struct InterchainDailyCounters {
+    pub date: NaiveDate,
+    pub daily_messages: u64,
+    pub daily_transfers: u64,
+}
 
 #[derive(Clone)]
 pub struct InterchainDatabase {
@@ -571,12 +585,122 @@ impl InterchainDatabase {
             .inspect_err(|e| tracing::error!(err =? e, "failed to query checkpoint from database"))
             .map_err(|e| e.into())
     }
+
+    /// Statistics
+    pub async fn get_total_counters(
+        &self,
+        timestamp: NaiveDateTime,
+        src_chain_filter: Option<u64>,
+        dst_chain_filter: Option<u64>,
+    ) -> anyhow::Result<InterchainTotalCounters> {
+        self.db
+            .transaction::<_, InterchainTotalCounters, DbErr>(|tx| {
+                Box::pin(async move {
+                    let mut filter = Condition::all()
+                        .add(Expr::col(crosschain_messages::Column::InitTimestamp).lt(timestamp));
+
+                    if let Some(src_chain_id) = src_chain_filter {
+                        filter = filter.add(
+                            Expr::col(crosschain_messages::Column::SrcChainId).eq(src_chain_id),
+                        );
+                    }
+
+                    if let Some(dst_chain_id) = dst_chain_filter {
+                        filter = filter.add(
+                            Expr::col(crosschain_messages::Column::DstChainId).eq(dst_chain_id),
+                        );
+                    }
+
+                    let total_messages = crosschain_messages::Entity::find()
+                        .filter(filter.clone())
+                        .count(tx)
+                        .await?;
+
+                    let total_transfers = crosschain_transfers::Entity::find()
+                        .join(
+                            JoinType::InnerJoin,
+                            crosschain_transfers::Relation::CrosschainMessages.def(),
+                        )
+                        .filter(filter)
+                        .count(tx)
+                        .await?;
+
+                    Ok(InterchainTotalCounters {
+                        timestamp,
+                        total_messages,
+                        total_transfers,
+                    })
+                })
+            })
+            .await
+            .map_err(|e| e.into())
+    }
+
+    pub async fn get_daily_counters(
+        &self,
+        timestamp: NaiveDateTime,
+        src_chain_filter: Option<u64>,
+        dst_chain_filter: Option<u64>,
+    ) -> anyhow::Result<InterchainDailyCounters> {
+        let day = timestamp.date();
+        let day_start = day.and_hms_opt(0, 0, 0).expect("valid day start");
+        let next_day_start = day_start + Duration::days(1);
+
+        self.db
+            .transaction::<_, InterchainDailyCounters, DbErr>(|tx| {
+                Box::pin(async move {
+                    let mut filter = Condition::all()
+                        .add(Expr::col(crosschain_messages::Column::InitTimestamp).gte(day_start))
+                        .add(
+                            Expr::col(crosschain_messages::Column::InitTimestamp)
+                                .lt(next_day_start),
+                        );
+
+                    if let Some(src_chain_id) = src_chain_filter {
+                        filter = filter.add(
+                            Expr::col(crosschain_messages::Column::SrcChainId).eq(src_chain_id),
+                        );
+                    }
+
+                    if let Some(dst_chain_id) = dst_chain_filter {
+                        filter = filter.add(
+                            Expr::col(crosschain_messages::Column::DstChainId).eq(dst_chain_id),
+                        );
+                    }
+
+                    let daily_messages = crosschain_messages::Entity::find()
+                        .filter(filter.clone())
+                        .count(tx)
+                        .await?;
+
+                    let daily_transfers = crosschain_transfers::Entity::find()
+                        .join(
+                            JoinType::InnerJoin,
+                            crosschain_transfers::Relation::CrosschainMessages.def(),
+                        )
+                        .filter(filter)
+                        .count(tx)
+                        .await?;
+
+                    Ok(InterchainDailyCounters {
+                        date: day,
+                        daily_messages,
+                        daily_transfers,
+                    })
+                })
+            })
+            .await
+            .map_err(|e| e.into())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use interchain_indexer_entity::chains;
-    use sea_orm::ActiveValue::Set;
+    use chrono::Utc;
+    use interchain_indexer_entity::{
+        chains, crosschain_messages, sea_orm_active_enums::MessageStatus,
+    };
+    use sea_orm::{ActiveValue::Set, EntityTrait};
 
     use crate::{
         InterchainDatabase,
@@ -663,5 +787,119 @@ mod tests {
         assert_eq!(stored_chain.name, ava_chain.name.unwrap());
         assert_eq!(stored_chain.native_id, ava_chain.native_id.unwrap());
         assert_eq!(stored_chain.icon, ava_chain.icon.unwrap());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn load_native_id_map_filters_missing_native_ids() {
+        let db = init_db("load_native_id_map_filters_missing_native_ids").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("ChainA".to_string()),
+                    native_id: Set(Some("0xaaa".to_string())),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("ChainB".to_string()),
+                    native_id: Set(Some("0xbbb".to_string())),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("ChainC".to_string()),
+                    native_id: Set(None),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        let map = interchain_db.load_native_id_map().await.unwrap();
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get("0xaaa"), Some(&1));
+        assert_eq!(map.get("0xbbb"), Some(&2));
+        assert!(map.get("0xccc").is_none());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_crosschain_message_handles_pk_and_native_ids() {
+        let db = init_db("get_crosschain_message_handles_pk_and_native_ids").await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        let (msg, transfers) = interchain_db
+            .get_crosschain_message(1001i64.to_be_bytes().to_vec())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(msg.id, 1001);
+        assert_eq!(transfers.len(), 1);
+
+        let native_id = vec![9u8; 16];
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: Set(2001),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Initiated),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(100)),
+            native_id: Set(Some(native_id.clone())),
+            ..Default::default()
+        })
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let (msg, transfers) = interchain_db
+            .get_crosschain_message(native_id.clone())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(msg.native_id, Some(native_id));
+        assert!(transfers.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn counters_cover_all_filters() {
+        let db = init_db("counters_cover_all_filters").await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+        let ts = (Utc::now() + chrono::Duration::seconds(1)).naive_utc();
+
+        let totals = interchain_db
+            .get_total_counters(ts, None, None)
+            .await
+            .unwrap();
+        assert_eq!(totals.total_messages, 4);
+        assert_eq!(totals.total_transfers, 5);
+
+        let src_filtered = interchain_db
+            .get_total_counters(ts, Some(1), None)
+            .await
+            .unwrap();
+        assert_eq!(src_filtered.total_messages, 2);
+        assert_eq!(src_filtered.total_transfers, 3);
+
+        let daily = interchain_db
+            .get_daily_counters(ts, None, None)
+            .await
+            .unwrap();
+        assert_eq!(daily.daily_messages, 4);
+        assert_eq!(daily.daily_transfers, 5);
+
+        let dst_filtered = interchain_db
+            .get_daily_counters(ts, None, Some(100))
+            .await
+            .unwrap();
+        assert_eq!(dst_filtered.daily_messages, 2);
+        assert_eq!(dst_filtered.daily_transfers, 3);
     }
 }

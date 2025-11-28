@@ -326,7 +326,6 @@ definitions:
     properties:
       timestamp:
         type: string
-        format: uint64
       total_messages:
         type: string
         format: uint64
@@ -338,7 +337,6 @@ definitions:
     properties:
       timestamp:
         type: string
-        format: uint64
       daily_messages:
         type: string
         format: uint64

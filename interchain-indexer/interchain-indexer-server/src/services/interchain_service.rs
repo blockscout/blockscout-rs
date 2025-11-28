@@ -3,7 +3,6 @@ use crate::{
     settings::ApiSettings,
 };
 use anyhow::anyhow;
-use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
     crosschain_messages::Model as CrosschainMessageModel,
     crosschain_transfers::Model as CrosschainTransferModel, sea_orm_active_enums::MessageStatus,
@@ -18,6 +17,8 @@ use std::{
     sync::Arc,
 };
 use tonic::{Request, Response, Status};
+
+use super::utils::{db_datetime_to_string, map_db_error};
 
 macro_rules! pagination_params {
     ($service:expr, $request:expr) => {{
@@ -325,15 +326,6 @@ impl InterchainService for InterchainServiceImpl {
         };
         Ok(Response::new(response))
     }
-}
-
-fn db_datetime_to_string(ts: NaiveDateTime) -> String {
-    ts.and_utc()
-        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-}
-
-fn map_db_error(err: anyhow::Error) -> tonic::Status {
-    tonic::Status::internal(err.to_string())
 }
 
 fn message_status_to_str(status: &MessageStatus) -> &'static str {

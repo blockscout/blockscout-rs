@@ -1,6 +1,7 @@
 mod health;
 mod interchain_service;
 mod stats;
+mod utils;
 
 pub use health::HealthService;
 pub use interchain_service::InterchainServiceImpl;
