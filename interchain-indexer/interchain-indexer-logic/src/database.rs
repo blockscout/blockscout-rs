@@ -4,10 +4,11 @@ use interchain_indexer_entity::{
     indexer_checkpoints, pending_messages,
 };
 use parking_lot::RwLock;
+use sea_orm::sea_query::Func;
 use sea_orm::{
-    ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, JoinType,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, TransactionTrait,
-    prelude::Expr, sea_query::OnConflict,
+    ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
+    JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
+    TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -646,51 +647,63 @@ impl InterchainDatabase {
         let day_start = day.and_hms_opt(0, 0, 0).expect("valid day start");
         let next_day_start = day_start + Duration::days(1);
 
-        self.db
-            .transaction::<_, InterchainDailyCounters, DbErr>(|tx| {
-                Box::pin(async move {
-                    let mut filter = Condition::all()
-                        .add(Expr::col(crosschain_messages::Column::InitTimestamp).gte(day_start))
-                        .add(
-                            Expr::col(crosschain_messages::Column::InitTimestamp)
-                                .lt(next_day_start),
-                        );
+        let mut filter = Condition::all()
+            .add(Expr::col(crosschain_messages::Column::InitTimestamp).gte(day_start))
+            .add(Expr::col(crosschain_messages::Column::InitTimestamp).lt(next_day_start));
 
-                    if let Some(src_chain_id) = src_chain_filter {
-                        filter = filter.add(
-                            Expr::col(crosschain_messages::Column::SrcChainId).eq(src_chain_id),
-                        );
-                    }
+        if let Some(src_chain_id) = src_chain_filter {
+            filter =
+                filter.add(Expr::col(crosschain_messages::Column::SrcChainId).eq(src_chain_id));
+        }
 
-                    if let Some(dst_chain_id) = dst_chain_filter {
-                        filter = filter.add(
-                            Expr::col(crosschain_messages::Column::DstChainId).eq(dst_chain_id),
-                        );
-                    }
+        if let Some(dst_chain_id) = dst_chain_filter {
+            filter =
+                filter.add(Expr::col(crosschain_messages::Column::DstChainId).eq(dst_chain_id));
+        }
 
-                    let daily_messages = crosschain_messages::Entity::find()
-                        .filter(filter.clone())
-                        .count(tx)
-                        .await?;
+        #[derive(Debug, FromQueryResult)]
+        struct DailyCountersResult {
+            daily_messages: i64,
+            daily_transfers: i64,
+        }
 
-                    let daily_transfers = crosschain_transfers::Entity::find()
-                        .join(
-                            JoinType::InnerJoin,
-                            crosschain_transfers::Relation::CrosschainMessages.def(),
-                        )
-                        .filter(filter)
-                        .count(tx)
-                        .await?;
+        // Single query: count distinct messages and total transfers via LEFT JOIN
+        // COUNT(DISTINCT m.id) for messages
+        // COUNT(t.id) for transfers (NULL when no transfer exists)
+        let result = crosschain_messages::Entity::find()
+            .select_only()
+            .column_as(
+                Expr::expr(Func::count_distinct(Expr::col((
+                    crosschain_messages::Entity,
+                    crosschain_messages::Column::Id,
+                )))),
+                "daily_messages",
+            )
+            .column_as(
+                Expr::expr(Func::count(Expr::col((
+                    crosschain_transfers::Entity,
+                    crosschain_transfers::Column::Id,
+                )))),
+                "daily_transfers",
+            )
+            .join(
+                JoinType::LeftJoin,
+                crosschain_messages::Relation::CrosschainTransfers.def(),
+            )
+            .filter(filter)
+            .into_model::<DailyCountersResult>()
+            .one(self.db.as_ref())
+            .await?
+            .unwrap_or(DailyCountersResult {
+                daily_messages: 0,
+                daily_transfers: 0,
+            });
 
-                    Ok(InterchainDailyCounters {
-                        date: day,
-                        daily_messages,
-                        daily_transfers,
-                    })
-                })
-            })
-            .await
-            .map_err(|e| e.into())
+        Ok(InterchainDailyCounters {
+            date: day,
+            daily_messages: result.daily_messages as u64,
+            daily_transfers: result.daily_transfers as u64,
+        })
     }
 
     // STAGING TABLE: pending_messages
