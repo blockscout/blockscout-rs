@@ -843,7 +843,7 @@ mod tests {
         .unwrap();
 
         // Message should be in hot tier (ready = has init_timestamp)
-        let (hot_count, _) = buffer.stats();
+        let hot_count = buffer.hot_len();
         assert_eq!(hot_count, 1);
 
         // Step 2: Process ReceiveCrossChainMessage

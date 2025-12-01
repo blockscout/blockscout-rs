@@ -84,7 +84,7 @@ impl Key {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Cursor {
     /// chain_id -> (min_block, max_block) seen for this message
-    pub chain_blocks: HashMap<i64, (i64, i64)>,
+    chain_blocks: HashMap<i64, (i64, i64)>,
 }
 
 impl Cursor {
@@ -233,6 +233,34 @@ impl TryInto<pending_messages::ActiveModel> for &Entry {
     }
 }
 
+impl From<crosschain_messages::Model> for Entry {
+    fn from(model: crosschain_messages::Model) -> Self {
+        Self {
+            key: Key::new(model.id, model.bridge_id),
+            src_chain_id: Some(model.src_chain_id),
+            source_transaction_hash: model
+                .src_tx_hash
+                .and_then(|v| FixedBytes::<32>::try_from(v.as_slice()).ok()),
+            init_timestamp: Some(model.init_timestamp),
+            sender_address: model
+                .sender_address
+                .and_then(|v| Address::try_from(v.as_slice()).ok()),
+            recipient_address: model
+                .recipient_address
+                .and_then(|v| Address::try_from(v.as_slice()).ok()),
+            destination_chain_id: model.dst_chain_id,
+            payload: model.payload,
+            native_id: model.native_id,
+            destination_transaction_hash: model
+                .dst_tx_hash
+                .and_then(|v| FixedBytes::<32>::try_from(v.as_slice()).ok()),
+            status: model.status.into(),
+            cursor: Cursor::default(), // Not stored in DB, starts fresh
+            created_at: model.created_at.map(|t| t),
+        }
+    }
+}
+
 /// Configuration for the tiered message buffer
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -242,8 +270,6 @@ pub struct Config {
     pub hot_ttl: Duration,
     /// How often to run maintenance (offload + flush)
     pub maintenance_interval: Duration,
-    /// Maximum entries per database batch insert (to avoid parameter limits)
-    pub db_batch_size: usize,
 }
 
 impl Default for Config {
@@ -252,17 +278,8 @@ impl Default for Config {
             max_hot_entries: 100_000,
             hot_ttl: Duration::from_secs(300), // 5 minutes
             maintenance_interval: Duration::from_millis(500),
-            db_batch_size: 1000, // ~14 columns * 1000 = 14000 params, well under 65535 limit
         }
     }
-}
-
-/// Report from maintenance operation
-#[derive(Default, Debug)]
-pub struct MaintenanceReport {
-    pub flushed_to_final: usize,
-    pub offloaded_to_cold: usize,
-    pub hot_entries_remaining: usize,
 }
 
 /// Tiered message buffer with hot (memory) and cold (Postgres) storage
@@ -288,8 +305,20 @@ impl MessageBuffer {
         })
     }
 
+    /// Get the number of entries in the hot tier (for testing/monitoring)
+    ///
+    #[allow(dead_code)]
+    pub fn hot_len(&self) -> usize {
+        self.hot.len()
+    }
+
     /// Get existing entry or create new one.
-    /// Checks: hot tier → cold tier (DB) → create new
+    ///
+    /// Checks:
+    /// 1. hot tier
+    /// 2. cold tier (pending_messages)
+    /// 3. final storage (crosschain_messages)
+    /// 4. create new
     pub async fn get_or_create(&self, key: Key) -> Result<Entry> {
         if let Some(entry) = self.hot.get(&key) {
             return Ok(entry.clone());
@@ -306,6 +335,15 @@ impl MessageBuffer {
             return entry;
         }
 
+        if let Some(model) = self
+            .db
+            .get_crosschain_message_by_pk(key.message_id, key.bridge_id)
+            .await?
+        {
+            return Ok(Entry::from(model));
+        }
+
+        // 4. Create new entry
         Ok(Entry::new(key))
     }
 
@@ -321,11 +359,6 @@ impl MessageBuffer {
         }
 
         Ok(())
-    }
-
-    /// Get current stats (hot tier entry count)
-    pub fn stats(&self) -> (usize, usize) {
-        (self.hot.len(), 0)
     }
 
     /// Run maintenance: offload stale entries, flush ready entries, update
@@ -682,7 +715,6 @@ mod tests {
             max_hot_entries: 100,
             hot_ttl: Duration::from_secs(0), // Immediate TTL for testing
             maintenance_interval: Duration::from_secs(60),
-            db_batch_size: 100,
         };
         let buffer = MessageBuffer::new(db.clone(), config);
 
@@ -701,7 +733,10 @@ mod tests {
         // Message should be flushed to final storage
         assert_eq!(buffer.hot.len(), 0, "Hot tier should be empty after flush");
 
-        let (messages, _) = db.get_crosschain_messages(None, 100, false, None).await.unwrap();
+        let (messages, _) = db
+            .get_crosschain_messages(None, 100, false, None)
+            .await
+            .unwrap();
         assert_eq!(messages.len(), 1, "Message should be in final storage");
         assert_eq!(messages[0].0.id, 1);
     }
@@ -716,7 +751,6 @@ mod tests {
             max_hot_entries: 100,
             hot_ttl: Duration::from_secs(0), // Immediate TTL
             maintenance_interval: Duration::from_secs(60),
-            db_batch_size: 100,
         };
         let buffer = MessageBuffer::new(db.clone(), config);
 
@@ -761,7 +795,6 @@ mod tests {
             max_hot_entries: 100,
             hot_ttl: Duration::from_secs(300), // Long TTL - don't offload msg2
             maintenance_interval: Duration::from_secs(60),
-            db_batch_size: 100,
         };
         let buffer = MessageBuffer::new(db.clone(), config);
 
@@ -813,7 +846,6 @@ mod tests {
             max_hot_entries: 100,
             hot_ttl: Duration::from_secs(300),
             maintenance_interval: Duration::from_secs(60),
-            db_batch_size: 100,
         };
         let buffer = MessageBuffer::new(db.clone(), config);
 
@@ -836,7 +868,10 @@ mod tests {
         buffer.run().await.unwrap();
 
         // msg1 should be flushed
-        let (messages, _) = db.get_crosschain_messages(None, 100, false, None).await.unwrap();
+        let (messages, _) = db
+            .get_crosschain_messages(None, 100, false, None)
+            .await
+            .unwrap();
         assert_eq!(messages.len(), 1);
 
         // Due to the bounding logic:
@@ -895,7 +930,6 @@ mod tests {
             max_hot_entries: 2, // Very low capacity
             hot_ttl: Duration::from_secs(0),
             maintenance_interval: Duration::from_secs(60),
-            db_batch_size: 100,
         };
         let buffer = MessageBuffer::new(db.clone(), config);
 
@@ -916,7 +950,10 @@ mod tests {
             "Hot tier should be empty after capacity-triggered maintenance"
         );
 
-        let (messages, _) = db.get_crosschain_messages(None, 100, false, None).await.unwrap();
+        let (messages, _) = db
+            .get_crosschain_messages(None, 100, false, None)
+            .await
+            .unwrap();
         assert_eq!(messages.len(), 3, "All messages should be in final storage");
     }
 
@@ -953,7 +990,6 @@ mod tests {
             max_hot_entries: 100,
             hot_ttl: Duration::from_secs(0),
             maintenance_interval: Duration::from_secs(60),
-            db_batch_size: 100,
         };
         let buffer = MessageBuffer::new(db.clone(), config);
 
@@ -965,7 +1001,10 @@ mod tests {
         buffer.run().await.unwrap();
 
         // Message should be in final storage
-        let (messages, _) = db.get_crosschain_messages(None, 100, false, None).await.unwrap();
+        let (messages, _) = db
+            .get_crosschain_messages(None, 100, false, None)
+            .await
+            .unwrap();
         assert_eq!(messages.len(), 1);
 
         // Message should be deleted from pending
@@ -975,6 +1014,112 @@ mod tests {
                 .unwrap()
                 .is_none(),
             "Message should be deleted from pending_messages after promotion"
+        );
+    }
+
+    /// Regression test: When SendCrossChainMessage is flushed to crosschain_messages,
+    /// and then a later event arrives (e.g., ReceiveCrossChainMessage), the buffer
+    /// should find the existing message in the final table and update it,
+    /// not create a new orphan entry.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_update_after_message_flushed_to_final_storage() {
+        let (db, bridge_id, chain_id) = setup_test_db("buffer_update_after_flush").await;
+
+        let config = Config {
+            max_hot_entries: 100,
+            hot_ttl: Duration::from_secs(0), // Immediate TTL for testing
+            maintenance_interval: Duration::from_secs(60),
+        };
+        let buffer = MessageBuffer::new(db.clone(), config);
+
+        let key = Key::new(1, bridge_id);
+
+        // Phase 1: Insert a READY message (simulating SendCrossChainMessage)
+        // with init_timestamp set and source data filled
+        let mut entry = Entry::new(key);
+        entry.init_timestamp = Some(chrono::Utc::now().naive_utc());
+        entry.src_chain_id = Some(chain_id);
+        entry.source_transaction_hash = Some(FixedBytes::<32>::repeat_byte(0xab));
+        entry.sender_address = Some(Address::repeat_byte(0x11));
+        entry.cursor.record_block(chain_id, 1000);
+        buffer.upsert(entry).await.unwrap();
+
+        // Phase 2: Run maintenance - this flushes the ready message to crosschain_messages
+        buffer.run().await.unwrap();
+
+        // Verify message is in final storage
+        let (messages, _) = db
+            .get_crosschain_messages(None, 100, false, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            messages.len(),
+            1,
+            "Message should be in crosschain_messages"
+        );
+        let msg = &messages[0].0;
+        assert_eq!(msg.src_chain_id, chain_id);
+        assert!(
+            msg.dst_chain_id.is_none(),
+            "Dest chain should not be set yet"
+        );
+        assert_eq!(msg.status, MessageStatus::Initiated);
+
+        // Verify hot tier is empty
+        assert!(
+            buffer.hot.is_empty(),
+            "Hot tier should be empty after flush"
+        );
+
+        // Phase 3: A later event arrives (e.g., message completion)
+        // The handler calls get_or_create and updates with destination data
+        let mut entry = buffer.get_or_create(key).await.unwrap();
+        // The bug: this creates a NEW entry without init_timestamp
+        // It should have found the message in crosschain_messages and loaded it
+        entry.destination_chain_id = Some(chain_id); // Same chain for simplicity
+        entry.destination_transaction_hash = Some(FixedBytes::<32>::repeat_byte(0xef));
+        entry.recipient_address = Some(Address::repeat_byte(0x22));
+        entry.status = Status::Completed;
+        entry.cursor.record_block(chain_id, 2000);
+        buffer.upsert(entry).await.unwrap();
+
+        // Phase 4: Run maintenance again
+        buffer.run().await.unwrap();
+
+        // Verify: The message in crosschain_messages should now have BOTH source AND dest data
+        let (messages, _) = db
+            .get_crosschain_messages(None, 100, false, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            messages.len(),
+            1,
+            "Should still be 1 message, not 2 (no orphan created)"
+        );
+
+        let msg = &messages[0].0;
+        // Source data should still be there
+        assert_eq!(
+            msg.src_chain_id, chain_id,
+            "Source chain should still be set"
+        );
+        assert!(
+            msg.src_tx_hash.is_some(),
+            "Source tx hash should still be present"
+        );
+
+        // Destination data should now be added
+        assert_eq!(
+            msg.dst_chain_id,
+            Some(chain_id),
+            "Dest chain should now be set from update event"
+        );
+        assert!(msg.dst_tx_hash.is_some(), "Dest tx hash should now be set");
+        assert_eq!(
+            msg.status,
+            MessageStatus::Completed,
+            "Status should be updated"
         );
     }
 }

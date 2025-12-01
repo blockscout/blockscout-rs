@@ -755,13 +755,36 @@ impl InterchainDatabase {
                     pending_messages::Column::BridgeId,
                 ])
                 .update_columns([pending_messages::Column::Payload])
-                .value(pending_messages::Column::CreatedAt, Expr::current_timestamp())
+                .value(
+                    pending_messages::Column::CreatedAt,
+                    Expr::current_timestamp(),
+                )
                 .to_owned(),
             )
             .exec(self.db.as_ref())
             .await
             .inspect_err(|e| tracing::error!(err =? e, "Failed to upsert pending message"))
             .map(|_| ())
+            .map_err(|e| e.into())
+    }
+
+    /// Get a crosschain message by primary key (message_id, bridge_id)
+    pub async fn get_crosschain_message_by_pk(
+        &self,
+        message_id: i64,
+        bridge_id: i32,
+    ) -> anyhow::Result<Option<crosschain_messages::Model>> {
+        crosschain_messages::Entity::find_by_id((message_id, bridge_id))
+            .one(self.db.as_ref())
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    err =? e,
+                    message_id,
+                    bridge_id,
+                    "Failed to fetch crosschain message by PK"
+                )
+            })
             .map_err(|e| e.into())
     }
 
