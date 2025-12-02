@@ -8,9 +8,9 @@ mod provider_layers;
 pub mod indexers;
 pub mod log_stream;
 pub mod pagination;
-pub mod token_info;
 #[cfg(any(test))]
 pub mod test_utils;
+pub mod token_info;
 pub mod utils;
 
 pub use database::*;

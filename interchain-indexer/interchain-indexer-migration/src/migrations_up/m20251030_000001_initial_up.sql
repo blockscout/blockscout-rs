@@ -119,7 +119,7 @@ CREATE TABLE crosschain_transfers (
   updated_at          TIMESTAMP DEFAULT now(),
   
   id                  BIGSERIAL PRIMARY KEY,
-  message_id          BIGINT NOT NULL, -- the linkage with message is optional
+  message_id          BIGINT NOT NULL,
   bridge_id           INTEGER NOT NULL,
   type                transfer_type, -- erc20/erc721/native/erc1155  
   token_src_chain_id  BIGINT NOT NULL REFERENCES chains(id),

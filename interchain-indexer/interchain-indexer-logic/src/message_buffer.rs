@@ -7,7 +7,7 @@
 //! Messages are promoted to `crosschain_messages` when they become "ready"
 //! (i.e., when the source event with `init_timestamp` has been received).
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 
 use alloy::primitives::{Address, FixedBytes};
 use anyhow::{Context, Result};
@@ -19,7 +19,7 @@ use interchain_indexer_entity::{
 };
 use sea_orm::{
     ActiveValue, DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
-    prelude::Decimal,
+    prelude::{BigDecimal, Decimal},
     sea_query::{Expr, OnConflict},
 };
 use serde::{Deserialize, Serialize};
@@ -402,7 +402,8 @@ impl Message {
     ) -> crosschain_transfers::ActiveModel {
         let now = Utc::now().naive_utc();
         let amount_str = t.amount.unwrap_or_default().to_string();
-        let amount = Decimal::from_str_exact(&amount_str).unwrap_or(Decimal::ZERO);
+        let amount = BigDecimal::from_str(&amount_str).unwrap_or_else(|_| BigDecimal::from(0));;
+
 
         crosschain_transfers::ActiveModel {
             id: ActiveValue::NotSet,
@@ -419,7 +420,7 @@ impl Message {
                     .map(|a| a.as_slice().to_vec())
                     .unwrap_or_default(),
             ),
-            src_amount: ActiveValue::Set(amount),
+            src_amount: ActiveValue::Set(amount.clone()),
             sender_address: ActiveValue::Set(t.sender.map(|a| a.as_slice().to_vec())),
             recipient_address: ActiveValue::Set(t.recipient.map(|a| a.as_slice().to_vec())),
             created_at: ActiveValue::Set(Some(now)),

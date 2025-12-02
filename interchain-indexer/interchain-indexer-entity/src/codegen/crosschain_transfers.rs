@@ -18,9 +18,9 @@ pub struct Model {
     pub src_decimals: i16,
     pub dst_decimals: i16,
     #[sea_orm(column_type = "Decimal(Some((78, 0)))")]
-    pub src_amount: Decimal,
+    pub src_amount: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((78, 0)))")]
-    pub dst_amount: Decimal,
+    pub dst_amount: BigDecimal,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub token_src_address: Vec<u8>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]

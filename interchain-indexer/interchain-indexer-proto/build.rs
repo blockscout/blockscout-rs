@@ -34,6 +34,7 @@ fn compile(
         .field_attribute("Pagination.timestamp", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.message_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.bridge_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("Pagination.transfer_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.direction", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         ;
     let default_fields: &[&str] = &[];

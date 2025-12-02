@@ -3844,6 +3844,7 @@ dependencies = [
  "chrono",
  "config 0.15.18",
  "env-collector",
+ "futures",
  "hex",
  "interchain-indexer-entity",
  "interchain-indexer-logic",

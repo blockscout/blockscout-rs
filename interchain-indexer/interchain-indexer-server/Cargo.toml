@@ -13,6 +13,7 @@ chrono = { workspace = true }
 config = { workspace = true }
 convert-trait = { workspace = true }
 env-collector = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
 interchain-indexer-entity = { workspace = true }
 interchain-indexer-logic = { workspace = true }

@@ -45,8 +45,9 @@ run-dev:
     dotenv -f .env run just run
 
 generate-entities *args:
-    sea-orm-cli generate entity -o interchain-indexer-entity/src/codegen 
+    sea-orm-cli generate entity -o interchain-indexer-entity/src/codegen
     cargo fmt --all -- --config imports_granularity=Crate
+    ./scripts/bigdecimal_rename.sh interchain-indexer-entity/src/codegen
 
 new-migration name:
     ./scripts/update_migration.sh {{name}}
