@@ -14,10 +14,12 @@ use anyhow::{Context, Result};
 use chrono::{NaiveDateTime, Utc};
 use dashmap::DashMap;
 use interchain_indexer_entity::{
-    crosschain_messages, indexer_checkpoints, pending_messages, sea_orm_active_enums::MessageStatus,
+    crosschain_messages, crosschain_transfers, indexer_checkpoints, pending_messages,
+    sea_orm_active_enums::{self, MessageStatus},
 };
 use sea_orm::{
     ActiveValue, DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
+    prelude::Decimal,
     sea_query::{Expr, OnConflict},
 };
 use serde::{Deserialize, Serialize};
@@ -111,9 +113,213 @@ impl Cursor {
     }
 }
 
-/// Serializable message entry - same structure for hot (memory) and cold (Postgres) storage
+/// ICTT event fragment - stores raw event data for later consolidation.
+///
+/// Events arrive in unpredictable order. We accumulate fragments and consolidate
+/// them into a normalized TokenTransfer when the message is flushed.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum IcttEventFragment {
+    /// TokensSent - source-side simple transfer
+    TokensSent {
+        token_contract: Address,
+        sender: Address,
+        dst_token_address: Address,
+        recipient: Address,
+        amount: alloy::primitives::U256,
+    },
+
+    /// TokensAndCallSent - source-side transfer with contract call
+    TokensAndCallSent {
+        token_contract: Address,
+        sender: Address,
+        dst_token_address: Address,
+        recipient_contract: Address,
+        fallback_recipient: Address,
+        amount: alloy::primitives::U256,
+    },
+
+    /// TokensWithdrawn - destination-side token release
+    TokensWithdrawn {
+        recipient: Address,
+        amount: alloy::primitives::U256,
+    },
+
+    /// CallSucceeded - destination-side contract call success
+    CallSucceeded {
+        recipient_contract: Address,
+        amount: alloy::primitives::U256,
+    },
+
+    /// CallFailed - destination-side contract call failure
+    /// Tokens go to fallback_recipient instead of recipient_contract
+    CallFailed {
+        recipient_contract: Address,
+        amount: alloy::primitives::U256,
+    },
+}
+
+/// Consolidate ICTT event fragments into a normalized TokenTransfer.
+///
+/// Handles out-of-order events by examining all fragments:
+/// - TokensSent/TokensAndCallSent provide source-side info
+/// - CallSucceeded/CallFailed provide destination result
+/// - When CallFailed is present, recipient becomes fallback_recipient
+pub fn consolidate_ictt_fragments(fragments: &[IcttEventFragment]) -> Option<TokenTransfer> {
+    if fragments.is_empty() {
+        return None;
+    }
+
+    let mut transfer = TokenTransfer::default();
+    let mut call_failed = false;
+    let mut fallback_recipient: Option<Address> = None;
+
+    for fragment in fragments {
+        match fragment {
+            IcttEventFragment::TokensSent {
+                token_contract,
+                sender,
+                dst_token_address,
+                recipient,
+                amount,
+            } => {
+                transfer.src_token_address = Some(*token_contract);
+                transfer.sender = Some(*sender);
+                transfer.dst_token_address = Some(*dst_token_address);
+                transfer.recipient = Some(*recipient);
+                transfer.amount = Some(*amount);
+            }
+            IcttEventFragment::TokensAndCallSent {
+                token_contract,
+                sender,
+                dst_token_address,
+                recipient_contract,
+                fallback_recipient: fallback,
+                amount,
+            } => {
+                transfer.src_token_address = Some(*token_contract);
+                transfer.sender = Some(*sender);
+                transfer.dst_token_address = Some(*dst_token_address);
+                // Initially set recipient to contract; may be overridden by CallFailed
+                transfer.recipient = Some(*recipient_contract);
+                transfer.amount = Some(*amount);
+                fallback_recipient = Some(*fallback);
+            }
+            IcttEventFragment::TokensWithdrawn { recipient, .. } => {
+                // On destination side, this confirms who received tokens
+                transfer.recipient = Some(*recipient);
+            }
+            IcttEventFragment::CallSucceeded { .. } => {
+                // Call succeeded, recipient stays as recipient_contract
+            }
+            IcttEventFragment::CallFailed { .. } => {
+                call_failed = true;
+            }
+        }
+    }
+
+    // If call failed and we have a fallback, use it as recipient
+    if call_failed && let Some(fallback) = fallback_recipient {
+        transfer.recipient = Some(fallback);
+    }
+
+    Some(transfer)
+}
+/// Token type for transfers (mirrors DB enum)
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferType {
+    #[default]
+    Erc20,
+    Erc721,
+    Native,
+    Erc1155,
+}
+
+impl From<sea_orm_active_enums::TransferType> for TransferType {
+    fn from(t: sea_orm_active_enums::TransferType) -> Self {
+        match t {
+            sea_orm_active_enums::TransferType::Erc20 => TransferType::Erc20,
+            sea_orm_active_enums::TransferType::Erc721 => TransferType::Erc721,
+            sea_orm_active_enums::TransferType::Native => TransferType::Native,
+            sea_orm_active_enums::TransferType::Erc1155 => TransferType::Erc1155,
+        }
+    }
+}
+
+impl Into<sea_orm_active_enums::TransferType> for TransferType {
+    fn into(self) -> sea_orm_active_enums::TransferType {
+        match self {
+            TransferType::Erc20 => sea_orm_active_enums::TransferType::Erc20,
+            TransferType::Erc721 => sea_orm_active_enums::TransferType::Erc721,
+            TransferType::Native => sea_orm_active_enums::TransferType::Native,
+            TransferType::Erc1155 => sea_orm_active_enums::TransferType::Erc1155,
+        }
+    }
+}
+
+/// Token transfer associated with a cross-chain message (ICTT)
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct Entry {
+pub struct TokenTransfer {
+    /// Token type (ERC20, ERC721, Native, ERC1155)
+    #[serde(default)]
+    pub r#type: TransferType,
+
+    /// Source token contract address
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_token_address: Option<Address>,
+
+    /// Destination token contract address (from SendTokensInput/SendAndCallInput)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dst_token_address: Option<Address>,
+
+    /// Amount transferred (in source token denomination)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub amount: Option<alloy::primitives::U256>,
+
+    /// Sender address (from TokensSent/TokensAndCallSent event)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender: Option<Address>,
+
+    /// Recipient address (from SendTokensInput or TokensWithdrawn)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipient: Option<Address>,
+    // /// For multi-hop: the final destination chain ID
+    // #[serde(default, skip_serializing_if = "Option::is_none")]
+    // pub final_destination_chain_id: Option<i64>,
+
+    // /// Result of the call on destination (for WithCall transfers)
+    // #[serde(default, skip_serializing_if = "Option::is_none")]
+    // pub call_result: Option<CallResult>,
+}
+
+impl TryFrom<crosschain_transfers::Model> for TokenTransfer {
+    type Error = anyhow::Error;
+
+    fn try_from(model: crosschain_transfers::Model) -> Result<Self> {
+        Ok(Self {
+            r#type: model.r#type.map(TransferType::from).unwrap_or_default(),
+            src_token_address: Some(Address::try_from(model.token_src_address.as_slice())?),
+            dst_token_address: Some(Address::try_from(model.token_dst_address.as_slice())?),
+            amount: Some(alloy::primitives::U256::from_str_radix(
+                &model.src_amount.to_string(),
+                10,
+            )?),
+            sender: model
+                .sender_address
+                .map(|v| Address::try_from(v.as_slice()))
+                .transpose()?,
+            recipient: model
+                .recipient_address
+                .map(|v| Address::try_from(v.as_slice()))
+                .transpose()?,
+        })
+    }
+}
+
+/// Serializable cross-chain message - same structure for hot (memory) and cold (Postgres) storage
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct Message {
     pub key: Key,
 
     // Source side (presence of init_timestamp makes message "ready")
@@ -138,16 +344,21 @@ pub struct Entry {
     #[serde(default)]
     pub status: Status,
 
+    /// ICTT event fragments accumulated from various events.
+    /// Consolidated into `transfers` when the message is flushed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ictt_fragments: Vec<IcttEventFragment>,
+
     // Cursor tracking for checkpoint management
     #[serde(default)]
     pub cursor: Cursor,
 
-    /// When this entry was first created (for TTL-based offloading)
+    /// When this message was first created (for TTL-based offloading)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<NaiveDateTime>,
 }
 
-impl Entry {
+impl Message {
     /// Create a new empty message entry
     pub fn new(key: Key) -> Self {
         Self {
@@ -163,26 +374,114 @@ impl Entry {
         self.init_timestamp.is_some()
     }
 
-    fn with_cursors(
+    fn to_active_models(
         &self,
-        cursors: HashMap<(i32, i64), (i64, i64)>,
-    ) -> HashMap<(i32, i64), (i64, i64)> {
-        self.cursor
-            .chain_blocks
+    ) -> Result<(
+        crosschain_messages::ActiveModel,
+        Vec<crosschain_transfers::ActiveModel>,
+    )> {
+        let message_model: crosschain_messages::ActiveModel = self.try_into()?;
+
+        // If we have ICTT fragments, consolidate and use that; otherwise use existing transfers
+        let consolidated = consolidate_ictt_fragments(&self.ictt_fragments);
+
+        let transfer_models: Vec<crosschain_transfers::ActiveModel> =
+            if let Some(ref t) = consolidated {
+                // Single consolidated transfer from fragments
+                vec![self.token_transfer_to_active_model(t)]
+            } else {
+                vec![]
+            };
+
+        Ok((message_model, transfer_models))
+    }
+
+    fn token_transfer_to_active_model(
+        &self,
+        t: &TokenTransfer,
+    ) -> crosschain_transfers::ActiveModel {
+        let now = Utc::now().naive_utc();
+        let amount_str = t.amount.unwrap_or_default().to_string();
+        let amount = Decimal::from_str_exact(&amount_str).unwrap_or(Decimal::ZERO);
+
+        crosschain_transfers::ActiveModel {
+            id: ActiveValue::NotSet,
+            message_id: ActiveValue::Set(self.key.message_id),
+            bridge_id: ActiveValue::Set(self.key.bridge_id),
+            r#type: ActiveValue::Set(Some(t.r#type.clone().into())),
+            token_src_address: ActiveValue::Set(
+                t.src_token_address
+                    .map(|a| a.as_slice().to_vec())
+                    .unwrap_or_default(),
+            ),
+            token_dst_address: ActiveValue::Set(
+                t.dst_token_address
+                    .map(|a| a.as_slice().to_vec())
+                    .unwrap_or_default(),
+            ),
+            src_amount: ActiveValue::Set(amount),
+            sender_address: ActiveValue::Set(t.sender.map(|a| a.as_slice().to_vec())),
+            recipient_address: ActiveValue::Set(t.recipient.map(|a| a.as_slice().to_vec())),
+            created_at: ActiveValue::Set(Some(now)),
+            updated_at: ActiveValue::Set(Some(now)),
+            // Use message's chain IDs for the transfer
+            token_src_chain_id: ActiveValue::Set(self.src_chain_id.unwrap_or(0)),
+            token_dst_chain_id: ActiveValue::Set(self.destination_chain_id.unwrap_or(0)),
+            src_decimals: ActiveValue::Set(18), // Default to 18 decimals
+            dst_decimals: ActiveValue::Set(18),
+            dst_amount: ActiveValue::Set(amount), // Same as src for now
+            token_ids: ActiveValue::NotSet,
+        }
+    }
+
+    fn is_ictt_complete(&self) -> bool {
+        if self.ictt_fragments.is_empty() {
+            return true; // No ICTT - not applicable
+        }
+
+        let has_tokens_sent = self
+            .ictt_fragments
             .iter()
-            .fold(cursors, |mut acc, (&chain_id, &(min, max))| {
-                acc.entry((self.key.bridge_id, chain_id))
-                    .and_modify(|(existing_min, existing_max)| {
-                        *existing_min = (*existing_min).min(min);
-                        *existing_max = (*existing_max).max(max);
-                    })
-                    .or_insert((min, max));
-                acc
-            })
+            .any(|f| matches!(f, IcttEventFragment::TokensSent { .. }));
+        let has_tokens_and_call_sent = self
+            .ictt_fragments
+            .iter()
+            .any(|f| matches!(f, IcttEventFragment::TokensAndCallSent { .. }));
+        let has_tokens_withdrawn = self
+            .ictt_fragments
+            .iter()
+            .any(|f| matches!(f, IcttEventFragment::TokensWithdrawn { .. }));
+        let has_call_result = self.ictt_fragments.iter().any(|f| {
+            matches!(
+                f,
+                IcttEventFragment::CallSucceeded { .. } | IcttEventFragment::CallFailed { .. }
+            )
+        });
+
+        (has_tokens_sent && has_tokens_withdrawn) || (has_tokens_and_call_sent && has_call_result)
     }
 }
 
-impl TryInto<crosschain_messages::ActiveModel> for &Entry {
+fn with_cursors(
+    message: &Message,
+    cursors: HashMap<(i32, i64), (i64, i64)>,
+) -> HashMap<(i32, i64), (i64, i64)> {
+    message
+        .cursor
+        .chain_blocks
+        .iter()
+        .fold(cursors, |mut acc, (&chain_id, &(min, max))| {
+            acc.entry((message.key.bridge_id, chain_id))
+                .and_modify(|(existing_min, existing_max)| {
+                    *existing_min = (*existing_min).min(min);
+                    *existing_max = (*existing_max).max(max);
+                })
+                .or_insert((min, max));
+            acc
+        })
+}
+
+impl TryInto<crosschain_messages::ActiveModel> for &Message {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<crosschain_messages::ActiveModel, Self::Error> {
@@ -217,7 +516,7 @@ impl TryInto<crosschain_messages::ActiveModel> for &Entry {
     }
 }
 
-impl TryInto<pending_messages::ActiveModel> for &Entry {
+impl TryInto<pending_messages::ActiveModel> for &Message {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<pending_messages::ActiveModel, Self::Error> {
@@ -233,31 +532,40 @@ impl TryInto<pending_messages::ActiveModel> for &Entry {
     }
 }
 
-impl From<crosschain_messages::Model> for Entry {
-    fn from(model: crosschain_messages::Model) -> Self {
-        Self {
+impl TryFrom<(crosschain_messages::Model, Vec<crosschain_transfers::Model>)> for Message {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (model, _transfers): (crosschain_messages::Model, Vec<crosschain_transfers::Model>),
+    ) -> Result<Self> {
+        Ok(Self {
             key: Key::new(model.id, model.bridge_id),
             src_chain_id: Some(model.src_chain_id),
             source_transaction_hash: model
                 .src_tx_hash
-                .and_then(|v| FixedBytes::<32>::try_from(v.as_slice()).ok()),
+                .map(|v| FixedBytes::<32>::try_from(v.as_slice()))
+                .transpose()?,
             init_timestamp: Some(model.init_timestamp),
             sender_address: model
                 .sender_address
-                .and_then(|v| Address::try_from(v.as_slice()).ok()),
+                .map(|v| Address::try_from(v.as_slice()))
+                .transpose()?,
             recipient_address: model
                 .recipient_address
-                .and_then(|v| Address::try_from(v.as_slice()).ok()),
+                .map(|v| Address::try_from(v.as_slice()))
+                .transpose()?,
             destination_chain_id: model.dst_chain_id,
             payload: model.payload,
             native_id: model.native_id,
             destination_transaction_hash: model
                 .dst_tx_hash
-                .and_then(|v| FixedBytes::<32>::try_from(v.as_slice()).ok()),
+                .map(|v| FixedBytes::<32>::try_from(v.as_slice()))
+                .transpose()?,
             status: model.status.into(),
-            cursor: Cursor::default(), // Not stored in DB, starts fresh
-            created_at: model.created_at.map(|t| t),
-        }
+            ictt_fragments: Vec::new(), // Not stored in DB, fragments are consolidated
+            cursor: Cursor::default(),  // Not stored in DB, starts fresh
+            created_at: model.created_at,
+        })
     }
 }
 
@@ -285,7 +593,7 @@ impl Default for Config {
 /// Tiered message buffer with hot (memory) and cold (Postgres) storage
 pub struct MessageBuffer {
     /// Hot tier: in-memory entries
-    hot: DashMap<Key, Entry>,
+    hot: DashMap<Key, Message>,
     /// Configuration
     config: Config,
     /// Database connection for cold tier operations
@@ -319,7 +627,7 @@ impl MessageBuffer {
     /// 2. cold tier (pending_messages)
     /// 3. final storage (crosschain_messages)
     /// 4. create new
-    pub async fn get_or_create(&self, key: Key) -> Result<Entry> {
+    pub async fn get_or_create(&self, key: Key) -> Result<Message> {
         if let Some(entry) = self.hot.get(&key) {
             return Ok(entry.clone());
         }
@@ -340,18 +648,18 @@ impl MessageBuffer {
             .get_crosschain_message_by_pk(key.message_id, key.bridge_id)
             .await?
         {
-            return Ok(Entry::from(model));
+            return model.try_into();
         }
 
         // 4. Create new entry
-        Ok(Entry::new(key))
+        Ok(Message::new(key))
     }
 
     /// Upsert entry in hot tier.
     /// If hot tier exceeds capacity, runs maintenance to flush entries.
-    pub async fn upsert(&self, entry: Entry) -> Result<()> {
-        let key = entry.key;
-        self.hot.insert(key, entry);
+    pub async fn upsert(&self, msg: Message) -> Result<()> {
+        let key = msg.key;
+        self.hot.insert(key, msg);
 
         // Run maintenance if hot tier is getting full
         if self.hot.len() > self.config.max_hot_entries {
@@ -389,15 +697,18 @@ impl MessageBuffer {
         let mut cold_cursors = HashMap::<(_, _), (_, _)>::new();
 
         for entry in self.hot.iter() {
-            match (
-                TryInto::<crosschain_messages::ActiveModel>::try_into(entry.value()),
-                entry.created_at,
-            ) {
+            match (entry.to_active_models(), entry.created_at) {
                 (Ok(model), _) => {
                     ready_entries.push(model);
-                    keys_to_remove_from_pending.push(entry.key);
+                    if entry.is_ictt_complete() {
+                        // ICTT complete: remove from both pending and hot
+                        keys_to_remove_from_pending.push(entry.key);
+                    } else {
+                        // ICTT incomplete: save to pending for recovery, remove from hot
+                        stale_entries.push(entry.clone());
+                    }
                     keys_to_remove_from_hot.push(entry.key);
-                    cold_cursors = entry.with_cursors(cold_cursors);
+                    cold_cursors = with_cursors(entry.value(), cold_cursors);
                 }
                 (_, Some(created_at))
                     if now
@@ -406,12 +717,12 @@ impl MessageBuffer {
                         .unwrap_or_default()
                         >= self.config.hot_ttl =>
                 {
-                    cold_cursors = entry.with_cursors(cold_cursors);
+                    cold_cursors = with_cursors(entry.value(), cold_cursors);
                     stale_entries.push(entry.clone());
                     keys_to_remove_from_hot.push(entry.key);
                 }
                 _ => {
-                    hot_cursors = entry.with_cursors(hot_cursors);
+                    hot_cursors = with_cursors(entry.value(), hot_cursors);
                 }
             }
         }
@@ -464,7 +775,12 @@ impl MessageBuffer {
 
                     // 2. Flush ready entries to final storage
                     let batch_size = ((u16::MAX - 100) / 15) as usize;
-                    for batch in ready_entries.chunks(batch_size) {
+                    let (messages, transfers) = ready_entries
+                        .into_iter()
+                        .unzip::<_, _, Vec<_>, Vec<Vec<_>>>();
+                    let transfers = transfers.into_iter().flatten().collect::<Vec<_>>();
+
+                    for batch in messages.chunks(batch_size) {
                         crosschain_messages::Entity::insert_many(batch.to_vec())
                             .on_conflict(
                                 OnConflict::columns([
@@ -482,6 +798,40 @@ impl MessageBuffer {
                                 ])
                                 .to_owned(),
                             )
+                            .exec(tx)
+                            .await?;
+                    }
+
+                    // TODO: refactor to avoid deleting then inserting
+                    for batch in transfers.chunks(batch_size) {
+                        // Get unique (message_id, bridge_id) pairs from this batch
+                        // TODO: avoid clone().unwrap()
+                        let keys_in_batch: Vec<_> = batch
+                            .iter()
+                            .map(|t| {
+                                (
+                                    t.message_id.clone().unwrap(),
+                                    t.bridge_id.clone().unwrap(),
+                                )
+                            })
+                            .collect::<std::collections::HashSet<_>>()
+                            .into_iter()
+                            .collect();
+
+                        // Delete existing transfers for these messages
+                        crosschain_transfers::Entity::delete_many()
+                            .filter(
+                                Expr::tuple([
+                                    Expr::col(crosschain_transfers::Column::MessageId).into(),
+                                    Expr::col(crosschain_transfers::Column::BridgeId).into(),
+                                ])
+                                .in_tuples(keys_in_batch),
+                            )
+                            .exec(tx)
+                            .await?;
+
+                        // Insert new transfers
+                        crosschain_transfers::Entity::insert_many(batch.to_vec())
                             .exec(tx)
                             .await?;
                     }
@@ -580,8 +930,8 @@ impl MessageBuffer {
 
         let count = pending.len();
         for p in pending {
-            let entry: Entry = serde_json::from_value(p.payload)?;
-            self.hot.insert(entry.key, entry);
+            let msg: Message = serde_json::from_value(p.payload)?;
+            self.hot.insert(msg.key, msg);
         }
 
         tracing::info!(
@@ -667,19 +1017,19 @@ mod tests {
     #[test]
     fn test_message_entry_serialization() {
         let key = Key::new(12345, 1);
-        let mut entry = Entry::new(key);
+        let mut msg = Message::new(key);
 
         let tx_hash = FixedBytes::<32>::repeat_byte(0xab);
-        entry.src_chain_id = Some(43114);
-        entry.source_transaction_hash = Some(tx_hash);
-        entry.init_timestamp = Some(Utc::now().naive_utc());
-        entry.sender_address = Some(Address::repeat_byte(0x11));
-        entry.native_id = Some(vec![0x22; 32]);
-        entry.status = Status::Completed;
-        entry.cursor.record_block(43114, 1000);
+        msg.src_chain_id = Some(43114);
+        msg.source_transaction_hash = Some(tx_hash);
+        msg.init_timestamp = Some(Utc::now().naive_utc());
+        msg.sender_address = Some(Address::repeat_byte(0x11));
+        msg.native_id = Some(vec![0x22; 32]);
+        msg.status = Status::Completed;
+        msg.cursor.record_block(43114, 1000);
 
-        let json = serde_json::to_value(&entry).unwrap();
-        let restored = serde_json::from_value::<Entry>(json).unwrap();
+        let json = serde_json::to_value(&msg).unwrap();
+        let restored = serde_json::from_value::<Message>(json).unwrap();
 
         assert_eq!(restored.key, key);
         assert_eq!(restored.src_chain_id, Some(43114));
@@ -719,12 +1069,12 @@ mod tests {
         let buffer = MessageBuffer::new(db.clone(), config);
 
         // Create a ready message (has init_timestamp)
-        let mut entry = Entry::new(Key::new(1, bridge_id));
-        entry.src_chain_id = Some(chain_id);
-        entry.init_timestamp = Some(Utc::now().naive_utc());
-        entry.cursor.record_block(chain_id, 10);
+        let mut msg = Message::new(Key::new(1, bridge_id));
+        msg.src_chain_id = Some(chain_id);
+        msg.init_timestamp = Some(Utc::now().naive_utc());
+        msg.cursor.record_block(chain_id, 10);
 
-        buffer.upsert(entry).await.unwrap();
+        buffer.upsert(msg).await.unwrap();
         assert_eq!(buffer.hot.len(), 1);
 
         // Run maintenance
@@ -755,14 +1105,14 @@ mod tests {
         let buffer = MessageBuffer::new(db.clone(), config);
 
         // Create an incomplete message (no init_timestamp - not ready)
-        let mut entry = Entry::new(Key::new(1, bridge_id));
-        entry.src_chain_id = Some(chain_id);
+        let mut msg = Message::new(Key::new(1, bridge_id));
+        msg.src_chain_id = Some(chain_id);
         // No init_timestamp - message is not ready
-        entry.cursor.record_block(chain_id, 10);
+        msg.cursor.record_block(chain_id, 10);
         // Backdate created_at to make it stale
-        entry.created_at = Some(Utc::now().naive_utc() - chrono::Duration::seconds(10));
+        msg.created_at = Some(Utc::now().naive_utc() - chrono::Duration::seconds(10));
 
-        buffer.upsert(entry).await.unwrap();
+        buffer.upsert(msg).await.unwrap();
         assert_eq!(buffer.hot.len(), 1);
 
         // Run maintenance
@@ -799,14 +1149,14 @@ mod tests {
         let buffer = MessageBuffer::new(db.clone(), config);
 
         // Message 1: ready (will be flushed)
-        let mut msg1 = Entry::new(Key::new(1, bridge_id));
+        let mut msg1 = Message::new(Key::new(1, bridge_id));
         msg1.src_chain_id = Some(chain_id);
         msg1.init_timestamp = Some(Utc::now().naive_utc());
         msg1.cursor.record_block(chain_id, 1);
         msg1.cursor.record_block(chain_id, 2);
 
         // Message 2: NOT ready (stays in hot tier)
-        let mut msg2 = Entry::new(Key::new(2, bridge_id));
+        let mut msg2 = Message::new(Key::new(2, bridge_id));
         msg2.src_chain_id = Some(chain_id);
         // No init_timestamp
         msg2.cursor.record_block(chain_id, 2);
@@ -850,14 +1200,14 @@ mod tests {
         let buffer = MessageBuffer::new(db.clone(), config);
 
         // Message 1: ready at blocks 1-5
-        let mut msg1 = Entry::new(Key::new(1, bridge_id));
+        let mut msg1 = Message::new(Key::new(1, bridge_id));
         msg1.src_chain_id = Some(chain_id);
         msg1.init_timestamp = Some(Utc::now().naive_utc());
         msg1.cursor.record_block(chain_id, 1);
         msg1.cursor.record_block(chain_id, 5);
 
         // Message 2: NOT ready, but at blocks 10-15 (doesn't overlap with msg1)
-        let mut msg2 = Entry::new(Key::new(2, bridge_id));
+        let mut msg2 = Message::new(Key::new(2, bridge_id));
         msg2.src_chain_id = Some(chain_id);
         msg2.cursor.record_block(chain_id, 10);
         msg2.cursor.record_block(chain_id, 15);
@@ -897,8 +1247,8 @@ mod tests {
         let (db, bridge_id, _chain_id) = setup_test_db("buffer_restore").await;
 
         // Pre-populate pending_messages
-        let entry = Entry::new(Key::new(42, bridge_id));
-        let payload = serde_json::to_value(&entry).unwrap();
+        let msg = Message::new(Key::new(42, bridge_id));
+        let payload = serde_json::to_value(&msg).unwrap();
         db.upsert_pending_message(pending_messages::ActiveModel {
             message_id: Set(42),
             bridge_id: Set(bridge_id),
@@ -935,11 +1285,11 @@ mod tests {
 
         // Insert 3 ready messages (exceeds capacity of 2)
         for i in 1..=3 {
-            let mut entry = Entry::new(Key::new(i, bridge_id));
-            entry.src_chain_id = Some(chain_id);
-            entry.init_timestamp = Some(Utc::now().naive_utc());
-            entry.cursor.record_block(chain_id, i);
-            buffer.upsert(entry).await.unwrap();
+            let mut msg = Message::new(Key::new(i, bridge_id));
+            msg.src_chain_id = Some(chain_id);
+            msg.init_timestamp = Some(Utc::now().naive_utc());
+            msg.cursor.record_block(chain_id, i);
+            buffer.upsert(msg).await.unwrap();
         }
 
         // After inserting 3rd message, maintenance should have been triggered
@@ -964,10 +1314,10 @@ mod tests {
         let (db, bridge_id, chain_id) = setup_test_db("buffer_pending_delete").await;
 
         // Pre-populate pending_messages with incomplete message
-        let mut entry = Entry::new(Key::new(1, bridge_id));
-        entry.src_chain_id = Some(chain_id);
-        entry.cursor.record_block(chain_id, 5);
-        let payload = serde_json::to_value(&entry).unwrap();
+        let mut msg = Message::new(Key::new(1, bridge_id));
+        msg.src_chain_id = Some(chain_id);
+        msg.cursor.record_block(chain_id, 5);
+        let payload = serde_json::to_value(&msg).unwrap();
 
         db.upsert_pending_message(pending_messages::ActiveModel {
             message_id: Set(1),
@@ -994,8 +1344,8 @@ mod tests {
         let buffer = MessageBuffer::new(db.clone(), config);
 
         // Now complete the message (add init_timestamp) and upsert
-        entry.init_timestamp = Some(Utc::now().naive_utc());
-        buffer.upsert(entry).await.unwrap();
+        msg.init_timestamp = Some(Utc::now().naive_utc());
+        buffer.upsert(msg).await.unwrap();
 
         // Run maintenance
         buffer.run().await.unwrap();
@@ -1037,13 +1387,13 @@ mod tests {
 
         // Phase 1: Insert a READY message (simulating SendCrossChainMessage)
         // with init_timestamp set and source data filled
-        let mut entry = Entry::new(key);
-        entry.init_timestamp = Some(chrono::Utc::now().naive_utc());
-        entry.src_chain_id = Some(chain_id);
-        entry.source_transaction_hash = Some(FixedBytes::<32>::repeat_byte(0xab));
-        entry.sender_address = Some(Address::repeat_byte(0x11));
-        entry.cursor.record_block(chain_id, 1000);
-        buffer.upsert(entry).await.unwrap();
+        let mut msg = Message::new(key);
+        msg.init_timestamp = Some(chrono::Utc::now().naive_utc());
+        msg.src_chain_id = Some(chain_id);
+        msg.source_transaction_hash = Some(FixedBytes::<32>::repeat_byte(0xab));
+        msg.sender_address = Some(Address::repeat_byte(0x11));
+        msg.cursor.record_block(chain_id, 1000);
+        buffer.upsert(msg).await.unwrap();
 
         // Phase 2: Run maintenance - this flushes the ready message to crosschain_messages
         buffer.run().await.unwrap();
@@ -1058,13 +1408,13 @@ mod tests {
             1,
             "Message should be in crosschain_messages"
         );
-        let msg = &messages[0].0;
-        assert_eq!(msg.src_chain_id, chain_id);
+        let msg_row = &messages[0].0;
+        assert_eq!(msg_row.src_chain_id, chain_id);
         assert!(
-            msg.dst_chain_id.is_none(),
+            msg_row.dst_chain_id.is_none(),
             "Dest chain should not be set yet"
         );
-        assert_eq!(msg.status, MessageStatus::Initiated);
+        assert_eq!(msg_row.status, MessageStatus::Initiated);
 
         // Verify hot tier is empty
         assert!(
@@ -1074,15 +1424,15 @@ mod tests {
 
         // Phase 3: A later event arrives (e.g., message completion)
         // The handler calls get_or_create and updates with destination data
-        let mut entry = buffer.get_or_create(key).await.unwrap();
+        let mut msg = buffer.get_or_create(key).await.unwrap();
         // The bug: this creates a NEW entry without init_timestamp
         // It should have found the message in crosschain_messages and loaded it
-        entry.destination_chain_id = Some(chain_id); // Same chain for simplicity
-        entry.destination_transaction_hash = Some(FixedBytes::<32>::repeat_byte(0xef));
-        entry.recipient_address = Some(Address::repeat_byte(0x22));
-        entry.status = Status::Completed;
-        entry.cursor.record_block(chain_id, 2000);
-        buffer.upsert(entry).await.unwrap();
+        msg.destination_chain_id = Some(chain_id); // Same chain for simplicity
+        msg.destination_transaction_hash = Some(FixedBytes::<32>::repeat_byte(0xef));
+        msg.recipient_address = Some(Address::repeat_byte(0x22));
+        msg.status = Status::Completed;
+        msg.cursor.record_block(chain_id, 2000);
+        buffer.upsert(msg).await.unwrap();
 
         // Phase 4: Run maintenance again
         buffer.run().await.unwrap();
@@ -1120,6 +1470,273 @@ mod tests {
             msg.status,
             MessageStatus::Completed,
             "Status should be updated"
+        );
+    }
+
+    /// Unit test: is_ictt_complete returns true when no ICTT fragments
+    #[test]
+    fn test_is_ictt_complete_no_fragments() {
+        let msg = Message::new(Key::new(1, 1));
+        assert!(msg.is_ictt_complete(), "No fragments means complete");
+    }
+
+    /// Unit test: is_ictt_complete returns false with only TokensSent (no destination event)
+    #[test]
+    fn test_is_ictt_complete_tokens_sent_only() {
+        let mut msg = Message::new(Key::new(1, 1));
+        msg.ictt_fragments.push(IcttEventFragment::TokensSent {
+            token_contract: Address::repeat_byte(0x01),
+            sender: Address::repeat_byte(0x02),
+            dst_token_address: Address::repeat_byte(0x03),
+            recipient: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        assert!(
+            !msg.is_ictt_complete(),
+            "TokensSent without TokensWithdrawn is incomplete"
+        );
+    }
+
+    /// Unit test: is_ictt_complete returns true with TokensSent + TokensWithdrawn
+    #[test]
+    fn test_is_ictt_complete_tokens_sent_and_withdrawn() {
+        let mut msg = Message::new(Key::new(1, 1));
+        msg.ictt_fragments.push(IcttEventFragment::TokensSent {
+            token_contract: Address::repeat_byte(0x01),
+            sender: Address::repeat_byte(0x02),
+            dst_token_address: Address::repeat_byte(0x03),
+            recipient: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        msg.ictt_fragments.push(IcttEventFragment::TokensWithdrawn {
+            recipient: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        assert!(
+            msg.is_ictt_complete(),
+            "TokensSent + TokensWithdrawn is complete"
+        );
+    }
+
+    /// Unit test: is_ictt_complete returns false with only TokensAndCallSent (no call result)
+    #[test]
+    fn test_is_ictt_complete_tokens_and_call_sent_only() {
+        let mut msg = Message::new(Key::new(1, 1));
+        msg.ictt_fragments
+            .push(IcttEventFragment::TokensAndCallSent {
+                token_contract: Address::repeat_byte(0x01),
+                sender: Address::repeat_byte(0x02),
+                dst_token_address: Address::repeat_byte(0x03),
+                recipient_contract: Address::repeat_byte(0x04),
+                fallback_recipient: Address::repeat_byte(0x05),
+                amount: alloy::primitives::U256::from(1000),
+            });
+        assert!(
+            !msg.is_ictt_complete(),
+            "TokensAndCallSent without CallSucceeded/CallFailed is incomplete"
+        );
+    }
+
+    /// Unit test: is_ictt_complete returns true with TokensAndCallSent + CallSucceeded
+    #[test]
+    fn test_is_ictt_complete_tokens_and_call_sent_with_success() {
+        let mut msg = Message::new(Key::new(1, 1));
+        msg.ictt_fragments
+            .push(IcttEventFragment::TokensAndCallSent {
+                token_contract: Address::repeat_byte(0x01),
+                sender: Address::repeat_byte(0x02),
+                dst_token_address: Address::repeat_byte(0x03),
+                recipient_contract: Address::repeat_byte(0x04),
+                fallback_recipient: Address::repeat_byte(0x05),
+                amount: alloy::primitives::U256::from(1000),
+            });
+        msg.ictt_fragments.push(IcttEventFragment::CallSucceeded {
+            recipient_contract: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        assert!(
+            msg.is_ictt_complete(),
+            "TokensAndCallSent + CallSucceeded is complete"
+        );
+    }
+
+    /// Unit test: is_ictt_complete returns true with TokensAndCallSent + CallFailed
+    #[test]
+    fn test_is_ictt_complete_tokens_and_call_sent_with_failure() {
+        let mut msg = Message::new(Key::new(1, 1));
+        msg.ictt_fragments
+            .push(IcttEventFragment::TokensAndCallSent {
+                token_contract: Address::repeat_byte(0x01),
+                sender: Address::repeat_byte(0x02),
+                dst_token_address: Address::repeat_byte(0x03),
+                recipient_contract: Address::repeat_byte(0x04),
+                fallback_recipient: Address::repeat_byte(0x05),
+                amount: alloy::primitives::U256::from(1000),
+            });
+        msg.ictt_fragments.push(IcttEventFragment::CallFailed {
+            recipient_contract: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        assert!(
+            msg.is_ictt_complete(),
+            "TokensAndCallSent + CallFailed is complete"
+        );
+    }
+
+    /// Unit test: is_ictt_complete returns false with mismatched pairs
+    /// (TokensSent should not be completed by CallSucceeded)
+    #[test]
+    fn test_is_ictt_complete_mismatched_pairs() {
+        let mut msg = Message::new(Key::new(1, 1));
+        msg.ictt_fragments.push(IcttEventFragment::TokensSent {
+            token_contract: Address::repeat_byte(0x01),
+            sender: Address::repeat_byte(0x02),
+            dst_token_address: Address::repeat_byte(0x03),
+            recipient: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        msg.ictt_fragments.push(IcttEventFragment::CallSucceeded {
+            recipient_contract: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        assert!(
+            !msg.is_ictt_complete(),
+            "TokensSent + CallSucceeded is NOT a valid completion pair"
+        );
+    }
+
+    /// Unit test: is_ictt_complete returns false with only destination events (no source)
+    #[test]
+    fn test_is_ictt_complete_destination_only() {
+        let mut msg = Message::new(Key::new(1, 1));
+        msg.ictt_fragments.push(IcttEventFragment::TokensWithdrawn {
+            recipient: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        assert!(
+            !msg.is_ictt_complete(),
+            "TokensWithdrawn without source event is incomplete"
+        );
+    }
+
+    /// E2E Test: Incomplete ICTT message is flushed but kept in pending
+    ///
+    /// Scenario:
+    /// - Message has init_timestamp (ready) and TokensSent (source ICTT event)
+    /// - But NO destination event yet (TokensWithdrawn)
+    ///
+    /// Expected:
+    /// - Message is flushed to crosschain_messages (it's ready)
+    /// - Message is NOT deleted from pending_messages (ICTT incomplete)
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_incomplete_ictt_kept_in_pending() {
+        let (db, bridge_id, chain_id) = setup_test_db("buffer_incomplete_ictt").await;
+
+        let config = Config {
+            max_hot_entries: 100,
+            hot_ttl: Duration::from_secs(0), // Immediate TTL
+            maintenance_interval: Duration::from_secs(60),
+        };
+        let buffer = MessageBuffer::new(db.clone(), config);
+
+        // Create a ready message with incomplete ICTT (only source event)
+        let mut msg = Message::new(Key::new(1, bridge_id));
+        msg.src_chain_id = Some(chain_id);
+        msg.destination_chain_id = Some(chain_id); // Same chain for simplicity in test
+        msg.init_timestamp = Some(Utc::now().naive_utc()); // Ready!
+        msg.cursor.record_block(chain_id, 10);
+
+        // Add TokensSent but NOT TokensWithdrawn - ICTT incomplete
+        msg.ictt_fragments.push(IcttEventFragment::TokensSent {
+            token_contract: Address::repeat_byte(0x01),
+            sender: Address::repeat_byte(0x02),
+            dst_token_address: Address::repeat_byte(0x03),
+            recipient: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+
+        buffer.upsert(msg).await.unwrap();
+
+        // Run maintenance
+        buffer.run().await.unwrap();
+
+        // Message should be flushed to crosschain_messages (it's ready)
+        let (messages, _) = db
+            .get_crosschain_messages(None, 100, false, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            messages.len(),
+            1,
+            "Message should be in crosschain_messages"
+        );
+
+        // But pending should still exist because ICTT is incomplete
+        let pending = db.get_pending_message(1, bridge_id).await.unwrap();
+        assert!(
+            pending.is_some(),
+            "Pending should NOT be deleted when ICTT is incomplete"
+        );
+    }
+
+    /// E2E Test: Complete ICTT message is flushed AND deleted from pending
+    ///
+    /// Scenario:
+    /// - Message has init_timestamp (ready) and complete ICTT (TokensSent + TokensWithdrawn)
+    ///
+    /// Expected:
+    /// - Message is flushed to crosschain_messages
+    /// - Message IS deleted from pending_messages
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_complete_ictt_deleted_from_pending() {
+        let (db, bridge_id, chain_id) = setup_test_db("buffer_complete_ictt").await;
+
+        let config = Config {
+            max_hot_entries: 100,
+            hot_ttl: Duration::from_secs(0),
+            maintenance_interval: Duration::from_secs(60),
+        };
+        let buffer = MessageBuffer::new(db.clone(), config);
+
+        // Create a ready message with complete ICTT
+        let mut msg = Message::new(Key::new(1, bridge_id));
+        msg.src_chain_id = Some(chain_id);
+        msg.destination_chain_id = Some(chain_id); // Same chain for simplicity in test
+        msg.init_timestamp = Some(Utc::now().naive_utc());
+        msg.cursor.record_block(chain_id, 10);
+
+        // Add TokensSent AND TokensWithdrawn - ICTT complete
+        msg.ictt_fragments.push(IcttEventFragment::TokensSent {
+            token_contract: Address::repeat_byte(0x01),
+            sender: Address::repeat_byte(0x02),
+            dst_token_address: Address::repeat_byte(0x03),
+            recipient: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+        msg.ictt_fragments.push(IcttEventFragment::TokensWithdrawn {
+            recipient: Address::repeat_byte(0x04),
+            amount: alloy::primitives::U256::from(1000),
+        });
+
+        buffer.upsert(msg).await.unwrap();
+
+        // Run maintenance
+        buffer.run().await.unwrap();
+
+        // Message should be flushed to crosschain_messages
+        let (messages, _) = db
+            .get_crosschain_messages(None, 100, false, None)
+            .await
+            .unwrap();
+        assert_eq!(messages.len(), 1);
+
+        // Pending should be deleted because ICTT is complete
+        let pending = db.get_pending_message(1, bridge_id).await.unwrap();
+        assert!(
+            pending.is_none(),
+            "Pending should be deleted when ICTT is complete"
         );
     }
 }

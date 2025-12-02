@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use alloy::{
     network::Ethereum,
-    primitives::Address,
+    primitives::{Address, B256},
     providers::{DynProvider, Provider as _},
     rpc::types::{Filter, Log},
     sol,
@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 use crate::{
     InterchainDatabase,
     log_stream::LogStreamBuilder,
-    message_buffer::{Config, Key, MessageBuffer, Status},
+    message_buffer::{Config, IcttEventFragment, Key, MessageBuffer, Status},
 };
 
 sol! {
@@ -61,6 +61,109 @@ sol! {
         event MessageExecutionFailed(
             bytes32 indexed messageID, bytes32 indexed sourceBlockchainID, TeleporterMessage message
         );
+    }
+
+    /**
+     * @notice Input parameters for transferring tokens to another chain as part of a simple transfer.
+     * @param destinationBlockchainID Blockchain ID of the destination
+     * @param destinationTokenTransferrerAddress Address of the destination token transferrer instance
+     * @param recipient Address of the recipient on the destination chain
+     * @param primaryFeeTokenAddress Address of the ERC20 contract to optionally pay a Teleporter message fee
+     * @param primaryFee Amount of tokens to pay as the optional Teleporter message fee
+     * @param secondaryFee Amount of tokens to pay for Teleporter fee if a multi-hop is needed
+     * @param requiredGasLimit Gas limit requirement for sending to a token transferrer.
+     * This is required because the gas requirement varies based on the token transferrer instance
+     * specified by {destinationBlockchainID} and {destinationTokenTransferrerAddress}.
+     * @param multiHopFallback In the case of a multi-hop transfer, the address where the tokens
+     * are sent on the home chain if the transfer is unable to be routed to its final destination.
+     * Note that this address must be able to receive the tokens held as collateral in the home contract.
+     */
+    struct SendTokensInput {
+        bytes32 destinationBlockchainID;
+        address destinationTokenTransferrerAddress;
+        address recipient;
+        address primaryFeeTokenAddress;
+        uint256 primaryFee;
+        uint256 secondaryFee;
+        uint256 requiredGasLimit;
+        address multiHopFallback;
+    }
+
+    /**
+     * @notice Input parameters for transferring tokens to another chain as part of a transfer with a contract call.
+     * @param destinationBlockchainID BlockchainID of the destination
+     * @param destinationTokenTransferrerAddress Address of the destination token transferrer instance
+     * @param recipientContract The contract on the destination chain that will be called
+     * @param recipientPayload The payload that will be provided to the recipient contract on the destination chain
+     * @param requiredGasLimit The required amount of gas needed to deliver the message on its destination chain,
+     * including token operations and the call to the recipient contract.
+     * @param recipientGasLimit The amount of gas that will provided to the recipient contract on the destination chain,
+     * which must be less than the requiredGasLimit of the message as a whole.
+     * @param multiHopFallback In the case of a multi-hop transfer, the address where the tokens
+     * are sent on the home chain if the transfer is unable to be routed to its final destination.
+     * Note that this address must be able to receive the tokens held as collateral in the home contract.
+     * @param fallbackRecipient Address on the {destinationBlockchainID} where the transferred tokens are sent to if the call
+     * to the recipient contract fails. Note that this address must be able to receive the tokens on the destination
+     * chain of the transfer.
+     * @param primaryFeeTokenAddress Address of the ERC20 contract to optionally pay a Teleporter message fee
+     * @param primaryFee Amount of tokens to pay for Teleporter fee on the chain that iniiated the transfer
+     * @param secondaryFee Amount of tokens to pay for Teleporter fee if a multi-hop is needed
+     */
+    struct SendAndCallInput {
+        bytes32 destinationBlockchainID;
+        address destinationTokenTransferrerAddress;
+        address recipientContract;
+        bytes recipientPayload;
+        uint256 requiredGasLimit;
+        uint256 recipientGasLimit;
+        address multiHopFallback;
+        address fallbackRecipient;
+        address primaryFeeTokenAddress;
+        uint256 primaryFee;
+        uint256 secondaryFee;
+    }
+
+    /**
+     * @notice Interface for an Avalanche interchain token transferrer that sends tokens to another chain.
+     *
+     * @custom:security-contact https://github.com/ava-labs/icm-contracts/blob/main/SECURITY.md
+     */
+    interface ITokenTransferrer is ITeleporterReceiver {
+        /**
+         * @notice Emitted when tokens are sent to another chain.
+         */
+        event TokensSent(
+            bytes32 indexed teleporterMessageID,
+            address indexed sender,
+            SendTokensInput input,
+            uint256 amount
+        );
+
+        /**
+         * @notice Emitted when tokens are sent to another chain with calldata for a contract recipient.
+         */
+        event TokensAndCallSent(
+            bytes32 indexed teleporterMessageID,
+            address indexed sender,
+            SendAndCallInput input,
+            uint256 amount
+        );
+
+        /**
+         * @notice Emitted when tokens are withdrawn from the token transferrer contract.
+         */
+        event TokensWithdrawn(address indexed recipient, uint256 amount);
+
+        /**
+         * @notice Emitted when a call to a recipient contract to receive token succeeds.
+         */
+        event CallSucceeded(address indexed recipientContract, uint256 amount);
+
+        /**
+         * @notice Emitted when a call to a recipient contract to receive token fails, and the tokens are sent
+         * to a fallback recipient.
+         */
+        event CallFailed(address indexed recipientContract, uint256 amount);
     }
 }
 
@@ -168,9 +271,18 @@ impl AvalancheIndexer {
                 (latest_block, latest_block.saturating_sub(1))
             };
 
+            // Combine ICM (TeleporterMessenger) and ICTT (TokenTransferrer) event signatures
+            let all_event_signatures: Vec<_> =
+                ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES
+                    .iter()
+                    .chain(ITokenTransferrer::ITokenTransferrerEvents::SIGNATURES.iter())
+                    .copied()
+                    .collect();
+
             let filter = Filter::new()
-                .address(vec![contract_address])
-                .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES);
+                // TODO: maybe we should still filter events by address for security reasons.
+                // .address(vec![contract_address])
+                .events(all_event_signatures);
 
             tracing::info!(bridge_id, chain_id, "Configured log stream");
 
@@ -240,6 +352,17 @@ fn blockchain_id_hex(bytes: &[u8]) -> String {
     format!("0x{}", hex::encode(bytes))
 }
 
+/// Context extracted from logs within the same transaction.
+/// Used to correlate events like CallSucceeded/CallFailed with their parent message.
+#[derive(Debug, Default)]
+struct TxContext {
+    /// Message ID extracted from ReceiveCrossChainMessage in this transaction.
+    /// Used to correlate destination-side ICTT events (CallSucceeded/CallFailed).
+    message_id: Option<i64>,
+    /// Source chain ID for the message (needed for Key construction)
+    src_chain_id: Option<i64>,
+}
+
 async fn process_batch(
     batch: Vec<Log>,
     chain_id: i64,
@@ -247,18 +370,49 @@ async fn process_batch(
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer>,
 ) -> Result<()> {
+    // Group logs by transaction hash for same-tx correlation
+    let mut logs_by_tx: HashMap<B256, Vec<&Log>> = HashMap::new();
     for log in &batch {
-        let block_number = log.block_number.context("missing block number")? as i64;
+        if let Some(tx_hash) = log.transaction_hash {
+            logs_by_tx.entry(tx_hash).or_default().push(log);
+        }
+    }
 
-        handle_log(
-            chain_id,
-            block_number,
-            log,
-            bridge_id,
-            native_id_to_chain_id,
-            buffer,
-        )
-        .await?;
+    // Process each transaction's logs together
+    for (_tx_hash, tx_logs) in logs_by_tx {
+        // First pass: extract context from ReceiveCrossChainMessage if present
+        let mut tx_context = TxContext::default();
+        for log in &tx_logs {
+            if log.topic0() == Some(&ITeleporterMessenger::ReceiveCrossChainMessage::SIGNATURE_HASH)
+            {
+                if let Ok(event) =
+                    log.log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()
+                {
+                    let message_id_bytes = event.inner.messageID.as_slice();
+                    if let Ok(id_bytes) = message_id_bytes[..8].try_into() {
+                        tx_context.message_id = Some(i64::from_be_bytes(id_bytes));
+                    }
+                    let source_hex = blockchain_id_hex(event.inner.sourceBlockchainID.as_slice());
+                    tx_context.src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
+                }
+            }
+        }
+
+        // Second pass: process all logs with context
+        for log in tx_logs {
+            let block_number = log.block_number.context("missing block number")? as i64;
+
+            handle_log(
+                chain_id,
+                block_number,
+                log,
+                bridge_id,
+                native_id_to_chain_id,
+                buffer,
+                &tx_context,
+            )
+            .await?;
+        }
     }
 
     Ok(())
@@ -271,8 +425,10 @@ async fn handle_log(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer>,
+    tx_context: &TxContext,
 ) -> anyhow::Result<()> {
     match log.topic0() {
+        // ICM Events
         Some(&ITeleporterMessenger::SendCrossChainMessage::SIGNATURE_HASH) => {
             handle_send_cross_chain_message(
                 chain_id,
@@ -317,7 +473,30 @@ async fn handle_log(
             )
             .await
         }
-        _ => Err(anyhow::Error::msg("unknown event")),
+        // ICTT Events
+        Some(&ITokenTransferrer::TokensSent::SIGNATURE_HASH) => {
+            handle_tokens_sent(chain_id, block_number, log, bridge_id, buffer).await
+        }
+        Some(&ITokenTransferrer::TokensAndCallSent::SIGNATURE_HASH) => {
+            handle_tokens_and_call_sent(chain_id, block_number, log, bridge_id, buffer).await
+        }
+        Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) => {
+            handle_tokens_withdrawn(chain_id, block_number, log, bridge_id, buffer, tx_context)
+                .await
+        }
+        Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) => {
+            handle_call_succeeded(chain_id, block_number, log, bridge_id, buffer, tx_context).await
+        }
+        Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) => {
+            handle_call_failed(chain_id, block_number, log, bridge_id, buffer, tx_context).await
+        }
+        _ => {
+            tracing::trace!(
+                topic0 = ?log.topic0(),
+                "Ignoring unknown event"
+            );
+            Ok(())
+        }
     }
 }
 
@@ -549,6 +728,276 @@ async fn handle_message_execution_failed(
         source_blockchain_id = %source_blockchain_id_hex,
         nonce = %event.message.messageNonce,
         "Processed MessageExecutionFailed"
+    );
+
+    Ok(())
+}
+
+// =============================================================================
+// ICTT (Interchain Token Transfer) Handlers
+// =============================================================================
+
+/// Handle TokensSent - source-side ICTT event for simple token transfers
+///
+/// This event is emitted when tokens are sent to another chain.
+/// The `teleporterMessageID` links this transfer to its parent ICM message.
+///
+/// Pushes an IcttEventFragment::TokensSent for later consolidation.
+async fn handle_tokens_sent(
+    chain_id: i64,
+    block_number: i64,
+    log: &Log,
+    bridge_id: i32,
+    buffer: &Arc<MessageBuffer>,
+) -> Result<()> {
+    let event = log.log_decode::<ITokenTransferrer::TokensSent>()?.inner;
+    let message_id_bytes = event.teleporterMessageID.as_slice();
+    let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
+    let token_contract = log.address();
+
+    let key = Key::new(id, bridge_id);
+    let mut entry = buffer.get_or_create(key).await?;
+
+    dbg!("tokens sent event");
+
+    // Push fragment for later consolidation
+    entry.ictt_fragments.push(IcttEventFragment::TokensSent {
+        token_contract,
+        sender: event.sender,
+        dst_token_address: event.input.destinationTokenTransferrerAddress,
+        recipient: event.input.recipient,
+        amount: event.amount,
+    });
+
+    entry.cursor.record_block(chain_id, block_number);
+    buffer.upsert(entry).await?;
+
+    tracing::debug!(
+        message_id = %hex::encode(message_id_bytes),
+        chain_id,
+        block_number,
+        sender = %event.sender,
+        amount = %event.amount,
+        "Processed TokensSent"
+    );
+
+    Ok(())
+}
+
+/// Handle TokensAndCallSent - source-side ICTT event for token transfers with contract call
+///
+/// Similar to TokensSent, but the recipient is a contract that will be called
+/// with the provided payload after receiving the tokens.
+///
+/// Pushes an IcttEventFragment::TokensAndCallSent for later consolidation.
+/// Stores fallbackRecipient so we can use it if CallFailed is received.
+async fn handle_tokens_and_call_sent(
+    chain_id: i64,
+    block_number: i64,
+    log: &Log,
+    bridge_id: i32,
+    buffer: &Arc<MessageBuffer>,
+) -> Result<()> {
+    let event = log
+        .log_decode::<ITokenTransferrer::TokensAndCallSent>()?
+        .inner;
+    let message_id_bytes = event.teleporterMessageID.as_slice();
+    let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
+    let token_contract = log.address();
+
+    let key = Key::new(id, bridge_id);
+    let mut entry = buffer.get_or_create(key).await?;
+
+    // Push fragment for later consolidation
+    entry
+        .ictt_fragments
+        .push(IcttEventFragment::TokensAndCallSent {
+            token_contract,
+            sender: event.sender,
+            dst_token_address: event.input.destinationTokenTransferrerAddress,
+            recipient_contract: event.input.recipientContract,
+            fallback_recipient: event.input.fallbackRecipient,
+            amount: event.amount,
+        });
+
+    entry.cursor.record_block(chain_id, block_number);
+    buffer.upsert(entry).await?;
+
+    tracing::debug!(
+        message_id = %hex::encode(message_id_bytes),
+        chain_id,
+        block_number,
+        sender = %event.sender,
+        recipient_contract = %event.input.recipientContract,
+        amount = %event.amount,
+        "Processed TokensAndCallSent"
+    );
+
+    Ok(())
+}
+
+/// Handle TokensWithdrawn - destination-side ICTT event when tokens are released
+///
+/// This event is emitted when tokens are withdrawn to the recipient.
+/// Uses TxContext to correlate with the parent message via messageID
+/// extracted from ReceiveCrossChainMessage in the same transaction.
+async fn handle_tokens_withdrawn(
+    chain_id: i64,
+    block_number: i64,
+    log: &Log,
+    bridge_id: i32,
+    buffer: &Arc<MessageBuffer>,
+    tx_context: &TxContext,
+) -> Result<()> {
+    let event = log
+        .log_decode::<ITokenTransferrer::TokensWithdrawn>()?
+        .inner;
+    let tx_hash = log.transaction_hash.context("missing tx hash")?;
+
+    // Use tx_context to find the parent message
+    let Some(message_id) = tx_context.message_id else {
+        tracing::debug!(
+            recipient = %event.recipient,
+            amount = %event.amount,
+            tx_hash = %tx_hash,
+            "TokensWithdrawn: no ReceiveCrossChainMessage in same tx, skipping"
+        );
+        return Ok(());
+    };
+
+    let key = Key::new(message_id, bridge_id);
+    let mut entry = buffer.get_or_create(key).await?;
+
+    // Push fragment for later consolidation
+    entry
+        .ictt_fragments
+        .push(IcttEventFragment::TokensWithdrawn {
+            recipient: event.recipient,
+            amount: event.amount,
+        });
+
+    entry.cursor.record_block(chain_id, block_number);
+    buffer.upsert(entry).await?;
+
+    tracing::debug!(
+        message_id,
+        recipient = %event.recipient,
+        amount = %event.amount,
+        tx_hash = %tx_hash,
+        chain_id,
+        block_number,
+        "Processed TokensWithdrawn"
+    );
+
+    Ok(())
+}
+
+/// Handle CallSucceeded - destination-side ICTT event when contract call succeeds
+///
+/// This event is emitted after TokensAndCallSent when the recipient contract
+/// call succeeds. Uses TxContext to correlate with parent message via messageID
+/// extracted from ReceiveCrossChainMessage in the same transaction.
+///
+/// Pushes an IcttEventFragment::CallSucceeded - consolidation will keep recipient
+/// as the recipientContract from TokensAndCallSent.
+async fn handle_call_succeeded(
+    chain_id: i64,
+    block_number: i64,
+    log: &Log,
+    bridge_id: i32,
+    buffer: &Arc<MessageBuffer>,
+    tx_context: &TxContext,
+) -> Result<()> {
+    let event = log.log_decode::<ITokenTransferrer::CallSucceeded>()?.inner;
+    let tx_hash = log.transaction_hash.context("missing tx hash")?;
+
+    // Use tx_context to find the parent message
+    let Some(message_id) = tx_context.message_id else {
+        tracing::debug!(
+            recipient_contract = %event.recipientContract,
+            amount = %event.amount,
+            tx_hash = %tx_hash,
+            "CallSucceeded: no ReceiveCrossChainMessage in same tx, skipping"
+        );
+        return Ok(());
+    };
+
+    let key = Key::new(message_id, bridge_id);
+    let mut entry = buffer.get_or_create(key).await?;
+
+    // Push fragment for later consolidation
+    entry.ictt_fragments.push(IcttEventFragment::CallSucceeded {
+        recipient_contract: event.recipientContract,
+        amount: event.amount,
+    });
+
+    entry.cursor.record_block(chain_id, block_number);
+    buffer.upsert(entry).await?;
+
+    tracing::debug!(
+        message_id,
+        recipient_contract = %event.recipientContract,
+        amount = %event.amount,
+        tx_hash = %tx_hash,
+        chain_id,
+        block_number,
+        "Processed CallSucceeded"
+    );
+
+    Ok(())
+}
+
+/// Handle CallFailed - destination-side ICTT event when contract call fails
+///
+/// This event is emitted after TokensAndCallSent when the recipient contract
+/// call fails. Tokens are sent to the fallback recipient instead.
+/// Uses TxContext to correlate with parent message via messageID
+/// extracted from ReceiveCrossChainMessage in the same transaction.
+///
+/// Pushes an IcttEventFragment::CallFailed - consolidation will use
+/// fallbackRecipient from TokensAndCallSent as the final recipient.
+async fn handle_call_failed(
+    chain_id: i64,
+    block_number: i64,
+    log: &Log,
+    bridge_id: i32,
+    buffer: &Arc<MessageBuffer>,
+    tx_context: &TxContext,
+) -> Result<()> {
+    let event = log.log_decode::<ITokenTransferrer::CallFailed>()?.inner;
+    let tx_hash = log.transaction_hash.context("missing tx hash")?;
+
+    // Use tx_context to find the parent message
+    let Some(message_id) = tx_context.message_id else {
+        tracing::debug!(
+            recipient_contract = %event.recipientContract,
+            amount = %event.amount,
+            tx_hash = %tx_hash,
+            "CallFailed: no ReceiveCrossChainMessage in same tx, skipping"
+        );
+        return Ok(());
+    };
+
+    let key = Key::new(message_id, bridge_id);
+    let mut entry = buffer.get_or_create(key).await?;
+
+    // Push fragment for later consolidation - recipient will become fallbackRecipient
+    entry.ictt_fragments.push(IcttEventFragment::CallFailed {
+        recipient_contract: event.recipientContract,
+        amount: event.amount,
+    });
+
+    entry.cursor.record_block(chain_id, block_number);
+    buffer.upsert(entry).await?;
+
+    tracing::debug!(
+        message_id,
+        recipient_contract = %event.recipientContract,
+        amount = %event.amount,
+        tx_hash = %tx_hash,
+        chain_id,
+        block_number,
+        "Processed CallFailed"
     );
 
     Ok(())

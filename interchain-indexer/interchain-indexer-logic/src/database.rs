@@ -601,24 +601,21 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
-    pub async fn upsert_token_info(
-        &self,
-        token_info: tokens::ActiveModel,
-    ) -> anyhow::Result<()> {
+    pub async fn upsert_token_info(&self, token_info: tokens::ActiveModel) -> anyhow::Result<()> {
         tokens::Entity::insert(token_info)
-        .on_conflict(
-            OnConflict::columns([tokens::Column::ChainId, tokens::Column::Address])
-            .update_columns([
-                tokens::Column::Name,
-                tokens::Column::Symbol,
-                tokens::Column::Decimals,
-                tokens::Column::TokenIcon
-                ])
-            .value(chains::Column::UpdatedAt, Expr::current_timestamp())
-            .to_owned()
-        )
-        .exec(self.db.as_ref())
-        .await?;
+            .on_conflict(
+                OnConflict::columns([tokens::Column::ChainId, tokens::Column::Address])
+                    .update_columns([
+                        tokens::Column::Name,
+                        tokens::Column::Symbol,
+                        tokens::Column::Decimals,
+                        tokens::Column::TokenIcon,
+                    ])
+                    .value(chains::Column::UpdatedAt, Expr::current_timestamp())
+                    .to_owned(),
+            )
+            .exec(self.db.as_ref())
+            .await?;
 
         Ok(())
     }
@@ -768,14 +765,16 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
-    /// Get a crosschain message by primary key (message_id, bridge_id)
+    /// Get a crosschain message by primary key (message_id, bridge_id) with its transfers
     pub async fn get_crosschain_message_by_pk(
         &self,
         message_id: i64,
         bridge_id: i32,
-    ) -> anyhow::Result<Option<crosschain_messages::Model>> {
-        crosschain_messages::Entity::find_by_id((message_id, bridge_id))
-            .one(self.db.as_ref())
+    ) -> anyhow::Result<Option<(crosschain_messages::Model, Vec<crosschain_transfers::Model>)>>
+    {
+        let result = crosschain_messages::Entity::find_by_id((message_id, bridge_id))
+            .find_with_related(crosschain_transfers::Entity)
+            .all(self.db.as_ref())
             .await
             .inspect_err(|e| {
                 tracing::error!(
@@ -784,8 +783,10 @@ impl InterchainDatabase {
                     bridge_id,
                     "Failed to fetch crosschain message by PK"
                 )
-            })
-            .map_err(|e| e.into())
+            })?;
+
+        // find_with_related returns Vec<(Message, Vec<Transfer>)>, we only expect 0 or 1
+        Ok(result.into_iter().next())
     }
 
     /// Check if a pending message exists for the given message_id and bridge_id
