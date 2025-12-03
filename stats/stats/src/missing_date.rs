@@ -60,6 +60,10 @@ pub fn trim_out_of_range_sorted<Resolution, Value>(
 ) where
     Resolution: Timespan + Ord,
 {
+    // the logic below tends to panic when from > to
+    if range.is_empty() {
+        data.clear();
+    }
     // start of relevant section
     let keep_from_idx = data
         .binary_search_by_key(&range.start(), |p| &p.timespan)
@@ -639,6 +643,7 @@ mod tests {
         trim_out_of_range_sorted(&mut data, d("2100-01-02")..=d("2100-01-04"));
         assert_eq!(data, vec![]);
         trim_out_of_range_sorted(&mut data, NaiveDate::MIN..=NaiveDate::MAX);
+        trim_out_of_range_sorted(&mut data, NaiveDate::MAX..=NaiveDate::MAX);
 
         // No elements in range (before)
         let mut data = vec![
@@ -647,6 +652,13 @@ mod tests {
             d_v_int("2100-01-03", 3),
         ];
         trim_out_of_range_sorted(&mut data, d("2099-12-30")..=d("2099-12-31"));
+        assert_eq!(data, vec![]);
+        let mut data = vec![
+            d_v_int("2100-01-01", 1),
+            d_v_int("2100-01-02", 2),
+            d_v_int("2100-01-03", 3),
+        ];
+        trim_out_of_range_sorted(&mut data, NaiveDate::MAX..=NaiveDate::MIN);
         assert_eq!(data, vec![]);
 
         // No elements in range (after)
@@ -694,6 +706,22 @@ mod tests {
         ];
         trim_out_of_range_sorted(&mut data, d("2100-01-02")..=d("2100-01-02"));
         assert_eq!(data, vec![d_v_int("2100-01-02", 2)]);
+
+        // Missing elements
+        let mut data = vec![
+            d_v_int("2100-01-01", 1),
+            // 2100-01-02 is missing
+            d_v_int("2100-01-03", 3),
+        ];
+        trim_out_of_range_sorted(&mut data, d("2100-01-02")..=d("2100-01-03"));
+        assert_eq!(data, vec![d_v_int("2100-01-03", 3)]);
+        let mut data = vec![
+            d_v_int("2100-01-01", 1),
+            // 2100-01-02 is missing
+            d_v_int("2100-01-03", 3),
+        ];
+        trim_out_of_range_sorted(&mut data, d("2100-01-01")..=d("2100-01-02"));
+        assert_eq!(data, vec![d_v_int("2100-01-01", 1)]);
     }
 
     #[test]
