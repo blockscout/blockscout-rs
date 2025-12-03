@@ -450,12 +450,17 @@ impl UpdateService {
         }
     }
 
+    /// `update_all=true` will ignore `chart_names` and update all enabled charts
     pub async fn handle_update_request(
         self: &Arc<Self>,
-        chart_names: Vec<String>,
+        mut chart_names: Vec<String>,
+        update_all: bool,
         from: Option<NaiveDate>,
         update_later: bool,
     ) -> Result<OnDemandReupdateAccepted, OnDemandReupdateError> {
+        if update_all {
+            chart_names = self.charts.charts_info.keys().cloned().collect();
+        }
         let (accepted_keys, accepted_names, rejections) =
             self.split_update_request_input(chart_names);
         if accepted_keys.is_empty() {

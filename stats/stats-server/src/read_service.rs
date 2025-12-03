@@ -717,7 +717,12 @@ impl StatsService for ReadService {
         let update_later = request.update_later.unwrap_or(false);
         let result = self
             .update_service
-            .handle_update_request(request.chart_names, from, update_later)
+            .handle_update_request(
+                request.chart_names,
+                request.update_all.unwrap_or(false),
+                from,
+                update_later,
+            )
             .await
             .map_err(|e| match e {
                 OnDemandReupdateError::AllChartsNotFound => Status::not_found(e.to_string()),
