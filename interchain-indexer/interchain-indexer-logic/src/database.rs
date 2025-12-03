@@ -625,9 +625,10 @@ impl InterchainDatabase {
                                                     .eq(marker.message_id as i64),
                                                 )
                                                 .and(
-                                                    Expr::col(
+                                                    Expr::col((
+                                                        crosschain_transfers::Entity,
                                                         crosschain_transfers::Column::BridgeId,
-                                                    )
+                                                    ))
                                                     .lt(marker.bridge_id as i32),
                                                 ),
                                         )
@@ -641,14 +642,18 @@ impl InterchainDatabase {
                                                     .eq(marker.message_id as i64),
                                                 )
                                                 .and(
-                                                    Expr::col(
+                                                    Expr::col((
+                                                        crosschain_transfers::Entity,
                                                         crosschain_transfers::Column::BridgeId,
-                                                    )
+                                                    ))
                                                     .eq(marker.bridge_id as i32),
                                                 )
                                                 .and(
-                                                    Expr::col(crosschain_transfers::Column::Id)
-                                                        .lt(marker.transfer_id as i64),
+                                                    Expr::col((
+                                                        crosschain_transfers::Entity,
+                                                        crosschain_transfers::Column::Id,
+                                                    ))
+                                                    .lt(marker.transfer_id as i64),
                                                 ),
                                         )
                                 }
@@ -675,9 +680,10 @@ impl InterchainDatabase {
                                                     .eq(marker.message_id as i64),
                                                 )
                                                 .and(
-                                                    Expr::col(
+                                                    Expr::col((
+                                                        crosschain_transfers::Entity,
                                                         crosschain_transfers::Column::BridgeId,
-                                                    )
+                                                    ))
                                                     .gt(marker.bridge_id as i32),
                                                 ),
                                         )
@@ -691,14 +697,18 @@ impl InterchainDatabase {
                                                     .eq(marker.message_id as i64),
                                                 )
                                                 .and(
-                                                    Expr::col(
+                                                    Expr::col((
+                                                        crosschain_transfers::Entity,
                                                         crosschain_transfers::Column::BridgeId,
-                                                    )
+                                                    ))
                                                     .eq(marker.bridge_id as i32),
                                                 )
                                                 .and(
-                                                    Expr::col(crosschain_transfers::Column::Id)
-                                                        .gt(marker.transfer_id as i64),
+                                                    Expr::col((
+                                                        crosschain_transfers::Entity,
+                                                        crosschain_transfers::Column::Id,
+                                                    ))
+                                                    .gt(marker.transfer_id as i64),
                                                 ),
                                         )
                                 }
@@ -721,15 +731,27 @@ impl InterchainDatabase {
                             query = query
                                 .order_by_desc(crosschain_messages::Column::InitTimestamp)
                                 .order_by_desc(crosschain_transfers::Column::MessageId)
-                                .order_by_desc(crosschain_transfers::Column::BridgeId)
-                                .order_by_desc(crosschain_transfers::Column::Id);
+                                .order_by_desc(Expr::col((
+                                    crosschain_transfers::Entity,
+                                    crosschain_transfers::Column::BridgeId,
+                                )))
+                                .order_by_desc(Expr::col((
+                                    crosschain_transfers::Entity,
+                                    crosschain_transfers::Column::Id,
+                                )));
                         }
                         PaginationDirection::Prev => {
                             query = query
                                 .order_by_asc(crosschain_messages::Column::InitTimestamp)
                                 .order_by_asc(crosschain_transfers::Column::MessageId)
-                                .order_by_asc(crosschain_transfers::Column::BridgeId)
-                                .order_by_asc(crosschain_transfers::Column::Id);
+                                .order_by_asc(Expr::col((
+                                    crosschain_transfers::Entity,
+                                    crosschain_transfers::Column::BridgeId,
+                                )))
+                                .order_by_asc(Expr::col((
+                                    crosschain_transfers::Entity,
+                                    crosschain_transfers::Column::Id,
+                                )));
                         }
                     }
 

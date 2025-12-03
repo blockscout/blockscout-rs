@@ -32,14 +32,28 @@ impl TokenInfoFetcher for Erc20TokenHomeInfoFetcher {
             provider.clone()
         );
 
-        match token_contract.getTokenAddress().call().await {
-            Ok(token_address) => {
-                let token_info = self.erc20_fetcher.fetch_token_info(provider, _chain_id, token_address.to_vec()).await?;
-                Ok(token_info)
-            },
-            Err(e) => {
-                Err(e.into())
+        // ERC20TokenHome contract has either getTokenAddress or tokenAddress function
+        // to get the token address depends on the version of the contract
+        // We try to use getTokenAddress (latest version) first,
+        // and if it fails, we try to use tokenAddress
+        let erc20_token_address = match token_contract.getTokenAddress().call().await {
+            Ok(token_address) => token_address,
+            Err(_e) => {
+                match token_contract.tokenAddress().call().await {
+                    Ok(token_address) => token_address,
+                    Err(e) => {
+                        return Err(e.into());
+                    }
+                }
             }
-        }
+        };
+        
+        let token_info = self.erc20_fetcher.fetch_token_info(
+            provider,
+            _chain_id,
+            erc20_token_address.to_vec()
+        ).await?;
+
+        Ok(token_info)
     }
 }
