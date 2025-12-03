@@ -9,7 +9,6 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::{Context, Result, anyhow};
-use chrono::Utc;
 use futures::{StreamExt, stream};
 use tokio::task::JoinHandle;
 
@@ -515,7 +514,6 @@ async fn handle_send_cross_chain_message(
     let message_id_bytes = event.messageID.as_slice();
     let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
     let tx_hash = log.transaction_hash.context("missing tx hash")?;
-    let now = Utc::now().naive_utc();
 
     let destination_hex = blockchain_id_hex(event.destinationBlockchainID.as_slice());
     let dst_chain_id = native_id_to_chain_id.get(&destination_hex).copied();
@@ -539,7 +537,10 @@ async fn handle_send_cross_chain_message(
     // Fill in source-side data
     entry.src_chain_id = Some(chain_id);
     entry.source_transaction_hash = Some(tx_hash.into());
-    entry.init_timestamp = Some(now); // This makes the message "ready"
+    entry.init_timestamp =
+        log.block_timestamp
+            .and_then(|ts| chrono::DateTime::from_timestamp(ts as i64, 0))
+            .map(|dt| dt.naive_utc());
     entry.sender_address = Some(event.message.originSenderAddress);
     entry.recipient_address = Some(event.message.destinationAddress);
     entry.destination_chain_id = dst_chain_id;
@@ -603,6 +604,10 @@ async fn handle_receive_cross_chain_message(
     entry.native_id = Some(message_id_bytes.to_vec());
     entry.sender_address = event.message.originSenderAddress.into();
     entry.recipient_address = event.message.destinationAddress.into();
+    entry.last_update_timestamp =
+        log.block_timestamp
+            .and_then(|ts| chrono::DateTime::from_timestamp(ts as i64, 0))
+            .map(|dt| dt.naive_utc());
     entry.payload = event.message.message.to_vec().into();
     entry.src_chain_id = src_chain_id;
     entry.cursor.record_block(chain_id, block_number);

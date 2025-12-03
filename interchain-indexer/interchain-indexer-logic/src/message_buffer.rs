@@ -4,8 +4,12 @@
 //! - **Hot tier**: In-memory storage for recent messages (fast access)
 //! - **Cold tier**: Postgres `pending_messages` table for durability
 //!
-//! Messages are promoted to `crosschain_messages` when they become "ready"
-//! (i.e., when the source event with `init_timestamp` has been received).
+//! Messages are promoted to `crosschain_messages` when they become "ready".
+//!
+//! Future improvements:
+//! - There might be situations when message is flushed to final storage but
+//!   isn't fully indexed. In that case we don't delete it from pending_messages
+//!   to allow recovery.
 
 use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 
@@ -19,7 +23,7 @@ use interchain_indexer_entity::{
 };
 use sea_orm::{
     ActiveValue, DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
-    prelude::{BigDecimal},
+    prelude::BigDecimal,
     sea_query::{Expr, OnConflict},
 };
 use serde::{Deserialize, Serialize};
@@ -330,6 +334,8 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub init_timestamp: Option<NaiveDateTime>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_update_timestamp: Option<NaiveDateTime>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sender_address: Option<Address>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipient_address: Option<Address>,
@@ -403,7 +409,6 @@ impl Message {
         let now = Utc::now().naive_utc();
         let amount_str = t.amount.unwrap_or_default().to_string();
         let amount = BigDecimal::from_str(&amount_str).unwrap_or_else(|_| BigDecimal::from(0));
-
 
         crosschain_transfers::ActiveModel {
             id: ActiveValue::NotSet,
@@ -487,7 +492,8 @@ impl TryInto<crosschain_messages::ActiveModel> for &Message {
 
     fn try_into(self) -> Result<crosschain_messages::ActiveModel, Self::Error> {
         let now = Utc::now().naive_utc();
-        self.init_timestamp
+        let init_timestamp = self
+            .init_timestamp
             .ok_or_else(|| anyhow::anyhow!("init_timestamp is required for promotion"))?;
 
         let entry = crosschain_messages::ActiveModel {
@@ -497,8 +503,8 @@ impl TryInto<crosschain_messages::ActiveModel> for &Message {
             src_chain_id: ActiveValue::Set(self.src_chain_id.unwrap_or(0)),
             dst_chain_id: ActiveValue::Set(self.destination_chain_id),
             native_id: ActiveValue::Set(self.native_id.clone()),
-            init_timestamp: ActiveValue::Set(now),
-            last_update_timestamp: ActiveValue::Set(Some(now)),
+            init_timestamp: ActiveValue::Set(init_timestamp),
+            last_update_timestamp: ActiveValue::Set(self.last_update_timestamp),
             src_tx_hash: ActiveValue::Set(
                 self.source_transaction_hash.map(|v| v.as_slice().to_vec()),
             ),
@@ -547,6 +553,7 @@ impl TryFrom<(crosschain_messages::Model, Vec<crosschain_transfers::Model>)> for
                 .map(|v| FixedBytes::<32>::try_from(v.as_slice()))
                 .transpose()?,
             init_timestamp: Some(model.init_timestamp),
+            last_update_timestamp: model.last_update_timestamp,
             sender_address: model
                 .sender_address
                 .map(|v| Address::try_from(v.as_slice()))
