@@ -19,7 +19,7 @@ use interchain_indexer_entity::{
 };
 use sea_orm::{
     ActiveValue, DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
-    prelude::{BigDecimal, Decimal},
+    prelude::{BigDecimal},
     sea_query::{Expr, OnConflict},
 };
 use serde::{Deserialize, Serialize};
@@ -402,7 +402,7 @@ impl Message {
     ) -> crosschain_transfers::ActiveModel {
         let now = Utc::now().naive_utc();
         let amount_str = t.amount.unwrap_or_default().to_string();
-        let amount = BigDecimal::from_str(&amount_str).unwrap_or_else(|_| BigDecimal::from(0));;
+        let amount = BigDecimal::from_str(&amount_str).unwrap_or_else(|_| BigDecimal::from(0));
 
 
         crosschain_transfers::ActiveModel {

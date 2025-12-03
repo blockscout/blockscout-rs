@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
-use alloy::{network::Ethereum, primitives::Address, providers::DynProvider, sol};
-use chrono::{DateTime, Duration, TimeDelta, Utc};
+use alloy::{network::Ethereum, providers::DynProvider};
+use chrono::{DateTime, Utc};
 use interchain_indexer_entity::tokens::{self, Model as TokenInfoModel};
 use parking_lot::RwLock;
 use sea_orm::ActiveValue::Set;
@@ -9,16 +9,14 @@ use tokio::sync::Mutex;
 
 use crate::InterchainDatabase;
 
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    ERC20,
-    "src/token_info/abi/ERC20.json"
-);
+use crate::token_info::fetchers::*;
 
 pub struct TokenInfoService {
     db: Arc<InterchainDatabase>,
     providers: HashMap<u64, DynProvider<Ethereum>>,
+
+    // The list of the fetchers to retrieve the token info on-chain
+    fetchers: Vec<Box<dyn TokenInfoFetcher>>,
 
     // Local token info cache: map of (chain_id, address) to token info DB model
     // Wrapped into async RwLock to allow concurrent access.
@@ -40,6 +38,10 @@ impl TokenInfoService {
         Self {
             db,
             providers,
+            fetchers: vec![
+                Box::new(Erc20TokenInfoFetcher),
+                Box::new(Erc20TokenHomeInfoFetcher::new()),
+            ],
             token_info_cache: RwLock::new(HashMap::new()),
             per_key_locks: RwLock::new(HashMap::new()),
             error_cache: RwLock::new(HashMap::new()),
@@ -93,20 +95,15 @@ impl TokenInfoService {
             .get(&chain_id)
             .ok_or_else(|| anyhow::anyhow!("Provider not found for chain_id={}", chain_id))?;
 
-        let token_contract = ERC20::new(Address::from_slice(&address), provider.clone());
-        let name_call = token_contract.name();
-        let symbol_call = token_contract.symbol();
-        let decimals_call = token_contract.decimals();
-
-        let res = match tokio::try_join!(name_call.call(), symbol_call.call(), decimals_call.call()) {
-            Ok((name, symbol, decimals)) => {
+        let res = match self.try_fetch_token_info(provider, chain_id, address.clone()).await {
+            Ok(token_info) => {
                 let model = TokenInfoModel {
                     chain_id: chain_id as i64,
                     address: address,
-                    name: Some(name),
-                    symbol: Some(symbol),
+                    name: Some(token_info.name),
+                    symbol: Some(token_info.symbol),
                     token_icon: None,
-                    decimals: Some(decimals as i16),
+                    decimals: Some(token_info.decimals as i16),
                     created_at: None,
                     updated_at: None,
                 };
@@ -173,5 +170,17 @@ impl TokenInfoService {
                 locks.remove(&key);
             }
         }
+    }
+
+    async fn try_fetch_token_info(&self, provider: &DynProvider<Ethereum>, chain_id: u64, address: Vec<u8>) -> anyhow::Result<OnchainTokenInfo> {
+        let mut last_error = None;
+        for fetcher in self.fetchers.iter() {
+            match fetcher.fetch_token_info(provider, chain_id, address.clone()).await {
+                Ok(info) => return Ok(info),
+                Err(e) => last_error = Some(e),
+            };
+        }
+
+        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Failed to fetch token info: no available fetchers")))
     }
 }
