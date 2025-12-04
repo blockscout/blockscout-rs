@@ -173,6 +173,10 @@ impl TokenInfoService {
     }
 
     async fn try_fetch_token_info(&self, provider: &DynProvider<Ethereum>, chain_id: u64, address: Vec<u8>) -> anyhow::Result<OnchainTokenInfo> {
+        if address.len() != 20 {
+            return Err(anyhow::anyhow!("Invalid address length: expected 20, got {}", address.len()));
+        }
+        
         let mut last_error = None;
         for fetcher in self.fetchers.iter() {
             match fetcher.fetch_token_info(provider, chain_id, address.clone()).await {
