@@ -62,21 +62,36 @@ sol! {
         );
     }
 
-    /**
-     * @notice Input parameters for transferring tokens to another chain as part of a simple transfer.
-     * @param destinationBlockchainID Blockchain ID of the destination
-     * @param destinationTokenTransferrerAddress Address of the destination token transferrer instance
-     * @param recipient Address of the recipient on the destination chain
-     * @param primaryFeeTokenAddress Address of the ERC20 contract to optionally pay a Teleporter message fee
-     * @param primaryFee Amount of tokens to pay as the optional Teleporter message fee
-     * @param secondaryFee Amount of tokens to pay for Teleporter fee if a multi-hop is needed
-     * @param requiredGasLimit Gas limit requirement for sending to a token transferrer.
-     * This is required because the gas requirement varies based on the token transferrer instance
-     * specified by {destinationBlockchainID} and {destinationTokenTransferrerAddress}.
-     * @param multiHopFallback In the case of a multi-hop transfer, the address where the tokens
-     * are sent on the home chain if the transfer is unable to be routed to its final destination.
-     * Note that this address must be able to receive the tokens held as collateral in the home contract.
-     */
+    /// @notice Input parameters for transferring tokens to another chain as
+    /// part of a simple transfer.
+    ///
+    /// @param destinationBlockchainID Blockchain ID of the destination
+    ///
+    /// @param destinationTokenTransferrerAddress Address of the destination
+    /// token transferrer instance
+    ///
+    /// @param recipient Address of the recipient on the destination chain
+    ///
+    /// @param primaryFeeTokenAddress Address of the ERC20 contract to
+    /// optionally pay a Teleporter message fee
+    ///
+    /// @param primaryFee Amount of tokens to pay as the optional Teleporter
+    /// message fee
+    ///
+    /// @param secondaryFee Amount of tokens to pay for Teleporter fee if a
+    /// multi-hop is needed
+    ///
+    /// @param requiredGasLimit Gas limit requirement for sending to a token
+    /// transferrer. This is required because the gas requirement varies based
+    /// on the token transferrer instance specified by
+    /// {destinationBlockchainID} and {destinationTokenTransferrerAddress}.
+    ///
+    ///
+    /// @param multiHopFallback In the case of a multi-hop transfer, the
+    /// address where the tokens are sent on the home chain if the transfer is
+    /// unable to be routed to its final destination. Note that this address
+    /// must be able to receive the tokens held as collateral in the home
+    /// contract.
     struct SendTokensInput {
         bytes32 destinationBlockchainID;
         address destinationTokenTransferrerAddress;
@@ -88,26 +103,48 @@ sol! {
         address multiHopFallback;
     }
 
-    /**
-     * @notice Input parameters for transferring tokens to another chain as part of a transfer with a contract call.
-     * @param destinationBlockchainID BlockchainID of the destination
-     * @param destinationTokenTransferrerAddress Address of the destination token transferrer instance
-     * @param recipientContract The contract on the destination chain that will be called
-     * @param recipientPayload The payload that will be provided to the recipient contract on the destination chain
-     * @param requiredGasLimit The required amount of gas needed to deliver the message on its destination chain,
-     * including token operations and the call to the recipient contract.
-     * @param recipientGasLimit The amount of gas that will provided to the recipient contract on the destination chain,
-     * which must be less than the requiredGasLimit of the message as a whole.
-     * @param multiHopFallback In the case of a multi-hop transfer, the address where the tokens
-     * are sent on the home chain if the transfer is unable to be routed to its final destination.
-     * Note that this address must be able to receive the tokens held as collateral in the home contract.
-     * @param fallbackRecipient Address on the {destinationBlockchainID} where the transferred tokens are sent to if the call
-     * to the recipient contract fails. Note that this address must be able to receive the tokens on the destination
-     * chain of the transfer.
-     * @param primaryFeeTokenAddress Address of the ERC20 contract to optionally pay a Teleporter message fee
-     * @param primaryFee Amount of tokens to pay for Teleporter fee on the chain that iniiated the transfer
-     * @param secondaryFee Amount of tokens to pay for Teleporter fee if a multi-hop is needed
-     */
+
+    /// @notice Input parameters for transferring tokens to another chain as
+    /// part of a transfer with a contract call.
+    ///
+    /// @param destinationBlockchainID BlockchainID of the destination
+    ///
+    /// @param destinationTokenTransferrerAddress Address of the destination
+    /// token transferrer instance
+    ///
+    /// @param recipientContract The contract on the destination chain that
+    /// will be called
+    ///
+    /// @param recipientPayload The payload that will be provided to the
+    /// recipient contract on the destination chain
+    ///
+    /// @param requiredGasLimit The required amount of gas needed to deliver
+    /// the message on its destination chain, including token operations and
+    /// the call to the recipient contract.
+    ///
+    /// @param recipientGasLimit The amount of gas that will provided to the
+    /// recipient contract on the destination chain, which must be less than
+    /// the requiredGasLimit of the message as a whole.
+    ///
+    /// @param multiHopFallback In the case of a multi-hop transfer, the
+    /// address where the tokens are sent on the home chain if the transfer is
+    /// unable to be routed to its final destination. Note that this address
+    /// must be able to receive the tokens held as collateral in the home
+    /// contract.
+    ///
+    /// @param fallbackRecipient Address on the {destinationBlockchainID} where
+    /// the transferred tokens are sent to if the call to the recipient
+    /// contract fails. Note that this address must be able to receive the
+    /// tokens on the destination chain of the transfer.
+    ///
+    /// @param primaryFeeTokenAddress Address of the ERC20 contract to
+    /// optionally pay a Teleporter message fee
+    ///
+    /// @param primaryFee Amount of tokens to pay for Teleporter fee on the
+    /// chain that iniiated the transfer
+    ///
+    /// @param secondaryFee Amount of tokens to pay for Teleporter fee if a
+    /// multi-hop is needed
     struct SendAndCallInput {
         bytes32 destinationBlockchainID;
         address destinationTokenTransferrerAddress;
@@ -122,15 +159,13 @@ sol! {
         uint256 secondaryFee;
     }
 
-    /**
-     * @notice Interface for an Avalanche interchain token transferrer that sends tokens to another chain.
-     *
-     * @custom:security-contact https://github.com/ava-labs/icm-contracts/blob/main/SECURITY.md
-     */
+     /// @notice Interface for an Avalanche interchain token transferrer that
+     /// sends tokens to another chain.
+     ///
+     /// @custom:security-contact
+     /// https://github.com/ava-labs/icm-contracts/blob/main/SECURITY.md
     interface ITokenTransferrer is ITeleporterReceiver {
-        /**
-         * @notice Emitted when tokens are sent to another chain.
-         */
+        /// @notice Emitted when tokens are sent to another chain.
         event TokensSent(
             bytes32 indexed teleporterMessageID,
             address indexed sender,
@@ -138,9 +173,8 @@ sol! {
             uint256 amount
         );
 
-        /**
-         * @notice Emitted when tokens are sent to another chain with calldata for a contract recipient.
-         */
+        /// @notice Emitted when tokens are sent to another chain with calldata
+        /// for a contract recipient.
         event TokensAndCallSent(
             bytes32 indexed teleporterMessageID,
             address indexed sender,
@@ -148,20 +182,16 @@ sol! {
             uint256 amount
         );
 
-        /**
-         * @notice Emitted when tokens are withdrawn from the token transferrer contract.
-         */
+        /// @notice Emitted when tokens are withdrawn from the token transferrer
+        /// contract.
         event TokensWithdrawn(address indexed recipient, uint256 amount);
 
-        /**
-         * @notice Emitted when a call to a recipient contract to receive token succeeds.
-         */
+        /// @notice Emitted when a call to a recipient contract to receive token
+        /// succeeds.
         event CallSucceeded(address indexed recipientContract, uint256 amount);
 
-        /**
-         * @notice Emitted when a call to a recipient contract to receive token fails, and the tokens are sent
-         * to a fallback recipient.
-         */
+        /// @notice Emitted when a call to a recipient contract to receive token
+        /// fails, and the tokens are sent to a fallback recipient.
         event CallFailed(address indexed recipientContract, uint256 amount);
     }
 }
@@ -188,7 +218,7 @@ impl AvalancheIndexerConfig {
             bridge_id,
             chains,
             poll_interval: Duration::from_secs(10),
-            batch_size: 2000,
+            batch_size: 0,
         }
     }
 
@@ -238,7 +268,7 @@ impl AvalancheIndexer {
             "Starting Avalanche indexer"
         );
 
-        let mut combined_stream = stream::empty::<(i64, Vec<Log>)>().boxed();
+        let mut combined_stream = stream::empty::<(i64, DynProvider<Ethereum>, Vec<Log>)>().boxed();
 
         for chain in chains {
             let chain_id = chain.chain_id;
@@ -285,6 +315,7 @@ impl AvalancheIndexer {
 
             tracing::info!(bridge_id, chain_id, "Configured log stream");
 
+            let stream_provider = provider.clone();
             let stream = LogStreamBuilder::new(provider.clone())
                 .filter(filter)
                 .poll_interval(poll_interval)
@@ -295,7 +326,7 @@ impl AvalancheIndexer {
                 .catchup()
                 .realtime()
                 .into_stream()
-                .map(move |logs| (chain_id, logs))
+                .map(move |logs| (chain_id, stream_provider.clone(), logs))
                 .boxed();
 
             combined_stream = stream::select(combined_stream, stream).boxed();
@@ -309,8 +340,17 @@ impl AvalancheIndexer {
         let buffer_handle = Arc::clone(&buffer).start().await?;
 
         // Process events
-        while let Some((chain_id, batch)) = combined_stream.next().await {
-            match process_batch(batch, chain_id, bridge_id, &native_id_to_chain_id, &buffer).await {
+        while let Some((chain_id, provider, batch)) = combined_stream.next().await {
+            match process_batch(
+                batch,
+                chain_id,
+                bridge_id,
+                &native_id_to_chain_id,
+                &buffer,
+                &provider,
+            )
+            .await
+            {
                 Ok(()) => {
                     tracing::debug!(bridge_id, chain_id, "Processed Avalanche log batch");
                 }
@@ -368,6 +408,7 @@ async fn process_batch(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer>,
+    provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
     // Group logs by transaction hash for same-tx correlation
     let mut logs_by_tx: HashMap<B256, Vec<&Log>> = HashMap::new();
@@ -409,6 +450,7 @@ async fn process_batch(
                 native_id_to_chain_id,
                 buffer,
                 &tx_context,
+                provider,
             )
             .await?;
         }
@@ -425,6 +467,7 @@ async fn handle_log(
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer>,
     tx_context: &TxContext,
+    provider: &DynProvider<Ethereum>,
 ) -> anyhow::Result<()> {
     match log.topic0() {
         // ICM Events
@@ -436,6 +479,7 @@ async fn handle_log(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
+                provider,
             )
             .await
         }
@@ -447,6 +491,7 @@ async fn handle_log(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
+                provider,
             )
             .await
         }
@@ -507,6 +552,7 @@ async fn handle_send_cross_chain_message(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer>,
+    provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
     let event = log
         .log_decode::<ITeleporterMessenger::SendCrossChainMessage>()?
@@ -534,13 +580,20 @@ async fn handle_send_cross_chain_message(
     // Get or create entry from buffer (checks hot tier, then cold tier, then creates new)
     let mut entry = buffer.get_or_create(key).await?;
 
+    // Fetch block timestamp via RPC (most nodes don't include it in logs)
+    let block_timestamp = provider
+        .get_block_by_number((block_number as u64).into())
+        .await?
+        .map(|block| {
+            chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
+                .map(|dt| dt.naive_utc())
+        })
+        .flatten();
+
     // Fill in source-side data
     entry.src_chain_id = Some(chain_id);
     entry.source_transaction_hash = Some(tx_hash.into());
-    entry.init_timestamp =
-        log.block_timestamp
-            .and_then(|ts| chrono::DateTime::from_timestamp(ts as i64, 0))
-            .map(|dt| dt.naive_utc());
+    entry.init_timestamp = block_timestamp;
     entry.sender_address = Some(event.message.originSenderAddress);
     entry.recipient_address = Some(event.message.destinationAddress);
     entry.destination_chain_id = dst_chain_id;
@@ -571,6 +624,7 @@ async fn handle_receive_cross_chain_message(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer>,
+    provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
     let event = log
         .log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()?
@@ -598,16 +652,23 @@ async fn handle_receive_cross_chain_message(
     let key = Key::new(id, bridge_id);
     let mut entry = buffer.get_or_create(key).await?;
 
+    // Fetch block timestamp via RPC (most nodes don't include it in logs)
+    let block_timestamp = provider
+        .get_block_by_number((block_number as u64).into())
+        .await?
+        .map(|block| {
+            chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
+                .map(|dt| dt.naive_utc())
+        })
+        .flatten();
+
     // Fill in destination-side data
     entry.destination_chain_id = Some(chain_id);
     entry.destination_transaction_hash = Some(tx_hash.into());
     entry.native_id = Some(message_id_bytes.to_vec());
     entry.sender_address = event.message.originSenderAddress.into();
     entry.recipient_address = event.message.destinationAddress.into();
-    entry.last_update_timestamp =
-        log.block_timestamp
-            .and_then(|ts| chrono::DateTime::from_timestamp(ts as i64, 0))
-            .map(|dt| dt.naive_utc());
+    entry.last_update_timestamp = block_timestamp;
     entry.payload = event.message.message.to_vec().into();
     entry.src_chain_id = src_chain_id;
     entry.cursor.record_block(chain_id, block_number);
@@ -1013,11 +1074,29 @@ mod tests {
     use super::*;
     use crate::test_utils::init_db;
     use alloy::{
+        node_bindings::AnvilInstance,
         primitives::{Address, B256, Bytes, LogData, U256},
+        providers::{ProviderBuilder, ext::AnvilApi},
         rpc::types::Log,
     };
     use interchain_indexer_entity::{crosschain_messages, sea_orm_active_enums::MessageStatus};
     use sea_orm::{ActiveValue, EntityTrait};
+
+    /// Create a mock provider for tests using an embedded Anvil instance.
+    /// Mines 300 blocks so that tests can reference blocks 0-299.
+    async fn create_test_provider() -> (DynProvider<Ethereum>, AnvilInstance) {
+        let anvil = alloy::node_bindings::Anvil::new().spawn();
+        let provider = ProviderBuilder::new()
+            .connect_http(anvil.endpoint_url())
+            .erased();
+
+        // Mine 300 blocks so tests can reference block numbers 100, 200, 201, etc.
+        for _ in 0..300 {
+            provider.evm_mine(None).await.unwrap();
+        }
+
+        (provider, anvil)
+    }
 
     // Helper to create a mock SendCrossChainMessage log
     fn create_send_message_log(
@@ -1214,9 +1293,11 @@ mod tests {
         InterchainDatabase,
         Arc<MessageBuffer>,
         HashMap<String, i64>,
-        i32, // bridge_id
-        i64, // src_chain_id
-        i64, // dst_chain_id
+        DynProvider<Ethereum>,
+        AnvilInstance, // keep anvil alive for the duration of the test
+        i32,           // bridge_id
+        i64,           // src_chain_id
+        i64,           // dst_chain_id
     ) {
         let db = init_db(test_name).await;
         let interchain_db = InterchainDatabase::new(db.client());
@@ -1259,10 +1340,14 @@ mod tests {
 
         let buffer = MessageBuffer::new(interchain_db.clone(), Config::default());
 
+        let (provider, anvil) = create_test_provider().await;
+
         (
             interchain_db,
             buffer,
             native_id_to_chain_id,
+            provider,
+            anvil,
             bridge_id,
             src_chain_id,
             dst_chain_id,
@@ -1272,8 +1357,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn test_sequential_event_flow_with_buffer() {
-        let (interchain_db, buffer, native_id_to_chain_id, bridge_id, src_chain_id, dst_chain_id) =
-            setup_test_env("avax_buf_seq").await;
+        let (
+            interchain_db,
+            buffer,
+            native_id_to_chain_id,
+            provider,
+            _anvil,
+            bridge_id,
+            src_chain_id,
+            dst_chain_id,
+        ) = setup_test_env("avax_buf_seq").await;
 
         let mut message_id_bytes = [0u8; 32];
         message_id_bytes[0..8].copy_from_slice(&123456789i64.to_be_bytes());
@@ -1292,6 +1385,7 @@ mod tests {
             bridge_id,
             &native_id_to_chain_id,
             &buffer,
+            &provider,
         )
         .await
         .unwrap();
@@ -1311,6 +1405,7 @@ mod tests {
             bridge_id,
             &native_id_to_chain_id,
             &buffer,
+            &provider,
         )
         .await
         .unwrap();
@@ -1350,8 +1445,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn test_out_of_order_with_buffer() {
-        let (interchain_db, buffer, native_id_to_chain_id, bridge_id, src_chain_id, dst_chain_id) =
-            setup_test_env("avax_buf_ooo").await;
+        let (
+            interchain_db,
+            buffer,
+            native_id_to_chain_id,
+            provider,
+            _anvil,
+            bridge_id,
+            src_chain_id,
+            dst_chain_id,
+        ) = setup_test_env("avax_buf_ooo").await;
 
         let mut message_id_bytes = [0u8; 32];
         message_id_bytes[0..8].copy_from_slice(&987654321i64.to_be_bytes());
@@ -1370,6 +1473,7 @@ mod tests {
             bridge_id,
             &native_id_to_chain_id,
             &buffer,
+            &provider,
         )
         .await
         .unwrap();
@@ -1394,6 +1498,7 @@ mod tests {
             bridge_id,
             &native_id_to_chain_id,
             &buffer,
+            &provider,
         )
         .await
         .unwrap();
@@ -1421,8 +1526,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn test_execution_before_send_with_buffer() {
-        let (interchain_db, buffer, native_id_to_chain_id, bridge_id, src_chain_id, dst_chain_id) =
-            setup_test_env("avax_buf_exec_first").await;
+        let (
+            interchain_db,
+            buffer,
+            native_id_to_chain_id,
+            provider,
+            _anvil,
+            bridge_id,
+            src_chain_id,
+            dst_chain_id,
+        ) = setup_test_env("avax_buf_exec_first").await;
 
         let mut message_id_bytes = [0u8; 32];
         message_id_bytes[0..8].copy_from_slice(&111222333i64.to_be_bytes());
@@ -1462,6 +1575,7 @@ mod tests {
             bridge_id,
             &native_id_to_chain_id,
             &buffer,
+            &provider,
         )
         .await
         .unwrap();
@@ -1481,8 +1595,16 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn test_failed_execution_with_buffer() {
-        let (interchain_db, buffer, native_id_to_chain_id, bridge_id, src_chain_id, dst_chain_id) =
-            setup_test_env("avax_buf_failed").await;
+        let (
+            interchain_db,
+            buffer,
+            native_id_to_chain_id,
+            provider,
+            _anvil,
+            bridge_id,
+            src_chain_id,
+            dst_chain_id,
+        ) = setup_test_env("avax_buf_failed").await;
 
         let mut message_id_bytes = [0u8; 32];
         message_id_bytes[0..8].copy_from_slice(&444555666i64.to_be_bytes());
@@ -1500,6 +1622,7 @@ mod tests {
             bridge_id,
             &native_id_to_chain_id,
             &buffer,
+            &provider,
         )
         .await
         .unwrap();
@@ -1514,6 +1637,7 @@ mod tests {
             bridge_id,
             &native_id_to_chain_id,
             &buffer,
+            &provider,
         )
         .await
         .unwrap();
