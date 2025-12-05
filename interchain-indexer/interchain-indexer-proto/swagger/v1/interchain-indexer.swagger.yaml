@@ -221,7 +221,7 @@ paths:
           required: false
           type: integer
           format: int64
-        - name: transfer_id
+        - name: index
           description: Raw pagination field
           in: query
           required: false
@@ -290,7 +290,7 @@ paths:
           required: false
           type: integer
           format: int64
-        - name: transfer_id
+        - name: index
           description: Raw pagination field
           in: query
           required: false
@@ -524,7 +524,7 @@ definitions:
       bridge_id:
         type: integer
         format: int64
-      transfer_id:
+      index:
         type: string
         format: uint64
       direction:

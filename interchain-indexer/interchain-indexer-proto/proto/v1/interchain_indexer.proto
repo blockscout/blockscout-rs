@@ -54,7 +54,7 @@ message Pagination {
   optional uint64 timestamp = 2;
   optional string message_id = 3;
   optional uint32 bridge_id = 4;
-  optional uint64 transfer_id = 5;
+  optional uint64 index = 5;
   optional string direction = 6;
 }
 
@@ -140,7 +140,7 @@ message GetTransfersRequest {
   optional uint64 timestamp = 5;  // Raw pagination field
   optional string message_id = 6; // Raw pagination field
   optional uint32 bridge_id = 7;  // Raw pagination field
-  optional uint64 transfer_id = 8;// Raw pagination field
+  optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
   
 }
@@ -160,7 +160,7 @@ message GetTransfersByTransactionRequest {
   optional uint64 timestamp = 5;  // Raw pagination field
   optional string message_id = 6; // Raw pagination field
   optional uint32 bridge_id = 7;  // Raw pagination field
-  optional uint64 transfer_id = 8;// Raw pagination field
+  optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
 }
 

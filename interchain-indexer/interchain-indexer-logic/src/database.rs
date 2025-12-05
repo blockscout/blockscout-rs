@@ -38,6 +38,7 @@ pub struct JoinedTransfer {
     pub id: i64,
     pub message_id: i64,
     pub bridge_id: i32,
+    pub index: i16,
     pub r#type: Option<TransferType>,
     pub token_src_chain_id: i64,
     pub token_dst_chain_id: i64,
@@ -585,6 +586,7 @@ impl InterchainDatabase {
                         .column(crosschain_transfers::Column::Id)
                         .column(crosschain_transfers::Column::MessageId)
                         .column(crosschain_transfers::Column::BridgeId)
+                        .column(crosschain_transfers::Column::Index)
                         .column(crosschain_transfers::Column::Type)
                         .column(crosschain_transfers::Column::TokenSrcChainId)
                         .column(crosschain_transfers::Column::TokenDstChainId)
@@ -643,11 +645,8 @@ impl InterchainDatabase {
                                                 .eq(marker.bridge_id as i32),
                                             )
                                             .and(
-                                                Expr::col((
-                                                    crosschain_transfers::Entity,
-                                                    crosschain_transfers::Column::Id,
-                                                ))
-                                                .lt(marker.transfer_id as i64),
+                                                Expr::col(crosschain_transfers::Column::Index)
+                                                .lt(marker.index as i64),
                                             ))
                                 }
                                 PaginationDirection::Prev => {
@@ -686,11 +685,8 @@ impl InterchainDatabase {
                                                 .eq(marker.bridge_id as i32),
                                             )
                                             .and(
-                                                Expr::col((
-                                                    crosschain_transfers::Entity,
-                                                    crosschain_transfers::Column::Id,
-                                                ))
-                                                .gt(marker.transfer_id as i64),
+                                                Expr::col(crosschain_transfers::Column::Index)
+                                                .gt(marker.index as i64),
                                             ))
                                 }
                             };
@@ -1090,7 +1086,7 @@ fn build_pagination_from_transfers(
         timestamp: transfer.init_timestamp,
         message_id: transfer.message_id as u64,
         bridge_id: transfer.bridge_id as u32,
-        transfer_id: transfer.id as u64,
+        index: transfer.id as u64,
         direction: PaginationDirection::Prev,
     });
 
@@ -1103,7 +1099,7 @@ fn build_pagination_from_transfers(
             timestamp: transfer.init_timestamp,
             message_id: transfer.message_id as u64,
             bridge_id: transfer.bridge_id as u32,
-            transfer_id: transfer.id as u64,
+            index: transfer.id as u64,
             direction: PaginationDirection::Next,
         })
     } else {

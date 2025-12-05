@@ -3,7 +3,7 @@ use std::fmt;
 use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
-//use interchain_indexer_proto::blockscout::interchain_indexer::v1::Pagination;
+use interchain_indexer_proto::blockscout::interchain_indexer::v1::Pagination;
 
 use crate::utils::{
     bytes_to_naive_datetime, naive_datetime_to_bytes, naive_datetime_to_nanos,
@@ -14,10 +14,9 @@ pub trait ListMarker: Sized {
     fn from_token(t: &str) -> anyhow::Result<Self>;
     fn token(&self) -> anyhow::Result<String>;
 
-    //fn produce_pagination(&self, use_pagination_token: bool) -> Pagination;
-    //fn read_pagination(&mut self, p: &Pagination, use_pagination_token: bool);
-
-    //fn from_proto(p: Pagination) -> anyhow::Result<Self>;
+    fn to_proto(&self, use_pagination_token: bool) -> Pagination;
+    
+    //fn from_proto(p: ) -> anyhow::Result<Self>;
 }
 
 pub struct OutputPagination<P: ListMarker> {
@@ -156,6 +155,24 @@ impl ListMarker for MessagesPaginationLogic {
 
         Ok(URL_SAFE_NO_PAD.encode(buf))
     }
+
+    // Create output pagination proto struct
+    fn to_proto(&self, use_pagination_token: bool) -> Pagination {
+        if use_pagination_token {
+            Pagination {
+                page_token: Some(self.token().unwrap()),
+                ..Default::default()
+            }
+        } else {
+            Pagination {
+                timestamp: Some(self.get_timestamp_ns().unwrap() as u64),
+                message_id: Some(self.get_message_id()),
+                bridge_id: Some(self.bridge_id),
+                direction: Some(self.direction.to_string()),
+                ..Default::default()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -163,7 +180,7 @@ pub struct TransfersPaginationLogic {
     pub timestamp: NaiveDateTime,
     pub message_id: u64,
     pub bridge_id: u32,
-    pub transfer_id: u64,
+    pub index: u64,
     pub direction: PaginationDirection,
 }
 
@@ -179,7 +196,7 @@ impl TransfersPaginationLogic {
             timestamp: nanos_to_naive_datetime(timestamp_ns)?,
             message_id: u64_from_hex_prefixed(&message_id)?,
             bridge_id,
-            transfer_id,
+            index: transfer_id,
             direction,
         })
     }
@@ -201,7 +218,7 @@ impl ListMarker for TransfersPaginationLogic {
 
         if decoded.len() != 29 {
             return Err(anyhow::anyhow!(
-                "Invalid token length: expected 21, got {}",
+                "Invalid token length: expected 29, got {}",
                 decoded.len()
             ));
         }
@@ -224,7 +241,7 @@ impl ListMarker for TransfersPaginationLogic {
         let transfer_id_bytes: [u8; 8] = decoded[20..28]
             .try_into()
             .map_err(|_| anyhow::anyhow!("Invalid message_id bytes"))?;
-        let transfer_id = u64::from_be_bytes(transfer_id_bytes);
+        let index = u64::from_be_bytes(transfer_id_bytes);
 
         let direction = PaginationDirection::from_u8(decoded[28])?;
 
@@ -232,7 +249,7 @@ impl ListMarker for TransfersPaginationLogic {
             timestamp,
             message_id,
             bridge_id,
-            transfer_id,
+            index,
             direction,
         })
     }
@@ -244,9 +261,28 @@ impl ListMarker for TransfersPaginationLogic {
         buf[0..8].copy_from_slice(&naive_datetime_to_bytes(self.timestamp)?);
         buf[8..16].copy_from_slice(&self.message_id.to_be_bytes());
         buf[16..20].copy_from_slice(&self.bridge_id.to_be_bytes());
-        buf[20..28].copy_from_slice(&self.transfer_id.to_be_bytes());
+        buf[20..28].copy_from_slice(&self.index.to_be_bytes());
         buf[28] = self.direction.to_u8();
 
         Ok(URL_SAFE_NO_PAD.encode(buf))
+    }
+
+    // Create output pagination proto struct
+    fn to_proto(&self, use_pagination_token: bool) -> Pagination {
+        if use_pagination_token {
+            Pagination {
+                page_token: Some(self.token().unwrap()),
+                ..Default::default()
+            }
+        } else {
+            Pagination {
+                timestamp: Some(self.get_timestamp_ns().unwrap() as u64),
+                message_id: Some(self.get_message_id()),
+                bridge_id: Some(self.bridge_id),
+                index: Some(self.index),
+                direction: Some(self.direction.to_string()),
+                ..Default::default()
+            }
+        }
     }
 }
