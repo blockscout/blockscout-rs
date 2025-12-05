@@ -22,7 +22,8 @@ use interchain_indexer_entity::{
     sea_orm_active_enums::{self, MessageStatus},
 };
 use sea_orm::{
-    ActiveValue, DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
+    ActiveValue, DbErr, EntityTrait, Iterable, QueryFilter, QueryOrder, QuerySelect,
+    TransactionTrait,
     prelude::BigDecimal,
     sea_query::{Expr, OnConflict},
 };
@@ -411,7 +412,6 @@ impl Message {
         let amount = BigDecimal::from_str(&amount_str).unwrap_or_else(|_| BigDecimal::from(0));
 
         crosschain_transfers::ActiveModel {
-            id: ActiveValue::NotSet,
             message_id: ActiveValue::Set(self.key.message_id),
             bridge_id: ActiveValue::Set(self.key.bridge_id),
             r#type: ActiveValue::Set(Some(t.r#type.clone().into())),
@@ -436,7 +436,7 @@ impl Message {
             src_decimals: ActiveValue::Set(18), // Default to 18 decimals
             dst_decimals: ActiveValue::Set(18),
             dst_amount: ActiveValue::Set(amount), // Same as src for now
-            token_ids: ActiveValue::NotSet,
+            ..Default::default()
         }
     }
 
@@ -528,7 +528,7 @@ impl TryInto<pending_messages::ActiveModel> for &Message {
 
     fn try_into(self) -> Result<pending_messages::ActiveModel, Self::Error> {
         let now = Utc::now().naive_utc();
-        let payload = serde_json::to_value(&self)?;
+        let payload = serde_json::to_value(self)?;
 
         Ok(pending_messages::ActiveModel {
             message_id: ActiveValue::Set(self.key.message_id),
@@ -719,11 +719,7 @@ impl MessageBuffer {
                     cold_cursors = with_cursors(entry.value(), cold_cursors);
                 }
                 (_, Some(created_at))
-                    if now
-                        .signed_duration_since(created_at)
-                        .to_std()
-                        .unwrap_or_default()
-                        >= self.config.hot_ttl =>
+                    if now.signed_duration_since(created_at).to_std()? >= self.config.hot_ttl =>
                 {
                     cold_cursors = with_cursors(entry.value(), cold_cursors);
                     stale_entries.push(entry.clone());
@@ -763,7 +759,7 @@ impl MessageBuffer {
             .db
             .transaction::<_, (), DbErr>(|tx| {
                 Box::pin(async move {
-                    let batch_size = ((u16::MAX - 100) / 4) as usize;
+                    let batch_size = (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
                     for batch in stale_entries.chunks(batch_size) {
                         let models: Vec<pending_messages::ActiveModel> =
                             batch.iter().filter_map(|e| e.try_into().ok()).collect();
@@ -782,7 +778,7 @@ impl MessageBuffer {
                     }
 
                     // 2. Flush ready entries to final storage
-                    let batch_size = ((u16::MAX - 100) / 15) as usize;
+                    let batch_size = (u16::MAX - 100) as usize / crosschain_messages::Column::iter().count();
                     let (messages, transfers) = ready_entries
                         .into_iter()
                         .unzip::<_, _, Vec<_>, Vec<Vec<_>>>();
@@ -810,40 +806,35 @@ impl MessageBuffer {
                             .await?;
                     }
 
+                    let batch_size = (u16::MAX - 100) as usize / crosschain_transfers::Column::iter().count();
                     // TODO: refactor to avoid deleting then inserting
                     for batch in transfers.chunks(batch_size) {
-                        // Get unique (message_id, bridge_id) pairs from this batch
-                        // TODO: avoid clone().unwrap()
-                        let keys_in_batch: Vec<_> = batch
-                            .iter()
-                            .map(|t| {
-                                (
-                                    t.message_id.clone().unwrap(),
-                                    t.bridge_id.clone().unwrap(),
-                                )
-                            })
-                            .collect::<std::collections::HashSet<_>>()
-                            .into_iter()
-                            .collect();
-
                         // Delete existing transfers for these messages
-                        crosschain_transfers::Entity::delete_many()
-                            .filter(
-                                Expr::tuple([
-                                    Expr::col(crosschain_transfers::Column::MessageId).into(),
-                                    Expr::col(crosschain_transfers::Column::BridgeId).into(),
-                                ])
-                                .in_tuples(keys_in_batch),
-                            )
-                            .exec(tx)
-                            .await?;
-
-                        // Insert new transfers
                         crosschain_transfers::Entity::insert_many(batch.to_vec())
+                            .on_conflict(
+                                OnConflict::columns([
+                                    crosschain_transfers::Column::MessageId,
+                                    crosschain_transfers::Column::BridgeId,
+                                    crosschain_transfers::Column::Index,
+                                ])
+                                .update_columns(
+                                    crosschain_transfers::Column::iter()
+                                        .filter(|c| !matches!(
+                                            c,
+                                            crosschain_transfers::Column::Id
+                                                | crosschain_transfers::Column::MessageId
+                                                | crosschain_transfers::Column::BridgeId
+                                                | crosschain_transfers::Column::Index
+                                                | crosschain_transfers::Column::CreatedAt
+                                        ))
+                                )
+                                .to_owned(),
+                            )
                             .exec(tx)
                             .await?;
                     }
 
+                    let batch_size = (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
                     for batch in keys_to_remove_from_pending.chunks(batch_size) {
                         let batch = batch.iter()
                             .map(|k| (k.message_id, k.bridge_id));

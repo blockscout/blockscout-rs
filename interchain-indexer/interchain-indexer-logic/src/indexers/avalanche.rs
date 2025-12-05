@@ -218,7 +218,8 @@ impl AvalancheIndexerConfig {
             bridge_id,
             chains,
             poll_interval: Duration::from_secs(10),
-            batch_size: 0,
+            // Make it an option for env config
+            batch_size: 1000,
         }
     }
 
@@ -424,17 +425,15 @@ async fn process_batch(
         let mut tx_context = TxContext::default();
         for log in &tx_logs {
             if log.topic0() == Some(&ITeleporterMessenger::ReceiveCrossChainMessage::SIGNATURE_HASH)
-            {
-                if let Ok(event) =
+                && let Ok(event) =
                     log.log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()
-                {
-                    let message_id_bytes = event.inner.messageID.as_slice();
-                    if let Ok(id_bytes) = message_id_bytes[..8].try_into() {
-                        tx_context.message_id = Some(i64::from_be_bytes(id_bytes));
-                    }
-                    let source_hex = blockchain_id_hex(event.inner.sourceBlockchainID.as_slice());
-                    tx_context.src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
+            {
+                let message_id_bytes = event.inner.messageID.as_slice();
+                if let Ok(id_bytes) = message_id_bytes[..8].try_into() {
+                    tx_context.message_id = Some(i64::from_be_bytes(id_bytes));
                 }
+                let source_hex = blockchain_id_hex(event.inner.sourceBlockchainID.as_slice());
+                tx_context.src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
             }
         }
 
@@ -584,15 +583,14 @@ async fn handle_send_cross_chain_message(
     let block_timestamp = provider
         .get_block_by_number((block_number as u64).into())
         .await?
-        .map(|block| {
+        .and_then(|block| {
             chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
                 .map(|dt| dt.naive_utc())
-        })
-        .flatten();
+        });
 
     // Fill in source-side data
     entry.src_chain_id = Some(chain_id);
-    entry.source_transaction_hash = Some(tx_hash.into());
+    entry.source_transaction_hash = Some(tx_hash);
     entry.init_timestamp = block_timestamp;
     entry.sender_address = Some(event.message.originSenderAddress);
     entry.recipient_address = Some(event.message.destinationAddress);
@@ -656,11 +654,10 @@ async fn handle_receive_cross_chain_message(
     let block_timestamp = provider
         .get_block_by_number((block_number as u64).into())
         .await?
-        .map(|block| {
+        .and_then(|block| {
             chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
                 .map(|dt| dt.naive_utc())
-        })
-        .flatten();
+        });
 
     // Fill in destination-side data
     entry.destination_chain_id = Some(chain_id);

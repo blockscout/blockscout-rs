@@ -12,6 +12,7 @@ pub struct Model {
     pub id: i64,
     pub message_id: i64,
     pub bridge_id: i32,
+    pub index: i32,
     pub r#type: Option<TransferType>,
     pub token_src_chain_id: i64,
     pub token_dst_chain_id: i64,

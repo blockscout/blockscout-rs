@@ -121,7 +121,8 @@ CREATE TABLE crosschain_transfers (
   id                  BIGSERIAL PRIMARY KEY,
   message_id          BIGINT NOT NULL,
   bridge_id           INTEGER NOT NULL,
-  type                transfer_type, -- erc20/erc721/native/erc1155  
+  index               INTEGER NOT NULL DEFAULT 0, -- index of the transfer in the message (for messages with multiple transfers)
+  type                transfer_type, -- erc20/erc721/native/erc1155
   token_src_chain_id  BIGINT NOT NULL REFERENCES chains(id),
   token_dst_chain_id  BIGINT NOT NULL REFERENCES chains(id),
   src_decimals        SMALLINT NOT NULL, -- token decimals (from the any side of interaction)
@@ -136,7 +137,9 @@ CREATE TABLE crosschain_transfers (
 
   FOREIGN KEY (message_id, bridge_id)
                REFERENCES crosschain_messages(id, bridge_id)
-               ON DELETE CASCADE
+               ON DELETE CASCADE,
+
+  UNIQUE (bridge_id, message_id, index)
 );
 
 -- indexer_checkpoints: for progress tracking per chain/worker
