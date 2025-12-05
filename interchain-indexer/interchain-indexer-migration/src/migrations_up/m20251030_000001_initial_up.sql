@@ -121,7 +121,7 @@ CREATE TABLE crosschain_transfers (
   id                  BIGSERIAL PRIMARY KEY,
   message_id          BIGINT NOT NULL,
   bridge_id           INTEGER NOT NULL,
-  index               INTEGER NOT NULL DEFAULT 0, -- index of the transfer in the message (for messages with multiple transfers)
+  index               SMALLINT NOT NULL DEFAULT 0, -- index of the transfer in the message (for messages with multiple transfers)
   type                transfer_type, -- erc20/erc721/native/erc1155
   token_src_chain_id  BIGINT NOT NULL REFERENCES chains(id),
   token_dst_chain_id  BIGINT NOT NULL REFERENCES chains(id),
