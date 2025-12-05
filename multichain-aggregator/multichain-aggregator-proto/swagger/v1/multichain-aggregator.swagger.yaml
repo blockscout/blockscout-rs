@@ -46,6 +46,41 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/addresses:stream:
+    get:
+      operationId: MultichainAggregatorService_StreamAddressUpdates
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1StreamAddressUpdatesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: chain_id
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: is_contract
+          in: query
+          required: false
+          type: boolean
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/block-numbers:
     get:
       operationId: MultichainAggregatorService_ListBlockNumbers
@@ -1240,6 +1275,18 @@ definitions:
         type: string
       value:
         type: string
+  StreamAddressUpdatesResponseStreamAddressUpdate:
+    type: object
+    properties:
+      hash:
+        type: string
+      chain_id:
+        type: string
+      updated_at:
+        type: string
+        format: int64
+      contract_name:
+        type: string
   TokenImportCounters:
     type: object
     properties:
@@ -1944,6 +1991,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Hash'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1StreamAddressUpdatesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/StreamAddressUpdatesResponseStreamAddressUpdate'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1Token:
