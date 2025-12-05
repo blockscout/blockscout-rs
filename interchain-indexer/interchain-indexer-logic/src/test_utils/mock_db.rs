@@ -3,7 +3,11 @@ use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
     sea_orm_active_enums::{MessageStatus, TransferType},
 };
-use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait, prelude::{BigDecimal, Decimal}};
+use sea_orm::{
+    ActiveValue::Set,
+    DatabaseConnection, EntityTrait,
+    prelude::{BigDecimal, Decimal},
+};
 
 pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
     chains::Entity::insert_many([
@@ -229,8 +233,8 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             dst_decimals: Set(18),
             src_amount: Set(BigDecimal::from(100_000_000_000_000_000u64)), // 0.1 native token with 18 decimals
             dst_amount: Set(BigDecimal::from(100_000_000_000_000_000u64)), // 0.1 native token with 18 decimals
-            token_src_address: Set(vec![0; 20]),                  // Zero address for native token
-            token_dst_address: Set(vec![0; 20]),                  // Zero address for native token
+            token_src_address: Set(vec![0; 20]), // Zero address for native token
+            token_dst_address: Set(vec![0; 20]), // Zero address for native token
             sender_address: Set(Some(
                 address!("0x6B175474E89094C44Da98b954EedeAC495271d0F")
                     .as_slice()

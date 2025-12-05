@@ -15,7 +15,9 @@ pub struct Erc20TokenHomeInfoFetcher {
 
 impl Erc20TokenHomeInfoFetcher {
     pub fn new() -> Self {
-        Self { erc20_fetcher: Erc20TokenInfoFetcher }
+        Self {
+            erc20_fetcher: Erc20TokenInfoFetcher,
+        }
     }
 }
 
@@ -27,10 +29,7 @@ impl TokenInfoFetcher for Erc20TokenHomeInfoFetcher {
         _chain_id: u64,
         address: Vec<u8>,
     ) -> anyhow::Result<OnchainTokenInfo> {
-        let token_contract = ERC20TokenHome::new(
-            Address::from_slice(&address),
-            provider.clone()
-        );
+        let token_contract = ERC20TokenHome::new(Address::from_slice(&address), provider.clone());
 
         // ERC20TokenHome contract has either getTokenAddress or tokenAddress function
         // to get the token address depends on the version of the contract
@@ -38,21 +37,18 @@ impl TokenInfoFetcher for Erc20TokenHomeInfoFetcher {
         // and if it fails, we try to use tokenAddress
         let erc20_token_address = match token_contract.getTokenAddress().call().await {
             Ok(token_address) => token_address,
-            Err(_e) => {
-                match token_contract.tokenAddress().call().await {
-                    Ok(token_address) => token_address,
-                    Err(e) => {
-                        return Err(e.into());
-                    }
+            Err(_e) => match token_contract.tokenAddress().call().await {
+                Ok(token_address) => token_address,
+                Err(e) => {
+                    return Err(e.into());
                 }
-            }
+            },
         };
-        
-        let token_info = self.erc20_fetcher.fetch_token_info(
-            provider,
-            _chain_id,
-            erc20_token_address.to_vec()
-        ).await?;
+
+        let token_info = self
+            .erc20_fetcher
+            .fetch_token_info(provider, _chain_id, erc20_token_address.to_vec())
+            .await?;
 
         Ok(token_info)
     }

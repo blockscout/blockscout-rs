@@ -25,16 +25,12 @@ impl TokenInfoFetcher for Erc20TokenInfoFetcher {
         let decimals_call = token_contract.decimals();
 
         match tokio::try_join!(name_call.call(), symbol_call.call(), decimals_call.call()) {
-            Ok((name, symbol, decimals)) => {
-                Ok(OnchainTokenInfo {
-                    name,
-                    symbol,
-                    decimals,
-                })
-            },
-            Err(e) => {
-                Err(e.into())
-            }
+            Ok((name, symbol, decimals)) => Ok(OnchainTokenInfo {
+                name,
+                symbol,
+                decimals,
+            }),
+            Err(e) => Err(e.into()),
         }
     }
 }

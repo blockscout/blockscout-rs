@@ -76,7 +76,9 @@ impl TokenInfoService {
         if let Some(failed_at) = self.error_cache.read().get(&key) {
             static ERROR_CACHE_TTL_SECONDS: i64 = 10;
             if (Utc::now() - failed_at).num_seconds() < ERROR_CACHE_TTL_SECONDS {
-                return Err(anyhow::anyhow!("Token info request failed recently, will retry later"));
+                return Err(anyhow::anyhow!(
+                    "Token info request failed recently, will retry later"
+                ));
             }
         }
 
@@ -95,7 +97,10 @@ impl TokenInfoService {
             .get(&chain_id)
             .ok_or_else(|| anyhow::anyhow!("Provider not found for chain_id={}", chain_id))?;
 
-        let res = match self.try_fetch_token_info(provider, chain_id, address.clone()).await {
+        let res = match self
+            .try_fetch_token_info(provider, chain_id, address.clone())
+            .await
+        {
             Ok(token_info) => {
                 let model = TokenInfoModel {
                     chain_id: chain_id as i64,
@@ -107,7 +112,7 @@ impl TokenInfoService {
                     created_at: None,
                     updated_at: None,
                 };
-        
+
                 let active_model = tokens::ActiveModel {
                     chain_id: Set(model.chain_id),
                     address: Set(model.address.clone()),
@@ -117,16 +122,16 @@ impl TokenInfoService {
                     decimals: Set(model.decimals),
                     ..Default::default()
                 };
-        
+
                 self.db.upsert_token_info(active_model).await?;
-        
+
                 {
                     let mut cache = self.token_info_cache.write();
                     cache.entry(key.clone()).or_insert_with(|| model.clone());
                 }
 
                 Ok(model)
-            },
+            }
             Err(e) => {
                 let mut error_cache = self.error_cache.write();
                 error_cache.insert(key.clone(), Utc::now());
@@ -172,19 +177,31 @@ impl TokenInfoService {
         }
     }
 
-    async fn try_fetch_token_info(&self, provider: &DynProvider<Ethereum>, chain_id: u64, address: Vec<u8>) -> anyhow::Result<OnchainTokenInfo> {
+    async fn try_fetch_token_info(
+        &self,
+        provider: &DynProvider<Ethereum>,
+        chain_id: u64,
+        address: Vec<u8>,
+    ) -> anyhow::Result<OnchainTokenInfo> {
         if address.len() != 20 {
-            return Err(anyhow::anyhow!("Invalid address length: expected 20, got {}", address.len()));
+            return Err(anyhow::anyhow!(
+                "Invalid address length: expected 20, got {}",
+                address.len()
+            ));
         }
-        
         let mut last_error = None;
         for fetcher in self.fetchers.iter() {
-            match fetcher.fetch_token_info(provider, chain_id, address.clone()).await {
+            match fetcher
+                .fetch_token_info(provider, chain_id, address.clone())
+                .await
+            {
                 Ok(info) => return Ok(info),
                 Err(e) => last_error = Some(e),
             };
         }
 
-        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Failed to fetch token info: no available fetchers")))
+        Err(last_error.unwrap_or_else(|| {
+            anyhow::anyhow!("Failed to fetch token info: no available fetchers")
+        }))
     }
 }

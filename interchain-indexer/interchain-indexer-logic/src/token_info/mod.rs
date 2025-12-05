@@ -1,4 +1,4 @@
-pub mod service;
 mod fetchers;
+pub mod service;
 
 pub use service::TokenInfoService;

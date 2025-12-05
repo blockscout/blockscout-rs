@@ -9,7 +9,12 @@ use interchain_indexer_entity::{
     tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
-    InterchainDatabase, JoinedTransfer, TokenInfoService, pagination::{ListMarker, MessagesPaginationLogic, OutputPagination, PaginationDirection, TransfersPaginationLogic}, utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed}
+    InterchainDatabase, JoinedTransfer, TokenInfoService,
+    pagination::{
+        ListMarker, MessagesPaginationLogic, OutputPagination, PaginationDirection,
+        TransfersPaginationLogic,
+    },
+    utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -290,9 +295,9 @@ impl InterchainServiceImpl {
         &self,
         transfers: Vec<JoinedTransfer>,
     ) -> Vec<InterchainTransfer> {
-        let futures = transfers.into_iter().map(|t| async move {
-            self.joined_transfer_logic_to_proto(&t).await
-        });
+        let futures = transfers
+            .into_iter()
+            .map(|t| async move { self.joined_transfer_logic_to_proto(&t).await });
 
         futures::future::join_all(futures).await
     }
@@ -461,7 +466,8 @@ impl InterchainService for InterchainServiceImpl {
         &self,
         request: Request<GetMessagesByTransactionRequest>,
     ) -> Result<Response<GetMessagesResponse>, Status> {
-        let (inner, input_pagination, page_size, is_last_page) = messages_pagination_params!(self, request)?;
+        let (inner, input_pagination, page_size, is_last_page) =
+            messages_pagination_params!(self, request)?;
 
         let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(map_db_error)?;
 

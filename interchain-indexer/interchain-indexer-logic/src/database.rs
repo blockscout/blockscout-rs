@@ -1,19 +1,24 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
-    bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints, pending_messages, sea_orm_active_enums::{MessageStatus, TransferType}, tokens
+    bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
+    indexer_checkpoints, pending_messages,
+    sea_orm_active_enums::{MessageStatus, TransferType},
+    tokens,
 };
 use parking_lot::RwLock;
 use sea_orm::{
     ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
     JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
     TransactionTrait,
-    prelude::Expr,
     entity::prelude::*,
+    prelude::Expr,
     sea_query::{Func, OnConflict},
 };
 use std::{collections::HashMap, sync::Arc};
 
-use crate::pagination::{MessagesPaginationLogic, OutputPagination, PaginationDirection, TransfersPaginationLogic};
+use crate::pagination::{
+    MessagesPaginationLogic, OutputPagination, PaginationDirection, TransfersPaginationLogic,
+};
 
 pub struct InterchainTotalCounters {
     pub timestamp: NaiveDateTime,
@@ -605,112 +610,88 @@ impl InterchainDatabase {
                                 PaginationDirection::Next => {
                                     Expr::col(crosschain_messages::Column::InitTimestamp)
                                         .lt(marker.timestamp)
-                                        .or(
-                                            Expr::col(crosschain_messages::Column::InitTimestamp)
-                                                .eq(marker.timestamp)
-                                                .and(
-                                                    Expr::col(
-                                                        crosschain_transfers::Column::MessageId,
-                                                    )
+                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                            .eq(marker.timestamp)
+                                            .and(
+                                                Expr::col(crosschain_transfers::Column::MessageId)
                                                     .lt(marker.message_id as i64),
-                                                ),
-                                        )
-                                        .or(
-                                            Expr::col(crosschain_messages::Column::InitTimestamp)
-                                                .eq(marker.timestamp)
-                                                .and(
-                                                    Expr::col(
-                                                        crosschain_transfers::Column::MessageId,
-                                                    )
+                                            ))
+                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                            .eq(marker.timestamp)
+                                            .and(
+                                                Expr::col(crosschain_transfers::Column::MessageId)
                                                     .eq(marker.message_id as i64),
-                                                )
-                                                .and(
-                                                    Expr::col((
-                                                        crosschain_transfers::Entity,
-                                                        crosschain_transfers::Column::BridgeId,
-                                                    ))
-                                                    .lt(marker.bridge_id as i32),
-                                                ),
-                                        )
-                                        .or(
-                                            Expr::col(crosschain_messages::Column::InitTimestamp)
-                                                .eq(marker.timestamp)
-                                                .and(
-                                                    Expr::col(
-                                                        crosschain_transfers::Column::MessageId,
-                                                    )
+                                            )
+                                            .and(
+                                                Expr::col((
+                                                    crosschain_transfers::Entity,
+                                                    crosschain_transfers::Column::BridgeId,
+                                                ))
+                                                .lt(marker.bridge_id as i32),
+                                            ))
+                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                            .eq(marker.timestamp)
+                                            .and(
+                                                Expr::col(crosschain_transfers::Column::MessageId)
                                                     .eq(marker.message_id as i64),
-                                                )
-                                                .and(
-                                                    Expr::col((
-                                                        crosschain_transfers::Entity,
-                                                        crosschain_transfers::Column::BridgeId,
-                                                    ))
-                                                    .eq(marker.bridge_id as i32),
-                                                )
-                                                .and(
-                                                    Expr::col((
-                                                        crosschain_transfers::Entity,
-                                                        crosschain_transfers::Column::Id,
-                                                    ))
-                                                    .lt(marker.transfer_id as i64),
-                                                ),
-                                        )
+                                            )
+                                            .and(
+                                                Expr::col((
+                                                    crosschain_transfers::Entity,
+                                                    crosschain_transfers::Column::BridgeId,
+                                                ))
+                                                .eq(marker.bridge_id as i32),
+                                            )
+                                            .and(
+                                                Expr::col((
+                                                    crosschain_transfers::Entity,
+                                                    crosschain_transfers::Column::Id,
+                                                ))
+                                                .lt(marker.transfer_id as i64),
+                                            ))
                                 }
                                 PaginationDirection::Prev => {
                                     Expr::col(crosschain_messages::Column::InitTimestamp)
                                         .gt(marker.timestamp)
-                                        .or(
-                                            Expr::col(crosschain_messages::Column::InitTimestamp)
-                                                .eq(marker.timestamp)
-                                                .and(
-                                                    Expr::col(
-                                                        crosschain_transfers::Column::MessageId,
-                                                    )
+                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                            .eq(marker.timestamp)
+                                            .and(
+                                                Expr::col(crosschain_transfers::Column::MessageId)
                                                     .gt(marker.message_id as i64),
-                                                ),
-                                        )
-                                        .or(
-                                            Expr::col(crosschain_messages::Column::InitTimestamp)
-                                                .eq(marker.timestamp)
-                                                .and(
-                                                    Expr::col(
-                                                        crosschain_transfers::Column::MessageId,
-                                                    )
+                                            ))
+                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                            .eq(marker.timestamp)
+                                            .and(
+                                                Expr::col(crosschain_transfers::Column::MessageId)
                                                     .eq(marker.message_id as i64),
-                                                )
-                                                .and(
-                                                    Expr::col((
-                                                        crosschain_transfers::Entity,
-                                                        crosschain_transfers::Column::BridgeId,
-                                                    ))
-                                                    .gt(marker.bridge_id as i32),
-                                                ),
-                                        )
-                                        .or(
-                                            Expr::col(crosschain_messages::Column::InitTimestamp)
-                                                .eq(marker.timestamp)
-                                                .and(
-                                                    Expr::col(
-                                                        crosschain_transfers::Column::MessageId,
-                                                    )
+                                            )
+                                            .and(
+                                                Expr::col((
+                                                    crosschain_transfers::Entity,
+                                                    crosschain_transfers::Column::BridgeId,
+                                                ))
+                                                .gt(marker.bridge_id as i32),
+                                            ))
+                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                            .eq(marker.timestamp)
+                                            .and(
+                                                Expr::col(crosschain_transfers::Column::MessageId)
                                                     .eq(marker.message_id as i64),
-                                                )
-                                                .and(
-                                                    Expr::col((
-                                                        crosschain_transfers::Entity,
-                                                        crosschain_transfers::Column::BridgeId,
-                                                    ))
-                                                    .eq(marker.bridge_id as i32),
-                                                )
-                                                .and(
-                                                    Expr::col((
-                                                        crosschain_transfers::Entity,
-                                                        crosschain_transfers::Column::Id,
-                                                    ))
-                                                    .gt(marker.transfer_id as i64),
-                                                ),
-                                        )
+                                            )
+                                            .and(
+                                                Expr::col((
+                                                    crosschain_transfers::Entity,
+                                                    crosschain_transfers::Column::BridgeId,
+                                                ))
+                                                .eq(marker.bridge_id as i32),
+                                            )
+                                            .and(
+                                                Expr::col((
+                                                    crosschain_transfers::Entity,
+                                                    crosschain_transfers::Column::Id,
+                                                ))
+                                                .gt(marker.transfer_id as i64),
+                                            ))
                                 }
                             };
 
@@ -1183,7 +1164,10 @@ mod tests {
             .unwrap();
         assert_eq!(crosschain_messages.len(), 4);
 
-        let crosschain_transfers = interchain_db.get_crosschain_transfers(None, 50, false, None).await.unwrap();
+        let crosschain_transfers = interchain_db
+            .get_crosschain_transfers(None, 50, false, None)
+            .await
+            .unwrap();
         assert_eq!(crosschain_transfers.0.len(), 5);
     }
 

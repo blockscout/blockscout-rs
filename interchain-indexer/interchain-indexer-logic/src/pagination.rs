@@ -5,7 +5,6 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
 //use interchain_indexer_proto::blockscout::interchain_indexer::v1::Pagination;
 
-
 use crate::utils::{
     bytes_to_naive_datetime, naive_datetime_to_bytes, naive_datetime_to_nanos,
     nanos_to_naive_datetime, to_hex_prefixed, u64_from_hex_prefixed,
@@ -157,7 +156,6 @@ impl ListMarker for MessagesPaginationLogic {
 
         Ok(URL_SAFE_NO_PAD.encode(buf))
     }
-    
 }
 
 #[derive(Debug, Clone, Copy)]
