@@ -733,15 +733,18 @@ impl MessageBuffer {
 
         let cursors: HashMap<(i32, i64), (i64, i64)> = cold_cursors
             .into_iter()
-            .filter_map(|(key, (cold_min, cold_max))| {
-                hot_cursors.get(&key).map(|&(hot_min, hot_max)| {
-                    // Bound cursor updates by what's still pending in hot tier
-                    // NOTE: this may cause some blocks to be processed twice,
-                    // so handlers and inserts should be idempotent.
-                    let min = cold_min.max(hot_min.saturating_add(1));
-                    let max = cold_max.min(hot_max.saturating_sub(1));
-                    (key, (min, max))
-                })
+            .map(|(key, (cold_min, cold_max))| {
+                hot_cursors
+                    .get(&key)
+                    .map(|&(hot_min, hot_max)| {
+                        // Bound cursor updates by what's still pending in hot tier
+                        // NOTE: this may cause some blocks to be processed twice,
+                        // so handlers and inserts should be idempotent.
+                        let min = cold_min.max(hot_min.saturating_add(1));
+                        let max = cold_max.min(hot_max.saturating_sub(1));
+                        (key, (min, max))
+                    })
+                    .unwrap_or((key, (cold_min, cold_max)))
             })
             .filter(|(_, (min, max))| max >= min)
             .collect();
