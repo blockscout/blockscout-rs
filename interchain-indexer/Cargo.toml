@@ -66,3 +66,4 @@ tonic-build = { version = "0.12" }
 tower = { version = "0.4", features = ["util"] }
 tracing = { version = "0.1" }
 url = "2.5.4"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

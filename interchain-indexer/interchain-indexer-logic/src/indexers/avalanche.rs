@@ -821,8 +821,6 @@ async fn handle_tokens_sent(
     let key = Key::new(id, bridge_id);
     let mut entry = buffer.get_or_create(key).await?;
 
-    dbg!("tokens sent event");
-
     // Push fragment for later consolidation
     entry.ictt_fragments.push(IcttEventFragment::TokensSent {
         token_contract,

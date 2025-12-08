@@ -1,7 +1,18 @@
+use alloy::{
+    network::Ethereum,
+    providers::{DynProvider, Provider, ProviderBuilder},
+};
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use interchain_indexer_server::Settings;
 use reqwest::Url;
 use std::path::PathBuf;
+
+/// Create a forked Anvil provider for the given RPC URL and block number.
+pub fn forked_provider(rpc_url: &str, block_number: u64) -> DynProvider<Ethereum> {
+    ProviderBuilder::new()
+        .connect_anvil_with_config(|anvil| anvil.fork_block_number(block_number).fork(rpc_url))
+        .erased()
+}
 
 pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
     let db_name = format!("{db_prefix}_{test_name}");
