@@ -1,6 +1,6 @@
 use super::AdditionalTable;
 use crate::{
-    entity::subgraph::domain::DomainWithAddress,
+    entity::subgraph::domain::{CreationAddr2Name, DomainWithAddress},
     protocols::Protocol,
     subgraph::sql::{utils, DbErr},
 };
@@ -8,12 +8,12 @@ use nonempty::NonEmpty;
 use sea_query::{Alias, Expr, PostgresQueryBuilder};
 use sqlx::PgPool;
 
-pub struct Addr2NameTable;
+pub struct AddrToNameTable;
 
 #[async_trait::async_trait]
-impl AdditionalTable for Addr2NameTable {
+impl AdditionalTable for AddrToNameTable {
     fn table_name() -> &'static str {
-        "addr2name"
+        "addr_to_name"
     }
 
     fn create_table_sql(schema: &str) -> String {
@@ -30,7 +30,7 @@ impl AdditionalTable for Addr2NameTable {
     }
 }
 
-impl Addr2NameTable {
+impl AddrToNameTable {
     pub async fn batch_search_addreses(
         pool: &PgPool,
         protocols: &NonEmpty<&Protocol>,
@@ -56,5 +56,34 @@ impl Addr2NameTable {
             .fetch_all(pool)
             .await?;
         Ok(domains)
+    }
+
+    pub async fn upsert_reverse_record(
+        pool: &PgPool,
+        reverse_record: CreationAddr2Name,
+        protocol: &Protocol,
+    ) -> Result<(), DbErr> {
+        let schema = &protocol.subgraph_schema;
+        let table_name = Self::table_name();
+        sqlx::query(&format!(
+            r#"
+        INSERT INTO {schema}.{table_name} (
+            resolved_address,
+            domain_id,
+            domain_name
+        )
+        VALUES ($1, $2, $3)
+        ON CONFLICT (resolved_address)
+        DO UPDATE SET
+            domain_id = EXCLUDED.domain_id,
+            domain_name = EXCLUDED.domain_name;
+        "#
+        ))
+        .bind(&reverse_record.resolved_address)
+        .bind(&reverse_record.domain_id)
+        .bind(&reverse_record.domain_name)
+        .execute(pool)
+        .await?;
+        Ok(())
     }
 }

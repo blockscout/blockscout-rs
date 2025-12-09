@@ -30,7 +30,8 @@ pub async fn offchain_resolve(
             sql::create_or_update_domain(db, result.domain, protocol).await?;
             if protocol.info.address_resolve_technique == AddressResolveTechnique::Addr2Name {
                 if let Some(reverse_record) = result.maybe_reverse_record {
-                    sql::create_or_update_reverse_record(db, reverse_record, protocol).await?;
+                    sql::create_or_update_reverse_record_in_addr2name(db, reverse_record, protocol)
+                        .await?;
                 }
             }
         }
@@ -69,6 +70,8 @@ async fn offchain_resolve_cached(
         ProtocolSpecific::D3Connect(d3) => {
             d3::maybe_offchain_resolution(db, from_user, d3, &info.address_resolve_technique).await
         }
+        // infinity name doesn't support offchain resolution
+        ProtocolSpecific::InfinityName(_) => None,
     };
     cached::Return::new(result)
 }

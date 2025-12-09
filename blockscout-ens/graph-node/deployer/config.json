@@ -129,7 +129,11 @@
       "subgraph_path": "../subgraphs/zns-subgraph",
       "subgraph_name": "zns-unichain-subgraph",
       "network": "unichain-mainnet"
+    },
+    "infinityname-base": {
+      "subgraph_path": "../subgraphs/infinityname-subgraph",
+      "subgraph_name": "infinityname-base-subgraph",
+      "network": "base-mainnet"
     }
   }
 }
-

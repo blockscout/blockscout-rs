@@ -33,7 +33,12 @@ pub fn hash_ens_domain_name(name: &str, empty_label_hash: Option<B256>) -> B256 
     }
 }
 
-pub fn domain_id(name: &str, empty_label_hash: Option<B256>) -> String {
+// https://github.com/infinitynamecom/InfinityName/blob/4c1be461f095c1df8a1b579cfed4ca95a72605bc/InfinityNameUpgradeable.sol#L559-L561
+pub fn hash_infinity_domain_name(name: &str) -> B256 {
+    keccak256(name.as_bytes())
+}
+
+pub fn ens_domain_id(name: &str, empty_label_hash: Option<B256>) -> String {
     hex(hash_ens_domain_name(name, empty_label_hash))
 }
 
@@ -74,7 +79,7 @@ mod tests {
                 "0x7a68d23f9d7e32e79f09e024d21e2e12b66f74cbbc4aff0e5a36043a6a42778d",
             ),
         ] {
-            let hash = domain_id(name, None);
+            let hash = ens_domain_id(name, None);
             assert_eq!(hash, expected_hash);
         }
     }
@@ -107,7 +112,7 @@ mod tests {
                 "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
             )
             .expect("valid hex");
-            let hash = domain_id(name, Some(genome_testnet_empty_label));
+            let hash = ens_domain_id(name, Some(genome_testnet_empty_label));
             assert_eq!(hash, expected_hash);
         }
     }

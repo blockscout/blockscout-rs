@@ -1,7 +1,9 @@
 mod addr2name;
 mod cache_views;
+mod primary_name_record;
 pub use addr2name::*;
 pub use cache_views::*;
+pub use primary_name_record::*;
 
 use sqlx::{Executor, PgPool};
 

@@ -87,7 +87,8 @@ owner,
 registrant,
 wrapped_owner,
 to_timestamp(expiry_date) as expiry_date,
-COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
+COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired,
+token_id
 "#;
 
 const DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"

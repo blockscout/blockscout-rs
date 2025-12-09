@@ -30,6 +30,9 @@ pub async fn resolve_addresses(
             AddressResolveTechnique::Addr2Name => {
                 resolve_addr2name(pool, &protocols, &addresses).await?
             }
+            AddressResolveTechnique::PrimaryNameRecord => {
+                resolve_primary_name_record(pool, &protocols, &addresses).await?
+            }
         };
         result.extend(found_domains);
     }
@@ -104,7 +107,16 @@ async fn resolve_addr2name(
     addresses: &[Address],
 ) -> Result<Vec<DomainWithAddress>, DbErr> {
     let addresses_str: Vec<String> = addresses.iter().map(hex).collect();
-    sql::Addr2NameTable::batch_search_addreses(pool, protocols, &addresses_str).await
+    sql::AddrToNameTable::batch_search_addreses(pool, protocols, &addresses_str).await
+}
+
+async fn resolve_primary_name_record(
+    pool: &PgPool,
+    protocols: &NonEmpty<&Protocol>,
+    addresses: &[Address],
+) -> Result<Vec<DomainWithAddress>, DbErr> {
+    let addresses_str: Vec<String> = addresses.iter().map(hex).collect();
+    sql::PrimaryNameRecordTable::batch_search_addresses(pool, protocols, &addresses_str).await
 }
 
 // async fn resolve_addr_reverse(
