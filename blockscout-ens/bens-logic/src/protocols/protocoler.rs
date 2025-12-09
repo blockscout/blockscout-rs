@@ -72,6 +72,7 @@ pub struct ProtocolInfo {
 pub enum ProtocolSpecific {
     EnsLike(EnsLikeProtocol),
     D3Connect(D3ConnectProtocol),
+    InfinityName(InfinityNameProtocol),
 }
 
 impl Default for ProtocolSpecific {
@@ -85,6 +86,7 @@ impl ProtocolSpecific {
         match self {
             ProtocolSpecific::EnsLike(ens) => ens.try_offchain_resolve,
             ProtocolSpecific::D3Connect(d3) => !d3.disable_offchain_resolve,
+            ProtocolSpecific::InfinityName(_) => false,
         }
     }
 
@@ -92,6 +94,7 @@ impl ProtocolSpecific {
         match self {
             ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
             ProtocolSpecific::D3Connect(_) => None,
+            ProtocolSpecific::InfinityName(_) => None,
         }
     }
 
@@ -99,15 +102,17 @@ impl ProtocolSpecific {
         match self {
             ProtocolSpecific::EnsLike(ens) => ens.native_token_contract,
             ProtocolSpecific::D3Connect(d3) => Some(d3.native_token_contract),
+            ProtocolSpecific::InfinityName(infinity) => Some(infinity.main_contract),
         }
     }
 
-    pub fn registry_contract(&self) -> Option<Address> {
-        match self {
-            ProtocolSpecific::EnsLike(ens) => ens.registry_contract,
-            ProtocolSpecific::D3Connect(_) => None,
-        }
-    }
+    // pub fn registry_contract(&self) -> Option<Address> {
+    //     match self {
+    //         ProtocolSpecific::EnsLike(ens) => ens.registry_contract,
+    //         ProtocolSpecific::D3Connect(_) => None,
+    //         ProtocolSpecific::InfinityName(_) => None,
+    //     }
+    // }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -127,6 +132,11 @@ pub struct D3ConnectProtocol {
     pub native_token_contract: Address,
     #[serde(default)]
     pub disable_offchain_resolve: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct InfinityNameProtocol {
+    pub main_contract: Address,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -151,6 +161,8 @@ pub enum AddressResolveTechnique {
     AllDomains,
     #[serde(rename = "addr2name")]
     Addr2Name,
+    #[serde(rename = "primary_name_record")]
+    PrimaryNameRecord,
 }
 
 impl Tld {

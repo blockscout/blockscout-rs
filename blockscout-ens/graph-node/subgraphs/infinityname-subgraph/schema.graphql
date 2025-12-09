@@ -1,7 +1,7 @@
 type Domain @entity {
-  "The namehash of the name"
+  "The hash of the name (keccak256(domain + suffix))"
   id: ID!
-  "The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)"
+  "The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].blue)"
   name: String
   "The human readable label name (imported from CSV), if known"
   labelName: String
@@ -13,7 +13,7 @@ type Domain @entity {
   subdomains: [Domain!] @derivedFrom(field: "parent")
   "The number of subdomains"
   subdomainCount: Int
-  "Address logged from current resolver, if any"
+  "Address logged from current resolver, if any. For InfinityName, this is the owner or primaryDomain owner"
   resolvedAddress: Account
 
   "The resolver that controls the domain's settings"
@@ -51,6 +51,8 @@ type Domain @entity {
 
   "Token ID for the domain (ERC721)"
   tokenId: BigInt
+  "Whether this domain is the primary domain for its owner"
+  isPrimary: Boolean!
 }
 
 interface DomainEvent {
@@ -75,6 +77,76 @@ type Transfer implements DomainEvent @entity {
   transactionID: Bytes!
   "The account that owns the domain after the transfer"
   owner: Account!
+  "The account that owned the domain before the transfer"
+  from: Account!
+  "The account that received the domain"
+  to: Account!
+}
+
+type DomainRegistered implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The account that registered the domain"
+  owner: Account!
+  "The full domain name that was registered"
+  domainName: String!
+  "The token ID of the registered domain"
+  tokenId: BigInt!
+}
+
+type PrimaryDomainSet implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The account that set the primary domain"
+  owner: Account!
+  "The token ID of the primary domain"
+  tokenId: BigInt!
+  "The full domain name"
+  domainName: String!
+}
+
+type PrimaryDomainReset implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The account that had the primary domain reset"
+  owner: Account!
+  "The token ID of the domain that was reset"
+  tokenId: BigInt!
+}
+
+type TokenSeized implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The account that lost the domain (from)"
+  from: Account!
+  "The account that received the domain (to)"
+  to: Account!
+  "The token ID of the seized domain"
+  tokenId: BigInt!
 }
 
 type NewOwner implements DomainEvent @entity {
@@ -197,7 +269,7 @@ type Registration @entity {
   "The registration date of the domain"
   registrationDate: BigInt!
   "The expiry date of the domain"
-  expiryDate: BigInt!
+  expiryDate: BigInt
   "The cost associated with the domain registration"
   cost: BigInt
   "The account that registered the domain"
@@ -231,7 +303,7 @@ type NameRegistered implements RegistrationEvent @entity {
   "The account that registered the name"
   registrant: Account!
   "The expiry date of the registration"
-  expiryDate: BigInt!
+  expiryDate: BigInt
 }
 
 type NameRenewed implements RegistrationEvent @entity {
@@ -284,6 +356,26 @@ type Account @entity {
   wrappedDomains: [WrappedDomain!] @derivedFrom(field: "owner")
   "The Registrations made by the account"
   registrations: [Registration!] @derivedFrom(field: "registrant")
+  "The primary domain for this account"
+  primaryDomain: Domain
+}
+
+type PrimaryNameRecord @entity {
+  "Unique identifier (resolved address)"
+  id: ID!
+  "The resolved address"
+  resolved_address: String!
+  "The domain ID that this address resolves to"
+  domain_id: String
+  "The domain name that this address resolves to"
+  domain_name: String
+}
+
+type TokenIdToDomain @entity {
+  "The token ID (as string)"
+  id: ID!
+  "The domain associated with this token ID"
+  domain: Domain!
 }
 
 type Resolver @entity {
@@ -457,3 +549,4 @@ type VersionChanged implements ResolverEvent @entity {
   "The new version number of the resolver"
   version: BigInt!
 }
+

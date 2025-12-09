@@ -112,3 +112,10 @@ provider = [
     { label = "unichain-mainnet", url = "https://rpc.poolz.finance/unichain", features = [] }
 ]
 shard = "primary"
+
+[chains."base-mainnet"]
+shard = "primary"
+[[chains."base-mainnet".provider]]
+label    = "base-mainnet"
+url      = "https://base-mainnet-prod-2.node.blockscout.com"
+features = []

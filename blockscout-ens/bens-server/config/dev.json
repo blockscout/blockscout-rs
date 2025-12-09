@@ -52,6 +52,14 @@
           "gravity"
         ]
       },
+      "8453": {
+        "blockscout": {
+          "url": "https://base.blockscout.com"
+        },
+        "use_protocols": [
+          "infinityname-base"
+        ]
+      },
       "33111": {
         "blockscout": {
           "url": "https://curtis.explorer.caldera.xyz/"
@@ -237,6 +245,7 @@
         }
       },
       "zns-unichain": {
+        "disabled": true,
         "tld_list": ["defi"],
         "network_id": 130,
         "subgraph_name": "zns-unichain-subgraph",
@@ -273,3 +282,4 @@
     }
   }
 }
+
