@@ -1,7 +1,7 @@
 use crate::{common, common::repository::DbData, s3_storage::S3Storage};
 use anyhow::Context;
 use da_indexer_entity::{eigenda_v2_commitments, prelude::EigendaV2Commitments};
-use sea_orm::{sea_query::OnConflict, DatabaseConnection, EntityTrait};
+use sea_orm::{sea_query::OnConflict, DatabaseConnection, EntityTrait, TransactionTrait};
 use sha3::{Digest, Keccak256};
 
 pub async fn find_by_commitment(
@@ -60,28 +60,27 @@ pub async fn insert_commitment_with_data(
     };
     let active_model: eigenda_v2_commitments::ActiveModel = model.into();
 
-    let database_insert_future = async move {
-        eigenda_v2_commitments::Entity::insert_many([active_model])
-            .on_conflict(
-                OnConflict::column(eigenda_v2_commitments::Column::CommitmentHash)
-                    .do_nothing()
-                    .to_owned(),
-            )
-            .on_empty_do_nothing()
-            .exec(db)
+    let txn = db.begin().await.context("could not begin transaction")?;
+    eigenda_v2_commitments::Entity::insert_many([active_model])
+        .on_conflict(
+            OnConflict::column(eigenda_v2_commitments::Column::CommitmentHash)
+                .do_nothing()
+                .to_owned(),
+        )
+        .on_empty_do_nothing()
+        .exec(&txn)
+        .await
+        .context("database insertion")?;
+
+    match s3_storage {
+        None => Ok(()),
+        Some(s3_storage) => s3_storage
+            .insert_many(data_s3_objects)
             .await
-            .context("database insertion")
-    };
-    let s3_storage_insert_future = async move {
-        match s3_storage {
-            None => Ok(()),
-            Some(s3_storage) => s3_storage
-                .insert_many(data_s3_objects)
-                .await
-                .context("s3 storage insertion"),
-        }
-    };
-    futures::future::try_join(database_insert_future, s3_storage_insert_future).await?;
+            .context("s3 storage insertion"),
+    }?;
+
+    txn.commit().await.context("could not commit transaction")?;
 
     Ok(())
 }
