@@ -50,8 +50,11 @@ where
         .await;
         match result {
             Ok(match_type) => {
-                let search_result = search_contract(blockscout_client, contract).await;
-                let result = search_result.map(|url| VerificationSuccess { url, match_type });
+                let search_result = search_contract(blockscout_client, contract, match_type).await;
+                let result = search_result.map(|url| VerificationSuccess {
+                    url: url.to_string(),
+                    match_type,
+                });
                 results.push(result)
             }
             Err(err) if err.is_compilation_failed_error() => {
@@ -184,7 +187,8 @@ fn process_verify_response(
 async fn search_contract(
     blockscout_client: &blockscout::Client,
     contract: Contract,
-) -> Result<String, Error> {
+    current_verification_match_type: eth_bytecode_db_v2::source::MatchType,
+) -> Result<url::Url, Error> {
     let request = blockscout::ImportSmartContract {
         address: contract.address,
         api_key: blockscout_client.api_key().clone(),
@@ -192,14 +196,22 @@ async fn search_contract(
     let search_result = blockscout_client.request(&request).await;
 
     match search_result {
+        Ok(response) if response.message.contains("Success") => {
+            let url = build_url(blockscout_client, &contract);
+            Ok(url)
+        }
+        Ok(response) if response.message.contains("Already verified") => {
+            let url = build_url(blockscout_client, &contract);
+            Err(Error::already_fully_verified_contract(&url))
+        }
         Ok(response)
-            if response.message.contains("Success")
-                || response.message.contains("Already verified") =>
+            if response.message.contains("Contract was not imported")
+                && current_verification_match_type
+                    == eth_bytecode_db_v2::source::MatchType::Partial
+                && is_contract_partially_verified(blockscout_client, &contract).await? =>
         {
-            let mut url = blockscout_client.base_url().clone();
-            url.set_path(&format!("/address/{}", contract.address.to_hex()));
-
-            Ok(url.to_string())
+            let url = build_url(blockscout_client, &contract);
+            Err(Error::already_partially_verified_contract(&url))
         }
         Ok(response) => {
             tracing::error!(
@@ -221,4 +233,29 @@ async fn search_contract(
             Err(Error::internal("Importing contract into blockscout failed"))
         }
     }
+}
+
+async fn is_contract_partially_verified(
+    blockscout_client: &blockscout::Client,
+    contract: &Contract,
+) -> Result<bool, Error> {
+    let request = blockscout::GetSmartContract {
+        address: contract.address,
+    };
+
+    let smart_contract = blockscout_client.request(&request).await.map_err(|err| {
+        tracing::error!(
+            contract_address = contract.address.to_hex(),
+            "internal error while retrieving smart-contract details: {err}"
+        );
+        Error::internal("Error while retrieving smart-contract details")
+    })?;
+
+    Ok(smart_contract.is_partially_verified)
+}
+
+fn build_url(blockscout_client: &blockscout::Client, contract: &Contract) -> url::Url {
+    let mut url = blockscout_client.base_url().clone();
+    url.set_path(&format!("/address/{}", contract.address.to_hex()));
+    url
 }
