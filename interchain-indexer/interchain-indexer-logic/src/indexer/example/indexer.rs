@@ -183,7 +183,11 @@ impl CrosschainIndexer for ExampleIndexer {
             messages_indexed: self.fake_counter.load(Ordering::Relaxed),
             transfers_indexed: self.fake_counter.load(Ordering::Relaxed),
             error_count: self.fake_err_counter.load(Ordering::Relaxed),
-            extra_info: HashMap::new(),
+            extra_info: HashMap::from([
+                ("foo".to_string(), serde_json::json!("bar")),
+                ("chains_count".to_string(), serde_json::json!(self.providers.len())),
+                ("the_main_answer".to_string(), serde_json::json!(42)),
+            ]),
         }
     }
 }
