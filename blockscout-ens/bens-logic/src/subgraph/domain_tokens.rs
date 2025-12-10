@@ -149,7 +149,7 @@ mod tests {
             // Native contract provided, but domain is third level
             (
                 domain(
-                    "this_is_third_level_domain.levvv.eth",
+                    "this-is-third-level-domain.levvv.eth",
                     "0x0200",
                     "0x0100",
                     owner,
@@ -172,7 +172,7 @@ mod tests {
             // Native contract provided, wrapped owner provided, but third level domain, so only wrapped token
             (
                 domain(
-                    "this_is_third_level_domain.levvv.eth",
+                    "this-is-third-level-domain.levvv.eth",
                     "0x0200",
                     "0x0100",
                     wrapped_contract,
@@ -224,6 +224,7 @@ mod tests {
             let deployed_protocol = DeployedProtocol {
                 protocol: &protocol,
                 deployment_network: &Network {
+                    network_id: 1,
                     blockscout_client: Arc::new(BlockscoutClient::new("http://localhost:8545".parse().unwrap(), 1, 1)),
                     rpc_url: None,
                     use_protocols: vec![],
@@ -233,7 +234,7 @@ mod tests {
             let tokens = extract_tokens_from_domain(&domain, &name)
                 .expect("failed to extract tokens from domain");
 
-            assert_eq!(tokens, expected_tokens, "failed for domain: {}", name.inner.name);
+            assert_eq!(tokens, expected_tokens, "failed for domain: {}", name.inner.name());
         }
     }
 }

@@ -1,35 +1,22 @@
-use super::{
-    domain_tokens::extract_tokens_from_domain,
-    pagination::{PaginatedList, Paginator},
-    sql,
-    types::*,
-    SubgraphPatcher,
-};
 use crate::{
-    blockscout,
-    blockscout::BlockscoutClient,
+    blockscout::{self, BlockscoutClient},
     entity::subgraph::{
         domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
     },
-    protocols::{
-        AddressResolveTechnique, DeployedProtocol, Network, Protocol, ProtocolError, ProtocolInfo,
-        Protocoler,
-    },
+    protocols::{CleanName, DomainNameOnProtocol, ProtocolError, Protocoler},
     subgraph::{
-        resolve_addresses::resolve_addresses,
-        sql::{AdditionalTable, CachedView, DbErr},
+        domain_tokens::extract_tokens_from_domain, reader::types::*,
+        resolve_addresses::resolve_addresses, sql, PaginatedList, Paginator, SubgraphReader,
     },
 };
 use alloy::primitives::{Address, TxHash};
 use anyhow::{anyhow, Context};
 use nonempty::{nonempty, NonEmpty};
-use sqlx::postgres::PgPool;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
-use thiserror::Error;
 use tracing::instrument;
 
 lazy_static::lazy_static! {
@@ -43,177 +30,35 @@ lazy_static::lazy_static! {
 
 const MAX_RESOLVE_ADDRESSES: usize = 100;
 
-#[derive(Error, Debug)]
-pub enum SubgraphReadError {
-    #[error("failed to get protocol info: {0}")]
-    Protocol(#[from] ProtocolError),
-    #[error("Db err")]
-    DbErr(#[from] DbErr),
-    #[error("internal error: {0}")]
-    Internal(#[from] anyhow::Error),
-}
-
-pub struct SubgraphReader {
-    pool: Arc<PgPool>,
-    protocoler: Protocoler,
-    patcher: SubgraphPatcher,
-}
-
-impl SubgraphReader {
-    #[instrument(name = "SubgraphReader::initialize", skip_all, err, level = "info")]
-    pub async fn initialize(
-        pool: Arc<PgPool>,
-        networks: HashMap<i64, Network>,
-        protocol_infos: HashMap<String, ProtocolInfo>,
-    ) -> Result<Self, anyhow::Error> {
-        let deployments = sql::get_deployments(&pool)
-            .await?
-            .into_iter()
-            .map(|deployment| (deployment.subgraph_name.clone(), deployment))
-            .collect::<HashMap<_, _>>();
-        tracing::info!(deployments =? deployments, "found subgraph deployments");
-
-        let protocols = protocol_infos
-            .into_iter()
-            .filter_map(|(slug, info)| {
-                if let Some(deployment) = deployments.get(&info.subgraph_name) {
-                    Some((
-                        slug,
-                        Protocol {
-                            info,
-                            subgraph_schema: deployment.schema_name.clone(),
-                        },
-                    ))
-                } else {
-                    tracing::warn!(
-                        "protocol '{}' with subgraph_name '{}' not found in subgraph deployments",
-                        slug,
-                        info.subgraph_name
-                    );
-                    None
-                }
-            })
-            .collect::<HashMap<_, _>>();
-
-        let networks = networks.into_iter()
-            .map(|(chain_id, network)| {
-                let (found_protocols, unknown_protocols): (Vec<_>, _) = network
-                    .use_protocols
-                    .into_iter()
-                    .partition(|protocol_name| protocols.contains_key(protocol_name));
-                if !unknown_protocols.is_empty() {
-                    tracing::warn!("found unknown or disabled protocols for network with id={chain_id}: {unknown_protocols:?}")
-                }
-                (chain_id, Network {
-                    blockscout_client: network.blockscout_client,
-                    use_protocols: found_protocols,
-                    rpc_url: network.rpc_url,
-                })
-            })
-            .collect::<HashMap<_, _>>();
-
-        tracing::info!(networks =? networks.keys().collect::<Vec<_>>(), "initialized subgraph reader");
-        let protocoler = Protocoler::initialize(networks, protocols)?;
-        let patcher = SubgraphPatcher::new();
-        let this = Self::new(pool, protocoler, patcher);
-        this.init_cache().await.context("init cache tables")?;
-        Ok(this)
-    }
-
-    pub fn new(pool: Arc<PgPool>, protocoler: Protocoler, patcher: SubgraphPatcher) -> Self {
-        Self {
-            pool,
-            protocoler,
-            patcher,
-        }
-    }
-
-    pub async fn refresh_cache(&self) -> Result<(), anyhow::Error> {
-        for protocol in self.iter_protocols() {
-            let schema = &protocol.subgraph_schema;
-            let address_resolve_technique = &protocol.info.address_resolve_technique;
-            tracing::info!(
-                address_resolve_technique =? address_resolve_technique,
-                "refreshing cache table for schema {schema}"
-            );
-            match address_resolve_technique {
-                AddressResolveTechnique::ReverseRegistry => {
-                    sql::AddrReverseNamesView::refresh_view(self.pool.as_ref(), schema)
-                        .await
-                        .context(format!(
-                            "failed to update AddrReverseNamesView for schema {schema}"
-                        ))?;
-                }
-                AddressResolveTechnique::AllDomains => {
-                    sql::AddressNamesView::refresh_view(self.pool.as_ref(), schema)
-                        .await
-                        .context(format!(
-                            "failed to update AddressNamesView for schema {schema}"
-                        ))?;
-                }
-                AddressResolveTechnique::Addr2Name => {
-                    // addr2name doesnt have view
-                }
-            }
-        }
-        Ok(())
-    }
-
-    #[instrument(skip_all, err, level = "info")]
-    pub async fn init_cache(&self) -> Result<(), anyhow::Error> {
-        for protocol in self.iter_protocols() {
-            let schema = &protocol.subgraph_schema;
-            let address_resolve_technique = &protocol.info.address_resolve_technique;
-            tracing::info!("start initializing cache table for schema {schema}");
-            match address_resolve_technique {
-                AddressResolveTechnique::ReverseRegistry => {
-                    sql::AddrReverseNamesView::create_view(self.pool.as_ref(), schema)
-                        .await
-                        .context(format!(
-                            "failed to create AddrReverseNamesView for schema {schema}"
-                        ))?;
-                }
-                AddressResolveTechnique::AllDomains => {
-                    sql::AddressNamesView::create_view(self.pool.as_ref(), schema)
-                        .await
-                        .context(format!(
-                            "failed to create AddressNamesView for schema {schema}"
-                        ))?;
-                }
-                AddressResolveTechnique::Addr2Name => {
-                    sql::Addr2NameTable::create_table(self.pool.as_ref(), schema)
-                        .await
-                        .context(format!(
-                            "failed to create Addr2NameTable for schema {schema}"
-                        ))?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn iter_protocols(&self) -> impl Iterator<Item = &Protocol> {
-        self.protocoler.iter_protocols()
-    }
-
-    pub fn protocols_of_network(
-        &'_ self,
-        network_id: i64,
-    ) -> Result<NonEmpty<DeployedProtocol<'_>>, ProtocolError> {
-        self.protocoler.protocols_of_network(network_id, None)
-    }
-}
-
 impl SubgraphReader {
     pub async fn get_domain(
         &self,
         input: GetDomainInput,
     ) -> Result<Option<GetDomainOutput>, SubgraphReadError> {
-        let name = self.protocoler.main_name_in_network(
-            &input.name,
-            input.network_id,
-            input.protocol_id.clone().map(|p| nonempty![p]),
-        )?;
+        let clean_name = CleanName::new(&input.name)?;
+        let protocol = match (input.network_id, input.protocol_id) {
+            (Some(network_id), Some(protocol_id)) => {
+                self.protocoler.choose_protocol_for_network_by_domain_name(
+                    network_id,
+                    &clean_name,
+                    Some(nonempty![protocol_id]),
+                )?
+            }
+            (Some(network_id), None) => self
+                .protocoler
+                .choose_protocol_for_network_by_domain_name(network_id, &clean_name, None)?,
+            (None, Some(protocol_id)) => self
+                .protocoler
+                .protocol_by_slug(&protocol_id)
+                .ok_or_else(|| ProtocolError::ProtocolNotFound(protocol_id.clone()))?,
+            (None, None) => self.protocoler.protocol_on_mainnet().ok_or_else(|| {
+                ProtocolError::ProtocolNotFound(
+                    "either network_id or protocol_id is required for getting domain".to_string(),
+                )
+            })?,
+        };
+        let name = DomainNameOnProtocol::from_str(&input.name, protocol)?;
+
         self.patcher
             .handle_user_domain_names(self.pool.as_ref(), &name)
             .await?;
@@ -240,11 +85,10 @@ impl SubgraphReader {
         &self,
         input: GetDomainHistoryInput,
     ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
-        let name = self.protocoler.main_name_in_network(
-            &input.name,
-            input.network_id,
-            input.protocol_id.clone().map(|p| nonempty![p]),
-        )?;
+        let protocol = self
+            .protocoler
+            .deployed_protocol_from_user_input(input.network_id, input.protocol_id.clone())?;
+        let name = DomainNameOnProtocol::from_str(&input.name, protocol)?;
         let domain_txns: Vec<DomainEventTransaction> = sql::find_transaction_events(
             self.pool.as_ref(),
             name.deployed_protocol.protocol,
@@ -254,7 +98,7 @@ impl SubgraphReader {
         .await?;
         let domain_events = self
             .events_from_transactions(
-                input.network_id,
+                name.deployed_protocol.deployment_network.network_id,
                 name.deployed_protocol
                     .deployment_network
                     .blockscout_client
@@ -269,20 +113,22 @@ impl SubgraphReader {
         &self,
         input: LookupDomainInput,
     ) -> Result<PaginatedList<LookupOutput>, SubgraphReadError> {
+        let protocols = self
+            .protocoler
+            .deployed_protocols_from_user_input(input.network_id, input.protocols)?;
         let find_domains_input = if let Some(name) = input.name {
-            match self.protocoler.lookup_names_options_in_network(
-                &name.to_lowercase(),
-                input.network_id,
-                input.maybe_filter_protocols,
-            ) {
-                Ok(name_options) => sql::FindDomainsInput::Names(name_options),
+            // special logic for lookup by name, no error returned if name is invalid! wow, so cool!
+            let Ok(clean_name) = CleanName::new(&name) else {
+                return Ok(PaginatedList::empty());
+            };
+            match self.protocoler.get_domain_options(&clean_name, protocols) {
+                Ok(name_options) => {
+                    sql::FindDomainsInput::Names(name_options.into_iter().collect())
+                }
                 Err(_) => return Ok(PaginatedList::empty()),
             }
         } else {
-            let protocols = self
-                .protocoler
-                .protocols_of_network(input.network_id, input.maybe_filter_protocols)?;
-            sql::FindDomainsInput::Protocols(protocols.map(|p| p.protocol).into_iter().collect())
+            sql::FindDomainsInput::Protocols(protocols.iter().map(|p| p.protocol).collect())
         };
 
         if let sql::FindDomainsInput::Names(names) = &find_domains_input {
@@ -304,7 +150,7 @@ impl SubgraphReader {
             // if domain is found by name, patch it with user input
             if let sql::FindDomainsInput::Names(names) = &find_domains_input {
                 if let Some(from_user) = names.iter().find(|name| {
-                    name.inner.id == domain.id
+                    name.inner.id() == domain.id
                         && name.deployed_protocol.protocol.info.slug == domain.protocol_slug
                 }) {
                     return self
@@ -331,8 +177,7 @@ impl SubgraphReader {
         }
         let protocols = self
             .protocoler
-            .protocols_of_network(input.network_id, input.maybe_filter_protocols.clone())?
-            .map(|p| p.protocol);
+            .protocols_from_user_input(input.network_id, input.protocols.clone())?;
         let domains = sql::find_resolved_addresses(self.pool.as_ref(), protocols, &input).await?;
         let output = lookup_output_from_domains(domains, &self.protocoler)?;
         let paginated = input
@@ -351,25 +196,19 @@ impl SubgraphReader {
         }
         let protocols = self
             .protocoler
-            .protocols_of_network(
-                input.network_id,
-                input.protocol_id.clone().map(|p| nonempty![p]),
-            )?
-            .map(|p| p.protocol);
+            .protocols_from_user_input(input.network_id, input.protocols.clone())?;
         let maybe_domain_name =
             resolve_addresses(self.pool.as_ref(), protocols, vec![input.address])
                 .await?
                 .into_iter()
-                .next()
-                .map(|d| d.domain_name);
-        if let Some(domain_name) = maybe_domain_name {
+                .next();
+        if let Some(domain) = maybe_domain_name {
             let result = self
                 .get_domain(GetDomainInput {
-                    network_id: input.network_id,
-                    name: domain_name,
+                    network_id: None,
+                    name: domain.domain_name,
                     only_active: true,
-                    // protocol will be resolved automatically
-                    protocol_id: None,
+                    protocol_id: Some(domain.protocol_slug),
                 })
                 .await?
                 .ok_or_else(|| {
@@ -385,18 +224,18 @@ impl SubgraphReader {
 
     pub async fn count_domains_by_address(
         &self,
-        network_id: i64,
         address: Address,
         resolved_to: bool,
         owned_by: bool,
+        network_id: Option<i64>,
+        protocols: Option<NonEmpty<String>>,
     ) -> Result<i64, SubgraphReadError> {
         if address_should_be_ignored(&address) {
             return Ok(Default::default());
         }
         let protocols = self
             .protocoler
-            .protocols_of_network(network_id, None)?
-            .map(|p| p.protocol);
+            .protocols_from_user_input(network_id, protocols)?;
         let only_active = true;
         let count = sql::count_domains_by_address(
             self.pool.as_ref(),
@@ -416,8 +255,7 @@ impl SubgraphReader {
     ) -> Result<BTreeMap<Address, String>, SubgraphReadError> {
         let protocols = self
             .protocoler
-            .protocols_of_network(input.network_id, None)?
-            .map(|p| p.protocol);
+            .protocols_from_user_input(input.network_id, input.protocols)?;
         // remove duplicates
         let addresses = remove_addresses_from_batch(input.addresses);
         let addresses_len = addresses.len();
@@ -482,8 +320,9 @@ impl SubgraphReader {
         if !addresses.is_empty() {
             let names_map = self
                 .batch_resolve_address_names(BatchResolveAddressNamesInput {
-                    network_id,
                     addresses,
+                    network_id: Some(network_id),
+                    protocols: None,
                 })
                 .await?;
             // Fill the `name` field using a resolved map (keys are 0x-lowercase strings)
@@ -557,6 +396,7 @@ mod tests {
     };
     use alloy::primitives::Address;
     use pretty_assertions::assert_eq;
+    use sqlx::PgPool;
 
     const DEFAULT_CHAIN_ID: i64 = 1;
 
@@ -568,7 +408,7 @@ mod tests {
         let name = "vitalik.eth".to_string();
         let result = reader
             .get_domain(GetDomainInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 name,
                 only_active: false,
                 protocol_id: None,
@@ -593,7 +433,7 @@ mod tests {
         let name = "expired.eth".to_string();
         let result = reader
             .get_domain(GetDomainInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 name: name.clone(),
                 only_active: false,
                 protocol_id: None,
@@ -612,7 +452,7 @@ mod tests {
         // get expired domain with only_active filter
         let result = reader
             .get_domain(GetDomainInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 name,
                 only_active: true,
                 protocol_id: None,
@@ -631,11 +471,11 @@ mod tests {
 
         let result = reader
             .lookup_domain_name(LookupDomainInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 name: Some("vitalik.eth".to_string()),
                 only_active: false,
                 pagination: Default::default(),
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get vitalik domains");
@@ -655,11 +495,11 @@ mod tests {
 
         let result = reader
             .lookup_domain_name(LookupDomainInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 name: Some("Vitalik".to_string()),
                 only_active: false,
                 pagination: Default::default(),
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get vitalik domains");
@@ -675,11 +515,11 @@ mod tests {
 
         let result = reader
             .lookup_domain_name(LookupDomainInput {
-                network_id: 1337,
+                network_id: Some(1337),
                 name: Some("abcnews".to_string()),
                 only_active: false,
                 pagination: pagination_for_domain,
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get abcnews domains");
@@ -699,17 +539,16 @@ mod tests {
         };
         let result = reader
             .lookup_domain_name(LookupDomainInput {
-                network_id: 1,
+                network_id: Some(1),
                 name: Some("00-01".to_string()),
                 only_active: false,
                 pagination: pagination_for_domain,
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get 00-01 domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
-        println!("result: {result:?}");
         assert_eq!(
             vec![Some("00-01.eth")],
             result
@@ -724,17 +563,16 @@ mod tests {
         };
         let result = reader
             .lookup_domain_name(LookupDomainInput {
-                network_id: 1,
+                network_id: Some(1),
                 name: Some("zt-c7c8172af17ab662.zkbtcnetwork".to_string()),
                 only_active: false,
                 pagination: pagination_for_domain,
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get zt-c7c8172af17ab662.zkbtcnetwork domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
-        println!("result: {result:?}");
         assert_eq!(
             vec![Some("zt-c7c8172af17ab662.zkbtcnetwork.eth")],
             result
@@ -749,17 +587,16 @@ mod tests {
         };
         let result = reader
             .lookup_domain_name(LookupDomainInput {
-                network_id: 1,
+                network_id: Some(1),
                 name: Some("⌐◨-◨".to_string()),
                 only_active: false,
                 pagination: pagination_for_domain,
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get ⌐◨-◨ domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
-        println!("result: {result:?}");
         assert_eq!(
             vec![Some("⌐◨-◨.eth")],
             result
@@ -774,17 +611,16 @@ mod tests {
         };
         let result = reader
             .lookup_domain_name(LookupDomainInput {
-                network_id: 1,
+                network_id: Some(1),
                 name: Some("😀😀😀😀😀😀".to_string()),
                 only_active: false,
                 pagination: pagination_for_domain,
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get 😀😀😀😀😀😀 domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
-        println!("result: {result:?}");
         assert_eq!(
             vec![Some("😀😀😀😀😀😀.eth")],
             result
@@ -800,13 +636,13 @@ mod tests {
 
         let result = reader
             .lookup_address(LookupAddressInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 resolved_to: true,
                 owned_by: false,
                 only_active: false,
                 pagination: Default::default(),
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get vitalik domains");
@@ -822,13 +658,13 @@ mod tests {
 
         let result = reader
             .lookup_address(LookupAddressInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 resolved_to: false,
                 owned_by: true,
                 only_active: false,
                 pagination: Default::default(),
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get vitalik domains");
@@ -845,13 +681,13 @@ mod tests {
         // search for expired address
         let result = reader
             .lookup_address(LookupAddressInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 address: addr("0x9f7f7ddbfb8e14d1756580ba8037530da0880b99"),
                 resolved_to: true,
                 owned_by: true,
                 only_active: false,
                 pagination: Default::default(),
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get expired domains");
@@ -868,13 +704,13 @@ mod tests {
         // search for expired address with only_active
         let result = reader
             .lookup_address(LookupAddressInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 address: addr("0x9f7f7ddbfb8e14d1756580ba8037530da0880b99"),
                 resolved_to: true,
                 owned_by: true,
                 only_active: true,
                 pagination: Default::default(),
-                maybe_filter_protocols: None,
+                protocols: None,
             })
             .await
             .expect("failed to get expired domains");
@@ -896,7 +732,7 @@ mod tests {
         let name = "vitalik.eth".to_string();
         let history = reader
             .get_domain_history(GetDomainHistoryInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 name,
                 sort: Default::default(),
                 order: Default::default(),
@@ -1010,8 +846,9 @@ mod tests {
         .unwrap();
         let domains = reader
             .batch_resolve_address_names(BatchResolveAddressNamesInput {
-                network_id: DEFAULT_CHAIN_ID,
                 addresses,
+                network_id: Some(DEFAULT_CHAIN_ID),
+                protocols: None,
             })
             .await
             .expect("failed to resolve addresess");
@@ -1048,7 +885,7 @@ mod tests {
         // After reader requests domain should be resolved
         let result = reader
             .get_domain(GetDomainInput {
-                network_id: DEFAULT_CHAIN_ID,
+                network_id: Some(DEFAULT_CHAIN_ID),
                 name: unresolved.to_string(),
                 only_active: false,
                 protocol_id: None,

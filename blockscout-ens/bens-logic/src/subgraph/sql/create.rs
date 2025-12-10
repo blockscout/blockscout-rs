@@ -104,7 +104,7 @@ async fn update_domain(
             resolved_address = $1,
             stored_offchain = $2,
             resolved_with_wildcard = $3,
-            expiry_date = $4
+            expiry_date = COALESCE($4, expiry_date)
         WHERE vid = $5
         "#
     ))

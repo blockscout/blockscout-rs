@@ -317,6 +317,7 @@ impl Envs {
             if !ignore_defaults {
                 entry.default_value = value.default_value;
             }
+            entry.required = value.required;
         }
     }
 

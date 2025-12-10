@@ -39,6 +39,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 | `BENS__SUBGRAPHS_READER__REFRESH_CACHE_SCHEDULE` |                          |                                                               | `0 0 * * * *`  |
 | `BENS__TRACING__ENABLED`                         |                          |                                                               | `true`         |
 | `BENS__TRACING__FORMAT`                          |                          |                                                               | `default`      |
+| `BENS__SUBGRAPHS_READER__REFRESH_CACHE_DISABLED` |                          |                                                               | `false`        |
 
 [anchor]: <> (anchors.envs.end.envs_main)
 

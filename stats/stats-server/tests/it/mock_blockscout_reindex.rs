@@ -5,7 +5,7 @@ use blockscout_service_launcher::{
     test_server::{init_server, send_get_request},
 };
 use chrono::{Days, NaiveDate, Utc};
-use pretty_assertions::assert_eq;
+use pretty_assertions::{assert_eq, assert_ne};
 use stats::tests::{
     init_db::init_db_all,
     mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data, imitate_reindex},
@@ -71,7 +71,7 @@ async fn test_reupdate_works() {
 
     // should reindex newTxns transitively
     let reupdate_response =
-        request_reupdate_from(&base, &api_key, "2023-01-01", vec!["txnsGrowth"]).await;
+        request_reupdate_from(&base, &api_key, "2023-01-01", vec!["txnsGrowth"], false).await;
     assert_eq!(
         reupdate_response,
         BatchUpdateChartsResult {
@@ -101,7 +101,7 @@ async fn test_reupdate_works() {
     );
 
     let reupdate_response =
-        request_reupdate_from(&base, &api_key, "2022-11-11", vec!["newTxns"]).await;
+        request_reupdate_from(&base, &api_key, "2022-11-11", vec!["newTxns"], false).await;
     assert_eq!(
         reupdate_response,
         BatchUpdateChartsResult {
@@ -131,7 +131,7 @@ async fn test_reupdate_works() {
     );
 
     let reupdate_response =
-        request_reupdate_from(&base, &api_key, "2000-01-01", vec!["newTxns"]).await;
+        request_reupdate_from(&base, &api_key, "2000-01-01", vec!["newTxns"], false).await;
     assert_eq!(
         reupdate_response,
         BatchUpdateChartsResult {
@@ -158,6 +158,11 @@ async fn test_reupdate_works() {
             ("2023-03-01", "2"),
         ])
     );
+
+    let reupdate_response =
+        request_reupdate_from(&base, &api_key, "2022-11-11", vec![], true).await;
+    assert_eq!(reupdate_response.total_rejected, 0);
+    assert_ne!(reupdate_response.accepted.len(), 0);
     blockscout_db.close_all_unwrap().await;
     stats_db.close_all_unwrap().await;
     shutdown.cancel_wait_timeout(None).await.unwrap();
@@ -170,6 +175,7 @@ pub async fn test_incorrect_reupdate_requests(base: &Url, key: ApiKey) {
     );
     request = request.json(&proto_v1::BatchUpdateChartsRequest {
         chart_names: vec!["txnsGrowth".to_string()],
+        update_all: None,
         from: Some("2023-01-01".to_string()),
         update_later: None,
     });
@@ -201,6 +207,7 @@ pub async fn test_incorrect_reupdate_requests(base: &Url, key: ApiKey) {
             .unwrap()
             .json(&proto_v1::BatchUpdateChartsRequest {
                 chart_names: vec!["txnsGrowth".to_string()],
+                update_all: None,
                 from: Some(tomorrow.format("%Y-%m-%d").to_string()),
                 update_later: None,
             });

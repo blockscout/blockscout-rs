@@ -42,6 +42,7 @@ impl Addr2NameTable {
                 .expr(Expr::cust("domain_id as id"))
                 .expr(Expr::cust("domain_name"))
                 .expr(Expr::cust("resolved_address"))
+                .expr(Expr::cust(format!("'{}' as protocol_slug", p.info.slug)))
                 .from((Alias::new(&p.subgraph_schema), Alias::new(table_name)))
                 .and_where(Expr::cust("resolved_address = ANY($1)"))
                 .and_where(Expr::cust("domain_id is not null"))

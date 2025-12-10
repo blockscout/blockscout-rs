@@ -26,7 +26,7 @@ pub async fn find_transaction_events(
     let sql = sql_events_of_domain(&protocol.subgraph_schema, sort, order)
         .context("building sql from template")?;
     let transactions: Vec<DomainEventTransaction> =
-        sqlx::query_as(&sql).bind(&name.id).fetch_all(pool).await?;
+        sqlx::query_as(&sql).bind(name.id()).fetch_all(pool).await?;
     Ok(transactions)
 }
 

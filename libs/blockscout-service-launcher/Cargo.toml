@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.20.0"
+version = "0.21.0"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -13,23 +13,23 @@ edition = "2021"
 [dependencies]
 actix-web = { version = "4", optional = true }
 actix-cors = { version = "0.7", optional = true }
-actix-web-prom = { version = "0.6", optional = true }
+actix-web-prom = { version = "0.10", optional = true }
 anyhow = { version = "1.0", optional = true }
-config = { version = "0.13", optional = true }
+config = { version = "0.15", optional = true }
 futures = { version = "0.3", optional = true }
 cfg-if = { version = "1.0.0", optional = true }
-keccak-hash = { version = "0.11.0", optional = true }
+keccak-hash = { version = "0.12.0", optional = true }
 once_cell = { version = "1", optional = true }
 opentelemetry = { version = "0.19", optional = true }
 opentelemetry-jaeger = { version = "0.18", features = ["rt-tokio"], optional = true }
-prometheus = { version = "0.13", optional = true }
+prometheus = { version = "0.14", optional = true }
 reqwest = { version = "0.12", features = ["json"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 serde_with = { version = "3", optional = true }
 tokio = { version = "1.44", optional = true }
 tokio-util = { version = "0.7.13", features = ["rt"], optional = true }
-tonic = { version = "0.12", optional = true }
+tonic = { version = "0.14", optional = true }
 tracing = { version = "0.1", optional = true }
 tracing-actix-web = { package = "blockscout-tracing-actix-web", version = "0.8.0", optional = true }
 tracing-opentelemetry = { version = "0.19", optional = true }
@@ -45,8 +45,8 @@ sea-orm-migration-0_10 = { package = "sea-orm-migration", version = "0.10", opti
 sea-orm-0_11 = { package = "sea-orm", version = "0.11", optional = true }
 sea-orm-migration-0_11 = { package = "sea-orm-migration", version = "0.11", optional = true }
 
-sea-orm-1 = { package = "sea-orm", version = "1.1.7", optional = true }
-sea-orm-migration-1 = { package = "sea-orm-migration", version = "1.1.7", optional = true }
+sea-orm-1 = { package = "sea-orm", version = "1", optional = true }
+sea-orm-migration-1 = { package = "sea-orm-migration", version = "1", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"

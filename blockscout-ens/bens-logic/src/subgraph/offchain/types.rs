@@ -40,9 +40,9 @@ pub fn offchain_resolution_to_resolve_result(
         vid: maybe_existing_domain.map(|d| d.vid),
         id: ccip_read_info.id.clone(),
         name: Some(ccip_read_info.name.clone()),
-        label_name: Some(from_user.inner.label_name.clone()),
+        label_name: Some(from_user.inner.label_name().to_string()),
         labelhash: Some(from_user.inner.labelhash().to_vec()),
-        parent: parent.map(|p| p.id),
+        parent: parent.map(|p| p.id().to_string()),
         subdomain_count: 0,
         resolved_address,
         resolver: Some(resolver.to_string()),
@@ -71,8 +71,8 @@ pub fn offchain_resolution_to_resolve_result(
     let maybe_reverse_record = match (&domain.resolved_address, maybe_addr2name) {
         (Some(addr), Some(name)) => Some(CreationAddr2Name {
             resolved_address: addr.clone(),
-            domain_id: Some(name.id),
-            domain_name: Some(name.name),
+            domain_id: Some(name.id().to_string()),
+            domain_name: Some(name.name().to_string()),
         }),
         (Some(addr), None) => Some(CreationAddr2Name {
             resolved_address: addr.clone(),

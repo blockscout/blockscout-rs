@@ -2,7 +2,7 @@ use super::{
     address_from_str_logic, and_not_zero_address, checksummed, maybe_protocol_filter_from_inner,
     protocol_from_logic, resolver_from_logic, ConversionError,
 };
-use crate::conversion::order_direction_from_inner;
+use crate::conversion::{map_convertion_error, order_direction_from_inner};
 use alloy::primitives::Address;
 use bens_logic::subgraph::{
     BatchResolveAddressNamesInput, DomainPaginationInput, DomainSortField, DomainToken,
@@ -10,6 +10,7 @@ use bens_logic::subgraph::{
     LookupDomainInput, LookupOutput,
 };
 use bens_proto::blockscout::bens::v1 as proto;
+use nonempty::nonempty;
 use std::{collections::BTreeMap, str::FromStr};
 
 const DEFAULT_PAGE_SIZE: u32 = 50;
@@ -19,7 +20,7 @@ pub fn get_domain_input_from_inner(
 ) -> Result<GetDomainInput, ConversionError> {
     let name = name_from_inner(inner.name)?;
     Ok(GetDomainInput {
-        network_id: inner.chain_id,
+        network_id: Some(inner.chain_id),
         name,
         only_active: inner.only_active,
         protocol_id: inner.protocol_id,
@@ -29,45 +30,42 @@ pub fn get_domain_input_from_inner(
 pub fn lookup_domain_name_from_inner(
     inner: proto::LookupDomainNameRequest,
 ) -> Result<LookupDomainInput, ConversionError> {
-    let sort = domain_sort_from_inner(&inner.sort)?;
-    let order = order_direction_from_inner(inner.order());
+    let pagination = pagination_from_proto_by_fields(
+        &inner.sort,
+        inner.order(),
+        inner.page_size,
+        inner.page_token,
+    )?;
     let name = inner.name.map(name_from_inner).transpose()?;
-    let maybe_filter_protocols = maybe_protocol_filter_from_inner(inner.protocols);
-
+    let maybe_filter_protocols = maybe_protocol_filter_from_inner(inner.protocols.clone());
     Ok(LookupDomainInput {
-        network_id: inner.chain_id,
+        network_id: Some(inner.chain_id),
         name,
         only_active: inner.only_active,
-        pagination: DomainPaginationInput {
-            sort,
-            order,
-            page_size: page_size_from_inner(inner.page_size),
-            page_token: inner.page_token,
-        },
-        maybe_filter_protocols,
+        pagination,
+        protocols: maybe_filter_protocols,
     })
 }
 
 pub fn lookup_address_from_inner(
     inner: proto::LookupAddressRequest,
 ) -> Result<LookupAddressInput, ConversionError> {
-    let sort = domain_sort_from_inner(&inner.sort)?;
-    let order = order_direction_from_inner(inner.order());
+    let pagination = pagination_from_proto_by_fields(
+        &inner.sort,
+        inner.order(),
+        inner.page_size,
+        inner.page_token,
+    )?;
     let address = address_from_str_inner(&inner.address)?;
     let maybe_filter_protocols = maybe_protocol_filter_from_inner(inner.protocols);
     Ok(LookupAddressInput {
-        network_id: inner.chain_id,
+        network_id: Some(inner.chain_id),
         address,
         resolved_to: inner.resolved_to,
         owned_by: inner.owned_by,
         only_active: inner.only_active,
-        pagination: DomainPaginationInput {
-            sort,
-            order,
-            page_size: page_size_from_inner(inner.page_size),
-            page_token: inner.page_token,
-        },
-        maybe_filter_protocols,
+        pagination,
+        protocols: maybe_filter_protocols,
     })
 }
 
@@ -76,9 +74,9 @@ pub fn get_address_from_inner(
 ) -> Result<GetAddressInput, ConversionError> {
     let address = address_from_str_inner(&inner.address)?;
     Ok(GetAddressInput {
-        network_id: inner.chain_id,
+        network_id: Some(inner.chain_id),
         address,
-        protocol_id: inner.protocol_id,
+        protocols: inner.protocol_id.map(|p| nonempty![p]),
     })
 }
 
@@ -100,14 +98,15 @@ pub fn batch_resolve_from_inner(
         .map(|addr| address_from_str_inner(addr))
         .collect::<Result<_, _>>()?;
     Ok(BatchResolveAddressNamesInput {
-        network_id: inner.chain_id,
+        network_id: Some(inner.chain_id),
         addresses,
+        protocols: None,
     })
 }
 
 pub fn batch_resolve_from_logic(
     output: BTreeMap<Address, String>,
-    chain_id: i64,
+    chain_id: Option<i64>,
 ) -> Result<proto::BatchResolveAddressNamesResponse, ConversionError> {
     let names = output
         .into_iter()
@@ -121,7 +120,7 @@ pub fn batch_resolve_from_logic(
 
 pub fn detailed_domain_from_logic(
     output: GetDomainOutput,
-    chain_id: i64,
+    chain_id: Option<i64>,
 ) -> Result<proto::DetailedDomain, ConversionError> {
     let domain = output.domain;
     let protocol = output.protocol;
@@ -170,7 +169,7 @@ pub fn detailed_domain_from_logic(
 
 pub fn domain_from_logic(
     output: LookupOutput,
-    chain_id: i64,
+    chain_id: Option<i64>,
 ) -> Result<proto::Domain, ConversionError> {
     let domain = output.domain;
     let owner =
@@ -226,7 +225,7 @@ fn date_from_logic(d: chrono::DateTime<chrono::Utc>) -> String {
     d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
-fn domain_token_from_logic(t: DomainToken, chain_id: i64) -> proto::Token {
+fn domain_token_from_logic(t: DomainToken, chain_id: Option<i64>) -> proto::Token {
     proto::Token {
         id: t.id,
         contract_hash: checksummed(&t.contract, chain_id),
@@ -239,4 +238,30 @@ fn domain_token_type_from_logic(t: DomainTokenType) -> proto::TokenType {
         DomainTokenType::Native => proto::TokenType::NativeDomainToken,
         DomainTokenType::Wrapped => proto::TokenType::WrappedDomainToken,
     }
+}
+
+pub fn pagination_from_proto_by_fields(
+    sort: &str,
+    order: proto::Order,
+    page_size: Option<u32>,
+    page_token: Option<String>,
+) -> Result<DomainPaginationInput, ConversionError> {
+    Ok(DomainPaginationInput {
+        sort: domain_sort_from_inner(sort)?,
+        order: order_direction_from_inner(order),
+        page_size: page_size_from_inner(page_size),
+        page_token,
+    })
+}
+
+#[allow(clippy::result_large_err)]
+pub fn from_resolved_domains_result(
+    result: impl IntoIterator<Item = LookupOutput>,
+    chain_id: Option<i64>,
+) -> Result<Vec<proto::Domain>, tonic::Status> {
+    result
+        .into_iter()
+        .map(|output| domain_from_logic(output, chain_id))
+        .collect::<Result<_, _>>()
+        .map_err(map_convertion_error)
 }

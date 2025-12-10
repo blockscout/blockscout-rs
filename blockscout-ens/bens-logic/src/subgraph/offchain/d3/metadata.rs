@@ -47,7 +47,7 @@ pub async fn get_metadata(
     d3: &D3ConnectProtocol,
 ) -> Result<D3NameMetadata, anyhow::Error> {
     let call = IERC721Metadata::tokenURICall {
-        tokenId: name.inner.id_bytes.into(),
+        tokenId: (*name.inner.id_bytes()).into(),
     };
     let uri = reader
         .call_ccip_solidity_method(d3.native_token_contract, call)

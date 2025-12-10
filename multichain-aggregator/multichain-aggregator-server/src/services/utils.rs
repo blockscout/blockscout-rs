@@ -3,7 +3,6 @@ use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::Paginati
 use std::{fmt::Display, str::FromStr};
 use tonic::Status;
 
-#[allow(clippy::result_large_err)]
 #[inline]
 pub fn parse_query<T: FromStr>(input: String) -> Result<T, Status>
 where
@@ -12,7 +11,6 @@ where
     T::from_str(&input).map_err(|e| Status::invalid_argument(format!("invalid value {input}: {e}")))
 }
 
-#[allow(clippy::result_large_err)]
 #[inline]
 pub fn parse_map_result<'a, E, T, F>(input: &'a str, f: F) -> Result<Vec<T>, Status>
 where
@@ -27,7 +25,6 @@ where
 }
 
 pub trait PageTokenExtractor<T: PageTokenFormat> {
-    #[allow(clippy::result_large_err)]
     fn extract_page_token(self) -> Result<Option<T>, Status>;
 }
 
@@ -51,7 +48,6 @@ pub fn page_token_to_proto<T: PageTokenFormat>(
     })
 }
 
-#[allow(clippy::result_large_err)]
 pub fn parse_chain_ids(chain_ids: Vec<String>) -> Result<Vec<ChainId>, Status> {
     chain_ids
         .into_iter()

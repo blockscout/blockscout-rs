@@ -1,26 +1,24 @@
-use crate::chart_prelude::*;
+use crate::{chart_prelude::*, utils::sql_with_multichain_filter_opt};
 
 pub struct TotalMultichainTxnsStatement;
 impl_db_choice!(TotalMultichainTxnsStatement, UsePrimaryDB);
 
 impl StatementFromUpdateTime for TotalMultichainTxnsStatement {
-    fn get_statement(
-        update_time: DateTime<Utc>,
-        _completed_migrations: &IndexerMigrations,
-    ) -> sea_orm::Statement {
-        Statement::from_sql_and_values(
+    fn get_statement_with_context(cx: &UpdateContext<'_>) -> sea_orm::Statement {
+        sql_with_multichain_filter_opt!(
             DbBackend::Postgres,
             r#"
             SELECT COALESCE(SUM(total_transactions_number), 0)::bigint AS value
             FROM (
                 SELECT DISTINCT ON (chain_id) chain_id, total_transactions_number
                 FROM counters_global_imported
-                WHERE date <= $1
+                WHERE date <= $1{multichain_filter}
                 ORDER BY chain_id, date DESC
             ) t
-            "#
-            .to_string(),
-            vec![update_time.into()],
+            "#,
+            [cx.time.into()],
+            "chain_id",
+            cx.multichain_filter,
         )
     }
 }
@@ -65,6 +63,7 @@ mod tests {
             "update_total_multichain_txns",
             "210",
             None,
+            None,
         )
         .await;
 
@@ -72,6 +71,15 @@ mod tests {
             "update_total_multichain_txns",
             "101",
             Some(dt("2023-02-02T00:00:00")),
+            None,
+        )
+        .await;
+
+        simple_test_counter_multichain::<TotalMultichainTxns>(
+            "update_total_multichain_txns",
+            "155",
+            None,
+            Some(vec![1, 3]),
         )
         .await;
     }

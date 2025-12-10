@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
+    "env-docs-generation",
     "stats",
     "stats-proto",
     "stats-server",
-    "stats/migration",
     "stats/entity",
-    "env-docs-generation",
+    "stats/migration",
 ]
 
 [workspace.dependencies]

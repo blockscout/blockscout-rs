@@ -241,6 +241,9 @@ definitions:
         type: array
         items:
           type: string
+      update_all:
+        type: boolean
+        title: Will ignore `chart_names` and update all charts
       from:
         type: string
         title: Default is today

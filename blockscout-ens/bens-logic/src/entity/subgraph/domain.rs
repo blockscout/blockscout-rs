@@ -80,6 +80,7 @@ pub struct DomainWithAddress {
     pub id: String,
     pub domain_name: String,
     pub resolved_address: String,
+    pub protocol_slug: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
@@ -95,6 +96,7 @@ pub struct AddrReverseDomainWithActualName {
     pub reversed_domain_id: String,
     pub resolved_address: String,
     pub name: String,
+    pub protocol_slug: String,
 }
 
 impl From<DetailedDomain> for Domain {

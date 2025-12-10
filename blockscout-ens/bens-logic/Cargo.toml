@@ -46,9 +46,11 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tracing = { workspace = true }
 url = { workspace = true }
 wiremock = { workspace = true, optional = true }
+ens-normalize-rs = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+rstest = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [[example]]

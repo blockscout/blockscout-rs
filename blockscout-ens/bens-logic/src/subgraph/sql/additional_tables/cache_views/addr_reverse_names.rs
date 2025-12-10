@@ -81,6 +81,7 @@ impl AddrReverseNamesView {
                 .expr(Expr::cust("reversed_domain_id"))
                 .expr(Expr::cust("resolved_address"))
                 .expr(Expr::cust("name"))
+                .expr(Expr::cust(format!("'{}' as protocol_slug", p.info.slug)))
                 .from((Alias::new(&p.subgraph_schema), Alias::new(view_table_name)))
                 .and_where(Expr::cust("reversed_domain_id = ANY($1)"))
                 .and_where(Expr::cust("resolved_address IS NOT NULL"))

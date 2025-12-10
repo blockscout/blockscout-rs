@@ -19,48 +19,42 @@ fn compile(
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
         .field_attribute(
-            ".blockscout.bens.v1.GetDomainRequest.only_active",
-            "#[serde(default)]"
-        )
-        .field_attribute(
-            ".blockscout.bens.v1.ListDomainEventsRequest.sort",
-            "#[serde(default)]"
-        )
-        .field_attribute(
-            ".blockscout.bens.v1.ListDomainEventsRequest.order",
-            "#[serde(default)]"
-        )
-        .field_attribute(
-            ".blockscout.bens.v1.LookupDomainNameRequest.sort",
-            "#[serde(default)]"
-        )
-        .field_attribute(
-            ".blockscout.bens.v1.LookupDomainNameRequest.order",
-            "#[serde(default)]"
-        )
-        .field_attribute(
-            ".blockscout.bens.v1.LookupDomainNameRequest.only_active",
-            "#[serde(default)]"
-        )
-        .field_attribute(
-            ".blockscout.bens.v1.LookupAddressRequest.sort",
-            "#[serde(default)]"
-        )
-        .field_attribute(
-            ".blockscout.bens.v1.LookupAddressRequest.order",
-            "#[serde(default)]"
-        )
-        .field_attribute(
-            ".blockscout.bens.v1.LookupAddressRequest.only_active",
-            "#[serde(default)]"
-        )
-        .field_attribute(
             ".blockscout.bens.v1.Address.ens_domain_name",
             "#[serde(skip_serializing_if = \"Option::is_none\")]"
         )
-        ;
+        .extern_path(".google.protobuf", "::prost_wkt_types");
+
+    default_fields(
+        &mut config,
+        &[
+            "GetDomainRequest.only_active",
+            "ListDomainEventsRequest.sort",
+            "ListDomainEventsRequest.order",
+            "LookupDomainNameRequest.only_active",
+            "LookupDomainNameRequest.sort",
+            "LookupDomainNameRequest.order",
+            "LookupAddressRequest.only_active",
+            "LookupAddressRequest.sort",
+            "LookupAddressRequest.order",
+            "GetDomainNameMultichainRequest.only_active",
+            "LookupDomainNameMultichainRequest.only_active",
+            "LookupDomainNameMultichainRequest.sort",
+            "LookupDomainNameMultichainRequest.order",
+            "LookupAddressMultichainRequest.only_active",
+            "LookupAddressMultichainRequest.sort",
+            "LookupAddressMultichainRequest.order",
+            "ListDomainEventsMultichainRequest.sort",
+            "ListDomainEventsMultichainRequest.order",
+        ],
+    );
     config.compile_protos(protos, includes)?;
     Ok(())
+}
+
+fn default_fields(config: &mut Config, fields: &[&str]) {
+    for field in fields {
+        config.field_attribute(field, "#[serde(default)]");
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,7 +68,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
     ]));
     compile(
-        &["proto/bens.proto", "proto/health.proto"],
+        &[
+            "proto/domains_extractor.proto",
+            "proto/multichain_domains.proto",
+            "proto/types.proto",
+            "proto/health.proto",
+        ],
         &["proto", "../../proto"],
         gens,
     )?;

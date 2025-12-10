@@ -76,6 +76,7 @@ fn compile(
             ("ListClusterTokensRequest", "chain_id"),
             ("ListAddressTokensRequest", "chain_id"),
             ("SearchByQueryRequest", "chain_id"),
+            ("StreamAddressUpdatesRequest", "chain_id"),
         ],
     );
 
@@ -95,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     std::fs::create_dir_all("./swagger/v1").unwrap();
     let gens = Box::new(GeneratorList::new(vec![
-        tonic_build::configure().service_generator(),
+        tonic_prost_build::configure().service_generator(),
         Box::new(ActixGenerator::new("proto/v1/api_config_http.yaml").unwrap()),
     ]));
     compile(

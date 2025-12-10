@@ -26,7 +26,6 @@ impl ClusterExplorer {
         }
     }
 
-    #[allow(clippy::result_large_err)]
     pub fn try_get_cluster(&self, name: &str) -> Result<&Cluster, Status> {
         self.clusters
             .get(name)
@@ -369,7 +368,6 @@ impl ClusterExplorerService for ClusterExplorer {
     }
 }
 
-#[allow(clippy::result_large_err)]
 fn parse_token_types(types: Option<String>) -> Result<Vec<TokenType>, Status> {
     let types = if let Some(types) = types {
         parse_map_result(&types, |v| {

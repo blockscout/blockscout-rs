@@ -123,7 +123,7 @@ fn mock_cross_chain_tx(index: usize, ts: NaiveDateTime) -> cross_chain_tx::Activ
 }
 
 fn mock_cctx_status(index: usize, ts: NaiveDateTime) -> cctx_status::ActiveModel {
-    let status = if index % 2 == 0 {
+    let status = if index.is_multiple_of(2) {
         CctxStatusStatus::OutboundMined
     } else {
         CctxStatusStatus::PendingRevert
