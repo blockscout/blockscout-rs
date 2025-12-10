@@ -15,9 +15,9 @@ refresh_versions_schedule = "0 0 * * * * *"
 
 [solidity.fetcher.list]
 # It depends on the OS you are running the service on
-list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
-# list_url = "https://solc-bin.ethereum.org/macosx-amd64/list.json"
-# list_url = "https://solc-bin.ethereum.org/windows-amd64/list.json"
+list_url = "https://binaries.soliditylang.org/linux-amd64/list.json"
+# list_url = "https://binaries.soliditylang.org/macosx-amd64/list.json"
+# list_url = "https://binaries.soliditylang.org/windows-amd64/list.json"
 
 #[solidity.fetcher.s3]
 #access_key = "access_key"

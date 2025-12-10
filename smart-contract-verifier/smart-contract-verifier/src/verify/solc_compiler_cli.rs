@@ -407,12 +407,12 @@ mod tests {
         {
             "builds": [
                 {
-                    "path": "https://solc-bin.ethereum.org/macosx-amd64/solc-macosx-amd64-v0.4.8+commit.60cc1668",
+                    "path": "https://binaries.soliditylang.org/macosx-amd64/solc-macosx-amd64-v0.4.8+commit.60cc1668",
                     "longVersion": "v0.4.8+commit.60cc1668",
                     "sha256": "ebb64b8b8dd465bd53a52fa7063569115df176c7561ac4feb47004513e1df74b"
                 },
                 {
-                    "path": "https://solc-bin.ethereum.org/macosx-amd64/solc-macosx-amd64-v0.4.10+commit.f0d539ae",
+                    "path": "https://binaries.soliditylang.org/macosx-amd64/solc-macosx-amd64-v0.4.10+commit.f0d539ae",
                     "longVersion": "v0.4.10+commit.f0d539ae",
                     "sha256": "0x40f179e4d27201ab726669dd26d594cfe10bf4dd6117495ee49d26f0dda9ef42"
                 }
