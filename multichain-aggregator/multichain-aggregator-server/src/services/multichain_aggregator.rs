@@ -260,10 +260,10 @@ impl MultichainAggregatorService for MultichainAggregator {
         paginated_multichain_endpoint!(self, request, search_domains_cached, ListDomainsResponse)
     }
 
-    async fn stream_address_updates(
+    async fn list_address_updates(
         &self,
-        request: Request<StreamAddressUpdatesRequest>,
-    ) -> Result<Response<StreamAddressUpdatesResponse>, Status> {
+        request: Request<ListAddressUpdatesRequest>,
+    ) -> Result<Response<ListAddressUpdatesResponse>, Status> {
         let inner = request.into_inner();
         let cluster = self.get_multichain_cluster()?;
 
@@ -272,9 +272,9 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_token = inner.page_token.extract_page_token()?;
 
         let (updates, next_page_token) = cluster
-            .stream_address_updates(chain_ids, inner.is_contract, page_size as u64, page_token)
+            .list_address_updates(chain_ids, inner.is_contract, page_size as u64, page_token)
             .await?;
-        Ok(Response::new(StreamAddressUpdatesResponse {
+        Ok(Response::new(ListAddressUpdatesResponse {
             items: updates.into_iter().map(|u| u.into()).collect(),
             next_page_params: page_token_to_proto(next_page_token, page_size),
         }))

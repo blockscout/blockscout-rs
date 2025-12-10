@@ -46,14 +46,14 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
-  /api/v1/addresses:stream:
+  /api/v1/addresses/updates:
     get:
-      operationId: MultichainAggregatorService_StreamAddressUpdates
+      operationId: MultichainAggregatorService_ListAddressUpdates
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1StreamAddressUpdatesResponse'
+            $ref: '#/definitions/v1ListAddressUpdatesResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -1266,16 +1266,7 @@ definitions:
         type: object
         additionalProperties:
           type: string
-  ListTokenHoldersResponseTokenHolder:
-    type: object
-    properties:
-      address:
-        $ref: '#/definitions/v1AddressHash'
-      token_id:
-        type: string
-      value:
-        type: string
-  StreamAddressUpdatesResponseStreamAddressUpdate:
+  ListAddressUpdatesResponseAddressUpdate:
     type: object
     properties:
       hash:
@@ -1286,6 +1277,15 @@ definitions:
         type: string
         format: int64
       contract_name:
+        type: string
+  ListTokenHoldersResponseTokenHolder:
+    type: object
+    properties:
+      address:
+        $ref: '#/definitions/v1AddressHash'
+      token_id:
+        type: string
+      value:
         type: string
   TokenImportCounters:
     type: object
@@ -1681,6 +1681,16 @@ definitions:
           $ref: '#/definitions/ListAddressTokensResponseAggregatedTokenBalanceInfo'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
+  v1ListAddressUpdatesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ListAddressUpdatesResponseAddressUpdate'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListAddressesResponse:
     type: object
     properties:
@@ -1991,16 +2001,6 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Hash'
-      next_page_params:
-        $ref: '#/definitions/v1Pagination'
-  v1StreamAddressUpdatesResponse:
-    type: object
-    properties:
-      items:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/StreamAddressUpdatesResponseStreamAddressUpdate'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1Token:

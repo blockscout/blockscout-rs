@@ -6,7 +6,7 @@ use crate::{
     error::{ParseError, ServiceError},
     repository::{
         address_token_balances::{self, ListAddressTokensPageToken, ListTokenHoldersPageToken},
-        addresses::{self, StreamAddressUpdatesPageToken},
+        addresses::{self, ListAddressUpdatesPageToken},
         block_ranges, chains, hashes, interop_message_transfers, interop_messages,
         tokens::{self, ListClusterTokensPageToken},
     },
@@ -21,7 +21,7 @@ use crate::{
     types::{
         ChainId,
         address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
-        addresses::{AggregatedAddressInfo, ChainAddressInfo, StreamAddressUpdate},
+        addresses::{AddressUpdate, AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
@@ -870,22 +870,16 @@ impl Cluster {
         Ok(result)
     }
 
-    pub async fn stream_address_updates(
+    pub async fn list_address_updates(
         &self,
         chain_ids: Vec<ChainId>,
         is_contract: Option<bool>,
         page_size: u64,
-        page_token: Option<StreamAddressUpdatesPageToken>,
-    ) -> Result<
-        (
-            Vec<StreamAddressUpdate>,
-            Option<StreamAddressUpdatesPageToken>,
-        ),
-        ServiceError,
-    > {
+        page_token: Option<ListAddressUpdatesPageToken>,
+    ) -> Result<(Vec<AddressUpdate>, Option<ListAddressUpdatesPageToken>), ServiceError> {
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
 
-        let (updates, next_page_token) = addresses::stream_address_updates(
+        let (updates, next_page_token) = addresses::list_address_updates(
             &self.db,
             chain_ids,
             is_contract,

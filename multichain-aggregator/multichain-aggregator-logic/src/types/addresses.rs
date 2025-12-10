@@ -228,15 +228,15 @@ impl From<ChainInfo> for proto::get_address_response::ChainInfo {
 
 #[derive(DerivePartialModel, Debug, Clone)]
 #[sea_orm(entity = "Entity", from_query_result)]
-pub struct StreamAddressUpdate {
+pub struct AddressUpdate {
     pub hash: SeaOrmAddress,
     pub chain_id: ChainId,
     pub updated_at: DateTime,
     pub contract_name: Option<String>,
 }
 
-impl From<StreamAddressUpdate> for proto::stream_address_updates_response::StreamAddressUpdate {
-    fn from(v: StreamAddressUpdate) -> Self {
+impl From<AddressUpdate> for proto::list_address_updates_response::AddressUpdate {
+    fn from(v: AddressUpdate) -> Self {
         Self {
             hash: v.hash.to_string(),
             chain_id: v.chain_id.to_string(),

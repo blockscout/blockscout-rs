@@ -2,7 +2,7 @@ use crate::{
     repository::{paginate_query, pagination::KeySpec, prepare_ts_query},
     types::{
         ChainId,
-        addresses::{Address, AggregatedAddressInfo, ChainAddressInfo, StreamAddressUpdate},
+        addresses::{Address, AddressUpdate, AggregatedAddressInfo, ChainAddressInfo},
     },
 };
 use alloy_primitives::Address as AddressAlloy;
@@ -175,25 +175,19 @@ where
     .await
 }
 
-pub type StreamAddressUpdatesPageToken = (NaiveDateTime, AddressAlloy, ChainId);
+pub type ListAddressUpdatesPageToken = (NaiveDateTime, AddressAlloy, ChainId);
 
-pub async fn stream_address_updates<C>(
+pub async fn list_address_updates<C>(
     db: &C,
     chain_ids: Vec<ChainId>,
     is_contract: Option<bool>,
     page_size: u64,
-    page_token: Option<StreamAddressUpdatesPageToken>,
-) -> Result<
-    (
-        Vec<StreamAddressUpdate>,
-        Option<StreamAddressUpdatesPageToken>,
-    ),
-    DbErr,
->
+    page_token: Option<ListAddressUpdatesPageToken>,
+) -> Result<(Vec<AddressUpdate>, Option<ListAddressUpdatesPageToken>), DbErr>
 where
     C: ConnectionTrait,
 {
-    let query = StreamAddressUpdate::select_cols(Entity::find().select_only())
+    let query = AddressUpdate::select_cols(Entity::find().select_only())
         .apply_if(
             (!chain_ids.is_empty()).then_some(chain_ids),
             |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
@@ -218,7 +212,7 @@ where
         page_size,
         page_token,
         order_keys,
-        |a: &StreamAddressUpdate| (a.updated_at, *a.hash, a.chain_id),
+        |a: &AddressUpdate| (a.updated_at, *a.hash, a.chain_id),
     )
     .await
 }

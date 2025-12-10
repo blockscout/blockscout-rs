@@ -23,7 +23,7 @@ service MultichainAggregatorService {
   rpc ListBlockNumbers(ListBlockNumbersRequest)
       returns (ListBlockNumbersResponse) {}
   rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse) {}
-  rpc StreamAddressUpdates(StreamAddressUpdatesRequest) returns (StreamAddressUpdatesResponse) {}
+  rpc ListAddressUpdates(ListAddressUpdatesRequest) returns (ListAddressUpdatesResponse) {}
 }
 
 enum TokenType {
@@ -344,21 +344,21 @@ message ListBlocksResponse {
   Pagination next_page_params = 2;
 }
 
-message StreamAddressUpdatesRequest {
+message ListAddressUpdatesRequest {
   repeated string chain_id = 1;
   optional bool is_contract = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }
 
-message StreamAddressUpdatesResponse {
-  message StreamAddressUpdate {
+message ListAddressUpdatesResponse {
+  message AddressUpdate {
     string hash = 1;
     string chain_id = 2;
     int64 updated_at = 3;
     optional string contract_name = 4;
   }
 
-  repeated StreamAddressUpdate items = 1;
+  repeated AddressUpdate items = 1;
   Pagination next_page_params = 2;
 }
