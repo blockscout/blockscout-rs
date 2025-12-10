@@ -14,9 +14,8 @@ use crate::{
         self, MIN_QUERY_LENGTH,
         coin_price::{CoinPriceCache, try_fetch_coin_price},
         dapp_search,
-        filecoin::try_filecoin_address_to_evm_address,
         macros::{maybe_cache_lookup, preload_domain_info},
-        quick_search::{self, SearchContext},
+        quick_search::{self, SearchContext, SearchTerm},
     },
     types::{
         ChainId,
@@ -28,7 +27,7 @@ use crate::{
         domains::{Domain, DomainInfo, ProtocolInfo},
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
-        search_results::QuickSearchResult,
+        search_results::{QuickSearchResult, Redirect},
         tokens::{AggregatedToken, TokenType},
     },
 };
@@ -116,6 +115,15 @@ impl Cluster {
             return Err(ServiceError::InvalidClusterChainId(chain_id));
         }
         Ok(())
+    }
+
+    pub fn search_context(&self, is_aggregated: bool) -> SearchContext<'_> {
+        SearchContext {
+            cluster: self,
+            db: Arc::new(self.db.clone()),
+            domain_primary_chain_id: self.domain_primary_chain_id,
+            is_aggregated,
+        }
     }
 
     /// If `chain_ids` is empty, then cluster will include all active chains.
@@ -578,10 +586,7 @@ impl Cluster {
             // 3. Otherwise, fallback to a contract name search
             // TODO: support joint paginated search for domain names without TLD and contract names;
             // we need to first handle all pages for domains and then switch to contract names
-            if let Some(address) = alloy_primitives::Address::from_str(&query)
-                .ok()
-                .or_else(|| try_filecoin_address_to_evm_address(&query))
-            {
+            if let Some(address) = SearchTerm::try_parse_address(&query) {
                 (vec![address], None)
             } else if domain_name_with_tld_regex().is_match(&query) {
                 let domains = self
@@ -854,12 +859,7 @@ impl Cluster {
         is_aggregated: bool,
         unlimited_per_chain: bool,
     ) -> Result<QuickSearchResult, ServiceError> {
-        let context = SearchContext {
-            cluster: self,
-            db: Arc::new(self.db.clone()),
-            domain_primary_chain_id: self.domain_primary_chain_id,
-            is_aggregated,
-        };
+        let context = self.search_context(is_aggregated);
         let result = quick_search::quick_search(
             query,
             &self.quick_search_chains,
@@ -867,6 +867,12 @@ impl Cluster {
             unlimited_per_chain,
         )
         .await?;
+        Ok(result)
+    }
+
+    pub async fn check_redirect(&self, query: &str) -> Result<Option<Redirect>, ServiceError> {
+        let context = self.search_context(false);
+        let result = quick_search::check_redirect(query, &context).await?;
         Ok(result)
     }
 

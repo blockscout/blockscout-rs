@@ -698,6 +698,29 @@ paths:
           type: string
       tags:
         - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/search:check-redirect:
+    get:
+      operationId: ClusterExplorerService_CheckRedirect
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CheckRedirectResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search:quick:
     get:
       operationId: ClusterExplorerService_QuickSearch
@@ -1492,6 +1515,17 @@ definitions:
       block_number:
         type: string
         format: uint64
+  v1CheckRedirectResponse:
+    type: object
+    properties:
+      redirect:
+        type: boolean
+      type:
+        type: string
+      parameter:
+        type: string
+      chain_id:
+        type: string
   v1ClusterQuickSearchResponse:
     type: object
     properties:

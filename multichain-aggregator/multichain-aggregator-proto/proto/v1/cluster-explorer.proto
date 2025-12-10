@@ -31,6 +31,7 @@ service ClusterExplorerService {
   rpc SearchDomains(SearchByQueryRequest) returns (SearchDomainsResponse) {}
   rpc SearchDapps(SearchByQueryRequest) returns (SearchDappsResponse) {}
   rpc QuickSearch(ClusterQuickSearchRequest) returns (ClusterQuickSearchResponse) {}
+  rpc CheckRedirect(CheckRedirectRequest) returns (CheckRedirectResponse) {}
 }
 
 message AddressHash {
@@ -321,4 +322,16 @@ message ClusterQuickSearchResponse {
   repeated AggregatedTokenInfo tokens = 6;
   repeated AggregatedTokenInfo nfts = 7;
   repeated blockscout.multichainAggregator.v1.Domain domains = 8;
+}
+
+message CheckRedirectRequest {
+  string cluster_id = 1;
+  string q = 2;
+}
+
+message CheckRedirectResponse {
+  bool redirect = 1;
+  optional string type = 2;
+  optional string parameter = 3;
+  optional string chain_id = 4;
 }
