@@ -91,14 +91,14 @@ impl Key {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Cursor {
     /// chain_id -> (min_block, max_block) seen for this message
-    chain_blocks: HashMap<i64, (i64, i64)>,
+    inner: HashMap<i64, (i64, i64)>,
 }
 
 impl Cursor {
     /// Record that data from a specific block was added to this message.
     /// Updates both min and max to properly track bidirectional cursor movement.
     pub fn record_block(&mut self, chain_id: i64, block_number: i64) {
-        self.chain_blocks
+        self.inner
             .entry(chain_id)
             .and_modify(|(min, max)| {
                 *min = (*min).min(block_number);
@@ -109,12 +109,12 @@ impl Cursor {
 
     /// Get the minimum block recorded for a chain (for catchup cursor)
     pub fn min_block(&self, chain_id: i64) -> Option<i64> {
-        self.chain_blocks.get(&chain_id).map(|(min, _)| *min)
+        self.inner.get(&chain_id).map(|(min, _)| *min)
     }
 
     /// Get the maximum block recorded for a chain (for realtime cursor)
     pub fn max_block(&self, chain_id: i64) -> Option<i64> {
-        self.chain_blocks.get(&chain_id).map(|(_, max)| *max)
+        self.inner.get(&chain_id).map(|(_, max)| *max)
     }
 }
 
@@ -474,7 +474,7 @@ fn with_cursors(
 ) -> HashMap<(i32, i64), (i64, i64)> {
     message
         .cursor
-        .chain_blocks
+        .inner
         .iter()
         .fold(cursors, |mut acc, (&chain_id, &(min, max))| {
             acc.entry((message.key.bridge_id, chain_id))
@@ -601,7 +601,7 @@ impl Default for Config {
 /// Tiered message buffer with hot (memory) and cold (Postgres) storage
 pub struct MessageBuffer {
     /// Hot tier: in-memory entries
-    hot: DashMap<Key, Message>,
+    inner: DashMap<Key, Message>,
     /// Configuration
     config: Config,
     /// Database connection for cold tier operations
@@ -614,7 +614,7 @@ impl MessageBuffer {
     /// Create a new tiered message buffer
     pub fn new(db: InterchainDatabase, config: Config) -> Arc<Self> {
         Arc::new(Self {
-            hot: DashMap::new(),
+            inner: DashMap::new(),
             config,
             db,
             maintenance_lock: RwLock::new(()),
@@ -625,7 +625,7 @@ impl MessageBuffer {
     ///
     #[allow(dead_code)]
     pub fn hot_len(&self) -> usize {
-        self.hot.len()
+        self.inner.len()
     }
 
     /// Get existing entry or create new one.
@@ -636,7 +636,7 @@ impl MessageBuffer {
     /// 3. final storage (crosschain_messages)
     /// 4. create new
     pub async fn get_or_create(&self, key: Key) -> Result<Message> {
-        if let Some(entry) = self.hot.get(&key) {
+        if let Some(entry) = self.inner.get(&key) {
             return Ok(entry.clone());
         }
 
@@ -667,10 +667,10 @@ impl MessageBuffer {
     /// If hot tier exceeds capacity, runs maintenance to flush entries.
     pub async fn upsert(&self, msg: Message) -> Result<()> {
         let key = msg.key;
-        self.hot.insert(key, msg);
+        self.inner.insert(key, msg);
 
         // Run maintenance if hot tier is getting full
-        if self.hot.len() > self.config.max_hot_entries {
+        if self.inner.len() > self.config.max_hot_entries {
             self.run().await?;
         }
 
@@ -704,7 +704,7 @@ impl MessageBuffer {
         let mut hot_cursors = HashMap::<(_, _), (_, _)>::new();
         let mut cold_cursors = HashMap::<(_, _), (_, _)>::new();
 
-        for entry in self.hot.iter() {
+        for entry in self.inner.iter() {
             match (entry.to_active_models(), entry.created_at) {
                 (Ok(model), _) => {
                     ready_entries.push(model);
@@ -907,7 +907,7 @@ impl MessageBuffer {
 
         // Remove processed entries from hot tier
         keys_to_remove_from_hot.iter().for_each(|k| {
-            self.hot.remove(k);
+            self.inner.remove(k);
         });
 
         tracing::info!(
@@ -933,7 +933,7 @@ impl MessageBuffer {
         let count = pending.len();
         for p in pending {
             let msg: Message = serde_json::from_value(p.payload)?;
-            self.hot.insert(msg.key, msg);
+            self.inner.insert(msg.key, msg);
         }
 
         tracing::info!(
@@ -1038,10 +1038,7 @@ mod tests {
         assert_eq!(restored.source_transaction_hash, Some(tx_hash));
         assert!(restored.init_timestamp.is_some());
         assert_eq!(restored.status, Status::Completed);
-        assert_eq!(
-            restored.cursor.chain_blocks.get(&43114),
-            Some(&(1000, 1000))
-        );
+        assert_eq!(restored.cursor.inner.get(&43114), Some(&(1000, 1000)));
     }
 
     #[test]
@@ -1052,7 +1049,7 @@ mod tests {
         tracker.record_block(1, 200);
         tracker.record_block(1, 30);
 
-        assert_eq!(tracker.chain_blocks.get(&1), Some(&(30, 200)));
+        assert_eq!(tracker.inner.get(&1), Some(&(30, 200)));
         assert_eq!(tracker.min_block(1), Some(30));
         assert_eq!(tracker.max_block(1), Some(200));
     }
@@ -1077,13 +1074,17 @@ mod tests {
         msg.cursor.record_block(chain_id, 10);
 
         buffer.upsert(msg).await.unwrap();
-        assert_eq!(buffer.hot.len(), 1);
+        assert_eq!(buffer.inner.len(), 1);
 
         // Run maintenance
         buffer.run().await.unwrap();
 
         // Message should be flushed to final storage
-        assert_eq!(buffer.hot.len(), 0, "Hot tier should be empty after flush");
+        assert_eq!(
+            buffer.inner.len(),
+            0,
+            "Hot tier should be empty after flush"
+        );
 
         let (messages, _) = db
             .get_crosschain_messages(None, 100, false, None)
@@ -1115,14 +1116,14 @@ mod tests {
         msg.created_at = Some(Utc::now().naive_utc() - chrono::Duration::seconds(10));
 
         buffer.upsert(msg).await.unwrap();
-        assert_eq!(buffer.hot.len(), 1);
+        assert_eq!(buffer.inner.len(), 1);
 
         // Run maintenance
         buffer.run().await.unwrap();
 
         // Message should be offloaded to cold storage (pending_messages)
         assert_eq!(
-            buffer.hot.len(),
+            buffer.inner.len(),
             0,
             "Hot tier should be empty after offload"
         );
@@ -1165,14 +1166,14 @@ mod tests {
 
         buffer.upsert(msg1).await.unwrap();
         buffer.upsert(msg2).await.unwrap();
-        assert_eq!(buffer.hot.len(), 2);
+        assert_eq!(buffer.inner.len(), 2);
 
         // Run maintenance - should flush msg1 but keep msg2
         buffer.run().await.unwrap();
 
         // msg1 flushed, msg2 still in hot
-        assert_eq!(buffer.hot.len(), 1);
-        assert!(buffer.hot.get(&Key::new(2, bridge_id)).is_some());
+        assert_eq!(buffer.inner.len(), 1);
+        assert!(buffer.inner.get(&Key::new(2, bridge_id)).is_some());
 
         // Check checkpoint - should NOT have been updated due to bounding logic
         let checkpoint = db
@@ -1268,8 +1269,8 @@ mod tests {
         let _handle = buffer.clone().start().await.unwrap();
 
         // Should have the message in hot tier
-        assert_eq!(buffer.hot.len(), 1);
-        assert!(buffer.hot.get(&Key::new(42, bridge_id)).is_some());
+        assert_eq!(buffer.inner.len(), 1);
+        assert!(buffer.inner.get(&Key::new(42, bridge_id)).is_some());
     }
 
     /// E2E Test: Maintenance triggered when hot tier exceeds capacity
@@ -1297,7 +1298,7 @@ mod tests {
         // After inserting 3rd message, maintenance should have been triggered
         // All ready messages should be flushed
         assert_eq!(
-            buffer.hot.len(),
+            buffer.inner.len(),
             0,
             "Hot tier should be empty after capacity-triggered maintenance"
         );
@@ -1420,7 +1421,7 @@ mod tests {
 
         // Verify hot tier is empty
         assert!(
-            buffer.hot.is_empty(),
+            buffer.inner.is_empty(),
             "Hot tier should be empty after flush"
         );
 
