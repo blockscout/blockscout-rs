@@ -29,7 +29,7 @@ const SERVICE_NAME: &str = "bens";
 #[derive(Clone)]
 struct Router {
     domains_extractor: Arc<DomainsExtractorService>,
-    multichain_domains: Arc<MultichainDomainsService>,
+    //multichain_domains: Arc<MultichainDomainsService>,
     health: Arc<HealthService>,
     swagger_path: PathBuf,
 }
@@ -41,9 +41,9 @@ impl Router {
             .add_service(DomainsExtractorServer::from_arc(
                 self.domains_extractor.clone(),
             ))
-            .add_service(MultichainDomainsServer::from_arc(
-                self.multichain_domains.clone(),
-            ))
+        // .add_service(MultichainDomainsServer::from_arc(
+        //     self.multichain_domains.clone(),
+        // ))
     }
 }
 
@@ -52,8 +52,8 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config
             .configure(|config| route_domains_extractor(config, self.domains_extractor.clone()));
-        service_config
-            .configure(|config| route_multichain_domains(config, self.multichain_domains.clone()));
+        // service_config
+        //     .configure(|config| route_multichain_domains(config, self.multichain_domains.clone()));
         service_config.configure(|config| {
             route_swagger(
                 config,
@@ -104,6 +104,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .await
             .context("database connect")?,
     );
+    tracing::info!(
+        "start pool with max connections: {}",
+        pool.options().get_max_connections()
+    );
+    let mut conn = pool.acquire().await?;
+    tracing::info!("connection acquired");
+    conn.execute("SELECT 1;").await?;
+    tracing::info!("connection executed");
+    conn.close().await?;
+    tracing::info!("connection closed");
+
     if settings.database.run_migrations {
         tracing::info!("running migrations");
         bens_logic::migrations::run(&pool).await?;
@@ -167,7 +178,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .context("failed to initialize subgraph-reader")?;
     let subgraph_reader = Arc::new(subgraph_reader);
     let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader.clone()));
-    let multichain_domains = Arc::new(MultichainDomainsService::new(subgraph_reader.clone()));
+    //let multichain_domains = Arc::new(MultichainDomainsService::new(subgraph_reader.clone()));
 
     let scheduler = JobScheduler::new().await?;
 
@@ -187,7 +198,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let router = Router {
         domains_extractor,
-        multichain_domains,
+        //multichain_domains,
         health,
         swagger_path: settings.swagger_path,
     };
