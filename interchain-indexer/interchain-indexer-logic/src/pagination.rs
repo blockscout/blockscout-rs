@@ -15,7 +15,7 @@ pub trait ListMarker: Sized {
     fn token(&self) -> anyhow::Result<String>;
 
     fn to_proto(&self, use_pagination_token: bool) -> Pagination;
-    
+
     //fn from_proto(p: ) -> anyhow::Result<Self>;
 }
 

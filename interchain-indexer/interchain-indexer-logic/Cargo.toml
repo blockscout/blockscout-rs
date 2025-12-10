@@ -31,6 +31,11 @@ interchain-indexer-entity = { workspace = true }
 interchain-indexer-proto = { workspace = true }
 parking_lot = { workspace = true }
 rand = { workspace = true }
+#keccak-hash = { workspace = true }
+#lazy_static = { workspace = true }
+#mismatch = { workspace = true }
+#prometheus = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
@@ -39,12 +44,8 @@ sea-orm = { workspace = true, features = [
 ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_with = { workspace = true }
 thiserror = { workspace = true }
-#keccak-hash = { workspace = true }
-#lazy_static = { workspace = true }
-#mismatch = { workspace = true }
-#prometheus = { workspace = true }
-#reqwest = { workspace = true }
 #semver = { workspace = true }
 #serde = { workspace = true }
 #serde_json = { workspace = true }

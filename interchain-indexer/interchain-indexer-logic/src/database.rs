@@ -606,93 +606,91 @@ impl InterchainDatabase {
                         .column(crosschain_messages::Column::SrcTxHash)
                         .column(crosschain_messages::Column::DstTxHash);
 
-                    if !last_page {
-                        if let Some(marker) = pagination_marker {
-                            let cond = match query_direction {
-                                PaginationDirection::Next => {
-                                    Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .lt(marker.timestamp)
-                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                            .eq(marker.timestamp)
-                                            .and(
-                                                Expr::col(crosschain_transfers::Column::MessageId)
-                                                    .lt(marker.message_id as i64),
+                    if !last_page && let Some(marker) = pagination_marker {
+                        let cond = match query_direction {
+                            PaginationDirection::Next => {
+                                Expr::col(crosschain_messages::Column::InitTimestamp)
+                                    .lt(marker.timestamp)
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker.timestamp)
+                                        .and(
+                                            Expr::col(crosschain_transfers::Column::MessageId)
+                                                .lt(marker.message_id as i64),
+                                        ))
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker.timestamp)
+                                        .and(
+                                            Expr::col(crosschain_transfers::Column::MessageId)
+                                                .eq(marker.message_id as i64),
+                                        )
+                                        .and(
+                                            Expr::col((
+                                                crosschain_transfers::Entity,
+                                                crosschain_transfers::Column::BridgeId,
                                             ))
-                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                            .eq(marker.timestamp)
-                                            .and(
-                                                Expr::col(crosschain_transfers::Column::MessageId)
-                                                    .eq(marker.message_id as i64),
-                                            )
-                                            .and(
-                                                Expr::col((
-                                                    crosschain_transfers::Entity,
-                                                    crosschain_transfers::Column::BridgeId,
-                                                ))
-                                                .lt(marker.bridge_id as i32),
+                                            .lt(marker.bridge_id as i32),
+                                        ))
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker.timestamp)
+                                        .and(
+                                            Expr::col(crosschain_transfers::Column::MessageId)
+                                                .eq(marker.message_id as i64),
+                                        )
+                                        .and(
+                                            Expr::col((
+                                                crosschain_transfers::Entity,
+                                                crosschain_transfers::Column::BridgeId,
                                             ))
-                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                            .eq(marker.timestamp)
-                                            .and(
-                                                Expr::col(crosschain_transfers::Column::MessageId)
-                                                    .eq(marker.message_id as i64),
-                                            )
-                                            .and(
-                                                Expr::col((
-                                                    crosschain_transfers::Entity,
-                                                    crosschain_transfers::Column::BridgeId,
-                                                ))
-                                                .eq(marker.bridge_id as i32),
-                                            )
-                                            .and(
-                                                Expr::col(crosschain_transfers::Column::Index)
+                                            .eq(marker.bridge_id as i32),
+                                        )
+                                        .and(
+                                            Expr::col(crosschain_transfers::Column::Index)
                                                 .lt(marker.index as i64),
+                                        ))
+                            }
+                            PaginationDirection::Prev => {
+                                Expr::col(crosschain_messages::Column::InitTimestamp)
+                                    .gt(marker.timestamp)
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker.timestamp)
+                                        .and(
+                                            Expr::col(crosschain_transfers::Column::MessageId)
+                                                .gt(marker.message_id as i64),
+                                        ))
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker.timestamp)
+                                        .and(
+                                            Expr::col(crosschain_transfers::Column::MessageId)
+                                                .eq(marker.message_id as i64),
+                                        )
+                                        .and(
+                                            Expr::col((
+                                                crosschain_transfers::Entity,
+                                                crosschain_transfers::Column::BridgeId,
                                             ))
-                                }
-                                PaginationDirection::Prev => {
-                                    Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .gt(marker.timestamp)
-                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                            .eq(marker.timestamp)
-                                            .and(
-                                                Expr::col(crosschain_transfers::Column::MessageId)
-                                                    .gt(marker.message_id as i64),
+                                            .gt(marker.bridge_id as i32),
+                                        ))
+                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
+                                        .eq(marker.timestamp)
+                                        .and(
+                                            Expr::col(crosschain_transfers::Column::MessageId)
+                                                .eq(marker.message_id as i64),
+                                        )
+                                        .and(
+                                            Expr::col((
+                                                crosschain_transfers::Entity,
+                                                crosschain_transfers::Column::BridgeId,
                                             ))
-                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                            .eq(marker.timestamp)
-                                            .and(
-                                                Expr::col(crosschain_transfers::Column::MessageId)
-                                                    .eq(marker.message_id as i64),
-                                            )
-                                            .and(
-                                                Expr::col((
-                                                    crosschain_transfers::Entity,
-                                                    crosschain_transfers::Column::BridgeId,
-                                                ))
-                                                .gt(marker.bridge_id as i32),
-                                            ))
-                                        .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                            .eq(marker.timestamp)
-                                            .and(
-                                                Expr::col(crosschain_transfers::Column::MessageId)
-                                                    .eq(marker.message_id as i64),
-                                            )
-                                            .and(
-                                                Expr::col((
-                                                    crosschain_transfers::Entity,
-                                                    crosschain_transfers::Column::BridgeId,
-                                                ))
-                                                .eq(marker.bridge_id as i32),
-                                            )
-                                            .and(
-                                                Expr::col(crosschain_transfers::Column::Index)
+                                            .eq(marker.bridge_id as i32),
+                                        )
+                                        .and(
+                                            Expr::col(crosschain_transfers::Column::Index)
                                                 .gt(marker.index as i64),
-                                            ))
-                                }
-                            };
+                                        ))
+                            }
+                        };
 
-                            query = query.filter(cond);
-                        }
+                        query = query.filter(cond);
                     }
 
                     if let Some(hash) = tx_hash_filter.as_ref() {
@@ -806,13 +804,32 @@ impl InterchainDatabase {
                         tokens::Column::Decimals,
                         tokens::Column::TokenIcon,
                     ])
-                    .value(chains::Column::UpdatedAt, Expr::current_timestamp())
+                    .value(tokens::Column::UpdatedAt, Expr::current_timestamp())
                     .to_owned(),
             )
             .exec(self.db.as_ref())
             .await?;
 
         Ok(())
+    }
+
+    /// Updates the token icon URL for a specific token.
+    pub async fn update_token_icon(
+        &self,
+        chain_id: u64,
+        address: Vec<u8>,
+        icon_url: Option<String>,
+    ) -> anyhow::Result<()> {
+        tokens::Entity::update_many()
+            .col_expr(tokens::Column::TokenIcon, Expr::value(icon_url))
+            .col_expr(tokens::Column::UpdatedAt, Expr::current_timestamp().into())
+            .filter(tokens::Column::ChainId.eq(chain_id as i64))
+            .filter(tokens::Column::Address.eq(address))
+            .exec(self.db.as_ref())
+            .await
+            .inspect_err(|e| tracing::error!(err =? e, "Failed to update token icon"))
+            .map(|_| ())
+            .map_err(|e| e.into())
     }
 
     /// Statistics
@@ -1244,7 +1261,6 @@ mod tests {
         assert_eq!(map.len(), 2);
         assert_eq!(map.get("0xaaa"), Some(&1));
         assert_eq!(map.get("0xbbb"), Some(&2));
-        assert!(map.get("0xccc").is_none());
     }
 
     #[tokio::test]

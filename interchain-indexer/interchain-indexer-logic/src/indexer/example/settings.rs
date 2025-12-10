@@ -1,10 +1,13 @@
 use serde::Deserialize;
+use serde_with::serde_as;
 use std::time::Duration;
 
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExampleIndexerSettings {
     #[serde(default = "default_fetch_interval")]
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub fetch_interval: Duration,
 }
 

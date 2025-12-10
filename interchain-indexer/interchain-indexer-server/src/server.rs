@@ -110,7 +110,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
 
-    let token_info_service = Arc::new(TokenInfoService::new(db.clone(), chains_providers.clone()));
+    let token_info_service = Arc::new(TokenInfoService::new(
+        db.clone(),
+        chains_providers.clone(),
+        settings.token_info,
+    ));
 
     let indexer_handles =
         spawn_configured_indexers(interchain_db.clone(), &bridges, &chains, &chains_providers)?;

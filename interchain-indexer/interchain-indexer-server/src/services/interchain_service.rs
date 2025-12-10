@@ -11,8 +11,7 @@ use interchain_indexer_entity::{
 use interchain_indexer_logic::{
     InterchainDatabase, JoinedTransfer, TokenInfoService,
     pagination::{
-        ListMarker, MessagesPaginationLogic, PaginationDirection,
-        TransfersPaginationLogic,
+        ListMarker, MessagesPaginationLogic, PaginationDirection, TransfersPaginationLogic,
     },
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
@@ -354,15 +353,11 @@ impl InterchainService for InterchainServiceImpl {
         let response = GetMessagesResponse {
             items,
             next_page_params: output_pagination
-                                .next_marker
-                                .map(|p|
-                                    p.to_proto(self.api_settings.use_pagination_token)
-                                ),
+                .next_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
             prev_page_params: output_pagination
-                                .prev_marker
-                                .map(|p|
-                                    p.to_proto(self.api_settings.use_pagination_token)
-                                ),
+                .prev_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
         };
         Ok(Response::new(response))
     }
@@ -408,15 +403,11 @@ impl InterchainService for InterchainServiceImpl {
         let response = GetMessagesResponse {
             items,
             next_page_params: output_pagination
-                                .next_marker
-                                .map(|p|
-                                    p.to_proto(self.api_settings.use_pagination_token)
-                                ),
+                .next_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
             prev_page_params: output_pagination
-                                .prev_marker
-                                .map(|p|
-                                    p.to_proto(self.api_settings.use_pagination_token)
-                                ),
+                .prev_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
         };
         Ok(Response::new(response))
     }
@@ -439,15 +430,11 @@ impl InterchainService for InterchainServiceImpl {
         let response = GetTransfersResponse {
             items,
             next_page_params: output_pagination
-                                .next_marker
-                                .map(|p|
-                                    p.to_proto(self.api_settings.use_pagination_token)
-                                ),
+                .next_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
             prev_page_params: output_pagination
-                                .prev_marker
-                                .map(|p|
-                                    p.to_proto(self.api_settings.use_pagination_token)
-                                ),
+                .prev_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
         };
         Ok(Response::new(response))
     }
@@ -472,15 +459,11 @@ impl InterchainService for InterchainServiceImpl {
         let response = GetTransfersResponse {
             items,
             next_page_params: output_pagination
-                                .next_marker
-                                .map(|p|
-                                    p.to_proto(self.api_settings.use_pagination_token)
-                                ),
+                .next_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
             prev_page_params: output_pagination
-                                .prev_marker
-                                .map(|p|
-                                    p.to_proto(self.api_settings.use_pagination_token)
-                                ),
+                .prev_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
         };
         Ok(Response::new(response))
     }
