@@ -327,6 +327,11 @@ impl TryFrom<crosschain_transfers::Model> for TokenTransfer {
 pub struct Message {
     pub key: Key,
 
+    /// Version counter for optimistic concurrency control.
+    /// Incremented on every modification to detect concurrent updates during maintenance.
+    #[serde(default)]
+    pub version: u64,
+
     // Source side (presence of init_timestamp makes message "ready")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub src_chain_id: Option<i64>,
@@ -370,9 +375,16 @@ impl Message {
     pub fn new(key: Key) -> Self {
         Self {
             key,
+            version: 0,
             created_at: Some(Utc::now().naive_utc()),
             ..Default::default()
         }
+    }
+
+    /// Increment the version counter. Must be called on every modification
+    /// to enable optimistic concurrency control during maintenance.
+    pub fn touch(&mut self) {
+        self.version = self.version.wrapping_add(1);
     }
 
     /// Check if this entry is ready for promotion to final storage.
@@ -547,6 +559,7 @@ impl TryFrom<(crosschain_messages::Model, Vec<crosschain_transfers::Model>)> for
     ) -> Result<Self> {
         Ok(Self {
             key: Key::new(model.id, model.bridge_id),
+            version: 0, // Fresh from DB, starts at 0
             src_chain_id: Some(model.src_chain_id),
             source_transaction_hash: model
                 .src_tx_hash
@@ -664,9 +677,11 @@ impl MessageBuffer {
     }
 
     /// Upsert entry in hot tier.
+    /// Increments the version counter for optimistic concurrency control.
     /// If hot tier exceeds capacity, runs maintenance to flush entries.
-    pub async fn upsert(&self, msg: Message) -> Result<()> {
+    pub async fn upsert(&self, mut msg: Message) -> Result<()> {
         let key = msg.key;
+        msg.touch(); // Increment version for CAS during maintenance
         self.inner.insert(key, msg);
 
         // Run maintenance if hot tier is getting full
@@ -699,12 +714,14 @@ impl MessageBuffer {
         // Collect entries to process
         let mut ready_entries = Vec::new();
         let mut stale_entries = Vec::new();
-        let mut keys_to_remove_from_hot = Vec::new();
+        // Store (key, version) pairs for CAS removal after DB commit
+        let mut keys_to_remove_from_hot: Vec<(Key, u64)> = Vec::new();
         let mut keys_to_remove_from_pending = Vec::new();
         let mut hot_cursors = HashMap::<(_, _), (_, _)>::new();
         let mut cold_cursors = HashMap::<(_, _), (_, _)>::new();
 
         for entry in self.inner.iter() {
+            let entry_version = entry.version;
             match (entry.to_active_models(), entry.created_at) {
                 (Ok(model), _) => {
                     ready_entries.push(model);
@@ -715,7 +732,7 @@ impl MessageBuffer {
                         // ICTT incomplete: save to pending for recovery, remove from hot
                         stale_entries.push(entry.clone());
                     }
-                    keys_to_remove_from_hot.push(entry.key);
+                    keys_to_remove_from_hot.push((entry.key, entry_version));
                     cold_cursors = with_cursors(entry.value(), cold_cursors);
                 }
                 (_, Some(created_at))
@@ -723,7 +740,7 @@ impl MessageBuffer {
                 {
                     cold_cursors = with_cursors(entry.value(), cold_cursors);
                     stale_entries.push(entry.clone());
-                    keys_to_remove_from_hot.push(entry.key);
+                    keys_to_remove_from_hot.push((entry.key, entry_version));
                 }
                 _ => {
                     hot_cursors = with_cursors(entry.value(), hot_cursors);
@@ -905,15 +922,30 @@ impl MessageBuffer {
             .await
             .context("maintenance transaction failed")?;
 
-        // Remove processed entries from hot tier
-        keys_to_remove_from_hot.iter().for_each(|k| {
-            self.inner.remove(k);
-        });
+        // Remove processed entries from hot tier using CAS (Compare-And-Swap).
+        // Only remove if the version hasn't changed since we captured it during iteration.
+        // If version changed, the entry was modified concurrently and will be processed
+        // in the next maintenance cycle.
+        let mut removed_count = 0;
+        let mut skipped_count = 0;
+        for (key, expected_version) in keys_to_remove_from_hot {
+            if self
+                .inner
+                .remove_if(&key, |_, entry| entry.version == expected_version)
+                .is_some()
+            {
+                removed_count += 1;
+            } else {
+                skipped_count += 1;
+            }
+        }
 
         tracing::info!(
             ready = ready_count,
             stale = stale_count,
             cursors = cursor_count,
+            removed = removed_count,
+            skipped = skipped_count,
             "Maintenance completed"
         );
 
