@@ -5,21 +5,23 @@ use alloy::{
     rpc::types::eth::Filter,
 };
 use anyhow::Error;
+use chrono::{NaiveDateTime, Utc};
 use std::{
     collections::HashMap,
     str::FromStr,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
 use tokio::{task::JoinHandle, time::sleep};
+use tonic::async_trait;
 use tracing::{info, warn};
 
 use crate::{
-    InterchainDatabase, example::settings::ExampleIndexerSettings,
-    indexer::crosschain_indexer::CrosschainIndexer,
+    CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
+    example::settings::ExampleIndexerSettings, indexer::crosschain_indexer::CrosschainIndexer,
 };
 
 /// Example implementation of CrosschainIndexer trait.
@@ -28,12 +30,17 @@ pub struct ExampleIndexer {
     db: Arc<InterchainDatabase>,
     bridge_id: i32,
     providers: HashMap<u64, DynProvider<Ethereum>>,
-    /// Indexer-specific settings
+    // Indexer-specific settings
     settings: ExampleIndexerSettings,
-    /// Flag to control the indexing loop
+    // Flag to control the indexing loop
     is_running: Arc<AtomicBool>,
     /// Handle to the indexing task for graceful shutdown
     indexing_handle: parking_lot::RwLock<Option<JoinHandle<()>>>,
+
+    status: parking_lot::RwLock<CrosschainIndexerState>,
+    init_timestamp: NaiveDateTime,
+    fake_counter: Arc<AtomicU64>,
+    fake_err_counter: Arc<AtomicU64>,
 }
 
 impl ExampleIndexer {
@@ -56,6 +63,10 @@ impl ExampleIndexer {
             settings,
             is_running: Arc::new(AtomicBool::new(false)),
             indexing_handle: parking_lot::RwLock::new(None),
+            status: parking_lot::RwLock::new(CrosschainIndexerState::Idle),
+            init_timestamp: Utc::now().naive_utc(),
+            fake_counter: Arc::new(AtomicU64::new(0)),
+            fake_err_counter: Arc::new(AtomicU64::new(0)),
         })
     }
 }
@@ -69,8 +80,17 @@ fn single_block_transfer_filter(block_number: u64) -> Filter {
         .event_signature(topic)
 }
 
+#[async_trait]
 impl CrosschainIndexer for ExampleIndexer {
-    fn start_indexing(&self) -> Result<(), Error> {
+    fn name(&self) -> String {
+        "ExampleIndexer".to_string()
+    }
+
+    fn description(&self) -> String {
+        "Example indexer to demonstrate the CrosschainIndexer trait".to_string()
+    }
+
+    async fn start_indexing(&self) -> Result<(), Error> {
         if self.is_running.load(Ordering::Acquire) {
             warn!(bridge_id = self.bridge_id, "Indexer is already running");
             return Ok(());
@@ -84,6 +104,8 @@ impl CrosschainIndexer for ExampleIndexer {
         let bridge_id = self.bridge_id;
         let providers = self.providers.clone();
         let is_running = self.is_running.clone();
+        let fake_counter = self.fake_counter.clone();
+        let fake_err_counter = self.fake_err_counter.clone();
 
         let fetch_interval = self.settings.fetch_interval;
 
@@ -95,8 +117,8 @@ impl CrosschainIndexer for ExampleIndexer {
             while is_running.load(Ordering::Acquire) {
                 match Self::indexing_loop_iteration(&db, bridge_id, &providers).await {
                     Ok(_) => {
-                        // Successfully processed, wait before next iteration
-                        sleep(fetch_interval).await;
+                        // Successfully processed
+                        fake_counter.fetch_add(1, Ordering::Relaxed);
                     }
                     Err(e) => {
                         tracing::error!(
@@ -104,10 +126,13 @@ impl CrosschainIndexer for ExampleIndexer {
                             err = ?e,
                             "Error in indexing loop iteration"
                         );
-                        // Wait a bit longer on error before retrying
-                        sleep(Duration::from_secs(5)).await;
+
+                        fake_err_counter.fetch_add(1, Ordering::Relaxed);
                     }
                 }
+
+                // Wait before next iteration
+                sleep(fetch_interval).await;
             }
 
             info!(bridge_id = bridge_id, "Indexing task stopped");
@@ -115,20 +140,24 @@ impl CrosschainIndexer for ExampleIndexer {
 
         // Store the handle for later cleanup
         *self.indexing_handle.write() = Some(handle);
+        *self.status.write() = CrosschainIndexerState::Running;
 
         Ok(())
     }
 
-    fn stop_indexing(&self) -> Result<(), Error> {
+    async fn stop_indexing(&self) {
         if !self.is_running.load(Ordering::Acquire) {
             warn!(bridge_id = self.bridge_id, "Indexer is not running");
-            return Ok(());
+            return;
         }
 
         info!(bridge_id = self.bridge_id, "Stopping ExampleIndexer");
 
         // Signal the indexing loop to stop
         self.is_running.store(false, Ordering::Release);
+
+        // TODO: add delay to ensure the indexing loop is stopped
+        sleep(Duration::from_secs(1)).await;
 
         // Wait for the task to finish
         if let Some(handle) = self.indexing_handle.write().take() {
@@ -137,7 +166,25 @@ impl CrosschainIndexer for ExampleIndexer {
             handle.abort();
         }
 
-        Ok(())
+        info!(bridge_id = self.bridge_id, "ExampleIndexer stopped");
+
+        *self.status.write() = CrosschainIndexerState::Idle;
+    }
+
+    fn get_state(&self) -> CrosschainIndexerState {
+        self.status.read().clone()
+    }
+
+    fn get_status(&self) -> CrosschainIndexerStatus {
+        CrosschainIndexerStatus {
+            state: self.status.read().clone(),
+            catchup_progress: 0.0f64,
+            init_timestamp: self.init_timestamp,
+            messages_indexed: self.fake_counter.load(Ordering::Relaxed),
+            transfers_indexed: self.fake_counter.load(Ordering::Relaxed),
+            error_count: self.fake_err_counter.load(Ordering::Relaxed),
+            extra_info: HashMap::new(),
+        }
     }
 }
 

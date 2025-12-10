@@ -119,6 +119,15 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let indexer_handles =
         spawn_configured_indexers(interchain_db.clone(), &bridges, &chains, &chains_providers)?;
 
+    // let example = ExampleIndexer::new(
+    //     db.clone(),
+    //     bridges[0].bridge_id,
+    //     chains_providers,
+    //     Default::default(),
+    // )?;
+
+    // example.start_indexing().await?;
+
     let interchain_service = Arc::new(InterchainServiceImpl::new(
         db.clone(),
         token_info_service.clone(),
@@ -151,6 +160,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         handle.abort();
         let _ = handle.await;
     }
+
+    //example.stop_indexing().await;
 
     launch_result
 }
