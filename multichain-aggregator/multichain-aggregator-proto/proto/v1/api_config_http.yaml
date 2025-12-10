@@ -43,6 +43,9 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListBlocks
       get: /api/v1/blocks
 
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListAddressUpdates
+      get: /api/v1/addresses/updates
+
     #################### Cluster Explorer ####################
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListClusterChains
       get: /api/v1/clusters/{cluster_id}/chains

@@ -76,6 +76,7 @@ fn compile(
             ("ListClusterTokensRequest", "chain_id"),
             ("ListAddressTokensRequest", "chain_id"),
             ("SearchByQueryRequest", "chain_id"),
+            ("StreamAddressUpdatesRequest", "chain_id"),
         ],
     );
 

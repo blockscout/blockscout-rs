@@ -46,6 +46,41 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/addresses/updates:
+    get:
+      operationId: MultichainAggregatorService_ListAddressUpdates
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListAddressUpdatesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: chain_id
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: is_contract
+          in: query
+          required: false
+          type: boolean
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/block-numbers:
     get:
       operationId: MultichainAggregatorService_ListBlockNumbers
@@ -1231,6 +1266,18 @@ definitions:
         type: object
         additionalProperties:
           type: string
+  ListAddressUpdatesResponseAddressUpdate:
+    type: object
+    properties:
+      hash:
+        type: string
+      chain_id:
+        type: string
+      updated_at:
+        type: string
+        format: int64
+      contract_name:
+        type: string
   ListTokenHoldersResponseTokenHolder:
     type: object
     properties:
@@ -1632,6 +1679,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/ListAddressTokensResponseAggregatedTokenBalanceInfo'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListAddressUpdatesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ListAddressUpdatesResponseAddressUpdate'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListAddressesResponse:

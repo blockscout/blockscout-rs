@@ -2,10 +2,11 @@ use crate::{
     repository::{paginate_query, pagination::KeySpec, prepare_ts_query},
     types::{
         ChainId,
-        addresses::{Address, AggregatedAddressInfo, ChainAddressInfo},
+        addresses::{Address, AddressUpdate, AggregatedAddressInfo, ChainAddressInfo},
     },
 };
 use alloy_primitives::Address as AddressAlloy;
+use chrono::NaiveDateTime;
 use entity::{
     address_coin_balances,
     addresses::{ActiveModel, Column, Entity},
@@ -170,6 +171,48 @@ where
         page_token,
         order_keys,
         |a: &ChainAddressInfo| (*a.hash, a.chain_info.chain_id),
+    )
+    .await
+}
+
+pub type ListAddressUpdatesPageToken = (NaiveDateTime, AddressAlloy, ChainId);
+
+pub async fn list_address_updates<C>(
+    db: &C,
+    chain_ids: Vec<ChainId>,
+    is_contract: Option<bool>,
+    page_size: u64,
+    page_token: Option<ListAddressUpdatesPageToken>,
+) -> Result<(Vec<AddressUpdate>, Option<ListAddressUpdatesPageToken>), DbErr>
+where
+    C: ConnectionTrait,
+{
+    let query = AddressUpdate::select_cols(Entity::find().select_only())
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
+        )
+        .apply_if(is_contract, |q, is_contract| {
+            q.filter(Column::IsContract.eq(is_contract))
+        })
+        .as_query()
+        .to_owned();
+
+    let order_keys = vec![
+        KeySpec::asc(Column::UpdatedAt.into_simple_expr()),
+        KeySpec::asc(Column::Hash.into_simple_expr()),
+        KeySpec::asc(Column::ChainId.into_simple_expr()),
+    ];
+    let page_token =
+        page_token.map(|(updated_at, address, chain_id)| (updated_at, address.to_vec(), chain_id));
+
+    paginate_query(
+        db,
+        query,
+        page_size,
+        page_token,
+        order_keys,
+        |a: &AddressUpdate| (a.updated_at, *a.hash, a.chain_id),
     )
     .await
 }
