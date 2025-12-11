@@ -35,7 +35,6 @@ verification-common = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true , features = ["test-server"]}
-ethabi = { workspace = true }
 foundry-compilers-new = { workspace = true, features = ["svm-solc"] }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }

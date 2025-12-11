@@ -22,7 +22,7 @@ lazy_static = { workspace = true }
 mismatch = { workspace = true }
 nonempty = { workspace = true }
 parking_lot = { workspace = true }
-primitive-types = { workspace = true }
+primitive-types = { workspace = true, features = ["impl-serde"] }
 prometheus = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 reqwest-middleware = { workspace = true }

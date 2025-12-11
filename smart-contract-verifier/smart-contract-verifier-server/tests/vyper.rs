@@ -97,7 +97,7 @@ fn validate_verification_response<T: TestCase>(
         "Invalid match type"
     );
 
-    let abi: Option<Result<ethabi::Contract, _>> = verification_result
+    let abi: Option<Result<alloy_json_abi::JsonAbi, _>> = verification_result
         .abi
         .as_ref()
         .map(|abi| serde_json::from_str(abi));
