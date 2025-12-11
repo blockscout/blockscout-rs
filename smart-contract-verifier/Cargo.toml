@@ -30,7 +30,7 @@ bytes = { version = "1.2" }
 chrono = { version = "0.4" }
 cron = { version = "0.11" }
 era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-common", rev = "9969de1" }
-foundry-compilers-new = { version = "0.19", package = "foundry-compilers" }
+foundry-compilers = { version = "0.19" }
 futures = { version = "0.3" }
 hex = { version = "0.4" }
 lazy_static = { version = "1" }

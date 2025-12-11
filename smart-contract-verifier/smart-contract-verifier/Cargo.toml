@@ -15,7 +15,7 @@ blockscout-display-bytes = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 cron = { workspace = true }
-foundry-compilers-new = { workspace = true, features = ["async"] }
+foundry-compilers = { workspace = true, features = ["async"] }
 futures = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }

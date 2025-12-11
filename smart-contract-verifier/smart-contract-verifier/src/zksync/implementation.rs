@@ -2,7 +2,7 @@ use crate::{compiler::{CompactVersion, DetailedVersion, DownloadCache, Fetcher},
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
-use foundry_compilers_new::error::SolcError;
+use foundry_compilers::error::SolcError;
 use futures::TryFutureExt;
 use nonempty::NonEmpty;
 use serde::{de::DeserializeOwned, Deserialize};
@@ -564,7 +564,7 @@ impl ZkSyncCompiler for ZkSolcCompiler {
         // The compiler version is required in case svm-rs will be asked to download
         // the corresponding compiler. As we don't need that functionality we can use
         // a dummy value.
-        let mut compiler = foundry_compilers_new::solc::Solc::new_with_version(
+        let mut compiler = foundry_compilers::solc::Solc::new_with_version(
             zk_compiler_path,
             semver::Version::new(0, 0, 0),
         );

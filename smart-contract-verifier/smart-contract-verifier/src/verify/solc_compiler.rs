@@ -2,7 +2,7 @@ use super::{evm_compilers, solc_compiler_cli, Error};
 use crate::{DetailedVersion, Language, Version};
 use anyhow::Context;
 use async_trait::async_trait;
-use foundry_compilers_new::{
+use foundry_compilers::{
     artifacts, artifacts::output_selection::OutputSelection, solc::SolcLanguage,
 };
 use serde::{Deserialize, Serialize};
@@ -82,7 +82,7 @@ impl evm_compilers::EvmCompiler for SolcCompiler {
                 serde_json::to_value(output).context("serializing compiler output into value")?
             );
         }
-        let solc = foundry_compilers_new::solc::Solc::new_with_version(
+        let solc = foundry_compilers::solc::Solc::new_with_version(
             compiler_path,
             compiler_version.to_semver().to_owned(),
         );

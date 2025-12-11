@@ -18,7 +18,7 @@ blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true }
 bytes = { workspace = true }
 cron = { workspace = true }
-foundry-compilers-new = { workspace = true }
+foundry-compilers = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }
 prometheus = { workspace = true }
@@ -35,7 +35,7 @@ verification-common = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true , features = ["test-server"]}
-foundry-compilers-new = { workspace = true, features = ["svm-solc"] }
+foundry-compilers = { workspace = true, features = ["svm-solc"] }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 semver = { workspace = true }

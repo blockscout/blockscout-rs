@@ -1,4 +1,4 @@
-use foundry_compilers_new::artifacts;
+use foundry_compilers::artifacts;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{ImmutableReferences, LinkReferences};

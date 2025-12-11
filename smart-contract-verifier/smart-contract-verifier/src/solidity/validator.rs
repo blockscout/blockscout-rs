@@ -1,7 +1,7 @@
 use crate::compiler::{FileValidator, Version};
 use anyhow::{Context, Error};
 use async_trait::async_trait;
-use foundry_compilers_new::solc::Solc;
+use foundry_compilers::solc::Solc;
 use std::path::Path;
 
 #[derive(Default, Copy, Clone)]

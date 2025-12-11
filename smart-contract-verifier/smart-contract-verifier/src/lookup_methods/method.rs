@@ -1,4 +1,4 @@
-use foundry_compilers_new::artifacts::sourcemap::SourceMap;
+use foundry_compilers::artifacts::sourcemap::SourceMap;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

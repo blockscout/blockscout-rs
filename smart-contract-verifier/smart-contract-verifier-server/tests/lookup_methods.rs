@@ -2,7 +2,7 @@ use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_post_request},
 };
-use foundry_compilers_new::{
+use foundry_compilers::{
     artifacts::{CompilerOutput, EvmVersion, Severity, SolcInput, Source},
     solc::Solc,
 };

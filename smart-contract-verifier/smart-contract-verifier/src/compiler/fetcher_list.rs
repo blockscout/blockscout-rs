@@ -231,7 +231,7 @@ mod tests {
         consts::DEFAULT_SOLIDITY_COMPILER_LIST, tests::parse::test_deserialize_ok, CompactVersion,
         DetailedVersion,
     };
-    use foundry_compilers_new::solc::Solc;
+    use foundry_compilers::solc::Solc;
     use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
     use wiremock::{

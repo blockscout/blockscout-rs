@@ -5,7 +5,7 @@
 //! we need convert functions for CompilerInput and CompilerOutput.
 
 use super::solc_compiler::SolcInput;
-use foundry_compilers_new::{
+use foundry_compilers::{
     artifacts::solc,
     error::{SolcError, SolcIoError},
 };
@@ -61,7 +61,7 @@ fn compiler_error(message: String) -> solc::error::Error {
 
 mod types {
     use super::serde_helpers;
-    use foundry_compilers_new::{artifacts::solc, error::SolcError};
+    use foundry_compilers::{artifacts::solc, error::SolcError};
     use serde::{Deserialize, Serialize};
     use std::{
         collections::{BTreeMap, HashMap},
@@ -334,7 +334,7 @@ mod serde_helpers {
 mod tests {
     use super::*;
     use crate::compiler::{DetailedVersion, Fetcher, ListFetcher};
-    use foundry_compilers_new::Artifact;
+    use foundry_compilers::Artifact;
     use hex::ToHex;
     use pretty_assertions::assert_eq;
     use std::{collections::HashSet, env::temp_dir, path::PathBuf, str::FromStr};

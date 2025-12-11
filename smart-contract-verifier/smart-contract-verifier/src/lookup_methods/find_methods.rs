@@ -4,7 +4,7 @@ use super::{
 };
 use alloy_json_abi::JsonAbi;
 use bytes::Bytes;
-use foundry_compilers_new::artifacts::sourcemap::SourceMap;
+use foundry_compilers::artifacts::sourcemap::SourceMap;
 use std::{collections::BTreeMap, iter::repeat_n};
 
 pub struct LookupMethodsRequest {
