@@ -1,7 +1,7 @@
 use crate::compiler::{FileValidator, Version};
 use anyhow::{Context, Error};
 use async_trait::async_trait;
-use ethers_solc::Solc;
+use foundry_compilers_new::solc::Solc;
 use std::path::Path;
 
 #[derive(Default, Copy, Clone)]
@@ -10,8 +10,8 @@ pub struct SolcValidator {}
 #[async_trait]
 impl<Ver: Version> FileValidator<Ver> for SolcValidator {
     async fn validate(&self, ver: &Ver, path: &Path) -> Result<(), Error> {
-        let solc = Solc::new(path);
-        let solc_ver = solc.version().context("could not get compiler version")?;
+        let solc = Solc::new(path).context("could not get compiler version")?;
+        let solc_ver = solc.version;
         // ignore build and pre metadata
         let solc_ver = semver::Version::new(solc_ver.major, solc_ver.minor, solc_ver.patch);
 

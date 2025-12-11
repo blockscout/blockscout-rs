@@ -2,7 +2,10 @@ use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_post_request},
 };
-use ethers_solc::{artifacts::Severity, CompilerInput, CompilerOutput, EvmVersion, Solc};
+use foundry_compilers_new::{
+    artifacts::{CompilerOutput, EvmVersion, Severity, SolcInput, Source},
+    solc::Solc,
+};
 use lazy_static::lazy_static;
 use rstest::rstest;
 use serde::Deserialize;
@@ -55,7 +58,7 @@ fn process_compiler_output(
     let file_ids = output
         .sources
         .iter()
-        .map(|(name, file)| (file.id, name.clone()))
+        .map(|(name, file)| (file.id, name.to_string_lossy().into_owned()))
         .collect();
 
     let request = LookupMethodsRequest {
@@ -96,11 +99,15 @@ async fn test_lookup_methods(#[files("tests/test_cases_lookup_methods/*")] test_
 
     let solc = {
         let _permit = COMPILER_LOCK.acquire().await.unwrap();
-        Solc::find_or_install_svm_version(test_case.version).expect("failed to install version")
+        let version =
+            semver::Version::parse(&test_case.version).expect("Cannot parse solidity version");
+        Solc::find_or_install(&version).expect("failed to install version")
     };
 
-    let inputs = CompilerInput::new(test_dir).expect("failed to read dir");
+    let sources = Source::read_sol_yul_from(&test_dir).expect("failed to read dir");
+    let inputs = SolcInput::resolve_and_build(sources, Default::default());
     let input = inputs[0].clone().evm_version(EvmVersion::London);
+
     let output = solc.compile(&input).expect("failed to compile");
     let errors = output
         .errors

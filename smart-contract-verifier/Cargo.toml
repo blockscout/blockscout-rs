@@ -32,7 +32,6 @@ cron = { version = "0.11" }
 era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-common", rev = "9969de1" }
 ethabi = { version = "18.0" }
 ethers-core = { version = "2.0.10" }
-ethers-solc = { version = "2.0.6" }
 foundry-compilers-new = { version = "0.19", package = "foundry-compilers" }
 futures = { version = "0.3" }
 hex = { version = "0.4" }

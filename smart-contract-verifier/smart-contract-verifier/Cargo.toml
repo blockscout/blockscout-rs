@@ -15,7 +15,6 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 cron = { workspace = true }
 ethers-core = { workspace = true }
-ethers-solc = { workspace = true, features = ["async"] }
 foundry-compilers-new = { workspace = true, features = ["async"] }
 futures = { workspace = true }
 hex = { workspace = true }

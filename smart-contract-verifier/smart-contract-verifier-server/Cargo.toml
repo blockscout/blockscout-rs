@@ -18,7 +18,7 @@ blockscout-service-launcher = { workspace = true }
 bytes = { workspace = true }
 cron = { workspace = true }
 ethers-core = { workspace = true }
-ethers-solc = { workspace = true }
+foundry-compilers-new = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }
 prometheus = { workspace = true }
@@ -36,9 +36,9 @@ verification-common = { workspace = true }
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true , features = ["test-server"]}
 ethabi = { workspace = true }
-ethers-solc = { workspace = true, features = ["svm-solc"] }
-foundry-compilers-new = { workspace = true }
+foundry-compilers-new = { workspace = true, features = ["svm-solc"] }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
+semver = { workspace = true }
 serde_path_to_error = { workspace = true }
 tempfile = { workspace = true }

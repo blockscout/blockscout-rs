@@ -4,7 +4,7 @@ use super::{
 };
 use bytes::Bytes;
 use ethers_core::abi::Abi;
-use ethers_solc::sourcemap::SourceMap;
+use foundry_compilers_new::artifacts::sourcemap::SourceMap;
 use std::{collections::BTreeMap, iter::repeat_n};
 
 pub struct LookupMethodsRequest {

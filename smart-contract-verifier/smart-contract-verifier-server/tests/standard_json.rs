@@ -9,7 +9,7 @@ use actix_web::{
     App,
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use ethers_solc::artifacts::StandardJsonCompilerInput;
+use foundry_compilers_new::artifacts::StandardJsonCompilerInput;
 use serde_json::json;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_actix::route_solidity_verifier, VerifyResponse,
@@ -207,7 +207,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid source"
     );
 
-    let compiler_settings: ethers_solc::artifacts::Settings =
+    let compiler_settings: foundry_compilers_new::artifacts::Settings =
         serde_json::from_str(&verification_result.compiler_settings)
             .expect("Compiler settings deserialization failed");
 

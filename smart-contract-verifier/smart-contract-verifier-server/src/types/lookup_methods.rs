@@ -2,7 +2,7 @@ use crate::proto;
 use amplify::{From, Wrapper};
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use ethers_core::abi::Abi;
-use ethers_solc::sourcemap;
+use foundry_compilers_new::artifacts::sourcemap;
 use smart_contract_verifier::{LookupMethodsRequest, LookupMethodsResponse};
 use std::{collections::BTreeMap, str::FromStr};
 
