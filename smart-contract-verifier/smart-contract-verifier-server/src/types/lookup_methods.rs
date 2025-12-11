@@ -1,7 +1,7 @@
 use crate::proto;
+use alloy_json_abi::JsonAbi;
 use amplify::{From, Wrapper};
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use ethers_core::abi::Abi;
 use foundry_compilers_new::artifacts::sourcemap;
 use smart_contract_verifier::{LookupMethodsRequest, LookupMethodsResponse};
 use std::{collections::BTreeMap, str::FromStr};
@@ -16,7 +16,7 @@ impl TryFrom<LookupMethodsRequestWrapper> for LookupMethodsRequest {
         let bytecode = DisplayBytes::from_str(&request.0.bytecode)
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid bytecode: {e:?}")))?
             .0;
-        let abi = Abi::load(request.0.abi.as_bytes())
+        let abi = JsonAbi::from_json_str(&request.0.abi)
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid abi: {e:?}")))?;
         let source_map = sourcemap::parse(&request.0.source_map)
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid source_map: {e:?}")))?;

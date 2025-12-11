@@ -8,13 +8,13 @@ keywords = ["ethereum", "web3", "solidity"]
 
 [dependencies]
 alloy-core = { workspace = true }
+alloy-json-abi = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 cron = { workspace = true }
-ethers-core = { workspace = true }
 foundry-compilers-new = { workspace = true, features = ["async"] }
 futures = { workspace = true }
 hex = { workspace = true }

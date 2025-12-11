@@ -2,14 +2,14 @@ use super::{
     disassemble::{disassemble_bytecode, DisassembledOpcode},
     method::Method,
 };
+use alloy_json_abi::JsonAbi;
 use bytes::Bytes;
-use ethers_core::abi::Abi;
 use foundry_compilers_new::artifacts::sourcemap::SourceMap;
 use std::{collections::BTreeMap, iter::repeat_n};
 
 pub struct LookupMethodsRequest {
     pub bytecode: Bytes,
-    pub abi: Abi,
+    pub abi: JsonAbi,
     pub source_map: SourceMap,
     pub file_ids: BTreeMap<u32, String>,
 }
@@ -105,9 +105,9 @@ fn find_src_map_index(selector: &[u8; 4], opcodes: &[DisassembledOpcode]) -> Opt
     None
 }
 
-fn parse_selectors(abi: Abi) -> BTreeMap<String, [u8; 4]> {
+fn parse_selectors(abi: JsonAbi) -> BTreeMap<String, [u8; 4]> {
     abi.functions()
-        .map(|f| (f.signature(), f.short_signature()))
+        .map(|f| (f.signature(), f.selector().0))
         .collect()
 }
 

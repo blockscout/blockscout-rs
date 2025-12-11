@@ -10,6 +10,7 @@ smart-contract-verifier = { workspace = true }
 smart-contract-verifier-proto = { workspace = true }
 
 actix-web = { workspace = true }
+alloy-json-abi = { workspace = true, features = ["serde_json"] }
 amplify = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -17,7 +18,6 @@ blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true }
 bytes = { workspace = true }
 cron = { workspace = true }
-ethers-core = { workspace = true }
 foundry-compilers-new = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }
