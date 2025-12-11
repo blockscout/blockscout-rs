@@ -557,9 +557,18 @@ impl ZkSyncCompiler for ZkSolcCompiler {
         evm_compiler_path: &Path,
         input: &Self::CompilerInput,
     ) -> Result<Value, SolcError> {
-        foundry_compilers::Solc::new(zk_compiler_path)
-            .arg(format!("--solc={}", evm_compiler_path.to_string_lossy()))
-            .async_compile_as(input)
-            .await
+        // The default `Solc::new()` tries to obtain a compiler version by running the compiler
+        // with `--version` flag. Zk compiler versions cannot be parsed, though, as they have
+        // different from usual Solidity version format. That is why we have to construct it with
+        // compiler version specified explicitly.
+        // The compiler version is required in case svm-rs will be asked to download
+        // the corresponding compiler. As we don't need that functionality we can use
+        // a dummy value.
+        let mut compiler = foundry_compilers::solc::Solc::new_with_version(
+            zk_compiler_path,
+            semver::Version::new(0, 0, 0),
+        );
+        compiler.extra_args = vec![format!("--solc={}", evm_compiler_path.to_string_lossy())];
+        compiler.async_compile_as(input).await
     }
 }

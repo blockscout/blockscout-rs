@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 const METADATA_FILE_NAME: &str = "metadata.json";
 const SOURCES_PREFIX: &str = "sources/";
 
-// There is struct for metadata in ethers_solc::artifacts::Metadata
+// There is struct for metadata in foundry_compilers::artifacts::Metadata
 // however it is for standard json input of compiler and
 // has different `libraries` field structure
 #[derive(Debug, PartialEq, Eq, Deserialize)]

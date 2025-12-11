@@ -2,7 +2,7 @@ use crate::{
     compiler::DetailedVersion, verify, verify::vyper_compiler_input, Error, EvmCompilersPool,
     OnChainContract, VerificationResult, VyperCompiler, VyperInput,
 };
-use foundry_compilers_new::{artifacts, artifacts::EvmVersion};
+use foundry_compilers::{artifacts, artifacts::EvmVersion};
 use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Clone, Debug)]

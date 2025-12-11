@@ -105,6 +105,7 @@ impl TestCaseRequest for TestCaseStandardJson {
                     PathBuf::from(file),
                     foundry_compilers::artifacts::Source {
                         content: Arc::new(content),
+                        kind: Default::default(),
                     },
                 )
             })

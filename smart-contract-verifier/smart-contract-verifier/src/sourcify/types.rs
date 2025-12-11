@@ -39,7 +39,7 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for Success {
     type Error = Error;
 
     fn try_from(value: sourcify::GetSourceFilesResponse) -> Result<Self, Self::Error> {
-        let metadata: ethers_solc::artifacts::Metadata =
+        let metadata: foundry_compilers::artifacts::Metadata =
             serde_json::from_value(value.metadata.clone()).map_err(|err| {
                 tracing::error!(target: "sourcify", "returned metadata cannot be parsed: {err}");
                 Error::Internal(anyhow::anyhow!(

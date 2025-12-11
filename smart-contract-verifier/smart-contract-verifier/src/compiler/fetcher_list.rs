@@ -231,7 +231,7 @@ mod tests {
         consts::DEFAULT_SOLIDITY_COMPILER_LIST, tests::parse::test_deserialize_ok, CompactVersion,
         DetailedVersion,
     };
-    use ethers_solc::Solc;
+    use foundry_compilers::solc::Solc;
     use pretty_assertions::assert_eq;
     use std::{env::temp_dir, str::FromStr};
     use wiremock::{
@@ -368,8 +368,8 @@ mod tests {
             DetailedVersion::from_str("0.8.9+commit.e5eed63a").unwrap(),
         ] {
             let file = fetcher.fetch(&compiler_version).await.unwrap();
-            let solc = Solc::new(file);
-            let ver = solc.version().unwrap();
+            let solc = Solc::new(file).unwrap();
+            let ver = solc.version;
             assert_eq!(
                 (ver.major, ver.minor, ver.patch),
                 (

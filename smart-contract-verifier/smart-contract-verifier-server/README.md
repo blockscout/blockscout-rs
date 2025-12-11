@@ -42,7 +42,7 @@ refresh_versions_schedule = "0 0 * * * * *"
 
 [solidity.fetcher.list]
 # List of all available solidity compilers and information about them.
-list_url = "https://solc-bin.ethereum.org/linux-amd64/list.json"
+list_url = "https://binaries.soliditylang.org/linux-amd64/list.json"
 
 [vyper]
 # When disabled, vyper related handlers are not available

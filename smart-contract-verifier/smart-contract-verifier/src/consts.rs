@@ -1,9 +1,9 @@
 #[cfg(target_os = "linux")]
 pub const DEFAULT_SOLIDITY_COMPILER_LIST: &str =
-    "https://solc-bin.ethereum.org/linux-amd64/list.json";
+    "https://binaries.soliditylang.org/linux-amd64/list.json";
 #[cfg(target_os = "macos")]
 pub const DEFAULT_SOLIDITY_COMPILER_LIST: &str =
-    "https://solc-bin.ethereum.org/macosx-amd64/list.json";
+    "https://binaries.soliditylang.org/macosx-amd64/list.json";
 
 #[cfg(target_os = "linux")]
 pub const DEFAULT_VYPER_COMPILER_LIST: &str =
