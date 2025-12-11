@@ -49,7 +49,7 @@ impl TestCaseRequest for TestCaseMultiPart {
     fn to_request(&self) -> Value {
         let test_case = &self.0;
 
-        let compiler_settings: foundry_compilers::artifacts::Settings =
+        let compiler_settings: foundry_compilers_new::artifacts::Settings =
             serde_json::from_value(test_case.compiler_settings.clone())
                 .expect("cannot deserialize compiler settings");
 
@@ -91,7 +91,7 @@ impl TestCaseRequest for TestCaseStandardJson {
         #[derive(Clone, Debug, Serialize)]
         struct CompilerInput {
             language: String,
-            sources: foundry_compilers::artifacts::Sources,
+            sources: foundry_compilers_new::artifacts::Sources,
             settings: Value,
         }
 
@@ -103,8 +103,9 @@ impl TestCaseRequest for TestCaseStandardJson {
             .map(|(file, content)| {
                 (
                     PathBuf::from(file),
-                    foundry_compilers::artifacts::Source {
+                    foundry_compilers_new::artifacts::Source {
                         content: Arc::new(content),
+                        kind: Default::default(),
                     },
                 )
             })

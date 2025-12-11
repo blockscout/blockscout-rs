@@ -33,8 +33,7 @@ era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-commo
 ethabi = { version = "18.0" }
 ethers-core = { version = "2.0.10" }
 ethers-solc = { version = "2.0.6" }
-foundry-compilers = { version = "=0.3.9" }
-foundry-compilers-new = { version = "0.13.3", package = "foundry-compilers" }
+foundry-compilers-new = { version = "0.19", package = "foundry-compilers" }
 futures = { version = "0.3" }
 hex = { version = "0.4" }
 lazy_static = { version = "1" }
