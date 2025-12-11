@@ -12,13 +12,13 @@
                 "chain_id": 43114,
                 "address": "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf",
                 "version": 1,
-                "started_at_block": 42526120
+                "started_at_block": 7000000
             },
             {
                 "chain_id": 8021,
                 "address": "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf",
                 "version": 1,
-                "started_at_block": 4
+                "started_at_block": 210955
             }
         ]
     }

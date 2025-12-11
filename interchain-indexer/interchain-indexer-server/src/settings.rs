@@ -30,6 +30,9 @@ pub struct Settings {
     pub tracing: TracingSettings,
     #[serde(default)]
     pub jaeger: JaegerSettings,
+    #[serde(default)]
+    pub swagger_path: PathBuf,
+
     pub database: DatabaseSettings,
 
     #[serde(default)]
@@ -38,6 +41,10 @@ pub struct Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "INTERCHAIN_INDEXER";
+}
+
+fn default_swagger_path() -> PathBuf {
+    blockscout_endpoint_swagger::default_swagger_path_from_service_name("interchain-indexer")
 }
 
 impl Settings {
@@ -51,6 +58,7 @@ impl Settings {
             metrics: Default::default(),
             tracing: Default::default(),
             jaeger: Default::default(),
+            swagger_path: default_swagger_path(),
             database: DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
                 create_database: Default::default(),

@@ -8,9 +8,6 @@
             {
                 "avalanche": {
                     "url": "https://api.avax.network/ext/bc/C/rpc"
-                },
-                "publicnode": {
-                    "url": "https://avalanche-c-chain-rpc.publicnode.com"
                 }
             }
         ]
