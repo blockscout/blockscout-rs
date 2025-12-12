@@ -17,6 +17,7 @@ impl DomainsExtractorService {
         Self { subgraph_reader }
     }
 }
+
 #[allow(clippy::result_large_err)]
 #[async_trait]
 impl DomainsExtractor for DomainsExtractorService {

@@ -1,8 +1,14 @@
 use super::{hash_name::hash_ens_domain_name, ProtocolError, Tld};
 use crate::{hex, protocols::protocoler::DeployedProtocol};
 use alloy::primitives::{keccak256, Address, B256};
+use ens_normalize_rs::EnsNameNormalizer;
+use lazy_static::lazy_static;
 
 const SEPARATOR: char = '.';
+
+lazy_static! {
+    static ref ENS_NORMALIZER: EnsNameNormalizer = EnsNameNormalizer::default();
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CleanName {
@@ -193,7 +199,7 @@ impl<'a> DomainNameOnProtocol<'a> {
 
 fn ens_normalize(name: &str) -> Result<String, ProtocolError> {
     let trimmed = name.trim().trim_matches(SEPARATOR);
-    let normalized = ens_normalize_rs::EnsNameNormalizer::default()
+    let normalized = ENS_NORMALIZER
         .normalize(trimmed)
         .map_err(|e| ProtocolError::InvalidName {
             name: name.to_string(),
