@@ -25,6 +25,7 @@ sol!(IEntrypointV07, "./src/indexer/v07/abi.json");
 pub struct IndexerV07 {
     pub v07_entry_points: Vec<Address>,
     pub v08_entry_points: Vec<Address>,
+    pub v09_entry_points: Vec<Address>,
 }
 
 struct ExtendedUserOperation {
@@ -36,22 +37,26 @@ struct ExtendedUserOperation {
 }
 
 impl IndexerLogic for IndexerV07 {
-    const VERSION: &'static str = "v0.7-v0.8";
+    const VERSION: &'static str = "v0.7-v0.9";
 
     const USER_OPERATION_EVENT_SIGNATURE: B256 = IEntrypointV07::UserOperationEvent::SIGNATURE_HASH;
 
     const BEFORE_EXECUTION_SIGNATURE: B256 = IEntrypointV07::BeforeExecution::SIGNATURE_HASH;
 
     fn entry_points(&self) -> Vec<Address> {
-        let mut entry_points =
-            Vec::with_capacity(self.v07_entry_points.len() + self.v08_entry_points.len());
+        let mut entry_points = Vec::with_capacity(
+            self.v07_entry_points.len() + self.v08_entry_points.len() + self.v09_entry_points.len(),
+        );
         entry_points.extend_from_slice(&self.v07_entry_points);
         entry_points.extend_from_slice(&self.v08_entry_points);
+        entry_points.extend_from_slice(&self.v09_entry_points);
         entry_points
     }
 
     fn matches_entry_point(&self, address: Address) -> bool {
-        self.v07_entry_points.contains(&address) || self.v08_entry_points.contains(&address)
+        self.v07_entry_points.contains(&address)
+            || self.v08_entry_points.contains(&address)
+            || self.v09_entry_points.contains(&address)
     }
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool {
@@ -234,10 +239,12 @@ impl IndexerV07 {
             aggregator: user_op.aggregator,
             aggregator_signature: user_op.aggregator_signature,
             entry_point: user_op.entry_point,
-            entry_point_version: if self.v08_entry_points.contains(&user_op.entry_point) {
+            entry_point_version: if self.v07_entry_points.contains(&user_op.entry_point) {
+                EntryPointVersion::V07
+            } else if self.v08_entry_points.contains(&user_op.entry_point) {
                 EntryPointVersion::V08
             } else {
-                EntryPointVersion::V07
+                EntryPointVersion::V09
             },
             transaction_hash: receipt.transaction_hash,
             block_number: receipt.block_number.unwrap_or(0),
