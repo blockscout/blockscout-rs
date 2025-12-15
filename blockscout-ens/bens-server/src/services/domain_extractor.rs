@@ -1,4 +1,3 @@
-#![allow(clippy::result_large_err)]
 use crate::conversion::{
     self, batch_resolve_from_inner, batch_resolve_from_logic, from_resolved_domains_result,
     map_convertion_error, map_protocol_error, map_subgraph_error, pagination_from_logic,
@@ -17,7 +16,7 @@ impl DomainsExtractorService {
         Self { subgraph_reader }
     }
 }
-#[allow(clippy::result_large_err)]
+
 #[async_trait]
 impl DomainsExtractor for DomainsExtractorService {
     async fn get_domain(

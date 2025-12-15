@@ -254,7 +254,6 @@ pub fn pagination_from_proto_by_fields(
     })
 }
 
-#[allow(clippy::result_large_err)]
 pub fn from_resolved_domains_result(
     result: impl IntoIterator<Item = LookupOutput>,
     chain_id: Option<i64>,

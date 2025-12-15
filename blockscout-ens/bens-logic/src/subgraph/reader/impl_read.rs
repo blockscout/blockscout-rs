@@ -206,17 +206,20 @@ impl SubgraphReader {
             let result = self
                 .get_domain(GetDomainInput {
                     network_id: None,
-                    name: domain.domain_name,
+                    name: domain.domain_name.clone(),
                     only_active: true,
-                    protocol_id: Some(domain.protocol_slug),
+                    protocol_id: Some(domain.protocol_slug.clone()),
                 })
-                .await?
-                .ok_or_else(|| {
-                    anyhow!(
-                        "batch search found domain for address, but detailed domain info not found"
-                    )
-                })?;
-            Ok(Some(result))
+                .await?;
+            if result.is_none() {
+                tracing::warn!(
+                    address =? input.address,
+                    domain_name =? domain.domain_name,
+                    protocol_slug =? domain.protocol_slug,
+                    "batch search found domain for address, but detailed domain info not found"
+                );
+            }
+            Ok(result)
         } else {
             Ok(None)
         }
