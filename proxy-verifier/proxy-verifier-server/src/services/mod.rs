@@ -235,7 +235,8 @@ fn process_results_response(
             },
             Err(proxy_verifier_logic::Error::AlreadyPartiallyVerifiedContract(url)) => {
                 let message = format!(
-                    "Your code is valid and verifies this contract (partial match). However, this contract is already partially verified with identical functionality [{}].",
+                    "Your code is valid and verifies this contract (partial match). However, this contract is already partially verified and can only be reverified with a full (exact) match [{}].",
+                    // without that replacement on UI the link is broken on multiple lines by symbol '-'
                     url.replace('-', "-\u{2060}")
                 );
                 ContractVerificationResult {
@@ -245,7 +246,8 @@ fn process_results_response(
             }
             Err(proxy_verifier_logic::Error::AlreadyFullyVerifiedContract(url)) => {
                 let message = format!(
-                    "Your code is valid and verifies this contract (partial match). However, this contract is already partially verified and can only be reverified with a full (exact) match [{}].",
+                    "This contract is already fully verified (exact match) and cannot be reverified [{}].",
+                    // without that replacement on UI the link is broken on multiple lines by symbol '-'
                     url.replace('-', "-\u{2060}")
                 );
                 ContractVerificationResult {
