@@ -21,7 +21,7 @@ use proxy_verifier_proto::blockscout::proxy_verifier::v1::{
 use std::collections::BTreeMap;
 use tonic::{Response, Status};
 
-pub(crate) const SOLIDITY_EVM_VERSIONS: [&str; 12] = [
+pub(crate) const SOLIDITY_EVM_VERSIONS: [&str; 15] = [
     "homestead",
     "tangerineWhistle",
     "spuriousDragon",
@@ -33,10 +33,13 @@ pub(crate) const SOLIDITY_EVM_VERSIONS: [&str; 12] = [
     "london",
     "paris",
     "shanghai",
+    "cancun",
+    "prague",
+    "osaka",
     "default",
 ];
 
-pub(crate) const VYPER_EVM_VERSIONS: [&str; 8] = [
+pub(crate) const VYPER_EVM_VERSIONS: [&str; 11] = [
     "byzantium",
     "constantinople",
     "petersburg",
@@ -44,6 +47,9 @@ pub(crate) const VYPER_EVM_VERSIONS: [&str; 8] = [
     "berlin",
     "paris",
     "shanghai",
+    "cancun",
+    "prague",
+    "osaka",
     "default",
 ];
 
