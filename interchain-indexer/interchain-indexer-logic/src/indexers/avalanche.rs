@@ -1,5 +1,3 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
-
 use alloy::{
     network::Ethereum,
     primitives::{Address, B256},
@@ -10,25 +8,34 @@ use alloy::{
 };
 use anyhow::{Context, Result, anyhow};
 use futures::{StreamExt, stream};
+use interchain_indexer_entity::{
+    crosschain_messages, crosschain_transfers, sea_orm_active_enums::MessageStatus,
+};
+use sea_orm::{ActiveValue, prelude::BigDecimal};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 use tokio::task::JoinHandle;
 
 use crate::{
     InterchainDatabase,
     log_stream::LogStreamBuilder,
-    message_buffer::{Config, IcttEventFragment, Key, MessageBuffer, Status},
+    message_buffer::{Config, Consolidate, ConsolidatedMessage, Key, MessageBuffer},
 };
 
 sol! {
+    #[derive(Debug, Deserialize, Serialize)]
     struct TeleporterMessageReceipt {
         uint256 receivedMessageNonce;
         address relayerRewardAddress;
     }
 
+    #[derive(Debug, Deserialize, Serialize)]
     struct TeleporterFeeInfo {
         address feeTokenAddress;
         uint256 amount;
     }
 
+    #[derive(Debug, Deserialize, Serialize)]
     struct TeleporterMessage {
         uint256 messageNonce;
         address originSenderAddress;
@@ -39,7 +46,9 @@ sol! {
         TeleporterMessageReceipt[] receipts;
         bytes message;
     }
+
     interface ITeleporterMessenger {
+        #[derive(Debug, Deserialize, Serialize)]
         event SendCrossChainMessage(
             bytes32 indexed messageID,
             bytes32 indexed destinationBlockchainID,
@@ -47,6 +56,7 @@ sol! {
             TeleporterFeeInfo feeInfo
         );
 
+        #[derive(Debug, Deserialize, Serialize)]
         event ReceiveCrossChainMessage(
             bytes32 indexed messageID,
             bytes32 indexed sourceBlockchainID,
@@ -55,8 +65,10 @@ sol! {
             TeleporterMessage message
         );
 
+        #[derive(Debug, Deserialize, Serialize)]
         event MessageExecuted(bytes32 indexed messageID, bytes32 indexed sourceBlockchainID);
 
+        #[derive(Debug, Deserialize, Serialize)]
         event MessageExecutionFailed(
             bytes32 indexed messageID, bytes32 indexed sourceBlockchainID, TeleporterMessage message
         );
@@ -92,6 +104,7 @@ sol! {
     /// unable to be routed to its final destination. Note that this address
     /// must be able to receive the tokens held as collateral in the home
     /// contract.
+    #[derive(Debug, Serialize, Deserialize)]
     struct SendTokensInput {
         bytes32 destinationBlockchainID;
         address destinationTokenTransferrerAddress;
@@ -145,6 +158,7 @@ sol! {
     ///
     /// @param secondaryFee Amount of tokens to pay for Teleporter fee if a
     /// multi-hop is needed
+    #[derive(Debug, Serialize, Deserialize)]
     struct SendAndCallInput {
         bytes32 destinationBlockchainID;
         address destinationTokenTransferrerAddress;
@@ -166,6 +180,7 @@ sol! {
      /// https://github.com/ava-labs/icm-contracts/blob/main/SECURITY.md
     interface ITokenTransferrer is ITeleporterReceiver {
         /// @notice Emitted when tokens are sent to another chain.
+        #[derive(Debug, Serialize, Deserialize)]
         event TokensSent(
             bytes32 indexed teleporterMessageID,
             address indexed sender,
@@ -175,6 +190,7 @@ sol! {
 
         /// @notice Emitted when tokens are sent to another chain with calldata
         /// for a contract recipient.
+        #[derive(Debug, Serialize, Deserialize)]
         event TokensAndCallSent(
             bytes32 indexed teleporterMessageID,
             address indexed sender,
@@ -184,15 +200,318 @@ sol! {
 
         /// @notice Emitted when tokens are withdrawn from the token transferrer
         /// contract.
+        #[derive(Debug, Serialize, Deserialize)]
         event TokensWithdrawn(address indexed recipient, uint256 amount);
 
         /// @notice Emitted when a call to a recipient contract to receive token
         /// succeeds.
+        #[derive(Debug, Serialize, Deserialize)]
         event CallSucceeded(address indexed recipientContract, uint256 amount);
 
         /// @notice Emitted when a call to a recipient contract to receive token
         /// fails, and the tokens are sent to a fallback recipient.
+        #[derive(Debug, Serialize, Deserialize)]
         event CallFailed(address indexed recipientContract, uint256 amount);
+    }
+
+    interface ITokenHome is ITokenTransferrer {
+        /// @notice Emitted when tokens are routed from a multi-hop send message
+        /// to another chain.
+        #[derive(Debug, Serialize, Deserialize)]
+        event TokensRouted(bytes32 indexed teleporterMessageID, SendTokensInput input, uint256 amount);
+
+        /// @notice Emitted when tokens are routed from a mulit-hop send
+        /// message, with calldata for a contract recipient, to another chain.
+        #[derive(Debug, Serialize, Deserialize)]
+        event TokensAndCallRouted(
+            bytes32 indexed teleporterMessageID, SendAndCallInput input, uint256 amount
+        );
+    }
+}
+
+/// Source-side ICTT event with contract address
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AnnotatedICTTSource<T> {
+    event: T,
+    /// The ICTT contract address that emitted this event (token source address)
+    contract_address: Address,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum SentOrRouted {
+    Sent(AnnotatedICTTSource<ITokenTransferrer::TokensSent>),
+    Routed(AnnotatedICTTSource<ITokenHome::TokensRouted>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum SentOrRoutedAndCalled {
+    Sent(AnnotatedICTTSource<ITokenTransferrer::TokensAndCallSent>),
+    Routed(AnnotatedICTTSource<ITokenHome::TokensAndCallRouted>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum CallOutcome {
+    Succeeded(ITokenTransferrer::CallSucceeded),
+    Failed(ITokenTransferrer::CallFailed),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum TokenTransfer {
+    Sent(
+        Option<SentOrRouted>,
+        Option<ITokenTransferrer::TokensWithdrawn>,
+    ),
+    SentAndCalled(Option<SentOrRoutedAndCalled>, Option<CallOutcome>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum MessageExecutionOutcome {
+    /// Message execution succeeded - this is final for ICM
+    Succeeded(AnnotatedEvent<ITeleporterMessenger::MessageExecuted>),
+    /// Message execution failed - can be retried via retryMessageExecution()
+    Failed(AnnotatedEvent<ITeleporterMessenger::MessageExecutionFailed>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AnnotatedEvent<T> {
+    event: T,
+    transaction_hash: B256,
+    block_number: i64,
+    block_timestamp: chrono::NaiveDateTime,
+    chain_id: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+struct Message {
+    /// Source-side: SendCrossChainMessage event (required for message to be "ready")
+    send: Option<AnnotatedEvent<ITeleporterMessenger::SendCrossChainMessage>>,
+    /// Destination-side: ReceiveCrossChainMessage event
+    receive: Option<AnnotatedEvent<ITeleporterMessenger::ReceiveCrossChainMessage>>,
+    /// Execution outcome - may come in same tx as receive, or later via retryMessageExecution()
+    execution: Option<MessageExecutionOutcome>,
+    /// ICTT token transfer (optional, only for ICTT messages)
+    transfer: Option<TokenTransfer>,
+}
+
+impl Consolidate for Message {
+    fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>> {
+        // Must have send event to be consolidatable (it provides init_timestamp)
+        let send = match self.send.as_ref() {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+        let send_event = &send.event;
+
+        // Determine status based on execution outcome
+        let status = match &self.execution {
+            Some(MessageExecutionOutcome::Succeeded(_)) => MessageStatus::Completed,
+            Some(MessageExecutionOutcome::Failed(_)) => MessageStatus::Failed,
+            None => MessageStatus::Initiated,
+        };
+
+        // Get destination-side info from receive event or execution event
+        let (destination_chain_id, destination_transaction_hash, last_update_timestamp) =
+            if let Some(receive) = &self.receive {
+                (
+                    Some(receive.chain_id),
+                    Some(receive.transaction_hash.as_slice().to_vec()),
+                    Some(receive.block_timestamp),
+                )
+            } else if let Some(execution) = &self.execution {
+                // Execution came via retry - get info from execution event
+                let (chain_id, transaction_hash, timestamp) = match execution {
+                    MessageExecutionOutcome::Succeeded(e) => {
+                        (e.chain_id, e.transaction_hash, e.block_timestamp)
+                    }
+                    MessageExecutionOutcome::Failed(e) => {
+                        (e.chain_id, e.transaction_hash, e.block_timestamp)
+                    }
+                };
+                (
+                    Some(chain_id),
+                    Some(transaction_hash.as_slice().to_vec()),
+                    Some(timestamp),
+                )
+            } else {
+                (None, None, None)
+            };
+
+        let is_ictt_complete = match &self.transfer {
+            None => true, // No ICTT - not applicable
+            Some(TokenTransfer::Sent(src, dst)) => src.is_some() && dst.is_some(),
+            Some(TokenTransfer::SentAndCalled(src, dst)) => src.is_some() && dst.is_some(),
+        };
+
+        let is_execution_succeeded =
+            matches!(self.execution, Some(MessageExecutionOutcome::Succeeded(_)));
+
+        // Message is final when:
+        // - Execution succeeded (MessageExecuted received), AND
+        // - ICTT transfer is complete (if applicable)
+        // Failed messages are NOT final - they can be retried via retryMessageExecution()
+        let is_final = is_execution_succeeded && is_ictt_complete;
+
+        // TODO: instead of retrieving message_id again, use the one from Key but
+        // validate that all events that come with message id match the one from
+        // the key.
+        // let message_id = self.message_id().context("no message ID")?;
+
+        let message = crosschain_messages::ActiveModel {
+            id: ActiveValue::Set(key.message_id),
+            bridge_id: ActiveValue::Set(key.bridge_id), // Will be set by caller via Key
+            status: ActiveValue::Set(status),
+            src_chain_id: ActiveValue::Set(send.chain_id),
+            dst_chain_id: ActiveValue::Set(destination_chain_id),
+            native_id: ActiveValue::Set(Some(send_event.messageID.as_slice().to_vec())),
+            init_timestamp: ActiveValue::Set(send.block_timestamp),
+            last_update_timestamp: ActiveValue::Set(last_update_timestamp),
+            src_tx_hash: ActiveValue::Set(Some(send.transaction_hash.as_slice().to_vec())),
+            dst_tx_hash: ActiveValue::Set(destination_transaction_hash),
+            sender_address: ActiveValue::Set(Some(
+                send_event.message.originSenderAddress.as_slice().to_vec(),
+            )),
+            recipient_address: ActiveValue::Set(Some(
+                send_event.message.destinationAddress.as_slice().to_vec(),
+            )),
+            payload: ActiveValue::Set(Some(send_event.message.message.to_vec())),
+            created_at: ActiveValue::NotSet,
+            updated_at: ActiveValue::NotSet,
+        };
+
+        // Build transfers from ICTT events if present.
+        // If transfer building fails (e.g., BigDecimal parsing), propagate the error.
+        let transfers = self
+            .transfer
+            .as_ref()
+            .map(|t| build_transfer(t, key, send.chain_id, destination_chain_id))
+            .transpose()?
+            .map_or_else(Vec::new, |t| vec![t]);
+
+        Ok(Some(ConsolidatedMessage {
+            is_final,
+            message,
+            transfers,
+        }))
+    }
+}
+
+fn build_transfer(
+    transfer: &TokenTransfer,
+    key: &Key,
+    src_chain_id: i64,
+    dest_chain_id: Option<i64>,
+) -> Result<crosschain_transfers::ActiveModel> {
+    // Default decimals - in the future this should be fetched from token contract
+    const DEFAULT_DECIMALS: i16 = 18;
+
+    match transfer {
+        TokenTransfer::Sent(src, dest) => {
+            let mut transfer = crosschain_transfers::ActiveModel {
+                message_id: ActiveValue::Set(key.message_id),
+                bridge_id: ActiveValue::Set(key.bridge_id),
+                // Always 0 for ICTT transfers
+                index: ActiveValue::Set(0),
+                // Set required chain ID fields
+                token_src_chain_id: ActiveValue::Set(src_chain_id),
+                token_dst_chain_id: ActiveValue::Set(dest_chain_id.unwrap_or(src_chain_id)),
+                // Default decimals - should be fetched from token contract in the future
+                src_decimals: ActiveValue::Set(DEFAULT_DECIMALS),
+                dst_decimals: ActiveValue::Set(DEFAULT_DECIMALS),
+                // Default empty token address - will be set from source event if available
+                token_src_address: ActiveValue::Set(Vec::new()),
+                ..Default::default()
+            };
+
+            // Fill from source event
+            if let Some(src_event) = src {
+                let (sender, amount, dst_token_addr, recipient, src_token_addr) = match src_event {
+                    SentOrRouted::Sent(e) => (
+                        e.event.sender,
+                        e.event.amount,
+                        e.event.input.destinationTokenTransferrerAddress,
+                        e.event.input.recipient,
+                        e.contract_address,
+                    ),
+                    SentOrRouted::Routed(e) => (
+                        Address::ZERO, // Routed doesn't have sender
+                        e.event.amount,
+                        e.event.input.destinationTokenTransferrerAddress,
+                        e.event.input.recipient,
+                        e.contract_address,
+                    ),
+                };
+                transfer.sender_address = ActiveValue::Set(Some(sender.as_slice().to_vec()));
+                transfer.src_amount =
+                    ActiveValue::Set(BigDecimal::from_str(&amount.to_string()).unwrap_or_default());
+                transfer.dst_amount =
+                    ActiveValue::Set(BigDecimal::from_str(&amount.to_string()).unwrap_or_default());
+                transfer.token_src_address = ActiveValue::Set(src_token_addr.as_slice().to_vec());
+                transfer.token_dst_address = ActiveValue::Set(dst_token_addr.as_slice().to_vec());
+                transfer.recipient_address = ActiveValue::Set(Some(recipient.as_slice().to_vec()));
+            }
+
+            // Fill from destination event
+            if let Some(dst_event) = dest {
+                transfer.recipient_address =
+                    ActiveValue::Set(Some(dst_event.recipient.as_slice().to_vec()));
+            }
+
+            Ok(transfer)
+        }
+        TokenTransfer::SentAndCalled(src, dest) => {
+            let mut transfer = crosschain_transfers::ActiveModel {
+                message_id: ActiveValue::Set(key.message_id),
+                bridge_id: ActiveValue::Set(key.bridge_id),
+                index: ActiveValue::Set(0),
+                // Set required chain ID fields
+                token_src_chain_id: ActiveValue::Set(src_chain_id),
+                token_dst_chain_id: ActiveValue::Set(dest_chain_id.unwrap_or(src_chain_id)),
+                // Default decimals - should be fetched from token contract in the future
+                src_decimals: ActiveValue::Set(DEFAULT_DECIMALS),
+                dst_decimals: ActiveValue::Set(DEFAULT_DECIMALS),
+                // Default empty token address - will be set from source event
+                // if available
+                ..Default::default()
+            };
+
+            // Fill from source event
+            if let Some(src_event) = src {
+                let (sender, amount, dst_token_addr, recipient, fallback, src_token_addr) =
+                    match src_event {
+                        SentOrRoutedAndCalled::Sent(e) => (
+                            e.event.sender,
+                            e.event.amount,
+                            e.event.input.destinationTokenTransferrerAddress,
+                            e.event.input.recipientContract,
+                            e.event.input.fallbackRecipient,
+                            e.contract_address,
+                        ),
+                        SentOrRoutedAndCalled::Routed(e) => (
+                            Address::ZERO,
+                            e.event.amount,
+                            e.event.input.destinationTokenTransferrerAddress,
+                            e.event.input.recipientContract,
+                            e.event.input.fallbackRecipient,
+                            e.contract_address,
+                        ),
+                    };
+                transfer.sender_address = ActiveValue::Set(Some(sender.as_slice().to_vec()));
+                transfer.src_amount = ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?);
+                transfer.dst_amount = ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?);
+                transfer.token_src_address = ActiveValue::Set(src_token_addr.as_slice().to_vec());
+                transfer.token_dst_address = ActiveValue::Set(dst_token_addr.as_slice().to_vec());
+
+                // If call failed, use fallback recipient
+                let final_recipient = match dest {
+                    Some(CallOutcome::Failed(_)) => fallback,
+                    _ => recipient,
+                };
+                transfer.recipient_address =
+                    ActiveValue::Set(Some(final_recipient.as_slice().to_vec()));
+            }
+
+            Ok(transfer)
+        }
     }
 }
 
@@ -237,7 +556,7 @@ impl AvalancheIndexerConfig {
 struct AvalancheIndexer {
     db: InterchainDatabase,
     config: AvalancheIndexerConfig,
-    buffer: Arc<MessageBuffer>,
+    buffer: Arc<MessageBuffer<Message>>,
 }
 
 impl AvalancheIndexer {
@@ -301,18 +620,9 @@ impl AvalancheIndexer {
                 (latest_block, latest_block.saturating_sub(1))
             };
 
-            // Combine ICM (TeleporterMessenger) and ICTT (TokenTransferrer) event signatures
-            let all_event_signatures: Vec<_> =
-                ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES
-                    .iter()
-                    .chain(ITokenTransferrer::ITokenTransferrerEvents::SIGNATURES.iter())
-                    .copied()
-                    .collect();
-
             let filter = Filter::new()
-                // TODO: maybe we should still filter events by address for security reasons.
-                // .address(vec![contract_address])
-                .events(all_event_signatures);
+                .address(contract_address)
+                .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES);
 
             tracing::info!(bridge_id, chain_id, "Configured log stream");
 
@@ -408,7 +718,7 @@ async fn process_batch(
     chain_id: i64,
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer>,
+    buffer: &Arc<MessageBuffer<Message>>,
     provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
     // Group logs by transaction hash for same-tx correlation
@@ -448,7 +758,6 @@ async fn process_batch(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
-                &tx_context,
                 provider,
             )
             .await?;
@@ -458,18 +767,202 @@ async fn process_batch(
     Ok(())
 }
 
+/// Fetch block timestamp from RPC
+async fn fetch_block_timestamp(
+    provider: &DynProvider<Ethereum>,
+    block_number: i64,
+) -> Result<chrono::NaiveDateTime> {
+    let block = provider
+        .get_block_by_number((block_number as u64).into())
+        .await?
+        .context("block not found")?;
+
+    chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
+        .map(|dt| dt.naive_utc())
+        .context("invalid timestamp")
+}
+
+use std::collections::HashSet;
+
+/// Fetch ICTT logs from the same transaction
+///
+/// TODO: use eth_getLogs with filter by tx hash Also there's
+/// ITokenTransferrer::ITokenTransferrerEvents::SIGNATURES for use in filter.
+///
+/// Global TODO: do not use contractions like "tx", write full words like
+/// "transaction".
+async fn fetch_ictt_logs_for_transaction(
+    provider: &DynProvider<Ethereum>,
+    transaction_hash: B256,
+) -> Result<Vec<Log>> {
+    let receipt = provider
+        .get_transaction_receipt(transaction_hash)
+        .await?
+        .context("transaction receipt not found")?;
+
+    let ictt_topics: HashSet<B256> = ITokenTransferrer::ITokenTransferrerEvents::SELECTORS
+        .iter()
+        .chain(ITokenHome::ITokenHomeEvents::SELECTORS)
+        .map(|selector| B256::from_slice(selector.as_slice()))
+        .collect();
+
+    let logs: Vec<Log> = receipt
+        .inner
+        .logs()
+        .iter()
+        .filter(|log| {
+            log.topic0()
+                .map(|t| ictt_topics.contains(t))
+                .unwrap_or(false)
+        })
+        .cloned()
+        .collect();
+
+    Ok(logs)
+}
+
+/// Parse ICTT logs into TokenTransfer. Returns None if no ICTT logs found.
+///
+/// TODO: We should validate that our invariant about one log correlation holds.
+/// If not, we should throw error. Also use Result<Option<TokenTransfer>> I guess?
+fn parse_ictt_logs(logs: &[Log]) -> Option<TokenTransfer> {
+    // Look for source-side events first
+    for log in logs {
+        let contract_address = log.address();
+
+        // TokensSent source event
+        if log.topic0() == Some(&ITokenTransferrer::TokensSent::SIGNATURE_HASH) {
+            if let Ok(event) = log.log_decode::<ITokenTransferrer::TokensSent>() {
+                let sent = SentOrRouted::Sent(AnnotatedICTTSource {
+                    event: event.inner.data.clone(),
+                    contract_address,
+                });
+                // Look for corresponding TokensWithdrawn
+                let withdrawn = logs.iter().find_map(|l| {
+                    if l.topic0() == Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) {
+                        l.log_decode::<ITokenTransferrer::TokensWithdrawn>()
+                            .ok()
+                            .map(|e| e.inner.data.clone())
+                    } else {
+                        None
+                    }
+                });
+                return Some(TokenTransfer::Sent(Some(sent), withdrawn));
+            }
+        }
+
+        // TokensAndCallSent source event
+        if log.topic0() == Some(&ITokenTransferrer::TokensAndCallSent::SIGNATURE_HASH) {
+            if let Ok(event) = log.log_decode::<ITokenTransferrer::TokensAndCallSent>() {
+                let sent = SentOrRoutedAndCalled::Sent(AnnotatedICTTSource {
+                    event: event.inner.data.clone(),
+                    contract_address,
+                });
+                // Look for CallSucceeded or CallFailed
+                let outcome = logs.iter().find_map(|l| {
+                    if l.topic0() == Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) {
+                        l.log_decode::<ITokenTransferrer::CallSucceeded>()
+                            .ok()
+                            .map(|e| CallOutcome::Succeeded(e.inner.data.clone()))
+                    } else if l.topic0() == Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) {
+                        l.log_decode::<ITokenTransferrer::CallFailed>()
+                            .ok()
+                            .map(|e| CallOutcome::Failed(e.inner.data.clone()))
+                    } else {
+                        None
+                    }
+                });
+                return Some(TokenTransfer::SentAndCalled(Some(sent), outcome));
+            }
+        }
+
+        // TokensRouted (multi-hop) source event
+        if log.topic0() == Some(&ITokenHome::TokensRouted::SIGNATURE_HASH) {
+            if let Ok(event) = log.log_decode::<ITokenHome::TokensRouted>() {
+                let routed = SentOrRouted::Routed(AnnotatedICTTSource {
+                    event: event.inner.data.clone(),
+                    contract_address,
+                });
+                let withdrawn = logs.iter().find_map(|l| {
+                    if l.topic0() == Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) {
+                        l.log_decode::<ITokenTransferrer::TokensWithdrawn>()
+                            .ok()
+                            .map(|e| e.inner.data.clone())
+                    } else {
+                        None
+                    }
+                });
+                return Some(TokenTransfer::Sent(Some(routed), withdrawn));
+            }
+        }
+
+        // TokensAndCallRouted (multi-hop) source event
+        if log.topic0() == Some(&ITokenHome::TokensAndCallRouted::SIGNATURE_HASH) {
+            if let Ok(event) = log.log_decode::<ITokenHome::TokensAndCallRouted>() {
+                let routed = SentOrRoutedAndCalled::Routed(AnnotatedICTTSource {
+                    event: event.inner.data.clone(),
+                    contract_address,
+                });
+                let outcome = logs.iter().find_map(|l| {
+                    if l.topic0() == Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) {
+                        l.log_decode::<ITokenTransferrer::CallSucceeded>()
+                            .ok()
+                            .map(|e| CallOutcome::Succeeded(e.inner.data.clone()))
+                    } else if l.topic0() == Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) {
+                        l.log_decode::<ITokenTransferrer::CallFailed>()
+                            .ok()
+                            .map(|e| CallOutcome::Failed(e.inner.data.clone()))
+                    } else {
+                        None
+                    }
+                });
+                return Some(TokenTransfer::SentAndCalled(Some(routed), outcome));
+            }
+        }
+    }
+
+    // No source-side ICTT events found - check for destination-only events
+    // (This happens when we receive on destination but haven't seen send yet)
+    for log in logs {
+        if log.topic0() == Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) {
+            if let Ok(event) = log.log_decode::<ITokenTransferrer::TokensWithdrawn>() {
+                return Some(TokenTransfer::Sent(None, Some(event.inner.data.clone())));
+            }
+        }
+        if log.topic0() == Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) {
+            if let Ok(event) = log.log_decode::<ITokenTransferrer::CallSucceeded>() {
+                return Some(TokenTransfer::SentAndCalled(
+                    None,
+                    Some(CallOutcome::Succeeded(event.inner.data.clone())),
+                ));
+            }
+        }
+        if log.topic0() == Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) {
+            if let Ok(event) = log.log_decode::<ITokenTransferrer::CallFailed>() {
+                return Some(TokenTransfer::SentAndCalled(
+                    None,
+                    Some(CallOutcome::Failed(event.inner.data.clone())),
+                ));
+            }
+        }
+    }
+
+    None
+}
+
+/// Handle ICM events - only handles Send/Receive/Execute events
+/// ICTT logs are fetched on-demand when processing Receive events
 async fn handle_log(
     chain_id: i64,
     block_number: i64,
     log: &Log,
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer>,
-    tx_context: &TxContext,
+    buffer: &Arc<MessageBuffer<Message>>,
     provider: &DynProvider<Ethereum>,
 ) -> anyhow::Result<()> {
     match log.topic0() {
-        // ICM Events
+        // ICM Source Event
         Some(&ITeleporterMessenger::SendCrossChainMessage::SIGNATURE_HASH) => {
             handle_send_cross_chain_message(
                 chain_id,
@@ -482,6 +975,7 @@ async fn handle_log(
             )
             .await
         }
+        // ICM Destination Events - ReceiveCrossChainMessage may have execution in same tx
         Some(&ITeleporterMessenger::ReceiveCrossChainMessage::SIGNATURE_HASH) => {
             handle_receive_cross_chain_message(
                 chain_id,
@@ -494,6 +988,8 @@ async fn handle_log(
             )
             .await
         }
+        // Execution events - handled for retry case (retryMessageExecution)
+        // When execution comes via retry, it's in a different transaction than ReceiveCrossChainMessage
         Some(&ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH) => {
             handle_message_executed(
                 chain_id,
@@ -502,6 +998,7 @@ async fn handle_log(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
+                provider,
             )
             .await
         }
@@ -513,25 +1010,9 @@ async fn handle_log(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
+                provider,
             )
             .await
-        }
-        // ICTT Events
-        Some(&ITokenTransferrer::TokensSent::SIGNATURE_HASH) => {
-            handle_tokens_sent(chain_id, block_number, log, bridge_id, buffer).await
-        }
-        Some(&ITokenTransferrer::TokensAndCallSent::SIGNATURE_HASH) => {
-            handle_tokens_and_call_sent(chain_id, block_number, log, bridge_id, buffer).await
-        }
-        Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) => {
-            handle_tokens_withdrawn(chain_id, block_number, log, bridge_id, buffer, tx_context)
-                .await
-        }
-        Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) => {
-            handle_call_succeeded(chain_id, block_number, log, bridge_id, buffer, tx_context).await
-        }
-        Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) => {
-            handle_call_failed(chain_id, block_number, log, bridge_id, buffer, tx_context).await
         }
         _ => {
             tracing::trace!(
@@ -543,28 +1024,27 @@ async fn handle_log(
     }
 }
 
-/// Handle SendCrossChainMessage - this is the SOURCE event that makes messages "ready"
+/// Handle SendCrossChainMessage - source-side event
+/// Fetches ICTT logs from the same transaction to capture TokensSent/TokensAndCallSent
 async fn handle_send_cross_chain_message(
     chain_id: i64,
     block_number: i64,
     log: &Log,
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer>,
+    buffer: &Arc<MessageBuffer<Message>>,
     provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
-    let event = log
-        .log_decode::<ITeleporterMessenger::SendCrossChainMessage>()?
-        .inner;
-    let message_id_bytes = event.messageID.as_slice();
-    let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
+    let decoded = log.log_decode::<ITeleporterMessenger::SendCrossChainMessage>()?;
+    let event = decoded.inner.data.clone();
+    let message_id_bytes: [u8; 8] = event.messageID.as_slice()[..8].try_into()?;
+    let id = i64::from_be_bytes(message_id_bytes);
     let tx_hash = log.transaction_hash.context("missing tx hash")?;
 
     let destination_hex = blockchain_id_hex(event.destinationBlockchainID.as_slice());
     let dst_chain_id = native_id_to_chain_id.get(&destination_hex).copied();
 
-    // TODO: Support messages to untracked chains in the future.
-    // For now, skip messages going to chains we don't index.
+    // Skip messages to untracked chains
     if dst_chain_id.is_none() {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
@@ -576,1090 +1056,334 @@ async fn handle_send_cross_chain_message(
 
     let key = Key::new(id, bridge_id);
 
-    // Get or create entry from buffer (checks hot tier, then cold tier, then creates new)
-    let mut entry = buffer.get_or_create(key).await?;
+    // Fetch block timestamp and ICTT logs in parallel
+    let (block_timestamp, ictt_logs) = tokio::try_join!(
+        fetch_block_timestamp(provider, block_number),
+        fetch_ictt_logs_for_transaction(provider, tx_hash)
+    )?;
 
-    // Fetch block timestamp via RPC (most nodes don't include it in logs)
-    let block_timestamp = provider
-        .get_block_by_number((block_number as u64).into())
-        .await?
-        .and_then(|block| {
-            chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
-                .map(|dt| dt.naive_utc())
-        });
+    // Parse ICTT logs
+    let transfer = parse_ictt_logs(&ictt_logs);
 
-    // Fill in source-side data
-    entry.src_chain_id = Some(chain_id);
-    entry.source_transaction_hash = Some(tx_hash);
-    entry.init_timestamp = block_timestamp;
-    entry.sender_address = Some(event.message.originSenderAddress);
-    entry.recipient_address = Some(event.message.destinationAddress);
-    entry.destination_chain_id = dst_chain_id;
-    entry.native_id = Some(message_id_bytes.to_vec());
-    entry.payload = Some(event.message.message.to_vec());
-    entry.cursor.record_block(chain_id, block_number);
+    // Build AnnotatedEvent
+    let annotated_send = AnnotatedEvent {
+        event,
+        transaction_hash: tx_hash,
+        block_number,
+        block_timestamp,
+        chain_id,
+    };
 
-    // Update buffer (message is now ready and will be flushed on next maintenance)
-    buffer.upsert(entry).await?;
+    // Get or create message entry
+    let mut entry = buffer.get_or_default(key).await?;
+
+    // Update send field (source-side)
+    entry.inner.send = Some(annotated_send);
+
+    // Merge ICTT transfer data - keep existing destination-side data if present
+    if let Some(new_transfer) = transfer {
+        entry.inner.transfer = match (entry.inner.transfer.take(), new_transfer) {
+            (None, new) => Some(new),
+            (Some(TokenTransfer::Sent(_, existing_dst)), TokenTransfer::Sent(src, _)) => {
+                Some(TokenTransfer::Sent(src, existing_dst))
+            }
+            (
+                Some(TokenTransfer::SentAndCalled(_, existing_dst)),
+                TokenTransfer::SentAndCalled(src, _),
+            ) => Some(TokenTransfer::SentAndCalled(src, existing_dst)),
+            (existing, _) => existing, // Keep existing if types don't match
+        };
+    }
+
+    buffer
+        .upsert_with_cursors(key, entry, chain_id, block_number)
+        .await?;
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
-        nonce = %event.message.messageNonce,
-        is_ready = true,
         "Processed SendCrossChainMessage"
     );
 
     Ok(())
 }
 
-/// Handle ReceiveCrossChainMessage - destination event, may arrive before source
+/// Handle ReceiveCrossChainMessage - destination-side event
+/// Also fetches MessageExecuted/MessageExecutionFailed and ICTT events from same tx
 async fn handle_receive_cross_chain_message(
     chain_id: i64,
     block_number: i64,
     log: &Log,
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer>,
+    buffer: &Arc<MessageBuffer<Message>>,
     provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
-    let event = log
-        .log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()?
-        .into_inner();
-    let message_id_bytes = event.messageID.as_slice();
-    let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
+    let decoded = log.log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()?;
+    let event = decoded.inner.data.clone();
+    let message_id_bytes: [u8; 8] = event.messageID.as_slice()[..8].try_into()?;
+    let id = i64::from_be_bytes(message_id_bytes);
     let tx_hash = log.transaction_hash.context("missing tx hash")?;
 
-    let source_blockchain_id_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
-    let src_chain_id = native_id_to_chain_id
-        .get(&source_blockchain_id_hex)
-        .copied();
+    let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
+    let src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
 
-    // TODO: Support messages from untracked chains in the future.
-    // For now, skip messages coming from chains we don't index.
+    // Skip messages from untracked chains
     if src_chain_id.is_none() {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
-            source_blockchain_id = %source_blockchain_id_hex,
+            source_blockchain_id = %source_hex,
             "Skipping ReceiveCrossChainMessage from untracked chain"
         );
         return Ok(());
     }
 
     let key = Key::new(id, bridge_id);
-    let mut entry = buffer.get_or_create(key).await?;
 
-    // Fetch block timestamp via RPC (most nodes don't include it in logs)
-    let block_timestamp = provider
-        .get_block_by_number((block_number as u64).into())
+    // Fetch block timestamp
+    let block_timestamp = fetch_block_timestamp(provider, block_number).await?;
+
+    // Fetch all logs from this transaction to find execution outcome and ICTT events
+    let receipt = provider
+        .get_transaction_receipt(tx_hash)
         .await?
-        .and_then(|block| {
-            chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
-                .map(|dt| dt.naive_utc())
-        });
+        .context("transaction receipt not found")?;
+    let transaction_logs: Vec<_> = receipt.inner.logs().to_vec();
 
-    // Fill in destination-side data
-    entry.destination_chain_id = Some(chain_id);
-    entry.destination_transaction_hash = Some(tx_hash.into());
-    entry.native_id = Some(message_id_bytes.to_vec());
-    entry.sender_address = event.message.originSenderAddress.into();
-    entry.recipient_address = event.message.destinationAddress.into();
-    entry.last_update_timestamp = block_timestamp;
-    entry.payload = event.message.message.to_vec().into();
-    entry.src_chain_id = src_chain_id;
-    entry.cursor.record_block(chain_id, block_number);
+    // Find execution outcome (MessageExecuted or MessageExecutionFailed) in same transaction
+    let execution_outcome = transaction_logs.iter().find_map(|l| {
+        if l.topic0() == Some(&ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH) {
+            l.log_decode::<ITeleporterMessenger::MessageExecuted>()
+                .ok()
+                .filter(|e| e.inner.data.messageID == event.messageID)
+                .map(|e| {
+                    MessageExecutionOutcome::Succeeded(AnnotatedEvent {
+                        event: e.inner.data.clone(),
+                        transaction_hash: tx_hash,
+                        block_number,
+                        block_timestamp,
+                        chain_id,
+                    })
+                })
+        } else if l.topic0() == Some(&ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH)
+        {
+            l.log_decode::<ITeleporterMessenger::MessageExecutionFailed>()
+                .ok()
+                .filter(|e| e.inner.data.messageID == event.messageID)
+                .map(|e| {
+                    MessageExecutionOutcome::Failed(AnnotatedEvent {
+                        event: e.inner.data.clone(),
+                        transaction_hash: tx_hash,
+                        block_number,
+                        block_timestamp,
+                        chain_id,
+                    })
+                })
+        } else {
+            None
+        }
+    });
 
-    buffer.upsert(entry).await?;
+    // Parse ICTT logs from same transaction (only present if execution succeeded)
+    let transfer = parse_ictt_logs(&transaction_logs);
+
+    // Build AnnotatedEvent for receive
+    let annotated_receive = AnnotatedEvent {
+        event,
+        transaction_hash: tx_hash,
+        block_number,
+        block_timestamp,
+        chain_id,
+    };
+
+    // Get or create message entry
+    let mut entry = buffer.get_or_default(key).await?;
+
+    // Update receive field
+    entry.inner.receive = Some(annotated_receive);
+
+    // Update execution field if we found one in the same transaction
+    if let Some(outcome) = execution_outcome {
+        entry.inner.execution = Some(outcome);
+    }
+
+    // Merge ICTT transfer data - keep existing source-side data if present
+    if let Some(new_transfer) = transfer {
+        entry.inner.transfer = match (entry.inner.transfer.take(), new_transfer) {
+            (None, new) => Some(new),
+            (Some(TokenTransfer::Sent(existing_src, _)), TokenTransfer::Sent(_, dst)) => {
+                Some(TokenTransfer::Sent(existing_src, dst))
+            }
+            (
+                Some(TokenTransfer::SentAndCalled(existing_src, _)),
+                TokenTransfer::SentAndCalled(_, dst),
+            ) => Some(TokenTransfer::SentAndCalled(existing_src, dst)),
+            (existing, _) => existing, // Keep existing if types don't match
+        };
+    }
+
+    buffer
+        .upsert_with_cursors(key, entry, chain_id, block_number)
+        .await?;
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
-        source_blockchain_id = %source_blockchain_id_hex,
-        nonce = %event.message.messageNonce,
         "Processed ReceiveCrossChainMessage"
     );
 
     Ok(())
 }
 
-/// Handle MessageExecuted - marks message as completed
+/// Handle MessageExecuted - can come via retry (retryMessageExecution)
+/// This handles the case where execution happens in a separate transaction from receive
 async fn handle_message_executed(
     chain_id: i64,
     block_number: i64,
     log: &Log,
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer>,
+    buffer: &Arc<MessageBuffer<Message>>,
+    provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::MessageExecuted>()?;
-    let event = decoded.inner;
-    let message_id_bytes = event.messageID.as_slice();
-    let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
+    let event = decoded.inner.data.clone();
+    let message_id_bytes: [u8; 8] = event.messageID.as_slice()[..8].try_into()?;
+    let id = i64::from_be_bytes(message_id_bytes);
+    let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
 
-    let source_blockchain_id_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
-    let src_chain_id = native_id_to_chain_id
-        .get(&source_blockchain_id_hex)
-        .copied();
+    let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
+    let src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
 
-    // TODO: Support messages from untracked chains in the future.
-    // For now, skip messages coming from chains we don't index.
+    // Skip messages from untracked chains
     if src_chain_id.is_none() {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
-            source_blockchain_id = %source_blockchain_id_hex,
+            source_blockchain_id = %source_hex,
             "Skipping MessageExecuted from untracked chain"
         );
         return Ok(());
     }
 
     let key = Key::new(id, bridge_id);
-    let mut entry = buffer.get_or_create(key).await?;
 
-    // Mark as completed
-    entry.status = Status::Completed;
-    entry.destination_chain_id = Some(chain_id);
-    entry.native_id = Some(message_id_bytes.to_vec());
-    entry.destination_transaction_hash = log.transaction_hash;
-    entry.src_chain_id = src_chain_id;
-    entry.cursor.record_block(chain_id, block_number);
+    // Fetch block timestamp
+    let block_timestamp = fetch_block_timestamp(provider, block_number).await?;
 
-    buffer.upsert(entry).await?;
+    // Fetch ICTT logs from this transaction (retry execution may have TokensWithdrawn, etc.)
+    let ictt_logs = fetch_ictt_logs_for_transaction(provider, transaction_hash).await?;
+    let transfer = parse_ictt_logs(&ictt_logs);
+
+    // Build AnnotatedEvent for execution
+    let annotated_execution = AnnotatedEvent {
+        event,
+        transaction_hash,
+        block_number,
+        block_timestamp,
+        chain_id,
+    };
+
+    // Get or create message entry
+    let mut entry = buffer.get_or_default(key).await?;
+
+    // Update execution field - this replaces any previous Failed execution with Succeeded
+    entry.inner.execution = Some(MessageExecutionOutcome::Succeeded(annotated_execution));
+
+    // Merge ICTT transfer data - keep existing source-side data if present
+    if let Some(new_transfer) = transfer {
+        entry.inner.transfer = match (entry.inner.transfer.take(), new_transfer) {
+            (None, new) => Some(new),
+            (Some(TokenTransfer::Sent(existing_src, _)), TokenTransfer::Sent(_, dst)) => {
+                Some(TokenTransfer::Sent(existing_src, dst))
+            }
+            (
+                Some(TokenTransfer::SentAndCalled(existing_src, _)),
+                TokenTransfer::SentAndCalled(_, dst),
+            ) => Some(TokenTransfer::SentAndCalled(existing_src, dst)),
+            (existing, _) => existing,
+        };
+    }
+
+    buffer
+        .upsert_with_cursors(key, entry, chain_id, block_number)
+        .await?;
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
-        source_blockchain_id = %source_blockchain_id_hex,
-        "Processed MessageExecuted"
+        "Processed MessageExecuted (retry)"
     );
 
     Ok(())
 }
 
-/// Handle MessageExecutionFailed - marks message as failed
+/// Handle MessageExecutionFailed - execution failed, can be retried later
 async fn handle_message_execution_failed(
     chain_id: i64,
     block_number: i64,
     log: &Log,
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer>,
+    buffer: &Arc<MessageBuffer<Message>>,
+    provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::MessageExecutionFailed>()?;
-    let event = decoded.inner;
-    let message_id_bytes = event.messageID.as_slice();
-    let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
+    let event = decoded.inner.data.clone();
+    let message_id_bytes: [u8; 8] = event.messageID.as_slice()[..8].try_into()?;
+    let id = i64::from_be_bytes(message_id_bytes);
+    let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
 
-    let source_blockchain_id_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
-    let src_chain_id = native_id_to_chain_id
-        .get(&source_blockchain_id_hex)
-        .copied();
+    let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
+    let src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
 
-    // TODO: Support messages from untracked chains in the future.
-    // For now, skip messages coming from chains we don't index.
+    // Skip messages from untracked chains
     if src_chain_id.is_none() {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
-            source_blockchain_id = %source_blockchain_id_hex,
+            source_blockchain_id = %source_hex,
             "Skipping MessageExecutionFailed from untracked chain"
         );
         return Ok(());
     }
 
     let key = Key::new(id, bridge_id);
-    let mut entry = buffer.get_or_create(key).await?;
 
-    // Mark as failed
-    entry.status = Status::Failed;
-    entry.destination_chain_id = Some(chain_id);
-    entry.native_id = Some(message_id_bytes.to_vec());
-    entry.sender_address = Some(event.message.originSenderAddress);
-    entry.recipient_address = Some(event.message.destinationAddress);
-    entry.payload = Some(event.message.message.to_vec());
-    entry.destination_transaction_hash = log.transaction_hash;
-    entry.src_chain_id = src_chain_id;
-    entry.cursor.record_block(chain_id, block_number);
+    // Fetch block timestamp
+    let block_timestamp = fetch_block_timestamp(provider, block_number).await?;
 
-    buffer.upsert(entry).await?;
+    // Build AnnotatedEvent for execution failure
+    let annotated_execution = AnnotatedEvent {
+        event,
+        transaction_hash,
+        block_number,
+        block_timestamp,
+        chain_id,
+    };
+
+    // Get or create message entry
+    let mut entry = buffer.get_or_default(key).await?;
+
+    // Only update if not already succeeded (don't overwrite success with failure)
+    if !matches!(
+        entry.inner.execution,
+        Some(MessageExecutionOutcome::Succeeded(_))
+    ) {
+        entry.inner.execution = Some(MessageExecutionOutcome::Failed(annotated_execution));
+    }
+
+    buffer
+        .upsert_with_cursors(key, entry, chain_id, block_number)
+        .await?;
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
-        source_blockchain_id = %source_blockchain_id_hex,
-        nonce = %event.message.messageNonce,
         "Processed MessageExecutionFailed"
     );
 
     Ok(())
-}
-
-// =============================================================================
-// ICTT (Interchain Token Transfer) Handlers
-// =============================================================================
-
-/// Handle TokensSent - source-side ICTT event for simple token transfers
-///
-/// This event is emitted when tokens are sent to another chain.
-/// The `teleporterMessageID` links this transfer to its parent ICM message.
-///
-/// Pushes an IcttEventFragment::TokensSent for later consolidation.
-async fn handle_tokens_sent(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    buffer: &Arc<MessageBuffer>,
-) -> Result<()> {
-    let event = log.log_decode::<ITokenTransferrer::TokensSent>()?.inner;
-    let message_id_bytes = event.teleporterMessageID.as_slice();
-    let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
-    let token_contract = log.address();
-
-    let key = Key::new(id, bridge_id);
-    let mut entry = buffer.get_or_create(key).await?;
-
-    // Push fragment for later consolidation
-    entry.ictt_fragments.push(IcttEventFragment::TokensSent {
-        token_contract,
-        sender: event.sender,
-        dst_token_address: event.input.destinationTokenTransferrerAddress,
-        recipient: event.input.recipient,
-        amount: event.amount,
-    });
-
-    entry.cursor.record_block(chain_id, block_number);
-    buffer.upsert(entry).await?;
-
-    tracing::debug!(
-        message_id = %hex::encode(message_id_bytes),
-        chain_id,
-        block_number,
-        sender = %event.sender,
-        amount = %event.amount,
-        "Processed TokensSent"
-    );
-
-    Ok(())
-}
-
-/// Handle TokensAndCallSent - source-side ICTT event for token transfers with contract call
-///
-/// Similar to TokensSent, but the recipient is a contract that will be called
-/// with the provided payload after receiving the tokens.
-///
-/// Pushes an IcttEventFragment::TokensAndCallSent for later consolidation.
-/// Stores fallbackRecipient so we can use it if CallFailed is received.
-async fn handle_tokens_and_call_sent(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    buffer: &Arc<MessageBuffer>,
-) -> Result<()> {
-    let event = log
-        .log_decode::<ITokenTransferrer::TokensAndCallSent>()?
-        .inner;
-    let message_id_bytes = event.teleporterMessageID.as_slice();
-    let id = i64::from_be_bytes(message_id_bytes[..8].try_into()?);
-    let token_contract = log.address();
-
-    let key = Key::new(id, bridge_id);
-    let mut entry = buffer.get_or_create(key).await?;
-
-    // Push fragment for later consolidation
-    entry
-        .ictt_fragments
-        .push(IcttEventFragment::TokensAndCallSent {
-            token_contract,
-            sender: event.sender,
-            dst_token_address: event.input.destinationTokenTransferrerAddress,
-            recipient_contract: event.input.recipientContract,
-            fallback_recipient: event.input.fallbackRecipient,
-            amount: event.amount,
-        });
-
-    entry.cursor.record_block(chain_id, block_number);
-    buffer.upsert(entry).await?;
-
-    tracing::debug!(
-        message_id = %hex::encode(message_id_bytes),
-        chain_id,
-        block_number,
-        sender = %event.sender,
-        recipient_contract = %event.input.recipientContract,
-        amount = %event.amount,
-        "Processed TokensAndCallSent"
-    );
-
-    Ok(())
-}
-
-/// Handle TokensWithdrawn - destination-side ICTT event when tokens are released
-///
-/// This event is emitted when tokens are withdrawn to the recipient.
-/// Uses TxContext to correlate with the parent message via messageID
-/// extracted from ReceiveCrossChainMessage in the same transaction.
-async fn handle_tokens_withdrawn(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    buffer: &Arc<MessageBuffer>,
-    tx_context: &TxContext,
-) -> Result<()> {
-    let event = log
-        .log_decode::<ITokenTransferrer::TokensWithdrawn>()?
-        .inner;
-    let tx_hash = log.transaction_hash.context("missing tx hash")?;
-
-    // Use tx_context to find the parent message
-    let Some(message_id) = tx_context.message_id else {
-        tracing::debug!(
-            recipient = %event.recipient,
-            amount = %event.amount,
-            tx_hash = %tx_hash,
-            "TokensWithdrawn: no ReceiveCrossChainMessage in same tx, skipping"
-        );
-        return Ok(());
-    };
-
-    let key = Key::new(message_id, bridge_id);
-    let mut entry = buffer.get_or_create(key).await?;
-
-    // Push fragment for later consolidation
-    entry
-        .ictt_fragments
-        .push(IcttEventFragment::TokensWithdrawn {
-            recipient: event.recipient,
-            amount: event.amount,
-        });
-
-    entry.cursor.record_block(chain_id, block_number);
-    buffer.upsert(entry).await?;
-
-    tracing::debug!(
-        message_id,
-        recipient = %event.recipient,
-        amount = %event.amount,
-        tx_hash = %tx_hash,
-        chain_id,
-        block_number,
-        "Processed TokensWithdrawn"
-    );
-
-    Ok(())
-}
-
-/// Handle CallSucceeded - destination-side ICTT event when contract call succeeds
-///
-/// This event is emitted after TokensAndCallSent when the recipient contract
-/// call succeeds. Uses TxContext to correlate with parent message via messageID
-/// extracted from ReceiveCrossChainMessage in the same transaction.
-///
-/// Pushes an IcttEventFragment::CallSucceeded - consolidation will keep recipient
-/// as the recipientContract from TokensAndCallSent.
-async fn handle_call_succeeded(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    buffer: &Arc<MessageBuffer>,
-    tx_context: &TxContext,
-) -> Result<()> {
-    let event = log.log_decode::<ITokenTransferrer::CallSucceeded>()?.inner;
-    let tx_hash = log.transaction_hash.context("missing tx hash")?;
-
-    // Use tx_context to find the parent message
-    let Some(message_id) = tx_context.message_id else {
-        tracing::debug!(
-            recipient_contract = %event.recipientContract,
-            amount = %event.amount,
-            tx_hash = %tx_hash,
-            "CallSucceeded: no ReceiveCrossChainMessage in same tx, skipping"
-        );
-        return Ok(());
-    };
-
-    let key = Key::new(message_id, bridge_id);
-    let mut entry = buffer.get_or_create(key).await?;
-
-    // Push fragment for later consolidation
-    entry.ictt_fragments.push(IcttEventFragment::CallSucceeded {
-        recipient_contract: event.recipientContract,
-        amount: event.amount,
-    });
-
-    entry.cursor.record_block(chain_id, block_number);
-    buffer.upsert(entry).await?;
-
-    tracing::debug!(
-        message_id,
-        recipient_contract = %event.recipientContract,
-        amount = %event.amount,
-        tx_hash = %tx_hash,
-        chain_id,
-        block_number,
-        "Processed CallSucceeded"
-    );
-
-    Ok(())
-}
-
-/// Handle CallFailed - destination-side ICTT event when contract call fails
-///
-/// This event is emitted after TokensAndCallSent when the recipient contract
-/// call fails. Tokens are sent to the fallback recipient instead.
-/// Uses TxContext to correlate with parent message via messageID
-/// extracted from ReceiveCrossChainMessage in the same transaction.
-///
-/// Pushes an IcttEventFragment::CallFailed - consolidation will use
-/// fallbackRecipient from TokensAndCallSent as the final recipient.
-async fn handle_call_failed(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    buffer: &Arc<MessageBuffer>,
-    tx_context: &TxContext,
-) -> Result<()> {
-    let event = log.log_decode::<ITokenTransferrer::CallFailed>()?.inner;
-    let tx_hash = log.transaction_hash.context("missing tx hash")?;
-
-    // Use tx_context to find the parent message
-    let Some(message_id) = tx_context.message_id else {
-        tracing::debug!(
-            recipient_contract = %event.recipientContract,
-            amount = %event.amount,
-            tx_hash = %tx_hash,
-            "CallFailed: no ReceiveCrossChainMessage in same tx, skipping"
-        );
-        return Ok(());
-    };
-
-    let key = Key::new(message_id, bridge_id);
-    let mut entry = buffer.get_or_create(key).await?;
-
-    // Push fragment for later consolidation - recipient will become fallbackRecipient
-    entry.ictt_fragments.push(IcttEventFragment::CallFailed {
-        recipient_contract: event.recipientContract,
-        amount: event.amount,
-    });
-
-    entry.cursor.record_block(chain_id, block_number);
-    buffer.upsert(entry).await?;
-
-    tracing::debug!(
-        message_id,
-        recipient_contract = %event.recipientContract,
-        amount = %event.amount,
-        tx_hash = %tx_hash,
-        chain_id,
-        block_number,
-        "Processed CallFailed"
-    );
-
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::test_utils::init_db;
-    use alloy::{
-        node_bindings::AnvilInstance,
-        primitives::{Address, B256, Bytes, LogData, U256},
-        providers::{ProviderBuilder, ext::AnvilApi},
-        rpc::types::Log,
-    };
-    use interchain_indexer_entity::{crosschain_messages, sea_orm_active_enums::MessageStatus};
-    use sea_orm::{ActiveValue, EntityTrait};
-
-    /// Create a mock provider for tests using an embedded Anvil instance.
-    /// Mines 300 blocks so that tests can reference blocks 0-299.
-    async fn create_test_provider() -> (DynProvider<Ethereum>, AnvilInstance) {
-        let anvil = alloy::node_bindings::Anvil::new().spawn();
-        let provider = ProviderBuilder::new()
-            .connect_http(anvil.endpoint_url())
-            .erased();
-
-        // Mine 300 blocks so tests can reference block numbers 100, 200, 201, etc.
-        for _ in 0..300 {
-            provider.evm_mine(None).await.unwrap();
-        }
-
-        (provider, anvil)
-    }
-
-    // Helper to create a mock SendCrossChainMessage log
-    fn create_send_message_log(
-        message_id: [u8; 32],
-        destination_blockchain_id: [u8; 32],
-        block_number: u64,
-        tx_hash: [u8; 32],
-        nonce: u64,
-    ) -> Log {
-        let message = TeleporterMessage {
-            messageNonce: U256::from(nonce),
-            originSenderAddress: Address::repeat_byte(0x11),
-            destinationBlockchainID: destination_blockchain_id.into(),
-            destinationAddress: Address::repeat_byte(0x22),
-            requiredGasLimit: U256::from(500000),
-            allowedRelayerAddresses: vec![],
-            receipts: vec![],
-            message: Bytes::from(vec![0xab, 0xcd]),
-        };
-
-        let fee_info = TeleporterFeeInfo {
-            feeTokenAddress: Address::ZERO,
-            amount: U256::ZERO,
-        };
-
-        let event = ITeleporterMessenger::SendCrossChainMessage {
-            messageID: message_id.into(),
-            destinationBlockchainID: destination_blockchain_id.into(),
-            message,
-            feeInfo: fee_info,
-        };
-
-        let topics = vec![
-            ITeleporterMessenger::SendCrossChainMessage::SIGNATURE_HASH,
-            message_id.into(),
-            destination_blockchain_id.into(),
-        ];
-
-        let data = event.encode_data();
-
-        Log {
-            inner: alloy::primitives::Log {
-                address: Address::repeat_byte(0x25),
-                data: LogData::new_unchecked(topics, data.into()),
-            },
-            block_hash: Some(B256::repeat_byte(0xbb)),
-            block_number: Some(block_number),
-            block_timestamp: None,
-            transaction_hash: Some(B256::from(tx_hash)),
-            transaction_index: Some(0),
-            log_index: Some(0),
-            removed: false,
-        }
-    }
-
-    // Helper to create a mock ReceiveCrossChainMessage log
-    fn create_receive_message_log(
-        message_id: [u8; 32],
-        source_blockchain_id: [u8; 32],
-        block_number: u64,
-        tx_hash: [u8; 32],
-        nonce: u64,
-    ) -> Log {
-        let message = TeleporterMessage {
-            messageNonce: U256::from(nonce),
-            originSenderAddress: Address::repeat_byte(0x11),
-            destinationBlockchainID: [0u8; 32].into(),
-            destinationAddress: Address::repeat_byte(0x22),
-            requiredGasLimit: U256::from(500000),
-            allowedRelayerAddresses: vec![],
-            receipts: vec![],
-            message: Bytes::from(vec![0xab, 0xcd]),
-        };
-
-        let event = ITeleporterMessenger::ReceiveCrossChainMessage {
-            messageID: message_id.into(),
-            sourceBlockchainID: source_blockchain_id.into(),
-            deliverer: Address::repeat_byte(0x33),
-            rewardRedeemer: Address::repeat_byte(0x44),
-            message,
-        };
-
-        let topics = vec![
-            ITeleporterMessenger::ReceiveCrossChainMessage::SIGNATURE_HASH,
-            message_id.into(),
-            source_blockchain_id.into(),
-            Address::repeat_byte(0x33).into_word(),
-        ];
-
-        let data = event.encode_data();
-
-        Log {
-            inner: alloy::primitives::Log {
-                address: Address::repeat_byte(0x25),
-                data: LogData::new_unchecked(topics, data.into()),
-            },
-            block_hash: Some(B256::repeat_byte(0xbb)),
-            block_number: Some(block_number),
-            block_timestamp: None,
-            transaction_hash: Some(B256::from(tx_hash)),
-            transaction_index: Some(0),
-            log_index: Some(1),
-            removed: false,
-        }
-    }
-
-    // Helper to create a mock MessageExecuted log
-    fn create_executed_message_log(
-        message_id: [u8; 32],
-        source_blockchain_id: [u8; 32],
-        block_number: u64,
-        tx_hash: [u8; 32],
-    ) -> Log {
-        let event = ITeleporterMessenger::MessageExecuted {
-            messageID: message_id.into(),
-            sourceBlockchainID: source_blockchain_id.into(),
-        };
-
-        let topics = vec![
-            ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH,
-            message_id.into(),
-            source_blockchain_id.into(),
-        ];
-
-        let data = event.encode_data();
-
-        Log {
-            inner: alloy::primitives::Log {
-                address: Address::repeat_byte(0x25),
-                data: LogData::new_unchecked(topics, data.into()),
-            },
-            block_hash: Some(B256::repeat_byte(0xbb)),
-            block_number: Some(block_number),
-            block_timestamp: None,
-            transaction_hash: Some(B256::from(tx_hash)),
-            transaction_index: Some(0),
-            log_index: Some(2),
-            removed: false,
-        }
-    }
-
-    // Helper to create a mock MessageExecutionFailed log
-    fn create_failed_message_log(
-        message_id: [u8; 32],
-        source_blockchain_id: [u8; 32],
-        block_number: u64,
-        tx_hash: [u8; 32],
-        nonce: u64,
-    ) -> Log {
-        let message = TeleporterMessage {
-            messageNonce: U256::from(nonce),
-            originSenderAddress: Address::repeat_byte(0x11),
-            destinationBlockchainID: [0u8; 32].into(),
-            destinationAddress: Address::repeat_byte(0x22),
-            requiredGasLimit: U256::from(500000),
-            allowedRelayerAddresses: vec![],
-            receipts: vec![],
-            message: Bytes::from(vec![0xab, 0xcd]),
-        };
-
-        let event = ITeleporterMessenger::MessageExecutionFailed {
-            messageID: message_id.into(),
-            sourceBlockchainID: source_blockchain_id.into(),
-            message,
-        };
-
-        let topics = vec![
-            ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH,
-            message_id.into(),
-            source_blockchain_id.into(),
-        ];
-
-        let data = event.encode_data();
-
-        Log {
-            inner: alloy::primitives::Log {
-                address: Address::repeat_byte(0x25),
-                data: LogData::new_unchecked(topics, data.into()),
-            },
-            block_hash: Some(B256::repeat_byte(0xbb)),
-            block_number: Some(block_number),
-            block_timestamp: None,
-            transaction_hash: Some(B256::from(tx_hash)),
-            transaction_index: Some(0),
-            log_index: Some(2),
-            removed: false,
-        }
-    }
-
-    /// Helper to set up test environment with chains and bridge
-    async fn setup_test_env(
-        test_name: &str,
-    ) -> (
-        InterchainDatabase,
-        Arc<MessageBuffer>,
-        HashMap<String, i64>,
-        DynProvider<Ethereum>,
-        AnvilInstance, // keep anvil alive for the duration of the test
-        i32,           // bridge_id
-        i64,           // src_chain_id
-        i64,           // dst_chain_id
-    ) {
-        let db = init_db(test_name).await;
-        let interchain_db = InterchainDatabase::new(db.client());
-
-        let bridge_id = 1i32;
-        let src_chain_id = 43114i64;
-        let dst_chain_id = 43113i64;
-
-        // Create chains
-        interchain_db
-            .upsert_chains(vec![
-                interchain_indexer_entity::chains::ActiveModel {
-                    id: ActiveValue::Set(src_chain_id),
-                    name: ActiveValue::Set("Avalanche C-Chain".to_string()),
-                    native_id: ActiveValue::Set(Some("0x".to_string() + &hex::encode([1u8; 32]))),
-                    ..Default::default()
-                },
-                interchain_indexer_entity::chains::ActiveModel {
-                    id: ActiveValue::Set(dst_chain_id),
-                    name: ActiveValue::Set("Fuji Testnet".to_string()),
-                    native_id: ActiveValue::Set(Some("0x".to_string() + &hex::encode([2u8; 32]))),
-                    ..Default::default()
-                },
-            ])
-            .await
-            .unwrap();
-
-        // Create bridge
-        interchain_db
-            .upsert_bridges(vec![interchain_indexer_entity::bridges::ActiveModel {
-                id: ActiveValue::Set(bridge_id),
-                name: ActiveValue::Set("Teleporter".to_string()),
-                enabled: ActiveValue::Set(true),
-                ..Default::default()
-            }])
-            .await
-            .unwrap();
-
-        let native_id_to_chain_id = interchain_db.load_native_id_map().await.unwrap();
-
-        let buffer = MessageBuffer::new(interchain_db.clone(), Config::default());
-
-        let (provider, anvil) = create_test_provider().await;
-
-        (
-            interchain_db,
-            buffer,
-            native_id_to_chain_id,
-            provider,
-            anvil,
-            bridge_id,
-            src_chain_id,
-            dst_chain_id,
-        )
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn test_sequential_event_flow_with_buffer() {
-        let (
-            interchain_db,
-            buffer,
-            native_id_to_chain_id,
-            provider,
-            _anvil,
-            bridge_id,
-            src_chain_id,
-            dst_chain_id,
-        ) = setup_test_env("avax_buf_seq").await;
-
-        let mut message_id_bytes = [0u8; 32];
-        message_id_bytes[0..8].copy_from_slice(&123456789i64.to_be_bytes());
-
-        let src_blockchain_id = [1u8; 32];
-        let dst_blockchain_id = [2u8; 32];
-
-        // Step 1: Process SendCrossChainMessage
-        let send_log =
-            create_send_message_log(message_id_bytes, dst_blockchain_id, 100, [0x1a; 32], 1);
-
-        handle_send_cross_chain_message(
-            src_chain_id,
-            100,
-            &send_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-            &provider,
-        )
-        .await
-        .unwrap();
-
-        // Message should be in hot tier (ready = has init_timestamp)
-        let hot_count = buffer.hot_len();
-        assert_eq!(hot_count, 1);
-
-        // Step 2: Process ReceiveCrossChainMessage
-        let receive_log =
-            create_receive_message_log(message_id_bytes, src_blockchain_id, 200, [0x2b; 32], 1);
-
-        handle_receive_cross_chain_message(
-            dst_chain_id,
-            200,
-            &receive_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-            &provider,
-        )
-        .await
-        .unwrap();
-
-        // Step 3: Process MessageExecuted
-        let executed_log =
-            create_executed_message_log(message_id_bytes, src_blockchain_id, 201, [0x3c; 32]);
-
-        handle_message_executed(
-            dst_chain_id,
-            201,
-            &executed_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-        )
-        .await
-        .unwrap();
-
-        // Run maintenance to flush to DB
-        buffer.run().await.unwrap();
-
-        // Verify message in DB with Completed status
-        let messages = crosschain_messages::Entity::find()
-            .all(interchain_db.db.as_ref())
-            .await
-            .unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].id, 123456789i64);
-        assert_eq!(messages[0].status, MessageStatus::Completed);
-        assert_eq!(messages[0].src_chain_id, src_chain_id);
-        assert_eq!(messages[0].dst_chain_id, Some(dst_chain_id));
-        assert!(messages[0].src_tx_hash.is_some());
-        assert!(messages[0].dst_tx_hash.is_some());
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn test_out_of_order_with_buffer() {
-        let (
-            interchain_db,
-            buffer,
-            native_id_to_chain_id,
-            provider,
-            _anvil,
-            bridge_id,
-            src_chain_id,
-            dst_chain_id,
-        ) = setup_test_env("avax_buf_ooo").await;
-
-        let mut message_id_bytes = [0u8; 32];
-        message_id_bytes[0..8].copy_from_slice(&987654321i64.to_be_bytes());
-
-        let src_blockchain_id = [1u8; 32];
-        let dst_blockchain_id = [2u8; 32];
-
-        // Step 1: Process ReceiveCrossChainMessage FIRST (out of order)
-        let receive_log =
-            create_receive_message_log(message_id_bytes, src_blockchain_id, 200, [0x2b; 32], 1);
-
-        handle_receive_cross_chain_message(
-            dst_chain_id,
-            200,
-            &receive_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-            &provider,
-        )
-        .await
-        .unwrap();
-
-        // Message should be in hot tier but NOT ready (no init_timestamp)
-        let key = Key::new(987654321i64, bridge_id);
-        let entry = buffer.get_or_create(key).await.unwrap();
-        assert!(!entry.is_ready());
-        assert!(entry.destination_transaction_hash.is_some());
-
-        // Run maintenance - should NOT flush (message not ready)
-        buffer.run().await.unwrap();
-
-        // Step 2: Process SendCrossChainMessage (arrives late)
-        let send_log =
-            create_send_message_log(message_id_bytes, dst_blockchain_id, 100, [0x1a; 32], 1);
-
-        handle_send_cross_chain_message(
-            src_chain_id,
-            100,
-            &send_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-            &provider,
-        )
-        .await
-        .unwrap();
-
-        // Now message should be ready
-        let entry = buffer.get_or_create(key).await.unwrap();
-        assert!(entry.is_ready());
-        assert!(entry.source_transaction_hash.is_some());
-        assert!(entry.destination_transaction_hash.is_some());
-
-        // Run maintenance - should flush now
-        buffer.run().await.unwrap();
-
-        // Verify message in DB
-        let messages = crosschain_messages::Entity::find()
-            .all(interchain_db.db.as_ref())
-            .await
-            .unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].id, 987654321i64);
-        assert_eq!(messages[0].src_chain_id, src_chain_id);
-        assert_eq!(messages[0].dst_chain_id, Some(dst_chain_id));
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn test_execution_before_send_with_buffer() {
-        let (
-            interchain_db,
-            buffer,
-            native_id_to_chain_id,
-            provider,
-            _anvil,
-            bridge_id,
-            src_chain_id,
-            dst_chain_id,
-        ) = setup_test_env("avax_buf_exec_first").await;
-
-        let mut message_id_bytes = [0u8; 32];
-        message_id_bytes[0..8].copy_from_slice(&111222333i64.to_be_bytes());
-
-        let src_blockchain_id = [1u8; 32];
-        let dst_blockchain_id = [2u8; 32];
-
-        // Step 1: Process MessageExecuted FIRST (very out of order)
-        let executed_log =
-            create_executed_message_log(message_id_bytes, src_blockchain_id, 201, [0x3c; 32]);
-
-        handle_message_executed(
-            dst_chain_id,
-            201,
-            &executed_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-        )
-        .await
-        .unwrap();
-
-        // Message not ready yet
-        let key = Key::new(111222333i64, bridge_id);
-        let entry = buffer.get_or_create(key).await.unwrap();
-        assert!(!entry.is_ready());
-        assert_eq!(entry.status, Status::Completed);
-
-        // Step 2: Process SendCrossChainMessage
-        let send_log =
-            create_send_message_log(message_id_bytes, dst_blockchain_id, 100, [0x1a; 32], 1);
-
-        handle_send_cross_chain_message(
-            src_chain_id,
-            100,
-            &send_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-            &provider,
-        )
-        .await
-        .unwrap();
-
-        // Run maintenance
-        buffer.run().await.unwrap();
-
-        // Verify final state - should be Completed
-        let messages = crosschain_messages::Entity::find()
-            .all(interchain_db.db.as_ref())
-            .await
-            .unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].status, MessageStatus::Completed);
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn test_failed_execution_with_buffer() {
-        let (
-            interchain_db,
-            buffer,
-            native_id_to_chain_id,
-            provider,
-            _anvil,
-            bridge_id,
-            src_chain_id,
-            dst_chain_id,
-        ) = setup_test_env("avax_buf_failed").await;
-
-        let mut message_id_bytes = [0u8; 32];
-        message_id_bytes[0..8].copy_from_slice(&444555666i64.to_be_bytes());
-
-        let src_blockchain_id = [1u8; 32];
-        let dst_blockchain_id = [2u8; 32];
-
-        // Step 1: Send
-        let send_log =
-            create_send_message_log(message_id_bytes, dst_blockchain_id, 100, [0x1a; 32], 1);
-        handle_send_cross_chain_message(
-            src_chain_id,
-            100,
-            &send_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-            &provider,
-        )
-        .await
-        .unwrap();
-
-        // Step 2: Receive
-        let receive_log =
-            create_receive_message_log(message_id_bytes, src_blockchain_id, 200, [0x2b; 32], 1);
-        handle_receive_cross_chain_message(
-            dst_chain_id,
-            200,
-            &receive_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-            &provider,
-        )
-        .await
-        .unwrap();
-
-        // Step 3: Execution Failed
-        let failed_log =
-            create_failed_message_log(message_id_bytes, src_blockchain_id, 201, [0x3c; 32], 1);
-        handle_message_execution_failed(
-            dst_chain_id,
-            201,
-            &failed_log,
-            bridge_id,
-            &native_id_to_chain_id,
-            &buffer,
-        )
-        .await
-        .unwrap();
-
-        // Run maintenance
-        buffer.run().await.unwrap();
-
-        // Verify final state is Failed
-        let messages = crosschain_messages::Entity::find()
-            .all(interchain_db.db.as_ref())
-            .await
-            .unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].status, MessageStatus::Failed);
-    }
 }
