@@ -1,4 +1,4 @@
-use ethers_solc::sourcemap::SourceMap;
+use foundry_compilers::artifacts::sourcemap::SourceMap;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,14 +21,14 @@ impl Method {
             .ok_or_else(|| anyhow::anyhow!("source map doesn't have function index"))?;
 
         let filename = src
-            .index
+            .index()
             .and_then(|id| file_ids.get(&id))
-            .ok_or_else(|| anyhow::anyhow!("src {:?} not found in output sources", src.index))?;
+            .ok_or_else(|| anyhow::anyhow!("src {:?} not found in output sources", src.index()))?;
 
         Ok(Method {
             selector,
-            offset: src.offset,
-            length: src.length,
+            offset: src.offset() as usize,
+            length: src.length() as usize,
             filename: filename.clone(),
         })
     }

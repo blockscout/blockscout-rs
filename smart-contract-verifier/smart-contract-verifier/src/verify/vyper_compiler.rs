@@ -2,7 +2,7 @@ use super::{evm_compilers, Error};
 use crate::{DetailedVersion, Language, Version};
 use anyhow::Context;
 use async_trait::async_trait;
-use foundry_compilers_new::artifacts;
+use foundry_compilers::artifacts;
 use serde_json::Value;
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 
@@ -87,7 +87,7 @@ impl evm_compilers::EvmCompiler for VyperCompiler {
         input: &Self::CompilerInput,
     ) -> Result<Value, Error> {
         // we use `solc::Solc` because `solc::Solc` does the same thing under the hood.
-        let solc = foundry_compilers_new::solc::Solc::new_with_version(
+        let solc = foundry_compilers::solc::Solc::new_with_version(
             compiler_path,
             compiler_version.to_semver().to_owned(),
         );

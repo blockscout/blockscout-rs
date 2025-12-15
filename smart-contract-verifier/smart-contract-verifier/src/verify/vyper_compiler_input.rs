@@ -1,4 +1,4 @@
-use foundry_compilers_new::artifacts::{
+use foundry_compilers::artifacts::{
     output_selection::{FileOutputSelection, OutputSelection},
     serde_helpers, EvmVersion, Source, Sources,
 };

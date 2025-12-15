@@ -43,7 +43,7 @@ pub trait CompilerInput: Serialize {
 }
 
 pub trait CompilationError:
-    foundry_compilers_new::CompilationError + for<'de> Deserialize<'de>
+    foundry_compilers::CompilationError + for<'de> Deserialize<'de>
 {
     fn formatted_message(&self) -> String;
 }
