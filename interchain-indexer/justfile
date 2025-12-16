@@ -9,7 +9,7 @@ db-name := env_var_or_default('DB_NAME', "interchain_indexer")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
 export RUST_LOG := env_var_or_default('RUST_LOG', "info")
 
-docker-name := env_var_or_default('DOCKER_NAME', "interchain-indexer-postgres")
+docker-name := env_var_or_default('DOCKER_NAME', "interchain-indexer-postgres-dev")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
 
 

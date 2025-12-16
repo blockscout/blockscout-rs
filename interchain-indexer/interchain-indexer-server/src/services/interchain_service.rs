@@ -234,7 +234,7 @@ impl InterchainServiceImpl {
                     transfer.token_src_address.clone(),
                 )
                 .await,
-            source_amount: Some(transfer.src_amount.to_string()),
+            source_amount: Some(transfer.src_amount.to_plain_string()),
             source_transaction_hash: hex_string_opt(message.src_tx_hash.clone()),
             sender: hex_string_opt(transfer.sender_address.clone()),
             send_timestamp: db_datetime_to_string(message.init_timestamp),
@@ -244,7 +244,7 @@ impl InterchainServiceImpl {
                     transfer.token_dst_address.clone(),
                 )
                 .await,
-            destination_amount: Some(transfer.dst_amount.to_string()),
+            destination_amount: Some(transfer.dst_amount.to_plain_string()),
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash.clone()),
             recipient: hex_string_opt(transfer.recipient_address.clone()),
             receive_timestamp: message
@@ -267,7 +267,7 @@ impl InterchainServiceImpl {
                     transfer.token_src_address.clone(),
                 )
                 .await,
-            source_amount: Some(transfer.src_amount.to_string()),
+            source_amount: Some(transfer.src_amount.to_plain_string()),
             source_transaction_hash: hex_string_opt(transfer.src_tx_hash.clone()),
             sender: hex_string_opt(transfer.sender_address.clone()),
             send_timestamp: db_datetime_to_string(transfer.init_timestamp),
@@ -277,7 +277,7 @@ impl InterchainServiceImpl {
                     transfer.token_dst_address.clone(),
                 )
                 .await,
-            destination_amount: Some(transfer.dst_amount.to_string()),
+            destination_amount: Some(transfer.dst_amount.to_plain_string()),
             destination_transaction_hash: hex_string_opt(transfer.dst_tx_hash.clone()),
             recipient: hex_string_opt(transfer.recipient_address.clone()),
             receive_timestamp: transfer
