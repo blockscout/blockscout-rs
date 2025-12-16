@@ -105,14 +105,6 @@ impl ProtocolSpecific {
             ProtocolSpecific::InfinityName(infinity) => Some(infinity.main_contract),
         }
     }
-
-    // pub fn registry_contract(&self) -> Option<Address> {
-    //     match self {
-    //         ProtocolSpecific::EnsLike(ens) => ens.registry_contract,
-    //         ProtocolSpecific::D3Connect(_) => None,
-    //         ProtocolSpecific::InfinityName(_) => None,
-    //     }
-    // }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

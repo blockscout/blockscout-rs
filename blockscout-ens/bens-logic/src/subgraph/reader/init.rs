@@ -146,7 +146,7 @@ impl SubgraphReader {
                         ))?;
                 }
                 AddressResolveTechnique::Addr2Name => {
-                    sql::AddrToNameTable::create_table(self.pool.as_ref(), schema)
+                    sql::Addr2NameTable::create_table(self.pool.as_ref(), schema)
                         .await
                         .context(format!(
                             "failed to create Addr2NameTable for schema {schema}"

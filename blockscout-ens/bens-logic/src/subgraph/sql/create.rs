@@ -1,7 +1,7 @@
 use crate::{
     entity::subgraph::domain::{CreationAddr2Name, CreationDomain},
     protocols::Protocol,
-    subgraph::sql::{AddrToNameTable, DbErr},
+    subgraph::sql::{Addr2NameTable, DbErr},
 };
 use sqlx::PgPool;
 
@@ -28,7 +28,7 @@ pub async fn create_or_update_reverse_record_in_addr2name(
     reverse_record: CreationAddr2Name,
     protocol: &Protocol,
 ) -> Result<(), DbErr> {
-    AddrToNameTable::upsert_reverse_record(pool, reverse_record, protocol).await
+    Addr2NameTable::upsert_reverse_record(pool, reverse_record, protocol).await
 }
 
 async fn create_domain(pool: &PgPool, schema: &str, domain: &CreationDomain) -> Result<(), DbErr> {

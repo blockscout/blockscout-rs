@@ -8,12 +8,12 @@ use nonempty::NonEmpty;
 use sea_query::{Alias, Expr, PostgresQueryBuilder};
 use sqlx::PgPool;
 
-pub struct AddrToNameTable;
+pub struct Addr2NameTable;
 
 #[async_trait::async_trait]
-impl AdditionalTable for AddrToNameTable {
+impl AdditionalTable for Addr2NameTable {
     fn table_name() -> &'static str {
-        "addr_to_name"
+        "addr2name"
     }
 
     fn create_table_sql(schema: &str) -> String {
@@ -30,7 +30,7 @@ impl AdditionalTable for AddrToNameTable {
     }
 }
 
-impl AddrToNameTable {
+impl Addr2NameTable {
     pub async fn batch_search_addreses(
         pool: &PgPool,
         protocols: &NonEmpty<&Protocol>,

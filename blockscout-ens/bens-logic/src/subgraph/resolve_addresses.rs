@@ -107,7 +107,7 @@ async fn resolve_addr2name(
     addresses: &[Address],
 ) -> Result<Vec<DomainWithAddress>, DbErr> {
     let addresses_str: Vec<String> = addresses.iter().map(hex).collect();
-    sql::AddrToNameTable::batch_search_addreses(pool, protocols, &addresses_str).await
+    sql::Addr2NameTable::batch_search_addreses(pool, protocols, &addresses_str).await
 }
 
 async fn resolve_primary_name_record(
