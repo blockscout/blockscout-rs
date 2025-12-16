@@ -27,6 +27,7 @@ pub struct DetailedDomain {
     pub protocol_slug: String,
     #[sqlx(default)]
     pub other_addresses: sqlx::types::Json<HashMap<String, String>>,
+    pub token_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, sqlx::FromRow)]

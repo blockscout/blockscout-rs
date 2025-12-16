@@ -1,5 +1,10 @@
 use super::{hash_name::hash_ens_domain_name, ProtocolError, Tld};
-use crate::{hex, protocols::protocoler::DeployedProtocol};
+use crate::{
+    hex,
+    protocols::{
+        hash_name::hash_infinity_domain_name, protocoler::DeployedProtocol, ProtocolSpecific,
+    },
+};
 use alloy::primitives::{keccak256, Address, B256};
 use ens_normalize_rs::EnsNameNormalizer;
 use lazy_static::lazy_static;
@@ -77,12 +82,17 @@ pub struct DomainName {
     id_bytes: B256,
     clean: CleanName,
     empty_label_hash: Option<B256>,
+    specific: Option<ProtocolSpecific>,
 }
 
 impl DomainName {
-    pub fn new(name: &str, empty_label_hash: Option<B256>) -> Result<Self, ProtocolError> {
+    pub fn new(
+        name: &str,
+        empty_label_hash: Option<B256>,
+        specific: Option<ProtocolSpecific>,
+    ) -> Result<Self, ProtocolError> {
         let clean = CleanName::new(name)?;
-        let id_bytes = hash_ens_domain_name(clean.name(), empty_label_hash);
+        let id_bytes = calculate_id(clean.name(), empty_label_hash, &specific);
         let id = hex(id_bytes);
 
         Ok(Self {
@@ -90,13 +100,23 @@ impl DomainName {
             id_bytes,
             clean,
             empty_label_hash,
+            specific,
         })
+    }
+
+    pub fn new_from_name_and_protocol(
+        name: &str,
+        protocol: &ProtocolSpecific,
+    ) -> Result<Self, ProtocolError> {
+        let empty_label_hash = protocol.empty_label_hash();
+        let specific = Some(protocol.clone());
+        Self::new(name, empty_label_hash, specific)
     }
 
     pub fn addr_reverse(addr: &Address) -> Self {
         let label_name = format!("{addr:x}");
         let name = format!("{label_name}.addr.reverse");
-        Self::new(&name, None).expect("addr.reverse is always valid")
+        Self::new(&name, None, None).expect("addr.reverse is always valid")
     }
 
     pub fn id(&self) -> &str {
@@ -135,7 +155,8 @@ impl DomainName {
         alloy_ccip_read::utils::iter_parent_names(self.clean.name())
             .into_iter()
             .map(|name| {
-                Self::new(name, self.empty_label_hash).expect("parent name is already normalized")
+                Self::new(name, self.empty_label_hash, self.specific.clone())
+                    .expect("parent name is already normalized")
             })
             .collect::<Vec<_>>()
             .into_iter()
@@ -176,16 +197,10 @@ impl<'a> DomainNameOnProtocol<'a> {
         name: &str,
         protocol_network: DeployedProtocol<'a>,
     ) -> Result<Self, ProtocolError> {
-        let name = DomainName::new(
-            name,
-            protocol_network
-                .protocol
-                .info
-                .protocol_specific
-                .empty_label_hash(),
-        )?;
+        let specific = protocol_network.protocol.info.protocol_specific.clone();
+        let domain = DomainName::new_from_name_and_protocol(name, &specific)?;
 
-        Ok(Self::new(name, protocol_network))
+        Ok(Self::new(domain, protocol_network))
     }
 
     pub fn tld_is_native(&self) -> bool {
@@ -214,15 +229,30 @@ fn ens_normalize(name: &str) -> Result<String, ProtocolError> {
     Ok(normalized)
 }
 
+fn calculate_id(
+    name: &str,
+    empty_label_hash: Option<B256>,
+    specific: &Option<ProtocolSpecific>,
+) -> B256 {
+    match specific {
+        Some(ProtocolSpecific::EnsLike(_) | ProtocolSpecific::D3Connect(_)) | None => {
+            hash_ens_domain_name(name, empty_label_hash)
+        }
+        Some(ProtocolSpecific::InfinityName(_)) => hash_infinity_domain_name(name),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::protocols::InfinityNameProtocol;
+
     use super::*;
     use alloy::hex::FromHex;
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
 
     #[test]
-    fn domain_creation_works() {
+    fn ens_domain_creation_works() {
         for (name, empty_label_hash, expected_id, expected_label, expected_name) in [
             (
                 "eth",
@@ -280,7 +310,35 @@ mod tests {
             ),
         ] {
             let domain_name =
-                DomainName::new(name, empty_label_hash).expect("failed to build domain name");
+                DomainName::new(name, empty_label_hash, None).expect("failed to build domain name");
+            assert_eq!(domain_name.id, expected_id);
+            assert_eq!(domain_name.label_name(), expected_label);
+            assert_eq!(domain_name.name(), expected_name)
+        }
+    }
+
+    #[test]
+    fn infinity_domain_creation_works() {
+        for (name, expected_id, expected_label, expected_name) in [
+            (
+                "suleyman.blue",
+                "0xd8959309308b01a3125249e04f2abadaeeba5e6d68c63d29c97743d514d94fd3",
+                "suleyman",
+                "suleyman.blue",
+            ),
+            (
+                "test.suleyman.blue",
+                "0x4d0241fe34d59d115986ed1157736bd231ed8706d5b05172f6c51dc81092b889",
+                "test",
+                "test.suleyman.blue",
+            ),
+        ] {
+            let specific = ProtocolSpecific::InfinityName(InfinityNameProtocol {
+                main_contract: Address::from_str("0x0000000000000000000000000000000000000000")
+                    .unwrap(),
+            });
+            let domain_name =
+                DomainName::new(name, None, Some(specific)).expect("failed to build domain name");
             assert_eq!(domain_name.id, expected_id);
             assert_eq!(domain_name.label_name(), expected_label);
             assert_eq!(domain_name.name(), expected_name);
@@ -303,7 +361,7 @@ mod tests {
 
     #[test]
     fn iter_parents_works() {
-        let domain_name = DomainName::new("5.fourth.third.vitalik.eth", None).unwrap();
+        let domain_name = DomainName::new("5.fourth.third.vitalik.eth", None, None).unwrap();
         let parents = domain_name
             .iter_parents_with_self()
             .map(|d| d.clean.name().to_string())

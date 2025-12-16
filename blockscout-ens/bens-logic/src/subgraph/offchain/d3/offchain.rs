@@ -89,18 +89,15 @@ async fn get_offchain_resolution(
         alloy_ccip_read::d3::resolve_d3_name(reader, resolver_address, name.inner.name(), "")
             .await?;
     let addr = resolve_result.addr.into_value();
-    let addr2name = match address_resolve_technique {
-        AddressResolveTechnique::Addr2Name => {
+    let addr_to_name = match address_resolve_technique {
+        AddressResolveTechnique::Addr2Name | AddressResolveTechnique::PrimaryNameRecord => {
             let reverse_resolve_result =
                 alloy_ccip_read::d3::reverse_resolve_d3_name(reader, addr, resolver_address, "")
                     .await?;
-            DomainName::new(
+
+            DomainName::new_from_name_and_protocol(
                 &reverse_resolve_result.name.value,
-                name.deployed_protocol
-                    .protocol
-                    .info
-                    .protocol_specific
-                    .empty_label_hash(),
+                &name.deployed_protocol.protocol.info.protocol_specific,
             )
             .map(|name| name.name().to_string())
             .ok()
@@ -118,6 +115,6 @@ async fn get_offchain_resolution(
         expiry_date,
         stored_offchain: true,
         resolved_with_wildcard: false,
-        addr2name,
+        addr_to_name,
     })
 }

@@ -3,7 +3,7 @@ pub mod hash_name;
 mod protocoler;
 
 pub use domain_name::{CleanName, DomainName, DomainNameOnProtocol};
-pub use hash_name::domain_id;
+pub use hash_name::{hash_ens_domain_name, hash_infinity_domain_name};
 pub use protocoler::*;
 
 #[derive(thiserror::Error, Debug)]

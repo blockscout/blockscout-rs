@@ -116,6 +116,9 @@ impl SubgraphReader {
                 AddressResolveTechnique::Addr2Name => {
                     // addr2name doesnt have view
                 }
+                AddressResolveTechnique::PrimaryNameRecord => {
+                    // primary_name_record doesnt have view
+                }
             }
         }
         Ok(())
@@ -148,6 +151,10 @@ impl SubgraphReader {
                         .context(format!(
                             "failed to create Addr2NameTable for schema {schema}"
                         ))?;
+                }
+                AddressResolveTechnique::PrimaryNameRecord => {
+                    // primary_name_record table is created by the subgraph itself
+                    continue;
                 }
             }
         }

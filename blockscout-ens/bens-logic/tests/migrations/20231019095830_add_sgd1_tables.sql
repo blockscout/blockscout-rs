@@ -265,7 +265,8 @@ CREATE TABLE sgd1.domain (
     wrapped_owner text,
     expiry_date numeric,
     stored_offchain BOOLEAN NOT NULL DEFAULT FALSE,
-    resolved_with_wildcard BOOLEAN NOT NULL DEFAULT FALSE
+    resolved_with_wildcard BOOLEAN NOT NULL DEFAULT FALSE,
+    token_id NUMERIC
 );
 
 
