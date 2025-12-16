@@ -21,8 +21,7 @@ use interchain_indexer_entity::{
     sea_orm_active_enums::MessageStatus,
 };
 use sea_orm::{
-    ActiveValue, DbErr, EntityTrait, Iterable, QueryFilter, QueryOrder, QuerySelect,
-    TransactionTrait,
+    ActiveValue, DbErr, EntityTrait, Iterable, QueryFilter, TransactionTrait,
     sea_query::{Expr, OnConflict},
 };
 use serde::{Deserialize, Serialize};
@@ -106,7 +105,7 @@ pub struct Entry<T> {
 }
 
 impl<T: Consolidate> Entry<T> {
-    pub fn new(inner: T) -> Self {
+    fn new(inner: T) -> Self {
         Self {
             inner,
             cursors: HashMap::new(),
@@ -141,7 +140,7 @@ impl<T: Consolidate> Entry<T> {
     }
 
     /// Returns true if this entry has changed since the last successful flush.
-    fn needs_flush(&self) -> bool {
+    fn is_dirty(&self) -> bool {
         self.version > self.last_flushed_version
     }
 }
@@ -185,19 +184,19 @@ mod tests {
         });
 
         // Newly created entry: considered flushed at version=0.
-        assert!(!entry.needs_flush());
+        assert!(!entry.is_dirty());
 
         // After a change, version increments and needs_flush becomes true.
         entry.touch();
-        assert!(entry.needs_flush());
+        assert!(entry.is_dirty());
 
         // Simulate successful flush.
         entry.last_flushed_version = entry.version;
-        assert!(!entry.needs_flush());
+        assert!(!entry.is_dirty());
 
         // Another modification should require a flush again.
         entry.touch();
-        assert!(entry.needs_flush());
+        assert!(entry.is_dirty());
     }
 }
 
@@ -370,7 +369,7 @@ impl<T: Consolidate> MessageBuffer<T> {
             let entry_version = entry.version;
             let created_at = entry.created_at;
 
-            if !entry.needs_flush() {
+            if !entry.is_dirty() {
                 continue;
             }
 
@@ -389,7 +388,7 @@ impl<T: Consolidate> MessageBuffer<T> {
                 if is_final {
                     consolidated_entries.push(message);
                     keys_to_remove_from_pending.push(key);
-                } else if entry.needs_flush() {
+                } else if entry.is_dirty() {
                     consolidated_entries.push(message);
                     keys_to_flush.push((key, entry_version));
                 }
