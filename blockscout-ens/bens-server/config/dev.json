@@ -251,6 +251,24 @@
           "icon_url": "https://i.imgur.com/Vx1jUlA.png",
           "docs_url": "https://docs.znsconnect.io/"
         }
+      },
+      "infinityname-base": {
+        "disabled": true,
+        "tld_list": ["blue"],
+        "network_id": 8453,
+        "subgraph_name": "infinityname-base-subgraph",
+        "address_resolve_technique": "primary_name_record",
+        "specific": {
+          "type": "infinity_name",
+          "main_contract": "0x86f6d95E688A5953074C0aBCb0d9d930837E528E"
+        },
+        "meta": {
+          "short_name": "InfinityName",
+          "title": "InfinityName",
+          "description": "InfinityName is a decentralized naming service giving users permanent ownership of their domain names",
+          "icon_url": "https://infinityname.com/img/InfinityName-logo.png",
+          "docs_url": "https://infinityname.com/"
+        }
       }
     }
   }
