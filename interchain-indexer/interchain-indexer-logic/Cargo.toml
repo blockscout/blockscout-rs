@@ -55,6 +55,7 @@ tower = { workspace = true }
 tracing = { workspace = true }
 #tonic = { workspace = true, features = ["tls-roots"] }
 tracing-subscriber = { workspace = true }
+itertools = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [

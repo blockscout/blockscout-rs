@@ -68,3 +68,4 @@ tower = { version = "0.4", features = ["util"] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5.4"
+itertools = { version = "0.14" }

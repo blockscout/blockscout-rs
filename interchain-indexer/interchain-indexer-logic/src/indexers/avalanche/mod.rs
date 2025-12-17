@@ -6,12 +6,14 @@ use alloy::{
     network::Ethereum,
     primitives::{Address, B256},
     providers::{DynProvider, Provider as _},
-    rpc::types::{Filter, Log},
+    rpc::types::{Block, Filter, Log},
     sol_types::SolEvent,
 };
 use anyhow::{Context, Result, anyhow};
-use futures::{StreamExt, stream};
+use futures::{StreamExt, TryStreamExt, stream};
+use itertools::Itertools;
 
+use std::collections::HashSet;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::task::JoinHandle;
 
@@ -223,22 +225,49 @@ async fn process_batch(
     buffer: &Arc<MessageBuffer<Message>>,
     provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
-    // Group logs by transaction hash for same-tx correlation
-    let mut logs_by_transaction_hash: HashMap<B256, Vec<&Log>> = HashMap::new();
+    let logs_by_transaction_hash: HashMap<B256, Vec<&Log>> = batch
+        .iter()
+        .filter_map(|log| log.transaction_hash.map(|hash| (hash, log)))
+        .into_group_map();
 
-    for log in &batch {
-        if let Some(transaction_hash) = log.transaction_hash {
-            logs_by_transaction_hash
-                .entry(transaction_hash)
-                .or_default()
-                .push(log);
-        }
-    }
+    let transaction_hashes: HashSet<B256> = logs_by_transaction_hash.keys().copied().collect();
+
+    let receipts_by_transaction_hash: HashMap<_, _> = stream::iter(transaction_hashes)
+        .map(|hash| async move {
+            let receipt = provider
+                .get_transaction_receipt(hash)
+                .await?
+                .context("transaction receipt not found")?;
+
+            let block_number = receipt
+                .block_number
+                .ok_or(anyhow::anyhow!("missing block number"))?
+                .into();
+
+            let block = provider
+                .get_block_by_number(block_number)
+                .await?
+                .context("block not found")?;
+
+            let logs = receipt.inner.logs().to_vec();
+            Ok::<(B256, (Vec<Log>, Block)), anyhow::Error>((hash, (logs, block)))
+        })
+        .buffer_unordered(25)
+        .try_collect()
+        .await?;
 
     // Process each transaction's logs together
-    for (_hash, logs) in logs_by_transaction_hash {
-        // Process all logs in this transaction.
-        for log in logs {
+    for (hash, teleporter_logs) in logs_by_transaction_hash {
+        let (receipt_logs, block) = receipts_by_transaction_hash
+            .get(&hash)
+            .context("missing receipt or block")?;
+
+        let block_timestamp = chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
+            .map(|dt| dt.naive_utc())
+            .context("invalid timestamp")?;
+
+        // Process all Teleporter logs in this transaction.
+        for log in teleporter_logs {
             let block_number = log.block_number.context("missing block number")? as i64;
 
             handle_log(
@@ -249,63 +278,14 @@ async fn process_batch(
                 native_id_to_chain_id,
                 buffer,
                 provider,
+                receipt_logs,
+                block_timestamp,
             )
             .await?;
         }
     }
 
     Ok(())
-}
-
-/// Fetch block timestamp from RPC
-async fn fetch_block_timestamp(
-    provider: &DynProvider<Ethereum>,
-    block_number: i64,
-) -> Result<chrono::NaiveDateTime> {
-    let block = provider
-        .get_block_by_number((block_number as u64).into())
-        .await?
-        .context("block not found")?;
-
-    chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
-        .map(|dt| dt.naive_utc())
-        .context("invalid timestamp")
-}
-
-use std::collections::HashSet;
-
-/// Fetch ICTT logs from the same transaction
-///
-/// TODO: use eth_getLogs with filter by transaction hash Also there's
-/// ITokenTransferrer::ITokenTransferrerEvents::SIGNATURES for use in filter.
-async fn fetch_ictt_logs_for_transaction(
-    provider: &DynProvider<Ethereum>,
-    transaction_hash: B256,
-) -> Result<Vec<Log>> {
-    let receipt = provider
-        .get_transaction_receipt(transaction_hash)
-        .await?
-        .context("transaction receipt not found")?;
-
-    let ictt_topics: HashSet<B256> = ITokenTransferrer::ITokenTransferrerEvents::SELECTORS
-        .iter()
-        .chain(ITokenHome::ITokenHomeEvents::SELECTORS)
-        .map(|selector| B256::from_slice(selector.as_slice()))
-        .collect();
-
-    let logs: Vec<Log> = receipt
-        .inner
-        .logs()
-        .iter()
-        .filter(|log| {
-            log.topic0()
-                .map(|t| ictt_topics.contains(t))
-                .unwrap_or(false)
-        })
-        .cloned()
-        .collect();
-
-    Ok(logs)
 }
 
 /// Parse ICTT logs into TokenTransfer. Returns None if no ICTT logs found.
@@ -445,6 +425,8 @@ async fn handle_log(
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
     provider: &DynProvider<Ethereum>,
+    receipt_logs: &[Log],
+    block_timestamp: chrono::NaiveDateTime,
 ) -> anyhow::Result<()> {
     match log.topic0() {
         // ICM Source Event
@@ -457,6 +439,8 @@ async fn handle_log(
                 native_id_to_chain_id,
                 buffer,
                 provider,
+                receipt_logs,
+                block_timestamp,
             )
             .await
         }
@@ -470,6 +454,8 @@ async fn handle_log(
                 native_id_to_chain_id,
                 buffer,
                 provider,
+                receipt_logs,
+                block_timestamp,
             )
             .await
         }
@@ -484,6 +470,8 @@ async fn handle_log(
                 native_id_to_chain_id,
                 buffer,
                 provider,
+                receipt_logs,
+                block_timestamp,
             )
             .await
         }
@@ -496,6 +484,7 @@ async fn handle_log(
                 native_id_to_chain_id,
                 buffer,
                 provider,
+                block_timestamp,
             )
             .await
         }
@@ -518,7 +507,9 @@ async fn handle_send_cross_chain_message(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    provider: &DynProvider<Ethereum>,
+    _provider: &DynProvider<Ethereum>,
+    receipt_logs: &[Log],
+    block_timestamp: chrono::NaiveDateTime,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::SendCrossChainMessage>()?;
     let event = decoded.inner.data.clone();
@@ -541,14 +532,8 @@ async fn handle_send_cross_chain_message(
 
     let key = Key::new(id, bridge_id);
 
-    // Fetch block timestamp and ICTT logs in parallel
-    let (block_timestamp, ictt_logs) = tokio::try_join!(
-        fetch_block_timestamp(provider, block_number),
-        fetch_ictt_logs_for_transaction(provider, transaction_hash)
-    )?;
-
-    // Parse ICTT logs
-    let transfer = parse_ictt_logs(&ictt_logs);
+    // Parse ICTT logs from the same transaction receipt.
+    let transfer = parse_ictt_logs(receipt_logs);
 
     // Build AnnotatedEvent
     let annotated_send = AnnotatedEvent {
@@ -603,7 +588,9 @@ async fn handle_receive_cross_chain_message(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    provider: &DynProvider<Ethereum>,
+    _provider: &DynProvider<Ethereum>,
+    receipt_logs: &[Log],
+    block_timestamp: chrono::NaiveDateTime,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()?;
     let event = decoded.inner.data.clone();
@@ -626,18 +613,8 @@ async fn handle_receive_cross_chain_message(
 
     let key = Key::new(id, bridge_id);
 
-    // Fetch block timestamp
-    let block_timestamp = fetch_block_timestamp(provider, block_number).await?;
-
-    // Fetch all logs from this transaction to find execution outcome and ICTT events
-    let receipt = provider
-        .get_transaction_receipt(transaction_hash)
-        .await?
-        .context("transaction receipt not found")?;
-    let transaction_logs: Vec<_> = receipt.inner.logs().to_vec();
-
     // Find execution outcome (MessageExecuted or MessageExecutionFailed) in same transaction
-    let execution_outcome = transaction_logs.iter().find_map(|l| {
+    let execution_outcome = receipt_logs.iter().find_map(|l| {
         if l.topic0() == Some(&ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH) {
             l.log_decode::<ITeleporterMessenger::MessageExecuted>()
                 .ok()
@@ -671,7 +648,7 @@ async fn handle_receive_cross_chain_message(
     });
 
     // Parse ICTT logs from same transaction (only present if execution succeeded)
-    let transfer = parse_ictt_logs(&transaction_logs);
+    let transfer = parse_ictt_logs(receipt_logs);
 
     // Build AnnotatedEvent for receive
     let annotated_receive = AnnotatedEvent {
@@ -731,7 +708,9 @@ async fn handle_message_executed(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    provider: &DynProvider<Ethereum>,
+    _provider: &DynProvider<Ethereum>,
+    receipt_logs: &[Log],
+    block_timestamp: chrono::NaiveDateTime,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::MessageExecuted>()?;
     let event = decoded.inner.data.clone();
@@ -754,12 +733,8 @@ async fn handle_message_executed(
 
     let key = Key::new(id, bridge_id);
 
-    // Fetch block timestamp
-    let block_timestamp = fetch_block_timestamp(provider, block_number).await?;
-
-    // Fetch ICTT logs from this transaction (retry execution may have TokensWithdrawn, etc.)
-    let ictt_logs = fetch_ictt_logs_for_transaction(provider, transaction_hash).await?;
-    let transfer = parse_ictt_logs(&ictt_logs);
+    // Parse ICTT logs from the same transaction receipt.
+    let transfer = parse_ictt_logs(receipt_logs);
 
     // Build AnnotatedEvent for execution
     let annotated_execution = AnnotatedEvent {
@@ -813,7 +788,8 @@ async fn handle_message_execution_failed(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    provider: &DynProvider<Ethereum>,
+    _provider: &DynProvider<Ethereum>,
+    block_timestamp: chrono::NaiveDateTime,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::MessageExecutionFailed>()?;
     let event = decoded.inner.data.clone();
@@ -835,9 +811,6 @@ async fn handle_message_execution_failed(
     }
 
     let key = Key::new(id, bridge_id);
-
-    // Fetch block timestamp
-    let block_timestamp = fetch_block_timestamp(provider, block_number).await?;
 
     // Build AnnotatedEvent for execution failure
     let annotated_execution = AnnotatedEvent {

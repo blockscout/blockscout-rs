@@ -2,7 +2,7 @@ use anyhow::Result;
 use interchain_indexer_entity::{
     crosschain_messages, crosschain_transfers, sea_orm_active_enums::MessageStatus,
 };
-use sea_orm::{prelude::BigDecimal, ActiveValue};
+use sea_orm::{ActiveValue, prelude::BigDecimal};
 use std::str::FromStr;
 
 use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
@@ -32,24 +32,9 @@ impl Consolidate for Message {
         let (destination_chain_id, destination_transaction_hash, last_update_timestamp) =
             if let Some(receive) = &self.receive {
                 (
-                    Some(receive.chain_id),
-                    Some(receive.transaction_hash.as_slice().to_vec()),
-                    Some(receive.block_timestamp),
-                )
-            } else if let Some(execution) = &self.execution {
-                // Execution came via retry - get info from execution event
-                let (chain_id, transaction_hash, timestamp) = match execution {
-                    MessageExecutionOutcome::Succeeded(e) => {
-                        (e.chain_id, e.transaction_hash, e.block_timestamp)
-                    }
-                    MessageExecutionOutcome::Failed(e) => {
-                        (e.chain_id, e.transaction_hash, e.block_timestamp)
-                    }
-                };
-                (
-                    Some(chain_id),
-                    Some(transaction_hash.as_slice().to_vec()),
-                    Some(timestamp),
+                    receive.chain_id.into(),
+                    receive.transaction_hash.as_slice().to_vec().into(),
+                    receive.block_timestamp.into(),
                 )
             } else {
                 (None, None, None)
