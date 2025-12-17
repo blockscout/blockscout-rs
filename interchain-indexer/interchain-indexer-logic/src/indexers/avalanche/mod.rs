@@ -13,8 +13,11 @@ use anyhow::{Context, Result, anyhow};
 use futures::{StreamExt, TryStreamExt, stream};
 use itertools::Itertools;
 
-use std::collections::HashSet;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::task::JoinHandle;
 
 use crate::{

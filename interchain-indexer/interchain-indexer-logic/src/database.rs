@@ -590,8 +590,6 @@ impl InterchainDatabase {
                         .column(crosschain_transfers::Column::Type)
                         .column(crosschain_transfers::Column::TokenSrcChainId)
                         .column(crosschain_transfers::Column::TokenDstChainId)
-                        .column(crosschain_transfers::Column::SrcDecimals)
-                        .column(crosschain_transfers::Column::DstDecimals)
                         .column(crosschain_transfers::Column::SrcAmount)
                         .column(crosschain_transfers::Column::DstAmount)
                         .column(crosschain_transfers::Column::TokenSrcAddress)

@@ -100,9 +100,6 @@ fn build_transfer(
     src_chain_id: i64,
     dest_chain_id: Option<i64>,
 ) -> Result<crosschain_transfers::ActiveModel> {
-    // Default decimals - in the future this should be fetched from token contract
-    const DEFAULT_DECIMALS: i16 = 18;
-
     match transfer {
         TokenTransfer::Sent(src, dest) => {
             let mut transfer = crosschain_transfers::ActiveModel {
@@ -113,10 +110,6 @@ fn build_transfer(
                 // Set required chain ID fields
                 token_src_chain_id: ActiveValue::Set(src_chain_id),
                 token_dst_chain_id: ActiveValue::Set(dest_chain_id.unwrap_or(src_chain_id)),
-                // Default decimals - should be fetched from token contract in the future
-                src_decimals: ActiveValue::Set(DEFAULT_DECIMALS),
-                dst_decimals: ActiveValue::Set(DEFAULT_DECIMALS),
-                // Default empty token address - will be set from source event if available
                 token_src_address: ActiveValue::Set(Vec::new()),
                 ..Default::default()
             };
@@ -165,11 +158,7 @@ fn build_transfer(
                 // Set required chain ID fields
                 token_src_chain_id: ActiveValue::Set(src_chain_id),
                 token_dst_chain_id: ActiveValue::Set(dest_chain_id.unwrap_or(src_chain_id)),
-                // Default decimals - should be fetched from token contract in the future
-                src_decimals: ActiveValue::Set(DEFAULT_DECIMALS),
-                dst_decimals: ActiveValue::Set(DEFAULT_DECIMALS),
-                // Default empty token address - will be set from source event
-                // if available
+                // Default decimals - should be fetched from token contract in the futur                // Default empty token address - will be set from source event
                 ..Default::default()
             };
 
