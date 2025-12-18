@@ -19,7 +19,6 @@ use dashmap::mapref::entry::Entry as DashEntry;
 use dashmap::{DashMap, mapref::one::RefMut};
 use interchain_indexer_entity::{
     crosschain_messages, crosschain_transfers, indexer_checkpoints, pending_messages,
-    sea_orm_active_enums::MessageStatus,
 };
 use sea_orm::{
     ActiveValue, DbErr, EntityTrait, Iterable, QueryFilter, TransactionTrait,
@@ -29,36 +28,6 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, task::JoinHandle};
 
 use crate::InterchainDatabase;
-
-/// Serializable wrapper for MessageStatus (avoids requiring serde on entity crate)
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum Status {
-    #[default]
-    Initiated,
-    Completed,
-    Failed,
-}
-
-impl From<MessageStatus> for Status {
-    fn from(status: MessageStatus) -> Self {
-        match status {
-            MessageStatus::Initiated => Status::Initiated,
-            MessageStatus::Completed => Status::Completed,
-            MessageStatus::Failed => Status::Failed,
-        }
-    }
-}
-
-impl From<Status> for MessageStatus {
-    fn from(status: Status) -> Self {
-        match status {
-            Status::Initiated => MessageStatus::Initiated,
-            Status::Completed => MessageStatus::Completed,
-            Status::Failed => MessageStatus::Failed,
-        }
-    }
-}
 
 /// Key for identifying a cross-chain message
 #[derive(Clone, Copy, Hash, Eq, PartialEq, Debug, Serialize, Deserialize, Default)]
@@ -102,7 +71,16 @@ pub struct Entry<T> {
     /// entries when they haven't changed.
     #[serde(default)]
     last_flushed_version: u64,
-    pub created_at: NaiveDateTime,
+    /// Hot-tier insertion timestamp used for TTL-based eviction.
+    ///
+    /// This field is intentionally not persisted in cold storage payloads;
+    /// when an entry is restored from cold tier it will be set to `Utc::now()`.
+    #[serde(skip_serializing, default = "now_naive_utc")]
+    pub hot_since: NaiveDateTime,
+}
+
+fn now_naive_utc() -> NaiveDateTime {
+    Utc::now().naive_utc()
 }
 
 impl<T: Consolidate> Entry<T> {
@@ -112,7 +90,7 @@ impl<T: Consolidate> Entry<T> {
             cursors: HashMap::new(),
             version: 0,
             last_flushed_version: 0,
-            created_at: Utc::now().naive_utc(),
+            hot_since: now_naive_utc(),
         }
     }
 
@@ -180,7 +158,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             max_hot_entries: 100_000,
-            hot_ttl: Duration::from_secs(10), // 5 minutes
+            hot_ttl: Duration::from_secs(10),
             maintenance_interval: Duration::from_millis(500),
         }
     }
@@ -340,7 +318,7 @@ impl<T: Consolidate> MessageBuffer<T> {
         for entry in self.inner.iter() {
             let key = *entry.key();
             let entry_version = entry.version;
-            let created_at = entry.created_at;
+            let created_at = entry.hot_since;
 
             if !entry.is_dirty() {
                 continue;
@@ -414,7 +392,7 @@ impl<T: Consolidate> MessageBuffer<T> {
                                     message_id: ActiveValue::Set(key.message_id),
                                     bridge_id: ActiveValue::Set(key.bridge_id),
                                     payload: ActiveValue::Set(payload),
-                                    created_at: ActiveValue::Set(Some(entry.created_at)),
+                                    created_at: ActiveValue::Set(Some(entry.hot_since)),
                                 })
                             })
                             .collect();
@@ -640,7 +618,8 @@ impl<T: Consolidate> MessageBuffer<T> {
 
 #[cfg(test)]
 mod tests {
-    use interchain_indexer_entity::bridges;
+    use chrono::DateTime;
+    use interchain_indexer_entity::{bridges, sea_orm_active_enums::MessageStatus};
 
     use super::*;
     use crate::test_utils::init_db;
@@ -674,6 +653,20 @@ mod tests {
         }
     }
 
+    async fn new_buffer(name: &str) -> Arc<MessageBuffer<DummyMessage>> {
+        // These tests need a DB-backed InterchainDatabase because MessageBuffer
+        // stores it. We don't *intend* to hit the DB when using alter (hot
+        // tier), but constructing the buffer requires a DB handle.
+        let db = init_db(name).await;
+        let db = InterchainDatabase::new(db.client());
+        let config = Config {
+            max_hot_entries: usize::MAX,
+            hot_ttl: Duration::from_secs(60),
+            maintenance_interval: Duration::from_secs(60),
+        };
+        MessageBuffer::new(db, config)
+    }
+
     #[test]
     fn test_entry_needs_flush_tracks_last_flushed_version() {
         let mut entry = Entry::new(DummyMessage {
@@ -696,20 +689,6 @@ mod tests {
         // Another modification should require a flush again.
         entry.touch();
         assert!(entry.is_dirty());
-    }
-
-    async fn new_buffer(name: &str) -> Arc<MessageBuffer<DummyMessage>> {
-        // These tests need a DB-backed InterchainDatabase because MessageBuffer
-        // stores it. We don't *intend* to hit the DB when using alter (hot
-        // tier), but constructing the buffer requires a DB handle.
-        let db = init_db(name).await;
-        let db = InterchainDatabase::new(db.client());
-        let config = Config {
-            max_hot_entries: usize::MAX,
-            hot_ttl: Duration::from_secs(60),
-            maintenance_interval: Duration::from_secs(60),
-        };
-        MessageBuffer::new(db, config)
     }
 
     #[tokio::test]
@@ -848,5 +827,73 @@ mod tests {
         assert_eq!(entry.inner.counter, 6);
         assert_eq!(entry.version, 1);
         assert_eq!(entry.cursors.get(&777), Some(&(42, 42)));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to construct InterchainDatabase"]
+    async fn test_restore_resets_created_at_for_hot_ttl() {
+        let test_db = init_db("buffer_restore_created_at").await;
+        let db = InterchainDatabase::new(test_db.client());
+        let config = Config {
+            max_hot_entries: usize::MAX,
+            hot_ttl: Duration::from_secs(60),
+            maintenance_interval: Duration::from_secs(60),
+        };
+        let buffer = MessageBuffer::new(db.clone(), config);
+
+        let key = Key::new(11, 1);
+
+        // Ensure FK prerequisites exist.
+        db.upsert_bridges(vec![bridges::ActiveModel {
+            id: ActiveValue::Set(key.bridge_id),
+            name: ActiveValue::Set("test_bridge".to_string()),
+            enabled: ActiveValue::Set(true),
+            ..Default::default()
+        }])
+        .await
+        .unwrap();
+
+        let payload_created_at = DateTime::from_timestamp(1_000, 0).unwrap().naive_utc();
+        let mut cold_entry = Entry::new(DummyMessage {
+            consolidatable: false,
+            is_final: false,
+            counter: 0,
+        });
+        cold_entry.hot_since = payload_created_at;
+
+        db.upsert_pending_message(pending_messages::ActiveModel {
+            message_id: ActiveValue::Set(key.message_id),
+            bridge_id: ActiveValue::Set(key.bridge_id),
+            payload: ActiveValue::Set(serde_json::to_value(&cold_entry).unwrap()),
+            created_at: ActiveValue::NotSet,
+        })
+        .await
+        .unwrap();
+
+        // Trigger restore by mutating (which calls get_mut_or_default).
+        buffer
+            .alter(key, 1, 1, |_m: &mut DummyMessage| Ok(()))
+            .await
+            .unwrap();
+
+        let entry = buffer.inner.get(&key).expect("entry must be restored");
+
+        // created_at must not come from payload nor from the pending_messages row timestamp.
+        assert_ne!(entry.hot_since, payload_created_at);
+
+        // created_at should be set to "now" on restore (allow some slack).
+        let now = Utc::now().naive_utc();
+        let drift = now
+            .signed_duration_since(entry.hot_since)
+            .num_seconds()
+            .abs();
+
+        assert!(
+            drift <= 2,
+            "expected restored created_at to be set near now; drift={}s (entry={}, now={})",
+            drift,
+            entry.hot_since,
+            now
+        );
     }
 }
