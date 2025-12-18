@@ -254,6 +254,7 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             index: Set(0),
             r#type: Set(Some(TransferType::Erc721)),
             token_src_chain_id: Set(100),
+            token_dst_chain_id: Set(1),
             src_amount: Set(BigDecimal::from(1)), // 1 NFT
             dst_amount: Set(BigDecimal::from(1)), // 1 NFT
             token_src_address: Set(address!("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599")

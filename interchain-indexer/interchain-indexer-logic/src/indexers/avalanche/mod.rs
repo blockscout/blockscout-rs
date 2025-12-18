@@ -220,6 +220,26 @@ fn blockchain_id_hex(bytes: &[u8]) -> String {
     format!("0x{}", hex::encode(bytes))
 }
 
+/// Extract the indexer message key from a Teleporter `messageID`.
+///
+/// Today we use the first 8 bytes as big-endian i64.
+fn parse_message_key(message_id: &B256, bridge_id: i32) -> Result<(Key, [u8; 8])> {
+    let message_id_bytes: [u8; 8] = message_id.as_slice()[..8].try_into()?;
+    let id = i64::from_be_bytes(message_id_bytes);
+    Ok((Key::new(id, bridge_id), message_id_bytes))
+}
+
+/// Resolve an on-chain blockchain ID (bytes32 in Teleporter events) into our local chain id.
+///
+/// Returns `None` when the chain isn't tracked by this indexer.
+fn resolve_tracked_chain_id(
+    native_blockchain_id: &[u8],
+    native_id_to_chain_id: &HashMap<String, i64>,
+) -> Option<i64> {
+    let native_hex = blockchain_id_hex(native_blockchain_id);
+    native_id_to_chain_id.get(&native_hex).copied()
+}
+
 async fn process_batch(
     batch: Vec<Log>,
     chain_id: i64,
@@ -280,7 +300,6 @@ async fn process_batch(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
-                provider,
                 receipt_logs,
                 block_timestamp,
             )
@@ -291,131 +310,192 @@ async fn process_batch(
     Ok(())
 }
 
-/// Parse ICTT logs into TokenTransfer. Returns None if no ICTT logs found.
+fn parse_sender_ictt_log(
+    message_id: &B256,
+    transfer: &Option<TokenTransfer>,
+    log: &Log,
+) -> Result<Option<TokenTransfer>> {
+    let contract_address = log.address();
+    let signature = log.topic0().context("missing topic0")?;
+    let mismatch_error = "mismatched ICTT transfer types in single receipt";
+
+    let transfer = match signature {
+        &ITokenTransferrer::TokensSent::SIGNATURE_HASH => {
+            let event = log
+                .log_decode::<ITokenTransferrer::TokensSent>()?
+                .inner
+                .data;
+
+            let withdrawn = match transfer {
+                Some(TokenTransfer::Sent(_, withdrawn)) => Ok(withdrawn.clone()),
+                None => Ok(None),
+                _ => Err(anyhow!(mismatch_error)),
+            }?;
+
+            (&event.teleporterMessageID == message_id).then_some(TokenTransfer::Sent(
+                Some(SentOrRouted::Sent(AnnotatedICTTSource {
+                    event: event.clone(),
+                    contract_address,
+                })),
+                withdrawn,
+            ))
+        }
+        &ITokenTransferrer::TokensAndCallSent::SIGNATURE_HASH => {
+            let event = log
+                .log_decode::<ITokenTransferrer::TokensAndCallSent>()?
+                .inner
+                .data;
+
+            let withdrawn = match transfer {
+                Some(TokenTransfer::SentAndCalled(_, withdrawn)) => Ok(withdrawn.clone()),
+                None => Ok(None),
+                _ => Err(anyhow!(mismatch_error)),
+            }?;
+
+            (&event.teleporterMessageID == message_id).then_some(TokenTransfer::SentAndCalled(
+                Some(SentOrRoutedAndCalled::Sent(AnnotatedICTTSource {
+                    event: event.clone(),
+                    contract_address,
+                })),
+                withdrawn,
+            ))
+        }
+        &ITokenHome::TokensRouted::SIGNATURE_HASH => {
+            let event = log.log_decode::<ITokenHome::TokensRouted>()?.inner.data;
+
+            let withdrawn = match transfer {
+                Some(TokenTransfer::Sent(_, withdrawn)) => Ok(withdrawn.clone()),
+                None => Ok(None),
+                _ => Err(anyhow!(mismatch_error)),
+            }?;
+
+            (&event.teleporterMessageID == message_id).then_some(TokenTransfer::Sent(
+                Some(SentOrRouted::Routed(AnnotatedICTTSource {
+                    event: event.clone(),
+                    contract_address,
+                })),
+                withdrawn,
+            ))
+        }
+        &ITokenHome::TokensAndCallRouted::SIGNATURE_HASH => {
+            let event = log
+                .log_decode::<ITokenHome::TokensAndCallRouted>()?
+                .inner
+                .data;
+
+            let withdrawn = match transfer {
+                Some(TokenTransfer::SentAndCalled(_, withdrawn)) => Ok(withdrawn.clone()),
+                None => Ok(None),
+                _ => Err(anyhow!(mismatch_error)),
+            }?;
+
+            (&event.teleporterMessageID == message_id).then_some(TokenTransfer::SentAndCalled(
+                Some(SentOrRoutedAndCalled::Routed(AnnotatedICTTSource {
+                    event: event.clone(),
+                    contract_address,
+                })),
+                withdrawn,
+            ))
+        }
+        _ => None,
+    };
+
+    Ok(transfer)
+}
+
+/// Parse receiver-side ICTT outcome logs (which don't include teleporterMessageID).
 ///
-/// TODO: We should validate that our invariant about one log correlation holds.
-/// If not, we should throw error. Also use Result<Option<TokenTransfer>> I guess?
-fn parse_ictt_logs(logs: &[Log]) -> Option<TokenTransfer> {
-    for log in logs {
-        let contract_address = log.address();
+/// Callers must enforce the single-outcome invariant first.
+fn parse_receiver_ictt_logs(
+    transfer: &Option<TokenTransfer>,
+    logs: &[Log],
+) -> Result<Option<TokenTransfer>> {
+    let counts = logs
+        .iter()
+        .filter_map(|log| {
+            let sig = log.topic0()?;
+            [
+                &ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH,
+                &ITokenTransferrer::CallSucceeded::SIGNATURE_HASH,
+                &ITokenTransferrer::CallFailed::SIGNATURE_HASH,
+            ]
+            .contains(&sig)
+            .then(|| *sig)
+        })
+        .counts();
 
-        if log.topic0() == Some(&ITokenTransferrer::TokensSent::SIGNATURE_HASH) {
-            if let Ok(event) = log.log_decode::<ITokenTransferrer::TokensSent>() {
-                let sent = SentOrRouted::Sent(AnnotatedICTTSource {
-                    event: event.inner.data.clone(),
-                    contract_address,
-                });
-                // Look for corresponding TokensWithdrawn
-                let withdrawn = logs.iter().find_map(|l| {
-                    if l.topic0() == Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) {
-                        l.log_decode::<ITokenTransferrer::TokensWithdrawn>()
-                            .ok()
-                            .map(|e| e.inner.data.clone())
-                    } else {
-                        None
-                    }
-                });
-                return Some(TokenTransfer::Sent(Some(sent), withdrawn));
-            }
-        }
+    counts
+        .iter()
+        .find(|(_, count)| **count > 1)
+        .map_or(Ok(()), |(outcome, _)| {
+            Err(anyhow!(
+                "receiver-side invariant violated: multiple {} logs in one receipt",
+                hex::encode(outcome)
+            ))
+        })?;
 
-        // TokensAndCallSent source event
-        if log.topic0() == Some(&ITokenTransferrer::TokensAndCallSent::SIGNATURE_HASH) {
-            if let Ok(event) = log.log_decode::<ITokenTransferrer::TokensAndCallSent>() {
-                let sent = SentOrRoutedAndCalled::Sent(AnnotatedICTTSource {
-                    event: event.inner.data.clone(),
-                    contract_address,
-                });
-                // Look for CallSucceeded or CallFailed
-                let outcome = logs.iter().find_map(|l| {
-                    if l.topic0() == Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) {
-                        l.log_decode::<ITokenTransferrer::CallSucceeded>()
-                            .ok()
-                            .map(|e| CallOutcome::Succeeded(e.inner.data.clone()))
-                    } else if l.topic0() == Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) {
-                        l.log_decode::<ITokenTransferrer::CallFailed>()
-                            .ok()
-                            .map(|e| CallOutcome::Failed(e.inner.data.clone()))
-                    } else {
-                        None
-                    }
-                });
-                return Some(TokenTransfer::SentAndCalled(Some(sent), outcome));
-            }
-        }
+    (counts.contains_key(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH)
+        && counts.contains_key(&ITokenTransferrer::CallFailed::SIGNATURE_HASH))
+    .then_some(Err(anyhow!(
+        "receiver-side invariant violated: both CallSucceeded and CallFailed present in one receipt"
+    )))
+    .unwrap_or(Ok(()))?;
 
-        // TokensRouted (multi-hop) source event
-        if log.topic0() == Some(&ITokenHome::TokensRouted::SIGNATURE_HASH) {
-            if let Ok(event) = log.log_decode::<ITokenHome::TokensRouted>() {
-                let routed = SentOrRouted::Routed(AnnotatedICTTSource {
-                    event: event.inner.data.clone(),
-                    contract_address,
-                });
-                let withdrawn = logs.iter().find_map(|l| {
-                    if l.topic0() == Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) {
-                        l.log_decode::<ITokenTransferrer::TokensWithdrawn>()
-                            .ok()
-                            .map(|e| e.inner.data.clone())
-                    } else {
-                        None
-                    }
-                });
-                return Some(TokenTransfer::Sent(Some(routed), withdrawn));
-            }
-        }
+    logs.iter()
+        .find_map(|log| parse_receiver_ictt_log(transfer, log).transpose())
+        .transpose()
+}
 
-        // TokensAndCallRouted (multi-hop) source event
-        if log.topic0() == Some(&ITokenHome::TokensAndCallRouted::SIGNATURE_HASH) {
-            if let Ok(event) = log.log_decode::<ITokenHome::TokensAndCallRouted>() {
-                let routed = SentOrRoutedAndCalled::Routed(AnnotatedICTTSource {
-                    event: event.inner.data.clone(),
-                    contract_address,
-                });
-                let outcome = logs.iter().find_map(|l| {
-                    if l.topic0() == Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) {
-                        l.log_decode::<ITokenTransferrer::CallSucceeded>()
-                            .ok()
-                            .map(|e| CallOutcome::Succeeded(e.inner.data.clone()))
-                    } else if l.topic0() == Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) {
-                        l.log_decode::<ITokenTransferrer::CallFailed>()
-                            .ok()
-                            .map(|e| CallOutcome::Failed(e.inner.data.clone()))
-                    } else {
-                        None
-                    }
-                });
-                return Some(TokenTransfer::SentAndCalled(Some(routed), outcome));
-            }
-        }
-    }
+fn parse_receiver_ictt_log(
+    transfer: &Option<TokenTransfer>,
+    log: &Log,
+) -> Result<Option<TokenTransfer>> {
+    let mismatch_error = "mismatched ICTT transfer types in single receipt";
 
-    // No source-side ICTT events found - check for destination-only events
-    // (This happens when we receive on destination but haven't seen send yet)
-    for log in logs {
-        if log.topic0() == Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) {
-            if let Ok(event) = log.log_decode::<ITokenTransferrer::TokensWithdrawn>() {
-                return Some(TokenTransfer::Sent(None, Some(event.inner.data.clone())));
-            }
-        }
-        if log.topic0() == Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) {
-            if let Ok(event) = log.log_decode::<ITokenTransferrer::CallSucceeded>() {
-                return Some(TokenTransfer::SentAndCalled(
-                    None,
-                    Some(CallOutcome::Succeeded(event.inner.data.clone())),
-                ));
-            }
-        }
-        if log.topic0() == Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) {
-            if let Ok(event) = log.log_decode::<ITokenTransferrer::CallFailed>() {
-                return Some(TokenTransfer::SentAndCalled(
-                    None,
-                    Some(CallOutcome::Failed(event.inner.data.clone())),
-                ));
-            }
-        }
-    }
+    let transfer = match log.topic0() {
+        Some(&ITokenTransferrer::TokensWithdrawn::SIGNATURE_HASH) => {
+            let event = log.log_decode::<ITokenTransferrer::TokensWithdrawn>()?;
 
-    None
+            let sent_or_routed = match transfer {
+                Some(TokenTransfer::Sent(existing, _)) => Ok(existing.clone()),
+                None => Ok(None),
+                _ => Err(anyhow!(mismatch_error)),
+            };
+
+            Some(TokenTransfer::Sent(sent_or_routed?, Some(event.inner.data)))
+        }
+        Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) => {
+            let event = log.log_decode::<ITokenTransferrer::CallSucceeded>()?;
+
+            let sent_or_routed_and_called = match transfer {
+                Some(TokenTransfer::SentAndCalled(existing, _)) => Ok(existing.clone()),
+                None => Ok(None),
+                _ => Err(anyhow!(mismatch_error)),
+            };
+
+            Some(TokenTransfer::SentAndCalled(
+                sent_or_routed_and_called?,
+                Some(CallOutcome::Succeeded(event.inner.data)),
+            ))
+        }
+        Some(&ITokenTransferrer::CallFailed::SIGNATURE_HASH) => {
+            let event = log.log_decode::<ITokenTransferrer::CallFailed>()?;
+
+            let sent_or_routed_and_called = match transfer {
+                Some(TokenTransfer::SentAndCalled(existing, _)) => Ok(existing.clone()),
+                None => Ok(None),
+                _ => Err(anyhow!(mismatch_error)),
+            };
+
+            Some(TokenTransfer::SentAndCalled(
+                sent_or_routed_and_called?,
+                Some(CallOutcome::Failed(event.inner.data)),
+            ))
+        }
+        _ => None,
+    };
+
+    Ok(transfer)
 }
 
 /// Handle ICM events - only handles Send/Receive/Execute events
@@ -427,7 +507,6 @@ async fn handle_log(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    provider: &DynProvider<Ethereum>,
     receipt_logs: &[Log],
     block_timestamp: chrono::NaiveDateTime,
 ) -> anyhow::Result<()> {
@@ -441,7 +520,6 @@ async fn handle_log(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
-                provider,
                 receipt_logs,
                 block_timestamp,
             )
@@ -456,7 +534,6 @@ async fn handle_log(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
-                provider,
                 receipt_logs,
                 block_timestamp,
             )
@@ -472,7 +549,6 @@ async fn handle_log(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
-                provider,
                 receipt_logs,
                 block_timestamp,
             )
@@ -486,7 +562,6 @@ async fn handle_log(
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
-                provider,
                 block_timestamp,
             )
             .await
@@ -510,18 +585,20 @@ async fn handle_send_cross_chain_message(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    _provider: &DynProvider<Ethereum>,
     receipt_logs: &[Log],
     block_timestamp: chrono::NaiveDateTime,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::SendCrossChainMessage>()?;
     let event = decoded.inner.data.clone();
-    let message_id_bytes: [u8; 8] = event.messageID.as_slice()[..8].try_into()?;
-    let id = i64::from_be_bytes(message_id_bytes);
     let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
 
+    let (key, message_id_bytes) =
+        parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
+    let dst_chain_id = resolve_tracked_chain_id(
+        event.destinationBlockchainID.as_slice(),
+        native_id_to_chain_id,
+    );
     let destination_hex = blockchain_id_hex(event.destinationBlockchainID.as_slice());
-    let dst_chain_id = native_id_to_chain_id.get(&destination_hex).copied();
 
     // Skip messages to untracked chains
     if dst_chain_id.is_none() {
@@ -533,43 +610,27 @@ async fn handle_send_cross_chain_message(
         return Ok(());
     }
 
-    let key = Key::new(id, bridge_id);
-
-    // Parse ICTT logs from the same transaction receipt.
-    let transfer = parse_ictt_logs(receipt_logs);
-
-    // Build AnnotatedEvent
-    let annotated_send = AnnotatedEvent {
-        event,
-        transaction_hash,
-        block_number,
-        block_timestamp,
-        chain_id,
-    };
-
-    // Get or create message entry
-    let mut entry = buffer.get_or_default(key).await?;
-
-    // Update send field (source-side)
-    entry.inner.send = Some(annotated_send);
-
-    // Merge ICTT transfer data - keep existing destination-side data if present
-    if let Some(new_transfer) = transfer {
-        entry.inner.transfer = match (entry.inner.transfer.take(), new_transfer) {
-            (None, new) => Some(new),
-            (Some(TokenTransfer::Sent(_, existing_dst)), TokenTransfer::Sent(src, _)) => {
-                Some(TokenTransfer::Sent(src, existing_dst))
-            }
-            (
-                Some(TokenTransfer::SentAndCalled(_, existing_dst)),
-                TokenTransfer::SentAndCalled(src, _),
-            ) => Some(TokenTransfer::SentAndCalled(src, existing_dst)),
-            (existing, _) => existing, // Keep existing if types don't match
-        };
-    }
-
     buffer
-        .upsert_with_cursors(key, entry, chain_id, block_number)
+        .alter(key, chain_id, block_number, |msg| {
+        let transfers: Vec<TokenTransfer> = receipt_logs
+            .iter()
+            .filter_map(|log| parse_sender_ictt_log(&event.messageID, &msg.transfer, log).transpose())
+            .collect::<Result<Vec<_>>>()?;
+
+        let transfer = (transfers.len() <= 1).then_some(transfers.first()).context(
+            "multiple sender-side ICTT transfers found for one teleporter message in a single receipt",
+        )?.cloned();
+
+        msg.send = Some(AnnotatedEvent {
+            event,
+            transaction_hash,
+            block_number,
+            block_timestamp,
+            chain_id,
+        });
+        msg.transfer = transfer;
+        Ok(())
+    })
         .await?;
 
     tracing::debug!(
@@ -582,6 +643,46 @@ async fn handle_send_cross_chain_message(
     Ok(())
 }
 
+fn parse_execution_outcome_log(
+    logs: &[Log],
+    chain_id: i64,
+    block_number: i64,
+    block_timestamp: chrono::NaiveDateTime,
+) -> Result<MessageExecutionOutcome> {
+    logs.iter()
+        .find_map(|log| {
+            let transaction_hash = log.transaction_hash?;
+            match *log.topic0()? {
+                ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH => log
+                    .log_decode::<ITeleporterMessenger::MessageExecuted>()
+                    .ok()
+                    .map(|decoded| {
+                        MessageExecutionOutcome::Succeeded(AnnotatedEvent {
+                            event: decoded.inner.data.clone(),
+                            transaction_hash,
+                            block_number,
+                            block_timestamp,
+                            chain_id,
+                        })
+                    }),
+                ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH => log
+                    .log_decode::<ITeleporterMessenger::MessageExecutionFailed>()
+                    .ok()
+                    .map(|decoded| {
+                        MessageExecutionOutcome::Failed(AnnotatedEvent {
+                            event: decoded.inner.data.clone(),
+                            transaction_hash,
+                            block_number,
+                            block_timestamp,
+                            chain_id,
+                        })
+                    }),
+                _ => None,
+            }
+        })
+        .context("no execution outcome log found in receipt")
+}
+
 /// Handle ReceiveCrossChainMessage - destination-side event
 /// Also fetches MessageExecuted/MessageExecutionFailed and ICTT events from same tx
 async fn handle_receive_cross_chain_message(
@@ -591,18 +692,18 @@ async fn handle_receive_cross_chain_message(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    _provider: &DynProvider<Ethereum>,
     receipt_logs: &[Log],
     block_timestamp: chrono::NaiveDateTime,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()?;
     let event = decoded.inner.data.clone();
-    let message_id_bytes: [u8; 8] = event.messageID.as_slice()[..8].try_into()?;
-    let id = i64::from_be_bytes(message_id_bytes);
     let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
 
+    let (key, message_id_bytes) =
+        parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
+    let src_chain_id =
+        resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
     let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
-    let src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
 
     // Skip messages from untracked chains
     if src_chain_id.is_none() {
@@ -614,89 +715,44 @@ async fn handle_receive_cross_chain_message(
         return Ok(());
     }
 
-    let key = Key::new(id, bridge_id);
-
-    // Find execution outcome (MessageExecuted or MessageExecutionFailed) in same transaction
-    let execution_outcome = receipt_logs.iter().find_map(|l| {
-        if l.topic0() == Some(&ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH) {
-            l.log_decode::<ITeleporterMessenger::MessageExecuted>()
-                .ok()
-                .filter(|e| e.inner.data.messageID == event.messageID)
-                .map(|e| {
-                    MessageExecutionOutcome::Succeeded(AnnotatedEvent {
-                        event: e.inner.data.clone(),
-                        transaction_hash,
-                        block_number,
-                        block_timestamp,
-                        chain_id,
-                    })
-                })
-        } else if l.topic0() == Some(&ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH)
-        {
-            l.log_decode::<ITeleporterMessenger::MessageExecutionFailed>()
-                .ok()
-                .filter(|e| e.inner.data.messageID == event.messageID)
-                .map(|e| {
-                    MessageExecutionOutcome::Failed(AnnotatedEvent {
-                        event: e.inner.data.clone(),
-                        transaction_hash,
-                        block_number,
-                        block_timestamp,
-                        chain_id,
-                    })
-                })
-        } else {
-            None
-        }
-    });
-
-    // Parse ICTT logs from same transaction (only present if execution succeeded)
-    let transfer = parse_ictt_logs(receipt_logs);
-
-    // Build AnnotatedEvent for receive
-    let annotated_receive = AnnotatedEvent {
-        event,
-        transaction_hash,
-        block_number,
-        block_timestamp,
-        chain_id,
-    };
-
-    // Get or create message entry
-    let mut entry = buffer.get_or_default(key).await?;
-
-    // Update receive field
-    entry.inner.receive = Some(annotated_receive);
-
-    // Update execution field if we found one in the same transaction
-    if let Some(outcome) = execution_outcome {
-        entry.inner.execution = Some(outcome);
-    }
-
-    // Merge ICTT transfer data - keep existing source-side data if present
-    if let Some(new_transfer) = transfer {
-        entry.inner.transfer = match (entry.inner.transfer.take(), new_transfer) {
-            (None, new) => Some(new),
-            (Some(TokenTransfer::Sent(existing_src, _)), TokenTransfer::Sent(_, dst)) => {
-                Some(TokenTransfer::Sent(existing_src, dst))
-            }
-            (
-                Some(TokenTransfer::SentAndCalled(existing_src, _)),
-                TokenTransfer::SentAndCalled(_, dst),
-            ) => Some(TokenTransfer::SentAndCalled(existing_src, dst)),
-            (existing, _) => existing, // Keep existing if types don't match
-        };
-    }
+    // Option A: ReceiveCrossChainMessage may have execution outcome in the same tx.
+    // We keep `parse_execution_outcome_log` for now but it's intentionally unused until we
+    // decide to fully wire the behaviour (see refactor notes).
+    let _maybe_execution: Option<MessageExecutionOutcome> = receipt_logs
+        .iter()
+        .any(|l| {
+            matches!(
+                l.topic0(),
+                Some(&ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH)
+                    | Some(&ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH)
+            )
+        })
+        .then(|| {
+            // Build lightweight annotated outcome without changing current persisted semantics.
+            // Intentionally NOT persisted yet.
+            parse_execution_outcome_log(receipt_logs, chain_id, block_number, block_timestamp)
+        })
+        .transpose()
+        .unwrap_or(None);
 
     buffer
-        .upsert_with_cursors(key, entry, chain_id, block_number)
+        .alter(key, chain_id, block_number, |msg| {
+            msg.receive = Some(AnnotatedEvent {
+                event,
+                transaction_hash,
+                block_number,
+                block_timestamp,
+                chain_id,
+            });
+            Ok(())
+        })
         .await?;
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
-        "Processed ReceiveCrossChainMessage"
+        "processed ReceiveCrossChainMessage"
     );
 
     Ok(())
@@ -711,18 +767,18 @@ async fn handle_message_executed(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    _provider: &DynProvider<Ethereum>,
     receipt_logs: &[Log],
     block_timestamp: chrono::NaiveDateTime,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::MessageExecuted>()?;
     let event = decoded.inner.data.clone();
-    let message_id_bytes: [u8; 8] = event.messageID.as_slice()[..8].try_into()?;
-    let id = i64::from_be_bytes(message_id_bytes);
     let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
 
+    let (key, message_id_bytes) =
+        parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
+    let src_chain_id =
+        resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
     let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
-    let src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
 
     // Skip messages from untracked chains
     if src_chain_id.is_none() {
@@ -734,50 +790,27 @@ async fn handle_message_executed(
         return Ok(());
     }
 
-    let key = Key::new(id, bridge_id);
-
-    // Parse ICTT logs from the same transaction receipt.
-    let transfer = parse_ictt_logs(receipt_logs);
-
-    // Build AnnotatedEvent for execution
-    let annotated_execution = AnnotatedEvent {
-        event,
-        transaction_hash,
-        block_number,
-        block_timestamp,
-        chain_id,
-    };
-
-    // Get or create message entry
-    let mut entry = buffer.get_or_default(key).await?;
-
-    // Update execution field - this replaces any previous Failed execution with Succeeded
-    entry.inner.execution = Some(MessageExecutionOutcome::Succeeded(annotated_execution));
-
-    // Merge ICTT transfer data - keep existing source-side data if present
-    if let Some(new_transfer) = transfer {
-        entry.inner.transfer = match (entry.inner.transfer.take(), new_transfer) {
-            (None, new) => Some(new),
-            (Some(TokenTransfer::Sent(existing_src, _)), TokenTransfer::Sent(_, dst)) => {
-                Some(TokenTransfer::Sent(existing_src, dst))
-            }
-            (
-                Some(TokenTransfer::SentAndCalled(existing_src, _)),
-                TokenTransfer::SentAndCalled(_, dst),
-            ) => Some(TokenTransfer::SentAndCalled(existing_src, dst)),
-            (existing, _) => existing,
-        };
-    }
-
     buffer
-        .upsert_with_cursors(key, entry, chain_id, block_number)
+        .alter(key, chain_id, block_number, |msg| {
+            // Receiver-side effects are parsed on MessageExecuted only.
+            // Enforce a strict invariant to avoid ambiguous attribution.
+            msg.execution = Some(MessageExecutionOutcome::Succeeded(AnnotatedEvent {
+                event,
+                transaction_hash,
+                block_number,
+                block_timestamp,
+                chain_id,
+            }));
+            msg.transfer = parse_receiver_ictt_logs(&msg.transfer, receipt_logs)?;
+            Ok(())
+        })
         .await?;
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
-        "Processed MessageExecuted (retry)"
+        "processed MessageExecuted"
     );
 
     Ok(())
@@ -791,17 +824,17 @@ async fn handle_message_execution_failed(
     bridge_id: i32,
     native_id_to_chain_id: &HashMap<String, i64>,
     buffer: &Arc<MessageBuffer<Message>>,
-    _provider: &DynProvider<Ethereum>,
     block_timestamp: chrono::NaiveDateTime,
 ) -> Result<()> {
     let decoded = log.log_decode::<ITeleporterMessenger::MessageExecutionFailed>()?;
     let event = decoded.inner.data.clone();
-    let message_id_bytes: [u8; 8] = event.messageID.as_slice()[..8].try_into()?;
-    let id = i64::from_be_bytes(message_id_bytes);
     let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
 
+    let (key, message_id_bytes) =
+        parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
+    let src_chain_id =
+        resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
     let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
-    let src_chain_id = native_id_to_chain_id.get(&source_hex).copied();
 
     // Skip messages from untracked chains
     if src_chain_id.is_none() {
@@ -813,30 +846,21 @@ async fn handle_message_execution_failed(
         return Ok(());
     }
 
-    let key = Key::new(id, bridge_id);
-
-    // Build AnnotatedEvent for execution failure
-    let annotated_execution = AnnotatedEvent {
-        event,
-        transaction_hash,
-        block_number,
-        block_timestamp,
-        chain_id,
-    };
-
-    // Get or create message entry
-    let mut entry = buffer.get_or_default(key).await?;
-
-    // Only update if not already succeeded (don't overwrite success with failure)
-    if !matches!(
-        entry.inner.execution,
-        Some(MessageExecutionOutcome::Succeeded(_))
-    ) {
-        entry.inner.execution = Some(MessageExecutionOutcome::Failed(annotated_execution));
-    }
-
     buffer
-        .upsert_with_cursors(key, entry, chain_id, block_number)
+        .alter(key, chain_id, block_number, |msg| {
+            // Only update if not already succeeded (don't overwrite success with failure)
+            if !matches!(msg.execution, Some(MessageExecutionOutcome::Succeeded(_))) {
+                msg.execution = Some(MessageExecutionOutcome::Failed(AnnotatedEvent {
+                    event,
+                    transaction_hash,
+                    block_number,
+                    block_timestamp,
+                    chain_id,
+                }));
+            }
+
+            Ok(())
+        })
         .await?;
 
     tracing::debug!(
