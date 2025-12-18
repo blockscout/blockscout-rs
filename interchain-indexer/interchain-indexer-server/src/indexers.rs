@@ -2,25 +2,25 @@ use crate::{BridgeConfig, ChainConfig};
 use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};
 use interchain_indexer_logic::{
-    InterchainDatabase,
-    indexers::avalanche::{AvalancheChainConfig, AvalancheIndexerConfig, spawn_indexer},
+    InterchainDatabase, CrosschainIndexer,
+    indexers::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
 };
 use std::collections::HashMap;
-use tokio::task::JoinHandle;
+use std::sync::Arc;
 
-pub fn spawn_configured_indexers(
+pub async fn spawn_configured_indexers(
     db: InterchainDatabase,
     bridges: &[BridgeConfig],
     chains: &[ChainConfig],
     chain_providers: &HashMap<u64, DynProvider<Ethereum>>,
-) -> Result<Vec<JoinHandle<()>>> {
+) -> Result<Vec<Arc<dyn CrosschainIndexer>>> {
     let chain_lookup: HashMap<i64, ChainConfig> = chains
         .iter()
         .cloned()
         .map(|chain| (chain.chain_id, chain))
         .collect();
 
-    let mut handles = Vec::new();
+    let mut indexers: Vec<Arc<dyn CrosschainIndexer>> = Vec::new();
 
     for bridge in bridges {
         if !bridge.enabled {
@@ -41,14 +41,27 @@ pub fn spawn_configured_indexers(
                 }
 
                 let config = AvalancheIndexerConfig::new(bridge.bridge_id, configs);
-                let handle = spawn_indexer(db.clone(), config).with_context(|| {
+                let indexer = AvalancheIndexer::new(Arc::new(db.clone()), config).with_context(|| {
                     format!(
                         "failed to spawn Avalanche indexer for bridge {}",
                         bridge.bridge_id
                     )
                 })?;
-                tracing::info!(bridge_id = bridge.bridge_id, "Spawned Avalanche indexer");
-                handles.push(handle);
+                let indexer: Arc<dyn CrosschainIndexer> = Arc::new(indexer);
+
+                // Start indexer asynchronously.
+                // NOTE: CrosschainIndexer::start is responsible for spawning internal tasks.
+                // We intentionally don't keep JoinHandles here.
+                // If start fails, we treat it as fatal for this indexer instance and skip it.
+                indexer.start().await.with_context(|| {
+                    format!(
+                        "failed to start Avalanche indexer for bridge {}",
+                        bridge.bridge_id
+                    )
+                })?;
+
+                tracing::info!(bridge_id = bridge.bridge_id, "Started Avalanche indexer");
+                indexers.push(indexer);
             }
             other => {
                 tracing::debug!(
@@ -59,7 +72,7 @@ pub fn spawn_configured_indexers(
             }
         }
     }
-    Ok(handles)
+    Ok(indexers)
 }
 
 fn build_avalanche_chain_configs(

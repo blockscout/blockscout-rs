@@ -44,8 +44,8 @@ fn to_hex(bytes: &Option<Vec<u8>>) -> String {
 }
 
 use interchain_indexer_logic::{
-    InterchainDatabase,
-    indexers::avalanche::{AvalancheChainConfig, AvalancheIndexerConfig, spawn_indexer},
+    CrosschainIndexer, InterchainDatabase,
+    indexers::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
 };
 use interchain_indexer_server::{BridgeConfig, BridgeContractConfig, ChainConfig};
 
@@ -165,7 +165,9 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
 
     let indexer_config = AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains);
 
-    let _indexer_handle = spawn_indexer(interchain_db.clone(), indexer_config)?;
+    let indexer =
+        AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
+    indexer.start().await?;
 
     let start = std::time::Instant::now();
     loop {
@@ -283,6 +285,8 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     // Verify amounts (sender and recipient should match for a successful transfer)
     assert_eq!(transfer.src_amount, 21633300000000000000u128.into());
     assert_eq!(transfer.dst_amount, 21633300000000000000u128.into());
+
+    indexer.stop().await;
 
     Ok(())
 }

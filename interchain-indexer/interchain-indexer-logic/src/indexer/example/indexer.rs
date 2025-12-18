@@ -90,7 +90,7 @@ impl CrosschainIndexer for ExampleIndexer {
         "Example indexer to demonstrate the CrosschainIndexer trait".to_string()
     }
 
-    async fn start_indexing(&self) -> Result<(), Error> {
+    async fn start(&self) -> Result<(), Error> {
         if self.is_running.load(Ordering::Acquire) {
             warn!(bridge_id = self.bridge_id, "Indexer is already running");
             return Ok(());
@@ -145,7 +145,7 @@ impl CrosschainIndexer for ExampleIndexer {
         Ok(())
     }
 
-    async fn stop_indexing(&self) {
+    async fn stop(&self) {
         if !self.is_running.load(Ordering::Acquire) {
             warn!(bridge_id = self.bridge_id, "Indexer is not running");
             return;
@@ -178,11 +178,7 @@ impl CrosschainIndexer for ExampleIndexer {
     fn get_status(&self) -> CrosschainIndexerStatus {
         CrosschainIndexerStatus {
             state: self.status.read().clone(),
-            catchup_progress: 0.0f64,
             init_timestamp: self.init_timestamp,
-            messages_indexed: self.fake_counter.load(Ordering::Relaxed),
-            transfers_indexed: self.fake_counter.load(Ordering::Relaxed),
-            error_count: self.fake_err_counter.load(Ordering::Relaxed),
             extra_info: HashMap::from([
                 ("foo".to_string(), serde_json::json!("bar")),
                 (

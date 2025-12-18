@@ -3,15 +3,17 @@ pub mod consolidation;
 pub mod types;
 
 use alloy::{
+    hex,
     network::Ethereum,
     primitives::{Address, B256},
     providers::{DynProvider, Provider as _},
     rpc::types::{Block, Filter, Log},
     sol_types::SolEvent,
 };
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Error, Result, anyhow};
 use futures::{StreamExt, TryStreamExt, stream};
 use itertools::Itertools;
+use std::sync::atomic::Ordering;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -19,9 +21,10 @@ use std::{
     time::Duration,
 };
 use tokio::task::JoinHandle;
+use tonic::async_trait;
 
 use crate::{
-    InterchainDatabase,
+    CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
     log_stream::LogStreamBuilder,
     message_buffer::{Config, Key, MessageBuffer},
 };
@@ -71,14 +74,22 @@ impl AvalancheIndexerConfig {
     }
 }
 
-struct AvalancheIndexer {
-    db: InterchainDatabase,
+pub struct AvalancheIndexer {
+    db: Arc<InterchainDatabase>,
     config: AvalancheIndexerConfig,
     buffer: Arc<MessageBuffer<Message>>,
+
+    is_running: Arc<std::sync::atomic::AtomicBool>,
+    indexing_handle: parking_lot::RwLock<Option<JoinHandle<()>>>,
+    state: Arc<parking_lot::RwLock<CrosschainIndexerState>>,
+    init_timestamp: chrono::NaiveDateTime,
+    messages_indexed: Arc<std::sync::atomic::AtomicU64>,
+    transfers_indexed: Arc<std::sync::atomic::AtomicU64>,
+    error_count: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl AvalancheIndexer {
-    fn new(db: InterchainDatabase, config: AvalancheIndexerConfig) -> Result<Self> {
+    pub fn new(db: Arc<InterchainDatabase>, config: AvalancheIndexerConfig) -> Result<Self> {
         if config.chains.is_empty() {
             return Err(anyhow!(
                 "Avalanche indexer requires at least one configured chain"
@@ -86,13 +97,41 @@ impl AvalancheIndexer {
         }
 
         let buffer_config = Config::default();
-        let buffer = MessageBuffer::new(db.clone(), buffer_config);
+        let buffer = MessageBuffer::new((*db).clone(), buffer_config);
 
-        Ok(Self { db, config, buffer })
+        Ok(Self {
+            db,
+            config,
+            buffer,
+            is_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            indexing_handle: parking_lot::RwLock::new(None),
+            state: Arc::new(parking_lot::RwLock::new(CrosschainIndexerState::Idle)),
+            init_timestamp: chrono::Utc::now().naive_utc(),
+            messages_indexed: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            transfers_indexed: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            error_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        })
+    }
+
+    fn clone_for_task(&self) -> Result<Self> {
+        Ok(Self {
+            db: self.db.clone(),
+            config: self.config.clone(),
+            buffer: self.buffer.clone(),
+            is_running: self.is_running.clone(),
+            indexing_handle: parking_lot::RwLock::new(None),
+            state: self.state.clone(),
+            init_timestamp: self.init_timestamp,
+            messages_indexed: self.messages_indexed.clone(),
+            transfers_indexed: self.transfers_indexed.clone(),
+            error_count: self.error_count.clone(),
+        })
     }
 
     async fn run(self) -> Result<()> {
-        let AvalancheIndexer { db, config, buffer } = self;
+        let db = (*self.db).clone();
+        let config = self.config;
+        let buffer = self.buffer;
         let AvalancheIndexerConfig {
             bridge_id,
             chains,
@@ -201,24 +240,82 @@ impl AvalancheIndexer {
     }
 }
 
-pub fn spawn_indexer(
-    db: InterchainDatabase,
-    config: AvalancheIndexerConfig,
-) -> Result<JoinHandle<()>> {
-    let bridge_id = config.bridge_id;
-    let indexer = AvalancheIndexer::new(db, config)?;
+#[async_trait]
+impl CrosschainIndexer for AvalancheIndexer {
+    fn name(&self) -> String {
+        "avalanche".to_string()
+    }
 
-    let handle = tokio::spawn(async move {
-        if let Err(err) = indexer.run().await {
-            tracing::error!(err = ?err, bridge_id, "Avalanche indexer terminated with error");
+    fn description(&self) -> String {
+        "Avalanche Teleporter (ICM) + ICTT indexer".to_string()
+    }
+
+    async fn start(&self) -> Result<(), Error> {
+        if self.is_running.load(Ordering::Acquire) {
+            tracing::warn!(
+                bridge_id = self.config.bridge_id,
+                "Avalanche indexer already running"
+            );
+            return Ok(());
         }
-    });
 
-    Ok(handle)
-}
+        self.is_running.store(true, Ordering::Release);
+        *self.state.write() = CrosschainIndexerState::Running;
 
-fn blockchain_id_hex(bytes: &[u8]) -> String {
-    format!("0x{}", hex::encode(bytes))
+        let this = self.clone_for_task()?;
+        let bridge_id = this.config.bridge_id;
+
+        let is_running = self.is_running.clone();
+        let state = self.state.clone();
+        let err_counter = self.error_count.clone();
+
+        let handle = tokio::spawn(async move {
+            if !is_running.load(Ordering::Acquire) {
+                return;
+            }
+            if let Err(err) = this.run().await {
+                err_counter.fetch_add(1, Ordering::Relaxed);
+                tracing::error!(err = ?err, bridge_id, "Avalanche indexer task stopped with error");
+                *state.write() = CrosschainIndexerState::Failed(format!("{err:#}"));
+            }
+        });
+
+        *self.indexing_handle.write() = Some(handle);
+        Ok(())
+    }
+
+    async fn stop(&self) {
+        self.is_running.store(false, Ordering::Release);
+        if let Some(handle) = self.indexing_handle.write().take() {
+            handle.abort();
+        }
+        *self.state.write() = CrosschainIndexerState::Idle;
+    }
+
+    fn get_state(&self) -> CrosschainIndexerState {
+        self.state.read().clone()
+    }
+
+    fn get_status(&self) -> CrosschainIndexerStatus {
+        CrosschainIndexerStatus {
+            state: self.state.read().clone(),
+            init_timestamp: self.init_timestamp,
+            extra_info: std::collections::HashMap::from([
+                (
+                    "chains_count".to_string(),
+                    serde_json::json!(self.config.chains.len()),
+                ),
+                (
+                    "poll_interval_secs".to_string(),
+                    serde_json::json!(self.config.poll_interval.as_secs()),
+                ),
+                (
+                    "batch_size".to_string(),
+                    serde_json::json!(self.config.batch_size),
+                ),
+            ]),
+        }
+    }
 }
 
 /// Extract the indexer message key from a Teleporter `messageID`.
@@ -237,7 +334,7 @@ fn resolve_tracked_chain_id(
     native_blockchain_id: &[u8],
     native_id_to_chain_id: &HashMap<String, i64>,
 ) -> Option<i64> {
-    let native_hex = blockchain_id_hex(native_blockchain_id);
+    let native_hex = hex::encode_prefixed(native_blockchain_id);
     native_id_to_chain_id.get(&native_hex).copied()
 }
 
@@ -601,7 +698,7 @@ async fn handle_send_cross_chain_message(
         event.destinationBlockchainID.as_slice(),
         native_id_to_chain_id,
     );
-    let destination_hex = blockchain_id_hex(event.destinationBlockchainID.as_slice());
+    let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
 
     // Skip messages to untracked chains
     if dst_chain_id.is_none() {
@@ -718,7 +815,7 @@ async fn handle_receive_cross_chain_message(
         parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
     let src_chain_id =
         resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
-    let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
+    let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
     if src_chain_id.is_none() {
@@ -805,7 +902,7 @@ async fn handle_message_executed(
         parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
     let src_chain_id =
         resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
-    let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
+    let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
     if src_chain_id.is_none() {
@@ -873,7 +970,7 @@ async fn handle_message_execution_failed(
         parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
     let src_chain_id =
         resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
-    let source_hex = blockchain_id_hex(event.sourceBlockchainID.as_slice());
+    let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
     if src_chain_id.is_none() {

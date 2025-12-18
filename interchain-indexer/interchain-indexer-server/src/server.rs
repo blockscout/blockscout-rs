@@ -116,8 +116,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.token_info,
     ));
 
-    let indexer_handles =
-        spawn_configured_indexers(interchain_db.clone(), &bridges, &chains, &chains_providers)?;
+    let indexers = spawn_configured_indexers(
+        interchain_db.clone(),
+        &bridges,
+        &chains,
+        &chains_providers,
+    )
+    .await?;
 
     // let example = ExampleIndexer::new(
     //     db.clone(),
@@ -156,9 +161,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let launch_result = launcher::launch(launch_settings, http_router, grpc_router).await;
 
-    for handle in indexer_handles {
-        handle.abort();
-        let _ = handle.await;
+    for indexer in indexers {
+        indexer.stop().await;
     }
 
     //example.stop_indexing().await;
