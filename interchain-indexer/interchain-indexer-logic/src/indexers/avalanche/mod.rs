@@ -460,9 +460,9 @@ fn parse_receiver_ictt_log(
                 Some(TokenTransfer::Sent(existing, _)) => Ok(existing.clone()),
                 None => Ok(None),
                 _ => Err(anyhow!(mismatch_error)),
-            };
+            }?;
 
-            Some(TokenTransfer::Sent(sent_or_routed?, Some(event.inner.data)))
+            Some(TokenTransfer::Sent(sent_or_routed, Some(event.inner.data)))
         }
         Some(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH) => {
             let event = log.log_decode::<ITokenTransferrer::CallSucceeded>()?;
@@ -471,10 +471,10 @@ fn parse_receiver_ictt_log(
                 Some(TokenTransfer::SentAndCalled(existing, _)) => Ok(existing.clone()),
                 None => Ok(None),
                 _ => Err(anyhow!(mismatch_error)),
-            };
+            }?;
 
             Some(TokenTransfer::SentAndCalled(
-                sent_or_routed_and_called?,
+                sent_or_routed_and_called,
                 Some(CallOutcome::Succeeded(event.inner.data)),
             ))
         }
@@ -485,10 +485,10 @@ fn parse_receiver_ictt_log(
                 Some(TokenTransfer::SentAndCalled(existing, _)) => Ok(existing.clone()),
                 None => Ok(None),
                 _ => Err(anyhow!(mismatch_error)),
-            };
+            }?;
 
             Some(TokenTransfer::SentAndCalled(
-                sent_or_routed_and_called?,
+                sent_or_routed_and_called,
                 Some(CallOutcome::Failed(event.inner.data)),
             ))
         }
