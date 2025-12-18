@@ -103,7 +103,7 @@ impl AvalancheIndexer {
         tracing::info!(
             bridge_id,
             chain_count = chains.len(),
-            "Starting Avalanche indexer"
+            "starting Avalanche indexer"
         );
 
         let mut combined_stream = stream::empty::<(i64, DynProvider<Ethereum>, Vec<Log>)>().boxed();
@@ -126,7 +126,7 @@ impl AvalancheIndexer {
                     chain_id,
                     forward_cursor,
                     backward_cursor,
-                    "Restored Avalanche indexer checkpoint"
+                    "restored Avalanche indexer checkpoint"
                 );
 
                 (forward_cursor, backward_cursor)
@@ -142,10 +142,11 @@ impl AvalancheIndexer {
                 .address(contract_address)
                 .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES);
 
-            tracing::info!(bridge_id, chain_id, "Configured log stream");
+            tracing::info!(bridge_id, chain_id, "configured log stream");
 
             let stream_provider = provider.clone();
             let stream = LogStreamBuilder::new(provider.clone())
+                .with_context(bridge_id, chain_id)
                 .filter(filter)
                 .poll_interval(poll_interval)
                 .batch_size(batch_size)
@@ -181,14 +182,14 @@ impl AvalancheIndexer {
             .await
             {
                 Ok(()) => {
-                    tracing::debug!(bridge_id, chain_id, "Processed Avalanche log batch");
+                    tracing::debug!(bridge_id, chain_id, "processed log batch");
                 }
                 Err(err) => {
                     tracing::error!(
                         err = ?err,
                         bridge_id,
                         chain_id,
-                        "Failed to process Avalanche log batch"
+                        "failed to process Avalanche log batch"
                     );
                 }
             }
@@ -568,8 +569,8 @@ async fn handle_log(
         }
         _ => {
             tracing::trace!(
-                topic0 = ?log.topic0(),
-                "Ignoring unknown event"
+                signature = ?log.topic0(),
+                "ignoring unknown event"
             );
             Ok(())
         }
@@ -591,6 +592,8 @@ async fn handle_send_cross_chain_message(
     let decoded = log.log_decode::<ITeleporterMessenger::SendCrossChainMessage>()?;
     let event = decoded.inner.data.clone();
     let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
+    let log_index = log.log_index.unwrap_or_default();
+    let topic0 = log.topic0().copied().unwrap_or_default();
 
     let (key, message_id_bytes) =
         parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
@@ -605,7 +608,12 @@ async fn handle_send_cross_chain_message(
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             destination_blockchain_id = %destination_hex,
-            "Skipping SendCrossChainMessage to untracked chain"
+            chain_id,
+            block_number,
+            transaction_hash = %transaction_hash,
+            log_index,
+            signature = %topic0,
+            "skipping SendCrossChainMessage to untracked chain"
         );
         return Ok(());
     }
@@ -637,7 +645,12 @@ async fn handle_send_cross_chain_message(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
-        "Processed SendCrossChainMessage"
+        transaction_hash = %transaction_hash,
+        log_index,
+        signature = %topic0,
+        destination_blockchain_id = %destination_hex,
+        destination_chain_id = dst_chain_id,
+        "processed SendCrossChainMessage"
     );
 
     Ok(())
@@ -698,6 +711,8 @@ async fn handle_receive_cross_chain_message(
     let decoded = log.log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()?;
     let event = decoded.inner.data.clone();
     let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
+    let log_index = log.log_index.unwrap_or_default();
+    let topic0 = log.topic0().copied().unwrap_or_default();
 
     let (key, message_id_bytes) =
         parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
@@ -710,7 +725,12 @@ async fn handle_receive_cross_chain_message(
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            "Skipping ReceiveCrossChainMessage from untracked chain"
+            chain_id,
+            block_number,
+            transaction_hash = %transaction_hash,
+            log_index,
+            signature = %topic0,
+            "skipping ReceiveCrossChainMessage from untracked chain"
         );
         return Ok(());
     }
@@ -752,6 +772,11 @@ async fn handle_receive_cross_chain_message(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
+        transaction_hash = %transaction_hash,
+        log_index,
+        signature = %topic0,
+        source_blockchain_id = %source_hex,
+        source_chain_id = src_chain_id,
         "processed ReceiveCrossChainMessage"
     );
 
@@ -773,6 +798,8 @@ async fn handle_message_executed(
     let decoded = log.log_decode::<ITeleporterMessenger::MessageExecuted>()?;
     let event = decoded.inner.data.clone();
     let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
+    let log_index = log.log_index.unwrap_or_default();
+    let topic0 = log.topic0().copied().unwrap_or_default();
 
     let (key, message_id_bytes) =
         parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
@@ -785,7 +812,12 @@ async fn handle_message_executed(
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            "Skipping MessageExecuted from untracked chain"
+            chain_id,
+            block_number,
+            transaction_hash = %transaction_hash,
+            log_index,
+            signature = %topic0,
+            "skipping MessageExecuted from untracked chain"
         );
         return Ok(());
     }
@@ -810,6 +842,11 @@ async fn handle_message_executed(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
+        transaction_hash = %transaction_hash,
+        log_index,
+        signature = %topic0,
+        source_blockchain_id = %source_hex,
+        source_chain_id = src_chain_id,
         "processed MessageExecuted"
     );
 
@@ -829,6 +866,8 @@ async fn handle_message_execution_failed(
     let decoded = log.log_decode::<ITeleporterMessenger::MessageExecutionFailed>()?;
     let event = decoded.inner.data.clone();
     let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
+    let log_index = log.log_index.unwrap_or_default();
+    let topic0 = log.topic0().copied().unwrap_or_default();
 
     let (key, message_id_bytes) =
         parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
@@ -841,7 +880,12 @@ async fn handle_message_execution_failed(
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            "Skipping MessageExecutionFailed from untracked chain"
+            chain_id,
+            block_number,
+            transaction_hash = %transaction_hash,
+            log_index,
+            signature = %topic0,
+            "skipping MessageExecutionFailed from untracked chain"
         );
         return Ok(());
     }
@@ -867,7 +911,12 @@ async fn handle_message_execution_failed(
         message_id = %hex::encode(message_id_bytes),
         chain_id,
         block_number,
-        "Processed MessageExecutionFailed"
+        transaction_hash = %transaction_hash,
+        log_index,
+        signature = %topic0,
+        source_blockchain_id = %source_hex,
+        source_chain_id = src_chain_id,
+        "processed MessageExecutionFailed"
     );
 
     Ok(())

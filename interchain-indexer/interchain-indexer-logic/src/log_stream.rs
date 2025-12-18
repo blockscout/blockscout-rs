@@ -15,6 +15,8 @@ pub struct LogStreamBuilder {
     backward_cursor: u64,
     poll_interval: Duration,
     batch_size: u64,
+    bridge_id: Option<i32>,
+    chain_id: Option<i64>,
     stream: stream::BoxStream<'static, Vec<Log>>,
 }
 
@@ -29,7 +31,19 @@ impl LogStreamBuilder {
             stream: stream::empty::<Vec<Log>>().boxed(),
             poll_interval: Duration::from_secs(10),
             batch_size: 100,
+            bridge_id: None,
+            chain_id: None,
         }
+    }
+
+    /// Attach optional context that will be included in all logs emitted by this stream.
+    ///
+    /// This is intentionally lightweight and avoids requiring callers to always route logs through
+    /// spans. When used, every info/debug/error line from the stream becomes attributable.
+    pub fn with_context(mut self, bridge_id: i32, chain_id: i64) -> Self {
+        self.bridge_id = Some(bridge_id);
+        self.chain_id = Some(chain_id);
+        self
     }
 
     pub fn filter(mut self, filter: Filter) -> Self {
@@ -69,16 +83,20 @@ impl LogStreamBuilder {
         let batch_size = self.batch_size;
         let genesis_block = self.genesis_block;
         let backward_cursor = self.backward_cursor;
+        let bridge_id = self.bridge_id;
+        let chain_id = self.chain_id;
 
         let stream = async_stream::stream! {
             let mut to_block = backward_cursor;
             while to_block >= genesis_block {
                 let from_block = to_block.saturating_sub(batch_size).max(genesis_block);
-                tracing::debug!(from_block, to_block, "catchup logs batch");
+                tracing::debug!(bridge_id, chain_id, from_block, to_block, batch_size, "catchup logs batch");
 
                 match fetch_logs(provider.clone(), &filter, from_block, to_block).await {
                     Ok(logs) => {
                         tracing::info!(
+                            bridge_id,
+                            chain_id,
                             count = logs.len(),
                             from_block,
                             to_block,
@@ -92,6 +110,8 @@ impl LogStreamBuilder {
                     Err(e) => {
                         tracing::error!(
                             err =? e,
+                            bridge_id,
+                            chain_id,
                             from_block,
                             to_block,
                             "failed to fetch catchup logs batch, retrying"
@@ -102,7 +122,7 @@ impl LogStreamBuilder {
                 }
             }
 
-            tracing::info!(genesis_block, "catchup complete, reached genesis block");
+            tracing::info!(bridge_id, chain_id, genesis_block, "catchup complete, reached genesis block");
         };
 
         self.stream = stream::select(self.stream, stream).boxed();
@@ -115,6 +135,8 @@ impl LogStreamBuilder {
         let poll_interval = self.poll_interval;
         let batch_size = self.batch_size;
         let forward_cursor = self.forward_cursor;
+        let bridge_id = self.bridge_id;
+        let chain_id = self.chain_id;
 
         let stream = async_stream::stream! {
             let mut from_block = forward_cursor;
@@ -122,13 +144,13 @@ impl LogStreamBuilder {
                 let to_block = provider
                     .get_block_number()
                     .await
-                    .inspect_err(|e| tracing::error!(err =? e, "failed to get latest block number"))
+                    .inspect_err(|e| tracing::error!(err =? e, bridge_id, chain_id, "failed to get latest block number"))
                     .ok()
                     .filter(|latest| from_block <= *latest)
                     .map(|latest| (from_block + batch_size).min(latest));
 
                 let Some(to_block) = to_block else {
-                    tracing::debug!(from_block, "waiting for new blocks");
+                    tracing::debug!(bridge_id, chain_id, from_block, "waiting for new blocks");
                     tokio::time::sleep(poll_interval).await;
                     continue;
                 };
@@ -137,9 +159,12 @@ impl LogStreamBuilder {
                     Ok(logs) => {
                         if !logs.is_empty() {
                             tracing::info!(
+                                bridge_id,
+                                chain_id,
                                 count = logs.len(),
                                 from_block,
                                 to_block,
+                                batch_size,
                                 "found realtime logs"
                             );
                             yield logs;
@@ -149,6 +174,8 @@ impl LogStreamBuilder {
                     Err(e) => {
                         tracing::error!(
                             err =? e,
+                            bridge_id,
+                            chain_id,
                             from_block,
                             to_block,
                             "failed to fetch realtime logs"
