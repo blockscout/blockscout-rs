@@ -1,11 +1,10 @@
 mod database;
 mod error;
-mod indexer;
 mod message_buffer;
 mod provider_layers;
 
 // pub mod event_handler;
-pub mod indexers;
+pub mod indexer;
 pub mod log_stream;
 pub mod pagination;
 #[cfg(any(test))]

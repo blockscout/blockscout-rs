@@ -3,7 +3,7 @@ use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase,
-    indexers::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
+    indexer::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
 };
 use std::{collections::HashMap, sync::Arc};
 

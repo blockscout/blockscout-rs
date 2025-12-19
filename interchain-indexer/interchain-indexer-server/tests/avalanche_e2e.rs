@@ -45,7 +45,7 @@ fn to_hex(bytes: &Option<Vec<u8>>) -> String {
 
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase,
-    indexers::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
+    indexer::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
 };
 use interchain_indexer_server::{BridgeConfig, BridgeContractConfig, ChainConfig};
 
