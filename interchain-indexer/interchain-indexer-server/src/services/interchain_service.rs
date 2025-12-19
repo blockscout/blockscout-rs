@@ -21,7 +21,6 @@ use std::{
     sync::Arc,
 };
 use tonic::{Request, Response, Status};
-use tracing;
 
 use super::utils::{db_datetime_to_string, map_db_error};
 
@@ -202,7 +201,7 @@ impl InterchainServiceImpl {
             recipient: self.get_address_info_opt(message.recipient_address),
             receive_timestamp: message
                 .last_update_timestamp
-                .map(|ts| db_datetime_to_string(ts)),
+                .map(db_datetime_to_string),
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash),
             payload,
             extra: BTreeMap::new(),
@@ -262,7 +261,7 @@ impl InterchainServiceImpl {
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: message
                 .last_update_timestamp
-                .map(|ts| db_datetime_to_string(ts)),
+                .map(db_datetime_to_string),
         }
     }
 
@@ -295,7 +294,7 @@ impl InterchainServiceImpl {
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: transfer
                 .last_update_timestamp
-                .map(|ts| db_datetime_to_string(ts)),
+                .map(db_datetime_to_string),
         }
     }
 
@@ -308,7 +307,6 @@ impl InterchainServiceImpl {
                 ui_url: None,
                 docs_url: None,
             })
-            .into()
     }
 
     fn get_message_id_from_message(&self, message: &CrosschainMessageModel) -> String {

@@ -7,7 +7,7 @@ mod provider_layers;
 pub mod indexer;
 pub mod log_stream;
 pub mod pagination;
-#[cfg(any(test))]
+#[cfg(test)]
 pub mod test_utils;
 pub mod token_info;
 pub mod utils;

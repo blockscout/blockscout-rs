@@ -12,7 +12,6 @@ use interchain_indexer_logic::{InterchainDatabase, TokenInfoService};
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::interchain_statistics_service_actix::route_interchain_statistics_service;
 use migration::Migrator;
 use std::sync::Arc;
-use tracing;
 const SERVICE_NAME: &str = "interchain_indexer";
 
 #[derive(Clone)]

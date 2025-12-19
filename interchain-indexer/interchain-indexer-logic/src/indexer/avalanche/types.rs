@@ -43,7 +43,7 @@ pub(crate) enum MessageExecutionOutcome {
     /// Message execution succeeded - this is final for ICM.
     Succeeded(AnnotatedEvent<ITeleporterMessenger::MessageExecuted>),
     /// Message execution failed - can be retried via retryMessageExecution().
-    Failed(AnnotatedEvent<ITeleporterMessenger::MessageExecutionFailed>),
+    Failed(Box<AnnotatedEvent<ITeleporterMessenger::MessageExecutionFailed>>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

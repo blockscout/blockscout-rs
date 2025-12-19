@@ -4,9 +4,8 @@ use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
 };
 use interchain_indexer_logic::{NodeConfig, PoolConfig, build_layered_http_provider};
-use sea_orm::{ActiveValue, entity::ActiveEnum, prelude::Json};
+use sea_orm::{ActiveValue, entity::ActiveEnum};
 use serde::{Deserialize, Deserializer};
-use serde_json;
 use std::{collections::HashMap, path::Path, str::FromStr, time::Duration};
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -86,7 +85,6 @@ impl BridgeContractConfig {
         let abi_value = self.abi.as_ref().and_then(|abi_str| {
             serde_json::from_str::<serde_json::Value>(abi_str)
                 .ok()
-                .map(|v| Json::from(v))
         });
 
         bridge_contracts::ActiveModel {

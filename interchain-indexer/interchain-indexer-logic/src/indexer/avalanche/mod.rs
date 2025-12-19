@@ -220,7 +220,7 @@ impl AvalancheIndexer {
             )
             .await
             {
-                Ok(()) => {
+                Ok(_) => {
                     tracing::debug!(bridge_id, chain_id, "processed log batch");
                 }
                 Err(err) => {
@@ -391,17 +391,18 @@ async fn process_batch(
         for log in teleporter_logs {
             let block_number = log.block_number.context("missing block number")? as i64;
 
-            handle_log(
+            let ctx = LogHandleContext {
                 chain_id,
                 block_number,
+                block_timestamp,
                 log,
                 bridge_id,
                 native_id_to_chain_id,
                 buffer,
                 receipt_logs,
-                block_timestamp,
-            )
-            .await?;
+            };
+
+            handle_log(ctx).await?;
         }
     }
 
@@ -417,8 +418,8 @@ fn parse_sender_ictt_log(
     let signature = log.topic0().context("missing topic0")?;
     let mismatch_error = "mismatched ICTT transfer types in single receipt";
 
-    let transfer = match signature {
-        &ITokenTransferrer::TokensSent::SIGNATURE_HASH => {
+    let transfer = match *signature {
+        ITokenTransferrer::TokensSent::SIGNATURE_HASH => {
             let event = log
                 .log_decode::<ITokenTransferrer::TokensSent>()?
                 .inner
@@ -438,7 +439,7 @@ fn parse_sender_ictt_log(
                 withdrawn,
             ))
         }
-        &ITokenTransferrer::TokensAndCallSent::SIGNATURE_HASH => {
+        ITokenTransferrer::TokensAndCallSent::SIGNATURE_HASH => {
             let event = log
                 .log_decode::<ITokenTransferrer::TokensAndCallSent>()?
                 .inner
@@ -458,7 +459,7 @@ fn parse_sender_ictt_log(
                 withdrawn,
             ))
         }
-        &ITokenHome::TokensRouted::SIGNATURE_HASH => {
+        ITokenHome::TokensRouted::SIGNATURE_HASH => {
             let event = log.log_decode::<ITokenHome::TokensRouted>()?.inner.data;
 
             let withdrawn = match transfer {
@@ -475,7 +476,7 @@ fn parse_sender_ictt_log(
                 withdrawn,
             ))
         }
-        &ITokenHome::TokensAndCallRouted::SIGNATURE_HASH => {
+        ITokenHome::TokensAndCallRouted::SIGNATURE_HASH => {
             let event = log
                 .log_decode::<ITokenHome::TokensAndCallRouted>()?
                 .inner
@@ -518,7 +519,7 @@ fn parse_receiver_ictt_logs(
                 &ITokenTransferrer::CallFailed::SIGNATURE_HASH,
             ]
             .contains(&sig)
-            .then(|| *sig)
+            .then_some(*sig)
         })
         .counts();
 
@@ -532,12 +533,13 @@ fn parse_receiver_ictt_logs(
             ))
         })?;
 
-    (counts.contains_key(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH)
-        && counts.contains_key(&ITokenTransferrer::CallFailed::SIGNATURE_HASH))
-    .then_some(Err(anyhow!(
-        "receiver-side invariant violated: both CallSucceeded and CallFailed present in one receipt"
-    )))
-    .unwrap_or(Ok(()))?;
+    if counts.contains_key(&ITokenTransferrer::CallSucceeded::SIGNATURE_HASH)
+        && counts.contains_key(&ITokenTransferrer::CallFailed::SIGNATURE_HASH)
+    {
+        Err(anyhow!(
+            "receiver-side invariant violated: both CallSucceeded and CallFailed present in one receipt"
+        ))?;
+    }
 
     logs.iter()
         .find_map(|log| parse_receiver_ictt_log(transfer, log).transpose())
@@ -596,107 +598,83 @@ fn parse_receiver_ictt_log(
     Ok(transfer)
 }
 
-/// Handle ICM events - only handles Send/Receive/Execute events
-/// ICTT logs are fetched on-demand when processing Receive events
-async fn handle_log(
+/// Shared per-log handler context.
+///
+/// This bundles the (previously many) positional arguments passed through the
+/// avalanche log handler call chain. It makes call sites clearer, reduces the
+/// risk of argument-order bugs, and allows handler signatures to evolve without
+/// rippling changes everywhere.
+struct LogHandleContext<'a> {
     chain_id: i64,
     block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer<Message>>,
-    receipt_logs: &[Log],
     block_timestamp: chrono::NaiveDateTime,
-) -> anyhow::Result<()> {
-    match log.topic0() {
-        // ICM Source Event
-        Some(&ITeleporterMessenger::SendCrossChainMessage::SIGNATURE_HASH) => {
-            handle_send_cross_chain_message(
-                chain_id,
-                block_number,
-                log,
-                bridge_id,
-                native_id_to_chain_id,
-                buffer,
-                receipt_logs,
-                block_timestamp,
-            )
-            .await
+
+    bridge_id: i32,
+    native_id_to_chain_id: &'a HashMap<String, i64>,
+    buffer: &'a Arc<MessageBuffer<Message>>,
+
+    /// Current log being handled.
+    log: &'a Log,
+
+    /// Full receipt logs for the transaction containing `log`.
+    receipt_logs: &'a [Log],
+}
+
+/// Handle ICM events - only handles Send/Receive/Execute events
+/// ICTT logs are fetched on-demand when processing Receive events
+async fn handle_log(ctx: LogHandleContext<'_>) -> anyhow::Result<()> {
+    if let Some(signature) = ctx.log.topic0() {
+        match *signature {
+            // ICM Source Event
+            ITeleporterMessenger::SendCrossChainMessage::SIGNATURE_HASH => {
+                handle_send_cross_chain_message(ctx).await
+            }
+            // ICM Destination Events - ReceiveCrossChainMessage may have execution in same tx
+            ITeleporterMessenger::ReceiveCrossChainMessage::SIGNATURE_HASH => {
+                handle_receive_cross_chain_message(ctx).await
+            }
+            // Execution events - handled for retry case (retryMessageExecution)
+            // When execution comes via retry, it's in a different transaction than ReceiveCrossChainMessage
+            ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH => {
+                handle_message_executed(ctx).await
+            }
+            ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH => {
+                handle_message_execution_failed(ctx).await
+            }
+            _ => {
+                tracing::trace!(?signature, "ignoring unknown event");
+                Ok(())
+            }
         }
-        // ICM Destination Events - ReceiveCrossChainMessage may have execution in same tx
-        Some(&ITeleporterMessenger::ReceiveCrossChainMessage::SIGNATURE_HASH) => {
-            handle_receive_cross_chain_message(
-                chain_id,
-                block_number,
-                log,
-                bridge_id,
-                native_id_to_chain_id,
-                buffer,
-                receipt_logs,
-                block_timestamp,
-            )
-            .await
-        }
-        // Execution events - handled for retry case (retryMessageExecution)
-        // When execution comes via retry, it's in a different transaction than ReceiveCrossChainMessage
-        Some(&ITeleporterMessenger::MessageExecuted::SIGNATURE_HASH) => {
-            handle_message_executed(
-                chain_id,
-                block_number,
-                log,
-                bridge_id,
-                native_id_to_chain_id,
-                buffer,
-                receipt_logs,
-                block_timestamp,
-            )
-            .await
-        }
-        Some(&ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH) => {
-            handle_message_execution_failed(
-                chain_id,
-                block_number,
-                log,
-                bridge_id,
-                native_id_to_chain_id,
-                buffer,
-                block_timestamp,
-            )
-            .await
-        }
-        _ => {
-            tracing::trace!(
-                signature = ?log.topic0(),
-                "ignoring unknown event"
-            );
-            Ok(())
-        }
+    } else {
+        tracing::warn!(
+            block_number = ctx.block_number,
+            chain_id = ctx.chain_id,
+            "log missing topic0, cannot process"
+        );
+        Ok(())
     }
 }
 
 /// Handle SendCrossChainMessage - source-side event
 /// Fetches ICTT logs from the same transaction to capture TokensSent/TokensAndCallSent
-async fn handle_send_cross_chain_message(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer<Message>>,
-    receipt_logs: &[Log],
-    block_timestamp: chrono::NaiveDateTime,
-) -> Result<()> {
-    let decoded = log.log_decode::<ITeleporterMessenger::SendCrossChainMessage>()?;
+async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()> {
+    let decoded = ctx
+        .log
+        .log_decode::<ITeleporterMessenger::SendCrossChainMessage>()?;
     let event = decoded.inner.data.clone();
-    let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
-    let log_index = log.log_index.unwrap_or_default();
-    let topic0 = log.topic0().copied().unwrap_or_default();
+    let transaction_hash = ctx
+        .log
+        .transaction_hash
+        .context("missing transaction hash")?;
+    let log_index = ctx.log.log_index.unwrap_or_default();
+    let topic0 = ctx.log.topic0().copied().unwrap_or_default();
 
-    let (key, message_id_bytes) =
-        parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
+    let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
+        .context("failed to parse message key")?;
     let dst_chain_id = resolve_tracked_chain_id(
         event.destinationBlockchainID.as_slice(),
-        native_id_to_chain_id,
+        ctx.native_id_to_chain_id,
     );
     let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
 
@@ -705,8 +683,8 @@ async fn handle_send_cross_chain_message(
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             destination_blockchain_id = %destination_hex,
-            chain_id,
-            block_number,
+            chain_id = ctx.chain_id,
+            block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
@@ -715,9 +693,9 @@ async fn handle_send_cross_chain_message(
         return Ok(());
     }
 
-    buffer
-        .alter(key, chain_id, block_number, |msg| {
-        let transfers: Vec<TokenTransfer> = receipt_logs
+    ctx.buffer
+        .alter(key, ctx.chain_id, ctx.block_number, |msg| {
+        let transfers: Vec<TokenTransfer> = ctx.receipt_logs
             .iter()
             .filter_map(|log| parse_sender_ictt_log(&event.messageID, &msg.transfer, log).transpose())
             .collect::<Result<Vec<_>>>()?;
@@ -729,9 +707,9 @@ async fn handle_send_cross_chain_message(
         msg.send = Some(AnnotatedEvent {
             event,
             transaction_hash,
-            block_number,
-            block_timestamp,
-            chain_id,
+            block_number: ctx.block_number,
+            block_timestamp: ctx.block_timestamp,
+            chain_id: ctx.chain_id,
         });
         msg.transfer = transfer;
         Ok(())
@@ -740,8 +718,8 @@ async fn handle_send_cross_chain_message(
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
-        chain_id,
-        block_number,
+        chain_id = ctx.chain_id,
+        block_number = ctx.block_number,
         transaction_hash = %transaction_hash,
         log_index,
         signature = %topic0,
@@ -779,13 +757,16 @@ fn parse_execution_outcome_log(
                     .log_decode::<ITeleporterMessenger::MessageExecutionFailed>()
                     .ok()
                     .map(|decoded| {
-                        MessageExecutionOutcome::Failed(AnnotatedEvent {
-                            event: decoded.inner.data.clone(),
-                            transaction_hash,
-                            block_number,
-                            block_timestamp,
-                            chain_id,
-                        })
+                        MessageExecutionOutcome::Failed(
+                            AnnotatedEvent {
+                                event: decoded.inner.data.clone(),
+                                transaction_hash,
+                                block_number,
+                                block_timestamp,
+                                chain_id,
+                            }
+                            .into(),
+                        )
                     }),
                 _ => None,
             }
@@ -795,26 +776,24 @@ fn parse_execution_outcome_log(
 
 /// Handle ReceiveCrossChainMessage - destination-side event
 /// Also fetches MessageExecuted/MessageExecutionFailed and ICTT events from same tx
-async fn handle_receive_cross_chain_message(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer<Message>>,
-    receipt_logs: &[Log],
-    block_timestamp: chrono::NaiveDateTime,
-) -> Result<()> {
-    let decoded = log.log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()?;
+async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()> {
+    let decoded = ctx
+        .log
+        .log_decode::<ITeleporterMessenger::ReceiveCrossChainMessage>()?;
     let event = decoded.inner.data.clone();
-    let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
-    let log_index = log.log_index.unwrap_or_default();
-    let topic0 = log.topic0().copied().unwrap_or_default();
+    let transaction_hash = ctx
+        .log
+        .transaction_hash
+        .context("missing transaction hash")?;
+    let log_index = ctx.log.log_index.unwrap_or_default();
+    let topic0 = ctx.log.topic0().copied().unwrap_or_default();
 
-    let (key, message_id_bytes) =
-        parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
-    let src_chain_id =
-        resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
+    let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
+        .context("failed to parse message key")?;
+    let src_chain_id = resolve_tracked_chain_id(
+        event.sourceBlockchainID.as_slice(),
+        ctx.native_id_to_chain_id,
+    );
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
@@ -822,8 +801,8 @@ async fn handle_receive_cross_chain_message(
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            chain_id,
-            block_number,
+            chain_id = ctx.chain_id,
+            block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
@@ -835,7 +814,8 @@ async fn handle_receive_cross_chain_message(
     // Option A: ReceiveCrossChainMessage may have execution outcome in the same tx.
     // We keep `parse_execution_outcome_log` for now but it's intentionally unused until we
     // decide to fully wire the behaviour (see refactor notes).
-    let _maybe_execution: Option<MessageExecutionOutcome> = receipt_logs
+    let _maybe_execution: Option<MessageExecutionOutcome> = ctx
+        .receipt_logs
         .iter()
         .any(|l| {
             matches!(
@@ -847,19 +827,24 @@ async fn handle_receive_cross_chain_message(
         .then(|| {
             // Build lightweight annotated outcome without changing current persisted semantics.
             // Intentionally NOT persisted yet.
-            parse_execution_outcome_log(receipt_logs, chain_id, block_number, block_timestamp)
+            parse_execution_outcome_log(
+                ctx.receipt_logs,
+                ctx.chain_id,
+                ctx.block_number,
+                ctx.block_timestamp,
+            )
         })
         .transpose()
         .unwrap_or(None);
 
-    buffer
-        .alter(key, chain_id, block_number, |msg| {
+    ctx.buffer
+        .alter(key, ctx.chain_id, ctx.block_number, |msg| {
             msg.receive = Some(AnnotatedEvent {
                 event,
                 transaction_hash,
-                block_number,
-                block_timestamp,
-                chain_id,
+                block_number: ctx.block_number,
+                block_timestamp: ctx.block_timestamp,
+                chain_id: ctx.chain_id,
             });
             Ok(())
         })
@@ -867,8 +852,8 @@ async fn handle_receive_cross_chain_message(
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
-        chain_id,
-        block_number,
+        chain_id = ctx.chain_id,
+        block_number = ctx.block_number,
         transaction_hash = %transaction_hash,
         log_index,
         signature = %topic0,
@@ -882,26 +867,24 @@ async fn handle_receive_cross_chain_message(
 
 /// Handle MessageExecuted - can come via retry (retryMessageExecution)
 /// This handles the case where execution happens in a separate transaction from receive
-async fn handle_message_executed(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer<Message>>,
-    receipt_logs: &[Log],
-    block_timestamp: chrono::NaiveDateTime,
-) -> Result<()> {
-    let decoded = log.log_decode::<ITeleporterMessenger::MessageExecuted>()?;
+async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
+    let decoded = ctx
+        .log
+        .log_decode::<ITeleporterMessenger::MessageExecuted>()?;
     let event = decoded.inner.data.clone();
-    let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
-    let log_index = log.log_index.unwrap_or_default();
-    let topic0 = log.topic0().copied().unwrap_or_default();
+    let transaction_hash = ctx
+        .log
+        .transaction_hash
+        .context("missing transaction hash")?;
+    let log_index = ctx.log.log_index.unwrap_or_default();
+    let topic0 = ctx.log.topic0().copied().unwrap_or_default();
 
-    let (key, message_id_bytes) =
-        parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
-    let src_chain_id =
-        resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
+    let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
+        .context("failed to parse message key")?;
+    let src_chain_id = resolve_tracked_chain_id(
+        event.sourceBlockchainID.as_slice(),
+        ctx.native_id_to_chain_id,
+    );
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
@@ -909,8 +892,8 @@ async fn handle_message_executed(
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            chain_id,
-            block_number,
+            chain_id = ctx.chain_id,
+            block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
@@ -919,26 +902,26 @@ async fn handle_message_executed(
         return Ok(());
     }
 
-    buffer
-        .alter(key, chain_id, block_number, |msg| {
+    ctx.buffer
+        .alter(key, ctx.chain_id, ctx.block_number, |msg| {
             // Receiver-side effects are parsed on MessageExecuted only.
             // Enforce a strict invariant to avoid ambiguous attribution.
             msg.execution = Some(MessageExecutionOutcome::Succeeded(AnnotatedEvent {
                 event,
                 transaction_hash,
-                block_number,
-                block_timestamp,
-                chain_id,
+                block_number: ctx.block_number,
+                block_timestamp: ctx.block_timestamp,
+                chain_id: ctx.chain_id,
             }));
-            msg.transfer = parse_receiver_ictt_logs(&msg.transfer, receipt_logs)?;
+            msg.transfer = parse_receiver_ictt_logs(&msg.transfer, ctx.receipt_logs)?;
             Ok(())
         })
         .await?;
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
-        chain_id,
-        block_number,
+        chain_id = ctx.chain_id,
+        block_number = ctx.block_number,
         transaction_hash = %transaction_hash,
         log_index,
         signature = %topic0,
@@ -951,25 +934,24 @@ async fn handle_message_executed(
 }
 
 /// Handle MessageExecutionFailed - execution failed, can be retried later
-async fn handle_message_execution_failed(
-    chain_id: i64,
-    block_number: i64,
-    log: &Log,
-    bridge_id: i32,
-    native_id_to_chain_id: &HashMap<String, i64>,
-    buffer: &Arc<MessageBuffer<Message>>,
-    block_timestamp: chrono::NaiveDateTime,
-) -> Result<()> {
-    let decoded = log.log_decode::<ITeleporterMessenger::MessageExecutionFailed>()?;
+async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()> {
+    let decoded = ctx
+        .log
+        .log_decode::<ITeleporterMessenger::MessageExecutionFailed>()?;
     let event = decoded.inner.data.clone();
-    let transaction_hash = log.transaction_hash.context("missing transaction hash")?;
-    let log_index = log.log_index.unwrap_or_default();
-    let topic0 = log.topic0().copied().unwrap_or_default();
+    let transaction_hash = ctx
+        .log
+        .transaction_hash
+        .context("missing transaction hash")?;
+    let log_index = ctx.log.log_index.unwrap_or_default();
+    let topic0 = ctx.log.topic0().copied().unwrap_or_default();
 
-    let (key, message_id_bytes) =
-        parse_message_key(&event.messageID, bridge_id).context("failed to parse message key")?;
-    let src_chain_id =
-        resolve_tracked_chain_id(event.sourceBlockchainID.as_slice(), native_id_to_chain_id);
+    let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
+        .context("failed to parse message key")?;
+    let src_chain_id = resolve_tracked_chain_id(
+        event.sourceBlockchainID.as_slice(),
+        ctx.native_id_to_chain_id,
+    );
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
@@ -977,8 +959,8 @@ async fn handle_message_execution_failed(
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            chain_id,
-            block_number,
+            chain_id = ctx.chain_id,
+            block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
@@ -987,17 +969,20 @@ async fn handle_message_execution_failed(
         return Ok(());
     }
 
-    buffer
-        .alter(key, chain_id, block_number, |msg| {
+    ctx.buffer
+        .alter(key, ctx.chain_id, ctx.block_number, |msg| {
             // Only update if not already succeeded (don't overwrite success with failure)
             if !matches!(msg.execution, Some(MessageExecutionOutcome::Succeeded(_))) {
-                msg.execution = Some(MessageExecutionOutcome::Failed(AnnotatedEvent {
-                    event,
-                    transaction_hash,
-                    block_number,
-                    block_timestamp,
-                    chain_id,
-                }));
+                msg.execution = Some(MessageExecutionOutcome::Failed(
+                    AnnotatedEvent {
+                        event,
+                        transaction_hash,
+                        block_number: ctx.block_number,
+                        block_timestamp: ctx.block_timestamp,
+                        chain_id: ctx.chain_id,
+                    }
+                    .into(),
+                ));
             }
 
             Ok(())
@@ -1006,8 +991,8 @@ async fn handle_message_execution_failed(
 
     tracing::debug!(
         message_id = %hex::encode(message_id_bytes),
-        chain_id,
-        block_number,
+        chain_id = ctx.chain_id,
+        block_number = ctx.block_number,
         transaction_hash = %transaction_hash,
         log_index,
         signature = %topic0,

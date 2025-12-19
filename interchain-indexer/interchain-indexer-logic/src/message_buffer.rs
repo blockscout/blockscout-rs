@@ -327,7 +327,7 @@ impl<T: Consolidate> MessageBuffer<T> {
             }
 
             let consolidated = entry.inner.consolidate(&key)?;
-            let is_final = consolidated.as_ref().map_or(false, |c| c.is_final);
+            let is_final = consolidated.as_ref().is_some_and(|c| c.is_final);
             let is_stale = now.signed_duration_since(created_at).to_std()? >= self.config.hot_ttl;
             let should_remove = is_final || is_stale;
 
