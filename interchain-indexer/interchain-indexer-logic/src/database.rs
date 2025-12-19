@@ -42,8 +42,6 @@ pub struct JoinedTransfer {
     pub r#type: Option<TransferType>,
     pub token_src_chain_id: i64,
     pub token_dst_chain_id: i64,
-    pub src_decimals: i16,
-    pub dst_decimals: i16,
     pub src_amount: BigDecimal,
     pub dst_amount: BigDecimal,
     pub token_src_address: Vec<u8>,

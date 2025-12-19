@@ -1,4 +1,5 @@
 use crate::{
+    BridgeConfig,
     proto::{interchain_service_server::*, *},
     settings::ApiSettings,
 };
@@ -139,7 +140,7 @@ macro_rules! transfers_pagination_params {
 pub struct InterchainServiceImpl {
     pub db: Arc<InterchainDatabase>,
     pub token_info_service: Arc<TokenInfoService>,
-    pub bridges_names: HashMap<i32, String>,
+    pub bridges_map: HashMap<i32, BridgeInfo>,
     pub api_settings: ApiSettings,
 }
 
@@ -147,13 +148,25 @@ impl InterchainServiceImpl {
     pub fn new(
         db: Arc<InterchainDatabase>,
         token_info_service: Arc<TokenInfoService>,
-        bridges_names: HashMap<i32, String>,
+        bridges: Vec<BridgeConfig>,
         api_settings: ApiSettings,
     ) -> Self {
         Self {
             db,
             token_info_service,
-            bridges_names,
+            bridges_map: bridges
+                .into_iter()
+                .map(|b| {
+                    (
+                        b.bridge_id,
+                        BridgeInfo {
+                            name: b.name,
+                            ui_url: b.ui_url,
+                            docs_url: b.docs_url,
+                        },
+                    )
+                })
+                .collect(),
             api_settings,
         }
     }
@@ -175,18 +188,18 @@ impl InterchainServiceImpl {
         .await;
 
         InterchainMessage {
+            bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(&message),
             status: message_status_to_str(&message.status).to_string(),
             source_chain_id: message.src_chain_id.to_string(),
-            sender: hex_string_opt(message.sender_address),
+            sender: self.get_address_info_opt(message.sender_address),
             send_timestamp: db_datetime_to_string(message.init_timestamp),
             source_transaction_hash: hex_string_opt(message.src_tx_hash),
-            bridge_name: self.get_bridge_name(message.bridge_id),
             destination_chain_id: message
                 .dst_chain_id
                 .map(|id| id.to_string())
                 .unwrap_or_default(),
-            recipient: hex_string_opt(message.recipient_address),
+            recipient: self.get_address_info_opt(message.recipient_address),
             receive_timestamp: message
                 .last_update_timestamp
                 .map(|ts| db_datetime_to_string(ts)),
@@ -225,7 +238,7 @@ impl InterchainServiceImpl {
         message: &CrosschainMessageModel,
     ) -> InterchainTransfer {
         InterchainTransfer {
-            bridge_name: self.get_bridge_name(message.bridge_id),
+            bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(message),
             status: message_status_to_str(&message.status).to_string(),
             source_token: self
@@ -236,7 +249,7 @@ impl InterchainServiceImpl {
                 .await,
             source_amount: Some(transfer.src_amount.to_plain_string()),
             source_transaction_hash: hex_string_opt(message.src_tx_hash.clone()),
-            sender: hex_string_opt(transfer.sender_address.clone()),
+            sender: self.get_address_info_opt(transfer.sender_address.clone()),
             send_timestamp: db_datetime_to_string(message.init_timestamp),
             destination_token: self
                 .get_token_info(
@@ -246,7 +259,7 @@ impl InterchainServiceImpl {
                 .await,
             destination_amount: Some(transfer.dst_amount.to_plain_string()),
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash.clone()),
-            recipient: hex_string_opt(transfer.recipient_address.clone()),
+            recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: message
                 .last_update_timestamp
                 .map(|ts| db_datetime_to_string(ts)),
@@ -258,7 +271,7 @@ impl InterchainServiceImpl {
         transfer: &JoinedTransfer,
     ) -> InterchainTransfer {
         InterchainTransfer {
-            bridge_name: self.get_bridge_name(transfer.bridge_id),
+            bridge: self.get_bridge_info(transfer.bridge_id).into(),
             message_id: self.get_message_id_from_joined_transfer(transfer),
             status: message_status_to_str(&transfer.status).to_string(),
             source_token: self
@@ -269,7 +282,7 @@ impl InterchainServiceImpl {
                 .await,
             source_amount: Some(transfer.src_amount.to_plain_string()),
             source_transaction_hash: hex_string_opt(transfer.src_tx_hash.clone()),
-            sender: hex_string_opt(transfer.sender_address.clone()),
+            sender: self.get_address_info_opt(transfer.sender_address.clone()),
             send_timestamp: db_datetime_to_string(transfer.init_timestamp),
             destination_token: self
                 .get_token_info(
@@ -279,18 +292,23 @@ impl InterchainServiceImpl {
                 .await,
             destination_amount: Some(transfer.dst_amount.to_plain_string()),
             destination_transaction_hash: hex_string_opt(transfer.dst_tx_hash.clone()),
-            recipient: hex_string_opt(transfer.recipient_address.clone()),
+            recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: transfer
                 .last_update_timestamp
                 .map(|ts| db_datetime_to_string(ts)),
         }
     }
 
-    fn get_bridge_name(&self, bridge_id: i32) -> String {
-        self.bridges_names
+    fn get_bridge_info(&self, bridge_id: i32) -> BridgeInfo {
+        self.bridges_map
             .get(&bridge_id)
             .cloned()
-            .unwrap_or("Unknown".to_string())
+            .unwrap_or(BridgeInfo {
+                name: "Unknown".to_string(),
+                ui_url: None,
+                docs_url: None,
+            })
+            .into()
     }
 
     fn get_message_id_from_message(&self, message: &CrosschainMessageModel) -> String {
@@ -330,6 +348,13 @@ impl InterchainServiceImpl {
                 }
             })
             .into()
+    }
+
+    fn get_address_info_opt(&self, address: Option<Vec<u8>>) -> Option<AddressInfo> {
+        address.map(|a| AddressInfo {
+            address: to_hex_prefixed(a.as_slice()),
+            ens_domain_name: None,
+        })
     }
 }
 

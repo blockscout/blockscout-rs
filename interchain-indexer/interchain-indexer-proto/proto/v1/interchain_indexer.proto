@@ -98,19 +98,30 @@ message GetMessagesByTransactionRequest {
   optional string direction = 8;  // Raw pagination field
 }
 
+message AddressInfo {
+  string address = 1;
+  optional string ens_domain_name = 2;
+}
+
+message BridgeInfo {
+  string name = 1;
+  optional string ui_url = 2;
+  optional string docs_url = 3;
+}
+
 message InterchainMessage {
-  string bridge_name = 1;
+  BridgeInfo bridge = 1;
   string message_id = 2;
   string status = 3;
   
   string source_chain_id = 4;
   string send_timestamp = 5;
-  optional string sender = 6;
+  optional AddressInfo sender = 6;
   optional string source_transaction_hash = 7;
   
   string destination_chain_id = 8;
   optional string receive_timestamp = 9;
-  optional string recipient = 10;
+  optional AddressInfo recipient = 10;
   optional string destination_transaction_hash = 11;
   
   optional string payload = 12;
@@ -142,7 +153,6 @@ message GetTransfersRequest {
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
-  
 }
 
 message GetTransfersByTransactionRequest {
@@ -174,21 +184,21 @@ message TokenInfo {
 }
 
 message InterchainTransfer {
-  string bridge_name = 1;
+  BridgeInfo bridge = 1;
   string message_id = 2;
   string status = 3;
   
   TokenInfo source_token = 4;
   optional string source_amount = 5;
   optional string source_transaction_hash = 6;
-  optional string sender = 7;
+  optional AddressInfo sender = 7;
   string send_timestamp = 8;
 
 
   TokenInfo destination_token = 9;
   optional string destination_amount = 10;
   optional string destination_transaction_hash = 11;
-  optional string recipient = 12;
+  optional AddressInfo recipient = 12;
   optional string receive_timestamp = 13;
   
 }

@@ -15,8 +15,10 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use chrono::{NaiveDateTime, Utc};
-use dashmap::mapref::entry::Entry as DashEntry;
-use dashmap::{DashMap, mapref::one::RefMut};
+use dashmap::{
+    DashMap,
+    mapref::{entry::Entry as DashEntry, one::RefMut},
+};
 use interchain_indexer_entity::{
     crosschain_messages, crosschain_transfers, indexer_checkpoints, pending_messages,
 };

@@ -128,6 +128,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         ],
         api_url: None,
         ui_url: None,
+        docs_url: None,
     };
 
     assert_eq!(provider_src.get_block_number().await?, block_number_src);

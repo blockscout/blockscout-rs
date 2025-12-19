@@ -394,6 +394,22 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1AddressInfo:
+    type: object
+    properties:
+      address:
+        type: string
+      ens_domain_name:
+        type: string
+  v1BridgeInfo:
+    type: object
+    properties:
+      name:
+        type: string
+      ui_url:
+        type: string
+      docs_url:
+        type: string
   v1GetCommonStatisticsResponse:
     type: object
     properties:
@@ -448,8 +464,8 @@ definitions:
   v1InterchainMessage:
     type: object
     properties:
-      bridge_name:
-        type: string
+      bridge:
+        $ref: '#/definitions/v1BridgeInfo'
       message_id:
         type: string
       status:
@@ -459,7 +475,7 @@ definitions:
       send_timestamp:
         type: string
       sender:
-        type: string
+        $ref: '#/definitions/v1AddressInfo'
       source_transaction_hash:
         type: string
       destination_chain_id:
@@ -467,7 +483,7 @@ definitions:
       receive_timestamp:
         type: string
       recipient:
-        type: string
+        $ref: '#/definitions/v1AddressInfo'
       destination_transaction_hash:
         type: string
       payload:
@@ -485,8 +501,8 @@ definitions:
   v1InterchainTransfer:
     type: object
     properties:
-      bridge_name:
-        type: string
+      bridge:
+        $ref: '#/definitions/v1BridgeInfo'
       message_id:
         type: string
       status:
@@ -498,7 +514,7 @@ definitions:
       source_transaction_hash:
         type: string
       sender:
-        type: string
+        $ref: '#/definitions/v1AddressInfo'
       send_timestamp:
         type: string
       destination_token:
@@ -508,7 +524,7 @@ definitions:
       destination_transaction_hash:
         type: string
       recipient:
-        type: string
+        $ref: '#/definitions/v1AddressInfo'
       receive_timestamp:
         type: string
   v1Pagination:

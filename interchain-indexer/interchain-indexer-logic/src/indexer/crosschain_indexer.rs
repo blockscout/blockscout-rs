@@ -22,7 +22,6 @@ pub struct CrosschainIndexerStatus {
     /// Prefer keeping this small and stable (control-plane info useful for debugging),
     /// and avoid putting high-cardinality or frequently-changing data here.
     pub extra_info: HashMap<String, Value>,
-
     // TODO: Telemetry fields were intentionally removed from the trait status.
     // They should be exported as Prometheus metrics instead:
     // - catchup progress / lag:

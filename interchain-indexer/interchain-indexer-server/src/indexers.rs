@@ -2,11 +2,10 @@ use crate::{BridgeConfig, ChainConfig};
 use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};
 use interchain_indexer_logic::{
-    InterchainDatabase, CrosschainIndexer,
+    CrosschainIndexer, InterchainDatabase,
     indexers::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
 };
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 pub async fn spawn_configured_indexers(
     db: InterchainDatabase,
@@ -41,12 +40,13 @@ pub async fn spawn_configured_indexers(
                 }
 
                 let config = AvalancheIndexerConfig::new(bridge.bridge_id, configs);
-                let indexer = AvalancheIndexer::new(Arc::new(db.clone()), config).with_context(|| {
-                    format!(
-                        "failed to spawn Avalanche indexer for bridge {}",
-                        bridge.bridge_id
-                    )
-                })?;
+                let indexer =
+                    AvalancheIndexer::new(Arc::new(db.clone()), config).with_context(|| {
+                        format!(
+                            "failed to spawn Avalanche indexer for bridge {}",
+                            bridge.bridge_id
+                        )
+                    })?;
                 let indexer: Arc<dyn CrosschainIndexer> = Arc::new(indexer);
 
                 // Start indexer asynchronously.

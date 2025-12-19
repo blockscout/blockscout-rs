@@ -116,13 +116,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.token_info,
     ));
 
-    let indexers = spawn_configured_indexers(
-        interchain_db.clone(),
-        &bridges,
-        &chains,
-        &chains_providers,
-    )
-    .await?;
+    let indexers =
+        spawn_configured_indexers(interchain_db.clone(), &bridges, &chains, &chains_providers)
+            .await?;
 
     // let example = ExampleIndexer::new(
     //     db.clone(),
@@ -136,10 +132,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let interchain_service = Arc::new(InterchainServiceImpl::new(
         db.clone(),
         token_info_service.clone(),
-        bridges
-            .iter()
-            .map(|b| (b.bridge_id, b.name.clone()))
-            .collect(),
+        bridges,
         settings.api,
     ));
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(db.clone()));

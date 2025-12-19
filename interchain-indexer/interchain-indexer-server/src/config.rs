@@ -411,7 +411,10 @@ mod tests {
         assert_eq!(config.enabled, true);
         assert_eq!(config.api_url, Some("https://api.example.com".to_string()));
         assert_eq!(config.ui_url, Some("https://ui.example.com".to_string()));
-        assert_eq!(config.docs_url, Some("https://docs.example.com".to_string()));
+        assert_eq!(
+            config.docs_url,
+            Some("https://docs.example.com".to_string())
+        );
         // indexer and contracts are lost in conversion (not stored in DB)
         assert_eq!(config.indexer, "");
         assert_eq!(config.contracts, vec![]);
