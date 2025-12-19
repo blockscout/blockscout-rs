@@ -19,6 +19,7 @@ pub struct BridgeConfig {
     pub enabled: bool,
     pub api_url: Option<String>,
     pub ui_url: Option<String>,
+    pub docs_url: Option<String>,
     pub contracts: Vec<BridgeContractConfig>,
 }
 
@@ -72,6 +73,7 @@ impl From<bridges::Model> for BridgeConfig {
             enabled: model.enabled,
             api_url: model.api_url,
             ui_url: model.ui_url,
+            docs_url: model.docs_url,
             contracts: vec![], // Contracts are in a separate table
         }
     }
@@ -374,6 +376,7 @@ mod tests {
             enabled: true,
             api_url: Some("https://api.example.com".to_string()),
             ui_url: Some("https://ui.example.com".to_string()),
+            docs_url: Some("https://docs.example.com".to_string()),
             contracts: vec![],
         };
 
@@ -395,6 +398,7 @@ mod tests {
             enabled: true,
             api_url: Some("https://api.example.com".to_string()),
             ui_url: Some("https://ui.example.com".to_string()),
+            docs_url: Some("https://docs.example.com".to_string()),
             created_at: None,
             updated_at: None,
         };
@@ -407,6 +411,7 @@ mod tests {
         assert_eq!(config.enabled, true);
         assert_eq!(config.api_url, Some("https://api.example.com".to_string()));
         assert_eq!(config.ui_url, Some("https://ui.example.com".to_string()));
+        assert_eq!(config.docs_url, Some("https://docs.example.com".to_string()));
         // indexer and contracts are lost in conversion (not stored in DB)
         assert_eq!(config.indexer, "");
         assert_eq!(config.contracts, vec![]);

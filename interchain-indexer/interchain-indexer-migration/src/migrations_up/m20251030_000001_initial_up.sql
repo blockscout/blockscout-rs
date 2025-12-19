@@ -22,6 +22,7 @@ CREATE TABLE bridges (
   enabled     BOOLEAN NOT NULL DEFAULT TRUE,
   api_url     TEXT,
   ui_url      TEXT,
+  docs_url    TEXT,
   
   created_at  TIMESTAMP DEFAULT now(),
   updated_at  TIMESTAMP DEFAULT now()

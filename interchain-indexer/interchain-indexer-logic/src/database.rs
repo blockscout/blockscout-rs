@@ -198,6 +198,7 @@ impl InterchainDatabase {
                                         bridges::Column::Enabled,
                                         bridges::Column::ApiUrl,
                                         bridges::Column::UiUrl,
+                                        bridges::Column::DocsUrl,
                                     ])
                                     .to_owned(),
                             )

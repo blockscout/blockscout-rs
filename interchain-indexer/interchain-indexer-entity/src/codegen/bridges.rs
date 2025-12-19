@@ -16,6 +16,8 @@ pub struct Model {
     pub api_url: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
     pub ui_url: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub docs_url: Option<String>,
     pub created_at: Option<DateTime>,
     pub updated_at: Option<DateTime>,
 }
