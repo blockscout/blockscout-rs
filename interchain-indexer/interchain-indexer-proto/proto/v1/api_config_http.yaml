@@ -3,7 +3,7 @@ config_version: 3
 
 http:
   rules:
-    #################### Messages & Transfers####################
+    #################### Messages & Transfers ####################
 
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessages
       get: /api/v1/interchain/messages
@@ -34,3 +34,10 @@ http:
     - selector: blockscout.interchainIndexer.v1.Health.Check
       get: /health
 
+    #################### Indexers Status ####################
+
+    - selector: blockscout.interchainIndexer.v1.StatusService.GetFullStatus
+      get: /api/v1/status/indexers
+
+    - selector: blockscout.interchainIndexer.v1.StatusService.GetStatusByIndexerName
+      get: /api/v1/status/indexers/{indexer_name}

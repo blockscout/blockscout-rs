@@ -199,9 +199,7 @@ impl InterchainServiceImpl {
                 .map(|id| id.to_string())
                 .unwrap_or_default(),
             recipient: self.get_address_info_opt(message.recipient_address),
-            receive_timestamp: message
-                .last_update_timestamp
-                .map(db_datetime_to_string),
+            receive_timestamp: message.last_update_timestamp.map(db_datetime_to_string),
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash),
             payload,
             extra: BTreeMap::new(),
@@ -259,9 +257,7 @@ impl InterchainServiceImpl {
             destination_amount: Some(transfer.dst_amount.to_plain_string()),
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash.clone()),
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
-            receive_timestamp: message
-                .last_update_timestamp
-                .map(db_datetime_to_string),
+            receive_timestamp: message.last_update_timestamp.map(db_datetime_to_string),
         }
     }
 
@@ -292,9 +288,7 @@ impl InterchainServiceImpl {
             destination_amount: Some(transfer.dst_amount.to_plain_string()),
             destination_transaction_hash: hex_string_opt(transfer.dst_tx_hash.clone()),
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
-            receive_timestamp: transfer
-                .last_update_timestamp
-                .map(db_datetime_to_string),
+            receive_timestamp: transfer.last_update_timestamp.map(db_datetime_to_string),
         }
     }
 
@@ -350,7 +344,7 @@ impl InterchainServiceImpl {
 
     fn get_address_info_opt(&self, address: Option<Vec<u8>>) -> Option<AddressInfo> {
         address.map(|a| AddressInfo {
-            address: to_hex_prefixed(a.as_slice()),
+            hash: to_hex_prefixed(a.as_slice()),
             ens_domain_name: None,
         })
     }

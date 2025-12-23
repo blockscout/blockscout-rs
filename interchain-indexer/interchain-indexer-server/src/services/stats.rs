@@ -57,7 +57,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .map_err(map_stats_error)?;
 
         let response = GetDailyStatisticsResponse {
-            timestamp: counters.date.to_string(),
+            date: counters.date.to_string(),
             daily_messages: counters.daily_messages,
             daily_transfers: counters.daily_transfers,
         };

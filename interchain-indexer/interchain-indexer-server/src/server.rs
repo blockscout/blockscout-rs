@@ -1,15 +1,27 @@
 use crate::{
-    create_provider_pools_from_chains, load_bridges_from_file, load_chains_from_file, proto::{
+    create_provider_pools_from_chains, load_bridges_from_file, load_chains_from_file,
+    proto::{
         health_actix::route_health, health_server::HealthServer,
         interchain_service_actix::route_interchain_service,
         interchain_service_server::InterchainServiceServer,
         interchain_statistics_service_server::InterchainStatisticsServiceServer,
-    }, services::{HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl}, settings::Settings, spawn_configured_indexers
+        status_service_server::StatusServiceServer,
+    },
+    services::{
+        HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl, StatusServiceImpl,
+    },
+    settings::Settings,
+    spawn_configured_indexers,
 };
-use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing as bs_tracing};
+use blockscout_service_launcher::{
+    database, launcher, launcher::LaunchSettings, tracing as bs_tracing,
+};
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
 use interchain_indexer_logic::{InterchainDatabase, TokenInfoService};
-use interchain_indexer_proto::blockscout::interchain_indexer::v1::interchain_statistics_service_actix::route_interchain_statistics_service;
+use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
+    interchain_statistics_service_actix::route_interchain_statistics_service,
+    status_service_actix::route_status_service,
+};
 use migration::Migrator;
 use std::sync::Arc;
 const SERVICE_NAME: &str = "interchain_indexer";
@@ -20,6 +32,7 @@ struct Router {
     health: Arc<HealthService>,
     interchain_service: Arc<InterchainServiceImpl>,
     stats_service: Arc<InterchainStatisticsServiceImpl>,
+    status_service: Arc<StatusServiceImpl>,
 }
 
 impl Router {
@@ -32,6 +45,7 @@ impl Router {
             .add_service(InterchainStatisticsServiceServer::from_arc(
                 self.stats_service.clone(),
             ))
+            .add_service(StatusServiceServer::from_arc(self.status_service.clone()))
     }
 }
 
@@ -43,6 +57,8 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| {
             route_interchain_statistics_service(config, self.stats_service.clone())
         });
+        service_config
+            .configure(|config| route_status_service(config, self.status_service.clone()));
     }
 }
 
@@ -135,10 +151,12 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.api,
     ));
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(db.clone()));
+    let status_service = Arc::new(StatusServiceImpl::new(indexers.clone()));
     let router = Router {
         health,
         interchain_service,
         stats_service,
+        status_service,
     };
 
     let grpc_router = router.grpc_router();

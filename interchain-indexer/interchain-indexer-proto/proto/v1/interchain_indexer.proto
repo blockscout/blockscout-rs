@@ -99,7 +99,7 @@ message GetMessagesByTransactionRequest {
 }
 
 message AddressInfo {
-  string address = 1;
+  string hash = 1;
   optional string ens_domain_name = 2;
 }
 

@@ -211,7 +211,7 @@ impl<T: Consolidate> MessageBuffer<T> {
     /// Checks:
     /// 1. hot tier
     /// 2. cold tier (pending_messages)
-    pub async fn get_mut(&self, key: Key) -> Result<Option<RefMut<'_, Key, Entry<T>>>> {
+    pub async fn _get_mut(&self, key: Key) -> Result<Option<RefMut<'_, Key, Entry<T>>>> {
         match self.inner.get_mut(&key) {
             Some(value) => Ok(Some(value)),
             None => {
@@ -251,7 +251,7 @@ impl<T: Consolidate> MessageBuffer<T> {
     }
 
     /// If hot tier exceeds capacity, runs maintenance to flush entries.
-    async fn maybe_run(&self) -> Result<()> {
+    async fn _maybe_run(&self) -> Result<()> {
         if self.inner.len() > self.config.max_hot_entries {
             self.run().await?;
         }

@@ -9,6 +9,7 @@ info:
 tags:
   - name: InterchainService
   - name: InterchainStatisticsService
+  - name: StatusService
   - name: Health
 host: interchain-indexer.services.blockscout.com
 schemes:
@@ -343,6 +344,39 @@ paths:
           format: uint64
       tags:
         - InterchainStatisticsService
+  /api/v1/status/indexers:
+    get:
+      operationId: StatusService_GetFullStatus
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1FullStatus'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatusService
+  /api/v1/status/indexers/{indexer_name}:
+    get:
+      operationId: StatusService_GetStatusByIndexerName
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1IndexerStatus'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: indexer_name
+          in: path
+          required: true
+          type: string
+      tags:
+        - StatusService
   /health:
     get:
       summary: |-
@@ -381,6 +415,18 @@ definitions:
       '@type':
         type: string
     additionalProperties: {}
+  protobufNullValue:
+    type: string
+    enum:
+      - NULL_VALUE
+    default: NULL_VALUE
+    description: |-
+      `NullValue` is a singleton enumeration to represent the null value for the
+      `Value` type union.
+
+      The JSON representation for `NullValue` is JSON `null`.
+
+       - NULL_VALUE: Null value.
   rpcStatus:
     type: object
     properties:
@@ -397,7 +443,7 @@ definitions:
   v1AddressInfo:
     type: object
     properties:
-      address:
+      hash:
         type: string
       ens_domain_name:
         type: string
@@ -410,6 +456,14 @@ definitions:
         type: string
       docs_url:
         type: string
+  v1FullStatus:
+    type: object
+    properties:
+      indexers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1IndexerStatus'
   v1GetCommonStatisticsResponse:
     type: object
     properties:
@@ -424,7 +478,7 @@ definitions:
   v1GetDailyStatisticsResponse:
     type: object
     properties:
-      timestamp:
+      date:
         type: string
       daily_messages:
         type: string
@@ -461,6 +515,19 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1IndexerStatus:
+    type: object
+    properties:
+      name:
+        type: string
+      description:
+        type: string
+      state:
+        type: string
+      init_timestamp:
+        type: string
+      extra_info:
+        type: object
   v1InterchainMessage:
     type: object
     properties:

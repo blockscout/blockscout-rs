@@ -30,12 +30,14 @@ fn compile(
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
         .retain_enum_prefix()
+        .extern_path(".google.protobuf", "::prost_wkt_types")
         .field_attribute("Pagination.page_token", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.timestamp", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.message_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.bridge_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.transfer_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.direction", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("IndexerStatus.extra_info", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         ;
     let default_fields: &[&str] = &[];
     for default_field in default_fields {
@@ -65,6 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &[
             "proto/v1/interchain_indexer.proto",
             "proto/v1/stats.proto",
+            "proto/v1/status.proto",
             "proto/v1/health.proto",
         ],
         &["proto", "../../proto"],

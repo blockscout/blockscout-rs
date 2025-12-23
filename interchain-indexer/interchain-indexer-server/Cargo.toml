@@ -20,6 +20,7 @@ interchain-indexer-entity = { workspace = true }
 interchain-indexer-logic = { workspace = true }
 interchain-indexer-migration = { workspace = true }
 interchain-indexer-proto = { workspace = true }
+prost-wkt-types = { workspace = true }
 sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

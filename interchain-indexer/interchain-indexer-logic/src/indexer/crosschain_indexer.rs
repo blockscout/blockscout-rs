@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 
 use anyhow::Error;
 use chrono::NaiveDateTime;
@@ -10,6 +13,16 @@ pub enum CrosschainIndexerState {
     Idle,           // indexer is alive, but not indexing at the moment (not started yet or stopped)
     Running,        // indexer is in operation state
     Failed(String), // indexer has stopped due to an unrecoverable error
+}
+
+impl Display for CrosschainIndexerState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CrosschainIndexerState::Idle => write!(f, "idle"),
+            CrosschainIndexerState::Running => write!(f, "running"),
+            CrosschainIndexerState::Failed(e) => write!(f, "failed: {}", e),
+        }
+    }
 }
 
 pub struct CrosschainIndexerStatus {

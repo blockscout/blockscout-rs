@@ -23,7 +23,7 @@ message GetCommonStatisticsResponse {
 }
 
 message GetDailyStatisticsResponse {
-    string timestamp = 1;
+    string date = 1;
     uint64 daily_messages = 2;
     uint64 daily_transfers = 3;
 }

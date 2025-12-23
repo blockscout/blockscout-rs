@@ -82,10 +82,10 @@ impl From<bridges::Model> for BridgeConfig {
 /// Note: `bridge_id` must be set separately as it's not part of BridgeContractConfig
 impl BridgeContractConfig {
     pub fn to_active_model(&self, bridge_id: i32) -> bridge_contracts::ActiveModel {
-        let abi_value = self.abi.as_ref().and_then(|abi_str| {
-            serde_json::from_str::<serde_json::Value>(abi_str)
-                .ok()
-        });
+        let abi_value = self
+            .abi
+            .as_ref()
+            .and_then(|abi_str| serde_json::from_str::<serde_json::Value>(abi_str).ok());
 
         bridge_contracts::ActiveModel {
             bridge_id: ActiveValue::Set(bridge_id),
