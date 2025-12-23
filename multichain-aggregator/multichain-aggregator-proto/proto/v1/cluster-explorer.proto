@@ -158,7 +158,7 @@ message GetAddressRequest {
 
 message BasicDomainInfo {
   string name = 1;
-  string protocol = 2;
+  string protocol_id = 2;
 }
 
 message GetAddressResponse {
