@@ -150,14 +150,14 @@ impl From<DomainInfo> for Domain {
 #[derive(Debug, Clone)]
 pub struct BasicDomainInfo {
     pub name: String,
-    pub protocol: String,
+    pub protocol_id: String,
 }
 
 impl From<DomainInfo> for BasicDomainInfo {
     fn from(v: DomainInfo) -> Self {
         Self {
             name: v.name,
-            protocol: v.protocol.short_name,
+            protocol_id: v.protocol.id,
         }
     }
 }
@@ -166,7 +166,7 @@ impl From<BasicDomainInfo> for proto::BasicDomainInfo {
     fn from(v: BasicDomainInfo) -> Self {
         Self {
             name: v.name,
-            protocol: v.protocol,
+            protocol_id: v.protocol_id,
         }
     }
 }
