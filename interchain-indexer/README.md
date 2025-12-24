@@ -34,6 +34,16 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 
 ## Envs
 
+Metrics (Prometheus-compatible):
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `INTERCHAIN_INDEXER__METRICS__ENABLED` | Enable the metrics server | `false` |
+| `INTERCHAIN_INDEXER__METRICS__ADDR` | Address for the metrics listener | `0.0.0.0:6060` |
+| `INTERCHAIN_INDEXER__METRICS__ROUTE` | HTTP path for metrics scraping | `/metrics` |
+
+Expose the metrics port (default `6060`) when running in Docker (see docker-compose.yml) and scrape `{addr}{route}`.
+
 [anchor]: <> (anchors.envs.start)
 [anchor]: <> (anchors.envs.end)
 

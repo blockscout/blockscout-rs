@@ -33,9 +33,9 @@ itertools = { workspace = true }
 parking_lot = { workspace = true }
 rand = { workspace = true }
 #keccak-hash = { workspace = true }
-#lazy_static = { workspace = true }
+lazy_static = { workspace = true }
 #mismatch = { workspace = true }
-#prometheus = { workspace = true }
+prometheus = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",

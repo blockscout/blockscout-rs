@@ -1,2 +1,7 @@
 [database.connect]
 url = "postgres://postgres:postgres@localhost:5432/postgres"
+
+[metrics]
+enabled = true
+addr = "0.0.0.0:6060"
+route = "/metrics"

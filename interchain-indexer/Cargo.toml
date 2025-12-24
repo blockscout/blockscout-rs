@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.dependencies]
-actix-prost = { version = "0.2.0" } 
+actix-prost = { version = "0.2.0" }
 actix-prost-build = { version = "0.2.0", features = ["conversions"] }
 actix-prost-macros = { version = "0.2.0" }
 actix-web = { version = "4.2" }
@@ -32,8 +32,11 @@ interchain-indexer-entity = { path = "./interchain-indexer-entity" }
 interchain-indexer-logic = { path = "./interchain-indexer-logic" }
 interchain-indexer-migration = { path = "./interchain-indexer-migration" }
 interchain-indexer-proto = { path = "./interchain-indexer-proto" }
+itertools = { version = "0.14" }
+lazy_static = { version = "1.5" }
 parking_lot = { version = "0.12" }
 pretty_assertions = { version = "1.3" }
+prometheus = { version = "0.13" }
 prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prost-types = { version = "0.13" }
@@ -68,4 +71,3 @@ tower = { version = "0.4", features = ["util"] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5.4"
-itertools = { version = "0.14" }

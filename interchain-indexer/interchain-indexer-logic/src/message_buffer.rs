@@ -22,6 +22,7 @@ use dashmap::{
 use interchain_indexer_entity::{
     crosschain_messages, crosschain_transfers, indexer_checkpoints, pending_messages,
 };
+use itertools::Itertools;
 use sea_orm::{
     ActiveValue, DbErr, EntityTrait, Iterable, QueryFilter, TransactionTrait,
     sea_query::{Expr, OnConflict},
@@ -29,7 +30,7 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, task::JoinHandle};
 
-use crate::InterchainDatabase;
+use crate::{InterchainDatabase, metrics};
 
 /// Key for identifying a cross-chain message
 #[derive(Clone, Copy, Hash, Eq, PartialEq, Debug, Serialize, Deserialize, Default)]
@@ -197,13 +198,25 @@ impl<T: Consolidate> MessageBuffer<T> {
     }
 
     async fn restore(&self, key: Key) -> Result<Option<Entry<T>>> {
-        self.db
+        let row = self
+            .db
             .get_pending_message(key.message_id, key.bridge_id)
-            .await?
-            .map(|row| {
-                serde_json::from_value(row.payload).context("failed to deserialize MessageEntry")
-            })
-            .transpose()
+            .await?;
+
+        let bridge = key.bridge_id.to_string();
+        let entry = if let Some(row) = row {
+            metrics::BUFFER_RESTORE_TOTAL
+                .with_label_values(&[&bridge, "hit"])
+                .inc();
+            Some(serde_json::from_value(row.payload)?)
+        } else {
+            metrics::BUFFER_RESTORE_TOTAL
+                .with_label_values(&[&bridge, "miss"])
+                .inc();
+            None
+        };
+
+        Ok(entry)
     }
 
     /// Get existing entry.
@@ -335,7 +348,7 @@ impl<T: Consolidate> MessageBuffer<T> {
                 (None, _) => not_consolidatable_count += 1,
                 (Some(_), true) => final_count += 1,
                 (Some(_), false) => consolidated_not_final_count += 1,
-            }
+            };
 
             if let Some(message) = consolidated {
                 if is_final {
@@ -378,11 +391,11 @@ impl<T: Consolidate> MessageBuffer<T> {
 
         let ready_count = consolidated_entries.len();
         let stale_count = stale_entries.len();
-        let cursor_count = cursors.len();
 
         self.db
             .db
             .transaction::<_, (), DbErr>(|tx| {
+                let cursors = cursors.clone();
                 Box::pin(async move {
                     let batch_size = (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
                     for batch in stale_entries.chunks(batch_size) {
@@ -547,24 +560,48 @@ impl<T: Consolidate> MessageBuffer<T> {
         // Only remove if the version hasn't changed since we captured it during iteration.
         // If version changed, the entry was modified concurrently and will be processed
         // in the next maintenance cycle.
-        let mut removed_count = 0;
-        let mut skipped_count = 0;
-        for (key, expected_version) in keys_to_remove_from_hot {
-            if self
-                .inner
-                .remove_if(&key, |_, entry| entry.version == expected_version)
-                .is_some()
-            {
-                removed_count += 1;
-            } else {
-                skipped_count += 1;
-            }
-        }
+        let keys_with_outcomes_per_bridge = keys_to_remove_from_hot
+            .iter()
+            .map(|(key, expected_version)| {
+                let is_removed = self
+                    .inner
+                    .remove_if(&key, |_, entry| entry.version == *expected_version)
+                    .is_some();
+                (key, is_removed)
+            })
+            .into_group_map_by(|(key, _)| key.bridge_id);
+
+        let flushed_keys_per_bridge = keys_with_outcomes_per_bridge
+            .iter()
+            .map(|(bridge_id, outcomes)| {
+                let (removed, skipped): (Vec<bool>, Vec<bool>) = outcomes
+                    .iter()
+                    .map(|(_, is_removed)| *is_removed)
+                    .partition(|is_removed| *is_removed);
+                (bridge_id, (removed.len(), skipped.len()))
+            })
+            .collect::<HashMap<_, _>>();
+
+        flushed_keys_per_bridge
+            .iter()
+            .for_each(|(bridge_id, (removed_count, _))| {
+                let bridge_label = bridge_id.to_string();
+                metrics::BUFFER_FLUSH_FINAL_ENTRIES
+                    .with_label_values(&[bridge_label.as_str()])
+                    .observe(*removed_count as f64);
+            });
+
+        let (removed_count, skipped_count) = flushed_keys_per_bridge.values().fold(
+            (0usize, 0usize),
+            |(acc_removed, acc_skipped), (removed, skipped)| {
+                (acc_removed + removed, acc_skipped + skipped)
+            },
+        );
 
         tracing::info!(
             ready = ready_count,
             stale = stale_count,
-            cursors = cursor_count,
+            cursors = cursors.len(),
             removed = removed_count,
             skipped = skipped_count,
             hot_len = self.inner.len(),
@@ -573,6 +610,30 @@ impl<T: Consolidate> MessageBuffer<T> {
             r#final = final_count,
             "maintenance completed"
         );
+
+        self.inner
+            .iter()
+            .counts_by(|entry| entry.key().bridge_id)
+            .iter()
+            .for_each(|(bridge_id, count)| {
+                let bridge_label = bridge_id.to_string();
+                metrics::BUFFER_HOT_ENTRIES
+                    .with_label_values(&[bridge_label.as_str()])
+                    .set(*count as f64);
+            });
+
+        cursors
+            .iter()
+            .for_each(|((bridge_id, chain_id), (catchup_min, realtime_max))| {
+                let bridge_label = bridge_id.to_string();
+                let chain_label = chain_id.to_string();
+                metrics::BUFFER_CATCHUP_CURSOR
+                    .with_label_values(&[&bridge_label, &chain_label])
+                    .set(*catchup_min as f64);
+                metrics::BUFFER_REALTIME_CURSOR
+                    .with_label_values(&[&bridge_label, &chain_label])
+                    .set(*realtime_max as f64);
+            });
 
         Ok(())
     }

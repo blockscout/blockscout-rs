@@ -26,6 +26,7 @@ services:
     ports:
       - "8050:8050"
       - "8051:8051"
+      - "6060:6060"
     environment:
       INTERCHAIN_INDEXER__DATABASE__CONNECT__URL: postgres://postgres:admin@database:5432/interchain_indexer
       INTERCHAIN_INDEXER__DATABASE__CREATE_DATABASE: true
@@ -35,6 +36,8 @@ services:
       INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN: true
       INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL: https://contracts-info-test.k8s-dev.blockscout.com
       INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS: 8021
+      INTERCHAIN_INDEXER__METRICS__ENABLED: true
+      INTERCHAIN_INDEXER__METRICS__ADDR: 0.0.0.0:6060
     #env_file:
       ## optional: if provided, would overwrite values from configuration file
       #- ./interchain-indexer-server/config/base.env

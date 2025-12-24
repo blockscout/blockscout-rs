@@ -1,5 +1,6 @@
 mod database;
 mod error;
+pub mod metrics;
 mod message_buffer;
 mod provider_layers;
 
