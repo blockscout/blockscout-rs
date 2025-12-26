@@ -52,7 +52,8 @@ pub(crate) struct AnnotatedEvent<T> {
     pub(crate) transaction_hash: B256,
     pub(crate) block_number: i64,
     pub(crate) block_timestamp: chrono::NaiveDateTime,
-    pub(crate) chain_id: i64,
+    pub(crate) source_chain_id: i64,
+    pub(crate) destination_chain_id: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

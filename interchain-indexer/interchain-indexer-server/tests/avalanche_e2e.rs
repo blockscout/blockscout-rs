@@ -43,6 +43,14 @@ fn to_hex(bytes: &Option<Vec<u8>>) -> String {
         .unwrap_or_else(|| "None".to_string())
 }
 
+fn parse_message_id_from_native_id(native_id: &str) -> i64 {
+    let native_id = native_id.strip_prefix("0x").unwrap_or(native_id);
+    let bytes = hex::decode(native_id).expect("native id must be hex");
+    assert_eq!(bytes.len(), 32, "teleporter messageID must be 32 bytes");
+    let first8: [u8; 8] = bytes[..8].try_into().unwrap();
+    i64::from_be_bytes(first8)
+}
+
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase,
     indexer::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
@@ -289,5 +297,310 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
 
     indexer.stop().await;
 
+    Ok(())
+}
+
+/// Verifies that processing only the destination chain (ReceiveCrossChainMessage)
+/// does NOT promote messages into `crosschain_messages` without the source-side SendCrossChainMessage.
+///
+/// Instead, the message should remain pending and be offloaded to `pending_messages` after the hot TTL.
+#[tokio::test]
+#[ignore = "requires network access and Anvil binary"]
+async fn test_receive_only_does_not_promote_message() -> Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_test_writer()
+        .try_init();
+
+    let (name_src, chain_id_src, native_id_src) = (
+        "Avalanche C-Chain",
+        43114,
+        "0x0427d4b22a2a78bcddd456742caf91b56badbff985ee19aef14573e7343fd652",
+    );
+
+    let (name_dest, rpc_url_dest, block_number_dest, chain_id_dest, native_id_dest) = (
+        "Numine",
+        "https://subnets.avax.network/numi/mainnet/rpc",
+        269775,
+        8021,
+        "0xd32cc4660bcf8fa7971589f666fddb5ab22aee7e75dcb30b19829a65d4fb0063",
+    );
+
+    let provider_dest = forked_provider(rpc_url_dest, block_number_dest);
+
+    let teleporter_address = "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf";
+
+    let chains = vec![
+        ChainConfig {
+            chain_id: chain_id_src as i64,
+            name: name_src.into(),
+            native_id: native_id_src.to_string().into(),
+            icon: String::new(),
+            rpcs: vec![],
+        },
+        ChainConfig {
+            chain_id: chain_id_dest as i64,
+            name: name_dest.into(),
+            native_id: native_id_dest.to_string().into(),
+            icon: String::new(),
+            rpcs: vec![],
+        },
+    ];
+
+    let bridge_id = 1u64;
+    let bridge_config = BridgeConfig {
+        bridge_id: bridge_id as i32,
+        name: "Test Bridge".into(),
+        bridge_type: "avalanche_native".into(),
+        indexer: String::new(),
+        enabled: true,
+        contracts: vec![
+            // Keep both chain contracts in DB so native_id_to_chain_id can resolve sourceBlockchainID.
+            BridgeContractConfig {
+                chain_id: chain_id_src as i64,
+                address: teleporter_address.into(),
+                started_at_block: 0,
+                version: 1,
+                abi: None,
+            },
+            BridgeContractConfig {
+                chain_id: chain_id_dest as i64,
+                address: teleporter_address.into(),
+                started_at_block: block_number_dest as i64,
+                version: 1,
+                abi: None,
+            },
+        ],
+        api_url: None,
+        ui_url: None,
+        docs_url: None,
+    };
+
+    assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
+
+    let db_guard = helpers::init_db("avalanche_e2e", "receive_only").await;
+    let db = db_guard.client();
+    let interchain_db = InterchainDatabase::new(db.clone());
+
+    let chains = chains
+        .iter()
+        .map(|c| interchain_indexer_entity::chains::ActiveModel::from(c.clone()))
+        .collect::<Vec<interchain_indexer_entity::chains::ActiveModel>>();
+    interchain_db.upsert_chains(chains).await?;
+
+    let bridges = [bridges::ActiveModel::from(bridge_config.clone())].to_vec();
+    interchain_db.upsert_bridges(bridges).await?;
+
+    // Index ONLY the destination chain.
+    let contract_address: Address = teleporter_address.parse()?;
+    let avalanche_chains = vec![AvalancheChainConfig {
+        chain_id: chain_id_dest as i64,
+        provider: provider_dest,
+        contract_address,
+        start_block: block_number_dest as u64,
+    }];
+
+    let indexer_config =
+        AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains)
+            .with_poll_interval(Duration::from_millis(200))
+            .with_batch_size(25);
+
+    let indexer =
+        AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
+    indexer.start().await?;
+
+    // Expected message native_id from the test blocks (same as full e2e).
+    let expected_message_native_id =
+        "0x6a806e48ef1315a93955b4505ebfbcb9ed45d142bf850c4ce3e67616be485f07";
+    let expected_message_id = parse_message_id_from_native_id(expected_message_native_id);
+
+    // Wait until the receive-only message is offloaded to pending_messages.
+    // Hot TTL is ~10s in the default buffer config, so allow a bit more.
+    let start = std::time::Instant::now();
+    loop {
+        let pending = interchain_db
+            .get_pending_message(expected_message_id, bridge_id as i32)
+            .await?;
+
+        if pending.is_some() {
+            break;
+        }
+
+        if start.elapsed() > Duration::from_secs(20) {
+            return Err(anyhow::anyhow!(
+                "Timeout waiting for receive-only message to be offloaded to pending_messages"
+            ));
+        }
+
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    // Ensure the message was NOT promoted to final storage.
+    let (messages, _pagination) = interchain_db
+        .get_crosschain_messages(None, 100, false, None)
+        .await?;
+
+    assert!(
+        messages
+            .iter()
+            .all(|(m, _)| to_hex(&m.native_id) != expected_message_native_id),
+        "Receive-only message must not be promoted to crosschain_messages"
+    );
+
+    indexer.stop().await;
+    Ok(())
+}
+
+/// Verifies that processing only the source chain (SendCrossChainMessage)
+/// produces a consistent *initiated* message in `crosschain_messages`.
+///
+/// We expect:
+/// - src_chain_id set (source chain)
+/// - dst_chain_id set (resolved destination chain)
+/// - status = Initiated
+/// - destination-side fields absent (no receive/execution yet)
+#[tokio::test]
+#[ignore = "requires network access and Anvil binary"]
+async fn test_send_only_creates_initiated_message() -> Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_test_writer()
+        .try_init();
+
+    let (name_src, rpc_url_src, block_number_src, chain_id_src, native_id_src) = (
+        "Avalanche C-Chain",
+        "https://api.avax.network/ext/bc/C/rpc",
+        73334280,
+        43114,
+        "0x0427d4b22a2a78bcddd456742caf91b56badbff985ee19aef14573e7343fd652",
+    );
+    let provider_src = forked_provider(rpc_url_src, block_number_src);
+
+    let (name_dest, chain_id_dest, native_id_dest) = (
+        "Numine",
+        8021,
+        "0xd32cc4660bcf8fa7971589f666fddb5ab22aee7e75dcb30b19829a65d4fb0063",
+    );
+
+    let teleporter_address = "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf";
+
+    let chains = vec![
+        ChainConfig {
+            chain_id: chain_id_src as i64,
+            name: name_src.into(),
+            native_id: native_id_src.to_string().into(),
+            icon: String::new(),
+            rpcs: vec![],
+        },
+        ChainConfig {
+            chain_id: chain_id_dest as i64,
+            name: name_dest.into(),
+            native_id: native_id_dest.to_string().into(),
+            icon: String::new(),
+            rpcs: vec![],
+        },
+    ];
+
+    let bridge_id = 1u64;
+    let bridge_config = BridgeConfig {
+        bridge_id: bridge_id as i32,
+        name: "Test Bridge".into(),
+        bridge_type: "avalanche_native".into(),
+        indexer: String::new(),
+        enabled: true,
+        contracts: vec![
+            // Keep both chain contracts in DB so destinationBlockchainID can resolve destination_chain_id.
+            BridgeContractConfig {
+                chain_id: chain_id_src as i64,
+                address: teleporter_address.into(),
+                started_at_block: block_number_src as i64,
+                version: 1,
+                abi: None,
+            },
+            BridgeContractConfig {
+                chain_id: chain_id_dest as i64,
+                address: teleporter_address.into(),
+                started_at_block: 0,
+                version: 1,
+                abi: None,
+            },
+        ],
+        api_url: None,
+        ui_url: None,
+        docs_url: None,
+    };
+
+    assert_eq!(provider_src.get_block_number().await?, block_number_src);
+
+    let db_guard = helpers::init_db("avalanche_e2e", "send_only").await;
+    let db = db_guard.client();
+    let interchain_db = InterchainDatabase::new(db.clone());
+
+    let chains = chains
+        .iter()
+        .map(|c| interchain_indexer_entity::chains::ActiveModel::from(c.clone()))
+        .collect::<Vec<interchain_indexer_entity::chains::ActiveModel>>();
+    interchain_db.upsert_chains(chains).await?;
+
+    let bridges = [bridges::ActiveModel::from(bridge_config.clone())].to_vec();
+    interchain_db.upsert_bridges(bridges).await?;
+
+    // Index ONLY the source chain.
+    let contract_address: Address = teleporter_address.parse()?;
+    let avalanche_chains = vec![AvalancheChainConfig {
+        chain_id: chain_id_src as i64,
+        provider: provider_src,
+        contract_address,
+        start_block: block_number_src as u64,
+    }];
+
+    let indexer_config =
+        AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains)
+            .with_poll_interval(Duration::from_millis(200))
+            .with_batch_size(25);
+
+    let indexer =
+        AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
+    indexer.start().await?;
+
+    // Expected message native_id from the test blocks.
+    let expected_message_native_id =
+        "0x6a806e48ef1315a93955b4505ebfbcb9ed45d142bf850c4ce3e67616be485f07";
+
+    let start = std::time::Instant::now();
+    let (message, _transfers) = loop {
+        let (messages, _pagination) = interchain_db
+            .get_crosschain_messages(None, 100, false, None)
+            .await?;
+
+        if let Some(found) = messages
+            .into_iter()
+            .find(|(m, _)| to_hex(&m.native_id) == expected_message_native_id)
+        {
+            break found;
+        }
+
+        if start.elapsed() > Duration::from_secs(8) {
+            return Err(anyhow::anyhow!(
+                "Timeout waiting for send-only message to be flushed into crosschain_messages"
+            ));
+        }
+
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    };
+
+    assert_eq!(message.bridge_id, bridge_id as i32);
+    assert_eq!(message.src_chain_id, chain_id_src as i64);
+    assert_eq!(message.dst_chain_id, Some(chain_id_dest as i64));
+    assert_eq!(message.status, MessageStatus::Initiated);
+
+    // Destination-side fields should be absent.
+    assert_eq!(to_hex(&message.dst_tx_hash), "None");
+    assert!(
+        message.last_update_timestamp.is_none(),
+        "last_update_timestamp must be None when only send-side was indexed"
+    );
+
+    indexer.stop().await;
     Ok(())
 }

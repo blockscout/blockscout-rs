@@ -1,7 +1,8 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use interchain_indexer_entity::{
     crosschain_messages, crosschain_transfers, sea_orm_active_enums::MessageStatus,
 };
+use itertools::Itertools;
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 use std::str::FromStr;
 
@@ -19,7 +20,6 @@ impl Consolidate for Message {
             Some(s) => s,
             None => return Ok(None),
         };
-        let send_event = &send.event;
 
         // Determine status based on execution outcome
         let status = match &self.execution {
@@ -28,16 +28,39 @@ impl Consolidate for Message {
             None => MessageStatus::Initiated,
         };
 
-        // Get destination-side info from receive event or execution event
-        let (destination_chain_id, destination_transaction_hash, last_update_timestamp) =
-            if let Some(receive) = &self.receive {
-                (
-                    receive.chain_id.into(),
+        let destination_chain_id = vec![
+            Some(send.destination_chain_id),
+            self.receive.as_ref().map(|r| r.destination_chain_id),
+            self.execution.as_ref().map(|e| match e {
+                MessageExecutionOutcome::Succeeded(executed) => executed.destination_chain_id,
+                MessageExecutionOutcome::Failed(failed) => failed.destination_chain_id,
+            }),
+        ]
+        .into_iter()
+        .flatten()
+        .all_equal_value()
+        .map_err(|mismatch| {
+            anyhow::anyhow!(
+                "destination chain id mismatch across events: {mismatch:?} (send/receive/execution must agree)"
+            )
+        })?;
+
+        // Get destination-side info from receive/execution events, else fall back to send.
+        let (destination_transaction_hash, last_update_timestamp) =
+            match (&self.receive, &self.execution) {
+                (Some(receive), _) => (
                     receive.transaction_hash.as_slice().to_vec().into(),
                     receive.block_timestamp.into(),
-                )
-            } else {
-                (None, None, None)
+                ),
+                (_, Some(MessageExecutionOutcome::Succeeded(executed))) => (
+                    executed.transaction_hash.as_slice().to_vec().into(),
+                    executed.block_timestamp.into(),
+                ),
+                (_, Some(MessageExecutionOutcome::Failed(failed))) => (
+                    failed.transaction_hash.as_slice().to_vec().into(),
+                    failed.block_timestamp.into(),
+                ),
+                (None, None) => (None, None),
             };
 
         let is_ictt_complete = match &self.transfer {
@@ -59,20 +82,20 @@ impl Consolidate for Message {
             id: ActiveValue::Set(key.message_id),
             bridge_id: ActiveValue::Set(key.bridge_id),
             status: ActiveValue::Set(status),
-            src_chain_id: ActiveValue::Set(send.chain_id),
-            dst_chain_id: ActiveValue::Set(destination_chain_id),
-            native_id: ActiveValue::Set(Some(send_event.messageID.as_slice().to_vec())),
+            src_chain_id: ActiveValue::Set(send.source_chain_id),
+            dst_chain_id: ActiveValue::Set(destination_chain_id.into()),
+            native_id: ActiveValue::Set(Some(send.event.messageID.as_slice().to_vec())),
             init_timestamp: ActiveValue::Set(send.block_timestamp),
             last_update_timestamp: ActiveValue::Set(last_update_timestamp),
             src_tx_hash: ActiveValue::Set(Some(send.transaction_hash.as_slice().to_vec())),
             dst_tx_hash: ActiveValue::Set(destination_transaction_hash),
             sender_address: ActiveValue::Set(Some(
-                send_event.message.originSenderAddress.as_slice().to_vec(),
+                send.event.message.originSenderAddress.as_slice().to_vec(),
             )),
             recipient_address: ActiveValue::Set(Some(
-                send_event.message.destinationAddress.as_slice().to_vec(),
+                send.event.message.destinationAddress.as_slice().to_vec(),
             )),
-            payload: ActiveValue::Set(Some(send_event.message.message.to_vec())),
+            payload: ActiveValue::Set(Some(send.event.message.message.to_vec())),
             created_at: ActiveValue::NotSet,
             updated_at: ActiveValue::NotSet,
         };
@@ -82,7 +105,7 @@ impl Consolidate for Message {
         let transfers = self
             .transfer
             .as_ref()
-            .map(|t| build_transfer(t, key, send.chain_id, destination_chain_id))
+            .map(|t| build_transfer(t, key, send.source_chain_id, destination_chain_id))
             .transpose()?
             .map_or_else(Vec::new, |t| vec![t]);
 
@@ -98,107 +121,97 @@ fn build_transfer(
     transfer: &TokenTransfer,
     key: &Key,
     src_chain_id: i64,
-    dest_chain_id: Option<i64>,
+    dest_chain_id: i64,
 ) -> Result<crosschain_transfers::ActiveModel> {
     match transfer {
         TokenTransfer::Sent(src, dest) => {
-            let mut transfer = crosschain_transfers::ActiveModel {
+            // This should newer happen because we don't consolidate without a
+            // send event. And if there were sent event, src must be Some.
+            let src = src.as_ref().context("missing source side of a transfer")?;
+            let (sender, amount, dst_token_addr, recipient, src_token_addr) = match src {
+                SentOrRouted::Sent(e) => (
+                    e.event.sender,
+                    e.event.amount,
+                    e.event.input.destinationTokenTransferrerAddress,
+                    e.event.input.recipient,
+                    e.contract_address,
+                ),
+                SentOrRouted::Routed(e) => (
+                    alloy::primitives::Address::ZERO, // Routed doesn't have sender
+                    e.event.amount,
+                    e.event.input.destinationTokenTransferrerAddress,
+                    e.event.input.recipient,
+                    e.contract_address,
+                ),
+            };
+
+            let recipient_address = dest
+                .as_ref()
+                .map(|event| event.recipient)
+                .unwrap_or(recipient);
+            let model = crosschain_transfers::ActiveModel {
                 message_id: ActiveValue::Set(key.message_id),
                 bridge_id: ActiveValue::Set(key.bridge_id),
                 // Always 0 for ICTT transfers
                 index: ActiveValue::Set(0),
-                // Set required chain ID fields
                 token_src_chain_id: ActiveValue::Set(src_chain_id),
-                token_dst_chain_id: ActiveValue::Set(dest_chain_id.unwrap_or(src_chain_id)),
-                token_src_address: ActiveValue::Set(Vec::new()),
+                token_dst_chain_id: ActiveValue::Set(dest_chain_id),
+                sender_address: ActiveValue::Set(sender.as_slice().to_vec().into()),
+                src_amount: ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?),
+                dst_amount: ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?),
+                token_src_address: ActiveValue::Set(src_token_addr.as_slice().to_vec()),
+                token_dst_address: ActiveValue::Set(dst_token_addr.as_slice().to_vec()),
+                recipient_address: ActiveValue::Set(recipient_address.as_slice().to_vec().into()),
                 ..Default::default()
             };
 
-            // Fill from source event
-            if let Some(src_event) = src {
-                let (sender, amount, dst_token_addr, recipient, src_token_addr) = match src_event {
-                    SentOrRouted::Sent(e) => (
-                        e.event.sender,
-                        e.event.amount,
-                        e.event.input.destinationTokenTransferrerAddress,
-                        e.event.input.recipient,
-                        e.contract_address,
-                    ),
-                    SentOrRouted::Routed(e) => (
-                        alloy::primitives::Address::ZERO, // Routed doesn't have sender
-                        e.event.amount,
-                        e.event.input.destinationTokenTransferrerAddress,
-                        e.event.input.recipient,
-                        e.contract_address,
-                    ),
-                };
-                transfer.sender_address = ActiveValue::Set(Some(sender.as_slice().to_vec()));
-                transfer.src_amount =
-                    ActiveValue::Set(BigDecimal::from_str(&amount.to_string()).unwrap_or_default());
-                transfer.dst_amount =
-                    ActiveValue::Set(BigDecimal::from_str(&amount.to_string()).unwrap_or_default());
-                transfer.token_src_address = ActiveValue::Set(src_token_addr.as_slice().to_vec());
-                transfer.token_dst_address = ActiveValue::Set(dst_token_addr.as_slice().to_vec());
-                transfer.recipient_address = ActiveValue::Set(Some(recipient.as_slice().to_vec()));
-            }
-
-            // Fill from destination event
-            if let Some(dst_event) = dest {
-                transfer.recipient_address =
-                    ActiveValue::Set(Some(dst_event.recipient.as_slice().to_vec()));
-            }
-
-            Ok(transfer)
+            Ok(model)
         }
         TokenTransfer::SentAndCalled(src, dest) => {
-            let mut transfer = crosschain_transfers::ActiveModel {
+            let src = src.as_ref().context("missing source side of a transfer")?;
+            // Fill from source event
+            let (sender, amount, dst_token_addr, recipient, fallback, src_token_addr) = match src {
+                SentOrRoutedAndCalled::Sent(e) => (
+                    e.event.sender,
+                    e.event.amount,
+                    e.event.input.destinationTokenTransferrerAddress,
+                    e.event.input.recipientContract,
+                    e.event.input.fallbackRecipient,
+                    e.contract_address,
+                ),
+                SentOrRoutedAndCalled::Routed(e) => (
+                    alloy::primitives::Address::ZERO,
+                    e.event.amount,
+                    e.event.input.destinationTokenTransferrerAddress,
+                    e.event.input.recipientContract,
+                    e.event.input.fallbackRecipient,
+                    e.contract_address,
+                ),
+            };
+
+            let recipient_address = match dest {
+                Some(CallOutcome::Failed(_)) => fallback,
+                _ => recipient,
+            };
+
+            let model = crosschain_transfers::ActiveModel {
                 message_id: ActiveValue::Set(key.message_id),
                 bridge_id: ActiveValue::Set(key.bridge_id),
                 index: ActiveValue::Set(0),
                 // Set required chain ID fields
                 token_src_chain_id: ActiveValue::Set(src_chain_id),
-                token_dst_chain_id: ActiveValue::Set(dest_chain_id.unwrap_or(src_chain_id)),
-                // Default decimals - should be fetched from token contract in the futur                // Default empty token address - will be set from source event
+                token_dst_chain_id: ActiveValue::Set(dest_chain_id),
+                sender_address: ActiveValue::Set(sender.as_slice().to_vec().into()),
+                src_amount: ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?),
+                dst_amount: ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?),
+                token_src_address: ActiveValue::Set(src_token_addr.as_slice().to_vec().into()),
+                token_dst_address: ActiveValue::Set(dst_token_addr.as_slice().to_vec().into()),
+                // If call failed, use fallback recipient
+                recipient_address: ActiveValue::Set(recipient_address.as_slice().to_vec().into()),
                 ..Default::default()
             };
 
-            // Fill from source event
-            if let Some(src_event) = src {
-                let (sender, amount, dst_token_addr, recipient, fallback, src_token_addr) =
-                    match src_event {
-                        SentOrRoutedAndCalled::Sent(e) => (
-                            e.event.sender,
-                            e.event.amount,
-                            e.event.input.destinationTokenTransferrerAddress,
-                            e.event.input.recipientContract,
-                            e.event.input.fallbackRecipient,
-                            e.contract_address,
-                        ),
-                        SentOrRoutedAndCalled::Routed(e) => (
-                            alloy::primitives::Address::ZERO,
-                            e.event.amount,
-                            e.event.input.destinationTokenTransferrerAddress,
-                            e.event.input.recipientContract,
-                            e.event.input.fallbackRecipient,
-                            e.contract_address,
-                        ),
-                    };
-                transfer.sender_address = ActiveValue::Set(Some(sender.as_slice().to_vec()));
-                transfer.src_amount = ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?);
-                transfer.dst_amount = ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?);
-                transfer.token_src_address = ActiveValue::Set(src_token_addr.as_slice().to_vec());
-                transfer.token_dst_address = ActiveValue::Set(dst_token_addr.as_slice().to_vec());
-
-                // If call failed, use fallback recipient
-                let final_recipient = match dest {
-                    Some(CallOutcome::Failed(_)) => fallback,
-                    _ => recipient,
-                };
-                transfer.recipient_address =
-                    ActiveValue::Set(Some(final_recipient.as_slice().to_vec()));
-            }
-
-            Ok(transfer)
+            Ok(model)
         }
     }
 }

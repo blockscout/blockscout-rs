@@ -668,7 +668,7 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         .transaction_hash
         .context("missing transaction hash")?;
     let log_index = ctx.log.log_index.unwrap_or_default();
-    let topic0 = ctx.log.topic0().copied().unwrap_or_default();
+    let topic0 = ctx.log.topic0().context("missing topic0")?;
 
     let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
         .context("failed to parse message key")?;
@@ -693,6 +693,8 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         return Ok(());
     }
 
+    let destination_chain_id = dst_chain_id.context("destination chain must be tracked here")?;
+
     ctx.buffer
         .alter(key, ctx.chain_id, ctx.block_number, |msg| {
         let transfers: Vec<TokenTransfer> = ctx.receipt_logs
@@ -704,12 +706,13 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
             "multiple sender-side ICTT transfers found for one teleporter message in a single receipt",
         )?.cloned();
 
-        msg.send = Some(AnnotatedEvent {
+        msg.send = Some(AnnotatedEvent{
             event,
             transaction_hash,
             block_number: ctx.block_number,
             block_timestamp: ctx.block_timestamp,
-            chain_id: ctx.chain_id,
+            source_chain_id: ctx.chain_id,
+            destination_chain_id,
         });
         msg.transfer = transfer;
         Ok(())
@@ -733,7 +736,8 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
 
 fn parse_execution_outcome_log(
     logs: &[Log],
-    chain_id: i64,
+    source_chain_id: i64,
+    destination_chain_id: i64,
     block_number: i64,
     block_timestamp: chrono::NaiveDateTime,
 ) -> Result<MessageExecutionOutcome> {
@@ -750,7 +754,8 @@ fn parse_execution_outcome_log(
                             transaction_hash,
                             block_number,
                             block_timestamp,
-                            chain_id,
+                            source_chain_id,
+                            destination_chain_id,
                         })
                     }),
                 ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH => log
@@ -763,7 +768,8 @@ fn parse_execution_outcome_log(
                                 transaction_hash,
                                 block_number,
                                 block_timestamp,
-                                chain_id,
+                                source_chain_id,
+                                destination_chain_id,
                             }
                             .into(),
                         )
@@ -811,6 +817,9 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
         return Ok(());
     }
 
+    let source_chain_id = src_chain_id.context("source chain must be tracked here")?;
+    let destination_chain_id = ctx.chain_id;
+
     // Option A: ReceiveCrossChainMessage may have execution outcome in the same tx.
     // We keep `parse_execution_outcome_log` for now but it's intentionally unused until we
     // decide to fully wire the behaviour (see refactor notes).
@@ -829,7 +838,8 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
             // Intentionally NOT persisted yet.
             parse_execution_outcome_log(
                 ctx.receipt_logs,
-                ctx.chain_id,
+                source_chain_id,
+                destination_chain_id,
                 ctx.block_number,
                 ctx.block_timestamp,
             )
@@ -844,7 +854,8 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
                 transaction_hash,
                 block_number: ctx.block_number,
                 block_timestamp: ctx.block_timestamp,
-                chain_id: ctx.chain_id,
+                source_chain_id,
+                destination_chain_id,
             });
             Ok(())
         })
@@ -902,6 +913,9 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
         return Ok(());
     }
 
+    let source_chain_id = src_chain_id.context("source chain must be tracked here")?;
+    let destination_chain_id = ctx.chain_id;
+
     ctx.buffer
         .alter(key, ctx.chain_id, ctx.block_number, |msg| {
             // Receiver-side effects are parsed on MessageExecuted only.
@@ -911,7 +925,8 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
                 transaction_hash,
                 block_number: ctx.block_number,
                 block_timestamp: ctx.block_timestamp,
-                chain_id: ctx.chain_id,
+                source_chain_id,
+                destination_chain_id,
             }));
             msg.transfer = parse_receiver_ictt_logs(&msg.transfer, ctx.receipt_logs)?;
             Ok(())
@@ -969,6 +984,9 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
         return Ok(());
     }
 
+    let source_chain_id = src_chain_id.context("source chain must be tracked here")?;
+    let destination_chain_id = ctx.chain_id;
+
     ctx.buffer
         .alter(key, ctx.chain_id, ctx.block_number, |msg| {
             // Only update if not already succeeded (don't overwrite success with failure)
@@ -979,7 +997,8 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
                         transaction_hash,
                         block_number: ctx.block_number,
                         block_timestamp: ctx.block_timestamp,
-                        chain_id: ctx.chain_id,
+                        source_chain_id,
+                        destination_chain_id,
                     }
                     .into(),
                 ));
