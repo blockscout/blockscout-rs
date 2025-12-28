@@ -27,15 +27,14 @@ pub fn empty_cctx_response() -> Value {
 }
 #[allow(dead_code)]
 pub async fn init_tests_logs() {
-    blockscout_service_launcher::tracing::init_logs(
+    let _ = blockscout_service_launcher::tracing::init_logs(
         "tests",
         &blockscout_service_launcher::tracing::TracingSettings {
             enabled: true,
             ..Default::default()
         },
         &blockscout_service_launcher::tracing::JaegerSettings::default(),
-    )
-    .unwrap();
+    );
 }
 #[allow(dead_code)]
 pub fn dummy_cross_chain_tx(index: &str, status: CctxStatusStatus) -> CrossChainTx {

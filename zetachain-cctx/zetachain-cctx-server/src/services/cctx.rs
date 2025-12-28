@@ -169,6 +169,8 @@ impl CctxInfo for CctxService {
             }
         };
 
+        let include_related = request.include_related.unwrap_or(false);
+
         let source_chain_id: Result<Vec<i32>, _> = parse_comma_separated(request.source_chain_id)
             .into_iter()
             .map(|s| s.parse::<i32>())
@@ -199,7 +201,7 @@ impl CctxInfo for CctxService {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let content = self
             .database
-            .list_cctxs(request.limit, request.page_key, filters, direction)
+            .list_cctxs(request.limit, request.page_key, filters, direction, include_related)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 

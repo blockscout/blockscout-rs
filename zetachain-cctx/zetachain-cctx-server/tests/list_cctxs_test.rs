@@ -50,7 +50,7 @@ async fn list_cctx_sorting() {
     tx.commit().await.unwrap();
 
     let retrieved_desc = database
-        .list_cctxs(limit as i64, None, Filters::default(), Direction::Desc)
+        .list_cctxs(limit as i64, None, Filters::default(), Direction::Desc, false)
         .await
         .unwrap();
 
@@ -61,7 +61,7 @@ async fn list_cctx_sorting() {
     );
 
     let retrieved_asc = database
-        .list_cctxs(limit as i64, None, Filters::default(), Direction::Asc)
+        .list_cctxs(limit as i64, None, Filters::default(), Direction::Asc, false)
         .await
         .unwrap();
 
@@ -110,7 +110,7 @@ async fn list_cctx_timestamp_pagination() {
 
     // Test DESC pagination (most recent first)
     let first_page_desc = database
-        .list_cctxs(limit as i64, None, Filters::default(), Direction::Desc)
+        .list_cctxs(limit as i64, None, Filters::default(), Direction::Desc, false)
         .await
         .unwrap();
 
@@ -140,6 +140,7 @@ async fn list_cctx_timestamp_pagination() {
             Some(page_key_desc),
             Filters::default(),
             Direction::Desc,
+            false
         )
         .await
         .unwrap();
@@ -158,7 +159,7 @@ async fn list_cctx_timestamp_pagination() {
 
     // Test ASC pagination (oldest first)
     let first_page_asc = database
-        .list_cctxs(limit as i64, None, Filters::default(), Direction::Asc)
+        .list_cctxs(limit as i64, None, Filters::default(), Direction::Asc, false)
         .await
         .unwrap();
 
@@ -188,6 +189,7 @@ async fn list_cctx_timestamp_pagination() {
             Some(page_key_asc),
             Filters::default(),
             Direction::Asc,
+            false
         )
         .await
         .unwrap();
@@ -212,6 +214,7 @@ async fn list_cctx_timestamp_pagination() {
             Some(non_existent_timestamp),
             Filters::default(),
             Direction::Desc,
+            false
         )
         .await
         .unwrap();
@@ -234,6 +237,7 @@ async fn list_cctx_timestamp_pagination() {
             Some(very_old_timestamp),
             Filters::default(),
             Direction::Desc,
+            false
         )
         .await
         .unwrap();
@@ -249,6 +253,7 @@ async fn list_cctx_timestamp_pagination() {
             Some(future_timestamp),
             Filters::default(),
             Direction::Asc,
+            false
         )
         .await
         .unwrap();
@@ -306,6 +311,7 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
                 Some(test_timestamp),
                 Filters::default(),
                 Direction::Desc,
+                false
             )
             .await;
 
@@ -330,7 +336,7 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
 
         // Test ASC direction
         let result_asc = database
-            .list_cctxs(10, Some(test_timestamp), Filters::default(), Direction::Asc)
+            .list_cctxs(10, Some(test_timestamp), Filters::default(), Direction::Asc, false)
             .await;
 
         assert!(
@@ -361,6 +367,7 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
             Some(negative_timestamp),
             Filters::default(),
             Direction::Desc,
+            false
         )
         .await;
 
@@ -386,6 +393,7 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
             Some(far_future_timestamp),
             Filters::default(),
             Direction::Desc,
+            false
         )
         .await
         .unwrap();

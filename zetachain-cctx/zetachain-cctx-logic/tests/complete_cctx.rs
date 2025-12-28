@@ -7,6 +7,9 @@ use zetachain_cctx_logic::{database::ZetachainCctxDatabase, models::CrossChainTx
 
 #[tokio::test]
 async fn test_get_complete_cctx() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
+        helpers::init_tests_logs().await;
+    }
     let db = crate::helpers::init_db("test", "indexer_get_complete_cctx").await;
     let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
     database.setup_db().await.unwrap();

@@ -1,7 +1,6 @@
 mod helpers;
 
 use crate::helpers::*;
-use blockscout_service_launcher::tracing::init_logs;
 use migration::sea_orm::TransactionTrait;
 use uuid::Uuid;
 use zetachain_cctx_logic::{
@@ -13,15 +12,7 @@ use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Direction;
 #[tokio::test]
 async fn query_cctxs_with_filters() {
     if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
-        init_logs(
-            "tests",
-            &blockscout_service_launcher::tracing::TracingSettings {
-                enabled: true,
-                ..Default::default()
-            },
-            &blockscout_service_launcher::tracing::JaegerSettings::default(),
-        )
-        .unwrap();
+        init_tests_logs().await;
     }
 
     let db = init_db("test", "query_cctxs_with_filters").await;
@@ -96,6 +87,7 @@ async fn query_cctxs_with_filters() {
                 hash: None,
             },
             Direction::Desc,
+            false,
         )
         .await
         .unwrap();
@@ -120,6 +112,7 @@ async fn query_cctxs_with_filters() {
                 hash: None,
             },
             Direction::Desc,
+            false,
         )
         .await
         .unwrap();
@@ -130,15 +123,7 @@ async fn query_cctxs_with_filters() {
 #[tokio::test]
 async fn query_cctxs_with_token_symbol_filter() {
     if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
-        init_logs(
-            "tests",
-            &blockscout_service_launcher::tracing::TracingSettings {
-                enabled: true,
-                ..Default::default()
-            },
-            &blockscout_service_launcher::tracing::JaegerSettings::default(),
-        )
-        .unwrap();
+        init_tests_logs().await;
     }
 
     let db = init_db("test", "query_cctxs_with_token_symbol_filter").await;
@@ -197,6 +182,7 @@ async fn query_cctxs_with_token_symbol_filter() {
                 hash: None,
             },
             Direction::Desc,
+            false,
         )
         .await
         .unwrap();
@@ -221,6 +207,7 @@ async fn query_cctxs_with_token_symbol_filter() {
                 hash: None,
             },
             Direction::Desc,
+            false
         )
         .await
         .unwrap();

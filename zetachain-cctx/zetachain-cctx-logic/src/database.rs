@@ -84,6 +84,42 @@ pub fn reduce_status(status: CctxStatusProto) -> CctxStatusReducedProto {
     }
 }
 
+struct QueryContext {
+    where_clause: String,
+    params: Vec<sea_orm::Value>,
+    param_count: i32,
+}
+
+impl QueryContext {
+    fn new() -> Self {
+        Self {
+            where_clause: String::new(),
+            params: Vec::new(),
+            param_count: 0,
+        }
+    }
+
+    fn add_vec_clause(&mut self, values: Vec<String>, column: &str, enum_name: Option<&str>) {
+        if values.is_empty() {
+            return;
+        }
+        self.param_count += 1;
+        self.where_clause
+            .push_str(&format!(" AND {} = ANY(${})", column, self.param_count));
+        if let Some(enum_name) = enum_name {
+            self.where_clause.push_str(&format!("::{}", enum_name));
+        }
+        self.params.push(sea_orm::Value::Array(
+            sea_orm::sea_query::ArrayType::String,
+            Some(Box::new(
+                values
+                    .into_iter()
+                    .map(|s| sea_orm::Value::String(Some(Box::new(s))))
+                    .collect::<Vec<_>>(),
+            )),
+        ));
+    }
+}
 impl ZetachainCctxDatabase {
     pub fn new(db: Arc<DatabaseConnection>, zetachain_id: i32) -> Self {
         Self { db, zetachain_id }
@@ -897,6 +933,8 @@ impl ZetachainCctxDatabase {
             None
         };
 
+        let related_cctxs = self.get_related_by_index(&fetched_cctx.index).await?;
+
         let cctx_list_item = CctxListItemProto {
             index: fetched_cctx.index,
             status: new_status.into(),
@@ -919,6 +957,7 @@ impl ZetachainCctxDatabase {
             token_symbol: token.as_ref().map(|t| t.symbol.clone()),
             zrc20_contract_address: token.as_ref().map(|t| t.zrc20_contract_address.clone()),
             decimals: token.as_ref().map(|t| t.decimals as i64),
+            related_cctxs,
         };
 
         Ok(cctx_list_item)
@@ -1261,12 +1300,37 @@ impl ZetachainCctxDatabase {
             });
         }
 
+        let related = self.get_related_by_index(&index).await?;
+
+        let status_reduced = reduce_status(CctxStatusProto::try_from(status.status)?);
+
+        Ok(Some(CrossChainTxProto {
+            creator,
+            index,
+            zeta_fees,
+            relayed_message,
+            cctx_status: Some(status),
+            cctx_status_reduced: status_reduced.into(),
+            inbound_params: Some(inbound),
+            outbound_params: outbounds,
+            revert_options,
+            protocol_contract_version: protocol_contract_version.into(),
+            related_cctxs: related,
+            token_symbol,
+            token_name,
+            zrc20_contract_address,
+            icon_url,
+            decimals,
+        }))
+    }
+
+    async fn get_related_by_index(&self, index: &str) -> anyhow::Result<Vec<RelatedCctxProto>> {
         let related_sql = include_str!("related.sql").to_string();
 
         let related_statement = Statement::from_sql_and_values(
             DbBackend::Postgres,
             related_sql,
-            vec![sea_orm::Value::String(Some(Box::new(index.clone())))],
+            vec![sea_orm::Value::String(Some(Box::new(index.to_string())))],
         );
 
         let related_rows = self
@@ -1349,28 +1413,8 @@ impl ZetachainCctxDatabase {
             });
         }
 
-        let status_reduced = reduce_status(CctxStatusProto::try_from(status.status)?);
-
-        Ok(Some(CrossChainTxProto {
-            creator,
-            index,
-            zeta_fees,
-            relayed_message,
-            cctx_status: Some(status),
-            cctx_status_reduced: status_reduced.into(),
-            inbound_params: Some(inbound),
-            outbound_params: outbounds,
-            revert_options,
-            protocol_contract_version: protocol_contract_version.into(),
-            related_cctxs: related,
-            token_symbol,
-            token_name,
-            zrc20_contract_address,
-            icon_url,
-            decimals,
-        }))
+        Ok(related)
     }
-
     async fn prefetch_token_ids(&self, token_symbols: Vec<String>) -> anyhow::Result<Vec<i32>> {
         let token_ids = TokenEntity::Entity::find()
             .filter(TokenEntity::Column::Symbol.is_in(token_symbols))
@@ -1404,89 +1448,34 @@ impl ZetachainCctxDatabase {
         page_key: Option<i64>,
         filters: Filters,
         direction: Direction,
+        include_related: bool,
     ) -> anyhow::Result<ListCctxsResponse> {
         let mut sql = include_str!("list_cctx_query.sql").to_string();
+
+        let mut query_context = QueryContext::new();
 
         let mut params: Vec<sea_orm::Value> = Vec::new();
         let mut param_count = 0;
 
-        if !filters.status_reduced.is_empty() {
-            param_count += 1;
-            sql.push_str(&format!(
-                " AND cs.status = ANY(${param_count}::cctx_status_status[])",
-            ));
-            params.push(sea_orm::Value::Array(
-                sea_orm::sea_query::ArrayType::String,
-                Some(Box::new(
-                    filters
-                        .status_reduced
-                        .into_iter()
-                        .flat_map(|s| self.get_status_by_reduced_status(&s))
-                        .map(|s| sea_orm::Value::String(Some(Box::new(s))))
-                        .collect::<Vec<_>>(),
-                )),
-            ));
-        }
+        query_context.add_vec_clause(
+            filters.status_reduced,
+            "cs.status".to_string(),
+            Some("cctx_status_status".to_string()),
+        );
 
-        if !filters.sender_address.is_empty() {
-            param_count += 1;
-            sql.push_str(&format!(" AND ip.sender = ANY(${param_count})"));
-            params.push(sea_orm::Value::Array(
-                sea_orm::sea_query::ArrayType::String,
-                Some(Box::new(
-                    filters
-                        .sender_address
-                        .into_iter()
-                        .map(|s| sea_orm::Value::String(Some(Box::new(s))))
-                        .collect::<Vec<_>>(),
-                )),
-            ));
-        }
+        query_context.add_vec_clause(filters.sender_address, "ip.sender".to_string(), None);
 
-        if !filters.receiver_address.is_empty() {
-            param_count += 1;
-            sql.push_str(&format!(" AND cctx.receiver = ANY(${param_count})"));
-            params.push(sea_orm::Value::Array(
-                sea_orm::sea_query::ArrayType::String,
-                Some(Box::new(
-                    filters
-                        .receiver_address
-                        .into_iter()
-                        .map(|s| sea_orm::Value::String(Some(Box::new(s))))
-                        .collect::<Vec<_>>(),
-                )),
-            ));
-        }
+        query_context.add_vec_clause(filters.receiver_address, "cctx.receiver".to_string(), None);
 
-        if !filters.asset.is_empty() {
-            param_count += 1;
-            sql.push_str(&format!(" AND ip.asset = ANY(${param_count})"));
-            params.push(sea_orm::Value::Array(
-                sea_orm::sea_query::ArrayType::String,
-                Some(Box::new(
-                    filters
-                        .asset
-                        .into_iter()
-                        .map(|s| sea_orm::Value::String(Some(Box::new(s))))
-                        .collect::<Vec<_>>(),
-                )),
-            ));
-        }
+        query_context.add_vec_clause(filters.asset, "ip.asset".to_string(), None);
 
-        if !filters.coin_type.is_empty() {
-            param_count += 1;
-            sql.push_str(&format!(" AND ip.coin_type::text = ANY(${param_count})"));
-            params.push(sea_orm::Value::Array(
-                sea_orm::sea_query::ArrayType::String,
-                Some(Box::new(
-                    filters
-                        .coin_type
-                        .into_iter()
-                        .map(|s| sea_orm::Value::String(Some(Box::new(s))))
-                        .collect::<Vec<_>>(),
-                )),
-            ));
-        }
+        query_context.add_vec_clause(filters.coin_type, "ip.coin_type::text".to_string(), None);
+
+        query_context.add_vec_clause(
+            filters.source_chain_id,
+            "ip.sender_chain_id".to_string(),
+            None,
+        );
 
         if !filters.source_chain_id.is_empty() {
             param_count += 1;
@@ -1611,7 +1600,7 @@ impl ZetachainCctxDatabase {
         let mut items = Vec::new();
         for row in truncated {
             // Read the status enum directly from the database
-            let index = row
+            let index: String = row
                 .try_get_by_index(0)
                 .map_err(|e| anyhow::anyhow!("index: {}", e))?;
             let status: CctxStatusProto = row
@@ -1657,6 +1646,11 @@ impl ZetachainCctxDatabase {
             let decimals: Option<i32> = row
                 .try_get_by_index(14)
                 .map_err(|e| anyhow::anyhow!("decimals: {}", e))?;
+            let related_cctxs = if include_related {
+                self.get_related_by_index(&index).await?
+            } else {
+                Vec::new()
+            };
 
             items.push(CctxListItemProto {
                 index,
@@ -1674,6 +1668,7 @@ impl ZetachainCctxDatabase {
                 token_symbol,
                 zrc20_contract_address,
                 decimals: decimals.map(|x| x as i64),
+                related_cctxs,
             });
         }
 
@@ -2091,6 +2086,7 @@ impl ZetachainCctxDatabase {
                     token_symbol: token.map(|t| t.symbol.clone()),
                     zrc20_contract_address: token.map(|t| t.zrc20_contract_address.clone()),
                     decimals: token.map(|t| t.decimals as i64),
+                    related_cctxs: Vec::new(), //  this list is calculated only to send notifications to frontend, which does not need related cctxs
                 });
             }
         }

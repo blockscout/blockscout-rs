@@ -120,6 +120,11 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_related
+          description: if true, return related cctxs, default is false. impacts performance a lot.
+          in: query
+          required: false
+          type: boolean
       tags:
         - CctxInfo
   /api/v1/Stats:getSyncProgress:
@@ -266,6 +271,11 @@ definitions:
       decimals:
         type: string
         format: int64
+      related_cctxs:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RelatedCctx'
   v1CctxStatus:
     type: string
     enum:

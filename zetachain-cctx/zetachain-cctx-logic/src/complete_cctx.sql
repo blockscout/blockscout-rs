@@ -1,1 +1,60 @@
-SELECT cctx.id as cctx_id, cctx.creator, cctx.index, cctx.zeta_fees, cctx.retries_number, cctx.processing_status::text, cctx.relayed_message, cctx.last_status_update_timestamp, cctx.protocol_contract_version::text, cctx.root_id, cctx.parent_id, cctx.depth, cctx.updated_by, cs.id as status_id, cs.cross_chain_tx_id as status_cross_chain_tx_id, cs.status::text, cs.status_message::text, cs.error_message, cs.last_update_timestamp, cs.is_abort_refunded, cs.created_timestamp, cs.error_message_revert, cs.error_message_abort, ip.id as inbound_id, ip.cross_chain_tx_id as inbound_cross_chain_tx_id, ip.sender, ip.sender_chain_id, ip.tx_origin, ip.coin_type::text, ip.asset, ip.amount, ip.observed_hash, ip.observed_external_height, ip.ballot_index, ip.finalized_zeta_height, ip.tx_finalization_status::text, ip.is_cross_chain_call, ip.status::text as inbound_status, ip.confirmation_mode::text as inbound_confirmation_mode, ro.id as revert_id, ro.cross_chain_tx_id as revert_cross_chain_tx_id, ro.revert_address, ro.call_on_revert, ro.abort_address, ro.revert_message, ro.revert_gas_limit, t.symbol as token_symbol, t.zrc20_contract_address as zrc20_contract_address, t.icon_url as icon_url, t.decimals as decimals, t.name as token_name FROM cross_chain_tx cctx JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id JOIN inbound_params ip ON cctx.id = ip.cross_chain_tx_id JOIN revert_options ro ON cctx.id = ro.cross_chain_tx_id LEFT JOIN token t ON t.id = cctx.token_id WHERE cctx.index = $1
+SELECT
+    cctx.id as cctx_id,
+    cctx.creator,
+    cctx.index,
+    cctx.zeta_fees,
+    cctx.retries_number,
+    cctx.processing_status :: text,
+    cctx.relayed_message,
+    cctx.last_status_update_timestamp,
+    cctx.protocol_contract_version :: text,
+    cctx.root_id,
+    cctx.parent_id,
+    cctx.depth,
+    cctx.updated_by,
+    cs.id as status_id,
+    cs.cross_chain_tx_id as status_cross_chain_tx_id,
+    cs.status :: text,
+    cs.status_message :: text,
+    cs.error_message,
+    cs.last_update_timestamp,
+    cs.is_abort_refunded,
+    cs.created_timestamp,
+    cs.error_message_revert,
+    cs.error_message_abort,
+    ip.id as inbound_id,
+    ip.cross_chain_tx_id as inbound_cross_chain_tx_id,
+    ip.sender,
+    ip.sender_chain_id,
+    ip.tx_origin,
+    ip.coin_type :: text,
+    ip.asset,
+    ip.amount,
+    ip.observed_hash,
+    ip.observed_external_height,
+    ip.ballot_index,
+    ip.finalized_zeta_height,
+    ip.tx_finalization_status :: text,
+    ip.is_cross_chain_call,
+    ip.status :: text as inbound_status,
+    ip.confirmation_mode :: text as inbound_confirmation_mode,
+    ro.id as revert_id,
+    ro.cross_chain_tx_id as revert_cross_chain_tx_id,
+    ro.revert_address,
+    ro.call_on_revert,
+    ro.abort_address,
+    ro.revert_message,
+    ro.revert_gas_limit,
+    t.symbol as token_symbol,
+    t.zrc20_contract_address as zrc20_contract_address,
+    t.icon_url as icon_url,
+    t.decimals as decimals,
+    t.name as token_name
+FROM
+    cross_chain_tx cctx
+    JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
+    JOIN inbound_params ip ON cctx.id = ip.cross_chain_tx_id
+    JOIN revert_options ro ON cctx.id = ro.cross_chain_tx_id
+    JOIN token t ON t.id = cctx.token_id
+WHERE
+    cctx.index = $1
