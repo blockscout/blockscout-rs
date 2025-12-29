@@ -1441,7 +1441,7 @@ definitions:
     properties:
       name:
         type: string
-      protocol:
+      protocol_id:
         type: string
   v1BatchImportRequest:
     type: object
