@@ -1,7 +1,7 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
-    bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
-    indexer_checkpoints, pending_messages,
+    avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
+    crosschain_transfers, indexer_checkpoints, pending_messages,
     sea_orm_active_enums::{MessageStatus, TransferType},
     tokens,
 };
@@ -83,11 +83,7 @@ impl InterchainDatabase {
         match chains::Entity::insert_many(chains)
             .on_conflict(
                 OnConflict::column(chains::Column::Id)
-                    .update_columns([
-                        chains::Column::Name,
-                        chains::Column::NativeId,
-                        chains::Column::Icon,
-                    ])
+                    .update_columns([chains::Column::Name, chains::Column::Icon])
                     .value(chains::Column::UpdatedAt, Expr::current_timestamp())
                     .to_owned(),
             )
@@ -113,25 +109,160 @@ impl InterchainDatabase {
         }
     }
 
-    /// Load a map of native blockchain IDs (normalized with 0x prefix) to chain id.
+    pub async fn ensure_chain_exists(
+        &self,
+        chain_id: i64,
+        preferred_name: Option<String>,
+        icon: Option<String>,
+    ) -> anyhow::Result<()> {
+        if chains::Entity::find_by_id(chain_id)
+            .one(self.db.as_ref())
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        let try_insert = |name: String, icon: Option<String>| async move {
+            let model = chains::ActiveModel {
+                id: ActiveValue::Set(chain_id),
+                name: ActiveValue::Set(name),
+                icon: ActiveValue::Set(icon),
+                ..Default::default()
+            };
+
+            chains::Entity::insert(model)
+                .on_conflict(
+                    OnConflict::column(chains::Column::Id)
+                        .do_nothing()
+                        .to_owned(),
+                )
+                .exec(self.db.as_ref())
+                .await
+        };
+
+        let name = preferred_name
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| format!("EVM Chain {chain_id}"));
+
+        match try_insert(name.clone(), icon.clone()).await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                // Most commonly: UNIQUE(name) violation. Retry with a deterministic unique-ish name.
+                tracing::warn!(
+                    err = ?err,
+                    chain_id,
+                    name = %name,
+                    "failed to insert chains row; retrying with fallback name"
+                );
+
+                let fallback = format!("EVM Chain {chain_id}");
+                try_insert(fallback, icon).await?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Load a map of Avalanche blockchain IDs (bytes in `avalanche_icm_blockchain_ids`)
+    /// normalized as `0x`-prefixed hex strings to chain id.
     ///
-    /// This is useful for pre-populating per-batch caches so handlers don't need to
-    /// hit the database for every log. Only chains with a non-null `native_id` are
-    /// included.
+    /// This is used to pre-populate a per-indexer in-memory cache so handlers don't need to
+    /// hit the database for every log.
     pub async fn load_native_id_map(&self) -> anyhow::Result<HashMap<String, i64>> {
-        chains::Entity::find()
-            .filter(chains::Column::NativeId.is_not_null())
+        avalanche_icm_blockchain_ids::Entity::find()
             .all(self.db.as_ref())
             .await
             .map(|rows| {
                 rows.into_iter()
-                    .filter_map(|row| (row.native_id?, row.id).into())
+                    .map(|row| {
+                        (
+                            format!("0x{}", hex::encode(row.blockchain_id)),
+                            row.chain_id,
+                        )
+                    })
                     .collect::<HashMap<_, _>>()
             })
             .map_err(|e| {
-                tracing::error!(err =? e, "Failed to load native id -> chain id map");
+                tracing::error!(
+                    err = ?e,
+                    "Failed to load avalanche_icm blockchain id -> chain id map"
+                );
                 e.into()
             })
+    }
+
+    pub async fn get_avalanche_icm_chain_id_by_blockchain_id(
+        &self,
+        blockchain_id: &[u8],
+    ) -> anyhow::Result<Option<i64>> {
+        let row = avalanche_icm_blockchain_ids::Entity::find_by_id(blockchain_id.to_vec())
+            .one(self.db.as_ref())
+            .await?;
+        Ok(row.map(|m| m.chain_id))
+    }
+
+    pub async fn upsert_avalanche_icm_blockchain_id(
+        &self,
+        blockchain_id: Vec<u8>,
+        chain_id: i64,
+    ) -> anyhow::Result<()> {
+        let insert = avalanche_icm_blockchain_ids::ActiveModel {
+            blockchain_id: ActiveValue::Set(blockchain_id.clone()),
+            chain_id: ActiveValue::Set(chain_id),
+            ..Default::default()
+        };
+
+        // First, handle the common path: upsert by primary key (blockchain_id).
+        // This covers re-mapping a previously seen blockchain_id.
+        match avalanche_icm_blockchain_ids::Entity::insert(insert)
+            .on_conflict(
+                OnConflict::column(avalanche_icm_blockchain_ids::Column::BlockchainId)
+                    .update_columns([
+                        avalanche_icm_blockchain_ids::Column::ChainId,
+                    ])
+                    .value(
+                        avalanche_icm_blockchain_ids::Column::UpdatedAt,
+                        Expr::current_timestamp(),
+                    )
+                    .to_owned(),
+            )
+            .exec(self.db.as_ref())
+            .await
+        {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                // If we hit UNIQUE(chain_id), update that row to point at the new blockchain_id.
+                // (The mapping is conceptually 1 chain_id -> 1 blockchain_id.)
+                let msg = e.to_string();
+                let looks_like_unique_chain_id = msg.contains("avalanche_icm_blockchain_ids")
+                    && msg.contains("chain_id")
+                    && (msg.contains("duplicate") || msg.contains("unique"));
+                if !looks_like_unique_chain_id {
+                    return Err(e.into());
+                }
+            }
+        }
+
+        let res = avalanche_icm_blockchain_ids::Entity::update_many()
+            .col_expr(
+                avalanche_icm_blockchain_ids::Column::BlockchainId,
+                Expr::val(blockchain_id).into(),
+            )
+            .col_expr(
+                avalanche_icm_blockchain_ids::Column::UpdatedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(avalanche_icm_blockchain_ids::Column::ChainId.eq(chain_id))
+            .exec(self.db.as_ref())
+            .await?;
+
+        if res.rows_affected == 0 {
+            return Err(anyhow::anyhow!(
+                "failed to upsert avalanche_icm_blockchain_ids: insert failed and no row updated"
+            ));
+        }
+
+        Ok(())
     }
 
     // CONFIGURATION TABLE: bridges
@@ -1192,9 +1323,6 @@ mod tests {
         let mut ava_chain = chains::ActiveModel {
             id: Set(43114),
             name: Set("C-Chain".to_string()),
-            native_id: Set(Some(
-                "2q9e4r6Mu3U68nU1fYjgbR6JvwrRx36CohpAX5UQxse55x1Q5".to_string(),
-            )),
             icon: Set(Some(
                 "https://chainlist.org/chain/43114/icon.png".to_string(),
             )),
@@ -1220,7 +1348,6 @@ mod tests {
         assert_eq!(chains.len(), 3);
         let stored_chain = chains.iter().find(|chain| chain.id == 43114).unwrap();
         assert_eq!(stored_chain.name, ava_chain.name.unwrap());
-        assert_eq!(stored_chain.native_id, ava_chain.native_id.unwrap());
         assert_eq!(stored_chain.icon, ava_chain.icon.unwrap());
     }
 
@@ -1235,29 +1362,43 @@ mod tests {
                 chains::ActiveModel {
                     id: Set(1),
                     name: Set("ChainA".to_string()),
-                    native_id: Set(Some("0xaaa".to_string())),
                     ..Default::default()
                 },
                 chains::ActiveModel {
                     id: Set(2),
                     name: Set("ChainB".to_string()),
-                    native_id: Set(Some("0xbbb".to_string())),
                     ..Default::default()
                 },
                 chains::ActiveModel {
                     id: Set(3),
                     name: Set("ChainC".to_string()),
-                    native_id: Set(None),
                     ..Default::default()
                 },
             ])
             .await
             .unwrap();
 
+        // Create mappings for only some chains.
+        interchain_indexer_entity::avalanche_icm_blockchain_ids::Entity::insert_many([
+            interchain_indexer_entity::avalanche_icm_blockchain_ids::ActiveModel {
+                blockchain_id: Set(vec![0xaa]),
+                chain_id: Set(1),
+                ..Default::default()
+            },
+            interchain_indexer_entity::avalanche_icm_blockchain_ids::ActiveModel {
+                blockchain_id: Set(vec![0xbb]),
+                chain_id: Set(2),
+                ..Default::default()
+            },
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
         let map = interchain_db.load_native_id_map().await.unwrap();
         assert_eq!(map.len(), 2);
-        assert_eq!(map.get("0xaaa"), Some(&1));
-        assert_eq!(map.get("0xbbb"), Some(&2));
+        assert_eq!(map.get("0xaa"), Some(&1));
+        assert_eq!(map.get("0xbb"), Some(&2));
     }
 
     #[tokio::test]

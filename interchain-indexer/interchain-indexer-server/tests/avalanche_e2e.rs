@@ -35,6 +35,13 @@ use alloy::{
     providers::{DynProvider, Provider, ProviderBuilder},
 };
 
+fn decode_blockchain_id(native_id: &str) -> Vec<u8> {
+    let native_id = native_id.strip_prefix("0x").unwrap_or(native_id);
+    let bytes = hex::decode(native_id).expect("native blockchain id must be hex");
+    assert_eq!(bytes.len(), 32, "blockchainID must be 32 bytes");
+    bytes
+}
+
 /// Helper to convert Option<Vec<u8>> to hex string for readable assertions
 fn to_hex(bytes: &Option<Vec<u8>>) -> String {
     bytes
@@ -98,14 +105,12 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
-            native_id: native_id_src.to_string().into(),
             icon: String::new(),
             rpcs: vec![],
         },
         ChainConfig {
             chain_id: chain_id_dest as i64,
             name: name_dest.into(),
-            native_id: native_id_dest.to_string().into(),
             icon: String::new(),
             rpcs: vec![],
         },
@@ -152,6 +157,20 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         .map(|c| interchain_indexer_entity::chains::ActiveModel::from(c.clone()))
         .collect::<Vec<interchain_indexer_entity::chains::ActiveModel>>();
     interchain_db.upsert_chains(chains).await?;
+
+    // Seed blockchainID -> chain_id mapping so the resolver does not need Avalanche Data API.
+    interchain_db
+        .upsert_avalanche_icm_blockchain_id(
+            decode_blockchain_id(native_id_src),
+            chain_id_src as i64,
+        )
+        .await?;
+    interchain_db
+        .upsert_avalanche_icm_blockchain_id(
+            decode_blockchain_id(native_id_dest),
+            chain_id_dest as i64,
+        )
+        .await?;
 
     let bridges = [bridges::ActiveModel::from(bridge_config.clone())].to_vec();
     interchain_db.upsert_bridges(bridges).await?;
@@ -334,14 +353,12 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
-            native_id: native_id_src.to_string().into(),
             icon: String::new(),
             rpcs: vec![],
         },
         ChainConfig {
             chain_id: chain_id_dest as i64,
             name: name_dest.into(),
-            native_id: native_id_dest.to_string().into(),
             icon: String::new(),
             rpcs: vec![],
         },
@@ -355,7 +372,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         indexer: String::new(),
         enabled: true,
         contracts: vec![
-            // Keep both chain contracts in DB so native_id_to_chain_id can resolve sourceBlockchainID.
+            // Keep both chain contracts in DB so the resolver can resolve sourceBlockchainID.
             BridgeContractConfig {
                 chain_id: chain_id_src as i64,
                 address: teleporter_address.into(),
@@ -388,6 +405,20 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         .collect::<Vec<interchain_indexer_entity::chains::ActiveModel>>();
     interchain_db.upsert_chains(chains).await?;
 
+    // Seed blockchainID -> chain_id mapping so the resolver does not need Avalanche Data API.
+    interchain_db
+        .upsert_avalanche_icm_blockchain_id(
+            decode_blockchain_id(native_id_src),
+            chain_id_src as i64,
+        )
+        .await?;
+    interchain_db
+        .upsert_avalanche_icm_blockchain_id(
+            decode_blockchain_id(native_id_dest),
+            chain_id_dest as i64,
+        )
+        .await?;
+
     let bridges = [bridges::ActiveModel::from(bridge_config.clone())].to_vec();
     interchain_db.upsert_bridges(bridges).await?;
 
@@ -400,10 +431,9 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         start_block: block_number_dest as u64,
     }];
 
-    let indexer_config =
-        AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains)
-            .with_poll_interval(Duration::from_millis(200))
-            .with_batch_size(25);
+    let indexer_config = AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains)
+        .with_poll_interval(Duration::from_millis(200))
+        .with_batch_size(25);
 
     let indexer =
         AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
@@ -488,14 +518,12 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
-            native_id: native_id_src.to_string().into(),
             icon: String::new(),
             rpcs: vec![],
         },
         ChainConfig {
             chain_id: chain_id_dest as i64,
             name: name_dest.into(),
-            native_id: native_id_dest.to_string().into(),
             icon: String::new(),
             rpcs: vec![],
         },
@@ -509,7 +537,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         indexer: String::new(),
         enabled: true,
         contracts: vec![
-            // Keep both chain contracts in DB so destinationBlockchainID can resolve destination_chain_id.
+            // Keep both chain contracts in DB so the resolver can resolve destinationBlockchainID.
             BridgeContractConfig {
                 chain_id: chain_id_src as i64,
                 address: teleporter_address.into(),
@@ -542,6 +570,20 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         .collect::<Vec<interchain_indexer_entity::chains::ActiveModel>>();
     interchain_db.upsert_chains(chains).await?;
 
+    // Seed blockchainID -> chain_id mapping so the resolver does not need Avalanche Data API.
+    interchain_db
+        .upsert_avalanche_icm_blockchain_id(
+            decode_blockchain_id(native_id_src),
+            chain_id_src as i64,
+        )
+        .await?;
+    interchain_db
+        .upsert_avalanche_icm_blockchain_id(
+            decode_blockchain_id(native_id_dest),
+            chain_id_dest as i64,
+        )
+        .await?;
+
     let bridges = [bridges::ActiveModel::from(bridge_config.clone())].to_vec();
     interchain_db.upsert_bridges(bridges).await?;
 
@@ -554,10 +596,9 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         start_block: block_number_src as u64,
     }];
 
-    let indexer_config =
-        AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains)
-            .with_poll_interval(Duration::from_millis(200))
-            .with_batch_size(25);
+    let indexer_config = AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains)
+        .with_poll_interval(Duration::from_millis(200))
+        .with_batch_size(25);
 
     let indexer =
         AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;

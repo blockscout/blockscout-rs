@@ -3,9 +3,6 @@ CREATE TABLE chains (
   id          BIGINT PRIMARY KEY, -- the classic EVM chain_id, 8 bytes long
                                   -- or arbitrary unique number if not applicable
   name        TEXT NOT NULL UNIQUE,
-  native_id   TEXT, -- the optional original network identifier,
-                    -- for cases where the chain_id is not applicable
-                    -- e.g. Avalanche chains has 32-byte blockchainID
   icon        TEXT,
 
   created_at  TIMESTAMP DEFAULT now(),
@@ -186,3 +183,12 @@ CREATE TABLE pending_messages (
 
 CREATE INDEX idx_pending_stale ON pending_messages(created_at);
 
+CREATE TABLE avalanche_icm_blockchain_ids (
+  -- TODO: create a comment on this field that this is hex encoded 32-byte Avalanche blockchain ID
+  blockchain_id      BYTEA PRIMARY KEY,
+  chain_id           BIGINT NOT NULL REFERENCES chains(id) ON DELETE CASCADE,
+  created_at         TIMESTAMP DEFAULT now(),
+  updated_at         TIMESTAMP DEFAULT now(),
+
+  UNIQUE(chain_id)
+);

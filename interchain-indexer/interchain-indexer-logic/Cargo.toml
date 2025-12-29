@@ -12,10 +12,13 @@ alloy-json-rpc = { workspace = true }
 anyhow = { workspace = true }
 async-stream = { version = "0.3" }
 async-trait = { workspace = true }
+backon = { version = "1" }
 base64 = { version = "0.22", features = ["std"] }
 blockscout-display-bytes = { workspace = true }
+bs58 = { workspace = true }
 chrono = { version = "0.4" }
 dashmap = { version = "6" }
+moka = { version = "0.12", features = ["future"] }
 ## Uncomment this if needed
 #ethabi = { workspace = true }
 #ethers-core = { workspace = true }

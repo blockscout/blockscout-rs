@@ -21,6 +21,7 @@ async-trait = { version = "0.1" }
 blockscout-display-bytes = { version = "1.1.0" }
 blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }
 blockscout-service-launcher = { version = "0.20.0" }
+bs58 = { version = "0.5", features = ["cb58"] }
 chrono = { version = "0.4" }
 config = { version = "0.15" }
 convert-trait = { package = "actix-prost-convert-trait", version = "0.2.0" }

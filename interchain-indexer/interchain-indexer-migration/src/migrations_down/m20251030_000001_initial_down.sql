@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS indexer_staging;
 DROP TABLE IF EXISTS tokens;
 DROP TABLE IF EXISTS bridge_contracts;
 DROP TABLE IF EXISTS bridges;
+DROP TABLE IF EXISTS avalanche_icm_blockchain_ids;
 DROP TABLE IF EXISTS chains;
 
 DROP TYPE IF EXISTS transfer_type;

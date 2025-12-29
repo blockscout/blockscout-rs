@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod avalanche_icm_blockchain_ids;
 pub mod bridge_contracts;
 pub mod bridges;
 pub mod chains;

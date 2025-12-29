@@ -10,8 +10,6 @@ pub struct Model {
     #[sea_orm(column_type = "Text", unique)]
     pub name: String,
     #[sea_orm(column_type = "Text", nullable)]
-    pub native_id: Option<String>,
-    #[sea_orm(column_type = "Text", nullable)]
     pub icon: Option<String>,
     pub created_at: Option<DateTime>,
     pub updated_at: Option<DateTime>,
@@ -19,6 +17,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_one = "super::avalanche_icm_blockchain_ids::Entity")]
+    AvalancheIcmBlockchainIds,
     #[sea_orm(has_many = "super::bridge_contracts::Entity")]
     BridgeContracts,
     #[sea_orm(has_many = "super::indexer_checkpoints::Entity")]
@@ -27,6 +27,12 @@ pub enum Relation {
     IndexerFailures,
     #[sea_orm(has_many = "super::tokens::Entity")]
     Tokens,
+}
+
+impl Related<super::avalanche_icm_blockchain_ids::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AvalancheIcmBlockchainIds.def()
+    }
 }
 
 impl Related<super::bridge_contracts::Entity> for Entity {

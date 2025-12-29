@@ -121,7 +121,7 @@ impl From<ChainConfig> for chains::ActiveModel {
         chains::ActiveModel {
             id: ActiveValue::Set(config.chain_id),
             name: ActiveValue::Set(config.name),
-            native_id: ActiveValue::Set(config.native_id),
+            // native_id: ActiveValue::Set(config.native_id),
             icon: ActiveValue::Set(if config.icon.is_empty() {
                 None
             } else {
@@ -139,7 +139,7 @@ impl From<chains::Model> for ChainConfig {
         ChainConfig {
             chain_id: model.id,
             name: model.name,
-            native_id: model.native_id,
+            // native_id: model.native_id,
             icon: model.icon.unwrap_or_default(),
             rpcs: vec![], // RPCs are not stored in database
         }
@@ -150,7 +150,7 @@ impl From<chains::Model> for ChainConfig {
 pub struct ChainConfig {
     pub chain_id: i64,
     pub name: String,
-    pub native_id: Option<String>,
+    // pub native_id: Option<String>,
     pub icon: String,
     pub rpcs: Vec<HashMap<String, RpcProviderConfig>>,
 }
@@ -356,7 +356,7 @@ mod tests {
         assert_eq!(chains.len(), 2);
         assert_eq!(chains[0].chain_id, 1);
         assert_eq!(chains[0].name, "Ethereum");
-        assert_eq!(chains[0].native_id, None);
+        // assert_eq!(chains[0].native_id, None);
         assert_eq!(chains[0].icon, "");
         assert!(!chains[0].rpcs.is_empty());
 
@@ -468,7 +468,7 @@ mod tests {
         let config = ChainConfig {
             chain_id: 1,
             name: "Ethereum".to_string(),
-            native_id: None,
+            // native_id: None,
             icon: "https://example.com/icon.png".to_string(),
             rpcs: vec![],
         };
@@ -488,7 +488,7 @@ mod tests {
         let config = ChainConfig {
             chain_id: 1,
             name: "Ethereum".to_string(),
-            native_id: None,
+            // native_id: None,
             icon: String::new(),
             rpcs: vec![],
         };
@@ -505,7 +505,7 @@ mod tests {
         let model = chains::Model {
             id: 1,
             name: "Ethereum".to_string(),
-            native_id: None,
+            // native_id: None,
             icon: Some("https://example.com/icon.png".to_string()),
             created_at: None,
             updated_at: None,
@@ -515,7 +515,7 @@ mod tests {
 
         assert_eq!(config.chain_id, 1);
         assert_eq!(config.name, "Ethereum");
-        assert_eq!(config.native_id, None);
+        // assert_eq!(config.native_id, None);
         assert_eq!(config.icon, "https://example.com/icon.png");
         // rpcs are lost in conversion (not stored in DB)
         assert_eq!(config.rpcs, vec![]);

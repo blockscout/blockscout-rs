@@ -1,4 +1,5 @@
 pub mod abi;
+mod blockchain_id_resolver;
 pub mod consolidation;
 pub mod types;
 
@@ -30,6 +31,7 @@ use crate::{
 };
 
 use abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
+use blockchain_id_resolver::{AvalancheDataApiNetwork, BlockchainIdResolver};
 
 use types::{
     AnnotatedEvent, AnnotatedICTTSource, CallOutcome, Message, MessageExecutionOutcome,
@@ -50,6 +52,12 @@ pub struct AvalancheIndexerConfig {
     pub chains: Vec<AvalancheChainConfig>,
     pub poll_interval: Duration,
     pub batch_size: u64,
+    /// Optional override for which EVM chain IDs are considered "tracked" for filtering.
+    ///
+    /// By default, the indexer tracks only the chains it is actively indexing.
+    /// Some use-cases (e.g. indexing only the source OR destination chain) still
+    /// require tracking both sides to avoid dropping cross-chain events.
+    pub tracked_chain_ids: Option<HashSet<i64>>,
 }
 
 impl AvalancheIndexerConfig {
@@ -60,7 +68,16 @@ impl AvalancheIndexerConfig {
             poll_interval: Duration::from_secs(10),
             // Make it an option for env config
             batch_size: 1000,
+            tracked_chain_ids: None,
         }
+    }
+
+    pub fn with_tracked_chain_ids<I>(mut self, tracked_chain_ids: I) -> Self
+    where
+        I: IntoIterator<Item = i64>,
+    {
+        self.tracked_chain_ids = Some(tracked_chain_ids.into_iter().collect());
+        self
     }
 
     pub fn with_poll_interval(mut self, poll_interval: Duration) -> Self {
@@ -137,7 +154,28 @@ impl AvalancheIndexer {
             chains,
             poll_interval,
             batch_size,
+            tracked_chain_ids,
         } = config;
+
+        let tracked_chain_ids: HashSet<i64> = tracked_chain_ids
+            .unwrap_or_else(|| chains.iter().map(|c| c.chain_id).collect());
+
+        let data_api_network = std::env::var("AVALANCHE_DATA_API_NETWORK")
+            .ok()
+            .and_then(|v| match v.to_ascii_lowercase().as_str() {
+                "mainnet" => Some(AvalancheDataApiNetwork::Mainnet),
+                "fuji" => Some(AvalancheDataApiNetwork::Fuji),
+                "testnet" => Some(AvalancheDataApiNetwork::Testnet),
+                _ => None,
+            })
+            .unwrap_or(AvalancheDataApiNetwork::Mainnet);
+
+        let data_api_key = std::env::var("AVALANCHE_GLACIER_API_KEY")
+            .ok()
+            .or_else(|| std::env::var("AVALANCHE_DATA_API_KEY").ok());
+
+        let blockchain_id_resolver =
+            BlockchainIdResolver::new(data_api_network, data_api_key, db.clone());
 
         tracing::info!(
             bridge_id,
@@ -201,11 +239,6 @@ impl AvalancheIndexer {
             combined_stream = stream::select(combined_stream, stream).boxed();
         }
 
-        let native_id_to_chain_id = db
-            .load_native_id_map()
-            .await
-            .context("failed to preload native blockchain id mapping")?;
-
         let buffer_handle = Arc::clone(&buffer).start().await?;
 
         // Process events
@@ -214,7 +247,8 @@ impl AvalancheIndexer {
                 batch,
                 chain_id,
                 bridge_id,
-                &native_id_to_chain_id,
+                &tracked_chain_ids,
+                &blockchain_id_resolver,
                 &buffer,
                 &provider,
             )
@@ -330,19 +364,42 @@ fn parse_message_key(message_id: &B256, bridge_id: i32) -> Result<(Key, [u8; 8])
 /// Resolve an on-chain blockchain ID (bytes32 in Teleporter events) into our local chain id.
 ///
 /// Returns `None` when the chain isn't tracked by this indexer.
-fn resolve_tracked_chain_id(
+async fn resolve_tracked_chain_id(
     native_blockchain_id: &[u8],
-    native_id_to_chain_id: &HashMap<String, i64>,
-) -> Option<i64> {
+    tracked_chain_ids: &HashSet<i64>,
+    blockchain_id_resolver: &BlockchainIdResolver,
+) -> anyhow::Result<Option<i64>> {
+    if native_blockchain_id.len() != 32 {
+        return Ok(None);
+    }
+
     let native_hex = hex::encode_prefixed(native_blockchain_id);
-    native_id_to_chain_id.get(&native_hex).copied()
+
+    let resolved = match blockchain_id_resolver.resolve(native_blockchain_id).await {
+        Ok(v) => v,
+        Err(err) => {
+            tracing::warn!(
+                err = ?err,
+                blockchain_id = %native_hex,
+                "failed to resolve Avalanche blockchain_id via Data API"
+            );
+            return Ok(None);
+        }
+    };
+
+    let Some(chain_id) = resolved else {
+        return Ok(None);
+    };
+
+    Ok(tracked_chain_ids.contains(&chain_id).then_some(chain_id))
 }
 
 async fn process_batch(
     batch: Vec<Log>,
     chain_id: i64,
     bridge_id: i32,
-    native_id_to_chain_id: &HashMap<String, i64>,
+    tracked_chain_ids: &HashSet<i64>,
+    blockchain_id_resolver: &BlockchainIdResolver,
     buffer: &Arc<MessageBuffer<Message>>,
     provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
@@ -397,7 +454,8 @@ async fn process_batch(
                 block_timestamp,
                 log,
                 bridge_id,
-                native_id_to_chain_id,
+                tracked_chain_ids,
+                blockchain_id_resolver,
                 buffer,
                 receipt_logs,
             };
@@ -610,7 +668,8 @@ struct LogHandleContext<'a> {
     block_timestamp: chrono::NaiveDateTime,
 
     bridge_id: i32,
-    native_id_to_chain_id: &'a HashMap<String, i64>,
+    tracked_chain_ids: &'a HashSet<i64>,
+    blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
 
     /// Current log being handled.
@@ -674,8 +733,10 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         .context("failed to parse message key")?;
     let dst_chain_id = resolve_tracked_chain_id(
         event.destinationBlockchainID.as_slice(),
-        ctx.native_id_to_chain_id,
-    );
+        ctx.tracked_chain_ids,
+        ctx.blockchain_id_resolver,
+    )
+    .await?;
     let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
 
     // Skip messages to untracked chains
@@ -798,8 +859,10 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
         .context("failed to parse message key")?;
     let src_chain_id = resolve_tracked_chain_id(
         event.sourceBlockchainID.as_slice(),
-        ctx.native_id_to_chain_id,
-    );
+        ctx.tracked_chain_ids,
+        ctx.blockchain_id_resolver,
+    )
+    .await?;
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
@@ -894,8 +957,10 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
         .context("failed to parse message key")?;
     let src_chain_id = resolve_tracked_chain_id(
         event.sourceBlockchainID.as_slice(),
-        ctx.native_id_to_chain_id,
-    );
+        ctx.tracked_chain_ids,
+        ctx.blockchain_id_resolver,
+    )
+    .await?;
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
@@ -965,8 +1030,10 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
         .context("failed to parse message key")?;
     let src_chain_id = resolve_tracked_chain_id(
         event.sourceBlockchainID.as_slice(),
-        ctx.native_id_to_chain_id,
-    );
+        ctx.tracked_chain_ids,
+        ctx.blockchain_id_resolver,
+    )
+    .await?;
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
     // Skip messages from untracked chains
