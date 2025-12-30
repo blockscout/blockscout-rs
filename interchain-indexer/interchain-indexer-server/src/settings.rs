@@ -6,7 +6,8 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use interchain_indexer_logic::{
-    TokenInfoServiceSettings, example::settings::ExampleIndexerSettings,
+    TokenInfoServiceSettings, avalanche::settings::AvalancheIndexerSettings,
+    example::settings::ExampleIndexerSettings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +22,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub example_indexer: ExampleIndexerSettings,
+
+    #[serde(default)]
+    pub avalanche_indexer: AvalancheIndexerSettings,
 
     #[serde(default)]
     pub server: ServerSettings,
@@ -54,6 +58,7 @@ impl Settings {
             bridges_config: PathBuf::from("config/omnibridge/bridges.json"),
             token_info: TokenInfoServiceSettings::default(),
             example_indexer: Default::default(),
+            avalanche_indexer: Default::default(),
             server: Default::default(),
             metrics: Default::default(),
             tracing: Default::default(),

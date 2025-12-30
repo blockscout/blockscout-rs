@@ -25,7 +25,7 @@ bs58 = { version = "0.5", features = ["cb58"] }
 chrono = { version = "0.4" }
 config = { version = "0.15" }
 convert-trait = { package = "actix-prost-convert-trait", version = "0.2.0" }
-env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "faa570f" }
 futures = { version = "0.3" }
 governor = { version = "0.10.0" }
 hex = { version = "0.4.3" }

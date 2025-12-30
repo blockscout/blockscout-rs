@@ -34,18 +34,92 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 
 ## Envs
 
-Metrics (Prometheus-compatible):
+### Main Service Settings
 
-| Variable | Description | Default |
-| --- | --- | --- |
-| `INTERCHAIN_INDEXER__METRICS__ENABLED` | Enable the metrics server | `false` |
-| `INTERCHAIN_INDEXER__METRICS__ADDR` | Address for the metrics listener | `0.0.0.0:6060` |
-| `INTERCHAIN_INDEXER__METRICS__ROUTE` | HTTP path for metrics scraping | `/metrics` |
+[anchor]: <> (anchors.envs.start.service)
+
+| Variable                                                                | Req&#x200B;uir&#x200B;ed | Description                                                  | Default value |
+| ----------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------ | ------------- |
+| `INTERCHAIN_INDEXER__BRIDGES_CONFIG`                                    | true                     | e.g. `config/avalanche/bridges.json`                         |               |
+| `INTERCHAIN_INDEXER__CHAINS_CONFIG`                                     | true                     | e.g. `config/avalanche/chains.json`                          |               |
+| `INTERCHAIN_INDEXER__DATABASE__CONNECT__URL`                            | true                     | e.g. `postgres://postgres:postgres@database:5433/blockscout` |               |
+| `INTERCHAIN_INDEXER__API__DEFAULT_PAGE_SIZE`                            |                          |                                                              | `50`          |
+| `INTERCHAIN_INDEXER__API__MAX_PAGE_SIZE`                                |                          |                                                              | `100`         |
+| `INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN`                         |                          |                                                              | `true`        |
+| `INTERCHAIN_INDEXER__DATABASE__CREATE_DATABASE`                         |                          | e.g. `true`                                                  | `false`       |
+| `INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS`                          |                          | e.g. `true`                                                  | `false`       |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS`  |                          |                                                              | ``            |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__RETRY_INTERVAL` |                          | e.g. `1`                                                     | `3600`        |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL`            |                          | e.g. `https://contracts-info-test.k8s-dev.blockscout.com`    | `null`        |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__ONCHAIN_RETRY_INTERVAL`                |                          |                                                              | `10`          |
+
+[anchor]: <> (anchors.envs.end.service)
+
+### Avalanche Indexer Settings
+
+[anchor]: <> (anchors.envs.start.avalanche)
+
+| Variable                                                  | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --------------------------------------------------------- | ------------------------ | ----------- | ------------- |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`       |                          |             | `1000`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS` |                          |             | `10000`       |
+
+[anchor]: <> (anchors.envs.end.avalanche)
+
+### Metrics Settings (Prometheus-compatible)
+
+[anchor]: <> (anchors.envs.start.metrics)
+
+| Variable                               | Req&#x200B;uir&#x200B;ed | Description | Default value  |
+| -------------------------------------- | ------------------------ | ----------- | -------------- |
+| `INTERCHAIN_INDEXER__METRICS__ENABLED` |                          | Enable the metrics server | `false`        |
+| `INTERCHAIN_INDEXER__METRICS__ADDR`    |                          | Address for the metrics listener | `0.0.0.0:6060` |
+| `INTERCHAIN_INDEXER__METRICS__ROUTE`   |                          | HTTP path for metrics scraping | `/metrics`     |
+
+[anchor]: <> (anchors.envs.end.metrics)
 
 Expose the metrics port (default `6060`) when running in Docker (see docker-compose.yml) and scrape `{addr}{route}`.
 
-[anchor]: <> (anchors.envs.start)
-[anchor]: <> (anchors.envs.end)
+### Auxiliary Settings
+
+<details><summary>Server settings</summary>
+<p>
+[anchor]: <> (anchors.envs.start.server)
+
+| Variable                                                           | Req&#x200B;uir&#x200B;ed | Description | Default value                            |
+| ------------------------------------------------------------------ | ------------------------ | ----------- | ---------------------------------------- |
+| `INTERCHAIN_INDEXER__SERVER__GRPC__ADDR`                           |                          |             | `0.0.0.0:8051`                           |
+| `INTERCHAIN_INDEXER__SERVER__GRPC__ENABLED`                        |                          |             | `false`                                  |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__ADDR`                           |                          |             | `0.0.0.0:8050`                           |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__BASE_PATH`                      |                          |             | `null`                                   |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__CORS__ALLOWED_CREDENTIALS`      |                          |             | `true`                                   |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__CORS__ALLOWED_METHODS`          |                          |             | `PUT, GET, POST, OPTIONS, DELETE, PATCH` |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__CORS__ALLOWED_ORIGIN`           |                          |             | ``                                       |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__CORS__BLOCK_ON_ORIGIN_MISMATCH` |                          |             | `false`                                  |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__CORS__ENABLED`                  |                          |             | `false`                                  |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__CORS__MAX_AGE`                  |                          |             | `3600`                                   |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__CORS__SEND_WILDCARD`            |                          |             | `false`                                  |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__ENABLED`                        |                          |             | `true`                                   |
+| `INTERCHAIN_INDEXER__SERVER__HTTP__MAX_BODY_SIZE`                  |                          |             | `2097152`                                |
+
+[anchor]: <> (anchors.envs.end.server)
+</p>
+</details>
+
+<details><summary>Tracing settings</summary>
+<p>
+[anchor]: <> (anchors.envs.start.tracing)
+
+| Variable                                     | Req&#x200B;uir&#x200B;ed | Description | Default value    |
+| -------------------------------------------- | ------------------------ | ----------- | ---------------- |
+| `INTERCHAIN_INDEXER__JAEGER__AGENT_ENDPOINT` |                          |             | `127.0.0.1:6831` |
+| `INTERCHAIN_INDEXER__JAEGER__ENABLED`        |                          |             | `false`          |
+| `INTERCHAIN_INDEXER__TRACING__ENABLED`       |                          |             | `true`           |
+| `INTERCHAIN_INDEXER__TRACING__FORMAT`        |                          |             | `default`        |
+
+[anchor]: <> (anchors.envs.end.tracing)
+</p>
+</details>
 
 ## Dev
 

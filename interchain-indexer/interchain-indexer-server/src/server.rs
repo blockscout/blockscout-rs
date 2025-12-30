@@ -128,12 +128,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let token_info_service = Arc::new(TokenInfoService::new(
         db.clone(),
         chains_providers.clone(),
-        settings.token_info,
+        settings.token_info.clone(),
     ));
 
-    let indexers =
-        spawn_configured_indexers(interchain_db.clone(), &bridges, &chains, &chains_providers)
-            .await?;
+    let indexers = spawn_configured_indexers(
+        interchain_db.clone(),
+        &bridges,
+        &chains,
+        &chains_providers,
+        &settings,
+    )
+    .await?;
 
     // let example = ExampleIndexer::new(
     //     db.clone(),

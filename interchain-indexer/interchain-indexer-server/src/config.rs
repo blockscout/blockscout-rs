@@ -406,7 +406,7 @@ mod tests {
         assert_eq!(config.bridge_id, 1);
         assert_eq!(config.name, "Test Bridge");
         assert_eq!(config.bridge_type, "lockmint");
-        assert_eq!(config.enabled, true);
+        assert!(config.enabled);
         assert_eq!(config.api_url, Some("https://api.example.com".to_string()));
         assert_eq!(config.ui_url, Some("https://ui.example.com".to_string()));
         assert_eq!(

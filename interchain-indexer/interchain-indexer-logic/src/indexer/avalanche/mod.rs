@@ -1,6 +1,7 @@
 pub mod abi;
 mod blockchain_id_resolver;
 pub mod consolidation;
+pub mod settings;
 pub mod types;
 
 use alloy::{
@@ -26,6 +27,7 @@ use tonic::async_trait;
 
 use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
+    avalanche::settings::AvalancheIndexerSettings,
     log_stream::LogStreamBuilder,
     message_buffer::{Config, Key, MessageBuffer},
 };
@@ -61,13 +63,16 @@ pub struct AvalancheIndexerConfig {
 }
 
 impl AvalancheIndexerConfig {
-    pub fn new(bridge_id: i32, chains: Vec<AvalancheChainConfig>) -> Self {
+    pub fn new(
+        bridge_id: i32,
+        chains: Vec<AvalancheChainConfig>,
+        settings: &AvalancheIndexerSettings,
+    ) -> Self {
         Self {
             bridge_id,
             chains,
-            poll_interval: Duration::from_secs(10),
-            // Make it an option for env config
-            batch_size: 1000,
+            poll_interval: settings.pull_interval_ms,
+            batch_size: settings.batch_size,
             tracked_chain_ids: None,
         }
     }
@@ -157,8 +162,8 @@ impl AvalancheIndexer {
             tracked_chain_ids,
         } = config;
 
-        let tracked_chain_ids: HashSet<i64> = tracked_chain_ids
-            .unwrap_or_else(|| chains.iter().map(|c| c.chain_id).collect());
+        let tracked_chain_ids: HashSet<i64> =
+            tracked_chain_ids.unwrap_or_else(|| chains.iter().map(|c| c.chain_id).collect());
 
         let data_api_network = std::env::var("AVALANCHE_DATA_API_NETWORK")
             .ok()

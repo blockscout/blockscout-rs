@@ -150,7 +150,7 @@ fn with_cursors<T>(
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Maximum entries in hot tier before forced offload
-    pub max_hot_entries: usize,
+    pub _max_hot_entries: usize,
     /// Time before entry moves from hot to cold
     pub hot_ttl: Duration,
     /// How often to run maintenance (offload + flush)
@@ -160,7 +160,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            max_hot_entries: 100_000,
+            _max_hot_entries: 100_000,
             hot_ttl: Duration::from_secs(10),
             maintenance_interval: Duration::from_millis(500),
         }
@@ -265,7 +265,7 @@ impl<T: Consolidate> MessageBuffer<T> {
 
     /// If hot tier exceeds capacity, runs maintenance to flush entries.
     async fn _maybe_run(&self) -> Result<()> {
-        if self.inner.len() > self.config.max_hot_entries {
+        if self.inner.len() > self.config._max_hot_entries {
             self.run().await?;
         }
         Ok(())
@@ -565,7 +565,7 @@ impl<T: Consolidate> MessageBuffer<T> {
             .map(|(key, expected_version)| {
                 let is_removed = self
                     .inner
-                    .remove_if(&key, |_, entry| entry.version == *expected_version)
+                    .remove_if(key, |_, entry| entry.version == *expected_version)
                     .is_some();
                 (key, is_removed)
             })
@@ -723,7 +723,7 @@ mod tests {
         let db = init_db(name).await;
         let db = InterchainDatabase::new(db.client());
         let config = Config {
-            max_hot_entries: usize::MAX,
+            _max_hot_entries: usize::MAX,
             hot_ttl: Duration::from_secs(60),
             maintenance_interval: Duration::from_secs(60),
         };
@@ -836,7 +836,7 @@ mod tests {
         let test_db = init_db("buffer_alter_cold_then_mutate").await;
         let db = InterchainDatabase::new(test_db.client());
         let config = Config {
-            max_hot_entries: usize::MAX,
+            _max_hot_entries: usize::MAX,
             hot_ttl: Duration::from_secs(60),
             maintenance_interval: Duration::from_secs(60),
         };
@@ -898,7 +898,7 @@ mod tests {
         let test_db = init_db("buffer_restore_created_at").await;
         let db = InterchainDatabase::new(test_db.client());
         let config = Config {
-            max_hot_entries: usize::MAX,
+            _max_hot_entries: usize::MAX,
             hot_ttl: Duration::from_secs(60),
             maintenance_interval: Duration::from_secs(60),
         };

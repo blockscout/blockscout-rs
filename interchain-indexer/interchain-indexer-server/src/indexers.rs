@@ -1,4 +1,4 @@
-use crate::{BridgeConfig, ChainConfig};
+use crate::{BridgeConfig, ChainConfig, Settings};
 use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};
 use interchain_indexer_logic::{
@@ -12,6 +12,7 @@ pub async fn spawn_configured_indexers(
     bridges: &[BridgeConfig],
     chains: &[ChainConfig],
     chain_providers: &HashMap<u64, DynProvider<Ethereum>>,
+    settings: &Settings,
 ) -> Result<Vec<Arc<dyn CrosschainIndexer>>> {
     let chain_lookup: HashMap<i64, ChainConfig> = chains
         .iter()
@@ -39,7 +40,11 @@ pub async fn spawn_configured_indexers(
                     continue;
                 }
 
-                let config = AvalancheIndexerConfig::new(bridge.bridge_id, configs);
+                let config = AvalancheIndexerConfig::new(
+                    bridge.bridge_id,
+                    configs,
+                    &settings.avalanche_indexer,
+                );
                 let indexer =
                     AvalancheIndexer::new(Arc::new(db.clone()), config).with_context(|| {
                         format!(

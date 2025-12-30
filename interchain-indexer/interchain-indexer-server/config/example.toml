@@ -1,7 +1,30 @@
-[database.connect]
-url = "postgres://postgres:postgres@localhost:5432/postgres"
+chains_config = "config/avalanche/chains.json"
+bridges_config = "config/avalanche/bridges.json"
 
-[metrics]
-enabled = true
-addr = "0.0.0.0:6060"
-route = "/metrics"
+[token_info]
+onchain_retry_interval = 10
+
+[token_info.blockscout_token_info]
+url = "https://contracts-info-test.k8s-dev.blockscout.com"
+retry_interval = 1
+
+[database.connect]
+url = "postgres://postgres:postgres@database:5433/blockscout"
+
+[example_indexer]
+fetch_interval = 1
+
+[database.connect_options]
+min_connections = 10
+max_connections = 20
+connect_timeout = 10
+acquire_timeout = 10
+
+[database]
+create_database = true
+run_migrations = true
+
+[api]
+default_page_size = 50
+max_page_size = 100
+use_pagination_token = true

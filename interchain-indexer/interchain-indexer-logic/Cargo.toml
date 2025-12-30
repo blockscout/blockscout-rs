@@ -18,7 +18,6 @@ blockscout-display-bytes = { workspace = true }
 bs58 = { workspace = true }
 chrono = { version = "0.4" }
 dashmap = { version = "6" }
-moka = { version = "0.12", features = ["future"] }
 ## Uncomment this if needed
 #ethabi = { workspace = true }
 #ethers-core = { workspace = true }
@@ -33,12 +32,13 @@ hex-literal = { version = "0.4" }
 interchain-indexer-entity = { workspace = true }
 interchain-indexer-proto = { workspace = true }
 itertools = { workspace = true }
-parking_lot = { workspace = true }
-rand = { workspace = true }
 #keccak-hash = { workspace = true }
 lazy_static = { workspace = true }
+moka = { version = "0.12", features = ["future"] }
+parking_lot = { workspace = true }
 #mismatch = { workspace = true }
 prometheus = { workspace = true }
+rand = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",

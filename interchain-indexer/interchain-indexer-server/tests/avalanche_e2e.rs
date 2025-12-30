@@ -46,7 +46,7 @@ fn decode_blockchain_id(native_id: &str) -> Vec<u8> {
 fn to_hex(bytes: &Option<Vec<u8>>) -> String {
     bytes
         .as_ref()
-        .map(|b| hex::encode_prefixed(b))
+        .map(hex::encode_prefixed)
         .unwrap_or_else(|| "None".to_string())
 }
 
@@ -101,7 +101,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
 
     let teleporter_address = "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf";
 
-    let chains = vec![
+    let chains = [
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
@@ -116,7 +116,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         },
     ];
 
-    let bridge_id = 1 as u64;
+    let bridge_id = 1_u64;
     let bridge_config = BridgeConfig {
         bridge_id: bridge_id as i32,
         name: "Test Bridge".into(),
@@ -181,17 +181,21 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
             chain_id: chain_id_src as i64,
             provider: provider_src,
             contract_address,
-            start_block: block_number_src as u64,
+            start_block: block_number_src,
         },
         AvalancheChainConfig {
             chain_id: chain_id_dest as i64,
             provider: provider_dest,
             contract_address,
-            start_block: block_number_dest as u64,
+            start_block: block_number_dest,
         },
     ];
 
-    let indexer_config = AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains);
+    let indexer_config = AvalancheIndexerConfig::new(
+        bridge_config.bridge_id,
+        avalanche_chains,
+        &Default::default(),
+    );
 
     let indexer =
         AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
@@ -349,7 +353,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
 
     let teleporter_address = "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf";
 
-    let chains = vec![
+    let chains = [
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
@@ -428,12 +432,16 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         chain_id: chain_id_dest as i64,
         provider: provider_dest,
         contract_address,
-        start_block: block_number_dest as u64,
+        start_block: block_number_dest,
     }];
 
-    let indexer_config = AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains)
-        .with_poll_interval(Duration::from_millis(200))
-        .with_batch_size(25);
+    let indexer_config = AvalancheIndexerConfig::new(
+        bridge_config.bridge_id,
+        avalanche_chains,
+        &Default::default(),
+    )
+    .with_poll_interval(Duration::from_millis(200))
+    .with_batch_size(25);
 
     let indexer =
         AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
@@ -514,7 +522,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
 
     let teleporter_address = "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf";
 
-    let chains = vec![
+    let chains = [
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
@@ -593,12 +601,16 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         chain_id: chain_id_src as i64,
         provider: provider_src,
         contract_address,
-        start_block: block_number_src as u64,
+        start_block: block_number_src,
     }];
 
-    let indexer_config = AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains)
-        .with_poll_interval(Duration::from_millis(200))
-        .with_batch_size(25);
+    let indexer_config = AvalancheIndexerConfig::new(
+        bridge_config.bridge_id,
+        avalanche_chains,
+        &Default::default(),
+    )
+    .with_poll_interval(Duration::from_millis(200))
+    .with_batch_size(25);
 
     let indexer =
         AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;

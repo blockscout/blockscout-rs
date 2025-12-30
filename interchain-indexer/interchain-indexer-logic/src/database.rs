@@ -217,9 +217,7 @@ impl InterchainDatabase {
         match avalanche_icm_blockchain_ids::Entity::insert(insert)
             .on_conflict(
                 OnConflict::column(avalanche_icm_blockchain_ids::Column::BlockchainId)
-                    .update_columns([
-                        avalanche_icm_blockchain_ids::Column::ChainId,
-                    ])
+                    .update_columns([avalanche_icm_blockchain_ids::Column::ChainId])
                     .value(
                         avalanche_icm_blockchain_ids::Column::UpdatedAt,
                         Expr::current_timestamp(),
