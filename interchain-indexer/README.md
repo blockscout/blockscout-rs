@@ -84,6 +84,7 @@ Expose the metrics port (default `6060`) when running in Docker (see docker-comp
 
 <details><summary>Server settings</summary>
 <p>
+
 [anchor]: <> (anchors.envs.start.server)
 
 | Variable                                                           | Req&#x200B;uir&#x200B;ed | Description | Default value                            |
@@ -103,11 +104,13 @@ Expose the metrics port (default `6060`) when running in Docker (see docker-comp
 | `INTERCHAIN_INDEXER__SERVER__HTTP__MAX_BODY_SIZE`                  |                          |             | `2097152`                                |
 
 [anchor]: <> (anchors.envs.end.server)
+
 </p>
 </details>
 
 <details><summary>Tracing settings</summary>
 <p>
+
 [anchor]: <> (anchors.envs.start.tracing)
 
 | Variable                                     | Req&#x200B;uir&#x200B;ed | Description | Default value    |
@@ -118,6 +121,7 @@ Expose the metrics port (default `6060`) when running in Docker (see docker-comp
 | `INTERCHAIN_INDEXER__TRACING__FORMAT`        |                          |             | `default`        |
 
 [anchor]: <> (anchors.envs.end.tracing)
+
 </p>
 </details>
 
