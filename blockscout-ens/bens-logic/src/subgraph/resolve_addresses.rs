@@ -30,6 +30,9 @@ pub async fn resolve_addresses(
             AddressResolveTechnique::Addr2Name => {
                 resolve_addr2name(pool, &protocols, &addresses).await?
             }
+            AddressResolveTechnique::PrimaryNameRecord => {
+                resolve_primary_name_record(pool, &protocols, &addresses).await?
+            }
         };
         result.extend(found_domains);
     }
@@ -71,7 +74,7 @@ async fn resolve_addr_reverse_cached(
 ) -> Result<Vec<DomainWithAddress>, DbErr> {
     let addr_reverse_hashes = addresses
         .iter()
-        .map(|addr| DomainName::addr_reverse(addr).id)
+        .map(|addr| DomainName::addr_reverse(addr).id().to_string())
         .collect::<Vec<String>>();
     let addr_reverse_domains =
         sql::AddrReverseNamesView::batch_search_addresses(pool, protocols, &addr_reverse_hashes)
@@ -81,12 +84,13 @@ async fn resolve_addr_reverse_cached(
         .into_iter()
         .filter_map(|row| {
             let addr = Address::from_str(&row.resolved_address).ok()?;
-            let addr_reverse_id = DomainName::addr_reverse(&addr).id;
+            let addr_reverse_id = DomainName::addr_reverse(&addr).id().to_string();
             if addr_reverse_id == row.reversed_domain_id {
                 Some(DomainWithAddress {
                     id: row.domain_id,
                     domain_name: row.name,
                     resolved_address: row.resolved_address,
+                    protocol_slug: row.protocol_slug,
                 })
             } else {
                 None
@@ -104,6 +108,15 @@ async fn resolve_addr2name(
 ) -> Result<Vec<DomainWithAddress>, DbErr> {
     let addresses_str: Vec<String> = addresses.iter().map(hex).collect();
     sql::Addr2NameTable::batch_search_addreses(pool, protocols, &addresses_str).await
+}
+
+async fn resolve_primary_name_record(
+    pool: &PgPool,
+    protocols: &NonEmpty<&Protocol>,
+    addresses: &[Address],
+) -> Result<Vec<DomainWithAddress>, DbErr> {
+    let addresses_str: Vec<String> = addresses.iter().map(hex).collect();
+    sql::PrimaryNameRecordTable::batch_search_addresses(pool, protocols, &addresses_str).await
 }
 
 // async fn resolve_addr_reverse(

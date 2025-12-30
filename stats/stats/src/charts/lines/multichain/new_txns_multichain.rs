@@ -1,9 +1,10 @@
-use std::{collections::HashSet, ops::Range};
+use std::ops::Range;
 
 use crate::{
-    ChartKey, ChartProperties, Named,
+    ChartProperties, Named,
     charts::db_interaction::read::QueryFullIndexerTimestampRange,
     data_source::{
+        UpdateContext,
         kinds::{
             data_manipulation::{
                 map::{MapParseTo, MapToString, StripExt},
@@ -17,11 +18,10 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
-    utils::sql_with_range_filter_opt,
+    utils::sql_with_range_and_multichain_filters,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -31,12 +31,11 @@ use sea_orm::{DbBackend, Statement};
 pub struct NewTxnsMultichainStatement;
 
 impl StatementFromRange for NewTxnsMultichainStatement {
-    fn get_statement(
+    fn get_statement_with_context(
+        cx: &UpdateContext<'_>,
         range: Option<Range<DateTime<Utc>>>,
-        _: &IndexerMigrations,
-        _: &HashSet<ChartKey>,
     ) -> Statement {
-        sql_with_range_filter_opt!(
+        sql_with_range_and_multichain_filters!(
             DbBackend::Postgres,
             r#"
                 SELECT
@@ -45,12 +44,14 @@ impl StatementFromRange for NewTxnsMultichainStatement {
                 FROM counters_global_imported as c
                 WHERE
                     c.daily_transactions_number IS NOT NULL
-                    {filter}
+                    {filter}{multichain_filter}
                 GROUP BY date
             "#,
             [],
             "c.date::timestamp",
-            range
+            range,
+            "c.chain_id",
+            cx.multichain_filter,
         )
     }
 }
@@ -126,6 +127,20 @@ mod tests {
                 ("2023-02-03", "49"),
                 ("2023-02-04", "60"),
             ],
+            None,
+        )
+        .await;
+
+        simple_test_chart_multichain::<NewTxnsMultichain>(
+            "update_new_txns_multichain",
+            vec![
+                ("2022-12-28", "44"),
+                ("2023-01-01", "7"),
+                ("2023-02-02", "22"),
+                ("2023-02-03", "42"),
+                ("2023-02-04", "40"),
+            ],
+            Some(vec![1, 3]),
         )
         .await;
     }
@@ -136,6 +151,14 @@ mod tests {
         simple_test_chart_multichain::<NewTxnsMultichainWeekly>(
             "update_new_txs_multichain_weekly",
             vec![("2022-12-26", "76"), ("2023-01-30", "134")],
+            None,
+        )
+        .await;
+
+        simple_test_chart_multichain::<NewTxnsMultichainWeekly>(
+            "update_new_txs_multichain_weekly",
+            vec![("2022-12-26", "14"), ("2023-01-30", "32")],
+            Some(vec![1]),
         )
         .await;
     }
@@ -150,6 +173,18 @@ mod tests {
                 ("2023-01-01", "10"),
                 ("2023-02-01", "134"),
             ],
+            None,
+        )
+        .await;
+
+        simple_test_chart_multichain::<NewTxnsMultichainMonthly>(
+            "update_new_txs_multichain_monthly",
+            vec![
+                ("2022-12-01", "22"),
+                ("2023-01-01", "3"),
+                ("2023-02-01", "30"),
+            ],
+            Some(vec![2]),
         )
         .await;
     }
@@ -160,6 +195,14 @@ mod tests {
         simple_test_chart_multichain::<NewTxnsMultichainYearly>(
             "update_new_txs_multichain_yearly",
             vec![("2022-01-01", "66"), ("2023-01-01", "144")],
+            None,
+        )
+        .await;
+
+        simple_test_chart_multichain::<NewTxnsMultichainYearly>(
+            "update_new_txs_multichain_yearly",
+            vec![("2022-01-01", "33"), ("2023-01-01", "76")],
+            Some(vec![3]),
         )
         .await;
     }

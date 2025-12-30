@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-prost =  { workspace = true }
-actix-prost-macros =  { workspace = true }
-actix-web =  { workspace = true }
+actix-web = { workspace = true }
+actix-prost = { workspace = true }
+actix-prost-macros = { workspace = true }
+tonic-prost = { workspace = true }
 prost =  { workspace = true }
 serde =  { workspace = true }
 serde_with =  { workspace = true }
@@ -18,3 +19,4 @@ tonic =  { workspace = true }
 actix-prost-build =  { workspace = true }
 prost-build = { workspace = true }
 tonic-build = { workspace = true}
+tonic-prost-build = { workspace = true}

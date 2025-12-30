@@ -1,13 +1,11 @@
 use super::new_txns_multichain::NewTxnsMultichainStatement;
 use crate::{chart_prelude::*, lines::NEW_TXNS_WINDOW_RANGE};
-use std::collections::HashSet;
 
 impl_db_choice!(NewTxnsMultichainStatement, UsePrimaryDB);
 
 fn new_txns_multichain_window_statement(
+    cx: &UpdateContext<'_>,
     update_day: NaiveDate,
-    completed_migrations: &IndexerMigrations,
-    enabled_update_charts_recursive: &HashSet<ChartKey>,
 ) -> Statement {
     // `update_day` is not included because the data would
     // be incomplete.
@@ -16,11 +14,7 @@ fn new_txns_multichain_window_statement(
             NEW_TXNS_WINDOW_RANGE,
         )),
     )..day_start(&update_day);
-    NewTxnsMultichainStatement::get_statement(
-        Some(window),
-        completed_migrations,
-        enabled_update_charts_recursive,
-    )
+    NewTxnsMultichainStatement::get_statement_with_context(cx, Some(window))
 }
 
 pub struct NewTxnsMultichainWindowQuery;
@@ -33,11 +27,7 @@ impl RemoteQueryBehaviour for NewTxnsMultichainWindowQuery {
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<NaiveDate, String>>, ChartError> {
         let update_day = cx.time.date_naive();
-        let statement = new_txns_multichain_window_statement(
-            update_day,
-            &cx.indexer_applied_migrations,
-            &cx.enabled_update_charts_recursive,
-        );
+        let statement = new_txns_multichain_window_statement(cx, update_day);
         find_all_points::<_, DateValue<String>>(NewTxnsMultichainStatement::get_db(cx)?, statement)
             .await
     }
@@ -113,6 +103,7 @@ mod tests {
         let mut parameters = UpdateParameters {
             stats_db: &db,
             is_multichain_mode: true,
+            multichain_filter: None,
             indexer_db: &indexer,
             second_indexer_db: None,
             indexer_applied_migrations: IndexerMigrations::latest(),

@@ -24,6 +24,7 @@ pub struct UpdateService {
     indexer_db: Arc<DatabaseConnection>,
     second_indexer_db: Option<Arc<DatabaseConnection>>,
     is_multichain_mode: bool,
+    multichain_filter: Option<Vec<u64>>,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
     init_update_tracker: InitialUpdateTracker,
@@ -59,6 +60,7 @@ impl UpdateService {
         charts: Arc<RuntimeSetup>,
         status_listener: Option<IndexingStatusListener>,
         is_multichain_mode: bool,
+        multichain_filter: Option<Vec<u64>>,
     ) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
         let init_update_tracker = Self::initialize_update_tracker(&charts);
@@ -67,6 +69,7 @@ impl UpdateService {
             indexer_db,
             second_indexer_db,
             is_multichain_mode,
+            multichain_filter,
             charts,
             status_listener,
             init_update_tracker,
@@ -419,6 +422,7 @@ impl UpdateService {
         let update_parameters = UpdateParameters {
             stats_db: &self.db,
             is_multichain_mode: self.is_multichain_mode,
+            multichain_filter: self.multichain_filter.clone(),
             indexer_db: &self.indexer_db,
             second_indexer_db: self.second_indexer_db.as_deref(),
             indexer_applied_migrations: active_migrations,
@@ -446,12 +450,17 @@ impl UpdateService {
         }
     }
 
+    /// `update_all=true` will ignore `chart_names` and update all enabled charts
     pub async fn handle_update_request(
         self: &Arc<Self>,
-        chart_names: Vec<String>,
+        mut chart_names: Vec<String>,
+        update_all: bool,
         from: Option<NaiveDate>,
         update_later: bool,
     ) -> Result<OnDemandReupdateAccepted, OnDemandReupdateError> {
+        if update_all {
+            chart_names = self.charts.charts_info.keys().cloned().collect();
+        }
         let (accepted_keys, accepted_names, rejections) =
             self.split_update_request_input(chart_names);
         if accepted_keys.is_empty() {

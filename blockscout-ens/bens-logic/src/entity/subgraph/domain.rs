@@ -27,6 +27,7 @@ pub struct DetailedDomain {
     pub protocol_slug: String,
     #[sqlx(default)]
     pub other_addresses: sqlx::types::Json<HashMap<String, String>>,
+    pub token_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, sqlx::FromRow)]
@@ -80,6 +81,7 @@ pub struct DomainWithAddress {
     pub id: String,
     pub domain_name: String,
     pub resolved_address: String,
+    pub protocol_slug: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
@@ -95,6 +97,7 @@ pub struct AddrReverseDomainWithActualName {
     pub reversed_domain_id: String,
     pub resolved_address: String,
     pub name: String,
+    pub protocol_slug: String,
 }
 
 impl From<DetailedDomain> for Domain {

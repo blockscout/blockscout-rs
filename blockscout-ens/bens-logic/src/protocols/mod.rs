@@ -2,8 +2,8 @@ mod domain_name;
 pub mod hash_name;
 mod protocoler;
 
-pub use domain_name::{DomainName, DomainNameOnProtocol};
-pub use hash_name::domain_id;
+pub use domain_name::{CleanName, DomainName, DomainNameOnProtocol};
+pub use hash_name::{hash_ens_domain_name, hash_infinity_domain_name};
 pub use protocoler::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -14,6 +14,8 @@ pub enum ProtocolError {
     InvalidName { name: String, reason: String },
     #[error("protocol not found: {0}")]
     ProtocolNotFound(String),
+    #[error("too many protocols. specified {specified} but maximum is {max}")]
+    TooManyProtocols { specified: usize, max: usize },
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
 }

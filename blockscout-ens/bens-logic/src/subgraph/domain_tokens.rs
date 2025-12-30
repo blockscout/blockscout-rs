@@ -1,7 +1,10 @@
 use super::{DomainToken, DomainTokenType};
 use crate::{
     entity::subgraph::domain::DetailedDomain,
-    protocols::{D3ConnectProtocol, DomainNameOnProtocol, EnsLikeProtocol, ProtocolSpecific},
+    protocols::{
+        D3ConnectProtocol, DomainNameOnProtocol, EnsLikeProtocol, InfinityNameProtocol,
+        ProtocolSpecific,
+    },
 };
 use alloy::primitives::Address;
 use anyhow::Context;
@@ -21,26 +24,23 @@ pub fn extract_tokens_from_domain(
     domain: &DetailedDomain,
     name: &DomainNameOnProtocol<'_>,
 ) -> Result<Vec<DomainToken>, anyhow::Error> {
-    let mut tokens = vec![];
-
     match &name.deployed_protocol.protocol.info.protocol_specific {
-        ProtocolSpecific::EnsLike(ens_like) => {
-            extract_tokens_for_ens_like(&mut tokens, domain, name, ens_like)?;
-        }
+        ProtocolSpecific::EnsLike(ens_like) => extract_tokens_for_ens_like(domain, name, ens_like),
         ProtocolSpecific::D3Connect(d3_connect) => {
-            extract_tokens_for_d3_connect(&mut tokens, domain, name, d3_connect)?;
+            extract_tokens_for_d3_connect(domain, name, d3_connect)
+        }
+        ProtocolSpecific::InfinityName(infinity_name) => {
+            extract_tokens_for_infinity_name(domain, name, infinity_name)
         }
     }
-
-    Ok(tokens)
 }
 
 fn extract_tokens_for_ens_like(
-    tokens: &mut Vec<DomainToken>,
     domain: &DetailedDomain,
     name: &DomainNameOnProtocol<'_>,
     ens_like: &EnsLikeProtocol,
-) -> Result<(), anyhow::Error> {
+) -> Result<Vec<DomainToken>, anyhow::Error> {
+    let mut tokens = vec![];
     if let Some(contract) = ens_like.native_token_contract {
         let is_second_level_domain = name.inner.level() == 2;
         let is_native_domain = name.tld_is_native();
@@ -72,23 +72,36 @@ fn extract_tokens_for_ens_like(
         });
     };
 
-    Ok(())
+    Ok(tokens)
 }
 
 fn extract_tokens_for_d3_connect(
-    tokens: &mut Vec<DomainToken>,
     domain: &DetailedDomain,
     _name: &DomainNameOnProtocol<'_>,
     d3_connect: &D3ConnectProtocol,
-) -> Result<(), anyhow::Error> {
+) -> Result<Vec<DomainToken>, anyhow::Error> {
     let id = token_id(&domain.id)?;
     let contract = d3_connect.native_token_contract;
-    tokens.push(DomainToken {
+    Ok(vec![DomainToken {
         id,
         contract,
         _type: DomainTokenType::Native,
-    });
-    Ok(())
+    }])
+}
+
+fn extract_tokens_for_infinity_name(
+    domain: &DetailedDomain,
+    _name: &DomainNameOnProtocol<'_>,
+    infinity_name: &InfinityNameProtocol,
+) -> Result<Vec<DomainToken>, anyhow::Error> {
+    match domain.token_id.clone() {
+        Some(token_id) => Ok(vec![DomainToken {
+            id: token_id,
+            contract: infinity_name.main_contract,
+            _type: DomainTokenType::Native,
+        }]),
+        None => Ok(vec![]),
+    }
 }
 
 fn token_id(hexed_id: &str) -> Result<String, anyhow::Error> {
@@ -149,7 +162,7 @@ mod tests {
             // Native contract provided, but domain is third level
             (
                 domain(
-                    "this_is_third_level_domain.levvv.eth",
+                    "this-is-third-level-domain.levvv.eth",
                     "0x0200",
                     "0x0100",
                     owner,
@@ -172,7 +185,7 @@ mod tests {
             // Native contract provided, wrapped owner provided, but third level domain, so only wrapped token
             (
                 domain(
-                    "this_is_third_level_domain.levvv.eth",
+                    "this-is-third-level-domain.levvv.eth",
                     "0x0200",
                     "0x0100",
                     wrapped_contract,
@@ -224,6 +237,7 @@ mod tests {
             let deployed_protocol = DeployedProtocol {
                 protocol: &protocol,
                 deployment_network: &Network {
+                    network_id: 1,
                     blockscout_client: Arc::new(BlockscoutClient::new("http://localhost:8545".parse().unwrap(), 1, 1)),
                     rpc_url: None,
                     use_protocols: vec![],
@@ -233,7 +247,7 @@ mod tests {
             let tokens = extract_tokens_from_domain(&domain, &name)
                 .expect("failed to extract tokens from domain");
 
-            assert_eq!(tokens, expected_tokens, "failed for domain: {}", name.inner.name);
+            assert_eq!(tokens, expected_tokens, "failed for domain: {}", name.inner.name());
         }
     }
 }

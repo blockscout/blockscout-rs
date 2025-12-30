@@ -12,7 +12,7 @@ pub fn list_domain_events_from_inner(
     let sort = event_sort_from_inner(&inner.sort)?;
     let order = order_direction_from_inner(inner.order());
     Ok(GetDomainHistoryInput {
-        network_id: inner.chain_id,
+        network_id: Some(inner.chain_id),
         name: inner.name,
         sort,
         order,
@@ -22,7 +22,7 @@ pub fn list_domain_events_from_inner(
 
 pub fn event_from_logic(
     e: DomainEvent,
-    chain_id: i64,
+    chain_id: Option<i64>,
 ) -> Result<proto::DomainEvent, ConversionError> {
     let from_address = Some(address_from_logic(
         &e.from_address,

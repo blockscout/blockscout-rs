@@ -105,6 +105,12 @@ mod get_smart_contract {
         pub deployed_bytecode: Option<Vec<u8>>,
         #[serde_as(as = "Option<blockscout_display_bytes::serde_as::Hex>")]
         pub creation_bytecode: Option<Vec<u8>>,
+        #[serde(default)]
+        pub is_verified: bool,
+        #[serde(default)]
+        pub is_fully_verified: bool,
+        #[serde(default)]
+        pub is_partially_verified: bool,
     }
 }
 
@@ -126,7 +132,7 @@ mod get_transaction {
         }
 
         fn path(&self) -> String {
-            format!("api/v2/transactions/{}", self.hash.to_hex())
+            format!("/api/v2/transactions/{}", self.hash.to_hex())
         }
     }
 

@@ -22,10 +22,23 @@ pub trait StatementFromRange: DatabaseChoice {
     /// `completed_migrations` and `enabled_update_charts_recursive`
     /// can be used for selecting more optimal query
     fn get_statement(
+        _range: Option<Range<DateTime<Utc>>>,
+        _completed_migrations: &IndexerMigrations,
+        _enabled_update_charts_recursive: &HashSet<ChartKey>,
+    ) -> Statement {
+        panic!("not implemented for this statement")
+    }
+
+    fn get_statement_with_context(
+        cx: &UpdateContext<'_>,
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &IndexerMigrations,
-        enabled_update_charts_recursive: &HashSet<ChartKey>,
-    ) -> Statement;
+    ) -> Statement {
+        Self::get_statement(
+            range,
+            &cx.indexer_applied_migrations,
+            &cx.enabled_update_charts_recursive,
+        )
+    }
 }
 
 /// Pull data from remote (blockscout) db according to statement
@@ -108,9 +121,5 @@ where
     // to not overcomplicate the queries
     let query_range =
         data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
-    Ok(S::get_statement(
-        query_range,
-        &cx.indexer_applied_migrations,
-        &cx.enabled_update_charts_recursive,
-    ))
+    Ok(S::get_statement_with_context(cx, query_range))
 }

@@ -7,6 +7,8 @@ db-user := env_var_or_default('DB_USER', "graph-node")
 db-password := env_var_or_default('DB_PASSWORD', "let-me-in")
 db-name := env_var_or_default('DB_NAME', "graph-node")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+export SQLX_OFFLINE := "true"
+
 
 docker-name := env_var_or_default('DOCKER_NAME', "bens-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
@@ -25,7 +27,10 @@ stop-postgres:
     docker rm -f {{docker-name}}
 
 graph-node-start:
-    docker-compose --file graph-node/docker-compose.yml up -d
+    # Try docker compose (V2) first, fallback to docker-compose (V1)
+    @command -v docker > /dev/null && docker compose version > /dev/null 2>&1 && \
+        docker compose --file graph-node/docker-compose.yml up -d || \
+        docker-compose --file graph-node/docker-compose.yml up -d
     sleep 6
     ./graph-node/rainbow.small.sh
 
@@ -33,7 +38,10 @@ graph-node-clean:
     rm -rf graph-node/data
 
 graph-node-stop:
-    docker-compose --file graph-node/docker-compose.yml down
+    # Try docker compose (V2) first, fallback to docker-compose (V1)
+    @command -v docker > /dev/null && docker compose version > /dev/null 2>&1 && \
+        docker compose --file graph-node/docker-compose.yml down || \
+        docker-compose --file graph-node/docker-compose.yml down
 
 deploy-subgraph *args:
     (cd graph-node/deployer && python3 deployer.py {{args}})
@@ -61,3 +69,12 @@ run:
 
 run-dev:
     dotenv -e .env.dev -- just run
+
+gen-swagger-v3:
+    python3 bens-proto/convert-swagger-v2-to-v3.py --service-name bens --swagger-dir=bens-proto/swagger
+
+check-swagger-v3:
+    python3 bens-proto/convert-swagger-v2-to-v3.py --service-name bens --swagger-dir=bens-proto/swagger --validate-only
+
+check-envs:
+    cargo run --bin check-envs

@@ -87,6 +87,7 @@ pub async fn stats(
             charts.clone(),
             status_listener,
             settings.multichain_mode,
+            settings.multichain_filter,
         )
         .await?,
     );

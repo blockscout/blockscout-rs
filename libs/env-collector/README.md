@@ -16,15 +16,24 @@ This is a simple tool to collect possible environment variables from `Settings` 
     ```rust
     // check-envs.rs
     use <path_to_settings>::Settings;
-    use env_collector::{run_env_collector_cli, PrefixFilter};
+    use env_collector::{run_env_collector_cli, EnvCollectorSettingsBuilder, PrefixFilter};
     
     fn main() {
         run_env_collector_cli::<Settings>(
-            "<SERVICE_NAME_PREFIX>",
-            "README.md",
-            "<PATH TO .TOML/.JSON EXAMPLE CONFIG>",
-            PrefixFilter::blacklist(&["<ENV_PREFIX_TO_IGNORE>"]),
-            Some("some_postfix"),
+            EnvCollectorSettingsBuilder::default()
+                .service_name("<SERVICE_NAME_PREFIX>")
+                .markdown_path("README.md")
+                .config_path("<PATH TO .TOML/.JSON EXAMPLE CONFIG>")
+                .vars_filter(PrefixFilter::blacklist(&[
+                    "<ENV_PREFIX_TO_IGNORE>",
+                    "<SERVICE_NAME>__SERVER",
+                    "<SERVICE_NAME>__JAEGER",
+                    "<SERVICE_NAME>__METRICS",
+                    "<SERVICE_NAME>__TRACING"
+                ]))
+                .anchor_postfix(Some("some_postfix".to_string()))
+                .build()
+                .expect("failed to build env collector settings"),
         );
     }
     ```
@@ -37,24 +46,25 @@ This is a simple tool to collect possible environment variables from `Settings` 
     [anchor]: <> (anchors.envs.end.some_postfix)
     ```
 
-4. (Optional) In your `justfile` add new command to run `check-envs.rs`:
+4. (Optional) In your `justfile` add new commands to run `check-envs.rs`:
 
     ```just
     # justfile
-    check-envs:
-        cargo run --bin check-envs
+    check-envs *args:
+        cargo run --bin env-docs-generation -- --validate-only {{args}}
+
+    generate-envs *args:
+        cargo run --bin env-docs-generation -- {{args}}
     ```
 
-5. Run command `just check-envs` to generate ENVs table in `README.md` file.
+5. Run command `just generate-envs` (or `cargo run --bin env-docs-generation`) to generate ENVs table in `README.md` file.
 
 6. Add github action to run this binary on every push to validate ENVs table in `README.md` file:    
     ```yaml
     [... other steps of `test` job ...]
     
-    - name: ENVs in doc tests
-      run: cargo run --bin check-envs
-      env:
-        VALIDATE_ONLY: true
+    - name: Verify ENVs in README
+      run: cargo run --bin check-envs -- --validate-only
     
     [... other steps of `test` job ...]
       ```

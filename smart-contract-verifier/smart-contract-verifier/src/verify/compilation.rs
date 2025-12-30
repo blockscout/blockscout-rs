@@ -231,7 +231,7 @@ fn append_cbor_auxdata(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethers_core::types::Bytes;
+    use blockscout_display_bytes::Bytes;
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
     use verification_common::verifier_alliance;

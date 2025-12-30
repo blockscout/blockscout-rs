@@ -21,7 +21,7 @@ use proxy_verifier_proto::blockscout::proxy_verifier::v1::{
 use std::collections::BTreeMap;
 use tonic::{Response, Status};
 
-pub(crate) const SOLIDITY_EVM_VERSIONS: [&str; 12] = [
+pub(crate) const SOLIDITY_EVM_VERSIONS: [&str; 15] = [
     "homestead",
     "tangerineWhistle",
     "spuriousDragon",
@@ -33,10 +33,13 @@ pub(crate) const SOLIDITY_EVM_VERSIONS: [&str; 12] = [
     "london",
     "paris",
     "shanghai",
+    "cancun",
+    "prague",
+    "osaka",
     "default",
 ];
 
-pub(crate) const VYPER_EVM_VERSIONS: [&str; 8] = [
+pub(crate) const VYPER_EVM_VERSIONS: [&str; 11] = [
     "byzantium",
     "constantinople",
     "petersburg",
@@ -44,6 +47,9 @@ pub(crate) const VYPER_EVM_VERSIONS: [&str; 8] = [
     "berlin",
     "paris",
     "shanghai",
+    "cancun",
+    "prague",
+    "osaka",
     "default",
 ];
 
@@ -233,6 +239,28 @@ fn process_results_response(
                 message: err.to_string(),
                 status: contract_validation_result::Status::InternalError.into(),
             },
+            Err(proxy_verifier_logic::Error::AlreadyPartiallyVerifiedContract(url)) => {
+                let message = format!(
+                    "Your code is valid and verifies this contract (partial match). However, this contract is already partially verified and can only be reverified with a full (exact) match [{}].",
+                    // without that replacement on UI the link is broken on multiple lines by symbol '-'
+                    url.replace('-', "-\u{2060}")
+                );
+                ContractVerificationResult {
+                    message,
+                    status: contract_verification_result::Status::Failure.into(),
+                }
+            }
+            Err(proxy_verifier_logic::Error::AlreadyFullyVerifiedContract(url)) => {
+                let message = format!(
+                    "This contract is already fully verified (exact match) and cannot be reverified [{}].",
+                    // without that replacement on UI the link is broken on multiple lines by symbol '-'
+                    url.replace('-', "-\u{2060}")
+                );
+                ContractVerificationResult {
+                    message,
+                    status: contract_verification_result::Status::Failure.into(),
+                }
+            }
             Err(err) => ContractVerificationResult {
                 message: err.to_string(),
                 status: contract_verification_result::Status::Failure.into(),

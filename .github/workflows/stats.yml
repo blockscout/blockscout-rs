@@ -51,6 +51,17 @@ jobs:
         with:
           working-directory: stats
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
       - name: Set Swap Space
         id: swapfile
         uses: pierotofy/set-swap-space@master
@@ -62,10 +73,8 @@ jobs:
         if: steps.swapfile.outcome == 'success'
         run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features --jobs $JOBS
 
-      - name: ENVs in documentation
-        run: cargo run --bin env-docs-generation
-        env:
-          VALIDATE_ONLY: true
+      - name: Verify ENVs in README.md
+        run: cargo run --bin env-docs-generation -- --validate-only
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins --jobs $JOBS -- --nocapture
@@ -78,6 +87,7 @@ jobs:
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: steps.build.outcome == 'success'
+
 
       - name: DB tests
         run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored

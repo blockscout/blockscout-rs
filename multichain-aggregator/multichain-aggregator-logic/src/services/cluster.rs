@@ -6,7 +6,8 @@ use crate::{
     error::{ParseError, ServiceError},
     repository::{
         address_token_balances::{self, ListAddressTokensPageToken, ListTokenHoldersPageToken},
-        addresses, block_ranges, chains, hashes, interop_message_transfers, interop_messages,
+        addresses::{self, ListAddressUpdatesPageToken},
+        block_ranges, chains, hashes, interop_message_transfers, interop_messages,
         tokens::{self, ListClusterTokensPageToken},
     },
     services::{
@@ -14,19 +15,19 @@ use crate::{
         coin_price::{CoinPriceCache, try_fetch_coin_price},
         dapp_search,
         macros::{maybe_cache_lookup, preload_domain_info},
-        quick_search::{self, SearchContext},
+        quick_search::{self, SearchContext, SearchTerm},
     },
     types::{
         ChainId,
         address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
-        addresses::{AggregatedAddressInfo, ChainAddressInfo},
+        addresses::{AddressUpdate, AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
         domains::{Domain, DomainInfo, ProtocolInfo},
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
-        search_results::QuickSearchResult,
+        search_results::{QuickSearchResult, Redirect},
         tokens::{AggregatedToken, TokenType},
     },
 };
@@ -114,6 +115,15 @@ impl Cluster {
             return Err(ServiceError::InvalidClusterChainId(chain_id));
         }
         Ok(())
+    }
+
+    pub fn search_context(&self, is_aggregated: bool) -> SearchContext<'_> {
+        SearchContext {
+            cluster: self,
+            db: Arc::new(self.db.clone()),
+            domain_primary_chain_id: self.domain_primary_chain_id,
+            is_aggregated,
+        }
     }
 
     /// If `chain_ids` is empty, then cluster will include all active chains.
@@ -576,7 +586,7 @@ impl Cluster {
             // 3. Otherwise, fallback to a contract name search
             // TODO: support joint paginated search for domain names without TLD and contract names;
             // we need to first handle all pages for domains and then switch to contract names
-            if let Ok(address) = alloy_primitives::Address::from_str(&query) {
+            if let Some(address) = SearchTerm::try_parse_address(&query) {
                 (vec![address], None)
             } else if domain_name_with_tld_regex().is_match(&query) {
                 let domains = self
@@ -849,12 +859,7 @@ impl Cluster {
         is_aggregated: bool,
         unlimited_per_chain: bool,
     ) -> Result<QuickSearchResult, ServiceError> {
-        let context = SearchContext {
-            cluster: self,
-            db: Arc::new(self.db.clone()),
-            domain_primary_chain_id: self.domain_primary_chain_id,
-            is_aggregated,
-        };
+        let context = self.search_context(is_aggregated);
         let result = quick_search::quick_search(
             query,
             &self.quick_search_chains,
@@ -863,6 +868,33 @@ impl Cluster {
         )
         .await?;
         Ok(result)
+    }
+
+    pub async fn check_redirect(&self, query: &str) -> Result<Option<Redirect>, ServiceError> {
+        let context = self.search_context(false);
+        let result = quick_search::check_redirect(query, &context).await?;
+        Ok(result)
+    }
+
+    pub async fn list_address_updates(
+        &self,
+        chain_ids: Vec<ChainId>,
+        is_contract: Option<bool>,
+        page_size: u64,
+        page_token: Option<ListAddressUpdatesPageToken>,
+    ) -> Result<(Vec<AddressUpdate>, Option<ListAddressUpdatesPageToken>), ServiceError> {
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+
+        let (updates, next_page_token) = addresses::list_address_updates(
+            &self.db,
+            chain_ids,
+            is_contract,
+            page_size,
+            page_token,
+        )
+        .await?;
+
+        Ok((updates, next_page_token))
     }
 }
 

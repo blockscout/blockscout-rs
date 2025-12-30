@@ -18,7 +18,7 @@ impl StatementFromRange for NewAccountAbstractionWalletsStatement {
         // All transactions from the beginning must be considered to calculate new wallets correctly.
         // E.g. if a wallet was first active both before `range.start()` and within the range,
         // we don't want to count it within the range (as it's not a *new* wallet).
-        let range = range.map(|r| (min_timestamp..r.end));
+        let range = range.map(|r| min_timestamp..r.end);
 
         sql_with_range_filter_opt!(
             DbBackend::Postgres,

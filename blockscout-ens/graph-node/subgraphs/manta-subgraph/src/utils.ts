@@ -34,6 +34,8 @@ export function createEventID(event: ethereum.Event): string {
     .concat("-")
     .concat(event.transaction.index.toString())
     .concat("-")
+    .concat(event.logIndex.toString())
+    .concat("-")
     .concat(event.transactionLogIndex.toString());
 }
 
@@ -80,6 +82,8 @@ export function createOrLoadDomain(node: string): Domain {
   let domain = Domain.load(node);
   if (domain == null) {
     domain = new Domain(node);
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
     domain.save();
   }
 

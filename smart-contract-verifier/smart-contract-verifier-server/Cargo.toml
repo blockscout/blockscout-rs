@@ -10,6 +10,7 @@ smart-contract-verifier = { workspace = true }
 smart-contract-verifier-proto = { workspace = true }
 
 actix-web = { workspace = true }
+alloy-json-abi = { workspace = true, features = ["serde_json"] }
 amplify = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -17,8 +18,6 @@ blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true }
 bytes = { workspace = true }
 cron = { workspace = true }
-ethers-core = { workspace = true }
-ethers-solc = { workspace = true }
 foundry-compilers = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }
@@ -36,9 +35,9 @@ verification-common = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true , features = ["test-server"]}
-ethabi = { workspace = true }
-ethers-solc = { workspace = true, features = ["svm-solc"] }
+foundry-compilers = { workspace = true, features = ["svm-solc"] }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
+semver = { workspace = true }
 serde_path_to_error = { workspace = true }
 tempfile = { workspace = true }

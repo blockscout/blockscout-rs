@@ -93,7 +93,7 @@ pub trait IndexerLogic {
         log: &Log,
     ) -> Option<sol_types::Result<T>> {
         if log.address() == entry_point && log.topic0() == Some(&T::SIGNATURE_HASH) {
-            Some(T::decode_log(&log.inner, true).map(|l| l.data))
+            Some(T::decode_log_validate(&log.inner).map(|l| l.data))
         } else {
             None
         }
@@ -485,7 +485,7 @@ mod tests {
         for response in load_test_responses(test_name) {
             mock.push_success(&response);
         }
-        ProviderBuilder::new().on_mocked_client(mock)
+        ProviderBuilder::new().connect_mocked_client(mock)
     }
 
     #[tokio::test]

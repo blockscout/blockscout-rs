@@ -1,0 +1,9 @@
+{
+  "base-mainnet": {
+    "InfinityNameUpgradeable": {
+      "address": "0x86f6d95E688A5953074C0aBCb0d9d930837E528E",
+      "startBlock": 37009868
+    }
+  }
+}
+

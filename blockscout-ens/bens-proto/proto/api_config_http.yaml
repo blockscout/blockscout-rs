@@ -3,6 +3,30 @@ config_version: 3
 
 http:
   rules:
+
+    #################### MultichainNames ####################
+    - selector: blockscout.bens.v1.MultichainDomains.GetDomainNameMultichain
+      get: /api/v1/domains/{name}
+
+    - selector: blockscout.bens.v1.MultichainDomains.ListDomainEventsMultichain
+      get: /api/v1/domains/{name}/events
+
+    - selector: blockscout.bens.v1.MultichainDomains.LookupDomainNameMultichain
+      get: /api/v1/domains:lookup
+
+    - selector: blockscout.bens.v1.MultichainDomains.LookupAddressMultichain
+      get: /api/v1/addresses:lookup
+
+    - selector: blockscout.bens.v1.MultichainDomains.GetAddressMultichain
+      get: /api/v1/addresses/{address}
+
+    - selector: blockscout.bens.v1.MultichainDomains.BatchResolveAddressesMultichain
+      post: /api/v1/addresses:batch-resolve
+      body: "*"
+
+    - selector: blockscout.bens.v1.MultichainDomains.GetMultichainProtocols
+      get: /api/v1/protocols
+
     #################### DomainsExtractor ####################
     - selector: blockscout.bens.v1.DomainsExtractor.GetDomain
       get: /api/v1/{chain_id}/domains/{name}

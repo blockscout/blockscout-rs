@@ -7,7 +7,7 @@ import subprocess
 import sys
 import glob
 
-DEFAULT_PROD_IFPS_URL = 'http://ipfs-backup.node.blockscout.com'
+DEFAULT_PROD_IFPS_URL = 'http://ipfs.node.blockscout.com'
 DEFAULT_IPFS_URL = "http://127.0.0.1:5001"
 
 
@@ -21,6 +21,7 @@ def parse_args():
                         type=str, default='v0.0.1', help="Version of the subgraph to deploy (default: v0.0.1)")
     parser.add_argument('--graph-node-url', type=str, default="http://127.0.0.1:8020", )
     parser.add_argument('--ipfs-url', type=str, default=None)
+    parser.add_argument('-y', '--yes', action='store_true', help="Answer yes to all prompts (default: false)")
     return parser.parse_args()
 
 
@@ -107,7 +108,10 @@ def deploy_subgraph(protocol, args):
         exec_on_shell(f'yarn --cwd {subgraph_path} graph create --node {graph_node_url} {subgraph_name}')
 
         if args.prod:
-            inpt = input('Are you sure you want to deploy to production? (y/n): ')
+            if args.yes:
+                inpt = 'y'
+            else:
+                inpt = input('Are you sure you want to deploy to production? (y/n): ')
             if inpt.lower() != 'y':
                 return error('Aborted deployment')
 

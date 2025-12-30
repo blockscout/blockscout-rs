@@ -26,7 +26,6 @@ impl ClusterExplorer {
         }
     }
 
-    #[allow(clippy::result_large_err)]
     pub fn try_get_cluster(&self, name: &str) -> Result<&Cluster, Status> {
         self.clusters
             .get(name)
@@ -350,9 +349,25 @@ impl ClusterExplorerService for ClusterExplorer {
             result.try_into().map_err(ServiceError::from)?,
         ))
     }
+
+    async fn check_redirect(
+        &self,
+        request: Request<CheckRedirectRequest>,
+    ) -> Result<Response<CheckRedirectResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+
+        let redirect = cluster
+            .check_redirect(&inner.q)
+            .await?
+            .map(|r| r.into())
+            .unwrap_or_default();
+
+        Ok(Response::new(redirect))
+    }
 }
 
-#[allow(clippy::result_large_err)]
 fn parse_token_types(types: Option<String>) -> Result<Vec<TokenType>, Status> {
     let types = if let Some(types) = types {
         parse_map_result(&types, |v| {

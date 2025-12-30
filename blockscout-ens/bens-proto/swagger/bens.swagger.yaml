@@ -1,20 +1,316 @@
 swagger: "2.0"
 info:
   title: Blockscout ENS
-  version: 1.3.0
+  version: 1.5.0
   contact:
     name: Blockscout
     url: https://blockscout.com
     email: support@blockscout.com
 tags:
   - name: DomainsExtractor
+  - name: MultichainDomains
   - name: Health
 host: bens.services.blockscout.com
+schemes:
+  - https
 consumes:
   - application/json
 produces:
   - application/json
 paths:
+  /api/v1/addresses/{address}:
+    get:
+      summary: Get detailed information about main address of requested name
+      operationId: MultichainDomains_GetAddressMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocols
+          description: comma separated list of protocol ids. Default is ENS protocol only
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainDomains
+  /api/v1/addresses:batch-resolve:
+    post:
+      summary: Perform batch resolving of list of addresses to names for blockscout backend requests
+      operationId: MultichainDomains_BatchResolveAddressesMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchResolveAddressNamesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1BatchResolveAddressesMultichainRequest'
+      tags:
+        - MultichainDomains
+  /api/v1/addresses:lookup:
+    get:
+      summary: Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+      operationId: MultichainDomains_LookupAddressMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          description: Address of EOA or contract
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocols
+          description: comma separated list of protocol ids. Default is ENS protocol only
+          in: query
+          required: false
+          type: string
+        - name: resolved_to
+          description: Include domains resolved to the address
+          in: query
+          required: false
+          type: boolean
+        - name: owned_by
+          description: Include domains owned by the address
+          in: query
+          required: false
+          type: boolean
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: Sorting field. Default is `registration_date`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Defaut is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: page_size
+          description: Optional. Max number of items in single response. Default is 50
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainDomains
+  /api/v1/domains/{name}:
+    get:
+      summary: Get detailed information about name for Detailed name page
+      operationId: MultichainDomains_GetDomainNameMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1DetailedDomain'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          description: Name of name, for example vitalik.eth
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocol_id
+          description: Protocol id of domain, default is first priority protocol on that chain
+          in: query
+          required: false
+          type: string
+        - name: only_active
+          description: Filtering field to remove expired names
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - MultichainDomains
+  /api/v1/domains/{name}/events:
+    get:
+      summary: Get list of events of domain for Detailed domain page
+      operationId: MultichainDomains_ListDomainEventsMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDomainEventsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          description: Name of name, for example vitalik.eth
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocol_id
+          description: Protocol id of domain, default is first priority protocol on that chain
+          in: query
+          required: false
+          type: string
+        - name: sort
+          description: Sorting field. Default is `timestamp`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+      tags:
+        - MultichainDomains
+  /api/v1/domains:lookup:
+    get:
+      summary: Get basic info about name for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+      operationId: MultichainDomains_LookupDomainNameMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupDomainNameResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          description: Optional. Name of domain, for example vitalik.eth. None means lookup for any name
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocols
+          description: comma separated list of protocol ids. Default is ENS protocol only
+          in: query
+          required: false
+          type: string
+        - name: only_active
+          description: Filtering field to remove expired names
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: Sorting field. Default is `registration_date`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: page_size
+          description: Optional. Max number of items in single response. Default is 50
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainDomains
+  /api/v1/protocols:
+    get:
+      summary: Get list of supported protocols
+      operationId: MultichainDomains_GetMultichainProtocols
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetProtocolsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where to get protocols
+          in: query
+          required: false
+          type: string
+          format: int64
+      tags:
+        - MultichainDomains
   /api/v1/{chain_id}/addresses/{address}:
     get:
       summary: Get detailed information about main domain of requested address
@@ -387,6 +683,21 @@ definitions:
         type: object
         additionalProperties:
           type: string
+  v1BatchResolveAddressesMultichainRequest:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: string
+        title: List of requested addresses
+      chain_id:
+        type: string
+        format: int64
+        title: The chain (network) where domain search should be done
+      protocols:
+        type: string
+        title: comma separated list of protocol ids. Default is ENS protocol only
   v1DetailedDomain:
     type: object
     properties:

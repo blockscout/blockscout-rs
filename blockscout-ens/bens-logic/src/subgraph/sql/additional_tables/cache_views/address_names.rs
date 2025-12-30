@@ -70,6 +70,7 @@ impl AddressNamesView {
                 .expr(Expr::cust("id"))
                 .expr(Expr::cust("domain_name"))
                 .expr(Expr::cust("resolved_address"))
+                .expr(Expr::cust(format!("'{}' as protocol_slug", p.info.slug)))
                 .from((Alias::new(&p.subgraph_schema), Alias::new(view_table_name)))
                 .and_where(Expr::cust("resolved_address = ANY($1)"))
                 .to_owned()

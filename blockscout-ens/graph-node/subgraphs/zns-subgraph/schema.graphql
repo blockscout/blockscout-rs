@@ -48,6 +48,9 @@ type Domain @entity {
   storedOffchain: Boolean!
   "Is domain resolved with wildcard"
   resolvedWithWildcard: Boolean!
+
+  "Token ID for the domain (ERC721)"
+  tokenId: BigInt
 }
 
 interface DomainEvent {

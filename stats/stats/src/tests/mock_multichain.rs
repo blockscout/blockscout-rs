@@ -78,7 +78,7 @@ fn mock_interop_messages_with_transfers(
     .map(|val| NaiveDateTime::from_str(val).unwrap())
     .filter(|ts| ts.date() <= max_date)
     .enumerate()
-    .map(|(i, ts)| mock_interop_message(i, ts, accounts))
+    .map(|(i, ts)| mock_interop_message(i, ts, 1, (i as i64 % 3) + 1, accounts))
     .collect();
 
     // link the first 3 messages with transfers
@@ -95,6 +95,8 @@ fn mock_interop_messages_with_transfers(
 fn mock_interop_message(
     index: usize,
     ts: NaiveDateTime,
+    init_chain_id: i64,
+    relay_chain_id: i64,
     accounts: &[addresses::ActiveModel],
 ) -> interop_messages::ActiveModel {
     let account_index = index % accounts.len();
@@ -107,10 +109,10 @@ fn mock_interop_message(
         sender_address_hash: Set(Some(from_address_hash)),
         target_address_hash: Set(Some(to_address_hash)),
         nonce: Set(index as i64),
-        init_chain_id: Set(1),
+        init_chain_id: Set(init_chain_id),
         init_transaction_hash: Set(None),
         timestamp: Set(Some(ts)),
-        relay_chain_id: Set(1),
+        relay_chain_id: Set(relay_chain_id),
         relay_transaction_hash: Set(None),
         payload: Set(None),
         failed: Set(None),

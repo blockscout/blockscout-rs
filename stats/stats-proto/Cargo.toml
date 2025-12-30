@@ -7,16 +7,16 @@ edition = "2024"
 actix-prost = "0.1.0"
 actix-prost-macros = "0.1.0"
 actix-web = "4"
+async-trait = "0.1"
 prost = "0.13"
-tonic = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_with = { version = "3", features = ["hex", "base64"] }
-async-trait = "0.1"
+tonic = "0.12"
 
 [dev-dependencies]
 serde_json = { workspace = true }
 
 [build-dependencies]
 actix-prost-build = "0.1.0"
-tonic-build = "0.12"
 prost-build = "0.13"
+tonic-build = "0.12"

@@ -459,4 +459,11 @@ mod regression_tests {
         );
         test_success(&test_case, BytecodeType::CreationInput).await;
     }
+
+    #[tokio::test]
+    async fn both_partial_and_full_verification_sources() {
+        let test_case =
+            solidity_types::from_file::<StandardJson>("both_partial_and_full_verification_sources");
+        test_success(&test_case, BytecodeType::DeployedBytecode).await
+    }
 }

@@ -31,6 +31,7 @@ regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
+strum = { workspace = true, features = ["std"] }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }
@@ -40,6 +41,7 @@ url = { workspace = true }
 futures = { workspace = true }
 recache = { workspace = true }
 amplify = { workspace = true }
+base32ct = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }

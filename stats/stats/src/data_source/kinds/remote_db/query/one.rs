@@ -53,17 +53,19 @@ where
 
 pub trait StatementFromUpdateTime: DatabaseChoice {
     fn get_statement(
-        update_time: DateTime<Utc>,
-        completed_migrations: &IndexerMigrations,
-    ) -> Statement;
+        _update_time: DateTime<Utc>,
+        _completed_migrations: &IndexerMigrations,
+    ) -> Statement {
+        panic!("not implemented for this statement")
+    }
+
+    fn get_statement_with_context(cx: &UpdateContext<'_>) -> Statement {
+        Self::get_statement(cx.time, &cx.indexer_applied_migrations)
+    }
 }
 
 /// Just like `PullOne` but timespan is taken from update time
-pub struct PullOneNowValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
-where
-    S: StatementFromUpdateTime,
-    Resolution: Timespan + Ord + Send,
-    Value: Send + TryGetable;
+pub struct PullOneNowValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>);
 
 impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneNowValue<S, Resolution, Value>
 where
@@ -77,7 +79,7 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
-        let statement = S::get_statement(cx.time, &cx.indexer_applied_migrations);
+        let statement = S::get_statement_with_context(cx);
         let timespan = Resolution::from_date(cx.time.date_naive());
         let value = find_one_value::<_, WrappedValue<Value>>(S::get_db(cx)?, statement)
             .await?
@@ -107,11 +109,8 @@ where
     ) -> Result<TimespanValue<NaiveDate, Value>, ChartError> {
         let update_time = cx.time;
         let range_24h = interval_24h(update_time);
-        let query = S::get_statement(
-            Some(inclusive_range_to_exclusive(range_24h)),
-            &cx.indexer_applied_migrations,
-            &cx.enabled_update_charts_recursive,
-        );
+        let query =
+            S::get_statement_with_context(cx, Some(inclusive_range_to_exclusive(range_24h)));
 
         let value = find_one_value_cached(S::get_db(cx)?, &cx.cache, query)
             .await?

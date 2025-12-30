@@ -23,11 +23,13 @@ export const EMPTY_ADDRESS_BYTEARRAY = new ByteArray(20);
 
 export function createEventID(event: ethereum.Event): string {
   return event.block.number
-      .toString()
-      .concat("-")
-      .concat(event.transaction.index.toString())
-      .concat("-")
-      .concat(event.transactionLogIndex.toString());
+    .toString()
+    .concat("-")
+    .concat(event.transaction.index.toString())
+    .concat("-")
+    .concat(event.logIndex.toString())
+    .concat("-")
+    .concat(event.transactionLogIndex.toString());
 }
 
 // Helper for concatenating two byte arrays
@@ -76,6 +78,8 @@ export function createOrLoadDomain(node: string ): Domain {
   let domain = Domain.load(node);
   if (domain == null) {
     domain = new Domain(node);
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
     domain.save();
   }
 

@@ -1,0 +1,8 @@
+{
+    "database": {
+        "connect": {
+            "url": "postgres://postgres:admin@127.0.0.1:9432/blockscout"
+        }
+    },
+    "indexer": {}
+}

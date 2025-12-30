@@ -1,8 +1,16 @@
 use crate::{
     error::ServiceError,
     repository::addresses,
-    services::{MIN_QUERY_LENGTH, cluster::Cluster, macros::preload_domain_info},
-    types::{ChainId, domains::Domain, hashes::HashType, search_results::QuickSearchResult},
+    services::{
+        MIN_QUERY_LENGTH, cluster::Cluster, filecoin::try_filecoin_address_to_evm_address,
+        macros::preload_domain_info,
+    },
+    types::{
+        ChainId,
+        domains::Domain,
+        hashes::HashType,
+        search_results::{QuickSearchResult, Redirect, RedirectType},
+    },
 };
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
@@ -57,6 +65,18 @@ pub async fn quick_search(
     Ok(results)
 }
 
+pub async fn check_redirect(
+    query: &str,
+    search_context: &SearchContext<'_>,
+) -> Result<Option<Redirect>, ServiceError> {
+    let raw_query = query.trim();
+
+    match parse_redirect_search_term(raw_query) {
+        Some(term) => term.try_to_redirect(search_context).await,
+        None => Ok(None),
+    }
+}
+
 pub struct SearchContext<'a> {
     pub cluster: &'a Cluster,
     pub db: Arc<DatabaseConnection>,
@@ -92,7 +112,13 @@ impl SearchTerm {
             SearchTerm::Hash(hash) => {
                 let (hashes, _) = search_context
                     .cluster
-                    .search_hashes(hash.to_string(), None, vec![], num_active_chains, None)
+                    .search_hashes(
+                        hash.to_string(),
+                        None,
+                        active_chain_ids,
+                        num_active_chains,
+                        None,
+                    )
                     .await?;
 
                 let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
@@ -200,6 +226,84 @@ impl SearchTerm {
 
         Ok(results)
     }
+
+    async fn try_to_redirect(
+        self,
+        search_context: &SearchContext<'_>,
+    ) -> Result<Option<Redirect>, ServiceError> {
+        let active_chain_ids = search_context.cluster.active_chain_ids().await?;
+
+        let redirect = match self {
+            SearchTerm::AddressHash(address) => {
+                Some(Redirect::new(RedirectType::Address, address, None))
+            }
+            SearchTerm::Hash(hash) => search_context
+                .cluster
+                .search_hashes(hash.to_string(), None, active_chain_ids, 1, None)
+                .await?
+                .0
+                .into_iter()
+                .next()
+                .map(|h| {
+                    let redirect_type = match h.hash_type {
+                        HashType::Block => RedirectType::Block,
+                        HashType::Transaction => RedirectType::Transaction,
+                    };
+                    Redirect::new(redirect_type, h.hash, Some(h.chain_id))
+                }),
+            SearchTerm::Domain(query) => search_context
+                .cluster
+                .search_domains_cached(
+                    query,
+                    vec![search_context.domain_primary_chain_id],
+                    QUICK_SEARCH_NUM_ITEMS,
+                    None,
+                )
+                .await?
+                .0
+                .into_iter()
+                .next()
+                .and_then(|d| d.address)
+                .map(|a| Redirect::new(RedirectType::Address, a, None)),
+            _ => None,
+        };
+
+        Ok(redirect)
+    }
+
+    pub fn try_parse_hash(q: &str) -> Option<alloy_primitives::B256> {
+        q.parse::<alloy_primitives::B256>().ok()
+    }
+
+    pub fn try_parse_address(q: &str) -> Option<alloy_primitives::Address> {
+        q.parse::<alloy_primitives::Address>()
+            .ok()
+            .or_else(|| try_filecoin_address_to_evm_address(q))
+    }
+
+    pub fn try_parse_block_number(q: &str) -> Option<alloy_primitives::BlockNumber> {
+        q.parse::<alloy_primitives::BlockNumber>().ok()
+    }
+}
+
+/// Try to parse a query as a redirect search term.
+/// Anything other than a hash or address is considered a domain name.
+pub fn parse_redirect_search_term(query: &str) -> Option<SearchTerm> {
+    let query = query.trim();
+
+    if let Some(hash) = SearchTerm::try_parse_hash(query) {
+        return Some(SearchTerm::Hash(hash));
+    }
+
+    if let Some(address) = SearchTerm::try_parse_address(query) {
+        return Some(SearchTerm::AddressHash(address));
+    }
+
+    if query.len() >= MIN_QUERY_LENGTH {
+        return Some(SearchTerm::Domain(query.to_string()));
+    }
+
+    None
 }
 
 pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
@@ -207,17 +311,17 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     let mut terms = vec![];
 
     // If a term is an address or a hash, we can ignore other search types
-    if let Ok(hash) = query.parse::<alloy_primitives::B256>() {
+    if let Some(hash) = SearchTerm::try_parse_hash(query) {
         terms.push(SearchTerm::Hash(hash));
         return terms;
     }
-    if let Ok(address) = query.parse::<alloy_primitives::Address>() {
+    if let Some(address) = SearchTerm::try_parse_address(query) {
         terms.push(SearchTerm::TokenInfo(address.to_string()));
         terms.push(SearchTerm::AddressHash(address));
         return terms;
     }
 
-    if let Ok(block_number) = query.parse::<alloy_primitives::BlockNumber>() {
+    if let Some(block_number) = SearchTerm::try_parse_block_number(query) {
         terms.push(SearchTerm::BlockNumber(block_number));
     }
 

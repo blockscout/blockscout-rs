@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 user-ops-indexer-entity = { path = "../user-ops-indexer-entity" }
 user-ops-indexer-proto = { path = "../user-ops-indexer-proto" }
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "8f2caa9" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "e860a53" }
 
 atoi = "2.0.0"
 anyhow = "1.0"
@@ -29,15 +29,15 @@ chrono = "0.4.31"
 lru = "0.12.2"
 async-trait = "0.1.77"
 serde_with = "3.6.1"
-alloy = { version = "0.13.0", features = ["contract", "pubsub", "provider-debug-api", "provider-trace-api"] }
+alloy = { workspace = true, features = ["contract", "pubsub", "provider-debug-api", "provider-trace-api"] }
 thiserror = "2.0.9"
 
 [dev-dependencies]
 async-trait = "0.1"
-blockscout-service-launcher = { workspace = true, features = ["test-database", "database-1_0"] }
+blockscout-service-launcher = { workspace = true, features = ["test-database", "database-1"] }
 user-ops-indexer-migration = { path = "../user-ops-indexer-migration" }
 pretty_assertions = "1.3"
-sea-orm = { version = "1.0.1", features = ["mock"] }
+sea-orm = { version = "1.0.1" }
 
 [features]
 # When activated includes helper methods for tests and benchmarking

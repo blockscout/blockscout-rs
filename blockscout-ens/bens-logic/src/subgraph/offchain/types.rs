@@ -15,7 +15,7 @@ pub struct DomainInfoFromOffchainResolution {
     pub stored_offchain: bool,
     pub resolved_with_wildcard: bool,
     pub expiry_date: Option<DateTime<Utc>>,
-    pub addr2name: Option<String>,
+    pub addr_to_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -40,9 +40,9 @@ pub fn offchain_resolution_to_resolve_result(
         vid: maybe_existing_domain.map(|d| d.vid),
         id: ccip_read_info.id.clone(),
         name: Some(ccip_read_info.name.clone()),
-        label_name: Some(from_user.inner.label_name.clone()),
+        label_name: Some(from_user.inner.label_name().to_string()),
         labelhash: Some(from_user.inner.labelhash().to_vec()),
-        parent: parent.map(|p| p.id),
+        parent: parent.map(|p| p.id().to_string()),
         subdomain_count: 0,
         resolved_address,
         resolver: Some(resolver.to_string()),
@@ -56,23 +56,20 @@ pub fn offchain_resolution_to_resolve_result(
         is_expired: false,
     };
 
-    let maybe_addr2name = ccip_read_info.addr2name.as_ref().and_then(|name| {
-        DomainName::new(
-            name,
-            from_user
-                .deployed_protocol
-                .protocol
-                .info
-                .protocol_specific
-                .empty_label_hash(),
-        )
-        .ok()
+    let maybe_addr_to_name = ccip_read_info.addr_to_name.as_ref().and_then(|name| {
+        let protocol_specific = from_user
+            .deployed_protocol
+            .protocol
+            .info
+            .protocol_specific
+            .clone();
+        DomainName::new_from_name_and_protocol(name, &protocol_specific).ok()
     });
-    let maybe_reverse_record = match (&domain.resolved_address, maybe_addr2name) {
+    let maybe_reverse_record = match (&domain.resolved_address, maybe_addr_to_name) {
         (Some(addr), Some(name)) => Some(CreationAddr2Name {
             resolved_address: addr.clone(),
-            domain_id: Some(name.id),
-            domain_name: Some(name.name),
+            domain_id: Some(name.id().to_string()),
+            domain_name: Some(name.name().to_string()),
         }),
         (Some(addr), None) => Some(CreationAddr2Name {
             resolved_address: addr.clone(),

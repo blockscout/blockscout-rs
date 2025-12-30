@@ -202,6 +202,8 @@ message UpdateStatus {
 
 message BatchUpdateChartsRequest {
   repeated string chart_names = 1;
+  // Will ignore `chart_names` and update all charts
+  optional bool update_all = 4;
   // Default is today
   optional string from = 2;
   optional bool update_later = 3;

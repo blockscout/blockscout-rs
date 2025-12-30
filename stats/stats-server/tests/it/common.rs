@@ -138,6 +138,7 @@ pub async fn request_reupdate_from(
     key: &ApiKey,
     from: &str,
     charts: Vec<&str>,
+    update_all: bool,
 ) -> proto_v1::BatchUpdateChartsResult {
     let chart_names = charts.into_iter().map(|s| s.to_string()).collect();
     send_request_with_key(
@@ -146,6 +147,7 @@ pub async fn request_reupdate_from(
         reqwest::Method::POST,
         Some(&proto_v1::BatchUpdateChartsRequest {
             chart_names,
+            update_all: Some(update_all),
             from: Some(from.into()),
             update_later: None,
         }),

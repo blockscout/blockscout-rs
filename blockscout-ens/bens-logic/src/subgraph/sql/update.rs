@@ -16,9 +16,9 @@ pub async fn update_domain_name(
     let result = sqlx::query(&format!(
         "UPDATE {schema}.domain SET name = $1, label_name = $2 WHERE id = $3;"
     ))
-    .bind(&name.name)
-    .bind(&name.label_name)
-    .bind(&name.id)
+    .bind(name.name())
+    .bind(name.label_name())
+    .bind(name.id())
     .execute(pool)
     .await?;
     Ok(result)
