@@ -81,18 +81,20 @@ async fn update_domain(
         r#"
         UPDATE {schema}.domain
         SET
-            resolved_address = $1,
-            stored_offchain = $2,
-            resolved_with_wildcard = $3,
-            expiry_date = COALESCE($4, expiry_date)
-        WHERE vid = $5
+            resolved_address = $2,
+            stored_offchain = $3,
+            resolved_with_wildcard = $4,
+            expiry_date = COALESCE($5, expiry_date),
+            resolver = COALESCE($6, resolver)
+        WHERE vid = $1
         "#
     ))
+    .bind(vid)
     .bind(&domain.resolved_address)
     .bind(domain.stored_offchain)
     .bind(domain.resolved_with_wildcard)
     .bind(&domain.expiry_date)
-    .bind(vid)
+    .bind(&domain.resolver)
     .execute(pool)
     .await?;
     Ok(())

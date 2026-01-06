@@ -1,5 +1,5 @@
 use crate::{
-    entity::subgraph::domain::{CreationAddr2Name, CreationDomain, Domain},
+    entity::subgraph::domain::{CreationAddr2Name, CreationDomain},
     protocols::{DomainName, DomainNameOnProtocol},
     subgraph::ResolverInSubgraph,
 };
@@ -27,7 +27,7 @@ pub struct ResolveResult {
 pub fn offchain_resolution_to_resolve_result(
     from_user: &DomainNameOnProtocol<'_>,
     ccip_read_info: DomainInfoFromOffchainResolution,
-    maybe_existing_domain: Option<Domain>,
+    maybe_existing_domain_vid: Option<i64>,
 ) -> ResolveResult {
     let parent = from_user.inner.iter_parents_with_self().nth(1);
     let resolver =
@@ -37,7 +37,7 @@ pub fn offchain_resolution_to_resolve_result(
     let resolved_address =
         non_zero_address(ccip_read_info.addr).map(|a| a.to_string().to_lowercase());
     let domain = CreationDomain {
-        vid: maybe_existing_domain.map(|d| d.vid),
+        vid: maybe_existing_domain_vid,
         id: ccip_read_info.id.clone(),
         name: Some(ccip_read_info.name.clone()),
         label_name: Some(from_user.inner.label_name().to_string()),
