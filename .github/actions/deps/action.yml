@@ -13,6 +13,7 @@ runs:
       run: |
         wget https://github.com/protocolbuffers/protobuf/releases/download/v25.0/protoc-25.0-linux-x86_64.zip -O ./protoc.zip
         unzip protoc.zip
+        sudo rm -rf /usr/include/google
         sudo mv ./include/* /usr/include/
         sudo mv ./bin/protoc /usr/bin/protoc
     - id: install-protoc-gen-openapiv2
