@@ -22,6 +22,7 @@ pub mod mock;
 
 pub use cumulative::*;
 
+gettable_const!(Batch1Day: TimespanDuration<NaiveDate> = TimespanDuration::from_days(1));
 gettable_const!(Batch30Days: TimespanDuration<NaiveDate> = TimespanDuration::from_days(30));
 gettable_const!(BatchMaxDays: TimespanDuration<NaiveDate> = TimespanDuration::from_days(u64::MAX));
 gettable_const!(Batch30Weeks: TimespanDuration<Week> = TimespanDuration::from_timespan_repeats(30));
