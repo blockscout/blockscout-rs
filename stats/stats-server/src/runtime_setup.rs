@@ -321,6 +321,7 @@ impl RuntimeSetup {
         vec![
             // actual singletons
             Arc::new(ActiveAccountsGroup),
+            Arc::new(ActiveAccountsWeeklyGroup),
             Arc::new(ActiveBundlersGroup),
             Arc::new(ActivePaymastersGroup),
             Arc::new(ActiveAccountAbstractionWalletsGroup),

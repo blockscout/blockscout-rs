@@ -8,9 +8,10 @@ use crate::{construct_update_group, counters::*, lines::*, utils::singleton_grou
 // Mostly counters because they don't have resolutions
 // Group for chart `Name` is called `NameGroup`
 singleton_groups!(
-    // Active accounts is left without resolutions because the chart is non-trivial
-    // to calculate somewhat-optimally
+    // Only weekly resolution because it is non-trivial
+    // to calculate somewhat-optimally for larger spans.
     ActiveAccounts,
+    ActiveAccountsWeekly,
     // Same ^ for bundlers, paymasters, and aa wallets
     ActiveBundlers,
     ActivePaymasters,
