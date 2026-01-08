@@ -40,7 +40,7 @@ You can take a look at that subgraph and understand structure of our project mor
 
     In case of any error, adjust typescript code of subgraph. Also make sure subgraph handles events properly.
 
-1. Write your mappings: read [official subgraph guide](https://thegraph.com/docs/en/developing/creating-a-subgraph/#writing-mappings). You have to handle events of your protocol properly in order to index all blockchain data. You can use default mapping from generated template, however make sure that code is written correctly.
+1. Write your mappings: read [official subgraph guide](https://thegraph.com/docs/en/subgraphs/developing/creating/assemblyscript-mappings/#writing-mappings). You have to handle events of your protocol properly in order to index all blockchain data. You can use default mapping from generated template, however make sure that code is written correctly.
 
 1. Run default tests that will check name hashing logic
 
