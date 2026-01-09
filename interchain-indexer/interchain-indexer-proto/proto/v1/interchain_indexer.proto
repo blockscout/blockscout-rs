@@ -175,8 +175,8 @@ message GetTransfersByTransactionRequest {
 }
 
 message TokenInfo {
-  string chain_id = 1;
-  string address = 2;
+  reserved 1; // chain_id moved to InterchainTransfer
+  string address_hash = 2;
   optional string name = 3;
   optional string symbol = 4;
   optional string decimals = 5;
@@ -187,6 +187,9 @@ message InterchainTransfer {
   BridgeInfo bridge = 1;
   string message_id = 2;
   string status = 3;
+
+  string source_chain_id = 14;
+  string destination_chain_id = 15;
   
   TokenInfo source_token = 4;
   optional string source_amount = 5;

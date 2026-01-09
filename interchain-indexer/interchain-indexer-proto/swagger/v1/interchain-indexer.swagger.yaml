@@ -574,6 +574,10 @@ definitions:
         type: string
       status:
         type: string
+      source_chain_id:
+        type: string
+      destination_chain_id:
+        type: string
       source_token:
         $ref: '#/definitions/v1TokenInfo'
       source_amount:
@@ -615,9 +619,7 @@ definitions:
   v1TokenInfo:
     type: object
     properties:
-      chain_id:
-        type: string
-      address:
+      address_hash:
         type: string
       name:
         type: string

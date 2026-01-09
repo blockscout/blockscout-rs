@@ -234,10 +234,15 @@ impl InterchainServiceImpl {
         transfer: &CrosschainTransferModel,
         message: &CrosschainMessageModel,
     ) -> InterchainTransfer {
+        let source_chain_id = transfer.token_src_chain_id.to_string();
+        let destination_chain_id = transfer.token_dst_chain_id.to_string();
+
         InterchainTransfer {
             bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(message),
             status: message_status_to_str(&message.status).to_string(),
+            source_chain_id,
+            destination_chain_id,
             source_token: self
                 .get_token_info(
                     transfer.token_src_chain_id as u64,
@@ -265,10 +270,15 @@ impl InterchainServiceImpl {
         &self,
         transfer: &JoinedTransfer,
     ) -> InterchainTransfer {
+        let source_chain_id = transfer.token_src_chain_id.to_string();
+        let destination_chain_id = transfer.token_dst_chain_id.to_string();
+
         InterchainTransfer {
             bridge: self.get_bridge_info(transfer.bridge_id).into(),
             message_id: self.get_message_id_from_joined_transfer(transfer),
             status: message_status_to_str(&transfer.status).to_string(),
+            source_chain_id,
+            destination_chain_id,
             source_token: self
                 .get_token_info(
                     transfer.token_src_chain_id as u64,
@@ -331,8 +341,7 @@ impl InterchainServiceImpl {
             .unwrap_or_else(|| {
                 // void TokenInfo (at least store address and chain id)
                 TokenInfo {
-                    chain_id: chain_id.to_string(),
-                    address: address_hex.clone(),
+                    address_hash: address_hex.clone(),
                     name: None,
                     symbol: None,
                     decimals: None,
@@ -496,8 +505,7 @@ fn message_status_to_str(status: &MessageStatus) -> &'static str {
 
 fn token_info_logic_to_proto(model: TokenInfoModel) -> TokenInfo {
     TokenInfo {
-        chain_id: model.chain_id.to_string(),
-        address: to_hex_prefixed(model.address.as_slice()),
+        address_hash: to_hex_prefixed(model.address.as_slice()),
         name: model.name,
         symbol: model.symbol,
         decimals: model.decimals.map(|d| d.to_string()),
