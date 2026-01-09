@@ -54,12 +54,11 @@ pub struct AvalancheIndexerConfig {
     pub chains: Vec<AvalancheChainConfig>,
     pub poll_interval: Duration,
     pub batch_size: u64,
-    /// Optional override for which EVM chain IDs are considered "tracked" for filtering.
+    /// If true, do not drop ICM events whose resolved EVM chain id is not present in
+    /// `tracked_chain_ids`.
     ///
-    /// By default, the indexer tracks only the chains it is actively indexing.
-    /// Some use-cases (e.g. indexing only the source OR destination chain) still
-    /// require tracking both sides to avoid dropping cross-chain events.
-    pub tracked_chain_ids: Option<HashSet<i64>>,
+    /// Chains without an EVM chain id (resolver returns `None`) are still skipped.
+    pub process_unknown_chains: bool,
 }
 
 impl AvalancheIndexerConfig {
@@ -73,16 +72,8 @@ impl AvalancheIndexerConfig {
             chains,
             poll_interval: settings.pull_interval_ms,
             batch_size: settings.batch_size,
-            tracked_chain_ids: None,
+            process_unknown_chains: settings.process_unknown_chains,
         }
-    }
-
-    pub fn with_tracked_chain_ids<I>(mut self, tracked_chain_ids: I) -> Self
-    where
-        I: IntoIterator<Item = i64>,
-    {
-        self.tracked_chain_ids = Some(tracked_chain_ids.into_iter().collect());
-        self
     }
 
     pub fn with_poll_interval(mut self, poll_interval: Duration) -> Self {
@@ -159,11 +150,10 @@ impl AvalancheIndexer {
             chains,
             poll_interval,
             batch_size,
-            tracked_chain_ids,
+            process_unknown_chains,
         } = config;
 
-        let tracked_chain_ids: HashSet<i64> =
-            tracked_chain_ids.unwrap_or_else(|| chains.iter().map(|c| c.chain_id).collect());
+        let chain_ids: HashSet<i64> = chains.iter().map(|c| c.chain_id).collect();
 
         let data_api_network = std::env::var("AVALANCHE_DATA_API_NETWORK")
             .ok()
@@ -252,7 +242,8 @@ impl AvalancheIndexer {
                 batch,
                 chain_id,
                 bridge_id,
-                &tracked_chain_ids,
+                &chain_ids,
+                process_unknown_chains,
                 &blockchain_id_resolver,
                 &buffer,
                 &provider,
@@ -366,44 +357,12 @@ fn parse_message_key(message_id: &B256, bridge_id: i32) -> Result<(Key, [u8; 8])
     Ok((Key::new(id, bridge_id), message_id_bytes))
 }
 
-/// Resolve an on-chain blockchain ID (bytes32 in Teleporter events) into our local chain id.
-///
-/// Returns `None` when the chain isn't tracked by this indexer.
-async fn resolve_tracked_chain_id(
-    native_blockchain_id: &[u8],
-    tracked_chain_ids: &HashSet<i64>,
-    blockchain_id_resolver: &BlockchainIdResolver,
-) -> anyhow::Result<Option<i64>> {
-    if native_blockchain_id.len() != 32 {
-        return Ok(None);
-    }
-
-    let native_hex = hex::encode_prefixed(native_blockchain_id);
-
-    let resolved = match blockchain_id_resolver.resolve(native_blockchain_id).await {
-        Ok(v) => v,
-        Err(err) => {
-            tracing::warn!(
-                err = ?err,
-                blockchain_id = %native_hex,
-                "failed to resolve Avalanche blockchain_id via Data API"
-            );
-            return Ok(None);
-        }
-    };
-
-    let Some(chain_id) = resolved else {
-        return Ok(None);
-    };
-
-    Ok(tracked_chain_ids.contains(&chain_id).then_some(chain_id))
-}
-
 async fn process_batch(
     batch: Vec<Log>,
     chain_id: i64,
     bridge_id: i32,
-    tracked_chain_ids: &HashSet<i64>,
+    chain_ids: &HashSet<i64>,
+    process_unknown_chains: bool,
     blockchain_id_resolver: &BlockchainIdResolver,
     buffer: &Arc<MessageBuffer<Message>>,
     provider: &DynProvider<Ethereum>,
@@ -459,7 +418,8 @@ async fn process_batch(
                 block_timestamp,
                 log,
                 bridge_id,
-                tracked_chain_ids,
+                chain_ids,
+                process_unknown_chains,
                 blockchain_id_resolver,
                 buffer,
                 receipt_logs,
@@ -671,9 +631,9 @@ struct LogHandleContext<'a> {
     chain_id: i64,
     block_number: i64,
     block_timestamp: chrono::NaiveDateTime,
-
     bridge_id: i32,
-    tracked_chain_ids: &'a HashSet<i64>,
+    chain_ids: &'a HashSet<i64>,
+    process_unknown_chains: bool,
     blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
 
@@ -736,16 +696,15 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
 
     let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
         .context("failed to parse message key")?;
-    let dst_chain_id = resolve_tracked_chain_id(
-        event.destinationBlockchainID.as_slice(),
-        ctx.tracked_chain_ids,
-        ctx.blockchain_id_resolver,
-    )
-    .await?;
+
+    let dst_chain_id = event.destinationBlockchainID.as_slice();
+    let dst_chain_id = ctx.blockchain_id_resolver.resolve(dst_chain_id).await?;
+
     let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
 
-    // Skip messages to untracked chains
-    if dst_chain_id.is_none() {
+    let destination_chain_id = dst_chain_id;
+
+    if !ctx.chain_ids.contains(&destination_chain_id) && !ctx.process_unknown_chains {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             destination_blockchain_id = %destination_hex,
@@ -754,12 +713,11 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
-            "skipping SendCrossChainMessage to untracked chain"
+            destination_chain_id,
+            "skipping SendCrossChainMessage to unknown chain"
         );
         return Ok(());
     }
-
-    let destination_chain_id = dst_chain_id.context("destination chain must be tracked here")?;
 
     ctx.buffer
         .alter(key, ctx.chain_id, ctx.block_number, |msg| {
@@ -793,7 +751,7 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         log_index,
         signature = %topic0,
         destination_blockchain_id = %destination_hex,
-        destination_chain_id = dst_chain_id,
+        destination_chain_id,
         "processed SendCrossChainMessage"
     );
 
@@ -862,16 +820,13 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
 
     let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
         .context("failed to parse message key")?;
-    let src_chain_id = resolve_tracked_chain_id(
-        event.sourceBlockchainID.as_slice(),
-        ctx.tracked_chain_ids,
-        ctx.blockchain_id_resolver,
-    )
-    .await?;
+
+    let source_chain_id = event.sourceBlockchainID.as_slice();
+    let source_chain_id = ctx.blockchain_id_resolver.resolve(source_chain_id).await?;
+
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
-    // Skip messages from untracked chains
-    if src_chain_id.is_none() {
+    if !ctx.chain_ids.contains(&source_chain_id) && !ctx.process_unknown_chains {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
@@ -880,12 +835,12 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
-            "skipping ReceiveCrossChainMessage from untracked chain"
+            source_chain_id,
+            "skipping ReceiveCrossChainMessage from unknown chain"
         );
         return Ok(());
     }
 
-    let source_chain_id = src_chain_id.context("source chain must be tracked here")?;
     let destination_chain_id = ctx.chain_id;
 
     // Option A: ReceiveCrossChainMessage may have execution outcome in the same tx.
@@ -937,7 +892,7 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
         log_index,
         signature = %topic0,
         source_blockchain_id = %source_hex,
-        source_chain_id = src_chain_id,
+        source_chain_id,
         "processed ReceiveCrossChainMessage"
     );
 
@@ -960,16 +915,15 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
 
     let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
         .context("failed to parse message key")?;
-    let src_chain_id = resolve_tracked_chain_id(
-        event.sourceBlockchainID.as_slice(),
-        ctx.tracked_chain_ids,
-        ctx.blockchain_id_resolver,
-    )
-    .await?;
+
+    let src_chain_id = event.sourceBlockchainID.as_slice();
+    let src_chain_id = ctx.blockchain_id_resolver.resolve(src_chain_id).await?;
+
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
-    // Skip messages from untracked chains
-    if src_chain_id.is_none() {
+    let source_chain_id = src_chain_id;
+
+    if !ctx.chain_ids.contains(&source_chain_id) && !ctx.process_unknown_chains {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
@@ -978,12 +932,12 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
-            "skipping MessageExecuted from untracked chain"
+            source_chain_id,
+            "skipping MessageExecuted from unknown chain"
         );
         return Ok(());
     }
 
-    let source_chain_id = src_chain_id.context("source chain must be tracked here")?;
     let destination_chain_id = ctx.chain_id;
 
     ctx.buffer
@@ -1011,7 +965,7 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
         log_index,
         signature = %topic0,
         source_blockchain_id = %source_hex,
-        source_chain_id = src_chain_id,
+        source_chain_id,
         "processed MessageExecuted"
     );
 
@@ -1033,16 +987,15 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
     let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
         .context("failed to parse message key")?;
-    let src_chain_id = resolve_tracked_chain_id(
-        event.sourceBlockchainID.as_slice(),
-        ctx.tracked_chain_ids,
-        ctx.blockchain_id_resolver,
-    )
-    .await?;
+
+    let src_chain_id = event.sourceBlockchainID.as_slice();
+    let src_chain_id = ctx.blockchain_id_resolver.resolve(src_chain_id).await?;
+
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
-    // Skip messages from untracked chains
-    if src_chain_id.is_none() {
+    let source_chain_id = src_chain_id;
+
+    if !ctx.chain_ids.contains(&source_chain_id) && !ctx.process_unknown_chains {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
@@ -1051,12 +1004,12 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
-            "skipping MessageExecutionFailed from untracked chain"
+            source_chain_id,
+            "skipping MessageExecutionFailed from unknown chain"
         );
         return Ok(());
     }
 
-    let source_chain_id = src_chain_id.context("source chain must be tracked here")?;
     let destination_chain_id = ctx.chain_id;
 
     ctx.buffer
@@ -1088,7 +1041,7 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
         log_index,
         signature = %topic0,
         source_blockchain_id = %source_hex,
-        source_chain_id = src_chain_id,
+        source_chain_id,
         "processed MessageExecutionFailed"
     );
 

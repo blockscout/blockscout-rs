@@ -42,9 +42,7 @@ impl TryFrom<&str> for AvalancheDataApiNetwork {
 
 /// Cache key: (network, blockchain_id_hex)
 type CacheKey = [u8; 32];
-
-/// Cache value: None means non-EVM blockchain (no chain id)
-type CacheValue = Option<i64>;
+type CacheValue = i64;
 
 #[derive(Clone)]
 pub struct BlockchainIdResolver {
@@ -109,7 +107,7 @@ impl BlockchainIdResolver {
         }
     }
 
-    pub async fn resolve(&self, blockchain_id: &[u8]) -> Result<Option<i64>> {
+    pub async fn resolve(&self, blockchain_id: &[u8]) -> Result<i64> {
         let key: CacheKey = blockchain_id.try_into().map_err(|_| {
             anyhow!(
                 "expected 32-byte blockchain_id, got {}",
@@ -126,7 +124,7 @@ impl BlockchainIdResolver {
                     .await
                     .context("failed to query avalanche_icm_blockchain_ids")?
                 {
-                    return Ok::<CacheValue, anyhow::Error>(Some(chain_id));
+                    return Ok::<CacheValue, anyhow::Error>(chain_id);
                 }
 
                 let resp = this
@@ -134,10 +132,7 @@ impl BlockchainIdResolver {
                     .await
                     .context("failed to fetch blockchain info from Avalanche Data API")?;
 
-                let Some(chain_id) = resp.evm_chain_id else {
-                    return Ok::<CacheValue, anyhow::Error>(None);
-                };
-
+                let chain_id = resp.evm_chain_id.context("missing evm_chain_id")?;
                 let chain_name = resp.blockchain_name.clone();
 
                 // Ensure FK target exists.
@@ -169,7 +164,7 @@ impl BlockchainIdResolver {
                     );
                 }
 
-                Ok::<CacheValue, anyhow::Error>(Some(chain_id))
+                Ok::<CacheValue, anyhow::Error>(chain_id)
             })
             .await
             .map_err(|err| anyhow!(err.to_string()))
@@ -283,7 +278,7 @@ mod tests {
         );
 
         let resolved = resolver.resolve(&bytes).await?;
-        anyhow::ensure!(resolved == Some(8021), "expected 8021, got {:?}", resolved);
+        anyhow::ensure!(resolved == 8021, "expected 8021, got {:?}", resolved);
 
         let persisted = interchain_db
             .get_avalanche_icm_chain_id_by_blockchain_id(&bytes)
