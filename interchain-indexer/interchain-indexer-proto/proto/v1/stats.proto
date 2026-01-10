@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package blockscout.interchainIndexer.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
+
+service InterchainStatisticsService {
+    rpc GetCommonStatistics(GetCommonStatisticsRequest) returns (GetCommonStatisticsResponse) {}
+    rpc GetDailyStatistics(GetDailyStatisticsRequest) returns (GetDailyStatisticsResponse) {}
+}
+
+message GetCommonStatisticsRequest {
+    optional uint64 timestamp = 1;
+}
+message GetDailyStatisticsRequest {
+    optional uint64 timestamp = 1;
+}
+
+message GetCommonStatisticsResponse {
+    string timestamp = 1;
+    uint64 total_messages = 2;
+    uint64 total_transfers = 3;
+}
+
+message GetDailyStatisticsResponse {
+    string date = 1;
+    uint64 daily_messages = 2;
+    uint64 daily_transfers = 3;
+}
