@@ -44,6 +44,9 @@ pub struct EntrypointsSettings {
     pub v08: bool,
     #[serde_as(as = "serde_with::StringWithSeparator<CommaSeparator, Address>")]
     pub v08_entry_point: Vec<Address>,
+    pub v09: bool,
+    #[serde_as(as = "serde_with::StringWithSeparator<CommaSeparator, Address>")]
+    pub v09_entry_point: Vec<Address>,
 }
 
 #[serde_as]
@@ -105,6 +108,8 @@ impl Default for EntrypointsSettings {
             v07_entry_point: vec![address!("0000000071727De22E5E9d8BAf0edAc6f37da032")],
             v08: true,
             v08_entry_point: vec![address!("4337084D9E255Ff0702461CF8895CE9E3b5Ff108")],
+            v09: true,
+            v09_entry_point: vec![address!("433709009B8330FDa32311DF1C2AFA402eD8D009")],
         }
     }
 }
