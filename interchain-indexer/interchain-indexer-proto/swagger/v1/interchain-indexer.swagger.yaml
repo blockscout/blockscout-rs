@@ -536,7 +536,7 @@ definitions:
       message_id:
         type: string
       status:
-        type: string
+        $ref: '#/definitions/v1MessageStatus'
       source_chain_id:
         type: string
       send_timestamp:
@@ -573,7 +573,7 @@ definitions:
       message_id:
         type: string
       status:
-        type: string
+        $ref: '#/definitions/v1MessageStatus'
       source_chain_id:
         type: string
       destination_chain_id:
@@ -598,6 +598,13 @@ definitions:
         $ref: '#/definitions/v1AddressInfo'
       receive_timestamp:
         type: string
+  v1MessageStatus:
+    type: string
+    enum:
+      - MESSAGE_STATUS_INITIATED
+      - MESSAGE_STATUS_COMPLETED
+      - MESSAGE_STATUS_FAILED
+    default: MESSAGE_STATUS_INITIATED
   v1Pagination:
     type: object
     properties:

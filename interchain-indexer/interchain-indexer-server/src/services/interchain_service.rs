@@ -6,7 +6,8 @@ use crate::{
 use anyhow::anyhow;
 use interchain_indexer_entity::{
     crosschain_messages::Model as CrosschainMessageModel,
-    crosschain_transfers::Model as CrosschainTransferModel, sea_orm_active_enums::MessageStatus,
+    crosschain_transfers::Model as CrosschainTransferModel,
+    sea_orm_active_enums::MessageStatus as DbMessageStatus,
     tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
@@ -189,7 +190,7 @@ impl InterchainServiceImpl {
         InterchainMessage {
             bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(&message),
-            status: message_status_to_str(&message.status).to_string(),
+            status: message_status_to_proto(&message.status) as i32,
             source_chain_id: message.src_chain_id.to_string(),
             sender: self.get_address_info_opt(message.sender_address),
             send_timestamp: db_datetime_to_string(message.init_timestamp),
@@ -240,7 +241,7 @@ impl InterchainServiceImpl {
         InterchainTransfer {
             bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(message),
-            status: message_status_to_str(&message.status).to_string(),
+            status: message_status_to_proto(&message.status) as i32,
             source_chain_id,
             destination_chain_id,
             source_token: self
@@ -276,7 +277,7 @@ impl InterchainServiceImpl {
         InterchainTransfer {
             bridge: self.get_bridge_info(transfer.bridge_id).into(),
             message_id: self.get_message_id_from_joined_transfer(transfer),
-            status: message_status_to_str(&transfer.status).to_string(),
+            status: message_status_to_proto(&transfer.status) as i32,
             source_chain_id,
             destination_chain_id,
             source_token: self
@@ -495,11 +496,11 @@ impl InterchainService for InterchainServiceImpl {
     }
 }
 
-fn message_status_to_str(status: &MessageStatus) -> &'static str {
+fn message_status_to_proto(status: &DbMessageStatus) -> MessageStatus {
     match status {
-        MessageStatus::Initiated => "initiated",
-        MessageStatus::Completed => "completed",
-        MessageStatus::Failed => "failed",
+        DbMessageStatus::Initiated => MessageStatus::MessageStatusInitiated,
+        DbMessageStatus::Completed => MessageStatus::MessageStatusCompleted,
+        DbMessageStatus::Failed => MessageStatus::MessageStatusFailed,
     }
 }
 
