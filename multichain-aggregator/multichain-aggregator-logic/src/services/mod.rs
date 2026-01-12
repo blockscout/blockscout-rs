@@ -1,4 +1,6 @@
 pub mod api_key_manager;
+pub mod cache;
+pub mod chain_metrics;
 pub mod chains;
 pub mod channel;
 pub mod cluster;

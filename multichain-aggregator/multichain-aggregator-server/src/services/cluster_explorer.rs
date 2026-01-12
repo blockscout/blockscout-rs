@@ -57,6 +57,20 @@ impl ClusterExplorerService for ClusterExplorer {
         Ok(Response::new(ListClusterChainsResponse { items }))
     }
 
+    async fn list_chain_metrics(
+        &self,
+        request: Request<ListChainMetricsRequest>,
+    ) -> Result<Response<ListChainMetricsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let metrics = cluster.list_chain_metrics().await?;
+
+        let items = metrics.into_iter().map(|m| m.into()).collect();
+
+        Ok(Response::new(ListChainMetricsResponse { items }))
+    }
+
     async fn get_interop_message(
         &self,
         request: Request<GetInteropMessageRequest>,

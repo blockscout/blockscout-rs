@@ -46,3 +46,4 @@ base32ct = { workspace = true, features = ["alloc"] }
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }
 pretty_assertions = { workspace = true }
+rstest = { workspace = true }
