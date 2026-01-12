@@ -13,6 +13,7 @@ use crate::{
     settings::Settings,
     spawn_configured_indexers,
 };
+use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{
     database, launcher, launcher::LaunchSettings, tracing as bs_tracing,
 };
@@ -23,7 +24,7 @@ use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     status_service_actix::route_status_service,
 };
 use migration::Migrator;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 const SERVICE_NAME: &str = "interchain_indexer";
 
 #[derive(Clone)]
@@ -33,6 +34,7 @@ struct Router {
     interchain_service: Arc<InterchainServiceImpl>,
     stats_service: Arc<InterchainStatisticsServiceImpl>,
     status_service: Arc<StatusServiceImpl>,
+    swagger_path: PathBuf,
 }
 
 impl Router {
@@ -59,6 +61,13 @@ impl launcher::HttpRouter for Router {
         });
         service_config
             .configure(|config| route_status_service(config, self.status_service.clone()));
+        service_config.configure(|config| {
+            route_swagger(
+                config,
+                self.swagger_path.clone(),
+                "/api/v1/docs/swagger.yaml",
+            )
+        });
     }
 }
 
@@ -162,6 +171,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         interchain_service,
         stats_service,
         status_service,
+        swagger_path: settings.swagger_path,
     };
 
     let grpc_router = router.grpc_router();
