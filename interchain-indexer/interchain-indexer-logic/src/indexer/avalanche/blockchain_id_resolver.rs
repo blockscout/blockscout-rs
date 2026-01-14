@@ -1,44 +1,8 @@
-use std::time::Duration;
-
-use crate::InterchainDatabase;
+use crate::{InterchainDatabase, avalanche_data_api::AvalancheDataApiClient};
 use anyhow::{Context, Result, anyhow};
-use backon::{ExponentialBuilder, Retryable};
 use moka::future::Cache;
-use reqwest::{StatusCode, Url, header};
-use thiserror::Error;
 
-const DATA_API_BASE_URL: &str = "https://data-api.avax.network";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Default)]
-pub enum AvalancheDataApiNetwork {
-    #[default]
-    Mainnet,
-    Fuji,
-    Testnet,
-}
-
-impl AvalancheDataApiNetwork {
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Mainnet => "mainnet",
-            Self::Fuji => "fuji",
-            Self::Testnet => "testnet",
-        }
-    }
-}
-
-impl TryFrom<&str> for AvalancheDataApiNetwork {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &str) -> Result<Self> {
-        match value {
-            "mainnet" => Ok(Self::Mainnet),
-            "fuji" => Ok(Self::Fuji),
-            "testnet" => Ok(Self::Testnet),
-            other => Err(anyhow!("unknown network: {}", other)),
-        }
-    }
-}
+pub use crate::avalanche_data_api::AvalancheDataApiNetwork;
 
 /// Cache key: (network, blockchain_id_hex)
 type CacheKey = [u8; 32];
@@ -46,50 +10,10 @@ type CacheValue = i64;
 
 #[derive(Clone)]
 pub struct BlockchainIdResolver {
-    client: reqwest::Client,
-    network: AvalancheDataApiNetwork,
-    api_key: Option<String>,
+    data_api: AvalancheDataApiClient,
     /// In-memory cache. `get_with` ensures only one inflight request per key.
     cache: Cache<CacheKey, CacheValue>,
     db: InterchainDatabase,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct GetBlockchainByIdResponse {
-    #[serde(rename = "blockchainId")]
-    blockchain_id: String,
-    #[serde(rename = "blockchainName")]
-    blockchain_name: String,
-    #[serde(rename = "evmChainId")]
-    evm_chain_id: Option<i64>,
-}
-
-#[derive(Debug, Error)]
-#[error("{inner}")]
-struct RetryError {
-    #[source]
-    inner: anyhow::Error,
-    is_retryable: bool,
-}
-
-impl RetryError {
-    fn retryable(inner: impl Into<anyhow::Error>) -> Self {
-        Self {
-            inner: inner.into(),
-            is_retryable: true,
-        }
-    }
-
-    fn permanent(inner: impl Into<anyhow::Error>) -> Self {
-        Self {
-            inner: inner.into(),
-            is_retryable: false,
-        }
-    }
-
-    fn into_inner(self) -> anyhow::Error {
-        self.inner
-    }
 }
 
 impl BlockchainIdResolver {
@@ -99,14 +23,7 @@ impl BlockchainIdResolver {
         db: InterchainDatabase,
     ) -> Self {
         Self {
-            //client: reqwest::Client::new(),
-            client: reqwest::Client::builder()
-                .connect_timeout(Duration::from_secs(5))
-                .timeout(Duration::from_secs(15))
-                .build()
-                .expect("Failed to build reqwest client"),
-            network,
-            api_key,
+            data_api: AvalancheDataApiClient::new(network, api_key),
             cache: Cache::new(10_000),
             db,
         }
@@ -133,7 +50,8 @@ impl BlockchainIdResolver {
                 }
 
                 let resp = this
-                    .fetch_with_backoff(&key)
+                    .data_api
+                    .get_blockchain_by_id(&key)
                     .await
                     .context("failed to fetch blockchain info from Avalanche Data API")?;
 
@@ -173,73 +91,6 @@ impl BlockchainIdResolver {
             })
             .await
             .map_err(|err| anyhow!(err.to_string()))
-    }
-
-    fn url(&self, blockchain_id: &[u8]) -> Result<Url> {
-        let blockchain_id_cb58 = bs58::encode(blockchain_id).as_cb58(None).into_string();
-        let url = format!(
-            "{DATA_API_BASE_URL}/v1/networks/{}/blockchains/{}",
-            self.network.as_str(),
-            blockchain_id_cb58
-        );
-        Url::parse(&url).with_context(|| format!("failed to parse URL {url}"))
-    }
-
-    async fn fetch_with_backoff(&self, blockchain_id: &[u8]) -> Result<GetBlockchainByIdResponse> {
-        let url = self.url(blockchain_id)?;
-        let fetch = || async {
-            let req = self
-                .client
-                .get(url.as_str())
-                .header(header::ACCEPT, "application/json");
-
-            let req = if let Some(key) = self.api_key.as_deref() {
-                req.header("x-glacier-api-key", key)
-            } else {
-                req
-            };
-
-            let resp = req.send().await.map_err(RetryError::retryable)?;
-
-            match resp.status() {
-                status if status.is_success() => resp
-                    .json::<GetBlockchainByIdResponse>()
-                    .await
-                    .map_err(RetryError::retryable),
-
-                StatusCode::TOO_MANY_REQUESTS => {
-                    Err(RetryError::retryable(anyhow!("rate limited")))
-                }
-
-                status if status.is_server_error() => {
-                    Err(RetryError::retryable(anyhow!("server error: {status}")))
-                }
-
-                status => {
-                    let body = resp.text().await.unwrap_or_default();
-                    Err(RetryError::permanent(anyhow!(
-                        "unexpected response: {} - {}",
-                        status,
-                        body
-                    )))
-                }
-            }
-        };
-
-        let backoff = ExponentialBuilder::default()
-            .with_min_delay(Duration::from_millis(200))
-            .with_max_delay(Duration::from_secs(5))
-            .with_max_times(5);
-
-        fetch
-            .retry(backoff)
-            .when(|e| e.is_retryable)
-            .notify(|err, duration| {
-                tracing::warn!(?url, ?err, ?duration, "retrying Avalanche Data API request");
-            })
-            .await
-            .map_err(RetryError::into_inner)
-            .context("Avalanche Data API request failed")
     }
 }
 

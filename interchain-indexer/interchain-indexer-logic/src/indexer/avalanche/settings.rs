@@ -32,13 +32,3 @@ fn default_pull_interval() -> Duration {
 fn default_batch_size() -> u64 {
     1000
 }
-
-impl Default for AvalancheIndexerSettings {
-    fn default() -> Self {
-        Self {
-            pull_interval_ms: default_pull_interval(),
-            batch_size: default_batch_size(),
-            process_unknown_chains: false,
-        }
-    }
-}
