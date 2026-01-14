@@ -14,7 +14,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
-use chrono::{NaiveDateTime, Utc};
+use chrono::{NaiveDateTime, TimeDelta, Utc};
 use dashmap::{
     DashMap,
     mapref::{entry::Entry as DashEntry, one::RefMut},
@@ -341,7 +341,11 @@ impl<T: Consolidate> MessageBuffer<T> {
 
             let consolidated = entry.inner.consolidate(&key)?;
             let is_final = consolidated.as_ref().is_some_and(|c| c.is_final);
-            let is_stale = now.signed_duration_since(created_at).to_std()? >= self.config.hot_ttl;
+            let age = now
+                .signed_duration_since(created_at)
+                .max(TimeDelta::zero())
+                .to_std()?;
+            let is_stale = age >= self.config.hot_ttl;
             let should_remove = is_final || is_stale;
 
             match (&consolidated, is_final) {
