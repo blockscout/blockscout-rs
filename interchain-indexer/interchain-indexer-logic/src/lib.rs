@@ -3,6 +3,7 @@ mod error;
 mod message_buffer;
 pub mod metrics;
 mod provider_layers;
+pub mod avalanche_data_api;
 
 // pub mod event_handler;
 pub mod indexer;
