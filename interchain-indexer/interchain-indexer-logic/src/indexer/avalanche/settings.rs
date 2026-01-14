@@ -15,6 +15,16 @@ pub struct AvalancheIndexerSettings {
     pub process_unknown_chains: bool,
 }
 
+impl Default for AvalancheIndexerSettings {
+    fn default() -> Self {
+        Self {
+            pull_interval_ms: default_pull_interval(),
+            batch_size: default_batch_size(),
+            process_unknown_chains: false,
+        }
+    }
+}
+
 fn default_pull_interval() -> Duration {
     Duration::from_millis(10_000)
 }
