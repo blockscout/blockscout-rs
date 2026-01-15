@@ -7,19 +7,19 @@ pub fn new_client(url: Url) -> Result<Client, Error> {
     Client::new(url, config)
 }
 
-pub mod lookup_domain_name {
+pub mod lookup_domain_name_multichain {
     use super::*;
     use api_client_framework::serialize_query;
     use bens_proto::blockscout::bens::v1::{
-        LookupDomainNameRequest, LookupDomainNameResponse, Order,
+        LookupDomainNameMultichainRequest, LookupDomainNameResponse, Order,
     };
     use serde::Serialize;
 
-    pub struct LookupDomainName {
-        pub request: LookupDomainNameRequest,
+    pub struct LookupDomainNameMultichain {
+        pub request: LookupDomainNameMultichainRequest,
     }
 
-    impl Endpoint for LookupDomainName {
+    impl Endpoint for LookupDomainNameMultichain {
         type Response = LookupDomainNameResponse;
 
         fn method(&self) -> Method {
@@ -27,14 +27,14 @@ pub mod lookup_domain_name {
         }
 
         fn path(&self) -> String {
-            format!("/api/v1/{}/domains:lookup", self.request.chain_id)
+            "/api/v1/domains:lookup".to_string()
         }
 
         fn query(&self) -> Option<String> {
             #[derive(Serialize)]
             pub struct Params<'a> {
                 pub name: Option<&'a String>,
-                pub chain_id: i64,
+                pub chain_id: Option<i64>,
                 pub only_active: bool,
                 pub sort: &'a String,
                 pub order: Order,
@@ -62,17 +62,17 @@ pub mod lookup_domain_name {
     }
 }
 
-pub mod get_address {
+pub mod get_address_multichain {
     use super::*;
     use api_client_framework::serialize_query;
-    use bens_proto::blockscout::bens::v1::{GetAddressRequest, GetAddressResponse};
+    use bens_proto::blockscout::bens::v1::{GetAddressMultichainRequest, GetAddressResponse};
     use serde::Serialize;
 
-    pub struct GetAddress {
-        pub request: GetAddressRequest,
+    pub struct GetAddressMultichain {
+        pub request: GetAddressMultichainRequest,
     }
 
-    impl Endpoint for GetAddress {
+    impl Endpoint for GetAddressMultichain {
         type Response = GetAddressResponse;
 
         fn method(&self) -> Method {
@@ -80,20 +80,19 @@ pub mod get_address {
         }
 
         fn path(&self) -> String {
-            format!(
-                "/api/v1/{}/addresses/{}",
-                self.request.chain_id, self.request.address
-            )
+            format!("/api/v1/addresses/{}", self.request.address)
         }
 
         fn query(&self) -> Option<String> {
             #[derive(Serialize)]
             pub struct Params<'a> {
-                pub protocol_id: Option<&'a String>,
+                pub chain_id: Option<i64>,
+                pub protocols: Option<&'a String>,
             }
 
             let params = Params {
-                protocol_id: self.request.protocol_id.as_ref(),
+                chain_id: self.request.chain_id,
+                protocols: self.request.protocols.as_ref(),
             };
             serialize_query(&params)
         }
