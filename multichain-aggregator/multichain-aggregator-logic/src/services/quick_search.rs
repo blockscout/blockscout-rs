@@ -80,7 +80,6 @@ pub async fn check_redirect(
 pub struct SearchContext<'a> {
     pub cluster: &'a Cluster,
     pub db: Arc<DatabaseConnection>,
-    pub domain_primary_chain_id: ChainId,
     pub is_aggregated: bool,
 }
 
@@ -195,12 +194,7 @@ impl SearchTerm {
             SearchTerm::Domain(query) => {
                 let (domains, _) = search_context
                     .cluster
-                    .search_domains_cached(
-                        query,
-                        vec![search_context.domain_primary_chain_id],
-                        QUICK_SEARCH_NUM_ITEMS,
-                        None,
-                    )
+                    .search_domains_cached(query, vec![], QUICK_SEARCH_NUM_ITEMS, None)
                     .await?;
 
                 let addresses = domains.iter().filter_map(|d| d.address).collect::<Vec<_>>();
@@ -253,12 +247,7 @@ impl SearchTerm {
                 }),
             SearchTerm::Domain(query) => search_context
                 .cluster
-                .search_domains_cached(
-                    query,
-                    vec![search_context.domain_primary_chain_id],
-                    QUICK_SEARCH_NUM_ITEMS,
-                    None,
-                )
+                .search_domains_cached(query, vec![], QUICK_SEARCH_NUM_ITEMS, None)
                 .await?
                 .0
                 .into_iter()

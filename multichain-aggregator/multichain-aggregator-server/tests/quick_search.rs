@@ -125,8 +125,28 @@ async fn mock_bens_server() -> MockServer {
             "docs_url": ""
         }
     });
+
+    let protocol_info = json!({
+        "id": "ens",
+        "short_name": "ENS",
+        "title": "Ethereum Name Service",
+        "description": "",
+        "deployment_blockscout_base_url": "",
+        "tld_list": ["eth"],
+        "icon_url": "",
+        "docs_url": ""
+    });
+
     Mock::given(method("GET"))
-        .and(path("/api/v1/1/domains:lookup"))
+        .and(path("/api/v1/1/protocols"))
+        .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(json!({
+            "items": [protocol_info]
+        })))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v1/domains:lookup"))
         .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(json!({
             "items": [domain_name]
         })))
@@ -135,7 +155,7 @@ async fn mock_bens_server() -> MockServer {
 
     Mock::given(method("GET"))
         .and(path(
-            "/api/v1/1/addresses/0x0000000000000000000000000000000000000500",
+            "/api/v1/addresses/0x0000000000000000000000000000000000000500",
         ))
         .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(json!({
             "domain": {

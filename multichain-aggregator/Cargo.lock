@@ -3384,6 +3384,7 @@ dependencies = [
  "cached",
  "chrono",
  "futures",
+ "itertools 0.14.0",
  "lazy_static",
  "multichain-aggregator-entity",
  "multichain-aggregator-proto",
