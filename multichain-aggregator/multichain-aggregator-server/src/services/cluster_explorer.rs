@@ -378,7 +378,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let page_token = inner.page_token.extract_page_token()?;
 
         let (domains, next_page_token) = cluster
-            .lookup_address_domains(inner.address, page_size, page_token)
+            .lookup_address_domains(inner.address_hash, page_size, page_token)
             .await?;
         Ok(Response::new(LookupAddressDomainsResponse {
             items: domains.into_iter().map(|d| d.into()).collect(),

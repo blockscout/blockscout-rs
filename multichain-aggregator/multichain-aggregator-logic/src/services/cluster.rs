@@ -55,6 +55,8 @@ pub type TokenSearchCache =
     CacheHandler<RedisStore, String, (Vec<AggregatedToken>, Option<ListClusterTokensPageToken>)>;
 pub type BlockscoutClients = Arc<BTreeMap<ChainId, Arc<HttpApiClient>>>;
 
+const BENS_PROTOCOLS_LIMIT: usize = 5;
+
 pub struct Cluster {
     db: DatabaseConnection,
     name: String,
@@ -845,6 +847,7 @@ impl Cluster {
                 protocols
                     .iter()
                     .map(|p| p.id.as_str())
+                    .take(BENS_PROTOCOLS_LIMIT)
                     .collect::<Vec<_>>()
                     .join(","),
             ))

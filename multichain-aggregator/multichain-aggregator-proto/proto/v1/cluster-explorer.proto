@@ -339,7 +339,7 @@ message CheckRedirectResponse {
 
 message LookupAddressDomainsRequest {
   string cluster_id = 1;
-  string address = 2;
+  string address_hash = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }
