@@ -1,6 +1,6 @@
 use crate::{
     clients::{
-        bens::{get_address, get_protocols, lookup_domain_name},
+        bens::{get_address, get_protocols, lookup_address_multichain, lookup_domain_name},
         blockscout,
     },
     error::{ParseError, ServiceError},
@@ -896,6 +896,22 @@ impl Cluster {
 
         Ok((updates, next_page_token))
     }
+
+    pub async fn lookup_address_domains(
+        &self,
+        address: String,
+        page_size: u32,
+        page_token: Option<String>,
+    ) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+        lookup_address_domains(
+            self.bens_client.clone(),
+            address,
+            self.bens_protocols,
+            page_size,
+            page_token,
+        )
+        .await
+    }
 }
 
 async fn get_domain_info(
@@ -961,6 +977,49 @@ pub async fn search_domains(
         .request(&lookup_domain_name::LookupDomainName { request })
         .await
         .map_err(|err| anyhow::anyhow!("failed to search domains: {:?}", err))?;
+
+    let domains = res
+        .items
+        .into_iter()
+        .map(|d| d.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let next_page_token = res.next_page_params.map(|p| p.page_token);
+
+    Ok((domains, next_page_token))
+}
+
+pub async fn lookup_address_domains(
+    bens_client: HttpApiClient,
+    address: String,
+    protocols: Option<&'static [String]>,
+    page_size: u32,
+    page_token: Option<String>,
+) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+    let sort = "registration_date".to_string();
+    let order = bens_proto::Order::Desc.into();
+    let only_active = true;
+    let resolved_to = true;
+    let owned_by = true;
+    let chain_id = None;
+
+    let request = bens_proto::LookupAddressMultichainRequest {
+        address,
+        chain_id,
+        protocols: protocols.map(|p| p.join(",")),
+        resolved_to,
+        owned_by,
+        only_active,
+        sort,
+        order,
+        page_size: Some(page_size),
+        page_token,
+    };
+
+    let res = bens_client
+        .request(&lookup_address_multichain::LookupAddressMultichain { request })
+        .await
+        .map_err(|err| anyhow::anyhow!("failed to lookup address domains: {:?}", err))?;
 
     let domains = res
         .items

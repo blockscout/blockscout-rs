@@ -120,3 +120,62 @@ pub mod get_protocols {
         }
     }
 }
+
+pub mod lookup_address_multichain {
+    use super::*;
+    use api_client_framework::serialize_query;
+    use bens_proto::blockscout::bens::v1::{
+        LookupAddressMultichainRequest, LookupAddressResponse, Order,
+    };
+    use serde::Serialize;
+
+    pub struct LookupAddressMultichain {
+        pub request: LookupAddressMultichainRequest,
+    }
+
+    impl Endpoint for LookupAddressMultichain {
+        type Response = LookupAddressResponse;
+
+        fn method(&self) -> Method {
+            Method::GET
+        }
+
+        fn path(&self) -> String {
+            "/api/v1/addresses:lookup".to_string()
+        }
+
+        fn query(&self) -> Option<String> {
+            #[derive(Serialize)]
+            pub struct Params<'a> {
+                pub address: &'a String,
+                pub chain_id: Option<i64>,
+                pub protocols: Option<&'a String>,
+                pub resolved_to: bool,
+                pub owned_by: bool,
+                pub only_active: bool,
+                pub sort: &'a String,
+                pub order: Order,
+                pub page_size: Option<u32>,
+                pub page_token: Option<&'a String>,
+            }
+
+            let params = Params {
+                address: &self.request.address,
+                chain_id: self.request.chain_id,
+                protocols: self.request.protocols.as_ref(),
+                resolved_to: self.request.resolved_to,
+                owned_by: self.request.owned_by,
+                only_active: self.request.only_active,
+                sort: &self.request.sort,
+                order: self
+                    .request
+                    .order
+                    .try_into()
+                    .expect("valid order enum should be provided"),
+                page_size: self.request.page_size,
+                page_token: self.request.page_token.as_ref(),
+            };
+            serialize_query(&params)
+        }
+    }
+}
