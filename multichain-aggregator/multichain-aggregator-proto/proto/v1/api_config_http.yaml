@@ -50,6 +50,9 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListClusterChains
       get: /api/v1/clusters/{cluster_id}/chains
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListChainMetrics
+      get: /api/v1/clusters/{cluster_id}/chain-metrics
+
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListInteropMessages
       get: /api/v1/clusters/{cluster_id}/messages
 

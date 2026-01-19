@@ -238,6 +238,25 @@ paths:
           type: string
       tags:
         - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/chain-metrics:
+    get:
+      operationId: ClusterExplorerService_ListChainMetrics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListChainMetricsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/chains:
     get:
       operationId: ClusterExplorerService_ListClusterChains
@@ -1515,6 +1534,19 @@ definitions:
       block_number:
         type: string
         format: uint64
+  v1ChainMetrics:
+    type: object
+    properties:
+      chain_id:
+        type: string
+      tps:
+        type: string
+      new_addresses:
+        $ref: '#/definitions/v1WeeklyMetric'
+      daily_transactions:
+        $ref: '#/definitions/v1WeeklyMetric'
+      active_accounts:
+        $ref: '#/definitions/v1WeeklyMetric'
   v1CheckRedirectResponse:
     type: object
     properties:
@@ -1755,6 +1787,14 @@ definitions:
           $ref: '#/definitions/v1Hash'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
+  v1ListChainMetricsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainMetrics'
   v1ListChainsResponse:
     type: object
     properties:
@@ -2062,3 +2102,12 @@ definitions:
       - TOKEN_TYPE_ERC_404
       - TOKEN_TYPE_ERC_7802
     default: TOKEN_TYPE_UNSPECIFIED
+  v1WeeklyMetric:
+    type: object
+    properties:
+      current_full_week:
+        type: string
+      previous_full_week:
+        type: string
+      wow_diff_percent:
+        type: string

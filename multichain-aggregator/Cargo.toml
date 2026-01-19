@@ -81,4 +81,5 @@ strum = { version = "0.27", default-features = false, features = ["derive"] }
 
 # tests
 pretty_assertions = "1.3"
+rstest = "0.26"
 wiremock = "0.6.2"
