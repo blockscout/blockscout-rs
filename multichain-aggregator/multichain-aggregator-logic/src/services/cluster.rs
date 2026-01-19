@@ -66,6 +66,7 @@ pub struct Cluster {
     quick_search_chains: Vec<ChainId>,
     dapp_client: HttpApiClient,
     bens_client: HttpApiClient,
+    bens_priority_protocols: Vec<String>,
     domain_search_cache: Option<DomainSearchCache>,
     domain_info_cache: Option<DomainInfoCache>,
     domain_protocols_cache: Option<DomainProtocolsCache>,
@@ -85,6 +86,7 @@ impl Cluster {
         quick_search_chains: Vec<ChainId>,
         dapp_client: HttpApiClient,
         bens_client: HttpApiClient,
+        bens_priority_protocols: Vec<String>,
         domain_search_cache: Option<DomainSearchCache>,
         domain_info_cache: Option<DomainInfoCache>,
         domain_protocols_cache: Option<DomainProtocolsCache>,
@@ -101,6 +103,7 @@ impl Cluster {
             quick_search_chains,
             dapp_client,
             bens_client,
+            bens_priority_protocols,
             domain_search_cache,
             domain_info_cache,
             domain_protocols_cache,
@@ -832,7 +835,8 @@ impl Cluster {
         let key = format!("{}:domain_protocols", self.name);
         let bens_client = self.bens_client.clone();
         let chain_ids = self.chain_ids.clone();
-        let get = || get_protocols(bens_client, chain_ids);
+        let priority_protocols = self.bens_priority_protocols.clone();
+        let get = || get_protocols(bens_client, chain_ids, priority_protocols);
         let protocols = maybe_cache_lookup!(self.domain_protocols_cache.as_ref(), key, get)?;
         Ok(protocols)
     }
@@ -946,6 +950,7 @@ async fn get_domain_info(
 async fn get_protocols(
     bens_client: HttpApiClient,
     chain_ids: Vec<ChainId>,
+    priority_protocols: Vec<String>,
 ) -> Result<Vec<ProtocolInfo>, ServiceError> {
     let jobs = chain_ids.into_iter().map(|chain_id| {
         let client = bens_client.clone();
@@ -963,12 +968,27 @@ async fn get_protocols(
 
     let results = futures::future::join_all(jobs).await;
 
-    let protocols = results
+    let mut protocols = results
         .into_iter()
         .filter_map(Result::ok)
         .flatten()
         .unique_by(|p| p.id.clone())
         .collect::<Vec<_>>();
+
+    // Protocols in priority list come first, followed by remaining protocols
+    // Example:
+    // priority_protocols = ["ens", "base"]
+    // protocols = ["zns", "base", "ens", "other"]
+    // result = ["ens", "base", "zns", "other"]
+    if !priority_protocols.is_empty() {
+        let priority_index = priority_protocols
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id.as_str(), i))
+            .collect::<HashMap<_, _>>();
+        let fallback = priority_protocols.len();
+        protocols.sort_by_key(|p| *priority_index.get(p.id.as_str()).unwrap_or(&fallback));
+    }
 
     Ok(protocols)
 }

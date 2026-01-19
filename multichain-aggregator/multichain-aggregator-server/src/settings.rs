@@ -98,6 +98,12 @@ pub struct ClusterExplorerSettings {
 pub struct ClusterSettings {
     #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
     pub chain_ids: Vec<i64>,
+    /// Ordered list of protocol IDs that should be prioritized when fetching domain protocols.
+    /// Protocols in this list will be returned first (in the specified order),
+    /// followed by other protocols from the cluster chains.
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
+    #[serde(default = "default_bens_priority_protocols")]
+    pub bens_priority_protocols: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -238,4 +244,8 @@ fn default_token_search_cache() -> CacheEntrySettings {
         ttl,
         refresh_ahead: Some(refresh_ahead),
     }
+}
+
+fn default_bens_priority_protocols() -> Vec<String> {
+    vec!["ens".to_string()]
 }
