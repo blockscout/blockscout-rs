@@ -15,7 +15,7 @@ use entity::{
 use sea_orm::{
     ActiveValue::Set,
     DerivePartialModel, FromJsonQueryResult, IntoSimpleExpr,
-    prelude::{DateTime, Expr},
+    prelude::Expr,
     sea_query::{Func, SimpleExpr},
 };
 use serde::{Deserialize, Serialize};
@@ -221,26 +221,6 @@ impl From<ChainInfo> for proto::get_address_response::ChainInfo {
             coin_balance: v.coin_balance.to_string(),
             is_contract: v.is_contract,
             is_verified: v.is_verified,
-            contract_name: v.contract_name,
-        }
-    }
-}
-
-#[derive(DerivePartialModel, Debug, Clone)]
-#[sea_orm(entity = "Entity", from_query_result)]
-pub struct AddressUpdate {
-    pub hash: SeaOrmAddress,
-    pub chain_id: ChainId,
-    pub updated_at: DateTime,
-    pub contract_name: Option<String>,
-}
-
-impl From<AddressUpdate> for proto::list_address_updates_response::AddressUpdate {
-    fn from(v: AddressUpdate) -> Self {
-        Self {
-            hash: v.hash.to_string(),
-            chain_id: v.chain_id.to_string(),
-            updated_at: v.updated_at.and_utc().timestamp_micros(),
             contract_name: v.contract_name,
         }
     }
