@@ -99,8 +99,8 @@ message ListClusterChainsResponse {
 }
 
 message WeeklyMetric {
-  string current_week = 1;
-  string previous_week = 2;
+  string current_full_week = 1;
+  string previous_full_week = 2;
   string wow_diff_percent = 3;
 }
 

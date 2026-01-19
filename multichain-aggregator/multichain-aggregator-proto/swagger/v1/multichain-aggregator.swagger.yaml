@@ -2105,9 +2105,9 @@ definitions:
   v1WeeklyMetric:
     type: object
     properties:
-      current_week:
+      current_full_week:
         type: string
-      previous_week:
+      previous_full_week:
         type: string
       wow_diff_percent:
         type: string

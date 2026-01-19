@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WeeklyMetric {
-    pub current_week: i64,
-    pub previous_week: i64,
+    pub current_full_week: i64,
+    pub previous_full_week: i64,
     /// Week-over-week difference as a percentage (e.g., "42.2" for 42.2% increase).
     pub wow_diff_percent: f64,
 }
@@ -13,8 +13,8 @@ pub struct WeeklyMetric {
 impl From<WeeklyMetric> for proto::WeeklyMetric {
     fn from(v: WeeklyMetric) -> Self {
         Self {
-            current_week: v.current_week.to_string(),
-            previous_week: v.previous_week.to_string(),
+            current_full_week: v.current_full_week.to_string(),
+            previous_full_week: v.previous_full_week.to_string(),
             wow_diff_percent: format!("{:.2}", v.wow_diff_percent),
         }
     }

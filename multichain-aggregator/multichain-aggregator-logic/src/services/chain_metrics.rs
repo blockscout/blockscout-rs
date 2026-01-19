@@ -15,9 +15,9 @@ use std::{collections::BTreeMap, sync::Arc};
 
 const SECONDS_IN_DAY: f64 = 86_400.0;
 const DAILY_TXS_COUNTER_ID: &str = "newTxns24h";
-const NEW_ACCOUNTS_CHART: &str = "newAccounts";
-const NEW_TXS_CHART: &str = "newTxns";
-const ACTIVE_ACCOUNTS_CHART: &str = "activeAccounts";
+const NEW_ACCOUNTS_CHART_ID: &str = "newAccounts";
+const NEW_TXS_CHART_ID: &str = "newTxns";
+const ACTIVE_ACCOUNTS_CHART_ID: &str = "activeAccounts";
 
 pub async fn fetch_chain_metrics(
     blockscout_clients: &Arc<BTreeMap<ChainId, Arc<HttpApiClient>>>,
@@ -47,9 +47,9 @@ pub async fn fetch_chain_metrics(
 async fn fetch_single_chain_metrics(chain_id: ChainId, client: &HttpApiClient) -> ChainMetrics {
     let (tps, new_addresses, daily_transactions, active_accounts) = futures::join!(
         fetch_tps(client),
-        fetch_weekly_metric(client, NEW_ACCOUNTS_CHART),
-        fetch_weekly_metric(client, NEW_TXS_CHART),
-        fetch_weekly_metric(client, ACTIVE_ACCOUNTS_CHART),
+        fetch_weekly_metric(client, NEW_ACCOUNTS_CHART_ID),
+        fetch_weekly_metric(client, NEW_TXS_CHART_ID),
+        fetch_weekly_metric(client, ACTIVE_ACCOUNTS_CHART_ID),
     );
 
     ChainMetrics {
@@ -117,17 +117,17 @@ async fn fetch_weekly_metric(
 }
 
 fn calculate_weekly_metric(line_chart: &LineChart) -> Result<WeeklyMetric, ServiceError> {
-    let points = &line_chart
+    let full_week_points = &line_chart
         .chart
         .iter()
         .filter(|p| !p.is_approximate.unwrap_or(false))
         .collect::<Vec<_>>();
 
-    if points.is_empty() {
+    if full_week_points.is_empty() {
         return Ok(WeeklyMetric::default());
     }
 
-    let (previous_week, current_week) = match points.as_slice() {
+    let (previous_full_week, current_full_week) = match full_week_points.as_slice() {
         [.., previous, current] => (
             previous.value.parse().map_err(ParseError::from)?,
             current.value.parse().map_err(ParseError::from)?,
@@ -135,16 +135,16 @@ fn calculate_weekly_metric(line_chart: &LineChart) -> Result<WeeklyMetric, Servi
         _ => {
             return Err(ServiceError::Internal(anyhow::anyhow!(
                 "expected at least 2 data points, got {}",
-                points.len()
+                full_week_points.len()
             )));
         }
     };
 
-    let wow_diff_percent = calculate_wow_diff(current_week, previous_week);
+    let wow_diff_percent = calculate_wow_diff(current_full_week, previous_full_week);
 
     Ok(WeeklyMetric {
-        current_week,
-        previous_week,
+        current_full_week,
+        previous_full_week,
         wow_diff_percent,
     })
 }
