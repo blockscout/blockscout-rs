@@ -46,41 +46,6 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
-  /api/v1/addresses/updates:
-    get:
-      operationId: MultichainAggregatorService_ListAddressUpdates
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1ListAddressUpdatesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: chain_id
-          in: query
-          required: false
-          type: array
-          items:
-            type: string
-          collectionFormat: multi
-        - name: is_contract
-          in: query
-          required: false
-          type: boolean
-        - name: page_size
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: page_token
-          in: query
-          required: false
-          type: string
-      tags:
-        - MultichainAggregatorService
   /api/v1/block-numbers:
     get:
       operationId: MultichainAggregatorService_ListBlockNumbers
@@ -1081,6 +1046,37 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/tokens/updates:
+    get:
+      operationId: MultichainAggregatorService_ListTokenUpdates
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListTokenUpdatesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: chain_id
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/transactions:
     get:
       operationId: MultichainAggregatorService_ListTransactions
@@ -1308,18 +1304,6 @@ definitions:
         type: object
         additionalProperties:
           type: string
-  ListAddressUpdatesResponseAddressUpdate:
-    type: object
-    properties:
-      hash:
-        type: string
-      chain_id:
-        type: string
-      updated_at:
-        type: string
-        format: int64
-      contract_name:
-        type: string
   ListTokenHoldersResponseTokenHolder:
     type: object
     properties:
@@ -1329,6 +1313,22 @@ definitions:
         type: string
       value:
         type: string
+  ListTokenUpdatesResponseTokenUpdate:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      chain_id:
+        type: string
+      updated_at:
+        type: string
+        format: int64
+      name:
+        type: string
+      symbol:
+        type: string
+      token_type:
+        $ref: '#/definitions/v1TokenType'
   TokenImportCounters:
     type: object
     properties:
@@ -1747,16 +1747,6 @@ definitions:
           $ref: '#/definitions/ListAddressTokensResponseAggregatedTokenBalanceInfo'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
-  v1ListAddressUpdatesResponse:
-    type: object
-    properties:
-      items:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/ListAddressUpdatesResponseAddressUpdate'
-      next_page_params:
-        $ref: '#/definitions/v1Pagination'
   v1ListAddressesResponse:
     type: object
     properties:
@@ -1890,6 +1880,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/ListTokenHoldersResponseTokenHolder'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListTokenUpdatesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ListTokenUpdatesResponseTokenUpdate'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListTokensResponse:

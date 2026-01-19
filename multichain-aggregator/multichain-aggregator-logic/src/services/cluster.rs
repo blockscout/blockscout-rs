@@ -6,9 +6,8 @@ use crate::{
     error::{ParseError, ServiceError},
     repository::{
         address_token_balances::{self, ListAddressTokensPageToken, ListTokenHoldersPageToken},
-        addresses::{self, ListAddressUpdatesPageToken},
-        block_ranges, chains, hashes, interop_message_transfers, interop_messages,
-        tokens::{self, ListClusterTokensPageToken},
+        addresses, block_ranges, chains, hashes, interop_message_transfers, interop_messages,
+        tokens::{self, ListClusterTokensPageToken, ListTokenUpdatesPageToken},
     },
     services::{
         self, MIN_QUERY_LENGTH,
@@ -21,7 +20,7 @@ use crate::{
     types::{
         ChainId,
         address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
-        addresses::{AddressUpdate, AggregatedAddressInfo, ChainAddressInfo},
+        addresses::{AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
@@ -29,7 +28,7 @@ use crate::{
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
         search_results::{QuickSearchResult, Redirect},
-        tokens::{AggregatedToken, TokenType},
+        tokens::{AggregatedToken, TokenListUpdate, TokenType},
     },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
@@ -869,23 +868,16 @@ impl Cluster {
         Ok(result)
     }
 
-    pub async fn list_address_updates(
+    pub async fn list_token_updates(
         &self,
         chain_ids: Vec<ChainId>,
-        is_contract: Option<bool>,
         page_size: u64,
-        page_token: Option<ListAddressUpdatesPageToken>,
-    ) -> Result<(Vec<AddressUpdate>, Option<ListAddressUpdatesPageToken>), ServiceError> {
+        page_token: Option<ListTokenUpdatesPageToken>,
+    ) -> Result<(Vec<TokenListUpdate>, Option<ListTokenUpdatesPageToken>), ServiceError> {
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
 
-        let (updates, next_page_token) = addresses::list_address_updates(
-            &self.db,
-            chain_ids,
-            is_contract,
-            page_size,
-            page_token,
-        )
-        .await?;
+        let (updates, next_page_token) =
+            tokens::list_token_updates(&self.db, chain_ids, page_size, page_token).await?;
 
         Ok((updates, next_page_token))
     }
