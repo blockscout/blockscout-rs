@@ -9,12 +9,13 @@ use crate::{
     types::{
         ChainId,
         tokens::{
-            AggregatedToken, TokenType, TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata,
-            UpdateTokenPriceData, UpdateTokenType,
+            AggregatedToken, TokenListUpdate, TokenType, TokenUpdate, UpdateTokenCounters,
+            UpdateTokenMetadata, UpdateTokenPriceData, UpdateTokenType,
         },
     },
 };
 use alloy_primitives::Address;
+use chrono::NaiveDateTime;
 use entity::tokens::{Column, Entity};
 use rust_decimal::Decimal;
 use sea_orm::{
@@ -320,6 +321,45 @@ where
                 a.chain_info.chain_id,
             )
         },
+    )
+    .await
+}
+
+pub type ListTokenUpdatesPageToken = (NaiveDateTime, Address, ChainId);
+
+pub async fn list_token_updates<C>(
+    db: &C,
+    chain_ids: Vec<ChainId>,
+    page_size: u64,
+    page_token: Option<ListTokenUpdatesPageToken>,
+) -> Result<(Vec<TokenListUpdate>, Option<ListTokenUpdatesPageToken>), DbErr>
+where
+    C: ConnectionTrait,
+{
+    let base_query = Entity::find().select_only();
+    let query = TokenListUpdate::select_cols(base_query)
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
+        )
+        .as_query()
+        .to_owned();
+
+    let order_keys = vec![
+        KeySpec::asc(Column::UpdatedAt.into_simple_expr()),
+        KeySpec::asc(Column::AddressHash.into_simple_expr()),
+        KeySpec::asc(Column::ChainId.into_simple_expr()),
+    ];
+    let page_token =
+        page_token.map(|(updated_at, address, chain_id)| (updated_at, address.to_vec(), chain_id));
+
+    paginate_query(
+        db,
+        query,
+        page_size,
+        page_token,
+        order_keys,
+        |t: &TokenListUpdate| (t.updated_at, *t.address_hash, t.chain_id),
     )
     .await
 }

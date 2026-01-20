@@ -57,6 +57,20 @@ impl ClusterExplorerService for ClusterExplorer {
         Ok(Response::new(ListClusterChainsResponse { items }))
     }
 
+    async fn list_chain_metrics(
+        &self,
+        request: Request<ListChainMetricsRequest>,
+    ) -> Result<Response<ListChainMetricsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let metrics = cluster.list_chain_metrics().await?;
+
+        let items = metrics.into_iter().map(|m| m.into()).collect();
+
+        Ok(Response::new(ListChainMetricsResponse { items }))
+    }
+
     async fn get_interop_message(
         &self,
         request: Request<GetInteropMessageRequest>,
@@ -365,6 +379,25 @@ impl ClusterExplorerService for ClusterExplorer {
             .unwrap_or_default();
 
         Ok(Response::new(redirect))
+    }
+
+    async fn lookup_address_domains(
+        &self,
+        request: Request<LookupAddressDomainsRequest>,
+    ) -> Result<Response<LookupAddressDomainsResponse>, Status> {
+        let inner = request.into_inner();
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
+
+        let (domains, next_page_token) = cluster
+            .lookup_address_domains(inner.address_hash, page_size, page_token)
+            .await?;
+        Ok(Response::new(LookupAddressDomainsResponse {
+            items: domains.into_iter().map(|d| d.into()).collect(),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
+        }))
     }
 }
 

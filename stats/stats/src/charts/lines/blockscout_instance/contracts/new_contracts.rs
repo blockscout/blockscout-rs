@@ -126,7 +126,7 @@ define_and_impl_resolution_properties!(
     base_impl: Properties
 );
 
-pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, Properties>;
+pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, Batch1Day, Properties>;
 pub type NewContractsInt = MapParseTo<StripExt<NewContracts>, i64>;
 pub type NewContractsWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewContractsInt, Week>>,

@@ -49,7 +49,7 @@ async fn resolve_d3_name(
 
     let default_resolver = d3.resolver_contract;
 
-    let (resolver_address, maybe_existing_domain) =
+    let (resolver_address, maybe_existing_domain_vid) =
         match subgraph::sql::get_domain(db, name, true).await? {
             Some(detailed_domain) => {
                 let domain = Domain::from(detailed_domain);
@@ -59,7 +59,7 @@ async fn resolve_d3_name(
                     .and_then(|r| ResolverInSubgraph::from_str(r).ok())
                     .map(|r| r.resolver_address)
                     .unwrap_or(default_resolver);
-                (resolver, Some(domain))
+                (resolver, Some(domain.vid))
             }
             None => (default_resolver, None),
         };
@@ -74,7 +74,7 @@ async fn resolve_d3_name(
     .await?;
     tracing::debug!(data =? offchain_resolution, "fetched offchain resolution");
     let creation_domain =
-        offchain_resolution_to_resolve_result(name, offchain_resolution, maybe_existing_domain);
+        offchain_resolution_to_resolve_result(name, offchain_resolution, maybe_existing_domain_vid);
     Ok(creation_domain)
 }
 

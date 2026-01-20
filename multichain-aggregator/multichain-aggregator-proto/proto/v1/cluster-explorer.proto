@@ -10,6 +10,8 @@ import "google/protobuf/struct.proto";
 service ClusterExplorerService {
   rpc ListClusterChains(ListClusterChainsRequest)
       returns (ListClusterChainsResponse) {}
+  rpc ListChainMetrics(ListChainMetricsRequest)
+      returns (ListChainMetricsResponse) {}
   rpc ListInteropMessages(ListInteropMessagesRequest)
       returns (ListInteropMessagesResponse) {}
   rpc CountInteropMessages(CountInteropMessagesRequest)
@@ -32,6 +34,7 @@ service ClusterExplorerService {
   rpc SearchDapps(SearchByQueryRequest) returns (SearchDappsResponse) {}
   rpc QuickSearch(ClusterQuickSearchRequest) returns (ClusterQuickSearchResponse) {}
   rpc CheckRedirect(CheckRedirectRequest) returns (CheckRedirectResponse) {}
+  rpc LookupAddressDomains(LookupAddressDomainsRequest) returns (LookupAddressDomainsResponse) {}
 }
 
 message AddressHash {
@@ -77,16 +80,6 @@ message InteropMessage {
   optional google.protobuf.Struct decoded_payload = 14;
 }
 
-message ProtocolInfo {
-  string id = 1;
-  string short_name = 2;
-  string title = 3;
-  string description = 4;
-  string deployment_blockscout_base_url = 8;
-  repeated string tld_list = 5;
-  optional string icon_url = 6;
-  optional string docs_url = 7;
-}
 
 message ListClusterChainsRequest {
   string cluster_id = 1;
@@ -94,6 +87,28 @@ message ListClusterChainsRequest {
 
 message ListClusterChainsResponse {
   repeated blockscout.multichainAggregator.v1.Chain items = 1;
+}
+
+message WeeklyMetric {
+  string current_full_week = 1;
+  string previous_full_week = 2;
+  string wow_diff_percent = 3;
+}
+
+message ChainMetrics {
+  string chain_id = 1;
+  optional string tps = 2;
+  optional WeeklyMetric new_addresses = 3;
+  optional WeeklyMetric daily_transactions = 4;
+  optional WeeklyMetric active_accounts = 5;
+}
+
+message ListChainMetricsRequest {
+  string cluster_id = 1;
+}
+
+message ListChainMetricsResponse {
+  repeated ChainMetrics items = 1;
 }
 
 message ListInteropMessagesRequest {
@@ -158,7 +173,7 @@ message GetAddressRequest {
 
 message BasicDomainInfo {
   string name = 1;
-  string protocol_id = 2;
+  blockscout.multichainAggregator.v1.ProtocolInfo protocol = 2;
 }
 
 message GetAddressResponse {
@@ -255,7 +270,7 @@ message ListDomainProtocolsRequest {
 }
 
 message ListDomainProtocolsResponse {
-  repeated ProtocolInfo items = 1;
+  repeated blockscout.multichainAggregator.v1.ProtocolInfo items = 1;
 }
 
 message SearchByQueryRequest {
@@ -334,4 +349,16 @@ message CheckRedirectResponse {
   optional string type = 2;
   optional string parameter = 3;
   optional string chain_id = 4;
+}
+
+message LookupAddressDomainsRequest {
+  string cluster_id = 1;
+  string address_hash = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message LookupAddressDomainsResponse {
+  repeated blockscout.multichainAggregator.v1.Domain items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
 }
