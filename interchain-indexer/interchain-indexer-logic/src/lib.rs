@@ -14,9 +14,9 @@ pub mod test_utils;
 pub mod token_info;
 pub mod utils;
 
-pub use chain_info::*;
+pub use chain_info::{ChainInfoService, ChainInfoServiceSettings};
 pub use database::*;
 pub use error::ApiError;
 pub use indexer::*;
 pub use provider_layers::*;
-pub use token_info::*;
+pub use token_info::{TokenInfoService, TokenInfoServiceSettings};

@@ -5,7 +5,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::{service::TokenKey, token_info::settings::BlockscoutTokenInfoClientSettings};
+use crate::token_info::{service::TokenKey, settings::BlockscoutTokenInfoClientSettings};
 
 /// TokenInfo model based on the Swagger specification for contracts-info API.
 /// Represents the response from `/api/v1/chains/{chainId}/token-infos/{tokenAddress}` endpoint.

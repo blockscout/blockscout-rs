@@ -52,6 +52,7 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 | `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__RETRY_INTERVAL` |                          | e.g. `1`                                                     | `3600`        |
 | `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL`            |                          | e.g. `https://contracts-info-test.k8s-dev.blockscout.com`    | `null`        |
 | `INTERCHAIN_INDEXER__TOKEN_INFO__ONCHAIN_RETRY_INTERVAL`                |                          |                                                              | `10`          |
+| `INTERCHAIN_INDEXER__CHAIN_INFO__COOLDOWN_INTERVAL`                     |                          |                                                              | `60`          |
 
 [anchor]: <> (anchors.envs.end.service)
 
@@ -59,10 +60,11 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 
 [anchor]: <> (anchors.envs.start.avalanche)
 
-| Variable                                                  | Req&#x200B;uir&#x200B;ed | Description | Default value |
-| --------------------------------------------------------- | ------------------------ | ----------- | ------------- |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`       |                          |             | `1000`        |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS` |                          |             | `10000`       |
+| Variable                                                        | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --------------------------------------------------------------- | ------------------------ | ----------- | ------------- |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`             |                          |             | `1000`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`       |                          |             | `10000`       |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PROCESS_UNKNOWN_CHAINS` |                          |             | `false`       |
 
 [anchor]: <> (anchors.envs.end.avalanche)
 

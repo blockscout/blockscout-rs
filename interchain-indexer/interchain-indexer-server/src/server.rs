@@ -140,7 +140,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.token_info.clone(),
     ));
 
-    let chain_info_service = Arc::new(ChainInfoService::new(db.clone()));
+    let chain_info_service = Arc::new(ChainInfoService::new(
+        db.clone(),
+        settings.chain_info.clone(),
+    ));
 
     let indexers = spawn_configured_indexers(
         interchain_db.clone(),

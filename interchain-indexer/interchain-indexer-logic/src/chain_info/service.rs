@@ -1,13 +1,9 @@
 use interchain_indexer_entity::chains;
 use parking_lot::RwLock;
 use sea_orm::JsonValue;
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
-use crate::InterchainDatabase;
+use crate::{ChainInfoServiceSettings, InterchainDatabase};
 
 /// Default name returned when chain info is not found in database for any reason
 const UNKNOWN_CHAIN_NAME: &str = "Unknown";
@@ -16,9 +12,6 @@ const UNKNOWN_CHAIN_NAME: &str = "Unknown";
 const DEFAULT_EXPLORER_TX_ROUTE: &str = "/tx/{hash}";
 const DEFAULT_EXPLORER_ADDRESS_ROUTE: &str = "/address/{hash}";
 const DEFAULT_EXPLORER_TOKEN_ROUTE: &str = "/token/{hash}";
-
-/// Minimum interval between DB queries for chains with empty names
-const UNKNOWN_NAME_QUERY_COOLDOWN: Duration = Duration::from_secs(60);
 
 /// Creates a placeholder chain model for an unknown chain
 fn unknown_chain(chain_id: u64) -> chains::Model {
@@ -94,6 +87,7 @@ fn normalize_chain(mut model: chains::Model) -> chains::Model {
 #[derive(Clone)]
 pub struct ChainInfoService {
     db: Arc<InterchainDatabase>,
+    settings: ChainInfoServiceSettings,
     /// Cache of chains with valid names: chain_id -> chains::Model
     cache: Arc<RwLock<HashMap<u64, chains::Model>>>,
     /// Tracks last query time for chains with unknown names to implement cooldown
@@ -101,9 +95,10 @@ pub struct ChainInfoService {
 }
 
 impl ChainInfoService {
-    pub fn new(db: Arc<InterchainDatabase>) -> Self {
+    pub fn new(db: Arc<InterchainDatabase>, settings: ChainInfoServiceSettings) -> Self {
         Self {
             db,
+            settings,
             cache: Arc::new(RwLock::new(HashMap::new())),
             unknown_name_last_query: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -187,7 +182,7 @@ impl ChainInfoService {
     /// Checks if we're in cooldown period for a chain with unknown name.
     fn is_in_cooldown(&self, chain_id: u64) -> bool {
         if let Some(last_query) = self.unknown_name_last_query.read().get(&chain_id) {
-            last_query.elapsed() < UNKNOWN_NAME_QUERY_COOLDOWN
+            last_query.elapsed() < self.settings.cooldown_interval
         } else {
             false
         }
