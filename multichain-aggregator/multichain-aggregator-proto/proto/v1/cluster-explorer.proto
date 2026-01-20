@@ -80,16 +80,6 @@ message InteropMessage {
   optional google.protobuf.Struct decoded_payload = 14;
 }
 
-message ProtocolInfo {
-  string id = 1;
-  string short_name = 2;
-  string title = 3;
-  string description = 4;
-  string deployment_blockscout_base_url = 8;
-  repeated string tld_list = 5;
-  optional string icon_url = 6;
-  optional string docs_url = 7;
-}
 
 message ListClusterChainsRequest {
   string cluster_id = 1;
@@ -183,7 +173,7 @@ message GetAddressRequest {
 
 message BasicDomainInfo {
   string name = 1;
-  string protocol_id = 2;
+  blockscout.multichainAggregator.v1.ProtocolInfo protocol = 2;
 }
 
 message GetAddressResponse {
@@ -280,7 +270,7 @@ message ListDomainProtocolsRequest {
 }
 
 message ListDomainProtocolsResponse {
-  repeated ProtocolInfo items = 1;
+  repeated blockscout.multichainAggregator.v1.ProtocolInfo items = 1;
 }
 
 message SearchByQueryRequest {

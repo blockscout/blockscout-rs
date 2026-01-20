@@ -4,8 +4,6 @@ package blockscout.multichainAggregator.v1;
 
 option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
 
-import "google/protobuf/struct.proto";
-
 service MultichainAggregatorService {
   rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
@@ -93,11 +91,22 @@ message Token {
   bool is_verified_contract = 6;
 }
 
+message ProtocolInfo {
+  string id = 1;
+  string short_name = 2;
+  string title = 3;
+  string description = 4;
+  string deployment_blockscout_base_url = 8;
+  repeated string tld_list = 5;
+  optional string icon_url = 6;
+  optional string docs_url = 7;
+}
+
 message Domain {
   optional string address = 1;
   string name = 2;
   optional string expiry_date = 3;
-  google.protobuf.Struct protocol = 4;
+  ProtocolInfo protocol = 4;
 }
 
 message ChainBlockNumber {

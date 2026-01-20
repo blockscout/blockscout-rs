@@ -1492,8 +1492,8 @@ definitions:
     properties:
       name:
         type: string
-      protocol_id:
-        type: string
+      protocol:
+        $ref: '#/definitions/v1ProtocolInfo'
   v1BatchImportRequest:
     type: object
     properties:
@@ -1649,7 +1649,7 @@ definitions:
       expiry_date:
         type: string
       protocol:
-        type: object
+        $ref: '#/definitions/v1ProtocolInfo'
   v1DomainInfo:
     type: object
     properties:
