@@ -21,6 +21,8 @@
 //! cargo test --package interchain-indexer-server avalanche_e2e -- --ignored --nocapture
 //! ```
 
+#![cfg(feature = "avalanche-e2e")]
+
 mod helpers;
 
 use anyhow::Result;
