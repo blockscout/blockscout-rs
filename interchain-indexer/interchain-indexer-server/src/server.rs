@@ -29,7 +29,6 @@ const SERVICE_NAME: &str = "interchain_indexer";
 
 #[derive(Clone)]
 struct Router {
-    // TODO: add services here
     health: Arc<HealthService>,
     interchain_service: Arc<InterchainServiceImpl>,
     stats_service: Arc<InterchainStatisticsServiceImpl>,

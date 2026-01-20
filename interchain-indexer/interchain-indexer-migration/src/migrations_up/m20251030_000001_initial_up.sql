@@ -238,7 +238,6 @@ CREATE TABLE pending_messages (
 CREATE INDEX idx_pending_stale ON pending_messages(created_at);
 
 CREATE TABLE avalanche_icm_blockchain_ids (
-  -- TODO: create a comment on this field that this is hex encoded 32-byte Avalanche blockchain ID
   blockchain_id      BYTEA PRIMARY KEY,
   chain_id           BIGINT NOT NULL REFERENCES chains(id) ON DELETE CASCADE,
   created_at         TIMESTAMP DEFAULT now(),
@@ -246,3 +245,6 @@ CREATE TABLE avalanche_icm_blockchain_ids (
 
   UNIQUE(chain_id)
 );
+
+COMMENT ON COLUMN avalanche_icm_blockchain_ids.blockchain_id IS
+  'Hex-encoded 32-byte Avalanche blockchain ID';
