@@ -80,13 +80,13 @@ jobs:
 
   docker:
     name: Docker build and docker push
-    # needs:
-    #   - test
-    #   - lint
-    # if: |
-    #   always() &&
-    #   (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
-    #   (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    needs:
+      - test
+      - lint
+    if: |
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: interchain-indexer
