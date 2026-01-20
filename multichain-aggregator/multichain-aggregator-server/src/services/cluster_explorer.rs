@@ -380,6 +380,25 @@ impl ClusterExplorerService for ClusterExplorer {
 
         Ok(Response::new(redirect))
     }
+
+    async fn lookup_address_domains(
+        &self,
+        request: Request<LookupAddressDomainsRequest>,
+    ) -> Result<Response<LookupAddressDomainsResponse>, Status> {
+        let inner = request.into_inner();
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
+
+        let (domains, next_page_token) = cluster
+            .lookup_address_domains(inner.address_hash, page_size, page_token)
+            .await?;
+        Ok(Response::new(LookupAddressDomainsResponse {
+            items: domains.into_iter().map(|d| d.into()).collect(),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
+        }))
+    }
 }
 
 fn parse_token_types(types: Option<String>) -> Result<Vec<TokenType>, Status> {

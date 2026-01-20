@@ -83,10 +83,6 @@ pub struct ServiceSettings {
     pub quick_search_chains: Vec<i64>,
     #[serde(default)]
     pub fetch_chains: bool,
-    #[serde(default = "default_bens_protocols")]
-    pub bens_protocols: Option<Vec<String>>,
-    #[serde(default = "default_domain_primary_chain_id")]
-    pub domain_primary_chain_id: i64,
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     #[serde(default = "default_marketplace_enabled_cache_update_interval")]
     pub marketplace_enabled_cache_update_interval: time::Duration,
@@ -104,6 +100,12 @@ pub struct ClusterExplorerSettings {
 pub struct ClusterSettings {
     #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
     pub chain_ids: Vec<i64>,
+    /// Ordered list of protocol IDs that should be prioritized when fetching domain protocols.
+    /// Protocols in this list will be returned first (in the specified order),
+    /// followed by other protocols from the cluster chains.
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
+    #[serde(default = "default_bens_priority_protocols")]
+    pub bens_priority_protocols: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -161,8 +163,6 @@ impl Settings {
                 },
                 quick_search_chains: default_quick_search_chains(),
                 fetch_chains: false,
-                bens_protocols: default_bens_protocols(),
-                domain_primary_chain_id: default_domain_primary_chain_id(),
                 marketplace_enabled_cache_update_interval:
                     default_marketplace_enabled_cache_update_interval(),
                 marketplace_enabled_cache_fetch_concurrency:
@@ -186,14 +186,6 @@ fn default_quick_search_chains() -> Vec<i64> {
     vec![
         1, 8453, 57073, 698, 109, 7777777, 100, 10, 42161, 690, 534352,
     ]
-}
-
-fn default_bens_protocols() -> Option<Vec<String>> {
-    Some(vec!["ens".to_string()])
-}
-
-fn default_domain_primary_chain_id() -> i64 {
-    1
 }
 
 fn default_marketplace_enabled_cache_update_interval() -> time::Duration {
@@ -254,6 +246,10 @@ fn default_token_search_cache() -> CacheEntrySettings {
         ttl,
         refresh_ahead: Some(refresh_ahead),
     }
+}
+
+fn default_bens_priority_protocols() -> Vec<String> {
+    vec!["ens".to_string()]
 }
 
 fn default_chain_metrics_cache() -> CacheEntrySettings {

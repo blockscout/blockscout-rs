@@ -42,6 +42,7 @@ futures = { workspace = true }
 recache = { workspace = true }
 amplify = { workspace = true }
 base32ct = { workspace = true, features = ["alloc"] }
+itertools = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }

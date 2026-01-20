@@ -1,6 +1,9 @@
 use crate::{
     clients::{
-        bens::{get_address, get_protocols, lookup_domain_name},
+        bens::{
+            get_address_multichain, get_protocols, lookup_address_multichain,
+            lookup_domain_name_multichain,
+        },
         blockscout,
     },
     error::{ParseError, ServiceError},
@@ -34,6 +37,7 @@ use crate::{
 use alloy_primitives::{Address as AddressAlloy, TxHash};
 use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
+use itertools::Itertools;
 use regex::Regex;
 use sea_orm::{DatabaseConnection, prelude::DateTime};
 use std::{
@@ -44,6 +48,8 @@ use std::{
 
 pub type BlockscoutClients = Arc<BTreeMap<ChainId, Arc<HttpApiClient>>>;
 
+const BENS_PROTOCOLS_LIMIT: usize = 5;
+
 pub struct Cluster {
     db: DatabaseConnection,
     name: String,
@@ -52,8 +58,7 @@ pub struct Cluster {
     quick_search_chains: Vec<ChainId>,
     dapp_client: HttpApiClient,
     bens_client: HttpApiClient,
-    bens_protocols: Option<&'static [String]>,
-    domain_primary_chain_id: ChainId,
+    bens_priority_protocols: Vec<String>,
     caches: ClusterCaches,
 }
 
@@ -67,8 +72,7 @@ impl Cluster {
         quick_search_chains: Vec<ChainId>,
         dapp_client: HttpApiClient,
         bens_client: HttpApiClient,
-        bens_protocols: Option<&'static [String]>,
-        domain_primary_chain_id: ChainId,
+        bens_priority_protocols: Vec<String>,
         caches: ClusterCaches,
     ) -> Self {
         Self {
@@ -79,8 +83,7 @@ impl Cluster {
             quick_search_chains,
             dapp_client,
             bens_client,
-            bens_protocols,
-            domain_primary_chain_id,
+            bens_priority_protocols,
             caches,
         }
     }
@@ -96,7 +99,6 @@ impl Cluster {
         SearchContext {
             cluster: self,
             db: Arc::new(self.db.clone()),
-            domain_primary_chain_id: self.domain_primary_chain_id,
             is_aggregated,
         }
     }
@@ -582,12 +584,7 @@ impl Cluster {
                 (vec![address], None)
             } else if domain_name_with_tld_regex().is_match(&query) {
                 let domains = self
-                    .search_domains_cached(
-                        query.clone(),
-                        vec![self.domain_primary_chain_id],
-                        1,
-                        None,
-                    )
+                    .search_domains_cached(query.clone(), vec![], 1, None)
                     .await
                     .map(|(d, _)| d)
                     .inspect_err(|err| {
@@ -742,25 +739,17 @@ impl Cluster {
         page_size: u64,
         page_token: Option<String>,
     ) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+        let protocols = self.prepare_protocol_ids().await?;
         let key = format!(
-            "{}:{}:{}:{}:{}",
+            "{}:{}:{}:{}",
             query,
-            self.bens_protocols.map(|p| p.join(",")).unwrap_or_default(),
-            self.domain_primary_chain_id,
+            protocols.clone().unwrap_or_default(),
             page_size,
             page_token.clone().unwrap_or_default(),
         );
 
-        let get = || {
-            search_domains(
-                self.bens_client.clone(),
-                query,
-                self.bens_protocols,
-                self.domain_primary_chain_id,
-                page_size,
-                page_token,
-            )
-        };
+        let bens_client = self.bens_client.clone();
+        let get = || search_domains(bens_client, query, protocols.clone(), page_size, page_token);
 
         let (domains, next_page_token) =
             maybe_cache_lookup!(self.caches.domain_search.as_ref(), key, get)?;
@@ -806,15 +795,11 @@ impl Cluster {
         &self,
         address: alloy_primitives::Address,
     ) -> Result<Option<DomainInfo>, ServiceError> {
+        let protocols = self.prepare_protocol_ids().await?;
         let key = format!("{}:{}", self.name, address);
 
-        let get = || {
-            get_domain_info(
-                self.bens_client.clone(),
-                address,
-                self.domain_primary_chain_id,
-            )
-        };
+        let bens_client = self.bens_client.clone();
+        let get = || get_domain_info(bens_client, address, protocols.clone());
 
         let domain_info = maybe_cache_lookup!(self.caches.domain_info.as_ref(), key, get)?;
 
@@ -840,9 +825,29 @@ impl Cluster {
 
     pub async fn get_protocols_cached(&self) -> Result<Vec<ProtocolInfo>, ServiceError> {
         let key = format!("{}:domain_protocols", self.name);
-        let get = || get_protocols(self.bens_client.clone(), self.domain_primary_chain_id);
+        let bens_client = self.bens_client.clone();
+        let chain_ids = self.chain_ids.clone();
+        let priority_protocols = self.bens_priority_protocols.clone();
+        let get = || get_protocols(bens_client, chain_ids, priority_protocols);
         let protocols = maybe_cache_lookup!(self.caches.domain_protocols.as_ref(), key, get)?;
         Ok(protocols)
+    }
+
+    /// Returns comma-separated protocol IDs for use in BENS multichain endpoints
+    async fn prepare_protocol_ids(&self) -> Result<Option<String>, ServiceError> {
+        let protocols = self.get_protocols_cached().await?;
+        if protocols.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(
+                protocols
+                    .iter()
+                    .map(|p| p.id.as_str())
+                    .take(BENS_PROTOCOLS_LIMIT)
+                    .collect::<Vec<_>>()
+                    .join(","),
+            ))
+        }
     }
 
     pub async fn quick_search(
@@ -881,21 +886,38 @@ impl Cluster {
 
         Ok((updates, next_page_token))
     }
+
+    pub async fn lookup_address_domains(
+        &self,
+        address: String,
+        page_size: u32,
+        page_token: Option<String>,
+    ) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+        let protocols = self.prepare_protocol_ids().await?;
+        lookup_address_domains(
+            self.bens_client.clone(),
+            address,
+            protocols,
+            page_size,
+            page_token,
+        )
+        .await
+    }
 }
 
 async fn get_domain_info(
     bens_client: HttpApiClient,
     address: alloy_primitives::Address,
-    chain_id: ChainId,
+    protocols: Option<String>,
 ) -> Result<Option<DomainInfo>, ServiceError> {
-    let request = bens_proto::GetAddressRequest {
+    let request = bens_proto::GetAddressMultichainRequest {
         address: address.to_string(),
-        chain_id,
-        protocol_id: None,
+        chain_id: None,
+        protocols,
     };
 
     let res = bens_client
-        .request(&get_address::GetAddress { request })
+        .request(&get_address_multichain::GetAddressMultichain { request })
         .await
         .inspect_err(|err| {
             tracing::error!(
@@ -910,42 +932,121 @@ async fn get_domain_info(
     Ok(domain_info)
 }
 
-pub async fn get_protocols(
+async fn get_protocols(
     bens_client: HttpApiClient,
-    chain_id: ChainId,
+    chain_ids: Vec<ChainId>,
+    priority_protocols: Vec<String>,
 ) -> Result<Vec<ProtocolInfo>, ServiceError> {
-    let request = bens_proto::GetProtocolsRequest { chain_id };
-    let res = bens_client
-        .request(&get_protocols::GetProtocols { request })
-        .await?;
-    Ok(res.items.into_iter().map(|p| p.into()).collect())
+    let jobs = chain_ids.into_iter().map(|chain_id| {
+        let client = bens_client.clone();
+        async move {
+            let request = bens_proto::GetProtocolsRequest { chain_id };
+            let res = client
+                .request(&get_protocols::GetProtocols { request })
+                .await
+                .inspect_err(
+                    |err| tracing::warn!(error = ?err, chain_id = ?chain_id, "failed to fetch protocols for chain"),
+                )?;
+            Ok::<Vec<ProtocolInfo>, ServiceError>(res.items.into_iter().map(Into::into).collect())
+        }
+    });
+
+    let results = futures::future::join_all(jobs).await;
+
+    let mut protocols = results
+        .into_iter()
+        .filter_map(Result::ok)
+        .flatten()
+        .unique_by(|p| p.id.clone())
+        .collect::<Vec<_>>();
+
+    // Protocols in priority list come first, followed by remaining protocols
+    // Example:
+    // priority_protocols = ["ens", "base"]
+    // protocols = ["zns", "base", "ens", "other"]
+    // result = ["ens", "base", "zns", "other"]
+    if !priority_protocols.is_empty() {
+        let priority_index = priority_protocols
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id.as_str(), i))
+            .collect::<HashMap<_, _>>();
+        let fallback = priority_protocols.len();
+        protocols.sort_by_key(|p| *priority_index.get(p.id.as_str()).unwrap_or(&fallback));
+    }
+
+    Ok(protocols)
 }
 
 pub async fn search_domains(
     bens_client: HttpApiClient,
     query: String,
-    protocols: Option<&'static [String]>,
-    primary_chain_id: ChainId,
+    protocols: Option<String>,
     page_size: u64,
     page_token: Option<String>,
 ) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
     let sort = "registration_date".to_string();
     let order = bens_proto::Order::Desc.into();
-    let request = bens_proto::LookupDomainNameRequest {
+    let chain_id = None;
+
+    let request = bens_proto::LookupDomainNameMultichainRequest {
         name: Some(query),
-        chain_id: primary_chain_id,
+        chain_id,
         only_active: true,
         sort,
         order,
-        protocols: protocols.map(|p| p.join(",")),
+        protocols,
         page_size: Some(page_size as u32),
         page_token,
     };
 
     let res = bens_client
-        .request(&lookup_domain_name::LookupDomainName { request })
+        .request(&lookup_domain_name_multichain::LookupDomainNameMultichain { request })
         .await
         .map_err(|err| anyhow::anyhow!("failed to search domains: {:?}", err))?;
+
+    let domains = res
+        .items
+        .into_iter()
+        .map(|d| d.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let next_page_token = res.next_page_params.map(|p| p.page_token);
+
+    Ok((domains, next_page_token))
+}
+
+pub async fn lookup_address_domains(
+    bens_client: HttpApiClient,
+    address: String,
+    protocols: Option<String>,
+    page_size: u32,
+    page_token: Option<String>,
+) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+    let sort = "registration_date".to_string();
+    let order = bens_proto::Order::Desc.into();
+    let only_active = true;
+    let resolved_to = true;
+    let owned_by = true;
+    let chain_id = None;
+
+    let request = bens_proto::LookupAddressMultichainRequest {
+        address,
+        chain_id,
+        protocols,
+        resolved_to,
+        owned_by,
+        only_active,
+        sort,
+        order,
+        page_size: Some(page_size),
+        page_token,
+    };
+
+    let res = bens_client
+        .request(&lookup_address_multichain::LookupAddressMultichain { request })
+        .await
+        .map_err(|err| anyhow::anyhow!("failed to lookup address domains: {:?}", err))?;
 
     let domains = res
         .items

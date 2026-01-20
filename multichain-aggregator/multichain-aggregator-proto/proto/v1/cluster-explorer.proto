@@ -34,6 +34,7 @@ service ClusterExplorerService {
   rpc SearchDapps(SearchByQueryRequest) returns (SearchDappsResponse) {}
   rpc QuickSearch(ClusterQuickSearchRequest) returns (ClusterQuickSearchResponse) {}
   rpc CheckRedirect(CheckRedirectRequest) returns (CheckRedirectResponse) {}
+  rpc LookupAddressDomains(LookupAddressDomainsRequest) returns (LookupAddressDomainsResponse) {}
 }
 
 message AddressHash {
@@ -358,4 +359,16 @@ message CheckRedirectResponse {
   optional string type = 2;
   optional string parameter = 3;
   optional string chain_id = 4;
+}
+
+message LookupAddressDomainsRequest {
+  string cluster_id = 1;
+  string address_hash = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message LookupAddressDomainsResponse {
+  repeated blockscout.multichainAggregator.v1.Domain items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
 }

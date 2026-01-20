@@ -241,8 +241,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     settings.service.quick_search_chains.clone(),
                     dapp_client.clone(),
                     bens_client.clone(),
-                    settings.service.bens_protocols.clone().map(|p| &*p.leak()),
-                    settings.service.domain_primary_chain_id,
+                    cluster.bens_priority_protocols,
                     caches.clone(),
                 ),
             )
@@ -259,8 +258,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             settings.service.quick_search_chains.clone(),
             dapp_client.clone(),
             bens_client.clone(),
-            settings.service.bens_protocols.clone().map(|p| &*p.leak()),
-            settings.service.domain_primary_chain_id,
+            Default::default(),
             caches.clone(),
         ),
     );

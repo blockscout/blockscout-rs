@@ -158,6 +158,38 @@ paths:
           type: string
       tags:
         - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/addresses/{address_hash}/domains:
+    get:
+      operationId: ClusterExplorerService_LookupAddressDomains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupAddressDomainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address_hash
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/addresses/{address_hash}/tokens:
     get:
       operationId: ClusterExplorerService_ListAddressTokens
@@ -1910,6 +1942,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Hash'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1LookupAddressDomainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1MarketplaceDapp:
