@@ -695,7 +695,6 @@ impl InterchainDatabase {
     }
 
     // VIEW TABLE: crosschain_transfers
-    // TBD: add pagination, filters, etc. Current implementation is just for tests only
     pub async fn get_crosschain_transfers(
         &self,
         tx_hash: Option<Vec<u8>>,
@@ -856,7 +855,7 @@ impl InterchainDatabase {
                                 )))
                                 .order_by_desc(Expr::col((
                                     crosschain_transfers::Entity,
-                                    crosschain_transfers::Column::Id,
+                                    crosschain_transfers::Column::Index,
                                 )));
                         }
                         PaginationDirection::Prev => {
@@ -869,7 +868,7 @@ impl InterchainDatabase {
                                 )))
                                 .order_by_asc(Expr::col((
                                     crosschain_transfers::Entity,
-                                    crosschain_transfers::Column::Id,
+                                    crosschain_transfers::Column::Index,
                                 )));
                         }
                     }

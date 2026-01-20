@@ -1,3 +1,5 @@
+-- Drop tables (indexes are dropped automatically)
+DROP TABLE IF EXISTS avalanche_icm_blockchain_ids;
 DROP TABLE IF EXISTS pending_messages;
 DROP TABLE IF EXISTS indexer_failures;
 DROP TABLE IF EXISTS indexer_checkpoints;
@@ -7,9 +9,9 @@ DROP TABLE IF EXISTS indexer_staging;
 DROP TABLE IF EXISTS tokens;
 DROP TABLE IF EXISTS bridge_contracts;
 DROP TABLE IF EXISTS bridges;
-DROP TABLE IF EXISTS avalanche_icm_blockchain_ids;
 DROP TABLE IF EXISTS chains;
 
+-- Drop enum types
 DROP TYPE IF EXISTS transfer_type;
 DROP TYPE IF EXISTS message_status;
 DROP TYPE IF EXISTS bridge_type;

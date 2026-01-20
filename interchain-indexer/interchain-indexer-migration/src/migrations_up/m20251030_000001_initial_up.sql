@@ -111,6 +111,41 @@ CREATE TABLE crosschain_messages (
   PRIMARY KEY (id, bridge_id)
 );
 
+-- Pagination index: works in the both directions (ascending and descending)
+CREATE INDEX crosschain_messages_pagination_idx
+    ON crosschain_messages (init_timestamp, id, bridge_id);
+
+-- Transaction hash lookups (used for filtering by src_tx_hash OR dst_tx_hash)
+CREATE INDEX crosschain_messages_src_tx_hash_idx
+    ON crosschain_messages (src_tx_hash) 
+    WHERE src_tx_hash IS NOT NULL;
+
+CREATE INDEX crosschain_messages_dst_tx_hash_idx
+    ON crosschain_messages (dst_tx_hash) 
+    WHERE dst_tx_hash IS NOT NULL;
+
+-- Native ID lookup (for messages with IDs > 8 bytes, e.g. Avalanche Teleporter)
+CREATE INDEX crosschain_messages_native_id_idx
+    ON crosschain_messages (native_id) 
+    WHERE native_id IS NOT NULL;
+
+-- Statistics queries: filter by chain IDs with timestamp range
+CREATE INDEX crosschain_messages_src_chain_ts_idx
+    ON crosschain_messages (src_chain_id, init_timestamp);
+
+CREATE INDEX crosschain_messages_dst_chain_ts_idx
+    ON crosschain_messages (dst_chain_id, init_timestamp) 
+    WHERE dst_chain_id IS NOT NULL;
+
+-- Sender/recipient address indexes for multisearch filtering
+CREATE INDEX crosschain_messages_sender_idx
+    ON crosschain_messages (sender_address) 
+    WHERE sender_address IS NOT NULL;
+
+CREATE INDEX crosschain_messages_recipient_idx
+    ON crosschain_messages (recipient_address) 
+    WHERE recipient_address IS NOT NULL;
+
 CREATE TYPE transfer_type AS ENUM ('erc20', 'erc721', 'native', 'erc1155');
 
 -- transfers: semantic transfer records extracted from messages (token transfers)
@@ -138,8 +173,24 @@ CREATE TABLE crosschain_transfers (
                REFERENCES crosschain_messages(id, bridge_id)
                ON DELETE CASCADE,
 
-  UNIQUE (bridge_id, message_id, index)
+  UNIQUE (message_id, bridge_id, index)
 );
+
+-- Sender/recipient address indexes for multisearch filtering on transfers
+CREATE INDEX crosschain_transfers_sender_idx
+    ON crosschain_transfers (sender_address) 
+    WHERE sender_address IS NOT NULL;
+
+CREATE INDEX crosschain_transfers_recipient_idx
+    ON crosschain_transfers (recipient_address) 
+    WHERE recipient_address IS NOT NULL;
+
+-- Token address indexes for filtering by token contract
+CREATE INDEX crosschain_transfers_token_src_idx
+    ON crosschain_transfers (token_src_chain_id, token_src_address);
+
+CREATE INDEX crosschain_transfers_token_dst_idx
+    ON crosschain_transfers (token_dst_chain_id, token_dst_address);
 
 -- indexer_checkpoints: for progress tracking per chain/worker
 CREATE TABLE indexer_checkpoints (
