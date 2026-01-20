@@ -236,20 +236,17 @@ impl AvalancheIndexer {
 
         let buffer_handle = Arc::clone(&buffer).start().await?;
 
+        let batch_ctx = BatchProcessContext {
+            bridge_id,
+            chain_ids: &chain_ids,
+            process_unknown_chains,
+            blockchain_id_resolver: &blockchain_id_resolver,
+            buffer: &buffer,
+        };
+
         // Process events
         while let Some((chain_id, provider, batch)) = combined_stream.next().await {
-            match process_batch(
-                batch,
-                chain_id,
-                bridge_id,
-                &chain_ids,
-                process_unknown_chains,
-                &blockchain_id_resolver,
-                &buffer,
-                &provider,
-            )
-            .await
-            {
+            match process_batch(batch, chain_id, &batch_ctx, &provider).await {
                 Ok(_) => {
                     tracing::debug!(bridge_id, chain_id, "processed log batch");
                 }
@@ -357,14 +354,19 @@ fn parse_message_key(message_id: &B256, bridge_id: i32) -> Result<(Key, [u8; 8])
     Ok((Key::new(id, bridge_id), message_id_bytes))
 }
 
+/// Shared context for batch processing that remains constant across all batches.
+struct BatchProcessContext<'a> {
+    bridge_id: i32,
+    chain_ids: &'a HashSet<i64>,
+    process_unknown_chains: bool,
+    blockchain_id_resolver: &'a BlockchainIdResolver,
+    buffer: &'a Arc<MessageBuffer<Message>>,
+}
+
 async fn process_batch(
     batch: Vec<Log>,
     chain_id: i64,
-    bridge_id: i32,
-    chain_ids: &HashSet<i64>,
-    process_unknown_chains: bool,
-    blockchain_id_resolver: &BlockchainIdResolver,
-    buffer: &Arc<MessageBuffer<Message>>,
+    ctx: &BatchProcessContext<'_>,
     provider: &DynProvider<Ethereum>,
 ) -> Result<()> {
     let logs_by_transaction_hash: HashMap<B256, Vec<&Log>> = batch
@@ -412,20 +414,20 @@ async fn process_batch(
         for log in teleporter_logs {
             let block_number = log.block_number.context("missing block number")? as i64;
 
-            let ctx = LogHandleContext {
+            let log_ctx = LogHandleContext {
                 chain_id,
                 block_number,
                 block_timestamp,
                 log,
-                bridge_id,
-                chain_ids,
-                process_unknown_chains,
-                blockchain_id_resolver,
-                buffer,
+                bridge_id: ctx.bridge_id,
+                chain_ids: ctx.chain_ids,
+                process_unknown_chains: ctx.process_unknown_chains,
+                blockchain_id_resolver: ctx.blockchain_id_resolver,
+                buffer: ctx.buffer,
                 receipt_logs,
             };
 
-            handle_log(ctx).await?;
+            handle_log(log_ctx).await?;
         }
     }
 

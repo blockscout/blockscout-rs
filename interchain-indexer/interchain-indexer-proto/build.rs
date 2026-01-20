@@ -38,6 +38,11 @@ fn compile(
         .field_attribute("Pagination.index", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.direction", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("IndexerStatus.extra_info", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("ChainInfo.icon", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("ChainInfo.explorer", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("ChainInfo.custom_tx_route", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("ChainInfo.custom_address_route", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("ChainInfo.custom_token_route", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         ;
     let default_fields: &[&str] = &[];
     for default_field in default_fields {

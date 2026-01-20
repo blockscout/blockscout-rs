@@ -18,7 +18,7 @@ use blockscout_service_launcher::{
     database, launcher, launcher::LaunchSettings, tracing as bs_tracing,
 };
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
-use interchain_indexer_logic::{InterchainDatabase, TokenInfoService};
+use interchain_indexer_logic::{ChainInfoService, InterchainDatabase, TokenInfoService};
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     interchain_statistics_service_actix::route_interchain_statistics_service,
     status_service_actix::route_status_service,
@@ -140,6 +140,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.token_info.clone(),
     ));
 
+    let chain_info_service = Arc::new(ChainInfoService::new(db.clone()));
+
     let indexers = spawn_configured_indexers(
         interchain_db.clone(),
         &bridges,
@@ -161,6 +163,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let interchain_service = Arc::new(InterchainServiceImpl::new(
         db.clone(),
         token_info_service.clone(),
+        chain_info_service.clone(),
         bridges,
         settings.api,
     ));

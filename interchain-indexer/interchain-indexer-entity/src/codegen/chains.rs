@@ -11,6 +11,9 @@ pub struct Model {
     pub name: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub icon: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub explorer: Option<String>,
+    pub custom_routes: Option<Json>,
     pub created_at: Option<DateTime>,
     pub updated_at: Option<DateTime>,
 }

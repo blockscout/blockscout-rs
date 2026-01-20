@@ -1,3 +1,4 @@
+mod chain_info;
 mod database;
 mod error;
 mod message_buffer;
@@ -13,6 +14,7 @@ pub mod test_utils;
 pub mod token_info;
 pub mod utils;
 
+pub use chain_info::*;
 pub use database::*;
 pub use error::ApiError;
 pub use indexer::*;

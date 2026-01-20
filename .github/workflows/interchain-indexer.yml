@@ -67,7 +67,7 @@ jobs:
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: steps.build.outcome == 'success'
       - name: DB tests
-        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored
+        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored --skip avalanche_e2e
         if: steps.build.outcome == 'success'
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/

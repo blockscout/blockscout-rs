@@ -1,9 +1,12 @@
 -- chains: supported chains list (e.g. Ethereum, Gnosis, Avalanche...)
 CREATE TABLE chains (
-  id          BIGINT PRIMARY KEY, -- the classic EVM chain_id, 8 bytes long
+  id            BIGINT PRIMARY KEY, -- the classic EVM chain_id, 8 bytes long
                                   -- or arbitrary unique number if not applicable
-  name        TEXT NOT NULL UNIQUE,
-  icon        TEXT,
+  name          TEXT NOT NULL UNIQUE,
+  icon          TEXT,
+  explorer      TEXT,
+  custom_routes JSON, -- explorer custom route templates [only when differs from defaults]:
+                      -- { tx: '/tx/{hash}', address: '/address/{hash}', token: '/token/{hash}' }
 
   created_at  TIMESTAMP DEFAULT now(),
   updated_at  TIMESTAMP DEFAULT now()

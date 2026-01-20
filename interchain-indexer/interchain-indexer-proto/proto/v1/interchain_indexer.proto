@@ -109,6 +109,16 @@ message BridgeInfo {
   optional string docs_url = 3;
 }
 
+message ChainInfo {
+  string id = 1;
+  string name = 2;
+  optional string icon = 3;
+  optional string explorer = 4;
+  optional string custom_tx_route = 5;
+  optional string custom_address_route = 6;
+  optional string custom_token_route = 7;
+}
+
 enum MessageStatus {
   MESSAGE_STATUS_INITIATED = 0;
   MESSAGE_STATUS_COMPLETED = 1;
@@ -120,12 +130,12 @@ message InterchainMessage {
   string message_id = 2;
   MessageStatus status = 3;
   
-  string source_chain_id = 4;
+  ChainInfo source_chain = 4;
   string send_timestamp = 5;
   optional AddressInfo sender = 6;
   optional string source_transaction_hash = 7;
   
-  string destination_chain_id = 8;
+  ChainInfo destination_chain = 8;
   optional string receive_timestamp = 9;
   optional AddressInfo recipient = 10;
   optional string destination_transaction_hash = 11;
@@ -194,8 +204,8 @@ message InterchainTransfer {
   string message_id = 2;
   MessageStatus status = 3;
 
-  string source_chain_id = 14;
-  string destination_chain_id = 15;
+  ChainInfo source_chain = 14;
+  ChainInfo destination_chain = 15;
   
   TokenInfo source_token = 4;
   optional string source_amount = 5;

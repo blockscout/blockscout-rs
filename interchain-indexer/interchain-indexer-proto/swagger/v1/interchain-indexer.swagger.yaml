@@ -456,6 +456,23 @@ definitions:
         type: string
       docs_url:
         type: string
+  v1ChainInfo:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      icon:
+        type: string
+      explorer:
+        type: string
+      custom_tx_route:
+        type: string
+      custom_address_route:
+        type: string
+      custom_token_route:
+        type: string
   v1FullStatus:
     type: object
     properties:
@@ -537,16 +554,16 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/v1MessageStatus'
-      source_chain_id:
-        type: string
+      source_chain:
+        $ref: '#/definitions/v1ChainInfo'
       send_timestamp:
         type: string
       sender:
         $ref: '#/definitions/v1AddressInfo'
       source_transaction_hash:
         type: string
-      destination_chain_id:
-        type: string
+      destination_chain:
+        $ref: '#/definitions/v1ChainInfo'
       receive_timestamp:
         type: string
       recipient:
@@ -574,10 +591,10 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/v1MessageStatus'
-      source_chain_id:
-        type: string
-      destination_chain_id:
-        type: string
+      source_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      destination_chain:
+        $ref: '#/definitions/v1ChainInfo'
       source_token:
         $ref: '#/definitions/v1TokenInfo'
       source_amount:

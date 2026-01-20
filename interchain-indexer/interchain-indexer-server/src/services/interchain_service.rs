@@ -5,13 +5,12 @@ use crate::{
 };
 use anyhow::anyhow;
 use interchain_indexer_entity::{
-    crosschain_messages::Model as CrosschainMessageModel,
+    chains::Model as ChainModel, crosschain_messages::Model as CrosschainMessageModel,
     crosschain_transfers::Model as CrosschainTransferModel,
-    sea_orm_active_enums::MessageStatus as DbMessageStatus,
-    tokens::Model as TokenInfoModel,
+    sea_orm_active_enums::MessageStatus as DbMessageStatus, tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
-    InterchainDatabase, JoinedTransfer, TokenInfoService,
+    ChainInfoService, InterchainDatabase, JoinedTransfer, TokenInfoService,
     pagination::{
         ListMarker, MessagesPaginationLogic, PaginationDirection, TransfersPaginationLogic,
     },
@@ -140,6 +139,7 @@ macro_rules! transfers_pagination_params {
 pub struct InterchainServiceImpl {
     pub db: Arc<InterchainDatabase>,
     pub token_info_service: Arc<TokenInfoService>,
+    pub chain_info_service: Arc<ChainInfoService>,
     pub bridges_map: HashMap<i32, BridgeInfo>,
     pub api_settings: ApiSettings,
 }
@@ -148,12 +148,14 @@ impl InterchainServiceImpl {
     pub fn new(
         db: Arc<InterchainDatabase>,
         token_info_service: Arc<TokenInfoService>,
+        chain_info_service: Arc<ChainInfoService>,
         bridges: Vec<BridgeConfig>,
         api_settings: ApiSettings,
     ) -> Self {
         Self {
             db,
             token_info_service,
+            chain_info_service,
             bridges_map: bridges
                 .into_iter()
                 .map(|b| {
@@ -187,18 +189,24 @@ impl InterchainServiceImpl {
         }))
         .await;
 
+        let source_chain = self
+            .get_chain_info(message.src_chain_id as u64)
+            .await
+            .into();
+        let destination_chain = match message.dst_chain_id {
+            Some(id) => Some(self.get_chain_info(id as u64).await),
+            None => None,
+        };
+
         InterchainMessage {
             bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(&message),
             status: message_status_to_proto(&message.status) as i32,
-            source_chain_id: message.src_chain_id.to_string(),
+            source_chain,
             sender: self.get_address_info_opt(message.sender_address),
             send_timestamp: db_datetime_to_string(message.init_timestamp),
             source_transaction_hash: hex_string_opt(message.src_tx_hash),
-            destination_chain_id: message
-                .dst_chain_id
-                .map(|id| id.to_string())
-                .unwrap_or_default(),
+            destination_chain,
             recipient: self.get_address_info_opt(message.recipient_address),
             receive_timestamp: message.last_update_timestamp.map(db_datetime_to_string),
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash),
@@ -235,15 +243,18 @@ impl InterchainServiceImpl {
         transfer: &CrosschainTransferModel,
         message: &CrosschainMessageModel,
     ) -> InterchainTransfer {
-        let source_chain_id = transfer.token_src_chain_id.to_string();
-        let destination_chain_id = transfer.token_dst_chain_id.to_string();
-
         InterchainTransfer {
             bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(message),
             status: message_status_to_proto(&message.status) as i32,
-            source_chain_id,
-            destination_chain_id,
+            source_chain: Some(
+                self.get_chain_info(transfer.token_src_chain_id as u64)
+                    .await,
+            ),
+            destination_chain: Some(
+                self.get_chain_info(transfer.token_dst_chain_id as u64)
+                    .await,
+            ),
             source_token: self
                 .get_token_info(
                     transfer.token_src_chain_id as u64,
@@ -271,15 +282,18 @@ impl InterchainServiceImpl {
         &self,
         transfer: &JoinedTransfer,
     ) -> InterchainTransfer {
-        let source_chain_id = transfer.token_src_chain_id.to_string();
-        let destination_chain_id = transfer.token_dst_chain_id.to_string();
-
         InterchainTransfer {
             bridge: self.get_bridge_info(transfer.bridge_id).into(),
             message_id: self.get_message_id_from_joined_transfer(transfer),
             status: message_status_to_proto(&transfer.status) as i32,
-            source_chain_id,
-            destination_chain_id,
+            source_chain: Some(
+                self.get_chain_info(transfer.token_src_chain_id as u64)
+                    .await,
+            ),
+            destination_chain: Some(
+                self.get_chain_info(transfer.token_dst_chain_id as u64)
+                    .await,
+            ),
             source_token: self
                 .get_token_info(
                     transfer.token_src_chain_id as u64,
@@ -357,6 +371,10 @@ impl InterchainServiceImpl {
             hash: to_hex_prefixed(a.as_slice()),
             ens_domain_name: None,
         })
+    }
+
+    async fn get_chain_info(&self, chain_id: u64) -> ChainInfo {
+        chain_info_logic_to_proto(self.chain_info_service.get_chain_info(chain_id).await)
     }
 }
 
@@ -511,5 +529,30 @@ fn token_info_logic_to_proto(model: TokenInfoModel) -> TokenInfo {
         symbol: model.symbol,
         decimals: model.decimals.map(|d| d.to_string()),
         icon_url: model.token_icon,
+    }
+}
+
+fn chain_info_logic_to_proto(model: ChainModel) -> ChainInfo {
+    ChainInfo {
+        id: model.id.to_string(),
+        name: model.name,
+        icon: model.icon,
+        explorer: model.explorer,
+        custom_tx_route: model
+            .custom_routes
+            .clone()
+            .and_then(|routes| routes.get("tx").and_then(|v| v.as_str()).map(String::from)),
+        custom_address_route: model.custom_routes.clone().and_then(|routes| {
+            routes
+                .get("address")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        }),
+        custom_token_route: model.custom_routes.and_then(|routes| {
+            routes
+                .get("token")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        }),
     }
 }

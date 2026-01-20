@@ -6,8 +6,8 @@ mod services;
 mod settings;
 
 pub use config::{
-    BridgeConfig, BridgeContractConfig, ChainConfig, create_provider_pools_from_chains,
-    load_bridges_from_file, load_chains_from_file,
+    BridgeConfig, BridgeContractConfig, ChainConfig, ExplorerConfig,
+    create_provider_pools_from_chains, load_bridges_from_file, load_chains_from_file,
 };
 pub use indexers::spawn_configured_indexers;
 pub use server::run;

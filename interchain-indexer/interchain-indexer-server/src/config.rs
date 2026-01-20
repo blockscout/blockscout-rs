@@ -118,15 +118,48 @@ impl From<bridge_contracts::Model> for BridgeContractConfig {
 /// Convert ChainConfig to chains::ActiveModel for database operations
 impl From<ChainConfig> for chains::ActiveModel {
     fn from(config: ChainConfig) -> Self {
+        // Build custom_routes JSON from ExplorerConfig fields
+        let custom_routes = {
+            let mut routes = serde_json::Map::new();
+            if let Some(tx_route) = &config.explorer.custom_tx_route {
+                routes.insert(
+                    "tx".to_string(),
+                    serde_json::Value::String(tx_route.clone()),
+                );
+            }
+            if let Some(address_route) = &config.explorer.custom_address_route {
+                routes.insert(
+                    "address".to_string(),
+                    serde_json::Value::String(address_route.clone()),
+                );
+            }
+            if let Some(token_route) = &config.explorer.custom_token_route {
+                routes.insert(
+                    "token".to_string(),
+                    serde_json::Value::String(token_route.clone()),
+                );
+            }
+            if routes.is_empty() {
+                None
+            } else {
+                Some(serde_json::Value::Object(routes))
+            }
+        };
+
         chains::ActiveModel {
             id: ActiveValue::Set(config.chain_id),
             name: ActiveValue::Set(config.name),
-            // native_id: ActiveValue::Set(config.native_id),
             icon: ActiveValue::Set(if config.icon.is_empty() {
                 None
             } else {
                 Some(config.icon)
             }),
+            explorer: ActiveValue::Set(if config.explorer.url.is_empty() {
+                None
+            } else {
+                Some(config.explorer.url)
+            }),
+            custom_routes: ActiveValue::Set(custom_routes),
             ..Default::default()
         }
     }
@@ -136,22 +169,55 @@ impl From<ChainConfig> for chains::ActiveModel {
 /// Note: This conversion loses the `rpcs` field as it's not stored in the chains table
 impl From<chains::Model> for ChainConfig {
     fn from(model: chains::Model) -> Self {
+        // Extract custom routes from JSON
+        let (custom_tx_route, custom_address_route, custom_token_route) =
+            if let Some(routes) = &model.custom_routes {
+                (
+                    routes.get("tx").and_then(|v| v.as_str()).map(String::from),
+                    routes
+                        .get("address")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    routes
+                        .get("token")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                )
+            } else {
+                (None, None, None)
+            };
+
         ChainConfig {
             chain_id: model.id,
             name: model.name,
-            // native_id: model.native_id,
             icon: model.icon.unwrap_or_default(),
+            explorer: ExplorerConfig {
+                url: model.explorer.unwrap_or_default(),
+                custom_tx_route,
+                custom_address_route,
+                custom_token_route,
+            },
             rpcs: vec![], // RPCs are not stored in database
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
+pub struct ExplorerConfig {
+    #[serde(default)]
+    pub url: String,
+    pub custom_tx_route: Option<String>,
+    pub custom_address_route: Option<String>,
+    pub custom_token_route: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct ChainConfig {
     pub chain_id: i64,
     pub name: String,
-    // pub native_id: Option<String>,
     pub icon: String,
+    #[serde(default)]
+    pub explorer: ExplorerConfig,
     pub rpcs: Vec<HashMap<String, RpcProviderConfig>>,
 }
 
@@ -468,8 +534,13 @@ mod tests {
         let config = ChainConfig {
             chain_id: 1,
             name: "Ethereum".to_string(),
-            // native_id: None,
             icon: "https://example.com/icon.png".to_string(),
+            explorer: ExplorerConfig {
+                url: "https://etherscan.io".to_string(),
+                custom_tx_route: Some("/transaction/{hash}".to_string()),
+                custom_address_route: None,
+                custom_token_route: None,
+            },
             rpcs: vec![],
         };
 
@@ -481,6 +552,20 @@ mod tests {
             active_model.icon,
             ActiveValue::Set(Some(ref icon)) if icon == "https://example.com/icon.png"
         ));
+        assert!(matches!(
+            active_model.explorer,
+            ActiveValue::Set(Some(ref url)) if url == "https://etherscan.io"
+        ));
+        // Check custom_routes contains the tx route
+        if let ActiveValue::Set(Some(ref routes)) = active_model.custom_routes {
+            assert_eq!(
+                routes.get("tx").and_then(|v| v.as_str()),
+                Some("/tx/{hash}")
+            );
+            assert!(routes.get("address").is_none());
+        } else {
+            panic!("Expected custom_routes to be set");
+        }
     }
 
     #[test]
@@ -488,25 +573,38 @@ mod tests {
         let config = ChainConfig {
             chain_id: 1,
             name: "Ethereum".to_string(),
-            // native_id: None,
             icon: String::new(),
+            explorer: ExplorerConfig {
+                url: String::new(),
+                custom_tx_route: None,
+                custom_address_route: None,
+                custom_token_route: None,
+            },
             rpcs: vec![],
         };
 
         let active_model: chains::ActiveModel = config.into();
 
         assert!(matches!(active_model.icon, ActiveValue::Set(None)));
+        assert!(matches!(active_model.explorer, ActiveValue::Set(None)));
+        assert!(matches!(active_model.custom_routes, ActiveValue::Set(None)));
     }
 
     #[test]
     fn test_model_to_chain_config() {
         use interchain_indexer_entity::chains;
 
+        let custom_routes = serde_json::json!({
+            "tx": "/transaction/{hash}",
+            "address": "/addr/{hash}"
+        });
+
         let model = chains::Model {
             id: 1,
             name: "Ethereum".to_string(),
-            // native_id: None,
             icon: Some("https://example.com/icon.png".to_string()),
+            explorer: Some("https://etherscan.io".to_string()),
+            custom_routes: Some(custom_routes),
             created_at: None,
             updated_at: None,
         };
@@ -515,8 +613,17 @@ mod tests {
 
         assert_eq!(config.chain_id, 1);
         assert_eq!(config.name, "Ethereum");
-        // assert_eq!(config.native_id, None);
         assert_eq!(config.icon, "https://example.com/icon.png");
+        assert_eq!(config.explorer.url, "https://etherscan.io");
+        assert_eq!(
+            config.explorer.custom_tx_route,
+            Some("/transaction/{hash}".to_string())
+        );
+        assert_eq!(
+            config.explorer.custom_address_route,
+            Some("/addr/{hash}".to_string())
+        );
+        assert_eq!(config.explorer.custom_token_route, None);
         // rpcs are lost in conversion (not stored in DB)
         assert_eq!(config.rpcs, vec![]);
     }

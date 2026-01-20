@@ -83,7 +83,12 @@ impl InterchainDatabase {
         match chains::Entity::insert_many(chains)
             .on_conflict(
                 OnConflict::column(chains::Column::Id)
-                    .update_columns([chains::Column::Name, chains::Column::Icon])
+                    .update_columns([
+                        chains::Column::Name,
+                        chains::Column::Icon,
+                        chains::Column::Explorer,
+                        chains::Column::CustomRoutes,
+                    ])
                     .value(chains::Column::UpdatedAt, Expr::current_timestamp())
                     .to_owned(),
             )
@@ -104,6 +109,19 @@ impl InterchainDatabase {
 
             Err(e) => {
                 tracing::error!(err =? e, "Failed to fetch all chains");
+                Err(e.into())
+            }
+        }
+    }
+
+    pub async fn get_chain_by_id(&self, chain_id: u64) -> anyhow::Result<Option<chains::Model>> {
+        match chains::Entity::find_by_id(chain_id as i64)
+            .one(self.db.as_ref())
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                tracing::error!(err =? e, chain_id, "Failed to fetch chain by id");
                 Err(e.into())
             }
         }
