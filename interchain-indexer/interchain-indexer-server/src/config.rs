@@ -560,7 +560,7 @@ mod tests {
         if let ActiveValue::Set(Some(ref routes)) = active_model.custom_routes {
             assert_eq!(
                 routes.get("tx").and_then(|v| v.as_str()),
-                Some("/tx/{hash}")
+                Some("/transaction/{hash}")
             );
             assert!(routes.get("address").is_none());
         } else {
