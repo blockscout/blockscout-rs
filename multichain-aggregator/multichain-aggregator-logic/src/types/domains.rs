@@ -76,16 +76,11 @@ impl TryFrom<bens_proto::Domain> for Domain {
 
 impl From<Domain> for proto::Domain {
     fn from(v: Domain) -> Self {
-        // convert protocol to prost_wkt struct
-        let protocol = serde_json::from_value(
-            serde_json::to_value(v.protocol).expect("failed to serialize protocol"),
-        )
-        .expect("failed to deserialize protocol");
         Self {
             address: v.address.map(|a| a.to_checksum(None)),
             name: v.name,
             expiry_date: v.expiry_date,
-            protocol,
+            protocol: Some(v.protocol.into()),
         }
     }
 }
