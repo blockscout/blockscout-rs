@@ -45,6 +45,8 @@ pub struct CacheSettings {
     pub decoded_calldata_cache: CacheEntrySettings,
     #[serde(default = "default_token_search_cache")]
     pub token_search_cache: CacheEntrySettings,
+    #[serde(default = "default_chain_metrics_cache")]
+    pub chain_metrics_cache: CacheEntrySettings,
 }
 
 #[serde_as]
@@ -248,4 +250,14 @@ fn default_token_search_cache() -> CacheEntrySettings {
 
 fn default_bens_priority_protocols() -> Vec<String> {
     vec!["ens".to_string()]
+}
+
+fn default_chain_metrics_cache() -> CacheEntrySettings {
+    let ttl = 24 * ONE_HOUR;
+    let refresh_ahead = ttl / 5; // 20% of ttl
+    CacheEntrySettings {
+        enabled: default_enabled(),
+        ttl,
+        refresh_ahead: Some(refresh_ahead),
+    }
 }

@@ -48,7 +48,7 @@ pub mod chart_prelude {
                         DefaultCreate, DefaultQueryVec, ValueEstimation,
                         update::{
                             batching::parameters::{
-                                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                                Batch1Day, Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
                                 BatchMaxDays,
                             },
                             clear_and_query_all::ClearAllAndPassVec,

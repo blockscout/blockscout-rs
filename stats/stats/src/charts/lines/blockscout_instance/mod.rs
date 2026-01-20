@@ -32,7 +32,7 @@ pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };
 pub use active_aa_wallets::ActiveAccountAbstractionWallets;
-pub use active_accounts::ActiveAccounts;
+pub use active_accounts::{ActiveAccounts, ActiveAccountsWeekly};
 pub use active_bundlers::ActiveBundlers;
 pub use active_paymasters::ActivePaymasters;
 pub use new_aa_wallets::{

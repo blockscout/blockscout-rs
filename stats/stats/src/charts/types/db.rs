@@ -3,6 +3,8 @@ use entity::chart_data;
 
 use sea_orm::{DbErr, FromQueryResult, QueryResult, Set, TryGetable};
 
+use crate::{chart_prelude::Week, types::Timespan};
+
 use super::{TimespanValue, timespans::DateValue};
 
 // Separate type instead of `TimespanValue` just to derive `FromQueryResult`
@@ -45,5 +47,14 @@ impl DbDateValue<String> {
 impl<V: TryGetable> FromQueryResult for TimespanValue<NaiveDate, V> {
     fn from_query_result(res: &QueryResult, pre: &str) -> Result<Self, DbErr> {
         DbDateValue::<V>::from_query_result(res, pre).map(|dv| dv.into())
+    }
+}
+
+impl<V: TryGetable> FromQueryResult for TimespanValue<Week, V> {
+    fn from_query_result(res: &QueryResult, pre: &str) -> Result<Self, DbErr> {
+        DbDateValue::<V>::from_query_result(res, pre).map(|dv| TimespanValue {
+            timespan: Week::from_date(dv.date),
+            value: dv.value,
+        })
     }
 }

@@ -9,13 +9,13 @@ use crate::{
     error::{ParseError, ServiceError},
     repository::{
         address_token_balances::{self, ListAddressTokensPageToken, ListTokenHoldersPageToken},
-        addresses::{self, ListAddressUpdatesPageToken},
-        block_ranges, chains, hashes, interop_message_transfers, interop_messages,
-        tokens::{self, ListClusterTokensPageToken},
+        addresses, block_ranges, chains, hashes, interop_message_transfers, interop_messages,
+        tokens::{self, ListClusterTokensPageToken, ListTokenUpdatesPageToken},
     },
     services::{
         self, MIN_QUERY_LENGTH,
-        coin_price::{CoinPriceCache, try_fetch_coin_price},
+        cache::ClusterCaches,
+        coin_price::try_fetch_coin_price,
         dapp_search,
         macros::{maybe_cache_lookup, preload_domain_info},
         quick_search::{self, SearchContext, SearchTerm},
@@ -23,7 +23,7 @@ use crate::{
     types::{
         ChainId,
         address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
-        addresses::{AddressUpdate, AggregatedAddressInfo, ChainAddressInfo},
+        addresses::{AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
@@ -31,14 +31,13 @@ use crate::{
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
         search_results::{QuickSearchResult, Redirect},
-        tokens::{AggregatedToken, TokenType},
+        tokens::{AggregatedToken, TokenListUpdate, TokenType},
     },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
 use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use itertools::Itertools;
-use recache::{handler::CacheHandler, stores::redis::RedisStore};
 use regex::Regex;
 use sea_orm::{DatabaseConnection, prelude::DateTime};
 use std::{
@@ -47,12 +46,6 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-pub type DecodedCalldataCache = CacheHandler<RedisStore, String, serde_json::Value>;
-pub type DomainSearchCache = CacheHandler<RedisStore, String, (Vec<Domain>, Option<String>)>;
-pub type DomainInfoCache = CacheHandler<RedisStore, String, Option<DomainInfo>>;
-pub type DomainProtocolsCache = CacheHandler<RedisStore, String, Vec<ProtocolInfo>>;
-pub type TokenSearchCache =
-    CacheHandler<RedisStore, String, (Vec<AggregatedToken>, Option<ListClusterTokensPageToken>)>;
 pub type BlockscoutClients = Arc<BTreeMap<ChainId, Arc<HttpApiClient>>>;
 
 const BENS_PROTOCOLS_LIMIT: usize = 5;
@@ -62,17 +55,11 @@ pub struct Cluster {
     name: String,
     chain_ids: Vec<ChainId>,
     blockscout_clients: BlockscoutClients,
-    decoded_calldata_cache: Option<DecodedCalldataCache>,
     quick_search_chains: Vec<ChainId>,
     dapp_client: HttpApiClient,
     bens_client: HttpApiClient,
     bens_priority_protocols: Vec<String>,
-    domain_search_cache: Option<DomainSearchCache>,
-    domain_info_cache: Option<DomainInfoCache>,
-    domain_protocols_cache: Option<DomainProtocolsCache>,
-    token_search_cache: Option<TokenSearchCache>,
-    marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
-    coin_price_cache: Option<CoinPriceCache>,
+    caches: ClusterCaches,
 }
 
 impl Cluster {
@@ -82,34 +69,22 @@ impl Cluster {
         name: String,
         chain_ids: Vec<ChainId>,
         blockscout_clients: BlockscoutClients,
-        decoded_calldata_cache: Option<DecodedCalldataCache>,
         quick_search_chains: Vec<ChainId>,
         dapp_client: HttpApiClient,
         bens_client: HttpApiClient,
         bens_priority_protocols: Vec<String>,
-        domain_search_cache: Option<DomainSearchCache>,
-        domain_info_cache: Option<DomainInfoCache>,
-        domain_protocols_cache: Option<DomainProtocolsCache>,
-        token_search_cache: Option<TokenSearchCache>,
-        marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
-        coin_price_cache: Option<CoinPriceCache>,
+        caches: ClusterCaches,
     ) -> Self {
         Self {
             db,
             name,
             chain_ids,
             blockscout_clients,
-            decoded_calldata_cache,
             quick_search_chains,
             dapp_client,
             bens_client,
             bens_priority_protocols,
-            domain_search_cache,
-            domain_info_cache,
-            domain_protocols_cache,
-            token_search_cache,
-            marketplace_enabled_cache,
-            coin_price_cache,
+            caches,
         }
     }
 
@@ -178,6 +153,23 @@ impl Cluster {
 
         let chains = chains::list_by_ids(&self.db, chain_ids).await?;
         Ok(chains.into_iter().map(|c| c.into()).collect())
+    }
+
+    pub async fn list_chain_metrics(
+        &self,
+    ) -> Result<Vec<crate::types::chain_metrics::ChainMetrics>, ServiceError> {
+        let chain_ids = self.active_chain_ids().await?;
+        let key = format!("{}:chain_metrics", self.name);
+
+        let blockscout_clients = self.blockscout_clients.clone();
+        let get = || async move {
+            Ok::<_, ServiceError>(
+                services::chain_metrics::fetch_chain_metrics(&blockscout_clients, &chain_ids).await,
+            )
+        };
+
+        let metrics = maybe_cache_lookup!(self.caches.chain_metrics.as_ref(), key, get)?;
+        Ok(metrics)
     }
 
     pub async fn get_interop_message(
@@ -422,7 +414,7 @@ impl Cluster {
                 .map_err(ServiceError::from)
         };
 
-        maybe_cache_lookup!(&self.decoded_calldata_cache, key, get_decoded_payload)
+        maybe_cache_lookup!(&self.caches.decoded_calldata, key, get_decoded_payload)
     }
 
     pub async fn search_hashes(
@@ -713,7 +705,7 @@ impl Cluster {
 
         // cache only the first page to speed up quick search
         let (mut tokens, page_token) = if is_first_page {
-            maybe_cache_lookup!(self.token_search_cache.as_ref(), key, get)?
+            maybe_cache_lookup!(self.caches.token_search.as_ref(), key, get)?
         } else {
             get().await?
         };
@@ -735,7 +727,7 @@ impl Cluster {
         let get = || async {
             Ok::<_, ServiceError>(try_fetch_coin_price(blockscout_clients, chain_ids).await)
         };
-        let coin_price = maybe_cache_lookup!(self.coin_price_cache.as_ref(), key, get)?;
+        let coin_price = maybe_cache_lookup!(self.caches.coin_price.as_ref(), key, get)?;
 
         Ok(coin_price)
     }
@@ -760,7 +752,7 @@ impl Cluster {
         let get = || search_domains(bens_client, query, protocols.clone(), page_size, page_token);
 
         let (domains, next_page_token) =
-            maybe_cache_lookup!(self.domain_search_cache.as_ref(), key, get)?;
+            maybe_cache_lookup!(self.caches.domain_search.as_ref(), key, get)?;
 
         Ok((domains, next_page_token))
     }
@@ -794,7 +786,7 @@ impl Cluster {
             query,
             categories,
             chain_ids,
-            &self.marketplace_enabled_cache,
+            &self.caches.marketplace_enabled,
         )
         .await
     }
@@ -809,7 +801,7 @@ impl Cluster {
         let bens_client = self.bens_client.clone();
         let get = || get_domain_info(bens_client, address, protocols.clone());
 
-        let domain_info = maybe_cache_lookup!(self.domain_info_cache.as_ref(), key, get)?;
+        let domain_info = maybe_cache_lookup!(self.caches.domain_info.as_ref(), key, get)?;
 
         Ok(domain_info)
     }
@@ -837,7 +829,7 @@ impl Cluster {
         let chain_ids = self.chain_ids.clone();
         let priority_protocols = self.bens_priority_protocols.clone();
         let get = || get_protocols(bens_client, chain_ids, priority_protocols);
-        let protocols = maybe_cache_lookup!(self.domain_protocols_cache.as_ref(), key, get)?;
+        let protocols = maybe_cache_lookup!(self.caches.domain_protocols.as_ref(), key, get)?;
         Ok(protocols)
     }
 
@@ -881,23 +873,16 @@ impl Cluster {
         Ok(result)
     }
 
-    pub async fn list_address_updates(
+    pub async fn list_token_updates(
         &self,
         chain_ids: Vec<ChainId>,
-        is_contract: Option<bool>,
         page_size: u64,
-        page_token: Option<ListAddressUpdatesPageToken>,
-    ) -> Result<(Vec<AddressUpdate>, Option<ListAddressUpdatesPageToken>), ServiceError> {
+        page_token: Option<ListTokenUpdatesPageToken>,
+    ) -> Result<(Vec<TokenListUpdate>, Option<ListTokenUpdatesPageToken>), ServiceError> {
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
 
-        let (updates, next_page_token) = addresses::list_address_updates(
-            &self.db,
-            chain_ids,
-            is_contract,
-            page_size,
-            page_token,
-        )
-        .await?;
+        let (updates, next_page_token) =
+            tokens::list_token_updates(&self.db, chain_ids, page_size, page_token).await?;
 
         Ok((updates, next_page_token))
     }

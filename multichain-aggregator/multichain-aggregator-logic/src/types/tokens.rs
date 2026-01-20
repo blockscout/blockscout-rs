@@ -8,7 +8,7 @@ use sea_orm::{
     ActiveValue::{NotSet, Set, Unchanged},
     DeriveIntoActiveModel, DerivePartialModel, FromJsonQueryResult, IntoActiveModel,
     IntoActiveValue, IntoSimpleExpr,
-    prelude::{BigDecimal, ColumnTrait, Decimal, Expr},
+    prelude::{BigDecimal, ColumnTrait, DateTime, Decimal, Expr},
     sea_query::SimpleExpr,
 };
 use serde::{Deserialize, Serialize};
@@ -192,6 +192,30 @@ impl From<AggregatedToken> for proto::Address {
             is_token: Some(true),
             chain_id: v.chain_info.chain_id.to_string(),
             domain_info: None,
+        }
+    }
+}
+
+#[derive(DerivePartialModel, Debug, Clone)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct TokenListUpdate {
+    pub address_hash: SeaOrmAddress,
+    pub chain_id: ChainId,
+    pub updated_at: DateTime,
+    pub name: Option<String>,
+    pub symbol: Option<String>,
+    pub token_type: TokenType,
+}
+
+impl From<TokenListUpdate> for proto::list_token_updates_response::TokenUpdate {
+    fn from(v: TokenListUpdate) -> Self {
+        Self {
+            address_hash: v.address_hash.to_string(),
+            chain_id: v.chain_id.to_string(),
+            updated_at: v.updated_at.and_utc().timestamp_micros(),
+            name: v.name,
+            symbol: v.symbol,
+            token_type: db_token_type_to_proto_token_type(v.token_type).into(),
         }
     }
 }

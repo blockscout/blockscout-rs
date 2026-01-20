@@ -10,6 +10,8 @@ import "google/protobuf/struct.proto";
 service ClusterExplorerService {
   rpc ListClusterChains(ListClusterChainsRequest)
       returns (ListClusterChainsResponse) {}
+  rpc ListChainMetrics(ListChainMetricsRequest)
+      returns (ListChainMetricsResponse) {}
   rpc ListInteropMessages(ListInteropMessagesRequest)
       returns (ListInteropMessagesResponse) {}
   rpc CountInteropMessages(CountInteropMessagesRequest)
@@ -95,6 +97,28 @@ message ListClusterChainsRequest {
 
 message ListClusterChainsResponse {
   repeated blockscout.multichainAggregator.v1.Chain items = 1;
+}
+
+message WeeklyMetric {
+  string current_full_week = 1;
+  string previous_full_week = 2;
+  string wow_diff_percent = 3;
+}
+
+message ChainMetrics {
+  string chain_id = 1;
+  optional string tps = 2;
+  optional WeeklyMetric new_addresses = 3;
+  optional WeeklyMetric daily_transactions = 4;
+  optional WeeklyMetric active_accounts = 5;
+}
+
+message ListChainMetricsRequest {
+  string cluster_id = 1;
+}
+
+message ListChainMetricsResponse {
+  repeated ChainMetrics items = 1;
 }
 
 message ListInteropMessagesRequest {

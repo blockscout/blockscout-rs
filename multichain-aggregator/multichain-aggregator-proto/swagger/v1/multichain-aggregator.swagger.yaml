@@ -46,41 +46,6 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
-  /api/v1/addresses/updates:
-    get:
-      operationId: MultichainAggregatorService_ListAddressUpdates
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1ListAddressUpdatesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: chain_id
-          in: query
-          required: false
-          type: array
-          items:
-            type: string
-          collectionFormat: multi
-        - name: is_contract
-          in: query
-          required: false
-          type: boolean
-        - name: page_size
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: page_token
-          in: query
-          required: false
-          type: string
-      tags:
-        - MultichainAggregatorService
   /api/v1/block-numbers:
     get:
       operationId: MultichainAggregatorService_ListBlockNumbers
@@ -267,6 +232,25 @@ paths:
         - name: page_token
           in: query
           required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/chain-metrics:
+    get:
+      operationId: ClusterExplorerService_ListChainMetrics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListChainMetricsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
           type: string
       tags:
         - ClusterExplorerService
@@ -1094,6 +1078,37 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/tokens/updates:
+    get:
+      operationId: MultichainAggregatorService_ListTokenUpdates
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListTokenUpdatesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: chain_id
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/transactions:
     get:
       operationId: MultichainAggregatorService_ListTransactions
@@ -1321,18 +1336,6 @@ definitions:
         type: object
         additionalProperties:
           type: string
-  ListAddressUpdatesResponseAddressUpdate:
-    type: object
-    properties:
-      hash:
-        type: string
-      chain_id:
-        type: string
-      updated_at:
-        type: string
-        format: int64
-      contract_name:
-        type: string
   ListTokenHoldersResponseTokenHolder:
     type: object
     properties:
@@ -1342,6 +1345,22 @@ definitions:
         type: string
       value:
         type: string
+  ListTokenUpdatesResponseTokenUpdate:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      chain_id:
+        type: string
+      updated_at:
+        type: string
+        format: int64
+      name:
+        type: string
+      symbol:
+        type: string
+      token_type:
+        $ref: '#/definitions/v1TokenType'
   TokenImportCounters:
     type: object
     properties:
@@ -1547,6 +1566,19 @@ definitions:
       block_number:
         type: string
         format: uint64
+  v1ChainMetrics:
+    type: object
+    properties:
+      chain_id:
+        type: string
+      tps:
+        type: string
+      new_addresses:
+        $ref: '#/definitions/v1WeeklyMetric'
+      daily_transactions:
+        $ref: '#/definitions/v1WeeklyMetric'
+      active_accounts:
+        $ref: '#/definitions/v1WeeklyMetric'
   v1CheckRedirectResponse:
     type: object
     properties:
@@ -1747,16 +1779,6 @@ definitions:
           $ref: '#/definitions/ListAddressTokensResponseAggregatedTokenBalanceInfo'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
-  v1ListAddressUpdatesResponse:
-    type: object
-    properties:
-      items:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/ListAddressUpdatesResponseAddressUpdate'
-      next_page_params:
-        $ref: '#/definitions/v1Pagination'
   v1ListAddressesResponse:
     type: object
     properties:
@@ -1787,6 +1809,14 @@ definitions:
           $ref: '#/definitions/v1Hash'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
+  v1ListChainMetricsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainMetrics'
   v1ListChainsResponse:
     type: object
     properties:
@@ -1882,6 +1912,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/ListTokenHoldersResponseTokenHolder'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListTokenUpdatesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ListTokenUpdatesResponseTokenUpdate'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListTokensResponse:
@@ -2104,3 +2144,12 @@ definitions:
       - TOKEN_TYPE_ERC_404
       - TOKEN_TYPE_ERC_7802
     default: TOKEN_TYPE_UNSPECIFIED
+  v1WeeklyMetric:
+    type: object
+    properties:
+      current_full_week:
+        type: string
+      previous_full_week:
+        type: string
+      wow_diff_percent:
+        type: string

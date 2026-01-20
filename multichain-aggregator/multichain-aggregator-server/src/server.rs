@@ -19,15 +19,13 @@ use multichain_aggregator_logic::{
     clients::{bens, blockscout, dapp},
     metrics,
     services::{
+        cache::*,
         chains::{
             ChainSource, MarketplaceEnabledCache, fetch_and_upsert_blockscout_chains,
             list_active_chains_cached,
         },
         channel::Channel,
-        cluster::{
-            Cluster, DecodedCalldataCache, DomainInfoCache, DomainProtocolsCache,
-            DomainSearchCache, TokenSearchCache,
-        },
+        cluster::Cluster,
         coin_price::build_coin_price_cache,
     },
 };
@@ -162,32 +160,41 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         };
     }
 
-    let domain_search_cache = build_cache!(
-        settings,
-        DomainSearchCache,
-        domain_search_cache,
-        "domain_search"
-    );
-    let domain_info_cache =
-        build_cache!(settings, DomainInfoCache, domain_info_cache, "domain_info");
-    let domain_protocols_cache = build_cache!(
-        settings,
-        DomainProtocolsCache,
-        domain_protocols_cache,
-        "domain_protocols"
-    );
-    let decoded_calldata_cache = build_cache!(
-        settings,
-        DecodedCalldataCache,
-        decoded_calldata_cache,
-        "decoded_calldata"
-    );
-    let token_search_cache = build_cache!(
-        settings,
-        TokenSearchCache,
-        token_search_cache,
-        "token_search"
-    );
+    let caches = ClusterCaches {
+        decoded_calldata: build_cache!(
+            settings,
+            DecodedCalldataCache,
+            decoded_calldata_cache,
+            "decoded_calldata"
+        ),
+        domain_search: build_cache!(
+            settings,
+            DomainSearchCache,
+            domain_search_cache,
+            "domain_search"
+        ),
+        domain_info: build_cache!(settings, DomainInfoCache, domain_info_cache, "domain_info"),
+        domain_protocols: build_cache!(
+            settings,
+            DomainProtocolsCache,
+            domain_protocols_cache,
+            "domain_protocols"
+        ),
+        token_search: build_cache!(
+            settings,
+            TokenSearchCache,
+            token_search_cache,
+            "token_search"
+        ),
+        chain_metrics: build_cache!(
+            settings,
+            ChainMetricsCache,
+            chain_metrics_cache,
+            "chain_metrics"
+        ),
+        marketplace_enabled: marketplace_enabled_cache.clone(),
+        coin_price: redis_cache.as_ref().cloned().map(build_coin_price_cache),
+    };
 
     let chain_urls = list_active_chains_cached(repo.read_db(), &[ChainSource::Repository])
         .await?
@@ -223,7 +230,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     (*id, Arc::new(client))
                 })
                 .collect::<BTreeMap<_, _>>();
-            let coin_price_cache = redis_cache.as_ref().cloned().map(build_coin_price_cache);
 
             (
                 name.clone(),
@@ -232,17 +238,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     name,
                     chain_ids,
                     Arc::new(blockscout_clients),
-                    decoded_calldata_cache.clone(),
                     settings.service.quick_search_chains.clone(),
                     dapp_client.clone(),
                     bens_client.clone(),
                     cluster.bens_priority_protocols,
-                    domain_search_cache.clone(),
-                    domain_info_cache.clone(),
-                    domain_protocols_cache.clone(),
-                    token_search_cache.clone(),
-                    marketplace_enabled_cache.clone(),
-                    coin_price_cache.clone(),
+                    caches.clone(),
                 ),
             )
         })
@@ -255,17 +255,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             MULTICHAIN_CLUSTER_ID.to_string(),
             Default::default(),
             Default::default(),
-            decoded_calldata_cache.clone(),
             settings.service.quick_search_chains.clone(),
             dapp_client.clone(),
             bens_client.clone(),
             Default::default(),
-            domain_search_cache.clone(),
-            domain_info_cache.clone(),
-            domain_protocols_cache.clone(),
-            token_search_cache.clone(),
-            marketplace_enabled_cache.clone(),
-            None,
+            caches.clone(),
         ),
     );
     let cluster_explorer = Arc::new(ClusterExplorer::new(clusters, settings.service.api.clone()));
