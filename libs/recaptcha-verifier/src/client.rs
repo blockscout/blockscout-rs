@@ -99,15 +99,17 @@ mod tests {
         matchers::{method, path},
     };
 
-    async fn mock_client(response: serde_json::Value) -> RecaptchaClient {
+    async fn mock_client(response: serde_json::Value) -> (MockServer, RecaptchaClient) {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/recaptcha/api/siteverify"))
             .respond_with(ResponseTemplate::new(200).set_body_json(response))
             .mount(&server)
             .await;
-        RecaptchaClient::new("test-secret")
-            .with_verify_url(format!("{}/recaptcha/api/siteverify", server.uri()))
+        let client = RecaptchaClient::new("test-secret")
+            .with_verify_url(format!("{}/recaptcha/api/siteverify", server.uri()));
+
+        (server, client)
     }
 
     fn v2_response(hostname: &str) -> serde_json::Value {
@@ -130,7 +132,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_v2_success() {
-        let client = mock_client(v2_response("example.com")).await;
+        let (_, client) = mock_client(v2_response("example.com")).await;
         let response = client.verify(VerifyRequest::new("token")).await.unwrap();
         assert!(response.success);
         assert!(!response.is_v3());
@@ -138,7 +140,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_v3_success() {
-        let client = mock_client(v3_response("example.com", 0.9, "login")).await;
+        let (_, client) = mock_client(v3_response("example.com", 0.9, "login")).await;
         let response = client
             .verify(
                 VerifyRequest::new("token")
@@ -153,7 +155,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_v3_score_too_low() {
-        let client = mock_client(v3_response("example.com", 0.3, "login")).await;
+        let (_, client) = mock_client(v3_response("example.com", 0.3, "login")).await;
         let err = client
             .verify(VerifyRequest::new("token").with_min_score(0.5))
             .await
@@ -165,7 +167,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_action_mismatch() {
-        let client = mock_client(v3_response("example.com", 0.9, "signup")).await;
+        let (_, client) = mock_client(v3_response("example.com", 0.9, "signup")).await;
         let err = client
             .verify(VerifyRequest::new("token").with_expected_action("login"))
             .await
@@ -177,7 +179,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_hostname_mismatch() {
-        let client = mock_client(v2_response("malicious.com")).await;
+        let (_, client) = mock_client(v2_response("malicious.com")).await;
         let err = client
             .verify(VerifyRequest::new("token").with_expected_hostname("example.com"))
             .await
@@ -189,7 +191,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_failed_with_error_codes() {
-        let client = mock_client(serde_json::json!({
+        let (_, client) = mock_client(serde_json::json!({
             "success": false,
             "error-codes": ["invalid-input-response", "timeout-or-duplicate"]
         }))
