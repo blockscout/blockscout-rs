@@ -43,16 +43,16 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 | `INTERCHAIN_INDEXER__BRIDGES_CONFIG`                                    | true                     | e.g. `config/avalanche/bridges.json`                         |               |
 | `INTERCHAIN_INDEXER__CHAINS_CONFIG`                                     | true                     | e.g. `config/avalanche/chains.json`                          |               |
 | `INTERCHAIN_INDEXER__DATABASE__CONNECT__URL`                            | true                     | e.g. `postgres://postgres:postgres@database:5433/blockscout` |               |
-| `INTERCHAIN_INDEXER__API__DEFAULT_PAGE_SIZE`                            |                          |                                                              | `50`          |
-| `INTERCHAIN_INDEXER__API__MAX_PAGE_SIZE`                                |                          |                                                              | `100`         |
-| `INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN`                         |                          |                                                              | `true`        |
-| `INTERCHAIN_INDEXER__DATABASE__CREATE_DATABASE`                         |                          | e.g. `true`                                                  | `false`       |
-| `INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS`                          |                          | e.g. `true`                                                  | `false`       |
-| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS`  |                          |                                                              | ``            |
-| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__RETRY_INTERVAL` |                          | e.g. `1`                                                     | `3600`        |
-| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL`            |                          | e.g. `https://contracts-info-test.k8s-dev.blockscout.com`    | `null`        |
-| `INTERCHAIN_INDEXER__TOKEN_INFO__ONCHAIN_RETRY_INTERVAL`                |                          |                                                              | `10`          |
-| `INTERCHAIN_INDEXER__CHAIN_INFO__COOLDOWN_INTERVAL`                     |                          |                                                              | `60`          |
+| `INTERCHAIN_INDEXER__DATABASE__CREATE_DATABASE`                         |                          | Create database on service startup                           | `false`       |
+| `INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS`                          |                          | Run DB migrations on startup                                 | `false`       |
+| `INTERCHAIN_INDEXER__API__DEFAULT_PAGE_SIZE`                            |                          | Default page size for paginated endpoints (`/api/v1/interchain/messages` and `/api/v1/interchain/transfers` | `50`          |
+| `INTERCHAIN_INDEXER__API__MAX_PAGE_SIZE`                                |                          | Maximum supported page size for paginated endpoints (configured via `page_size` query parameter) | `100`         |
+| `INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN`                         |                          | If true, wrap all raw pagination parameters into the single Base64 string | `true`        |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS`  |                          | The list of chains IDs to be ignored by token info service. Comma-separated list of identifiers without spaces (e.g. `42,1000`)                                                             | ``            |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__RETRY_INTERVAL` |                          | If the token icon is not found in the the external token info service do not retry fetching it during this interval. Unit: `seconds` | `3600`        |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL`            |                          | External Blockscout token info service. E.g. `https://contracts-info-test.k8s-dev.blockscout.com` | `null`        |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__ONCHAIN_RETRY_INTERVAL`                |                          | If the onchain request for the token info was unsuccessful, do not retry fetching it during this interval. Unit: `seconds` | `10`          |
+| `INTERCHAIN_INDEXER__CHAIN_INFO__COOLDOWN_INTERVAL`                     |                          | If the chain name is unknown, do not retry DB query during this interval. Unit: `seconds` | `60`          |
 
 [anchor]: <> (anchors.envs.end.service)
 

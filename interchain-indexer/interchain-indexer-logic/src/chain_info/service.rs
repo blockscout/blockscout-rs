@@ -123,8 +123,9 @@ impl ChainInfoService {
         // Query database
         match self.db.get_chain_by_id(chain_id).await {
             Ok(Some(model)) => {
+                let has_name = has_valid_name(&model);
                 let normalized = normalize_chain(model);
-                if has_valid_name(&normalized) {
+                if has_name {
                     // Chain has a valid name - cache it and remove from cooldown tracker
                     self.cache.write().insert(chain_id, normalized.clone());
                     self.unknown_name_last_query.write().remove(&chain_id);
@@ -157,8 +158,9 @@ impl ChainInfoService {
 
         let mut cache = self.cache.write();
         for chain in chains {
+            let has_name = has_valid_name(&chain);
             let normalized = normalize_chain(chain);
-            if has_valid_name(&normalized) {
+            if has_name {
                 cache.insert(normalized.id as u64, normalized);
             }
         }

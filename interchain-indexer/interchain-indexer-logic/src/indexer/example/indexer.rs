@@ -156,7 +156,7 @@ impl CrosschainIndexer for ExampleIndexer {
         // Signal the indexing loop to stop
         self.is_running.store(false, Ordering::Release);
 
-        // TODO: add delay to ensure the indexing loop is stopped
+        // add delay to ensure the indexing loop is stopped
         sleep(Duration::from_secs(1)).await;
 
         // Wait for the task to finish
