@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub struct VerifyRequest<'a> {
     pub response_token: &'a str,
-    pub expected_hostname: &'a str,
+    pub expected_hostname: Option<&'a str>,
     /// Expected action name (v3 only, optional)
     pub expected_action: Option<&'a str>,
     /// Minimum acceptable score (v3 only, defaults to 0.5)
@@ -11,13 +11,18 @@ pub struct VerifyRequest<'a> {
 }
 
 impl<'a> VerifyRequest<'a> {
-    pub fn new(response_token: &'a str, expected_hostname: &'a str) -> Self {
+    pub fn new(response_token: &'a str) -> Self {
         Self {
             response_token,
-            expected_hostname,
+            expected_hostname: None,
             expected_action: None,
             min_score: None,
         }
+    }
+
+    pub fn with_expected_hostname(mut self, hostname: &'a str) -> Self {
+        self.expected_hostname = Some(hostname);
+        self
     }
 
     /// Set the expected action (for v3)

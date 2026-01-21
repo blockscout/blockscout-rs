@@ -54,12 +54,13 @@ impl RecaptchaClient {
             return Err(Error::VerificationFailed(verify_response.error_codes));
         }
 
-        // Check hostname
-        if let Some(ref actual_hostname) = verify_response.hostname
-            && actual_hostname != request.expected_hostname
+        // Check hostname if expected
+        if let Some(expected_hostname) = request.expected_hostname
+            && let Some(ref actual_hostname) = verify_response.hostname
+            && actual_hostname != expected_hostname
         {
             return Err(Error::HostnameMismatch {
-                expected: request.expected_hostname.to_string(),
+                expected: expected_hostname.to_string(),
                 actual: actual_hostname.clone(),
             });
         }
@@ -130,10 +131,7 @@ mod tests {
     #[tokio::test]
     async fn verify_v2_success() {
         let client = mock_client(v2_response("example.com")).await;
-        let response = client
-            .verify(VerifyRequest::new("token", "example.com"))
-            .await
-            .unwrap();
+        let response = client.verify(VerifyRequest::new("token")).await.unwrap();
         assert!(response.success);
         assert!(!response.is_v3());
     }
@@ -143,7 +141,7 @@ mod tests {
         let client = mock_client(v3_response("example.com", 0.9, "login")).await;
         let response = client
             .verify(
-                VerifyRequest::new("token", "example.com")
+                VerifyRequest::new("token")
                     .with_expected_action("login")
                     .with_min_score(0.7),
             )
@@ -157,7 +155,7 @@ mod tests {
     async fn verify_v3_score_too_low() {
         let client = mock_client(v3_response("example.com", 0.3, "login")).await;
         let err = client
-            .verify(VerifyRequest::new("token", "example.com").with_min_score(0.5))
+            .verify(VerifyRequest::new("token").with_min_score(0.5))
             .await
             .unwrap_err();
         assert!(
@@ -169,7 +167,7 @@ mod tests {
     async fn verify_action_mismatch() {
         let client = mock_client(v3_response("example.com", 0.9, "signup")).await;
         let err = client
-            .verify(VerifyRequest::new("token", "example.com").with_expected_action("login"))
+            .verify(VerifyRequest::new("token").with_expected_action("login"))
             .await
             .unwrap_err();
         assert!(
@@ -181,7 +179,7 @@ mod tests {
     async fn verify_hostname_mismatch() {
         let client = mock_client(v2_response("malicious.com")).await;
         let err = client
-            .verify(VerifyRequest::new("token", "example.com"))
+            .verify(VerifyRequest::new("token").with_expected_hostname("example.com"))
             .await
             .unwrap_err();
         assert!(
@@ -197,7 +195,7 @@ mod tests {
         }))
         .await;
         let err = client
-            .verify(VerifyRequest::new("token", "example.com"))
+            .verify(VerifyRequest::new("token"))
             .await
             .unwrap_err();
         assert!(matches!(err, Error::VerificationFailed(codes) if codes.len() == 2));
