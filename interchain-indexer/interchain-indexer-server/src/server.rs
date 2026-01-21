@@ -81,8 +81,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let db = Arc::new(interchain_db.clone());
 
     // Reading chains and bridges from json config files
-    let chains = load_chains_from_file(&settings.chains_config).unwrap();
-    let bridges = load_bridges_from_file(&settings.bridges_config).unwrap();
+    let chains = load_chains_from_file(&settings.chains_config)?;
+    let bridges = load_bridges_from_file(&settings.bridges_config)?;
 
     // Populate database with the chains, bridges and bridge contracts
     db.upsert_chains(

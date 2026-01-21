@@ -105,6 +105,9 @@ impl LogStreamBuilder {
                         if !logs.is_empty() {
                             yield logs;
                         }
+                        if from_block == genesis_block {
+                            break;
+                        }
                         to_block = from_block.saturating_sub(1);
                     }
                     Err(e) => {

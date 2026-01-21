@@ -37,7 +37,7 @@ pub struct Settings {
     pub tracing: TracingSettings,
     #[serde(default)]
     pub jaeger: JaegerSettings,
-    #[serde(default)]
+    #[serde(default = "default_swagger_path")]
     pub swagger_path: PathBuf,
 
     pub database: DatabaseSettings,

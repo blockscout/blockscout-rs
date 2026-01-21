@@ -58,12 +58,19 @@ pub async fn spawn_configured_indexers(
                 // NOTE: CrosschainIndexer::start is responsible for spawning internal tasks.
                 // We intentionally don't keep JoinHandles here.
                 // If start fails, we treat it as fatal for this indexer instance and skip it.
-                indexer.start().await.with_context(|| {
+                if let Err(err) = indexer.start().await.with_context(|| {
                     format!(
                         "failed to start Avalanche indexer for bridge {}",
                         bridge.bridge_id
                     )
-                })?;
+                }) {
+                    tracing::error!(
+                        bridge_id = bridge.bridge_id,
+                        err = ?err,
+                        "Failed to start Avalanche indexer"
+                    );
+                    continue;
+                }
 
                 tracing::info!(bridge_id = bridge.bridge_id, "Started Avalanche indexer");
                 indexers.push(indexer);

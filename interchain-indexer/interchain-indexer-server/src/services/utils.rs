@@ -7,7 +7,8 @@ pub fn db_datetime_to_string(ts: NaiveDateTime) -> String {
 }
 
 pub fn map_db_error(err: anyhow::Error) -> tonic::Status {
-    tonic::Status::internal(err.to_string())
+    tracing::error!("database error: {:?}", err);
+    tonic::Status::internal("internal server error")
 }
 
 pub fn sort_json_value(value: JsonValue) -> JsonValue {

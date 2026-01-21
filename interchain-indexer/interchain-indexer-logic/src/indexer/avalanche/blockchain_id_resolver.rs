@@ -99,7 +99,12 @@ impl BlockchainIdResolver {
         db: InterchainDatabase,
     ) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            //client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(5))
+                .timeout(Duration::from_secs(15))
+                .build()
+                .expect("Failed to build reqwest client"),
             network,
             api_key,
             cache: Cache::new(10_000),

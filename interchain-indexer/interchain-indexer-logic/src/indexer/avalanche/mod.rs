@@ -91,6 +91,7 @@ pub struct AvalancheIndexer {
     db: Arc<InterchainDatabase>,
     config: AvalancheIndexerConfig,
     buffer: Arc<MessageBuffer<Message>>,
+    buffer_handle: parking_lot::RwLock<Option<JoinHandle<()>>>,
 
     is_running: Arc<std::sync::atomic::AtomicBool>,
     indexing_handle: parking_lot::RwLock<Option<JoinHandle<()>>>,
@@ -116,6 +117,7 @@ impl AvalancheIndexer {
             db,
             config,
             buffer,
+            buffer_handle: parking_lot::RwLock::new(None),
             is_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             indexing_handle: parking_lot::RwLock::new(None),
             state: Arc::new(parking_lot::RwLock::new(CrosschainIndexerState::Idle)),
@@ -131,6 +133,7 @@ impl AvalancheIndexer {
             db: self.db.clone(),
             config: self.config.clone(),
             buffer: self.buffer.clone(),
+            buffer_handle: parking_lot::RwLock::new(None),
             is_running: self.is_running.clone(),
             indexing_handle: parking_lot::RwLock::new(None),
             state: self.state.clone(),
@@ -234,8 +237,6 @@ impl AvalancheIndexer {
             combined_stream = stream::select(combined_stream, stream).boxed();
         }
 
-        let buffer_handle = Arc::clone(&buffer).start().await?;
-
         let batch_ctx = BatchProcessContext {
             bridge_id,
             chain_ids: &chain_ids,
@@ -261,7 +262,6 @@ impl AvalancheIndexer {
             }
         }
 
-        buffer_handle.abort();
         tracing::warn!(bridge_id, "Avalanche indexer stream completed unexpectedly");
         Ok(())
     }
@@ -285,6 +285,9 @@ impl CrosschainIndexer for AvalancheIndexer {
             );
             return Ok(());
         }
+
+        let handle = Arc::clone(&self.buffer).start().await?;
+        *self.buffer_handle.write() = Some(handle);
 
         self.is_running.store(true, Ordering::Release);
         *self.state.write() = CrosschainIndexerState::Running;
@@ -314,6 +317,9 @@ impl CrosschainIndexer for AvalancheIndexer {
     async fn stop(&self) {
         self.is_running.store(false, Ordering::Release);
         if let Some(handle) = self.indexing_handle.write().take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.buffer_handle.write().take() {
             handle.abort();
         }
         *self.state.write() = CrosschainIndexerState::Idle;

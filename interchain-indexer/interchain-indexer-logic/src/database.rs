@@ -1246,7 +1246,7 @@ fn build_pagination_from_transfers(
         timestamp: transfer.init_timestamp,
         message_id: transfer.message_id as u64,
         bridge_id: transfer.bridge_id as u32,
-        index: transfer.id as u64,
+        index: transfer.index as u64,
         direction: PaginationDirection::Prev,
     });
 
@@ -1259,7 +1259,7 @@ fn build_pagination_from_transfers(
             timestamp: transfer.init_timestamp,
             message_id: transfer.message_id as u64,
             bridge_id: transfer.bridge_id as u32,
-            index: transfer.id as u64,
+            index: transfer.index as u64,
             direction: PaginationDirection::Next,
         })
     } else {

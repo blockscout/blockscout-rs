@@ -19,6 +19,10 @@ impl TokenInfoFetcher for Erc20TokenInfoFetcher {
         _chain_id: u64,
         address: Vec<u8>,
     ) -> anyhow::Result<OnchainTokenInfo> {
+        if address.len() != 20 {
+            anyhow::bail!("ERC20 address must be 20 bytes, got {}", address.len());
+        }
+
         let token_contract = ERC20::new(Address::from_slice(&address), provider.clone());
         let name_call = token_contract.name();
         let symbol_call = token_contract.symbol();

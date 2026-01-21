@@ -27,9 +27,9 @@ pub fn naive_datetime_to_nanos(dt: NaiveDateTime) -> anyhow::Result<i64> {
 }
 
 pub fn nanos_to_naive_datetime(nanos: i64) -> anyhow::Result<NaiveDateTime> {
-    let secs = nanos / NANOS_PER_SEC;
-    let nanos = nanos % NANOS_PER_SEC;
-    let dt = chrono::DateTime::from_timestamp(secs, nanos as u32)
+    let secs = nanos.div_euclid(NANOS_PER_SEC);
+    let subsec_nanos = nanos.rem_euclid(NANOS_PER_SEC) as u32;
+    let dt = chrono::DateTime::from_timestamp(secs, subsec_nanos)
         .ok_or_else(|| anyhow::anyhow!("Failed to construct DateTime from timestamp"))?
         .naive_utc();
     Ok(dt)
