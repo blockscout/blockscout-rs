@@ -55,13 +55,13 @@ impl RecaptchaClient {
         }
 
         // Check hostname
-        if let Some(ref actual_hostname) = verify_response.hostname {
-            if actual_hostname != request.expected_hostname {
-                return Err(Error::HostnameMismatch {
-                    expected: request.expected_hostname.to_string(),
-                    actual: actual_hostname.clone(),
-                });
-            }
+        if let Some(ref actual_hostname) = verify_response.hostname
+            && actual_hostname != request.expected_hostname
+        {
+            return Err(Error::HostnameMismatch {
+                expected: request.expected_hostname.to_string(),
+                actual: actual_hostname.clone(),
+            });
         }
 
         // For v3 responses, check score and action
@@ -75,15 +75,14 @@ impl RecaptchaClient {
             }
 
             // Check action if expected
-            if let Some(expected_action) = request.expected_action {
-                if let Some(ref actual_action) = verify_response.action {
-                    if actual_action != expected_action {
-                        return Err(Error::ActionMismatch {
-                            expected: expected_action.to_string(),
-                            actual: actual_action.clone(),
-                        });
-                    }
-                }
+            if let Some(expected_action) = request.expected_action
+                && let Some(ref actual_action) = verify_response.action
+                && actual_action != expected_action
+            {
+                return Err(Error::ActionMismatch {
+                    expected: expected_action.to_string(),
+                    actual: actual_action.clone(),
+                });
             }
         }
 
@@ -94,8 +93,10 @@ impl RecaptchaClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
 
     async fn mock_client(response: serde_json::Value) -> RecaptchaClient {
         let server = MockServer::start().await;
