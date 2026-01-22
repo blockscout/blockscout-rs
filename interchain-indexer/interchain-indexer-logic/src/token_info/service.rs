@@ -202,7 +202,6 @@ impl TokenInfoService {
             }
             Ok(None) => {}
             Err(e) => {
-                // Request failed, touch updated_at to prevent repeated attempts
                 tracing::warn!(
                     chain_id = chain_id,
                     address = hex::encode(&address),
