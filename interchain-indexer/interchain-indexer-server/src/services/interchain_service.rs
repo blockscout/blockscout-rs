@@ -536,8 +536,8 @@ fn chain_info_logic_to_proto(model: ChainModel) -> ChainInfo {
     ChainInfo {
         id: model.id.to_string(),
         name: model.name,
-        icon: model.icon,
-        explorer: model.explorer,
+        logo: model.icon,
+        explorer_url: model.explorer,
         custom_tx_route: model
             .custom_routes
             .clone()

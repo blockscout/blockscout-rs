@@ -463,9 +463,9 @@ definitions:
         type: string
       name:
         type: string
-      icon:
+      logo:
         type: string
-      explorer:
+      explorer_url:
         type: string
       custom_tx_route:
         type: string

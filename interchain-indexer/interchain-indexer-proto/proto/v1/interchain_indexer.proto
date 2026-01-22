@@ -112,8 +112,8 @@ message BridgeInfo {
 message ChainInfo {
   string id = 1;
   string name = 2;
-  optional string icon = 3;
-  optional string explorer = 4;
+  optional string logo = 3;
+  optional string explorer_url = 4;
   optional string custom_tx_route = 5;
   optional string custom_address_route = 6;
   optional string custom_token_route = 7;
