@@ -91,7 +91,11 @@ impl CrosschainIndexer for ExampleIndexer {
     }
 
     async fn start(&self) -> Result<(), Error> {
-        if self.is_running.load(Ordering::Acquire) {
+        if self
+            .is_running
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
             warn!(bridge_id = self.bridge_id, "Indexer is already running");
             return Ok(());
         }

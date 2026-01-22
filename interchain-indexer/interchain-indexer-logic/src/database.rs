@@ -356,6 +356,10 @@ impl InterchainDatabase {
             })
             .await?;
 
+        // Most likely bridges upserting will be invoked just on service startup,
+        // but just in case, we invalidate the cache anyway.
+        self.bridges_names.write().clear();
+
         Ok(())
     }
 
