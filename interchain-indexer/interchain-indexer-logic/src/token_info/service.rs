@@ -154,6 +154,12 @@ impl TokenInfoService {
                         cache.entry(key.clone()).or_insert_with(|| model.clone());
                     }
 
+                    // Invalidate error cache for this key on success
+                    {
+                        let mut error_cache = self.error_cache.write();
+                        error_cache.remove(&key);
+                    }
+
                     Ok(model)
                 }
                 Err(e) => {
