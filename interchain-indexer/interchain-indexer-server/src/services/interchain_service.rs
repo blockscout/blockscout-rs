@@ -119,7 +119,7 @@ macro_rules! transfers_pagination_params {
 
                 _ => {
                     return Err(map_db_error(anyhow!(
-                        "Pagination error: timestamp, message_id, bridge_id, transfer_id and direction must be provided together"
+                        "Pagination error: timestamp, message_id, bridge_id, index and direction must be provided together"
                     )))
                 }
             }

@@ -33,7 +33,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
-          description: multisesarch ability
+          description: multisearch ability
           in: query
           required: false
           type: string
@@ -179,7 +179,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
-          description: multisesarch ability
+          description: multisearch ability
           in: query
           required: false
           type: string

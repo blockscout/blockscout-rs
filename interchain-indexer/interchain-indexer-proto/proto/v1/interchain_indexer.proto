@@ -59,7 +59,7 @@ message Pagination {
 }
 
 message GetMessagesRequest {
-  optional string q = 1;  // multisesarch ability
+  optional string q = 1;  // multisearch ability
 
   // Items on a page: bounded by the API settings
   optional uint32 page_size = 2;
@@ -153,7 +153,7 @@ message GetMessagesResponse {
 }
 
 message GetTransfersRequest {
-  optional string q = 1;  // multisesarch ability
+  optional string q = 1;  // multisearch ability
 
   // Items on a page: bounded by the API settings
   optional uint32 page_size = 2;
