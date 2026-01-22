@@ -31,6 +31,7 @@ enum TokenType {
   TOKEN_TYPE_ERC_1155 = 3;
   TOKEN_TYPE_ERC_404 = 4;
   TOKEN_TYPE_ERC_7802 = 5;
+  TOKEN_TYPE_ZRC_2 = 6;
 }
 
 enum HashType {

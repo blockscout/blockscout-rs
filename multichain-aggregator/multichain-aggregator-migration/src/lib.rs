@@ -13,6 +13,7 @@ mod m20250729_111157_change_block_ranges_block_number_to_bigint;
 mod m20250822_103440_add_tokens_indexes;
 mod m20250904_113635_add_token_holders_index;
 mod m20260119_122518_add_token_updates_index;
+mod m20260121_183201_add_zrc2_token_type;
 
 pub struct Migrator;
 
@@ -32,6 +33,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250822_103440_add_tokens_indexes::Migration),
             Box::new(m20250904_113635_add_token_holders_index::Migration),
             Box::new(m20260119_122518_add_token_updates_index::Migration),
+            Box::new(m20260121_183201_add_zrc2_token_type::Migration),
         ]
     }
 }
