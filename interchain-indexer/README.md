@@ -51,7 +51,7 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 | `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS`  |                          | The list of chains IDs to be ignored by token info service. Comma-separated list of identifiers without spaces (e.g. `42,1000`)                                                             | ``            |
 | `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__RETRY_INTERVAL` |                          | If the token icon is not found in the the external token info service do not retry fetching it during this interval. Unit: `seconds` | `3600`        |
 | `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL`            |                          | External Blockscout token info service. E.g. `https://contracts-info-test.k8s-dev.blockscout.com` | `null`        |
-| `INTERCHAIN_INDEXER__TOKEN_INFO__ONCHAIN_RETRY_INTERVAL`                |                          | If the onchain request for the token info was unsuccessful, do not retry fetching it during this interval. Unit: `seconds` | `10`          |
+| `INTERCHAIN_INDEXER__TOKEN_INFO__ONCHAIN_RETRY_INTERVAL`                |                          | If the on-chain request for the token info was unsuccessful, do not retry fetching it during this interval. Unit: `seconds` | `10`          |
 | `INTERCHAIN_INDEXER__CHAIN_INFO__COOLDOWN_INTERVAL`                     |                          | If the chain name is unknown, do not retry DB query during this interval. Unit: `seconds` | `60`          |
 
 [anchor]: <> (anchors.envs.end.service)
@@ -131,7 +131,7 @@ Expose the metrics port (default `6060`) when running in Docker (see docker-comp
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.
 + Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
-+ Execute `just` to see avaliable dev commands
++ Execute `just` to see available dev commands
 
 ```bash
 just
@@ -178,6 +178,6 @@ or run with ENVs from .env current
 `Router` and `Router` have similar names, but are actually distinct types
 ```
 
-To fix this error you need to change tonic version of `tonic` in `blockscout-service-launcer` to `0.8`
+To fix this error you need to change tonic version of `tonic` in `blockscout-service-launcher` to `0.8`
 
 For now you can only change in `Cargo.lock`

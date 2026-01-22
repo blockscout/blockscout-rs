@@ -150,7 +150,7 @@ impl LogStreamBuilder {
                     .inspect_err(|e| tracing::error!(err =? e, bridge_id, chain_id, "failed to get latest block number"))
                     .ok()
                     .filter(|latest| from_block <= *latest)
-                    .map(|latest| (from_block + batch_size).min(latest));
+                    .map(|latest| from_block.saturating_add(batch_size).min(latest));
 
                 let Some(to_block) = to_block else {
                     tracing::debug!(bridge_id, chain_id, from_block, "waiting for new blocks");
