@@ -915,8 +915,8 @@ impl InterchainDatabase {
         chain_id: u64,
     ) -> anyhow::Result<Option<indexer_checkpoints::Model>> {
         indexer_checkpoints::Entity::find()
-            .filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id))
-            .filter(indexer_checkpoints::Column::ChainId.eq(chain_id))
+            .filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id as i64))
+            .filter(indexer_checkpoints::Column::ChainId.eq(chain_id as i64))
             .one(self.db.as_ref())
             .await
             .inspect_err(|e| tracing::error!(err =? e, "failed to query checkpoint from database"))
@@ -929,7 +929,7 @@ impl InterchainDatabase {
         address: Vec<u8>,
     ) -> anyhow::Result<Option<tokens::Model>> {
         tokens::Entity::find()
-            .filter(tokens::Column::ChainId.eq(chain_id))
+            .filter(tokens::Column::ChainId.eq(chain_id as i64))
             .filter(tokens::Column::Address.eq(address))
             .one(self.db.as_ref())
             .await
@@ -990,13 +990,15 @@ impl InterchainDatabase {
 
                     if let Some(src_chain_id) = src_chain_filter {
                         filter = filter.add(
-                            Expr::col(crosschain_messages::Column::SrcChainId).eq(src_chain_id),
+                            Expr::col(crosschain_messages::Column::SrcChainId)
+                                .eq(src_chain_id as i64),
                         );
                     }
 
                     if let Some(dst_chain_id) = dst_chain_filter {
                         filter = filter.add(
-                            Expr::col(crosschain_messages::Column::DstChainId).eq(dst_chain_id),
+                            Expr::col(crosschain_messages::Column::DstChainId)
+                                .eq(dst_chain_id as i64),
                         );
                     }
 
@@ -1040,13 +1042,13 @@ impl InterchainDatabase {
             .add(Expr::col(crosschain_messages::Column::InitTimestamp).lt(next_day_start));
 
         if let Some(src_chain_id) = src_chain_filter {
-            filter =
-                filter.add(Expr::col(crosschain_messages::Column::SrcChainId).eq(src_chain_id));
+            filter = filter
+                .add(Expr::col(crosschain_messages::Column::SrcChainId).eq(src_chain_id as i64));
         }
 
         if let Some(dst_chain_id) = dst_chain_filter {
-            filter =
-                filter.add(Expr::col(crosschain_messages::Column::DstChainId).eq(dst_chain_id));
+            filter = filter
+                .add(Expr::col(crosschain_messages::Column::DstChainId).eq(dst_chain_id as i64));
         }
 
         #[derive(Debug, FromQueryResult)]

@@ -214,9 +214,8 @@ impl ExampleIndexer {
         // Example: Process each contract on its respective chain
         for contract in contracts {
             // Convert i64 chain_id to u64 for HashMap lookup
-            let chain_id_u64 = u64::try_from(contract.chain_id).map_err(|_| {
-                anyhow::anyhow!("Invalid negative chain_id: {}", contract.chain_id)
-            })?;
+            let chain_id_u64 = u64::try_from(contract.chain_id)
+                .map_err(|_| anyhow::anyhow!("Invalid negative chain_id: {}", contract.chain_id))?;
             if let Some(provider) = providers.get(&chain_id_u64) {
                 let provider = provider.clone();
 
