@@ -333,7 +333,7 @@ impl InterchainServiceImpl {
             .native_id
             .as_ref()
             .map(|id| to_hex_prefixed(id.as_slice()))
-            .unwrap_or_else(|| message.id.to_string())
+            .unwrap_or_else(|| format!("0x{:x}", message.id))
     }
 
     fn get_message_id_from_joined_transfer(&self, joined: &JoinedTransfer) -> String {
@@ -341,7 +341,7 @@ impl InterchainServiceImpl {
             .native_id
             .as_ref()
             .map(|id| to_hex_prefixed(id.as_slice()))
-            .unwrap_or_else(|| joined.message_id.to_string())
+            .unwrap_or_else(|| format!("0x{:x}", joined.message_id))
     }
 
     async fn get_token_info(&self, chain_id: u64, address: Vec<u8>) -> Option<TokenInfo> {
