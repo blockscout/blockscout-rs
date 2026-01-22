@@ -1,18 +1,15 @@
 use crate::{
-    create_provider_pools_from_chains, load_bridges_from_file, load_chains_from_file,
-    proto::{
+    ChainConfig, create_provider_pools_from_chains, load_bridges_from_file, load_chains_from_file, proto::{
         health_actix::route_health, health_server::HealthServer,
         interchain_service_actix::route_interchain_service,
         interchain_service_server::InterchainServiceServer,
         interchain_statistics_service_server::InterchainStatisticsServiceServer,
         status_service_server::StatusServiceServer,
-    },
-    services::{
+    }, services::{
         HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl, StatusServiceImpl,
-    },
-    settings::Settings,
-    spawn_configured_indexers,
+    }, settings::Settings, spawn_configured_indexers
 };
+use anyhow::{Context, bail};
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{
     database, launcher, launcher::LaunchSettings, tracing as bs_tracing,
@@ -94,6 +91,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .collect::<Vec<chains::ActiveModel>>(),
     )
     .await?;
+    prefill_avalanche_blockchain_ids(db.as_ref(), &chains).await?;
     db.upsert_bridges(
         bridges
             .clone()
@@ -193,4 +191,53 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     //example.stop_indexing().await;
 
     launch_result
+}
+
+fn decode_blockchain_id(native_id: &str) -> anyhow::Result<Vec<u8>> {
+    let trimmed = native_id.trim();
+    let native_id = trimmed.trim_start_matches("0x");
+    let bytes = hex::decode(native_id)
+        .with_context(|| format!("native_id must be hex: {native_id}"))?;
+
+    if bytes.len() != 32 {
+        bail!("native_id must be 32 bytes, got {}", bytes.len());
+    }
+
+    Ok(bytes)
+}
+
+async fn prefill_avalanche_blockchain_ids(
+    db: &InterchainDatabase,
+    chains: &[ChainConfig],
+) -> anyhow::Result<()> {
+    for chain in chains {
+        let Some(native_id) = chain
+            .native_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+        else {
+            continue;
+        };
+
+        let blockchain_id = decode_blockchain_id(native_id).with_context(|| {
+            format!(
+                "invalid native_id configured for chain {} ({native_id})",
+                chain.chain_id
+            )
+        })?;
+
+        db.upsert_avalanche_icm_blockchain_id(blockchain_id, chain.chain_id)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to persist avalanche_icm_blockchain_ids mapping for chain {}",
+                    chain.chain_id
+                )
+            })?;
+
+        tracing::debug!(chain_id = chain.chain_id, "prefilled Avalanche blockchain id mapping");
+    }
+
+    Ok(())
 }

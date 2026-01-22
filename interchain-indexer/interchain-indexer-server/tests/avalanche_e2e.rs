@@ -108,12 +108,14 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
+            native_id: Some(native_id_src.into()),
             icon: String::new(),
             rpcs: vec![],
         },
         ChainConfig {
             chain_id: chain_id_dest as i64,
             name: name_dest.into(),
+            native_id: Some(native_id_dest.into()),
             icon: String::new(),
             rpcs: vec![],
         },
@@ -364,12 +366,14 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
+            native_id: Some(native_id_src.into()),
             icon: String::new(),
             rpcs: vec![],
         },
         ChainConfig {
             chain_id: chain_id_dest as i64,
             name: name_dest.into(),
+            native_id: Some(native_id_dest.into()),
             icon: String::new(),
             rpcs: vec![],
         },
@@ -693,12 +697,14 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
+            native_id: Some(native_id_src.into()),
             icon: String::new(),
             rpcs: vec![],
         },
         ChainConfig {
             chain_id: chain_id_dest as i64,
             name: name_dest.into(),
+            native_id: Some(native_id_dest.into()),
             icon: String::new(),
             rpcs: vec![],
         },
@@ -863,6 +869,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         ChainConfig {
             chain_id: chain_id_src as i64,
             name: name_src.into(),
+            native_id: Some(native_id_src.into()),
             icon: String::new(),
             rpcs: vec![],
         }
