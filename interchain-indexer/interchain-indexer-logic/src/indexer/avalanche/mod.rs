@@ -91,15 +91,53 @@ pub struct AvalancheIndexer {
     db: Arc<InterchainDatabase>,
     config: AvalancheIndexerConfig,
     buffer: Arc<MessageBuffer<Message>>,
-    buffer_handle: parking_lot::RwLock<Option<JoinHandle<()>>>,
+    buffer_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
 
     is_running: Arc<std::sync::atomic::AtomicBool>,
-    indexing_handle: parking_lot::RwLock<Option<JoinHandle<()>>>,
+    indexing_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
     state: Arc<parking_lot::RwLock<CrosschainIndexerState>>,
     init_timestamp: chrono::NaiveDateTime,
     messages_indexed: Arc<std::sync::atomic::AtomicU64>,
     transfers_indexed: Arc<std::sync::atomic::AtomicU64>,
     error_count: Arc<std::sync::atomic::AtomicU64>,
+}
+
+/// Cleanup guard that ensures proper cleanup when the indexer task exits.
+/// On drop, it clears handles, aborts the buffer task, and sets the appropriate state.
+struct IndexerCleanupGuard {
+    is_running: Arc<std::sync::atomic::AtomicBool>,
+    state: Arc<parking_lot::RwLock<CrosschainIndexerState>>,
+    buffer_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
+    indexing_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
+    bridge_id: i32,
+}
+
+impl Drop for IndexerCleanupGuard {
+    fn drop(&mut self) {
+        tracing::debug!(
+            bridge_id = self.bridge_id,
+            "Indexer cleanup guard triggered"
+        );
+
+        // Mark as not running
+        self.is_running.store(false, Ordering::Release);
+
+        // Abort and clear the buffer handle
+        if let Some(handle) = self.buffer_handle.write().take() {
+            handle.abort();
+        }
+
+        // Clear the indexing handle (don't abort - we're inside it)
+        let _ = self.indexing_handle.write().take();
+
+        // Set final state based on whether there was an error
+        // Note: if an error occurred, the state was already set to Failed in the task
+        // This handles the case of clean exit or abort
+        let current_state = self.state.read().clone();
+        if !matches!(current_state, CrosschainIndexerState::Failed(_)) {
+            *self.state.write() = CrosschainIndexerState::Idle;
+        }
+    }
 }
 
 impl AvalancheIndexer {
@@ -117,9 +155,9 @@ impl AvalancheIndexer {
             db,
             config,
             buffer,
-            buffer_handle: parking_lot::RwLock::new(None),
+            buffer_handle: Arc::new(parking_lot::RwLock::new(None)),
             is_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            indexing_handle: parking_lot::RwLock::new(None),
+            indexing_handle: Arc::new(parking_lot::RwLock::new(None)),
             state: Arc::new(parking_lot::RwLock::new(CrosschainIndexerState::Idle)),
             init_timestamp: chrono::Utc::now().naive_utc(),
             messages_indexed: Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -128,20 +166,20 @@ impl AvalancheIndexer {
         })
     }
 
-    fn clone_for_task(&self) -> Result<Self> {
-        Ok(Self {
+    fn clone_for_task(&self) -> Self {
+        Self {
             db: self.db.clone(),
             config: self.config.clone(),
             buffer: self.buffer.clone(),
-            buffer_handle: parking_lot::RwLock::new(None),
+            buffer_handle: self.buffer_handle.clone(),
             is_running: self.is_running.clone(),
-            indexing_handle: parking_lot::RwLock::new(None),
+            indexing_handle: self.indexing_handle.clone(),
             state: self.state.clone(),
             init_timestamp: self.init_timestamp,
             messages_indexed: self.messages_indexed.clone(),
             transfers_indexed: self.transfers_indexed.clone(),
             error_count: self.error_count.clone(),
-        })
+        }
     }
 
     async fn run(self) -> Result<()> {
@@ -278,7 +316,12 @@ impl CrosschainIndexer for AvalancheIndexer {
     }
 
     async fn start(&self) -> Result<(), Error> {
-        if self.is_running.load(Ordering::Acquire) {
+        // Atomic compare-and-set: only one caller can proceed
+        if self
+            .is_running
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
             tracing::warn!(
                 bridge_id = self.config.bridge_id,
                 "Avalanche indexer already running"
@@ -286,28 +329,49 @@ impl CrosschainIndexer for AvalancheIndexer {
             return Ok(());
         }
 
-        let handle = Arc::clone(&self.buffer).start().await?;
-        *self.buffer_handle.write() = Some(handle);
+        // Start the buffer task
+        let buffer_task_handle = match Arc::clone(&self.buffer).start().await {
+            Ok(handle) => handle,
+            Err(err) => {
+                // Rollback is_running on failure
+                self.is_running.store(false, Ordering::Release);
+                return Err(err);
+            }
+        };
+        *self.buffer_handle.write() = Some(buffer_task_handle);
 
-        self.is_running.store(true, Ordering::Release);
         *self.state.write() = CrosschainIndexerState::Running;
 
-        let this = self.clone_for_task()?;
+        let this = self.clone_for_task();
         let bridge_id = this.config.bridge_id;
 
-        let is_running = self.is_running.clone();
-        let state = self.state.clone();
-        let err_counter = self.error_count.clone();
-
         let handle = tokio::spawn(async move {
+            // Extract Arc references before moving `this` into run()
+            let is_running = this.is_running.clone();
+            let state = this.state.clone();
+            let buffer_handle = this.buffer_handle.clone();
+            let indexing_handle = this.indexing_handle.clone();
+            let error_count = this.error_count.clone();
+
+            // Cleanup guard that runs on drop (whether success, error, or abort)
+            let _cleanup_guard = IndexerCleanupGuard {
+                is_running: is_running.clone(),
+                state: state.clone(),
+                buffer_handle,
+                indexing_handle,
+                bridge_id,
+            };
+
             if !is_running.load(Ordering::Acquire) {
                 return;
             }
+
             if let Err(err) = this.run().await {
-                err_counter.fetch_add(1, Ordering::Relaxed);
+                error_count.fetch_add(1, Ordering::Relaxed);
                 tracing::error!(err = ?err, bridge_id, "Avalanche indexer task stopped with error");
                 *state.write() = CrosschainIndexerState::Failed(format!("{err:#}"));
             }
+            // On clean exit without error, the guard will set state to Idle
         });
 
         *self.indexing_handle.write() = Some(handle);
