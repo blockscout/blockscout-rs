@@ -62,9 +62,9 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 
 | Variable                                                        | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --------------------------------------------------------------- | ------------------------ | ----------- | ------------- |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`             |                          |             | `1000`        |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`       |                          |             | `10000`       |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PROCESS_UNKNOWN_CHAINS` |                          |             | `false`       |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`             |                          | Number of contract events to be pulled at once. | `1000`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`       |                          | Duration between pulling contract events. Unit: `milliseconds` | `10000`       |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PROCESS_UNKNOWN_CHAINS` |                          | Enable messages/transfers processing from/to non-indexing chains. | `false`       |
 
 [anchor]: <> (anchors.envs.end.avalanche)
 
