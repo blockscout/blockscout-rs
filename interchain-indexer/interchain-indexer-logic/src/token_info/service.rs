@@ -125,9 +125,12 @@ impl TokenInfoService {
                 Ok(token_info) => {
                     // Use the icon from the external API if available
                     let icon_url = icon_result.ok().flatten();
+                    let chain_id_i64 = i64::try_from(chain_id).map_err(|e| {
+                        anyhow::anyhow!("chain_id out of range: {}: {}", chain_id, e)
+                    })?;
 
                     let model = TokenInfoModel {
-                        chain_id: chain_id as i64,
+                        chain_id: chain_id_i64,
                         address,
                         name: Some(token_info.name),
                         symbol: Some(token_info.symbol),
@@ -138,7 +141,7 @@ impl TokenInfoService {
                     };
 
                     let active_model = tokens::ActiveModel {
-                        chain_id: Set(model.chain_id),
+                        chain_id: Set(chain_id_i64),
                         address: Set(model.address.clone()),
                         symbol: Set(model.symbol.clone()),
                         name: Set(model.name.clone()),
