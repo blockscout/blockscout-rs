@@ -81,6 +81,7 @@ impl LogStreamBuilder {
         let filter = self.filter.clone();
         let poll_interval = self.poll_interval;
         let batch_size = self.batch_size;
+        let batch_span = batch_size.saturating_sub(1);
         let genesis_block = self.genesis_block;
         let backward_cursor = self.backward_cursor;
         let bridge_id = self.bridge_id;
@@ -89,7 +90,7 @@ impl LogStreamBuilder {
         let stream = async_stream::stream! {
             let mut to_block = backward_cursor;
             while to_block >= genesis_block {
-                let from_block = to_block.saturating_sub(batch_size).max(genesis_block);
+                let from_block = to_block.saturating_sub(batch_span).max(genesis_block);
                 tracing::debug!(bridge_id, chain_id, from_block, to_block, batch_size, "catchup logs batch");
 
                 match fetch_logs(provider.clone(), &filter, from_block, to_block).await {
@@ -137,6 +138,7 @@ impl LogStreamBuilder {
         let filter = self.filter.clone();
         let poll_interval = self.poll_interval;
         let batch_size = self.batch_size;
+        let batch_span = batch_size.saturating_sub(1);
         let forward_cursor = self.forward_cursor;
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
@@ -150,7 +152,7 @@ impl LogStreamBuilder {
                     .inspect_err(|e| tracing::error!(err =? e, bridge_id, chain_id, "failed to get latest block number"))
                     .ok()
                     .filter(|latest| from_block <= *latest)
-                    .map(|latest| from_block.saturating_add(batch_size).min(latest));
+                    .map(|latest| from_block.saturating_add(batch_span).min(latest));
 
                 let Some(to_block) = to_block else {
                     tracing::debug!(bridge_id, chain_id, from_block, "waiting for new blocks");
