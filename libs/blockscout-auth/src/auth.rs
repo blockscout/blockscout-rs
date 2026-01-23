@@ -9,11 +9,11 @@ const API_KEY_NAME: &str = "api_key";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AuthSuccess {
-    pub avatar: String,
+    pub avatar: Option<String>,
     pub email: String,
     pub id: i64,
-    pub name: String,
-    pub nickname: String,
+    pub name: Option<String>,
+    pub nickname: Option<String>,
     pub uid: String,
     pub watchlist_id: i64,
     pub email_verified: bool,
