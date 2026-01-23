@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
+pub const NATIVE_TOKEN_ADDRESS: alloy_primitives::Address = alloy_primitives::Address::ZERO;
 
 #[derive(Debug, Clone, Default)]
 pub struct TokenUpdate {

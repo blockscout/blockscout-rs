@@ -3,9 +3,11 @@ use crate::{
     proto, repository,
     services::channel::{LatestBlockUpdateMessage, NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
     types::{
+        address_coin_balances::AddressCoinBalance,
+        address_token_balances::AddressTokenBalance,
         batch_import_request::BatchImportRequest,
         interop_messages::InteropMessage,
-        tokens::{TokenType, TokenUpdate, UpdateTokenType},
+        tokens::{NATIVE_TOKEN_ADDRESS, TokenType, TokenUpdate, UpdateTokenType},
     },
 };
 use actix_phoenix_channel::ChannelBroadcaster;
@@ -45,7 +47,9 @@ pub async fn batch_import(
     let mut token_updates = request.tokens;
     token_updates.extend(token_type_updates);
 
-    repository::address_coin_balances::upsert_many(&tx, request.address_coin_balances)
+    // Temporarily save address_coin_balances for backward compatibility
+    // until address_coin_balances is fully deprecated
+    repository::address_coin_balances::upsert_many(&tx, request.address_coin_balances.clone())
         .await
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert address coin balances");
@@ -55,6 +59,18 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert address token balances");
         })?;
+
+    let native_token_balances = request
+        .address_coin_balances
+        .into_iter()
+        .map(AddressTokenBalance::from)
+        .collect();
+    repository::address_token_balances::upsert_many(&tx, native_token_balances)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, "failed to upsert native coin token balances");
+        })?;
+
     repository::tokens::upsert_many(&tx, token_updates)
         .await
         .inspect_err(|e| {
