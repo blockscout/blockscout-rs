@@ -3,11 +3,10 @@ use crate::{
     proto, repository,
     services::channel::{LatestBlockUpdateMessage, NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
     types::{
-        address_coin_balances::AddressCoinBalance,
         address_token_balances::AddressTokenBalance,
         batch_import_request::BatchImportRequest,
         interop_messages::InteropMessage,
-        tokens::{NATIVE_TOKEN_ADDRESS, TokenType, TokenUpdate, UpdateTokenType},
+        tokens::{TokenType, TokenUpdate, UpdateTokenType},
     },
 };
 use actix_phoenix_channel::ChannelBroadcaster;

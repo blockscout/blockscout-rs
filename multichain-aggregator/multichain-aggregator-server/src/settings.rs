@@ -88,6 +88,16 @@ pub struct ServiceSettings {
     pub marketplace_enabled_cache_update_interval: time::Duration,
     #[serde(default = "default_marketplace_enabled_cache_fetch_concurrency")]
     pub marketplace_enabled_cache_fetch_concurrency: usize,
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    #[serde(default = "default_native_coin_metadata_update_interval")]
+    pub native_coin_metadata_update_interval: time::Duration,
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    #[serde(default = "default_native_coin_price_update_interval")]
+    pub native_coin_price_update_interval: time::Duration,
+    #[serde(default = "default_native_coin_update_concurrency")]
+    pub native_coin_update_concurrency: usize,
+    #[serde(default)]
+    pub initialize_native_coins: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -167,6 +177,11 @@ impl Settings {
                     default_marketplace_enabled_cache_update_interval(),
                 marketplace_enabled_cache_fetch_concurrency:
                     default_marketplace_enabled_cache_fetch_concurrency(),
+                native_coin_metadata_update_interval: default_native_coin_metadata_update_interval(
+                ),
+                native_coin_price_update_interval: default_native_coin_price_update_interval(),
+                native_coin_update_concurrency: default_native_coin_update_concurrency(),
+                initialize_native_coins: false,
             },
             cache: None,
             cluster_explorer: Default::default(),
@@ -193,6 +208,18 @@ fn default_marketplace_enabled_cache_update_interval() -> time::Duration {
 }
 
 fn default_marketplace_enabled_cache_fetch_concurrency() -> usize {
+    10
+}
+
+fn default_native_coin_metadata_update_interval() -> time::Duration {
+    time::Duration::from_secs(60 * 60) // 1 hour
+}
+
+fn default_native_coin_price_update_interval() -> time::Duration {
+    time::Duration::from_secs(5 * 60) // 5 minutes
+}
+
+fn default_native_coin_update_concurrency() -> usize {
     10
 }
 

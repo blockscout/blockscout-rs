@@ -40,5 +40,9 @@ async fn try_fetch_client_coin_price(
     let res = blockscout_client
         .request(&blockscout::stats::Stats {})
         .await?;
-    Ok(res.coin_price)
+    res.coin_price.ok_or_else(|| {
+        ServiceError::Internal(anyhow::anyhow!(
+            "coin_price not available for chain {chain_id}"
+        ))
+    })
 }

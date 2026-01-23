@@ -25,3 +25,13 @@ pub fn proto_address_hash_from_alloy(
         hash: address.to_checksum(None),
     }
 }
+
+pub mod macros {
+    macro_rules! opt_parse {
+        ($v:expr) => {
+            $v.map(|v| v.parse()).transpose()?
+        };
+    }
+
+    pub(crate) use opt_parse;
+}
