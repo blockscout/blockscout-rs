@@ -46,6 +46,7 @@ fn compile(
         .field_attribute("TokenType.TOKEN_TYPE_ERC_404", "#[serde(rename = \"ERC-404\")]")
         .field_attribute("TokenType.TOKEN_TYPE_ERC_7802", "#[serde(rename = \"ERC-7802\")]")
         .field_attribute("TokenType.TOKEN_TYPE_ZRC_2", "#[serde(rename = \"ZRC-2\")]")
+        .field_attribute("TokenType.TOKEN_TYPE_NATIVE", "#[serde(rename = \"NATIVE\")]")
         // Make import fields optional
         .field_attribute("BatchImportRequest.addresses", "#[serde(default)]")
         .field_attribute("BatchImportRequest.block_ranges", "#[serde(default)]")
