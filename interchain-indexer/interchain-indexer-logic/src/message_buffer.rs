@@ -335,34 +335,38 @@ impl<T: Consolidate> MessageBuffer<T> {
             let entry_version = entry.version;
             let created_at = entry.hot_since;
 
-            if !entry.is_dirty() {
-                continue;
-            }
-
-            let consolidated = entry.inner.consolidate(&key)?;
-            let is_final = consolidated.as_ref().is_some_and(|c| c.is_final);
             let age = now
                 .signed_duration_since(created_at)
                 .max(TimeDelta::zero())
                 .to_std()?;
             let is_stale = age >= self.config.hot_ttl;
-            let should_remove = is_final || is_stale;
 
-            match (&consolidated, is_final) {
-                (None, _) => not_consolidatable_count += 1,
-                (Some(_), true) => final_count += 1,
-                (Some(_), false) => consolidated_not_final_count += 1,
+            let is_dirty = entry.is_dirty();
+            let consolidated = if is_dirty {
+                entry.inner.consolidate(&key)?
+            } else {
+                None
             };
 
-            if let Some(message) = consolidated {
+            let is_final = if let Some(message) = consolidated {
+                let is_final = message.is_final;
                 if is_final {
-                    consolidated_entries.push(message);
+                    final_count += 1;
                     keys_to_remove_from_pending.push(key);
-                } else if entry.is_dirty() {
-                    consolidated_entries.push(message);
+                } else {
+                    consolidated_not_final_count += 1;
                     keys_to_flush.push((key, entry_version));
                 }
-            }
+                consolidated_entries.push(message);
+                is_final
+            } else {
+                if is_dirty {
+                    not_consolidatable_count += 1;
+                }
+                false
+            };
+
+            let should_remove = is_final || is_stale;
 
             if should_remove {
                 if !is_final {
