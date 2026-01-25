@@ -636,9 +636,13 @@ fn parse_receiver_ictt_logs(
         ))?;
     }
 
-    logs.iter()
+    // TODO: add a regression test to check that fallback to original transfer
+    // works as expected
+    logs
+        .iter()
         .find_map(|log| parse_receiver_ictt_log(transfer, log).transpose())
         .transpose()
+        .map(|parsed| parsed.or_else(|| transfer.clone()))
 }
 
 fn parse_receiver_ictt_log(
