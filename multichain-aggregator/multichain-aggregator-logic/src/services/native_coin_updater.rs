@@ -90,7 +90,20 @@ impl NativeCoinUpdater {
         let jobs = chains.into_iter().filter_map(|c| {
             let chain_id = c.id;
             let url: Url = c.explorer_url?.parse().ok()?;
-            Some(async move { fetch_update(chain_id, &url, endpoint).await.ok() })
+            Some(async move {
+                fetch_update(chain_id, &url, endpoint)
+                    .await
+                    .inspect_err(|err| {
+                        tracing::warn!(
+                            chain_id = ?chain_id,
+                            url = ?url,
+                            path = ?endpoint.path(),
+                            err = ?err,
+                            "failed to fetch native coin update",
+                        )
+                    })
+                    .ok()
+            })
         });
 
         let updates: Vec<TokenUpdate> = stream::iter(jobs)
@@ -109,11 +122,6 @@ impl NativeCoinUpdater {
     }
 }
 
-#[tracing::instrument(
-    level = "info",
-    skip(endpoint),
-    fields(path = %endpoint.path()),
-)]
 async fn fetch_update<T>(
     chain_id: ChainId,
     url: &Url,
@@ -125,12 +133,7 @@ where
     <(ChainId, T::Response) as TryInto<TokenUpdate>>::Error: Into<ServiceError>,
 {
     let client = blockscout::new_client(url.clone())?;
-    let response = client.request(endpoint).await.inspect_err(|err| {
-        tracing::warn!(
-            err = ?err,
-            "failed to fetch native coin update",
-        );
-    })?;
+    let response = client.request(endpoint).await?;
 
     (chain_id, response).try_into().map_err(Into::into)
 }
