@@ -2,7 +2,10 @@ use super::ChainId;
 use crate::{
     error::ParseError,
     proto,
-    types::{self, proto_address_hash_from_alloy, sea_orm_wrappers::SeaOrmAddress},
+    types::{
+        self, address_coin_balances::AddressCoinBalance, proto_address_hash_from_alloy,
+        sea_orm_wrappers::SeaOrmAddress, tokens::NATIVE_TOKEN_ADDRESS,
+    },
 };
 use entity::{
     address_token_balances::{ActiveModel, Column, Entity, Model},
@@ -23,6 +26,18 @@ pub struct AddressTokenBalance {
     pub value: Option<BigDecimal>,
     pub chain_id: ChainId,
     pub token_id: Option<BigDecimal>,
+}
+
+impl From<AddressCoinBalance> for AddressTokenBalance {
+    fn from(v: AddressCoinBalance) -> Self {
+        Self {
+            address_hash: v.address_hash,
+            token_address_hash: NATIVE_TOKEN_ADDRESS,
+            value: Some(v.value),
+            chain_id: v.chain_id,
+            token_id: None,
+        }
+    }
 }
 
 impl TryFrom<Model> for AddressTokenBalance {

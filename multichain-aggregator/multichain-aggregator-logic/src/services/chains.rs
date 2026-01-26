@@ -1,7 +1,8 @@
 use crate::{
-    clients::dapp,
+    clients::{blockscout, dapp},
     error::ServiceError,
     repository,
+    services::jobs::create_repeated_job,
     types::{ChainId, chains::Chain},
 };
 use api_client_framework::HttpApiClient;
@@ -9,15 +10,12 @@ use blockscout_chains::BlockscoutChainsClient;
 use cached::proc_macro::{cached, once};
 use futures::{StreamExt, stream};
 use sea_orm::DatabaseConnection;
-use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use tokio::{
-    sync::RwLock,
-    time::{Duration, Instant, interval},
-};
+use tokio::{sync::RwLock, time::Duration};
+use tokio_cron_scheduler::{Job, JobSchedulerError};
 use url::Url;
 
 #[cached(
@@ -119,29 +117,21 @@ impl MarketplaceEnabledCache {
         Self::default()
     }
 
-    pub fn start_updater(
+    pub fn updater_job(
         self,
         db: DatabaseConnection,
         dapp_client: HttpApiClient,
-        update_interval: Duration,
+        interval: Duration,
         concurrency: usize,
-    ) {
-        let mut interval = interval(update_interval);
+    ) -> Result<Job, JobSchedulerError> {
+        create_repeated_job("marketplace enabled cache", interval, move || {
+            // NOTE: these clones are cheap as each struct stores only Arc references
+            let this = self.clone();
+            let db = db.clone();
+            let dapp_client = dapp_client.clone();
 
-        tokio::spawn(async move {
-            loop {
-                interval.tick().await;
-                let now = Instant::now();
-                if let Err(err) = self.update(&db, &dapp_client, concurrency).await {
-                    tracing::error!(err = ?err, "failed to update marketplace enabled cache");
-                }
-                let elapsed = now.elapsed();
-                tracing::info!(
-                    elapsed_secs = elapsed.as_secs_f32(),
-                    "marketplace enabled cache updated"
-                );
-            }
-        });
+            async move { this.update(&db, &dapp_client, concurrency).await }
+        })
     }
 
     async fn update(
@@ -210,35 +200,11 @@ impl MarketplaceEnabledCache {
 }
 
 async fn fetch_marketplace_enabled(explorer_url: &Url) -> Result<bool, ServiceError> {
-    #[derive(Debug, Deserialize)]
-    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-    struct Envs {
-        next_public_marketplace_enabled: String,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct NodeApiConfig {
-        envs: Envs,
-    }
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .expect("client should be valid");
-
-    let url = explorer_url
-        .join("/node-api/config")
-        .map_err(|e| ServiceError::Convert(e.into()))?;
-
+    let client = blockscout::new_client(explorer_url.clone())?;
     let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to fetch node-api config: {:?}", e))?
-        .json::<NodeApiConfig>()
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to parse node-api config: {:?}", e))?;
+        .request(&blockscout::node_api_config::NodeApiConfig {})
+        .await?;
 
-    let is_enabled = response.envs.next_public_marketplace_enabled == "true";
+    let is_enabled = response.envs.next_public_marketplace_enabled.as_deref() == Some("true");
     Ok(is_enabled)
 }

@@ -8,6 +8,8 @@ pub mod coin_price;
 pub mod dapp_search;
 pub mod filecoin;
 pub mod import;
+pub mod jobs;
+pub mod native_coin_updater;
 pub mod quick_search;
 
 pub const MIN_QUERY_LENGTH: usize = 3;

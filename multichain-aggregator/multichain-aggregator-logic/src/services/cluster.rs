@@ -15,6 +15,7 @@ use crate::{
     services::{
         self, MIN_QUERY_LENGTH,
         cache::ClusterCaches,
+        chain_metrics,
         coin_price::try_fetch_coin_price,
         dapp_search,
         macros::{maybe_cache_lookup, preload_domain_info},
@@ -25,6 +26,7 @@ use crate::{
         address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
         addresses::{AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
+        chain_metrics::ChainMetrics,
         chains::Chain,
         dapp::MarketplaceDapp,
         domains::{Domain, DomainInfo, ProtocolInfo},
@@ -155,16 +157,14 @@ impl Cluster {
         Ok(chains.into_iter().map(|c| c.into()).collect())
     }
 
-    pub async fn list_chain_metrics(
-        &self,
-    ) -> Result<Vec<crate::types::chain_metrics::ChainMetrics>, ServiceError> {
+    pub async fn list_chain_metrics(&self) -> Result<Vec<ChainMetrics>, ServiceError> {
         let chain_ids = self.active_chain_ids().await?;
         let key = format!("{}:chain_metrics", self.name);
 
         let blockscout_clients = self.blockscout_clients.clone();
         let get = || async move {
             Ok::<_, ServiceError>(
-                services::chain_metrics::fetch_chain_metrics(&blockscout_clients, &chain_ids).await,
+                chain_metrics::fetch_chain_metrics(&blockscout_clients, &chain_ids).await,
             )
         };
 

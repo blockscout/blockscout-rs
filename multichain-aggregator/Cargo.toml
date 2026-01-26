@@ -78,6 +78,7 @@ lazy_static = { version = "1.4" }
 prometheus = { version = "0.14" }
 recache = { git = "https://github.com/blockscout/blockscout-rs", rev = "096c4c1" }
 strum = { version = "0.27", default-features = false, features = ["derive"] }
+tokio-cron-scheduler = "0.15"
 
 # tests
 pretty_assertions = "1.3"

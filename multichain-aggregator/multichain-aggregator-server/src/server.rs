@@ -27,6 +27,7 @@ use multichain_aggregator_logic::{
         channel::Channel,
         cluster::Cluster,
         coin_price::build_coin_price_cache,
+        native_coin_updater::NativeCoinUpdater,
     },
 };
 use recache::stores::redis::RedisStore;
@@ -35,6 +36,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use tokio_cron_scheduler::JobScheduler;
 
 const SERVICE_NAME: &str = "multichain_aggregator";
 
@@ -111,21 +113,21 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.replica_database.as_ref(),
     )
     .await?;
+    let repo = Arc::new(repo);
 
     if settings.service.fetch_chains {
         fetch_and_upsert_blockscout_chains(repo.main_db()).await?;
     }
 
+    if settings.service.initialize_native_coins {
+        let native_coin_updater = NativeCoinUpdater::new(Arc::clone(&repo));
+        native_coin_updater
+            .initialize_all_native_coins(settings.service.native_coin_update_concurrency)
+            .await?;
+    }
+
     let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;
     let bens_client = bens::new_client(settings.service.bens_client.url)?;
-
-    let marketplace_enabled_cache = MarketplaceEnabledCache::new();
-    marketplace_enabled_cache.clone().start_updater(
-        repo.read_db().clone(),
-        dapp_client.clone(),
-        settings.service.marketplace_enabled_cache_update_interval,
-        settings.service.marketplace_enabled_cache_fetch_concurrency,
-    );
 
     let channel = Arc::new(ChannelCentral::new(Channel));
 
@@ -159,6 +161,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             }
         };
     }
+
+    let marketplace_enabled_cache = MarketplaceEnabledCache::new();
 
     let caches = ClusterCaches {
         decoded_calldata: build_cache!(
@@ -202,6 +206,33 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .map(|c| (c.id, c.explorer_url))
         .collect::<BTreeMap<_, _>>();
 
+    let scheduler = JobScheduler::new().await?;
+
+    scheduler
+        .add(marketplace_enabled_cache.clone().updater_job(
+            repo.read_db().clone(),
+            dapp_client.clone(),
+            settings.service.marketplace_enabled_cache_update_interval,
+            settings.service.marketplace_enabled_cache_fetch_concurrency,
+        )?)
+        .await?;
+
+    let native_coin_updater = NativeCoinUpdater::new(Arc::clone(&repo));
+    scheduler
+        .add(native_coin_updater.clone().metadata_job(
+            settings.service.native_coin_metadata_update_interval,
+            settings.service.native_coin_update_concurrency,
+        )?)
+        .await?;
+    scheduler
+        .add(native_coin_updater.price_job(
+            settings.service.native_coin_price_update_interval,
+            settings.service.native_coin_update_concurrency,
+        )?)
+        .await?;
+
+    scheduler.start().await?;
+
     let mut clusters = settings
         .cluster_explorer
         .clusters
@@ -222,7 +253,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     let url = chain_urls
                         .get(id)
                         .cloned()
-                        .expect("chain should be present")
+                        .unwrap_or_else(|| panic!("chain {id} should be present"))
                         .expect("chain url should be present")
                         .parse()
                         .expect("chain url should be valid");
@@ -265,7 +296,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let cluster_explorer = Arc::new(ClusterExplorer::new(clusters, settings.service.api.clone()));
 
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
-        Arc::new(repo),
+        repo,
         dapp_client,
         settings.service.api,
         marketplace_enabled_cache,

@@ -47,7 +47,7 @@ SELECT
         WHEN mod(n, 7) = 6 THEN false
         ELSE mod(n, 3) = 0
     END
-FROM generate_series(0, 999) n;
+FROM generate_series(1, 1000) n;
 
 -- Generate hashes table
 INSERT INTO hashes (
@@ -62,7 +62,7 @@ SELECT
         WHEN 0 THEN 'block'
         ELSE 'transaction'
     END AS hash_type)
-FROM generate_series(0, 999) n;
+FROM generate_series(1, 1000) n;
 
 
 INSERT INTO tokens (
@@ -91,4 +91,4 @@ SELECT
             ELSE 'ERC-1155'
         END AS token_type
     )
-FROM generate_series(0, 999) n;
+FROM generate_series(1, 1000) n;

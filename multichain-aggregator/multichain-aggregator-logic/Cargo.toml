@@ -35,6 +35,7 @@ strum = { workspace = true, features = ["std"] }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }
+tokio-cron-scheduler = { workspace = true }
 reqwest = { workspace = true }
 rust_decimal = { workspace = true }
 url = { workspace = true }
