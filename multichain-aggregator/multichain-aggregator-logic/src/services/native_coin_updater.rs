@@ -110,6 +110,7 @@ impl NativeCoinUpdater {
 }
 
 #[tracing::instrument(
+    level = "info",
     skip(endpoint),
     fields(path = %endpoint.path()),
 )]
