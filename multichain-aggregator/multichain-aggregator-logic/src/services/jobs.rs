@@ -17,11 +17,13 @@ where
         let update_fn = Arc::clone(&update_fn);
         Box::pin(async move {
             let now = Instant::now();
-            if let Err(err) = update_fn().await {
-                tracing::error!(err = ?err, "failed to update {name}");
+            let result = update_fn().await;
+            let elapsed_secs = now.elapsed().as_secs_f32();
+            if let Err(err) = result {
+                tracing::error!(elapsed_secs = elapsed_secs, err = ?err, "failed to update {name}");
+            } else {
+                tracing::info!(elapsed_secs = elapsed_secs, "{name} updated");
             }
-            let elapsed = now.elapsed();
-            tracing::info!(elapsed_secs = elapsed.as_secs_f32(), "{name} updated");
         })
     })
 }
