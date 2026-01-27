@@ -393,11 +393,10 @@ fn build_rpc_url(url: &str, api_key_config: &Option<ApiKeyConfig>) -> Result<Str
     // If API key is configured, we need to handle it
     // For now, we'll just use the URL as-is and log a warning if API key is needed
     if let Some(api_key) = api_key_config {
-        tracing::warn!(
-            url = url,
-            location = api_key.location,
-            name = api_key.name,
-            "API key configuration found but not yet implemented. URL used as-is."
+        anyhow::bail!(
+            "API key config ({}/{}) present for {url} but substitution is not implemented",
+            api_key.location,
+            api_key.name
         );
     }
 
