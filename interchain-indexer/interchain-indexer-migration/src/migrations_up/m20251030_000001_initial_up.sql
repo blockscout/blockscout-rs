@@ -194,7 +194,7 @@ CREATE INDEX crosschain_transfers_token_dst_idx
 
 -- indexer_checkpoints: for progress tracking per chain/worker
 CREATE TABLE indexer_checkpoints (
-  bridge_id         BIGINT NOT NULL REFERENCES bridges(id),
+  bridge_id         INTEGER NOT NULL REFERENCES bridges(id),
   chain_id          BIGINT NOT NULL REFERENCES chains(id),
   
   -- sync checkpoints

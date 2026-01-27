@@ -512,7 +512,7 @@ impl<T: Consolidate> MessageBuffer<T> {
                         .iter()
                         .map(|((bridge_id, chain_id), (min, max))| {
                             indexer_checkpoints::ActiveModel {
-                                bridge_id: ActiveValue::Set(*bridge_id as i64),
+                                bridge_id: ActiveValue::Set(*bridge_id),
                                 chain_id: ActiveValue::Set(*chain_id),
                                 catchup_min_block: ActiveValue::Set(0),
                                 catchup_max_block: ActiveValue::Set(*min),

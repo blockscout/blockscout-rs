@@ -6,7 +6,7 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "indexer_checkpoints")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub bridge_id: i64,
+    pub bridge_id: i32,
     #[sea_orm(primary_key, auto_increment = false)]
     pub chain_id: i64,
     pub catchup_min_block: i64,
