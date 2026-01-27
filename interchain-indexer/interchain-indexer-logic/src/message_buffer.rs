@@ -468,9 +468,7 @@ impl<T: Consolidate> MessageBuffer<T> {
                     }
 
                     let batch_size = (u16::MAX - 100) as usize / crosschain_transfers::Column::iter().count();
-                    // TODO: refactor to avoid deleting then inserting
                     for batch in transfers.chunks(batch_size) {
-                        // Delete existing transfers for these messages
                         crosschain_transfers::Entity::insert_many(batch.to_vec())
                             .on_conflict(
                                 OnConflict::columns([

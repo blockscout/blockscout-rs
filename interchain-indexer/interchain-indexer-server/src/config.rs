@@ -47,7 +47,17 @@ where
 /// Convert BridgeConfig to bridges::ActiveModel for database operations
 impl From<BridgeConfig> for bridges::ActiveModel {
     fn from(config: BridgeConfig) -> Self {
-        let bridge_type = BridgeType::try_from_value(&config.bridge_type).ok();
+        let bridge_type = match BridgeType::try_from_value(&config.bridge_type) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                tracing::warn!(
+                    bridge_type = %config.bridge_type,
+                    err = ?e,
+                    "Unknown bridge type in config; storing as NULL"
+                );
+                None
+            }
+        };
         bridges::ActiveModel {
             id: ActiveValue::Set(config.bridge_id),
             name: ActiveValue::Set(config.name),
@@ -292,7 +302,7 @@ pub fn load_bridges_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<BridgeConfi
 }
 
 /// Create layered Alloy providers from ChainConfig definitions.
-/// Returns a HashMap mapping chain_id (as u64) to a DynProvider.
+/// Returns a HashMap mapping chain_id (as i64) to a DynProvider.
 /// Only enabled RPC providers are included in each pool.
 pub async fn create_provider_pools_from_chains(
     chains: Vec<ChainConfig>,
