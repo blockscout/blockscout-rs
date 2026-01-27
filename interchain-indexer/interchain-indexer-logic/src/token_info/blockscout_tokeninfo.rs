@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use parking_lot::RwLock;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::token_info::{service::TokenKey, settings::BlockscoutTokenInfoClientSettings};
@@ -101,7 +102,10 @@ impl BlockscoutTokenInfoClient {
         }
 
         Self {
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(Duration::from_secs(15))
+                .build()
+                .expect("Failed to build BlockscoutTokenInfoClient"),
             settings,
             per_key_locks: Arc::new(RwLock::new(HashMap::new())),
             icon_cache: Arc::new(RwLock::new(HashMap::new())),
