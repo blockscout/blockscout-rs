@@ -363,6 +363,11 @@ pub async fn create_provider_pools_from_chains(
 
         // Create layered provider for this chain if we have any nodes
         if !node_configs.is_empty() {
+            // Check for duplicate chain_id in config
+            if pools.contains_key(&chain.chain_id) {
+                anyhow::bail!("Duplicate chain_id {} in chains config", chain.chain_id,);
+            }
+
             match build_layered_http_provider(node_configs, pool_config.clone()) {
                 Ok(provider) => {
                     tracing::info!(

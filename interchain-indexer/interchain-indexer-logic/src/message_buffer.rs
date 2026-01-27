@@ -263,6 +263,7 @@ impl<T: Consolidate> MessageBuffer<T> {
         }
     }
 
+    /// TODO: check once again if this is needed
     /// If hot tier exceeds capacity, runs maintenance to flush entries.
     async fn _maybe_run(&self) -> Result<()> {
         if self.inner.len() > self.config._max_hot_entries {
