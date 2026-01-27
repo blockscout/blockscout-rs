@@ -97,8 +97,6 @@ pub struct AvalancheIndexer {
     indexing_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
     state: Arc<parking_lot::RwLock<CrosschainIndexerState>>,
     init_timestamp: chrono::NaiveDateTime,
-    messages_indexed: Arc<std::sync::atomic::AtomicU64>,
-    transfers_indexed: Arc<std::sync::atomic::AtomicU64>,
     error_count: Arc<std::sync::atomic::AtomicU64>,
 }
 
@@ -160,8 +158,6 @@ impl AvalancheIndexer {
             indexing_handle: Arc::new(parking_lot::RwLock::new(None)),
             state: Arc::new(parking_lot::RwLock::new(CrosschainIndexerState::Idle)),
             init_timestamp: chrono::Utc::now().naive_utc(),
-            messages_indexed: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-            transfers_indexed: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             error_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         })
     }
@@ -176,8 +172,6 @@ impl AvalancheIndexer {
             indexing_handle: self.indexing_handle.clone(),
             state: self.state.clone(),
             init_timestamp: self.init_timestamp,
-            messages_indexed: self.messages_indexed.clone(),
-            transfers_indexed: self.transfers_indexed.clone(),
             error_count: self.error_count.clone(),
         }
     }
