@@ -13,7 +13,10 @@ use crate::{
     error::{ParseError, ServiceError},
     metrics::IMPORT_ENTITIES_COUNT,
     proto,
-    types::tokens::{TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData},
+    types::{
+        macros::opt_parse,
+        tokens::{TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData},
+    },
 };
 use chrono::NaiveDateTime;
 use sea_orm::prelude::BigDecimal;
@@ -29,12 +32,6 @@ pub struct BatchImportRequest {
     pub address_token_balances: Vec<AddressTokenBalance>,
     pub tokens: Vec<TokenUpdate>,
     pub counters: Vec<Counters>,
-}
-
-macro_rules! opt_parse {
-    ($v: expr) => {
-        $v.map(|v| v.parse()).transpose()?
-    };
 }
 
 impl BatchImportRequest {

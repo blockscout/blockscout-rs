@@ -20,6 +20,16 @@ impl From<WeeklyMetric> for proto::WeeklyMetric {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum ChainMetricKind {
+    #[default]
+    ActiveAccounts,
+    DailyTransactions,
+    NewAddresses,
+    Tps,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainMetrics {
     pub chain_id: ChainId,
@@ -27,6 +37,26 @@ pub struct ChainMetrics {
     pub new_addresses: Option<WeeklyMetric>,
     pub daily_transactions: Option<WeeklyMetric>,
     pub active_accounts: Option<WeeklyMetric>,
+}
+
+impl ChainMetrics {
+    pub fn metric_value_for_sorting(&self, metric: ChainMetricKind) -> Option<f64> {
+        match metric {
+            ChainMetricKind::ActiveAccounts => self
+                .active_accounts
+                .as_ref()
+                .map(|metric| metric.current_full_week as f64),
+            ChainMetricKind::DailyTransactions => self
+                .daily_transactions
+                .as_ref()
+                .map(|metric| metric.current_full_week as f64),
+            ChainMetricKind::NewAddresses => self
+                .new_addresses
+                .as_ref()
+                .map(|metric| metric.current_full_week as f64),
+            ChainMetricKind::Tps => self.tps,
+        }
+    }
 }
 
 impl From<ChainMetrics> for proto::ChainMetrics {

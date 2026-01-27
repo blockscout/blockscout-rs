@@ -9,13 +9,14 @@ use url::Url;
 
 const API_KEY_NAME: &str = "api_key";
 
+// https://github.com/blockscout/blockscout/blob/426e4b5a3724cb21c2a1eb697c27e41916739503/apps/explorer/lib/explorer/account/identity.ex#L31
 #[derive(Debug, Deserialize)]
 pub struct UserInfo {
-    pub address_hash: Option<String>,
-    pub avatar: String,
-    pub email: Option<String>,
-    pub name: String,
-    pub nickname: String,
+    pub address_hash: Option<String>, // virtual field
+    pub avatar: Option<String>,       // nullable in DB
+    pub email: String,                // null: false
+    pub name: Option<String>,         // virtual field
+    pub nickname: Option<String>,     // virtual field
 }
 
 #[derive(Debug, Deserialize)]

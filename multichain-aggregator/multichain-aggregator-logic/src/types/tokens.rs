@@ -1,7 +1,12 @@
 use super::ChainId;
 use crate::{
+    clients::blockscout::{node_api_config::NodeApiConfigResponse, stats::StatsResponse},
+    error::ParseError,
     proto,
-    types::{addresses::db_token_type_to_proto_token_type, sea_orm_wrappers::SeaOrmAddress},
+    types::{
+        addresses::db_token_type_to_proto_token_type, macros::opt_parse,
+        sea_orm_wrappers::SeaOrmAddress,
+    },
 };
 use entity::tokens::{ActiveModel, Column, Entity};
 use sea_orm::{
@@ -15,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
+pub const NATIVE_TOKEN_ADDRESS: alloy_primitives::Address = alloy_primitives::Address::ZERO;
 
 #[derive(Debug, Clone, Default)]
 pub struct TokenUpdate {
@@ -24,7 +30,49 @@ pub struct TokenUpdate {
     pub r#type: Option<UpdateTokenType>,
 }
 
-#[derive(Debug, Clone)]
+impl TryFrom<(ChainId, NodeApiConfigResponse)> for TokenUpdate {
+    type Error = ParseError;
+
+    fn try_from((chain_id, config): (ChainId, NodeApiConfigResponse)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            metadata: Some(UpdateTokenMetadata {
+                chain_id,
+                address_hash: NATIVE_TOKEN_ADDRESS.to_vec(),
+                name: config.envs.next_public_network_currency_name,
+                symbol: config.envs.next_public_network_currency_symbol,
+                decimals: opt_parse!(config.envs.next_public_network_currency_decimals),
+                token_type: Some(TokenType::Native),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+impl TryFrom<(ChainId, StatsResponse)> for TokenUpdate {
+    type Error = ParseError;
+
+    fn try_from((chain_id, stats): (ChainId, StatsResponse)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            metadata: Some(UpdateTokenMetadata {
+                chain_id,
+                address_hash: NATIVE_TOKEN_ADDRESS.to_vec(),
+                token_type: Some(TokenType::Native),
+                icon_url: stats.coin_image,
+                ..Default::default()
+            }),
+            price_data: Some(UpdateTokenPriceData {
+                chain_id,
+                address_hash: NATIVE_TOKEN_ADDRESS.to_vec(),
+                fiat_value: opt_parse!(stats.coin_price),
+                circulating_market_cap: opt_parse!(stats.market_cap),
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct UpdateTokenMetadata {
     pub chain_id: ChainId,
     pub address_hash: Vec<u8>,

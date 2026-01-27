@@ -64,6 +64,40 @@ pub mod stats {
 
     #[derive(Debug, Deserialize)]
     pub struct StatsResponse {
-        pub coin_price: String,
+        pub coin_price: Option<String>,
+        pub coin_image: Option<String>,
+        pub market_cap: Option<String>,
+    }
+}
+
+pub mod node_api_config {
+    use super::*;
+
+    pub struct NodeApiConfig {}
+
+    impl Endpoint for NodeApiConfig {
+        type Response = NodeApiConfigResponse;
+
+        fn method(&self) -> Method {
+            Method::GET
+        }
+
+        fn path(&self) -> String {
+            "/node-api/config".to_string()
+        }
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct NodeApiConfigResponse {
+        pub envs: Envs,
+    }
+
+    #[derive(Debug, Deserialize, Default)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE", default)]
+    pub struct Envs {
+        pub next_public_marketplace_enabled: Option<String>,
+        pub next_public_network_currency_name: Option<String>,
+        pub next_public_network_currency_symbol: Option<String>,
+        pub next_public_network_currency_decimals: Option<String>,
     }
 }
