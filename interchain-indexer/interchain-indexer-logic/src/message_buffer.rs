@@ -409,16 +409,20 @@ impl<T: Consolidate> MessageBuffer<T> {
                     for batch in stale_entries.chunks(batch_size) {
                         let models: Vec<pending_messages::ActiveModel> = batch
                             .iter()
-                            .filter_map(|(key, entry)| {
-                                let payload = serde_json::to_value(entry).ok()?;
-                                Some(pending_messages::ActiveModel {
+                            .map(|(key, entry)| {
+                                let payload = serde_json::to_value(entry).map_err(|e| {
+                                    DbErr::Custom(format!(
+                                        "pending_messages payload serialize failed: {e}"
+                                    ))
+                                })?;
+                                Ok(pending_messages::ActiveModel {
                                     message_id: ActiveValue::Set(key.message_id),
                                     bridge_id: ActiveValue::Set(key.bridge_id),
                                     payload: ActiveValue::Set(payload),
                                     created_at: ActiveValue::Set(Some(entry.hot_since)),
                                 })
                             })
-                            .collect();
+                            .collect::<Result<_, DbErr>>()?;
 
                         pending_messages::Entity::insert_many(models)
                             .on_conflict(
