@@ -179,8 +179,9 @@ impl TokenInfoService {
         }
         .await;
 
-        // Release the mutex
+        // Release the mutex and the local Arc so strong_count can reach 1
         drop(guard);
+        drop(key_lock);
 
         // prevent per_key_locks unlimited growth
         self.remove_lock_for_key(&key);

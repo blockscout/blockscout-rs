@@ -236,38 +236,41 @@ impl BlockscoutTokenInfoClient {
             return Ok(cached);
         }
 
-        // Acquire the lock for this key to prevent duplicate requests
-        let key_lock = self.get_lock_for_key(&key);
-        let _guard = key_lock.lock().await;
+        // Acquire the lock for this key to prevent duplicate requests.
+        // Use a block so key_lock and _guard are dropped before remove_lock_for_key,
+        // allowing strong_count to reach 1 so the map entry can be removed.
+        let icon_url = {
+            let key_lock = self.get_lock_for_key(&key);
+            let _guard = key_lock.lock().await;
 
-        // Check cache again after acquiring lock (another thread may have fetched it)
-        if let Some(cached) = self.get_cached_icon(&key) {
-            self.remove_lock_for_key(&key);
-            return Ok(cached);
-        }
-
-        let address_hex = format!("0x{}", hex::encode(token_address));
-        let result = self.get_token_info(base_url, chain_id, &address_hex).await;
-
-        // Cache the result
-        let icon_url = match &result {
-            Ok(info) => info.icon_url(),
-            Err(e) => {
-                tracing::warn!(
-                    chain_id = chain_id,
-                    token_address = address_hex,
-                    error = e.to_string(),
-                    "Failed to fetch token info"
-                );
+            // Check cache again after acquiring lock (another thread may have fetched it)
+            if let Some(cached) = self.get_cached_icon(&key) {
+                drop(_guard);
+                drop(key_lock);
                 self.remove_lock_for_key(&key);
+                return Ok(cached);
+            }
 
-                None
+            let address_hex = format!("0x{}", hex::encode(token_address));
+            let result = self.get_token_info(base_url, chain_id, &address_hex).await;
+
+            match &result {
+                Ok(info) => info.icon_url(),
+                Err(e) => {
+                    tracing::warn!(
+                        chain_id = chain_id,
+                        token_address = address_hex,
+                        error = e.to_string(),
+                        "Failed to fetch token info"
+                    );
+                    None
+                }
             }
         };
 
         self.cache_icon_result(key.clone(), icon_url.clone());
 
-        // Clean up the lock
+        // Clean up the lock (key_lock is dropped so strong_count == 1)
         self.remove_lock_for_key(&key);
 
         Ok(icon_url)
