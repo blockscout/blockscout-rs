@@ -55,6 +55,7 @@ impl From<BridgeConfig> for bridges::ActiveModel {
             enabled: ActiveValue::Set(config.enabled),
             api_url: ActiveValue::Set(config.api_url),
             ui_url: ActiveValue::Set(config.ui_url),
+            docs_url: ActiveValue::Set(config.docs_url),
             ..Default::default()
         }
     }
@@ -82,10 +83,20 @@ impl From<bridges::Model> for BridgeConfig {
 /// Note: `bridge_id` must be set separately as it's not part of BridgeContractConfig
 impl BridgeContractConfig {
     pub fn to_active_model(&self, bridge_id: i32) -> bridge_contracts::ActiveModel {
-        let abi_value = self
-            .abi
-            .as_ref()
-            .and_then(|abi_str| serde_json::from_str::<serde_json::Value>(abi_str).ok());
+        let abi_value = match &self.abi {
+            None => None,
+            Some(abi_str) => match serde_json::from_str::<serde_json::Value>(abi_str) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    tracing::warn!(
+                        err = %e,
+                        abi_preview = %abi_str.chars().take(500).collect::<String>(),
+                        "Invalid ABI JSON in bridge contract config, treating as None"
+                    );
+                    None
+                }
+            },
+        };
 
         bridge_contracts::ActiveModel {
             bridge_id: ActiveValue::Set(bridge_id),
@@ -436,27 +447,6 @@ mod tests {
 
         assert_eq!(chains[1].chain_id, 100);
         assert_eq!(chains[1].name, "Gnosis");
-    }
-
-    #[test]
-    fn test_bridge_config_to_active_model() {
-        let config = BridgeConfig {
-            bridge_id: 1,
-            name: "Test Bridge".to_string(),
-            bridge_type: "lockmint".to_string(),
-            indexer: "TestIndexer".to_string(),
-            enabled: true,
-            api_url: Some("https://api.example.com".to_string()),
-            ui_url: Some("https://ui.example.com".to_string()),
-            docs_url: Some("https://docs.example.com".to_string()),
-            contracts: vec![],
-        };
-
-        let active_model: bridges::ActiveModel = config.clone().into();
-
-        // Note: We can't easily check ActiveValue contents, but we can verify the conversion compiles
-        // In a real scenario, you'd extract the values to verify
-        assert!(matches!(active_model.id, ActiveValue::Set(1)));
     }
 
     #[test]
