@@ -10,11 +10,11 @@ use tokio::sync::Mutex;
 
 use crate::token_info::{blockscout_tokeninfo::BlockscoutTokenInfoClient, fetchers::*};
 
-pub type TokenKey = (u64, Vec<u8>);
+pub type TokenKey = (i64, Vec<u8>);
 
 pub struct TokenInfoService {
     db: Arc<InterchainDatabase>,
-    providers: HashMap<u64, DynProvider<Ethereum>>,
+    providers: HashMap<i64, DynProvider<Ethereum>>,
     settings: TokenInfoServiceSettings,
 
     // The list of the fetchers to retrieve the token info on-chain
@@ -38,7 +38,7 @@ pub struct TokenInfoService {
 impl TokenInfoService {
     pub fn new(
         db: Arc<InterchainDatabase>,
-        providers: HashMap<u64, DynProvider<Ethereum>>,
+        providers: HashMap<i64, DynProvider<Ethereum>>,
         settings: TokenInfoServiceSettings,
     ) -> Self {
         let token_info_client =
@@ -61,9 +61,13 @@ impl TokenInfoService {
 
     pub async fn get_token_info(
         &self,
-        chain_id: u64,
+        chain_id: i64,
         address: Vec<u8>,
     ) -> anyhow::Result<TokenInfoModel> {
+        if chain_id < 0 {
+            return Err(anyhow::anyhow!("chain_id is negative: {}", chain_id));
+        }
+
         let key = (chain_id, address.clone());
 
         // Fast path: try to read from cache
@@ -95,7 +99,11 @@ impl TokenInfoService {
             }
 
             // Not in cache: load from DB
-            if let Some(model) = self.db.get_token_info(chain_id, key.1.clone()).await? {
+            if let Some(model) = self
+                .db
+                .get_token_info(chain_id as u64, key.1.clone())
+                .await?
+            {
                 // Insert into cache (drop guard before any await)
                 {
                     let mut cache = self.token_info_cache.write();
@@ -125,12 +133,9 @@ impl TokenInfoService {
                 Ok(token_info) => {
                     // Use the icon from the external API if available
                     let icon_url = icon_result.ok().flatten();
-                    let chain_id_i64 = i64::try_from(chain_id).map_err(|e| {
-                        anyhow::anyhow!("chain_id out of range: {}: {}", chain_id, e)
-                    })?;
 
                     let model = TokenInfoModel {
-                        chain_id: chain_id_i64,
+                        chain_id,
                         address,
                         name: Some(token_info.name),
                         symbol: Some(token_info.symbol),
@@ -141,7 +146,7 @@ impl TokenInfoService {
                     };
 
                     let active_model = tokens::ActiveModel {
-                        chain_id: Set(chain_id_i64),
+                        chain_id: Set(chain_id),
                         address: Set(model.address.clone()),
                         symbol: Set(model.symbol.clone()),
                         name: Set(model.name.clone()),
@@ -191,7 +196,7 @@ impl TokenInfoService {
             return model;
         }
 
-        let chain_id = model.chain_id as u64;
+        let chain_id = model.chain_id;
         let address = model.address.clone();
 
         match self.try_fetch_token_icon(chain_id, address.clone()).await {
@@ -247,10 +252,10 @@ impl TokenInfoService {
     }
 
     /// Updates the token icon in the database and cache.
-    async fn update_token_icon(&self, chain_id: u64, address: Vec<u8>, icon_url: Option<String>) {
+    async fn update_token_icon(&self, chain_id: i64, address: Vec<u8>, icon_url: Option<String>) {
         if let Err(e) = self
             .db
-            .update_token_icon(chain_id, address.clone(), icon_url.clone())
+            .update_token_icon(chain_id as u64, address.clone(), icon_url.clone())
             .await
         {
             tracing::warn!(
@@ -274,7 +279,7 @@ impl TokenInfoService {
     async fn try_fetch_token_info_onchain(
         &self,
         provider: &DynProvider<Ethereum>,
-        chain_id: u64,
+        chain_id: i64,
         address: Vec<u8>,
     ) -> anyhow::Result<OnchainTokenInfo> {
         if address.len() != 20 {
@@ -286,7 +291,7 @@ impl TokenInfoService {
         let mut last_error = None;
         for fetcher in self.fetchers.iter() {
             match fetcher
-                .fetch_token_info(provider, chain_id, address.clone())
+                .fetch_token_info(provider, chain_id as u64, address.clone())
                 .await
             {
                 Ok(info) => return Ok(info),
@@ -302,7 +307,7 @@ impl TokenInfoService {
     /// Attempts to fetch a token icon from the Blockscout contracts-info API.
     async fn try_fetch_token_icon(
         &self,
-        chain_id: u64,
+        chain_id: i64,
         address: Vec<u8>,
     ) -> anyhow::Result<Option<String>> {
         self.token_info_client

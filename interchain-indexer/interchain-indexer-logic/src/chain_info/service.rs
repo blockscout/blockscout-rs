@@ -14,9 +14,9 @@ const DEFAULT_EXPLORER_ADDRESS_ROUTE: &str = "/address/{hash}";
 const DEFAULT_EXPLORER_TOKEN_ROUTE: &str = "/token/{hash}";
 
 /// Creates a placeholder chain model for an unknown chain
-fn unknown_chain(chain_id: u64) -> chains::Model {
+fn unknown_chain(chain_id: i64) -> chains::Model {
     chains::Model {
-        id: chain_id as i64,
+        id: chain_id,
         name: UNKNOWN_CHAIN_NAME.to_string(),
         icon: None,
         explorer: None,
@@ -89,9 +89,9 @@ pub struct ChainInfoService {
     db: Arc<InterchainDatabase>,
     settings: ChainInfoServiceSettings,
     /// Cache of chains with valid names: chain_id -> chains::Model
-    cache: Arc<RwLock<HashMap<u64, chains::Model>>>,
+    cache: Arc<RwLock<HashMap<i64, chains::Model>>>,
     /// Tracks last query time for chains with unknown names to implement cooldown
-    unknown_name_last_query: Arc<RwLock<HashMap<u64, Instant>>>,
+    unknown_name_last_query: Arc<RwLock<HashMap<i64, Instant>>>,
 }
 
 impl ChainInfoService {
@@ -109,7 +109,11 @@ impl ChainInfoService {
     /// Returns cached data if available. If not cached:
     /// - Queries the database (with rate-limiting for chains with empty names)
     /// - Returns "Unknown" as the chain name if name is empty or chain not found
-    pub async fn get_chain_info(&self, chain_id: u64) -> chains::Model {
+    pub async fn get_chain_info(&self, chain_id: i64) -> chains::Model {
+        if chain_id < 0 {
+            return unknown_chain(chain_id);
+        }
+
         // Fast path: check cache first (only chains with valid names are cached)
         if let Some(info) = self.cache.read().get(&chain_id) {
             return info.clone();
@@ -121,7 +125,7 @@ impl ChainInfoService {
         }
 
         // Query database
-        match self.db.get_chain_by_id(chain_id).await {
+        match self.db.get_chain_by_id(chain_id as u64).await {
             Ok(Some(model)) => {
                 let has_name = has_valid_name(&model);
                 let normalized = normalize_chain(model);
@@ -161,7 +165,7 @@ impl ChainInfoService {
             let has_name = has_valid_name(&chain);
             let normalized = normalize_chain(chain);
             if has_name {
-                cache.insert(normalized.id as u64, normalized);
+                cache.insert(normalized.id as i64, normalized);
             }
         }
 
@@ -176,13 +180,13 @@ impl ChainInfoService {
     }
 
     /// Invalidates a specific chain from cache.
-    pub fn invalidate_chain(&self, chain_id: u64) {
+    pub fn invalidate_chain(&self, chain_id: i64) {
         self.cache.write().remove(&chain_id);
         self.unknown_name_last_query.write().remove(&chain_id);
     }
 
     /// Checks if we're in cooldown period for a chain with unknown name.
-    fn is_in_cooldown(&self, chain_id: u64) -> bool {
+    fn is_in_cooldown(&self, chain_id: i64) -> bool {
         if let Some(last_query) = self.unknown_name_last_query.read().get(&chain_id) {
             last_query.elapsed() < self.settings.cooldown_interval
         } else {

@@ -11,7 +11,7 @@ pub async fn spawn_configured_indexers(
     db: InterchainDatabase,
     bridges: &[BridgeConfig],
     chains: &[ChainConfig],
-    chain_providers: &HashMap<u64, DynProvider<Ethereum>>,
+    chain_providers: &HashMap<i64, DynProvider<Ethereum>>,
     settings: &Settings,
 ) -> Result<Vec<Arc<dyn CrosschainIndexer>>> {
     let chain_lookup: HashMap<i64, ChainConfig> = chains
@@ -90,7 +90,7 @@ pub async fn spawn_configured_indexers(
 fn build_avalanche_chain_configs(
     bridge: &BridgeConfig,
     chain_lookup: &HashMap<i64, ChainConfig>,
-    chain_providers: &HashMap<u64, DynProvider<Ethereum>>,
+    chain_providers: &HashMap<i64, DynProvider<Ethereum>>,
 ) -> Vec<AvalancheChainConfig> {
     let mut chain_configs = Vec::new();
 
@@ -104,7 +104,7 @@ fn build_avalanche_chain_configs(
             continue;
         };
 
-        let Some(provider) = chain_providers.get(&(contract.chain_id as u64)) else {
+        let Some(provider) = chain_providers.get(&(contract.chain_id)) else {
             tracing::warn!(
                 bridge_id = bridge.bridge_id,
                 chain_id = contract.chain_id,

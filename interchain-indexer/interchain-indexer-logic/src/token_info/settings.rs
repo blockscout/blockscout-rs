@@ -10,9 +10,9 @@ pub struct BlockscoutTokenInfoClientSettings {
     pub url: Option<String>,
 
     // Do not request icons for the tokens from chains with these IDs.
-    #[serde_as(as = "StringWithSeparator<CommaSeparator, u64>")]
+    #[serde_as(as = "StringWithSeparator<CommaSeparator, i64>")]
     #[serde(default = "default_ignore_chains")]
-    pub ignore_chains: Vec<u64>,
+    pub ignore_chains: Vec<i64>,
 
     // If the token icon is not found in the the external token info service,
     // do not retry fetching it during this interval.
@@ -21,7 +21,7 @@ pub struct BlockscoutTokenInfoClientSettings {
     pub retry_interval: Duration,
 }
 
-fn default_ignore_chains() -> Vec<u64> {
+fn default_ignore_chains() -> Vec<i64> {
     vec![]
 }
 

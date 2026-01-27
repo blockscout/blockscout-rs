@@ -285,7 +285,7 @@ pub fn load_bridges_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<BridgeConfi
 /// Only enabled RPC providers are included in each pool.
 pub async fn create_provider_pools_from_chains(
     chains: Vec<ChainConfig>,
-) -> Result<HashMap<u64, DynProvider<Ethereum>>> {
+) -> Result<HashMap<i64, DynProvider<Ethereum>>> {
     let mut pools = HashMap::new();
 
     // Default pool configuration
@@ -302,7 +302,15 @@ pub async fn create_provider_pools_from_chains(
     const DEFAULT_COOLDOWN_SECS: u64 = 60;
 
     for chain in chains {
-        let chain_id_u64 = chain.chain_id as u64;
+        if chain.chain_id < 0 {
+            tracing::warn!(
+                chain_id = chain.chain_id,
+                chain_name = chain.name,
+                "Skipping chain with negative ID"
+            );
+            continue;
+        }
+
         let mut node_configs = Vec::new();
 
         // Extract enabled RPC providers from the chain config
@@ -337,15 +345,15 @@ pub async fn create_provider_pools_from_chains(
             match build_layered_http_provider(node_configs, pool_config.clone()) {
                 Ok(provider) => {
                     tracing::info!(
-                        chain_id = chain_id_u64,
+                        chain_id = chain.chain_id,
                         chain_name = chain.name,
                         "Created layered provider for chain"
                     );
-                    pools.insert(chain_id_u64, provider);
+                    pools.insert(chain.chain_id, provider);
                 }
                 Err(e) => {
                     tracing::warn!(
-                        chain_id = chain_id_u64,
+                        chain_id = chain.chain_id,
                         chain_name = chain.name,
                         err = ?e,
                         "Failed to create layered provider for chain, skipping"
@@ -354,7 +362,7 @@ pub async fn create_provider_pools_from_chains(
             }
         } else {
             tracing::warn!(
-                chain_id = chain_id_u64,
+                chain_id = chain.chain_id,
                 chain_name = chain.name,
                 "No enabled RPC providers found for chain, skipping provider creation"
             );

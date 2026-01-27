@@ -189,12 +189,9 @@ impl InterchainServiceImpl {
         }))
         .await;
 
-        let source_chain = self
-            .get_chain_info(message.src_chain_id as u64)
-            .await
-            .into();
+        let source_chain = self.get_chain_info(message.src_chain_id).await.into();
         let destination_chain = match message.dst_chain_id {
-            Some(id) => Some(self.get_chain_info(id as u64).await),
+            Some(id) => Some(self.get_chain_info(id).await),
             None => None,
         };
 
@@ -247,17 +244,11 @@ impl InterchainServiceImpl {
             bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(message),
             status: message_status_to_proto(&message.status) as i32,
-            source_chain: Some(
-                self.get_chain_info(transfer.token_src_chain_id as u64)
-                    .await,
-            ),
-            destination_chain: Some(
-                self.get_chain_info(transfer.token_dst_chain_id as u64)
-                    .await,
-            ),
+            source_chain: Some(self.get_chain_info(transfer.token_src_chain_id).await),
+            destination_chain: Some(self.get_chain_info(transfer.token_dst_chain_id).await),
             source_token: self
                 .get_token_info(
-                    transfer.token_src_chain_id as u64,
+                    transfer.token_src_chain_id,
                     transfer.token_src_address.clone(),
                 )
                 .await,
@@ -267,7 +258,7 @@ impl InterchainServiceImpl {
             send_timestamp: db_datetime_to_string(message.init_timestamp),
             destination_token: self
                 .get_token_info(
-                    transfer.token_dst_chain_id as u64,
+                    transfer.token_dst_chain_id,
                     transfer.token_dst_address.clone(),
                 )
                 .await,
@@ -286,17 +277,11 @@ impl InterchainServiceImpl {
             bridge: self.get_bridge_info(transfer.bridge_id).into(),
             message_id: self.get_message_id_from_joined_transfer(transfer),
             status: message_status_to_proto(&transfer.status) as i32,
-            source_chain: Some(
-                self.get_chain_info(transfer.token_src_chain_id as u64)
-                    .await,
-            ),
-            destination_chain: Some(
-                self.get_chain_info(transfer.token_dst_chain_id as u64)
-                    .await,
-            ),
+            source_chain: Some(self.get_chain_info(transfer.token_src_chain_id).await),
+            destination_chain: Some(self.get_chain_info(transfer.token_dst_chain_id).await),
             source_token: self
                 .get_token_info(
-                    transfer.token_src_chain_id as u64,
+                    transfer.token_src_chain_id,
                     transfer.token_src_address.clone(),
                 )
                 .await,
@@ -306,7 +291,7 @@ impl InterchainServiceImpl {
             send_timestamp: db_datetime_to_string(transfer.init_timestamp),
             destination_token: self
                 .get_token_info(
-                    transfer.token_dst_chain_id as u64,
+                    transfer.token_dst_chain_id,
                     transfer.token_dst_address.clone(),
                 )
                 .await,
@@ -344,7 +329,7 @@ impl InterchainServiceImpl {
             .unwrap_or_else(|| format!("0x{:x}", joined.message_id))
     }
 
-    async fn get_token_info(&self, chain_id: u64, address: Vec<u8>) -> Option<TokenInfo> {
+    async fn get_token_info(&self, chain_id: i64, address: Vec<u8>) -> Option<TokenInfo> {
         let address_hex = to_hex_prefixed(address.as_slice());
         self
             .token_info_service
@@ -373,7 +358,7 @@ impl InterchainServiceImpl {
         })
     }
 
-    async fn get_chain_info(&self, chain_id: u64) -> ChainInfo {
+    async fn get_chain_info(&self, chain_id: i64) -> ChainInfo {
         chain_info_logic_to_proto(self.chain_info_service.get_chain_info(chain_id).await)
     }
 }

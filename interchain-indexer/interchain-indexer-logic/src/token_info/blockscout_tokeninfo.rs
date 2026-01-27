@@ -67,6 +67,8 @@ pub enum BlockscoutTokenInfoError {
     InvalidResponse(u16),
     #[error("Invalid address length: expected 20, got {0}")]
     InvalidAddressLength(usize),
+    #[error("Invalid chain ID: {0}")]
+    InvalidChainId(i64),
 }
 
 /// Cached result for icon fetching.
@@ -157,7 +159,7 @@ impl BlockscoutTokenInfoClient {
     async fn get_token_info(
         &self,
         base_url: &str,
-        chain_id: u64,
+        chain_id: i64,
         token_address: &str,
     ) -> Result<BlockscoutTokenInfo, BlockscoutTokenInfoError> {
         let normalized_address = token_address.to_lowercase();
@@ -200,9 +202,13 @@ impl BlockscoutTokenInfoClient {
     /// * `Err(...)` - If the request fails or token is not found
     pub async fn get_token_icon(
         &self,
-        chain_id: u64,
+        chain_id: i64,
         token_address: &Vec<u8>,
     ) -> Result<Option<String>, BlockscoutTokenInfoError> {
+        if chain_id < 0 {
+            return Err(BlockscoutTokenInfoError::InvalidChainId(chain_id));
+        }
+
         if token_address.len() != 20 {
             return Err(BlockscoutTokenInfoError::InvalidAddressLength(
                 token_address.len(),
