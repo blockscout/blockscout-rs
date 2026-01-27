@@ -254,7 +254,7 @@ impl BlockscoutTokenInfoClient {
             let address_hex = format!("0x{}", hex::encode(token_address));
             let result = self.get_token_info(base_url, chain_id, &address_hex).await;
 
-            match &result {
+            let icon_url = match &result {
                 Ok(info) => info.icon_url(),
                 Err(e) => {
                     tracing::warn!(
@@ -265,12 +265,13 @@ impl BlockscoutTokenInfoClient {
                     );
                     None
                 }
-            }
+            };
+
+            self.cache_icon_result(key.clone(), icon_url.clone());
+
+            icon_url
         };
 
-        self.cache_icon_result(key.clone(), icon_url.clone());
-
-        // Clean up the lock (key_lock is dropped so strong_count == 1)
         self.remove_lock_for_key(&key);
 
         Ok(icon_url)
