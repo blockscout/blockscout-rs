@@ -212,7 +212,7 @@ CREATE TABLE indexer_checkpoints (
 -- indexer_failures: storing failed intervals for indexer
 CREATE TABLE indexer_failures (
   id           BIGSERIAL PRIMARY KEY,
-  bridge_id    BIGINT NOT NULL REFERENCES bridges(id),
+  bridge_id    INTEGER NOT NULL REFERENCES bridges(id),
   chain_id     BIGINT NOT NULL REFERENCES chains(id),
   
   from_block   BIGINT NOT NULL,
@@ -247,4 +247,4 @@ CREATE TABLE avalanche_icm_blockchain_ids (
 );
 
 COMMENT ON COLUMN avalanche_icm_blockchain_ids.blockchain_id IS
-  'Hex-encoded 32-byte Avalanche blockchain ID';
+  '32-byte Avalanche blockchain ID (stored as binary)';
