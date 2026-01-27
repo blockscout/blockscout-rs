@@ -26,7 +26,7 @@ use crate::{
         address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
         addresses::{AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
-        chain_metrics::ChainMetrics,
+        chain_metrics::{ChainMetricKind, ChainMetrics},
         chains::Chain,
         dapp::MarketplaceDapp,
         domains::{Domain, DomainInfo, ProtocolInfo},
@@ -43,6 +43,7 @@ use itertools::Itertools;
 use regex::Regex;
 use sea_orm::{DatabaseConnection, prelude::DateTime};
 use std::{
+    cmp::Ordering,
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
     sync::{Arc, OnceLock},
@@ -150,11 +151,48 @@ impl Cluster {
         Ok(chain_ids)
     }
 
-    pub async fn list_chains(&self) -> Result<Vec<Chain>, ServiceError> {
+    pub async fn list_chains(
+        &self,
+        sort_metric: Option<ChainMetricKind>,
+    ) -> Result<Vec<Chain>, ServiceError> {
         let chain_ids = self.active_chain_ids().await?.into_iter().collect();
 
-        let chains = chains::list_by_ids(&self.db, chain_ids).await?;
-        Ok(chains.into_iter().map(|c| c.into()).collect())
+        let mut chains = chains::list_by_ids(&self.db, chain_ids)
+            .await?
+            .into_iter()
+            .map(|c| c.into())
+            .collect::<Vec<Chain>>();
+
+        let sort_metric = sort_metric.unwrap_or_default();
+        let metrics_map = self
+            .list_chain_metrics()
+            .await?
+            .into_iter()
+            .filter_map(|metric| {
+                metric
+                    .metric_value_for_sorting(sort_metric)
+                    .map(|v| (metric.chain_id, v))
+            })
+            .collect::<HashMap<_, _>>();
+
+        chains.sort_by(|left, right| {
+            // Compare metrics values in descending order
+            let ordering = match (metrics_map.get(&left.id), metrics_map.get(&right.id)) {
+                (Some(left), Some(right)) => right.total_cmp(left),
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            };
+
+            // If metrics values are equal, compare chain ids in ascending order
+            if ordering == Ordering::Equal {
+                left.id.cmp(&right.id)
+            } else {
+                ordering
+            }
+        });
+
+        Ok(chains)
     }
 
     pub async fn list_chain_metrics(&self) -> Result<Vec<ChainMetrics>, ServiceError> {
