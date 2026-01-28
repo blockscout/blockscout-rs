@@ -12,6 +12,7 @@ pub mod domains;
 pub mod hashes;
 pub mod interop_message_transfers;
 pub mod interop_messages;
+pub mod portfolio;
 pub mod sea_orm_wrappers;
 pub mod search_results;
 pub mod tokens;
