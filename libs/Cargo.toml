@@ -11,6 +11,7 @@ members = [
     "env-collector",
     "metrics-tools",
     "mismatch",
+    "recaptcha-verifier",
     "reqwest-rate-limiter",
     "solidity-metadata",
     "sourcify",
