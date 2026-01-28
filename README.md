@@ -48,23 +48,25 @@ A set of services used by [Blockscout](https://blockscout.com/) blockchain explo
 
 3. [eth-bytecode-db](eth-bytecode-db/) - Ethereum Bytecode Database. Cross-chain smart-contracts database used for automatic contracts verification
 
-4. [proxy-verifier](proxy-verifier) - backend for the standalone multi-chain verification service
+4. [interchain-indexer](interchain-indexer/) - Universal Bridge Indexer. A standalone service for indexing and aggregating interoperability data across multiple blockchains
 
-5. [sig-provider](sig-provider/) - aggregator of ethereum signatures for transactions and events
+5. [proxy-verifier](proxy-verifier) - backend for the standalone multi-chain verification service
 
-6. [smart-contract-verifier](smart-contract-verifier/) - smart-contracts verification
+6. [sig-provider](sig-provider/) - aggregator of ethereum signatures for transactions and events
 
-7. [stats](stats) - service designed to calculate and present statistical information from a Blockscout instance
+7. [smart-contract-verifier](smart-contract-verifier/) - smart-contracts verification
 
-8. [tac-operation-lifecycle](tac-operation-lifecycle/) - indexing operations in TAC (Ton Application Chain)
+8. [stats](stats) - service designed to calculate and present statistical information from a Blockscout instance
 
-9. [user-ops-indexer](user-ops-indexer) - service designed to index, decode and serve user operations as per the ERC-4337 standard
+9. [tac-operation-lifecycle](tac-operation-lifecycle/) - indexing operations in TAC (Ton Application Chain)
 
-10. [visualizer](visualizer/) - service for evm visualization such as:
+10. [user-ops-indexer](user-ops-indexer) - service designed to index, decode and serve user operations as per the ERC-4337 standard
+
+11. [visualizer](visualizer/) - service for evm visualization such as:
    
    * Solidity contract visualization using [sol2uml](https://www.npmjs.com/package/sol2uml)
 
-11. [multichain-aggregator](multichain-aggregator/) - service to store and index data from multiple blockscout instances. Also contains logic with [interop messages](https://docs.optimism.io/interop/message-passing)
+12. [multichain-aggregator](multichain-aggregator/) - service to store and index data from multiple blockscout instances. Also contains logic with [interop messages](https://docs.optimism.io/interop/message-passing)
 
 
 ## Running and configuring services
