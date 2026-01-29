@@ -74,6 +74,7 @@ pub async fn list_by_address<C>(
     address: alloy_primitives::Address,
     token_types: Vec<TokenType>,
     chain_ids: Vec<i64>,
+    query: Option<String>,
     page_size: u64,
     page_token: Option<ListAddressTokensPageToken>,
 ) -> Result<
@@ -92,7 +93,7 @@ where
         .into();
 
     let query = AggregatedAddressTokenBalance::select_cols(
-        base_normal_tokens_query(vec![], chain_ids, token_types, None)
+        base_normal_tokens_query(vec![], chain_ids, token_types, query)
             .join(JoinType::InnerJoin, tokens_rel)
             .filter(Column::AddressHash.eq(address.as_slice()))
             .filter(Column::Value.gt(0)),

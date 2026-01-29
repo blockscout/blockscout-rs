@@ -371,6 +371,7 @@ impl Cluster {
         address: AddressAlloy,
         token_types: Vec<TokenType>,
         chain_ids: Vec<ChainId>,
+        query: Option<String>,
         page_size: u64,
         page_token: Option<ListAddressTokensPageToken>,
     ) -> Result<
@@ -386,6 +387,7 @@ impl Cluster {
             address,
             token_types,
             chain_ids,
+            query,
             page_size,
             page_token,
         )
