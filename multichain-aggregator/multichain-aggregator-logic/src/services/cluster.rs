@@ -32,6 +32,7 @@ use crate::{
         domains::{Domain, DomainInfo, ProtocolInfo},
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
+        portfolio::AddressPortfolio,
         search_results::{QuickSearchResult, Redirect},
         tokens::{AggregatedToken, TokenListUpdate, TokenType},
     },
@@ -41,7 +42,10 @@ use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use itertools::Itertools;
 use regex::Regex;
-use sea_orm::{DatabaseConnection, prelude::DateTime};
+use sea_orm::{
+    DatabaseConnection,
+    prelude::{BigDecimal, DateTime},
+};
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, HashMap, HashSet},
@@ -342,6 +346,24 @@ impl Cluster {
         address_info.domain_info = domain_info?;
 
         Ok(address_info)
+    }
+
+    pub async fn get_address_portfolio(
+        &self,
+        address: AddressAlloy,
+        chain_ids: Vec<ChainId>,
+    ) -> Result<AddressPortfolio, ServiceError> {
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+        let chain_values =
+            address_token_balances::portfolio_by_address(&self.db, address, chain_ids).await?;
+        let total_value = chain_values
+            .iter()
+            .fold(BigDecimal::from(0), |acc, v| acc + v.value.clone());
+
+        Ok(AddressPortfolio {
+            total_value,
+            chain_values,
+        })
     }
 
     pub async fn list_address_tokens(

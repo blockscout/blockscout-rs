@@ -19,6 +19,8 @@ service ClusterExplorerService {
   rpc GetInteropMessage(GetInteropMessageRequest)
       returns (GetInteropMessageResponse) {}
   rpc GetAddress(GetAddressRequest) returns (GetAddressResponse) {}
+  rpc GetAddressPortfolio(GetAddressPortfolioRequest)
+      returns (GetAddressPortfolioResponse) {}
   rpc ListAddressTokens(ListAddressTokensRequest) returns (ListAddressTokensResponse) {}
   rpc ListClusterTokens(ListClusterTokensRequest) returns (ListClusterTokensResponse) {}
   rpc GetAggregatedToken(GetAggregatedTokenRequest) returns (GetAggregatedTokenResponse) {}
@@ -172,6 +174,22 @@ message AggregatedTokenInfo {
 message GetAddressRequest {
   string cluster_id = 1;
   string address_hash = 2;
+}
+
+message AddressPortfolio {
+  string total_value = 1;
+  map<string, string> chain_values = 2;
+}
+
+message GetAddressPortfolioRequest {
+  string cluster_id = 1;
+  string address_hash = 2;
+  // Comma-separated list of chain ids to filter by.
+  repeated string chain_id = 3;
+}
+
+message GetAddressPortfolioResponse {
+  AddressPortfolio portfolio = 1;
 }
 
 message BasicDomainInfo {
