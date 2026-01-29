@@ -188,6 +188,7 @@ impl ClusterExplorerService for ClusterExplorer {
                 address,
                 token_types,
                 chain_ids,
+                inner.query,
                 page_size as u64,
                 page_token,
             )

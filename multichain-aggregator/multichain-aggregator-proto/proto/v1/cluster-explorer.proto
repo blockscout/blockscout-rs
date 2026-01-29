@@ -225,6 +225,7 @@ message ListAddressTokensRequest {
   optional string type = 3;
   // Comma-separated list of chain ids to filter by.
   repeated string chain_id = 4;
+  optional string query = 7;
   optional uint32 page_size = 5;
   optional string page_token = 6;
 }
