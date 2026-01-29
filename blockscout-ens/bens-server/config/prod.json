@@ -783,7 +783,7 @@
         }
       },
       "infinityname-soneium": {
-        "tld_list": ["soneium"],
+        "tld_list": ["cd"],
         "network_id": 1868,
         "subgraph_name": "infinityname-soneium-subgraph",
         "address_resolve_technique": "primary_name_record",
