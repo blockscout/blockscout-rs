@@ -5,6 +5,7 @@ use crate::{
         address_token_balances::{
             AddressTokenBalance, AggregatedAddressTokenBalance, TokenHolder, fiat_balance_query,
         },
+        portfolio::PortfolioChainValue,
     },
 };
 use bigdecimal::BigDecimal;
@@ -114,6 +115,38 @@ where
         |a: &AggregatedAddressTokenBalance| (a.fiat_balance.clone(), a.value.clone(), a.id),
     )
     .await
+}
+
+pub async fn portfolio_by_address<C>(
+    db: &C,
+    address: alloy_primitives::Address,
+    chain_ids: Vec<ChainId>,
+) -> Result<Vec<PortfolioChainValue>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let tokens_rel = Entity::belongs_to(tokens::Entity)
+        .from((Column::TokenAddressHash, Column::ChainId))
+        .to((tokens::Column::AddressHash, tokens::Column::ChainId))
+        .into();
+
+    let values = Entity::find()
+        .select_only()
+        .join(JoinType::InnerJoin, tokens_rel)
+        .filter(Column::AddressHash.eq(address.as_slice()))
+        .filter(Column::Value.gt(0))
+        .filter(tokens::Column::FiatValue.is_not_null())
+        .filter(tokens::Column::Decimals.is_not_null())
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
+        )
+        .group_by(Column::ChainId)
+        .into_partial_model::<PortfolioChainValue>()
+        .all(db)
+        .await?;
+
+    Ok(values)
 }
 
 pub async fn check_if_tokens_at_address<C>(

@@ -153,6 +153,23 @@ impl ClusterExplorerService for ClusterExplorer {
         Ok(Response::new(address_info.into()))
     }
 
+    async fn get_address_portfolio(
+        &self,
+        request: Request<GetAddressPortfolioRequest>,
+    ) -> Result<Response<GetAddressPortfolioResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let address = parse_query(inner.address_hash)?;
+        let chain_ids = parse_chain_ids(inner.chain_id)?;
+
+        let portfolio = cluster.get_address_portfolio(address, chain_ids).await?;
+
+        Ok(Response::new(GetAddressPortfolioResponse {
+            portfolio: Some(portfolio.into()),
+        }))
+    }
+
     async fn list_address_tokens(
         &self,
         request: Request<ListAddressTokensRequest>,

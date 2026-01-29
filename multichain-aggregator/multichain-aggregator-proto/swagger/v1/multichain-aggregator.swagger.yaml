@@ -190,6 +190,37 @@ paths:
           type: string
       tags:
         - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/addresses/{address_hash}/portfolio:
+    get:
+      operationId: ClusterExplorerService_GetAddressPortfolio
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAddressPortfolioResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address_hash
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+      tags:
+        - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/addresses/{address_hash}/tokens:
     get:
       operationId: ClusterExplorerService_ListAddressTokens
@@ -1455,6 +1486,15 @@ definitions:
     properties:
       hash:
         type: string
+  v1AddressPortfolio:
+    type: object
+    properties:
+      total_value:
+        type: string
+      chain_values:
+        type: object
+        additionalProperties:
+          type: string
   v1AggregatedTokenInfo:
     type: object
     properties:
@@ -1669,6 +1709,11 @@ definitions:
       names_count:
         type: integer
         format: int64
+  v1GetAddressPortfolioResponse:
+    type: object
+    properties:
+      portfolio:
+        $ref: '#/definitions/v1AddressPortfolio'
   v1GetAddressResponse:
     type: object
     properties:

@@ -65,6 +65,9 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetAddress
       get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetAddressPortfolio
+      get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}/portfolio
+
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListAddressTokens
       get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}/tokens
 
