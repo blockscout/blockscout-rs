@@ -134,6 +134,11 @@
       "subgraph_path": "../subgraphs/infinityname-subgraph",
       "subgraph_name": "infinityname-base-subgraph",
       "network": "base-mainnet"
+    },
+    "infinityname-soneium": {
+      "subgraph_path": "../subgraphs/infinityname-subgraph",
+      "subgraph_name": "infinityname-soneium-subgraph",
+      "network": "soneium-mainnet"
     }
   }
 }
