@@ -110,6 +110,9 @@ message ChainMetrics {
 
 message ListChainMetricsRequest {
   string cluster_id = 1;
+  // Metric used to sort chain metrics. Supported values: active_accounts, daily_transactions,
+  // new_addresses, tps. Defaults to active_accounts.
+  optional string sort_by = 2;
 }
 
 message ListChainMetricsResponse {

@@ -287,6 +287,13 @@ paths:
           in: path
           required: true
           type: string
+        - name: sort_by
+          description: |-
+            Metric used to sort chain metrics. Supported values: active_accounts, daily_transactions,
+            new_addresses, tps. Defaults to active_accounts.
+          in: query
+          required: false
+          type: string
       tags:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/chains:
