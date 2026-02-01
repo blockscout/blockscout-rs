@@ -226,6 +226,8 @@ message ListAddressTokensRequest {
   // Comma-separated list of chain ids to filter by.
   repeated string chain_id = 4;
   optional string query = 7;
+  // If true, include tokens with poor reputation in the results. By default they are excluded.
+  optional bool include_poor_reputation_tokens = 8;
   optional uint32 page_size = 5;
   optional string page_token = 6;
 }

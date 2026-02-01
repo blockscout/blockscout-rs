@@ -259,6 +259,11 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_poor_reputation_tokens
+          description: If true, include tokens with poor reputation in the results. By default they are excluded.
+          in: query
+          required: false
+          type: boolean
         - name: page_size
           in: query
           required: false

@@ -180,6 +180,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let token_types = parse_token_types(inner.r#type)?;
         let address = parse_query(inner.address_hash)?;
         let chain_ids = parse_chain_ids(inner.chain_id)?;
+        let filter_poor_reputation = !inner.include_poor_reputation_tokens.unwrap_or(false);
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;
 
@@ -191,6 +192,7 @@ impl ClusterExplorerService for ClusterExplorer {
                 inner.query,
                 page_size as u64,
                 page_token,
+                filter_poor_reputation,
             )
             .await?;
 

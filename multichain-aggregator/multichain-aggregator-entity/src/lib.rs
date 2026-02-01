@@ -13,5 +13,6 @@ pub mod dapps;
 pub mod hashes;
 pub mod interop_messages;
 pub mod interop_messages_transfers;
+pub mod poor_reputation_tokens;
 pub mod sea_orm_active_enums;
 pub mod tokens;
