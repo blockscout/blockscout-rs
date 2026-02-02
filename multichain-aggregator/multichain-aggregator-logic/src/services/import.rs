@@ -1,6 +1,8 @@
+use std::collections::HashSet;
+
 use crate::{
     error::ServiceError,
-    proto, repository,
+    proto, repository, services,
     services::channel::{LatestBlockUpdateMessage, NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
     types::{
         address_token_balances::AddressTokenBalance,
@@ -111,6 +113,16 @@ pub async fn import_poor_reputation_tokens(
     db: &DatabaseConnection,
     tokens: Vec<PoorReputationToken>,
 ) -> Result<(), ServiceError> {
+    let valid_chain_ids = services::chains::list_repo_chains_cached(db, false)
+        .await?
+        .into_iter()
+        .map(|c| c.id)
+        .collect::<HashSet<_>>();
+    let tokens = tokens
+        .into_iter()
+        .filter(|t| valid_chain_ids.contains(&t.chain_id))
+        .collect();
+
     repository::poor_reputation_tokens::upsert_many(db, tokens)
         .await
         .inspect_err(|err| {
