@@ -6,6 +6,7 @@ use crate::{
         address_token_balances::AddressTokenBalance,
         batch_import_request::BatchImportRequest,
         interop_messages::InteropMessage,
+        poor_reputation_tokens::PoorReputationToken,
         tokens::{TokenType, TokenUpdate, UpdateTokenType},
     },
 };
@@ -103,6 +104,18 @@ pub async fn batch_import(
         channel.broadcast((NEW_BLOCKS_TOPIC, "new_blocks", block_ranges));
     }
 
+    Ok(())
+}
+
+pub async fn import_poor_reputation_tokens(
+    db: &DatabaseConnection,
+    tokens: Vec<PoorReputationToken>,
+) -> Result<(), ServiceError> {
+    repository::poor_reputation_tokens::upsert_many(db, tokens)
+        .await
+        .inspect_err(|err| {
+            tracing::error!(error = ?err, "failed to import poor reputation tokens");
+        })?;
     Ok(())
 }
 

@@ -7,6 +7,10 @@ http:
       post: /api/v1/import:batch
       body: "*"
 
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ImportPoorReputationTokens
+      post: /api/v1/import:poor-reputation-tokens
+      body: "*"
+
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.QuickSearch
       get: /api/v1/search:quick
 

@@ -69,6 +69,7 @@ where
 
 pub type ListAddressTokensPageToken = (Option<BigDecimal>, BigDecimal, i64);
 
+#[allow(clippy::too_many_arguments)]
 pub async fn list_by_address<C>(
     db: &C,
     address: alloy_primitives::Address,

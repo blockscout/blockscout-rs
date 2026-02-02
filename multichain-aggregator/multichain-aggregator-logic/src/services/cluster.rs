@@ -366,6 +366,7 @@ impl Cluster {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_address_tokens(
         &self,
         address: AddressAlloy,
