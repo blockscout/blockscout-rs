@@ -42,9 +42,11 @@ service InterchainService {
   rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse) {}
   rpc GetMessageDetails(GetMessageDetailsRequest) returns (InterchainMessage) {}
   rpc GetMessagesByTransaction(GetMessagesByTransactionRequest) returns (GetMessagesResponse) {}
+  rpc GetMessagesByAddress(GetMessagesByAddressRequest) returns (GetMessagesResponse) {}
   
   rpc GetTransfers(GetTransfersRequest) returns (GetTransfersResponse) {}
   rpc GetTransfersByTransaction(GetTransfersByTransactionRequest) returns (GetTransfersResponse) {}
+  rpc GetTransfersByAddress(GetTransfersByAddressRequest) returns (GetTransfersResponse) {}
 }
 
 
@@ -81,6 +83,24 @@ message GetMessageDetailsRequest {
 
 message GetMessagesByTransactionRequest {
   string tx_hash = 1;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 2;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 3;
+  // input pagination token - used by default
+  // (packed version of the raw pagination parameters)
+  optional string page_token = 4;
+  // Raw pagination parameters
+  // (used when api.use_pagination_token=false)
+  optional uint64 timestamp = 5;  // Raw pagination field
+  optional string message_id = 6; // Raw pagination field
+  optional uint32 bridge_id = 7;  // Raw pagination field
+  optional string direction = 8;  // Raw pagination field
+}
+
+message GetMessagesByAddressRequest {
+  string address = 1;
 
   // Items on a page: bounded by the API settings
   optional uint32 page_size = 2;
@@ -172,6 +192,25 @@ message GetTransfersRequest {
 
 message GetTransfersByTransactionRequest {
   string tx_hash = 1;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 2;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 3;
+  // input pagination token - used by default
+  // (packed version of the raw pagination parameters)
+  optional string page_token = 4;
+  // Raw pagination parameters
+  // (used when api.use_pagination_token=false)
+  optional uint64 timestamp = 5;  // Raw pagination field
+  optional string message_id = 6; // Raw pagination field
+  optional uint32 bridge_id = 7;  // Raw pagination field
+  optional uint64 index = 8;      // Raw pagination field
+  optional string direction = 9;  // Raw pagination field
+}
+
+message GetTransfersByAddressRequest {
+  string address = 1;
 
   // Items on a page: bounded by the API settings
   optional uint32 page_size = 2;

@@ -374,7 +374,7 @@ impl InterchainService for InterchainServiceImpl {
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_messages(None, page_size, is_last_page, input_pagination)
+            .get_crosschain_messages(None, None, page_size, is_last_page, input_pagination)
             .await
             .map_err(map_db_error)?;
 
@@ -424,7 +424,48 @@ impl InterchainService for InterchainServiceImpl {
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_messages(Some(tx_hash), page_size, is_last_page, input_pagination)
+            .get_crosschain_messages(
+                Some(tx_hash),
+                None,
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
+            .await
+            .map_err(map_db_error)?;
+
+        let items = self.messages_logic_to_proto(items).await;
+
+        let response = GetMessagesResponse {
+            items,
+            next_page_params: output_pagination
+                .next_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+            prev_page_params: output_pagination
+                .prev_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+        };
+        Ok(Response::new(response))
+    }
+
+    async fn get_messages_by_address(
+        &self,
+        request: Request<GetMessagesByAddressRequest>,
+    ) -> Result<Response<GetMessagesResponse>, Status> {
+        let (inner, input_pagination, page_size, is_last_page) =
+            messages_pagination_params!(self, request)?;
+
+        let address = vec_from_hex_prefixed(&inner.address).map_err(map_db_error)?;
+
+        let (items, output_pagination) = self
+            .db
+            .get_crosschain_messages(
+                None,
+                Some(address),
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
             .await
             .map_err(map_db_error)?;
 
@@ -451,7 +492,7 @@ impl InterchainService for InterchainServiceImpl {
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_transfers(None, page_size, is_last_page, input_pagination)
+            .get_crosschain_transfers(None, None, page_size, is_last_page, input_pagination)
             .await
             .map_err(map_db_error)?;
 
@@ -480,7 +521,48 @@ impl InterchainService for InterchainServiceImpl {
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_transfers(Some(tx_hash), page_size, is_last_page, input_pagination)
+            .get_crosschain_transfers(
+                Some(tx_hash),
+                None,
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
+            .await
+            .map_err(map_db_error)?;
+
+        let items = self.joined_transfers_logic_to_proto(items).await;
+
+        let response = GetTransfersResponse {
+            items,
+            next_page_params: output_pagination
+                .next_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+            prev_page_params: output_pagination
+                .prev_marker
+                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+        };
+        Ok(Response::new(response))
+    }
+
+    async fn get_transfers_by_address(
+        &self,
+        request: Request<GetTransfersByAddressRequest>,
+    ) -> Result<Response<GetTransfersResponse>, Status> {
+        let (inner, input_pagination, page_size, is_last_page) =
+            transfers_pagination_params!(self, request)?;
+
+        let address = vec_from_hex_prefixed(&inner.address).map_err(map_db_error)?;
+
+        let (items, output_pagination) = self
+            .db
+            .get_crosschain_transfers(
+                None,
+                Some(address),
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
             .await
             .map_err(map_db_error)?;
 

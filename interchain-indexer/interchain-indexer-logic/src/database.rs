@@ -491,6 +491,7 @@ impl InterchainDatabase {
     pub async fn get_crosschain_messages(
         &self,
         tx_hash: Option<Vec<u8>>,
+        address: Option<Vec<u8>>,
         page_size: usize,
         last_page: bool,
         input_pagination: Option<MessagesPaginationLogic>,
@@ -581,6 +582,16 @@ impl InterchainDatabase {
                             .or(Expr::col(crosschain_messages::Column::DstTxHash).eq(tx_hash));
 
                         query = query.filter(tx_filter);
+                    }
+
+                    // Apply address filter if provided
+                    if let Some(address) = address.clone() {
+                        let address_filter = Expr::col(crosschain_messages::Column::SenderAddress)
+                            .eq(address.clone())
+                            .or(Expr::col(crosschain_messages::Column::RecipientAddress)
+                                .eq(address));
+
+                        query = query.filter(address_filter);
                     }
 
                     // Apply ordering depending on requested direction
@@ -702,6 +713,7 @@ impl InterchainDatabase {
     pub async fn get_crosschain_transfers(
         &self,
         tx_hash: Option<Vec<u8>>,
+        address: Option<Vec<u8>>,
         page_size: usize,
         last_page: bool,
         input_pagination: Option<TransfersPaginationLogic>,
@@ -716,6 +728,7 @@ impl InterchainDatabase {
             .transaction(|tx| {
                 let pagination_marker = input_pagination;
                 let tx_hash_filter = tx_hash.clone();
+                let address_filter = address.clone();
 
                 Box::pin(async move {
                     let query_direction = if last_page {
@@ -846,6 +859,21 @@ impl InterchainDatabase {
                             .or(Expr::col(crosschain_messages::Column::DstTxHash).eq(hash.clone()));
 
                         query = query.filter(tx_filter);
+                    }
+
+                    if let Some(address) = address_filter.as_ref() {
+                        let address_filter = Expr::col((
+                            crosschain_transfers::Entity,
+                            crosschain_transfers::Column::SenderAddress,
+                        ))
+                        .eq(address.clone())
+                        .or(Expr::col((
+                            crosschain_transfers::Entity,
+                            crosschain_transfers::Column::RecipientAddress,
+                        ))
+                        .eq(address.clone()));
+
+                        query = query.filter(address_filter);
                     }
 
                     match query_direction {
@@ -1321,13 +1349,13 @@ mod tests {
         assert_eq!(bridge_contract.address, bridge_contracts[0].address);
 
         let (crosschain_messages, _) = interchain_db
-            .get_crosschain_messages(None, 100, false, None)
+            .get_crosschain_messages(None, None, 100, false, None)
             .await
             .unwrap();
         assert_eq!(crosschain_messages.len(), 4);
 
         let crosschain_transfers = interchain_db
-            .get_crosschain_transfers(None, 50, false, None)
+            .get_crosschain_transfers(None, None, 50, false, None)
             .await
             .unwrap();
         assert_eq!(crosschain_transfers.0.len(), 5);

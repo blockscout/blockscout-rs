@@ -251,7 +251,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     );
 
     let (messages, _pagination) = interchain_db
-        .get_crosschain_messages(None, 100, false, None)
+        .get_crosschain_messages(None, None, 100, false, None)
         .await?;
 
     // Expected message native_id from the test blocks
@@ -496,7 +496,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
 
     // Ensure the message was NOT promoted to final storage.
     let (messages, _pagination) = interchain_db
-        .get_crosschain_messages(None, 100, false, None)
+        .get_crosschain_messages(None, None, 100, false, None)
         .await?;
 
     assert!(
@@ -657,7 +657,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
     let start = std::time::Instant::now();
     let (message, _transfers) = loop {
         let (messages, _pagination) = interchain_db
-            .get_crosschain_messages(None, 100, false, None)
+            .get_crosschain_messages(None, None, 100, false, None)
             .await?;
 
         if let Some(found) = messages
@@ -799,7 +799,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
     let start = std::time::Instant::now();
     let (message, _transfers) = loop {
         let (messages, _pagination) = interchain_db
-            .get_crosschain_messages(None, 100, false, None)
+            .get_crosschain_messages(None, None, 100, false, None)
             .await?;
 
         if let Some(found) = messages

@@ -14,11 +14,17 @@ http:
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessagesByTransaction
       get: /api/v1/interchain/messages:byTx/{tx_hash}
 
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessagesByAddress
+      get: /api/v1/interchain/messages:byAddress/{address}
+
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfers
       get: /api/v1/interchain/transfers
 
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfersByTransaction
       get: /api/v1/interchain/transfers:byTx/{tx_hash}
+    
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfersByAddress
+      get: /api/v1/interchain/transfers:byAddress/{address}
 
 
     #################### Statistics ####################
