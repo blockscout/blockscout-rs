@@ -8,7 +8,7 @@ use crate::{
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
     settings::{
-        Settings, apply_multichain_mode_settings, handle_disable_internal_transactions,
+        Mode, Settings, apply_multichain_mode_settings, handle_disable_internal_transactions,
         handle_enable_all_arbitrum, handle_enable_all_eip_7702, handle_enable_all_op_stack,
         handle_enable_zetachain_cctx,
     },
@@ -55,8 +55,12 @@ pub async fn stats(
         &mut charts_config,
     );
     handle_enable_zetachain_cctx(&mut settings, &mut charts_config);
-    if settings.multichain_mode {
-        apply_multichain_mode_settings(&mut settings);
+    match settings.mode {
+        Mode::Aggregator => apply_multichain_mode_settings(&mut settings),
+        Mode::Interchain => {
+            // #UBI: apply interchain mode settings (api urls, start conditions, charts).
+        }
+        _ => {}
     }
 
     let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
@@ -64,7 +68,7 @@ pub async fn stats(
     let indexer = connect_to_main_indexer_db(&settings).await?;
     let cctx_indexer = connect_to_second_indexer_db(&settings).await?;
 
-    check_if_unsupported_charts_are_enabled(settings.multichain_mode, &charts, &indexer).await?;
+    check_if_unsupported_charts_are_enabled(settings.mode, &charts, &indexer).await?;
     create_charts_if_needed(&db, &charts).await?;
 
     if settings.metrics.enabled {
@@ -86,7 +90,7 @@ pub async fn stats(
             cctx_indexer.clone(),
             charts.clone(),
             status_listener,
-            settings.multichain_mode,
+            settings.mode,
             settings.multichain_filter,
         )
         .await?,
@@ -107,7 +111,7 @@ pub async fn stats(
         ReadService::new(
             db.clone(),
             indexer.clone(),
-            settings.multichain_mode,
+            settings.mode,
             cctx_indexer.clone(),
             charts,
             update_service,
@@ -224,6 +228,9 @@ async fn connect_to_indexer_db_common(url: String) -> anyhow::Result<Arc<Databas
 async fn connect_to_main_indexer_db(
     settings: &Settings,
 ) -> anyhow::Result<Arc<DatabaseConnection>> {
+    if settings.is_interchain_mode() {
+        // #UBI: connect to interchain indexer DB once its URL/source is defined.
+    }
     connect_to_indexer_db_common(
         settings
             .indexer_db_url
@@ -240,7 +247,7 @@ async fn connect_to_main_indexer_db(
 async fn connect_to_second_indexer_db(
     settings: &Settings,
 ) -> anyhow::Result<Option<Arc<DatabaseConnection>>> {
-    let connection = if settings.enable_zetachain_cctx {
+    let connection = if settings.enable_zetachain_cctx() {
         Some(
             connect_to_indexer_db_common(
                 settings
@@ -266,11 +273,14 @@ fn init_runtime_setup(
 }
 
 async fn check_if_unsupported_charts_are_enabled(
-    is_multichain: bool,
+    mode: Mode,
     setup: &RuntimeSetup,
     indexer_db: &DatabaseConnection,
 ) -> anyhow::Result<()> {
-    let migrations = IndexerMigrations::query_from_db(is_multichain, indexer_db).await?;
+    let migrations = IndexerMigrations::query_from_db(mode.is_multichain(), indexer_db).await?;
+    if mode.is_interchain() {
+        // #UBI: validate charts against interchain indexer capabilities.
+    }
     if !migrations.denormalization {
         let charts_without_normalization = &[NewBuilderAccounts::name()];
         let mut all_enabled_charts_with_deps = setup.update_groups.values().flat_map(|g| {

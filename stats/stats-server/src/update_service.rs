@@ -11,6 +11,7 @@ use crate::{
     InitialUpdateTracker,
     blockscout_waiter::IndexingStatusListener,
     runtime_setup::{RuntimeSetup, UpdateGroupEntry},
+    settings::Mode,
 };
 use stats::{
     ChartKey,
@@ -23,7 +24,7 @@ pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     indexer_db: Arc<DatabaseConnection>,
     second_indexer_db: Option<Arc<DatabaseConnection>>,
-    is_multichain_mode: bool,
+    mode: Mode,
     multichain_filter: Option<Vec<u64>>,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
@@ -59,7 +60,7 @@ impl UpdateService {
         second_indexer_db: Option<Arc<DatabaseConnection>>,
         charts: Arc<RuntimeSetup>,
         status_listener: Option<IndexingStatusListener>,
-        is_multichain_mode: bool,
+        mode: Mode,
         multichain_filter: Option<Vec<u64>>,
     ) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
@@ -68,7 +69,7 @@ impl UpdateService {
             db,
             indexer_db,
             second_indexer_db,
-            is_multichain_mode,
+            mode,
             multichain_filter,
             charts,
             status_listener,
@@ -410,7 +411,7 @@ impl UpdateService {
             "updating group of charts"
         );
         let Ok(active_migrations) =
-            IndexerMigrations::query_from_db(self.is_multichain_mode, &self.indexer_db)
+            IndexerMigrations::query_from_db(self.mode.is_multichain(), &self.indexer_db)
                 .await
                 .inspect_err(|err| {
                     tracing::error!("error during blockscout migrations detection: {:?}", err)
@@ -418,10 +419,13 @@ impl UpdateService {
         else {
             return;
         };
+        if self.mode.is_interchain() {
+            // #UBI: compute interchain indexer migrations/metadata when available.
+        }
 
         let update_parameters = UpdateParameters {
             stats_db: &self.db,
-            is_multichain_mode: self.is_multichain_mode,
+            is_multichain_mode: self.mode.is_multichain(),
             multichain_filter: self.multichain_filter.clone(),
             indexer_db: &self.indexer_db,
             second_indexer_db: self.second_indexer_db.as_deref(),

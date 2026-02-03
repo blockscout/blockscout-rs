@@ -8,7 +8,7 @@ use crate::{
         types::{self, EnabledChartSettings},
     },
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
-    settings::LimitsSettings,
+    settings::{LimitsSettings, Mode},
     update_service::OnDemandReupdateError,
 };
 
@@ -48,7 +48,7 @@ use tonic::{Request, Response, Status};
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
     indexer: Arc<DatabaseConnection>,
-    multichain_mode: bool,
+    mode: Mode,
     second_indexer_db: Option<Arc<DatabaseConnection>>,
     charts: Arc<RuntimeSetup>,
     authorization: Arc<AuthorizationProvider>,
@@ -61,7 +61,7 @@ impl ReadService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
         indexer: Arc<DatabaseConnection>,
-        multichain_mode: bool,
+        mode: Mode,
         second_indexer_db: Option<Arc<DatabaseConnection>>,
         charts: Arc<RuntimeSetup>,
         update_service: Arc<UpdateService>,
@@ -71,7 +71,7 @@ impl ReadService {
         Ok(Self {
             db,
             indexer,
-            multichain_mode,
+            mode,
             second_indexer_db,
             charts,
             update_service,
@@ -269,9 +269,12 @@ impl ReadService {
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
     ) -> Result<Data, ChartError> {
-        let migrations = IndexerMigrations::query_from_db(self.multichain_mode, &self.indexer)
+        let migrations = IndexerMigrations::query_from_db(self.mode.is_multichain(), &self.indexer)
             .await
             .map_err(ChartError::IndexerDB)?;
+        if self.mode.is_interchain() {
+            // #UBI: fetch migrations/indexing metadata for interchain indexer DB.
+        }
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &self.db,

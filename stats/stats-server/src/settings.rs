@@ -36,6 +36,15 @@ use crate::{
     config::{self, types::AllChartSettings},
 };
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    Blockscout,
+    Aggregator,
+    Zetachain,
+    Interchain,
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
@@ -43,7 +52,20 @@ pub struct Settings {
     pub db_url: String,
     pub create_database: bool,
     pub run_migrations: bool,
-    pub blockscout_db_url: Option<String>,
+
+    /// Mode determines the type of the underlying database and feature flags that were
+    /// previously controlled by `enable_zetachain_cctx` and `multichain_mode`.
+    ///
+    /// The service can be run in one of the following modes:
+    /// - `Blockscout`: run the service for a single blockscout instance (default)
+    /// - `Aggregator`: run the service for a multichain_aggregator
+    /// - `Zetachain`: run the service for a zetachain instance
+    /// - `Interchain`: run the service for a interchain indexer (aka Universal Bridge Indexer)
+    ///
+    /// Modes are mutually exclusive by design.
+    pub mode: Mode,
+
+    pub blockscout_db_url: Option<String>,  // deprecated, use `indexer_db_url` instead
     pub indexer_db_url: Option<String>,
     /// Url for second db of indexer (currently assumed to be CCTX (cross chain transactions) indexer, see `zetachain-cctx` service)
     pub second_indexer_db_url: Option<String>,
@@ -65,17 +87,6 @@ pub struct Settings {
     pub enable_all_op_stack: bool,
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
-    /// Enable stats for zetachain CCTX data. Requires `second_indexer_db_url` to be set.
-    ///
-    /// Note: it's not a interop/multichain CCTX stats, therefore it's not compatible with
-    /// `multichain_mode`.
-    pub enable_zetachain_cctx: bool,
-    /// Enable multichain mode.
-    ///
-    /// This will run stats service for a multichain explorer.
-    /// It takes precedence over other chart-related flags like `enable_all_arbitrum`,
-    /// `enable_all_op_stack`, `enable_all_eip_7702`.
-    pub multichain_mode: bool,
     /// Filter by chain ids for multichain mode.
     #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
     pub multichain_filter: Option<Vec<u64>>,
@@ -120,6 +131,7 @@ impl Default for Settings {
             },
             api_keys: Default::default(),
             db_url: Default::default(),
+            mode: Mode::Blockscout,
             default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
             force_update_on_start: Some(false),
             concurrent_start_updates: 3,
@@ -141,8 +153,6 @@ impl Default for Settings {
             enable_all_arbitrum: false,
             enable_all_op_stack: false,
             enable_all_eip_7702: false,
-            enable_zetachain_cctx: false,
-            multichain_mode: false,
             multichain_filter: Default::default(),
             create_database: Default::default(),
             run_migrations: Default::default(),
@@ -155,6 +165,34 @@ impl Default for Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "STATS";
+}
+
+impl Mode {
+    pub fn is_multichain(self) -> bool {
+        matches!(self, Mode::Aggregator)
+    }
+
+    pub fn is_zetachain(self) -> bool {
+        matches!(self, Mode::Zetachain)
+    }
+
+    pub fn is_interchain(self) -> bool {
+        matches!(self, Mode::Interchain)
+    }
+}
+
+impl Settings {
+    pub fn is_multichain_mode(&self) -> bool {
+        self.mode.is_multichain()
+    }
+
+    pub fn enable_zetachain_cctx(&self) -> bool {
+        self.mode.is_zetachain()
+    }
+
+    pub fn is_interchain_mode(&self) -> bool {
+        self.mode.is_interchain()
+    }
 }
 
 pub fn handle_disable_internal_transactions(
@@ -279,14 +317,10 @@ pub fn handle_enable_zetachain_cctx(
     settings: &mut Settings,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
-    if !settings.enable_zetachain_cctx {
+    if settings.mode != Mode::Zetachain {
         return;
     }
-    if settings.multichain_mode {
-        panic!(
-            "Multichain mode is not compatible with enabling local cross chain transactions stats"
-        );
-    }
+
     enable_charts(
         &[
             NewZetachainCrossChainTxns::key().name(),
