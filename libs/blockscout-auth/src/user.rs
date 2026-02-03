@@ -14,9 +14,9 @@ const API_KEY_NAME: &str = "api_key";
 pub struct UserInfo {
     pub address_hash: Option<String>, // virtual field
     pub avatar: Option<String>,       // nullable in DB
-    pub email: String,                // null: false
-    pub name: Option<String>,         // virtual field
-    pub nickname: Option<String>,     // virtual field
+    pub email: Option<String>, // null: false, but can be empty in response because account might be by wallet only
+    pub name: Option<String>,  // virtual field
+    pub nickname: Option<String>, // virtual field
 }
 
 #[derive(Debug, Deserialize)]
