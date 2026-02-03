@@ -22,6 +22,11 @@ on:
       dockerfile-path:
         required: false
         type: string
+      build-contexts:
+        description: 'Override Docker build contexts; newline-separated name=path (default: proto=proto)'
+        required: false
+        type: string
+        default: 'proto=proto'
     secrets:
       ARM_RUNNER_HOSTNAME:
         required: true
@@ -93,8 +98,7 @@ jobs:
         with:
           context: ${{ inputs.docker-context-path || format('{0}/', inputs.service-name) }}
           file: ${{ inputs.dockerfile-path || format('{0}/Dockerfile', inputs.service-name) }}
-          build-contexts: |
-            proto=proto
+          build-contexts: ${{ inputs.build-contexts }}
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
           platforms: |
