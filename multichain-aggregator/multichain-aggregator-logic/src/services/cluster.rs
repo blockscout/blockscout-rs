@@ -369,6 +369,7 @@ impl Cluster {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_address_tokens(
         &self,
         address: AddressAlloy,
@@ -377,6 +378,7 @@ impl Cluster {
         query: Option<String>,
         page_size: u64,
         page_token: Option<ListAddressTokensPageToken>,
+        filter_poor_reputation: bool,
     ) -> Result<
         (
             Vec<AggregatedAddressTokenBalance>,
@@ -393,6 +395,7 @@ impl Cluster {
             query,
             page_size,
             page_token,
+            filter_poor_reputation,
         )
         .await?;
 

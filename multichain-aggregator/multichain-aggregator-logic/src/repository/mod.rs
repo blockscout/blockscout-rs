@@ -9,6 +9,7 @@ pub mod hashes;
 pub mod interop_message_transfers;
 pub mod interop_messages;
 pub mod pagination;
+pub mod poor_reputation_tokens;
 pub mod tokens;
 
 mod batch_update;

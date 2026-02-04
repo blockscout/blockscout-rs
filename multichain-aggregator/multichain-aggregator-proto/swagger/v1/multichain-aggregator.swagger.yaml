@@ -259,6 +259,11 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_poor_reputation_tokens
+          description: If true, include tokens with poor reputation in the results. By default they are excluded.
+          in: query
+          required: false
+          type: boolean
         - name: page_size
           in: query
           required: false
@@ -1034,6 +1039,26 @@ paths:
             $ref: '#/definitions/v1BatchImportRequest'
       tags:
         - MultichainAggregatorService
+  /api/v1/import:poor-reputation-tokens:
+    post:
+      operationId: MultichainAggregatorService_ImportPoorReputationTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ImportPoorReputationTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1ImportPoorReputationTokensRequest'
+      tags:
+        - MultichainAggregatorService
   /api/v1/nfts:
     get:
       operationId: MultichainAggregatorService_ListNfts
@@ -1308,6 +1333,13 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  ImportPoorReputationTokensRequestPoorReputationToken:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      chain_id:
+        type: string
   InteropMessageImportInit:
     type: object
     properties:
@@ -1792,6 +1824,21 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1ImportPoorReputationTokensRequest:
+    type: object
+    properties:
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ImportPoorReputationTokensRequestPoorReputationToken'
+      api_key:
+        type: string
+  v1ImportPoorReputationTokensResponse:
+    type: object
+    properties:
+      status:
+        type: string
   v1InteropMessage:
     type: object
     properties:

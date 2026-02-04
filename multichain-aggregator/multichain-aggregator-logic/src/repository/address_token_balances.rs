@@ -69,6 +69,7 @@ where
 
 pub type ListAddressTokensPageToken = (Option<BigDecimal>, BigDecimal, i64);
 
+#[allow(clippy::too_many_arguments)]
 pub async fn list_by_address<C>(
     db: &C,
     address: alloy_primitives::Address,
@@ -77,6 +78,7 @@ pub async fn list_by_address<C>(
     query: Option<String>,
     page_size: u64,
     page_token: Option<ListAddressTokensPageToken>,
+    filter_poor_reputation: bool,
 ) -> Result<
     (
         Vec<AggregatedAddressTokenBalance>,
@@ -93,10 +95,16 @@ where
         .into();
 
     let query = AggregatedAddressTokenBalance::select_cols(
-        base_normal_tokens_query(vec![], chain_ids, token_types, query)
-            .join(JoinType::InnerJoin, tokens_rel)
-            .filter(Column::AddressHash.eq(address.as_slice()))
-            .filter(Column::Value.gt(0)),
+        base_normal_tokens_query(
+            vec![],
+            chain_ids,
+            token_types,
+            query,
+            filter_poor_reputation,
+        )
+        .join(JoinType::InnerJoin, tokens_rel)
+        .filter(Column::AddressHash.eq(address.as_slice()))
+        .filter(Column::Value.gt(0)),
     )
     .as_query()
     .to_owned();

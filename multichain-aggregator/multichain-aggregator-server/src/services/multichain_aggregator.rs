@@ -38,9 +38,10 @@ impl MultichainAggregator {
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
         channel_broadcaster: ChannelBroadcaster,
         cluster_explorer: Arc<ClusterExplorer>,
+        metadata_import_api_key: Option<String>,
     ) -> Self {
         Self {
-            api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
+            api_key_manager: ApiKeyManager::new(repo.main_db().clone(), metadata_import_api_key),
             repo,
             dapp_client,
             api_settings,
@@ -88,6 +89,30 @@ impl MultichainAggregatorService for MultichainAggregator {
         })?;
 
         Ok(Response::new(BatchImportResponse {
+            status: "ok".to_string(),
+        }))
+    }
+
+    async fn import_poor_reputation_tokens(
+        &self,
+        request: Request<ImportPoorReputationTokensRequest>,
+    ) -> Result<Response<ImportPoorReputationTokensResponse>, Status> {
+        let inner = request.into_inner();
+
+        self.api_key_manager
+            .validate_metadata_import_api_key(inner.api_key.as_str())
+            .map_err(ServiceError::from)?;
+
+        let tokens = inner
+            .tokens
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ServiceError::from)?;
+
+        import::import_poor_reputation_tokens(self.repo.main_db(), tokens).await?;
+
+        Ok(Response::new(ImportPoorReputationTokensResponse {
             status: "ok".to_string(),
         }))
     }
