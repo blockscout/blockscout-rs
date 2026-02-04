@@ -65,8 +65,9 @@ impl ClusterExplorerService for ClusterExplorer {
     ) -> Result<Response<ListChainMetricsResponse>, Status> {
         let inner = request.into_inner();
 
+        let sort_metric = inner.sort_by.map(parse_query).transpose()?;
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let metrics = cluster.list_chain_metrics().await?;
+        let metrics = cluster.list_chain_metrics(sort_metric).await?;
 
         let items = metrics.into_iter().map(|m| m.into()).collect();
 
