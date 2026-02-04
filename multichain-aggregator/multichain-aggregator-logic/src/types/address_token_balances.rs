@@ -81,7 +81,7 @@ pub fn fiat_balance_query() -> SimpleExpr {
 
 pub fn chain_values_expr() -> SimpleExpr {
     Expr::cust_with_exprs(
-        "jsonb_build_object('chain_id',$1,'value',$2)",
+        "jsonb_build_object('chain_id',$1,'value',$2::text)",
         [
             Column::ChainId.into_simple_expr(),
             Column::Value.into_simple_expr(),

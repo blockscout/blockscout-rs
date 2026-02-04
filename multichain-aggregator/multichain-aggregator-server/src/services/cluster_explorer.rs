@@ -10,6 +10,7 @@ use multichain_aggregator_logic::{
     types::{addresses::proto_token_type_to_db_token_type, tokens::TokenType},
 };
 use multichain_aggregator_proto::blockscout::cluster_explorer::v1::*;
+use sea_orm::Iterable;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
@@ -209,6 +210,15 @@ impl ClusterExplorerService for ClusterExplorer {
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let token_types = parse_token_types(inner.r#type)?;
+        // Always exclude NATIVE token type from cluster tokens listing.
+        let token_types = if token_types.is_empty() {
+            TokenType::iter().collect()
+        } else {
+            token_types
+        }
+        .into_iter()
+        .filter(|t| *t != TokenType::Native)
+        .collect();
         let chain_ids = parse_chain_ids(inner.chain_id)?;
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;
