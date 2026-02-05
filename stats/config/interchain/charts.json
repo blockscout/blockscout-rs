@@ -1,1 +1,55 @@
-{"template_values":{},"counters":{"total_interchain_messages":{"title":"Total interchain messages","description":"Total indexed inter-chain messages (no filters)"},"total_interchain_messages_sent":{"title":"Total interchain messages sent","description":"Total inter-chain messages sent from the primary chain"},"total_interchain_messages_received":{"title":"Total interchain messages received","description":"Total inter-chain messages received on the primary chain"}},"line_charts":{"new_messages_interchain":{"title":"New interchain messages","description":"Number of new interchain messages indexed per day (no filters)"},"new_messages_sent_interchain":{"title":"New messages sent","description":"Number of new interchain messages sent per day"},"new_messages_received_interchain":{"title":"New messages received","description":"Number of new interchain messages received per day"}}}
+{
+  "template_values": {},
+  "counters": {
+    "total_interchain_messages": {
+      "title": "Total interchain messages",
+      "description": "Total indexed inter-chain messages"
+    },
+    "total_interchain_messages_sent": {
+      "title": "Total interchain messages sent",
+      "description": "Total inter-chain messages sent"
+    },
+    "total_interchain_messages_received": {
+      "title": "Total interchain messages received",
+      "description": "Total inter-chain messages received"
+    },
+    "total_interchain_transfers": {
+      "title": "Total interchain transfers",
+      "description": "Total indexed inter-chain transfers"
+    },
+    "total_interchain_transfers_sent": {
+      "title": "Total interchain transfers sent",
+      "description": "Total inter-chain transfers sent"
+    },
+    "total_interchain_transfers_received": {
+      "title": "Total interchain transfers received",
+      "description": "Total inter-chain transfers received"
+    }
+  },
+  "line_charts": {
+    "new_messages_interchain": {
+      "title": "New interchain messages",
+      "description": "Number of new interchain messages indexed per day"
+    },
+    "new_messages_sent_interchain": {
+      "title": "New messages sent",
+      "description": "Number of new interchain messages sent per day"
+    },
+    "new_messages_received_interchain": {
+      "title": "New messages received",
+      "description": "Number of new interchain messages received per day"
+    },
+    "new_transfers_interchain": {
+      "title": "New interchain transfers",
+      "description": "Number of new interchain transfers indexed per day"
+    },
+    "new_transfers_sent_interchain": {
+      "title": "New transfers sent",
+      "description": "Number of new interchain transfers sent per day"
+    },
+    "new_transfers_received_interchain": {
+      "title": "New transfers received",
+      "description": "Number of new interchain transfers received per day"
+    }
+  }
+}

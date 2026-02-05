@@ -33,10 +33,30 @@ mod interchain_migrator {
                     .to_string(),
                 ))
                 .await?;
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    manager.get_database_backend(),
+                    r#"
+                    CREATE TABLE crosschain_transfers (
+                        id BIGSERIAL PRIMARY KEY,
+                        message_id BIGINT NOT NULL REFERENCES crosschain_messages(id)
+                    )
+                    "#
+                    .to_string(),
+                ))
+                .await?;
             Ok(())
         }
 
         async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    manager.get_database_backend(),
+                    "DROP TABLE IF EXISTS crosschain_transfers".to_string(),
+                ))
+                .await?;
             manager
                 .get_connection()
                 .execute(Statement::from_string(
