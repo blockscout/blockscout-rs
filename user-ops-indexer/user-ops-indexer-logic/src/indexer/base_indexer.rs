@@ -645,6 +645,7 @@ mod tests {
             v07::IndexerV07 {
                 v07_entry_points: entry_points.clone(),
                 v08_entry_points: vec![],
+                v09_entry_points: vec![],
             },
             tx,
         );
@@ -714,6 +715,7 @@ mod tests {
             v07::IndexerV07 {
                 v07_entry_points: vec![],
                 v08_entry_points: entry_points.clone(),
+                v09_entry_points: vec![],
             },
             tx,
         );
@@ -761,6 +763,76 @@ mod tests {
             user_logs_start_index: 26,
             user_logs_count: 0,
             fee: U256::from(458778679666885u64),
+            consensus: None,
+            timestamp: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn handle_tx_v09_ok() {
+        let db = get_shared_db().await;
+        let client = mock_rpc_with_responses("handle_tx_v09_ok");
+
+        // just some random tx from op mainnet
+        let tx_hash = b256!("23873f5963354837d4539d1630be2277f18c483f97f87dc139d117e02d885c60");
+        let entry_points = EntrypointsSettings::default().v09_entry_point;
+
+        let (tx, _) = mpsc::channel(100);
+        let indexer = Indexer::new(
+            client,
+            db.clone(),
+            Default::default(),
+            v07::IndexerV07 {
+                v07_entry_points: vec![],
+                v08_entry_points: vec![],
+                v09_entry_points: entry_points.clone(),
+            },
+            tx,
+        );
+        indexer
+            .handle_tx(tx_hash, TraceClient::Trace)
+            .await
+            .unwrap();
+
+        let op_hash = b256!("99cc8f2ffdbb3a7a83b9a4b5906c7ecf2b384e8eba1713c09fbb2b8be6ee38fd");
+        let user_op = repository::user_op::find_user_op_by_op_hash(&db, op_hash)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(user_op, UserOp {
+            hash: op_hash,
+            sender: address!("8bd5b79e6C764Ee201F9BD0FB812202ecB9B1cbC"),
+            nonce: b256!("000000000000000000000000000000000000019a82fff8a20000000000000000"),
+            init_code: None,
+            call_data: bytes!("abc5345e00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000003b22d7742fa2a8a8f01b64f40f0f2185e965cb800000000000000000000000000000000000000000000000000000002540be4000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000096a1ea62dec381e22fadd0d4c80d12ec486f021c00000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000"),
+            call_gas_limit: U256::from(37165),
+            verification_gas_limit: U256::from(115136),
+            pre_verification_gas: U256::from(72788),
+            max_fee_per_gas: U256::from(2000000),
+            max_priority_fee_per_gas: U256::from(2002384),
+            paymaster_and_data: None,
+            signature: bytes!("0c5d576d6ed3fcd99dd2dd653bf0efb0a1b4b614955c187e9a6e79a0aba21af7430ed920d59a88ee4950f195a5f9ee70bf19fbffb52d63b6c744e10492f9add11c"),
+            aggregator: None,
+            aggregator_signature: None,
+            entry_point: entry_points[0],
+            entry_point_version: EntryPointVersion::V09,
+            transaction_hash: tx_hash,
+            block_number: 143767819,
+            block_hash: b256!("59231c2171065cb4f14efb55946d08d10420a5010efbc37b10e6fdee2387f78c"),
+            bundler: address!("09FD4F6088f2025427AB1e89257A44747081Ed59"),
+            bundle_index: 0,
+            index: 0,
+            factory: None,
+            paymaster: None,
+            status: true,
+            revert_reason: None,
+            gas: U256::from(225089),
+            gas_price: U256::from(2001000),
+            gas_used: U256::from(170622),
+            sponsor_type: SponsorType::WalletDeposit,
+            user_logs_start_index: 85,
+            user_logs_count: 0,
+            fee: U256::from(341414622000u64),
             consensus: None,
             timestamp: None,
         })

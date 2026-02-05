@@ -169,7 +169,7 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
                     "signature": v.signature.to_string(),
                 })
             }
-            EntryPointVersion::V07 | EntryPointVersion::V08 => {
+            EntryPointVersion::V07 | EntryPointVersion::V08 | EntryPointVersion::V09 => {
                 json!({
                     "sender": v.sender.to_string(),
                     "nonce": U256::from_be_slice(v.nonce.as_slice()).to_string(),
