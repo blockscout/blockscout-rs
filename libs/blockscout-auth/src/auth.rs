@@ -1,11 +1,12 @@
-use crate::jwt_headers::{build_http_headers, extract_csrf_token, extract_jwt};
+use crate::{
+    consts,
+    jwt_headers::{build_http_headers, extract_csrf_token, extract_jwt},
+};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use thiserror::Error;
 use tonic::metadata::MetadataMap;
 use url::Url;
-
-const API_KEY_NAME: &str = "api_key";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AuthSuccess {
@@ -77,14 +78,14 @@ pub async fn auth_from_tokens(
         .expect("invalid base url");
     url.set_query(
         blockscout_api_key
-            .map(|api_key| format!("{API_KEY_NAME}={api_key}"))
+            .map(|api_key| format!("{}={api_key}", consts::API_KEY_NAME))
             .as_deref(),
     );
-
-    let headers = build_http_headers(jwt, csrf_token)?;
+    let headers = build_http_headers(jwt, csrf_token, blockscout_api_key)?;
     let client = Client::new();
     let response = if csrf_token.is_some() {
-        client.post(url)
+        let body = build_request_body(blockscout_api_key);
+        client.post(url).json(&body)
     } else {
         client.get(url)
     }
@@ -130,14 +131,18 @@ pub async fn auth_from_tokens(
     }
 }
 
+pub fn build_request_body(blockscout_api_key: Option<&str>) -> serde_json::Value {
+    serde_json::json!({
+        consts::API_KEY_NAME: blockscout_api_key,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::{
-        init_mocked_blockscout_auth_service, jwt_headers::HEADER_JWT_TOKEN_NAME, MockUser,
-    };
+    use crate::{consts, init_mocked_blockscout_auth_service, MockUser};
     use reqwest::header::{HeaderMap, HeaderName};
     use serde::Serialize;
     use tonic::{codegen::http::header::CONTENT_TYPE, Extensions, Request};
@@ -155,7 +160,7 @@ mod tests {
             );
             headers.insert(COOKIE, cookies.parse().unwrap());
         } else {
-            headers.insert(HEADER_JWT_TOKEN_NAME, jwt.parse().unwrap());
+            headers.insert(consts::HEADER_JWT_TOKEN_NAME, jwt.parse().unwrap());
         };
         headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
         if let Some(csrf_token) = csrf_token {
