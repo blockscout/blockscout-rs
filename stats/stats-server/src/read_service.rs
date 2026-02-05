@@ -27,6 +27,9 @@ use stats::{
         PendingTxns30m, PendingZetachainCrossChainTxns, TotalAddresses, TotalBlocks,
         TotalContracts, TotalTxns, TotalVerifiedContracts, TotalZetachainCrossChainTxns,
         TxnsFee24h, YesterdayTxns,
+        interchain::{
+            TotalInterchainMessages, TotalInterchainMessagesReceived, TotalInterchainMessagesSent,
+        },
         multichain::{TotalMultichainAddresses, TotalMultichainTxns, YesterdayTxnsMultichain},
     },
     data_source::{UpdateContext, UpdateParameters, types::IndexerMigrations},
@@ -259,6 +262,20 @@ impl ReadService {
             NewTxnsMultichainWindow::name(),
         ]
     }
+
+    pub fn main_page_interchain_charts() -> Vec<String> {
+        #[allow(clippy::no_effect)]
+        proto_v1::MainPageInterchainStats {
+            total_interchain_messages: None,
+            total_interchain_messages_sent: None,
+            total_interchain_messages_received: None,
+        };
+        vec![
+            TotalInterchainMessages::name(),
+            TotalInterchainMessagesSent::name(),
+            TotalInterchainMessagesReceived::name(),
+        ]
+    }
 }
 
 impl ReadService {
@@ -269,12 +286,10 @@ impl ReadService {
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
     ) -> Result<Data, ChartError> {
-        let migrations = IndexerMigrations::query_from_db(self.mode.is_multichain(), &self.indexer)
-            .await
-            .map_err(ChartError::IndexerDB)?;
-        if self.mode.is_interchain() {
-            // #UBI: fetch migrations/indexing metadata for interchain indexer DB.
-        }
+        let migrations = IndexerMigrations::query_from_db(self.mode, &self.indexer)
+        .await
+        .map_err(ChartError::IndexerDB)?;
+    
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &self.db,
@@ -282,6 +297,7 @@ impl ReadService {
                 migrations,
                 self.second_indexer_db.as_deref(),
                 Some(query_time),
+                self.mode,
             ));
         query_handle
             .query_data(&context, range, points_limit, true)
@@ -680,6 +696,29 @@ impl StatsService for ReadService {
             total_multichain_addresses,
             yesterday_txns_multichain,
             new_txns_multichain_window,
+        }))
+    }
+
+    async fn get_main_page_interchain_stats(
+        &self,
+        _request: Request<proto_v1::GetMainPageStatsRequest>,
+    ) -> Result<Response<proto_v1::MainPageInterchainStats>, Status> {
+        let now = Utc::now();
+
+        let (
+            total_interchain_messages,
+            total_interchain_messages_sent,
+            total_interchain_messages_received,
+        ) = join!(
+            self.query_counter(TotalInterchainMessages::name(), now),
+            self.query_counter(TotalInterchainMessagesSent::name(), now),
+            self.query_counter(TotalInterchainMessagesReceived::name(), now),
+        );
+
+        Ok(Response::new(proto_v1::MainPageInterchainStats {
+            total_interchain_messages,
+            total_interchain_messages_sent,
+            total_interchain_messages_received,
         }))
     }
 

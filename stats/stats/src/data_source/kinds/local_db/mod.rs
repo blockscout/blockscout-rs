@@ -27,23 +27,17 @@ use parameters::{
 use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
-    ChartError, ChartKey, IndexingStatus,
-    charts::{
+    ChartError, ChartKey, IndexingStatus, Mode, charts::{
         ChartProperties, Named, chart_properties_portrait,
         db_interaction::{
             read::{
-                get_chart_metadata, get_min_block_blockscout, last_accurate_point,
-                multichain::get_min_block_multichain,
+                get_chart_metadata, get_min_block_blockscout, interchain::get_min_block_interchain, last_accurate_point, multichain::get_min_block_multichain
             },
             write::set_last_updated_at,
         },
-    },
-    data_source::{
+    }, data_source::{
         DataSource, UpdateContext, kinds::local_db::cached::RemoteCachedLocalDbChartSource,
-    },
-    metrics,
-    range::UniversalRange,
-    utils::day_start,
+    }, metrics, range::UniversalRange, utils::day_start
 };
 
 use super::auxiliary::PartialCumulative;
@@ -183,14 +177,16 @@ where
             }
         }
         let chart_id = metadata.id;
-        let min_indexer_block = if cx.is_multichain_mode {
-            get_min_block_multichain(cx.indexer_db)
+        let min_indexer_block = match cx.mode {
+            Mode::Interchain => get_min_block_interchain(cx.indexer_db)
                 .await
-                .map_err(ChartError::IndexerDB)?
-        } else {
-            get_min_block_blockscout(cx.indexer_db)
+                .map_err(ChartError::IndexerDB)?,
+            Mode::Aggregator => get_min_block_multichain(cx.indexer_db)
                 .await
-                .map_err(ChartError::IndexerDB)?
+                .map_err(ChartError::IndexerDB)?,
+            _ => get_min_block_blockscout(cx.indexer_db)
+                .await
+                .map_err(ChartError::IndexerDB)?,
         };
         let last_accurate_point = last_accurate_point::<ChartProps, Query>(
             chart_id,

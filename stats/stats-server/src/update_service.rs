@@ -26,6 +26,7 @@ pub struct UpdateService {
     second_indexer_db: Option<Arc<DatabaseConnection>>,
     mode: Mode,
     multichain_filter: Option<Vec<u64>>,
+    interchain_primary_id: Option<u64>,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
     init_update_tracker: InitialUpdateTracker,
@@ -62,6 +63,7 @@ impl UpdateService {
         status_listener: Option<IndexingStatusListener>,
         mode: Mode,
         multichain_filter: Option<Vec<u64>>,
+        interchain_primary_id: Option<u64>,
     ) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
         let init_update_tracker = Self::initialize_update_tracker(&charts);
@@ -71,6 +73,7 @@ impl UpdateService {
             second_indexer_db,
             mode,
             multichain_filter,
+            interchain_primary_id,
             charts,
             status_listener,
             init_update_tracker,
@@ -411,7 +414,7 @@ impl UpdateService {
             "updating group of charts"
         );
         let Ok(active_migrations) =
-            IndexerMigrations::query_from_db(self.mode.is_multichain(), &self.indexer_db)
+            IndexerMigrations::query_from_db(self.mode, &self.indexer_db)
                 .await
                 .inspect_err(|err| {
                     tracing::error!("error during blockscout migrations detection: {:?}", err)
@@ -419,14 +422,12 @@ impl UpdateService {
         else {
             return;
         };
-        if self.mode.is_interchain() {
-            // #UBI: compute interchain indexer migrations/metadata when available.
-        }
 
         let update_parameters = UpdateParameters {
             stats_db: &self.db,
-            is_multichain_mode: self.mode.is_multichain(),
+            mode: self.mode,
             multichain_filter: self.multichain_filter.clone(),
+            interchain_primary_id: self.interchain_primary_id,
             indexer_db: &self.indexer_db,
             second_indexer_db: self.second_indexer_db.as_deref(),
             indexer_applied_migrations: active_migrations,

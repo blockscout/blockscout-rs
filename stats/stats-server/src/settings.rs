@@ -36,14 +36,7 @@ use crate::{
     config::{self, types::AllChartSettings},
 };
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum Mode {
-    Blockscout,
-    Aggregator,
-    Zetachain,
-    Interchain,
-}
+pub use stats::Mode;
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -90,6 +83,9 @@ pub struct Settings {
     /// Filter by chain ids for multichain mode.
     #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
     pub multichain_filter: Option<Vec<u64>>,
+    /// Set the primary chain_id for Interchain mode
+    /// If the primary chain set, send/receive counters and charts will be built around it
+    pub interchain_primary_id: Option<u64>,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -154,6 +150,7 @@ impl Default for Settings {
             enable_all_op_stack: false,
             enable_all_eip_7702: false,
             multichain_filter: Default::default(),
+            interchain_primary_id: Default::default(),
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -165,34 +162,6 @@ impl Default for Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "STATS";
-}
-
-impl Mode {
-    pub fn is_multichain(self) -> bool {
-        matches!(self, Mode::Aggregator)
-    }
-
-    pub fn is_zetachain(self) -> bool {
-        matches!(self, Mode::Zetachain)
-    }
-
-    pub fn is_interchain(self) -> bool {
-        matches!(self, Mode::Interchain)
-    }
-}
-
-impl Settings {
-    pub fn is_multichain_mode(&self) -> bool {
-        self.mode.is_multichain()
-    }
-
-    pub fn enable_zetachain_cctx(&self) -> bool {
-        self.mode.is_zetachain()
-    }
-
-    pub fn is_interchain_mode(&self) -> bool {
-        self.mode.is_interchain()
-    }
 }
 
 pub fn handle_disable_internal_transactions(
@@ -342,6 +311,21 @@ pub fn handle_enable_zetachain_cctx(
 }
 
 pub fn apply_multichain_mode_settings(settings: &mut Settings) {
+    settings.blockscout_api_url = None;
+    settings.ignore_blockscout_api_absence = true;
+    settings.conditional_start.blocks_ratio.enabled = false;
+    settings
+        .conditional_start
+        .internal_transactions_ratio
+        .enabled = false;
+    settings
+        .conditional_start
+        .user_ops_past_indexing_finished
+        .enabled = false;
+}
+
+/// Apply settings for Interchain mode (separate indexer DB, no blockscout API).
+pub fn apply_interchain_mode_settings(settings: &mut Settings) {
     settings.blockscout_api_url = None;
     settings.ignore_blockscout_api_absence = true;
     settings.conditional_start.blocks_ratio.enabled = false;

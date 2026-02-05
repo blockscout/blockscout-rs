@@ -31,10 +31,12 @@ pretty_assertions = { version = "1.2", optional = true }
 prometheus = "0.13"
 rand = "0.8"
 rust_decimal = "1.27"
+serde = { version = "1", features = ["derive"] }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ] }
+sea-orm-migration = { workspace = true }
 sea-query = { workspace = true }
 serde_json = { workspace = true, optional = true }
 stats-proto = { path = "../stats-proto" }

@@ -1,0 +1,1 @@
+{"counters_order":["total_interchain_messages","total_interchain_messages_sent","total_interchain_messages_received"],"line_chart_categories":[{"id":"messages","title":"Messages","charts_order":["new_messages_interchain","new_messages_sent_interchain","new_messages_received_interchain"]}]}

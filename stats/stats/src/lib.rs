@@ -4,10 +4,12 @@ mod charts;
 pub mod data_processing;
 pub mod data_source;
 pub mod metrics;
+pub mod mode;
 mod missing_date;
 pub mod range;
 pub mod update_group;
 pub mod update_groups;
+pub mod update_groups_interchain;
 pub mod update_groups_multichain;
 pub mod utils;
 
@@ -16,7 +18,7 @@ pub mod tests;
 
 pub use entity;
 pub use migration;
-
+pub use mode::Mode;
 pub use charts::{
     ChartError, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject, MissingDatePolicy,
     Named, ResolutionKind, counters,

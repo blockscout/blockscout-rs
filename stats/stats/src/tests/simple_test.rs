@@ -1,6 +1,7 @@
 use super::{
-    init_db::{init_db_all, init_db_all_multichain, init_db_zetachain_cctx},
+    init_db::{init_db_all, init_db_all_interchain, init_db_all_multichain, init_db_zetachain_cctx},
     mock_blockscout::fill_mock_blockscout_data,
+    mock_interchain::fill_mock_interchain_data,
     mock_zetachain_cctx::fill_mock_zetachain_cctx_data,
 };
 use crate::{
@@ -13,6 +14,7 @@ use crate::{
     range::UniversalRange,
     tests::mock_multichain::fill_mock_multichain_data,
     types::{Timespan, timespans::DateValue},
+    Mode,
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -47,6 +49,8 @@ where
         IndexerMigrations::latest(),
         false,
         None,
+        None,
+        false,
         false,
     )
     .await;
@@ -72,7 +76,32 @@ where
         IndexerMigrations::latest(),
         true,
         multichain_filter,
+        None,
         false,
+        false,
+    )
+    .await
+}
+
+/// Chart test with interchain indexer DB (crosschain_messages). Pass interchain_primary_id to filter by chain.
+pub async fn simple_test_chart_interchain<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    interchain_primary_id: Option<u64>,
+) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    simple_test_chart_inner::<C>(
+        test_name,
+        expected,
+        IndexerMigrations::latest(),
+        false,
+        None,
+        interchain_primary_id,
+        false,
+        true,
     )
     .await
 }
@@ -93,7 +122,7 @@ pub async fn simple_test_chart_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false, None, false)
+        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false, None, None, false, false)
             .await;
     }
 }
@@ -115,7 +144,9 @@ where
         IndexerMigrations::latest(),
         false,
         None,
+        None,
         true,
+        false,
     )
     .await;
     (
@@ -135,7 +166,9 @@ async fn simple_test_chart_inner<C>(
     migrations: IndexerMigrations,
     multichain_mode: bool,
     multichain_filter: Option<Vec<u64>>,
+    interchain_primary_id: Option<u64>,
     connect_zetachain_cctx: bool,
+    connect_interchain: bool,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
@@ -148,13 +181,22 @@ where
         DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap(),
         multichain_mode,
         connect_zetachain_cctx,
+        connect_interchain,
     )
     .await;
 
+    let mode = if connect_interchain {
+        Mode::Interchain
+    } else if multichain_mode {
+        Mode::Aggregator
+    } else {
+        Mode::Blockscout
+    };
     let mut parameters = UpdateParameters {
         stats_db: &db,
-        is_multichain_mode: multichain_mode,
+        mode,
         multichain_filter,
+        interchain_primary_id,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: zetachain_cctx.as_deref(),
@@ -207,8 +249,9 @@ pub async fn dirty_force_update_and_check<C>(
 
     let parameters = UpdateParameters {
         stats_db: db,
-        is_multichain_mode: false,
+        mode: Mode::Blockscout,
         multichain_filter: None,
+        interchain_primary_id: None,
         indexer_db: blockscout,
         indexer_applied_migrations: IndexerMigrations::latest(),
         second_indexer_db: None,
@@ -304,12 +347,13 @@ async fn ranged_test_chart_inner<C>(
 
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let (init_time, db, blockscout, _) =
-        prepare_simple_any_test::<C>(test_name, update_time, max_time, false, false).await;
+        prepare_simple_any_test::<C>(test_name, update_time, max_time, false, false, false).await;
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
-        is_multichain_mode: false,
+        mode: Mode::Blockscout,
         multichain_filter: None,
+        interchain_primary_id: None,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: None,
@@ -357,6 +401,8 @@ pub async fn simple_test_counter<C>(
         false,
         None,
         false,
+        false,
+        None,
     )
     .await;
 }
@@ -378,6 +424,32 @@ pub async fn simple_test_counter_multichain<C>(
         true,
         multichain_filter,
         false,
+        false,
+        None,
+    )
+    .await;
+}
+
+/// `test_name` must be unique to avoid db clashes.
+/// Uses interchain indexer DB (crosschain_messages). Pass interchain_primary_id to filter by chain.
+pub async fn simple_test_counter_interchain<C>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+    interchain_primary_id: Option<u64>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    simple_test_counter_inner::<C>(
+        test_name,
+        expected,
+        update_time,
+        IndexerMigrations::latest(),
+        false,
+        None,
+        false,
+        true,
+        interchain_primary_id,
     )
     .await;
 }
@@ -399,6 +471,8 @@ where
         false,
         None,
         true,
+        false,
+        None,
     )
     .await;
     (
@@ -432,6 +506,8 @@ pub async fn simple_test_counter_with_migration_variants<C>(
             false,
             None,
             false,
+            false,
+            None,
         )
         .await;
     }
@@ -445,6 +521,8 @@ async fn simple_test_counter_inner<C>(
     multichain_mode: bool,
     multichain_filter: Option<Vec<u64>>,
     connect_zetachain_cctx: bool,
+    connect_interchain: bool,
+    interchain_primary_id: Option<u64>,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
@@ -456,13 +534,22 @@ where
         max_time,
         multichain_mode,
         connect_zetachain_cctx,
+        connect_interchain,
     )
     .await;
 
+    let mode = if connect_interchain {
+        Mode::Interchain
+    } else if multichain_mode {
+        Mode::Aggregator
+    } else {
+        Mode::Blockscout
+    };
     let mut parameters = UpdateParameters {
         stats_db: &db,
-        is_multichain_mode: multichain_mode,
+        mode,
         multichain_filter,
+        interchain_primary_id,
         indexer_db: &indexer,
         indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
@@ -495,6 +582,7 @@ where
         init_time,
         false,
         false,
+        false,
     )
     .await;
 
@@ -507,8 +595,9 @@ where
 
     let parameters = UpdateParameters {
         stats_db: &db,
-        is_multichain_mode: false,
+        mode: Mode::Blockscout,
         multichain_filter: None,
+        interchain_primary_id: None,
         indexer_db: &blockscout,
         indexer_applied_migrations: IndexerMigrations::latest(),
         second_indexer_db: None,
@@ -529,7 +618,7 @@ pub async fn prepare_blockscout_chart_test<C: DataSource + ChartProperties>(
         .map(|t| t.and_utc())
         .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
     let (init_time, db, indexer, _) =
-        prepare_chart_test_inner::<C>(test_name, init_time, false, false).await;
+        prepare_chart_test_inner::<C>(test_name, init_time, false, false, false).await;
     (init_time, db, indexer)
 }
 
@@ -541,7 +630,7 @@ pub async fn prepare_multichain_chart_test<C: DataSource + ChartProperties>(
         .map(|t| t.and_utc())
         .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
     let (init_time, db, indexer, _) =
-        prepare_chart_test_inner::<C>(test_name, init_time, true, false).await;
+        prepare_chart_test_inner::<C>(test_name, init_time, true, false, false).await;
     (init_time, db, indexer)
 }
 
@@ -550,9 +639,12 @@ async fn prepare_chart_test_inner<C: DataSource + ChartProperties>(
     init_time: DateTime<Utc>,
     multichain_mode: bool,
     connect_zetachain_cctx: bool,
+    connect_interchain: bool,
 ) -> (DateTime<Utc>, TestDbGuard, TestDbGuard, Option<TestDbGuard>) {
     let _ = tracing_subscriber::fmt::try_init();
-    let (db, indexer) = if multichain_mode {
+    let (db, indexer) = if connect_interchain {
+        init_db_all_interchain(test_name).await
+    } else if multichain_mode {
         init_db_all_multichain(test_name).await
     } else {
         init_db_all(test_name).await
@@ -575,6 +667,7 @@ async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
     max_time: DateTime<Utc>,
     multichain_mode: bool,
     connect_zetachain_cctx: bool,
+    connect_interchain: bool,
 ) -> (DateTime<Utc>, TestDbGuard, TestDbGuard, Option<TestDbGuard>) {
     let init_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
     let max_date = max_time.date_naive();
@@ -583,9 +676,12 @@ async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
         init_time,
         multichain_mode,
         connect_zetachain_cctx,
+        connect_interchain,
     )
     .await;
-    if multichain_mode {
+    if connect_interchain {
+        fill_mock_interchain_data(&indexer, max_date).await;
+    } else if multichain_mode {
         fill_mock_multichain_data(&indexer, max_date).await;
     } else {
         fill_mock_blockscout_data(&indexer, max_date).await;

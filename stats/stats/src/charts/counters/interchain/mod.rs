@@ -1,0 +1,7 @@
+mod total_interchain_messages;
+mod total_interchain_messages_received;
+mod total_interchain_messages_sent;
+
+pub use total_interchain_messages::TotalInterchainMessages;
+pub use total_interchain_messages_received::TotalInterchainMessagesReceived;
+pub use total_interchain_messages_sent::TotalInterchainMessagesSent;

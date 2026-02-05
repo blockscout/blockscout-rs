@@ -1,0 +1,1 @@
+{"schedules":{"total_interchain_messages_group":"0 10 0 * * * *","total_interchain_messages_sent_group":"0 10 0 * * * *","total_interchain_messages_received_group":"0 10 0 * * * *","new_messages_interchain_group":"0 10 0 * * * *","new_messages_sent_interchain_group":"0 10 0 * * * *","new_messages_received_interchain_group":"0 10 0 * * * *"}}

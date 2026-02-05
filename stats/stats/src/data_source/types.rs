@@ -11,17 +11,18 @@ use sea_orm::{
 use tokio::sync::Mutex;
 use tracing::warn;
 
-use crate::{ChartKey, counters::TxnsStatsValue, types::new_txns::NewTxnsCombinedPoint};
+use crate::{ChartKey, counters::TxnsStatsValue, mode::Mode, types::new_txns::NewTxnsCombinedPoint};
 
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
     pub stats_db: &'a DatabaseConnection,
-    /// `true` - the connection is to multichain indexer DB;
-    /// `false` - the connection is to usual (per-instance) blockscout DB.
-    pub is_multichain_mode: bool,
-    /// Chain IDs to filter by in multichain mode
+    /// Service mode (from settings); determines indexer type and query branching.
+    pub mode: Mode,
+    /// Chain IDs to filter by in multichain (Aggregator) mode
     pub multichain_filter: Option<Vec<u64>>,
-    /// Indexer database (blockscout or multichain)
+    /// If the primary chain set, send/receive counters and charts will be built around it
+    pub interchain_primary_id: Option<u64>,
+    /// Indexer database (blockscout, multichain, or interchain)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
     /// Second indexer database (CCTX indexer currently)
@@ -40,17 +41,21 @@ impl<'a> UpdateParameters<'a> {
     /// Parameter builder for just querying data (if no updates are expected)
     /// Query parameters are just a subset of the update parameters,
     /// which is why there are a few fields that are not applicable to query parameters.
+    /// Build parameters for reading stored chart data. Filter fields like
+    /// `multichain_filter` and `interchain_primary_id` are not used when reading.
     pub fn query_parameters(
         db: &'a DatabaseConnection,
         indexer: &'a DatabaseConnection,
         indexer_applied_migrations: IndexerMigrations,
         second_indexer: Option<&'a DatabaseConnection>,
         query_time_override: Option<chrono::DateTime<Utc>>,
+        mode: Mode,
     ) -> Self {
         Self {
             stats_db: db,
-            is_multichain_mode: false, // mode does not matter for query parameters
-            multichain_filter: None,   // the filter works only when updating the DB
+            mode,
+            multichain_filter: None,   // only used when updating the DB
+            interchain_primary_id: None, // only used when updating the DB
             indexer_db: indexer,
             indexer_applied_migrations,
             second_indexer_db: second_indexer,
@@ -77,8 +82,9 @@ impl<'a> UpdateParameters<'a> {
     ) -> Self {
         Self {
             stats_db: db,
-            is_multichain_mode: false,
+            mode: Mode::Blockscout,
             multichain_filter: None,
+            interchain_primary_id: None,
             indexer_db: indexer,
             indexer_applied_migrations: IndexerMigrations::latest(),
             second_indexer_db: None,
@@ -100,6 +106,7 @@ impl<'a> UpdateParameters<'a> {
             IndexerMigrations::latest(),
             None,
             time_override,
+            Mode::Blockscout,
         )
     }
 
@@ -112,9 +119,10 @@ impl<'a> UpdateParameters<'a> {
 #[derive(Clone)]
 pub struct UpdateContext<'a> {
     pub stats_db: &'a DatabaseConnection,
-    pub is_multichain_mode: bool,
+    pub mode: Mode,
     pub multichain_filter: Option<Vec<u64>>,
-    /// Indexer database (blockscout or multichain depending on `is_multichain_mode`)
+    pub interchain_primary_id: Option<u64>,
+    /// Indexer database (blockscout, multichain, or interchain depending on mode)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
     pub second_indexer_db: Option<&'a DatabaseConnection>,
@@ -131,8 +139,9 @@ impl<'a> UpdateContext<'a> {
     pub fn from_params_now_or_override(value: UpdateParameters<'a>) -> Self {
         Self {
             stats_db: value.stats_db,
-            is_multichain_mode: value.is_multichain_mode,
+            mode: value.mode,
             multichain_filter: value.multichain_filter,
+            interchain_primary_id: value.interchain_primary_id,
             indexer_db: value.indexer_db,
             indexer_applied_migrations: value.indexer_applied_migrations,
             second_indexer_db: value.second_indexer_db,
@@ -152,13 +161,12 @@ pub struct IndexerMigrations {
 
 impl IndexerMigrations {
     pub async fn query_from_db(
-        is_multichain: bool,
+        mode: Mode,
         indexer: &DatabaseConnection,
     ) -> Result<Self, DbErr> {
-        if is_multichain {
-            Ok(Self::empty())
-        } else {
-            Self::query_from_blockscout_db(indexer).await
+        match mode {
+            Mode::Blockscout | Mode::Zetachain => Self::query_from_blockscout_db(indexer).await,
+            _ => Ok(Self::empty()),
         }
     }
 

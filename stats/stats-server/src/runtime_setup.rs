@@ -298,6 +298,8 @@ impl RuntimeSetup {
         // pages
         let charts_in_pages = [
             ReadService::main_page_charts(),
+            ReadService::main_page_multichain_charts(),
+            ReadService::main_page_interchain_charts(),
             ReadService::contracts_page_charts(),
             ReadService::transactions_page_charts(),
         ]
@@ -316,7 +318,7 @@ impl RuntimeSetup {
     }
 
     fn all_update_groups() -> Vec<ArcUpdateGroup> {
-        use stats::{update_groups::*, update_groups_multichain::*};
+        use stats::{update_groups::*, update_groups_interchain::*, update_groups_multichain::*};
 
         vec![
             // actual singletons
@@ -383,6 +385,13 @@ impl RuntimeSetup {
             Arc::new(NewTxnsMultichainWindowGroup),
             Arc::new(TxnsGrowthMultichainGroup),
             Arc::new(AccountsGrowthMultichainGroup),
+            // interchain: simple set
+            Arc::new(TotalInterchainMessagesGroup),
+            Arc::new(TotalInterchainMessagesReceivedGroup),
+            Arc::new(TotalInterchainMessagesSentGroup),
+            Arc::new(NewMessagesInterchainGroup),
+            Arc::new(NewMessagesSentInterchainGroup),
+            Arc::new(NewMessagesReceivedInterchainGroup),
         ]
     }
 
