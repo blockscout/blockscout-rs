@@ -30,7 +30,7 @@ pub async fn get_user_info_from_metadata(
     blockscout_api_key: Option<&str>,
 ) -> Result<UserInfo, Error> {
     let jwt = extract_jwt(metadata)?;
-    let headers = build_http_headers(&jwt, None)?;
+    let headers = build_http_headers(&jwt, None, blockscout_api_key)?;
 
     let mut url = blockscout_host
         .join("/api/account/v2/user/info")
