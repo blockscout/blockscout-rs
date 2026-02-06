@@ -24,6 +24,10 @@
     "total_interchain_transfers_received": {
       "title": "Total interchain transfers received",
       "description": "Total inter-chain transfers received"
+    },
+    "total_interchain_transfer_users": {
+      "title": "Total interchain transfer users",
+      "description": "Number of unique addresses that sent or received interchain transfers"
     }
   },
   "line_charts": {

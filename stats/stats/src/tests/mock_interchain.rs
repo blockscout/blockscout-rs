@@ -99,13 +99,21 @@ pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_dat
         .await
         .unwrap();
 
-    // Bulk insert transfers: (id, message_id) only; date is from message's init_timestamp
-    let mut transfer_rows: Vec<(i64, i64)> = Vec::new();
+    // Bulk insert transfers: (id, message_id, sender_address, recipient_address).
+    // Use 8 distinct 20-byte addresses so totalInterchainTransferUsers = 8.
+    let mut transfer_rows: Vec<(i64, i64, Vec<u8>, Vec<u8>)> = Vec::new();
     let mut transfer_id: i64 = 1;
     for (i, (_ts, _src, _dst, _has_src, _has_dst, num_transfers)) in rows.iter().enumerate() {
         let message_id = (i + 1) as i64;
         for _ in 0..*num_transfers {
-            transfer_rows.push((transfer_id, message_id));
+            let sender_idx = ((transfer_id - 1) % 8) as u8;
+            let recipient_idx = ((transfer_id + 2) % 8) as u8;
+            transfer_rows.push((
+                transfer_id,
+                message_id,
+                vec![sender_idx; 20],
+                vec![recipient_idx; 20],
+            ));
             transfer_id += 1;
         }
     }
@@ -115,17 +123,19 @@ pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_dat
     let t = transfer_rows.len();
     let transfer_placeholders: Vec<String> = (0..t)
         .map(|i| {
-            let b = i * 2 + 1;
-            format!("(${}, ${})", b, b + 1)
+            let b = i * 4 + 1;
+            format!("(${}, ${}, ${}, ${})", b, b + 1, b + 2, b + 3)
         })
         .collect();
-    let mut transfer_values: Vec<Value> = Vec::with_capacity(t * 2);
-    for (id, message_id) in transfer_rows {
+    let mut transfer_values: Vec<Value> = Vec::with_capacity(t * 4);
+    for (id, message_id, sender, recipient) in transfer_rows {
         transfer_values.push(Value::BigInt(Some(id)));
         transfer_values.push(Value::BigInt(Some(message_id)));
+        transfer_values.push(Value::Bytes(Some(Box::new(sender))));
+        transfer_values.push(Value::Bytes(Some(Box::new(recipient))));
     }
     let transfer_sql = format!(
-        r#"INSERT INTO crosschain_transfers (id, message_id) VALUES {}"#,
+        r#"INSERT INTO crosschain_transfers (id, message_id, sender_address, recipient_address) VALUES {}"#,
         transfer_placeholders.join(", ")
     );
     interchain

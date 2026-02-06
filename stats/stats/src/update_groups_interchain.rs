@@ -30,6 +30,7 @@ singleton_groups!(
     TotalInterchainTransfers,
     TotalInterchainTransfersReceived,
     TotalInterchainTransfersSent,
+    TotalInterchainTransferUsers,
 );
 
 construct_update_group!(NewMessagesInterchainGroup {

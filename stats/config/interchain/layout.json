@@ -5,7 +5,8 @@
     "total_interchain_messages_received",
     "total_interchain_transfers",
     "total_interchain_transfers_sent",
-    "total_interchain_transfers_received"
+    "total_interchain_transfers_received",
+    "total_interchain_transfer_users"
   ],
   "line_chart_categories": [
     {

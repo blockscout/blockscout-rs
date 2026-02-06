@@ -40,7 +40,9 @@ mod interchain_migrator {
                     r#"
                     CREATE TABLE crosschain_transfers (
                         id BIGSERIAL PRIMARY KEY,
-                        message_id BIGINT NOT NULL REFERENCES crosschain_messages(id)
+                        message_id BIGINT NOT NULL REFERENCES crosschain_messages(id),
+                        sender_address BYTEA,
+                        recipient_address BYTEA
                     )
                     "#
                     .to_string(),

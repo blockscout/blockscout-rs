@@ -395,6 +395,7 @@ impl RuntimeSetup {
             Arc::new(TotalInterchainTransfersGroup),
             Arc::new(TotalInterchainTransfersReceivedGroup),
             Arc::new(TotalInterchainTransfersSentGroup),
+            Arc::new(TotalInterchainTransferUsersGroup),
             Arc::new(NewTransfersInterchainGroup),
             Arc::new(NewTransfersSentInterchainGroup),
             Arc::new(NewTransfersReceivedInterchainGroup),
