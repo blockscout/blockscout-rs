@@ -1,0 +1,267 @@
+syntax = "proto3";
+
+package blockscout.interchainIndexer.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
+
+import "google/protobuf/struct.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "convert/convert_options.proto";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Interchain Indexer service"
+    version: "0.1.1"
+    contact: {
+      name: "Blockscout"
+      url: "https://blockscout.com"
+      email: "support@blockscout.com"
+    }
+  }
+  host: "interchain-indexer.services.blockscout.com"
+  schemes: [HTTPS]
+  external_docs: {
+    url: "https://github.com/blockscout/blockscout-rs"
+    description: "More about blockscout microservices"
+  }
+  security_definitions: {
+    security: {
+      key: "ApiKeyAuth"
+      value: {
+        type: TYPE_API_KEY
+        in: IN_HEADER
+        name: "x-api-key"
+      }
+    }
+  }
+};
+
+
+
+service InterchainService {
+  rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse) {}
+  rpc GetMessageDetails(GetMessageDetailsRequest) returns (InterchainMessage) {}
+  rpc GetMessagesByTransaction(GetMessagesByTransactionRequest) returns (GetMessagesResponse) {}
+  rpc GetMessagesByAddress(GetMessagesByAddressRequest) returns (GetMessagesResponse) {}
+  
+  rpc GetTransfers(GetTransfersRequest) returns (GetTransfersResponse) {}
+  rpc GetTransfersByTransaction(GetTransfersByTransactionRequest) returns (GetTransfersResponse) {}
+  rpc GetTransfersByAddress(GetTransfersByAddressRequest) returns (GetTransfersResponse) {}
+}
+
+
+message Pagination {
+  optional string page_token = 1;
+  optional uint64 timestamp = 2;
+  optional string message_id = 3;
+  optional uint32 bridge_id = 4;
+  optional uint64 index = 5;
+  optional string direction = 6;
+}
+
+message GetMessagesRequest {
+  optional string q = 1;  // multisearch ability
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 2;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 3;
+  // input pagination token - used by default
+  // (packed version of the raw pagination parameters)
+  optional string page_token = 4;
+  // Raw pagination parameters
+  // (used when api.use_pagination_token=false)
+  optional uint64 timestamp = 5;  // Raw pagination field
+  optional string message_id = 6; // Raw pagination field
+  optional uint32 bridge_id = 7;  // Raw pagination field
+  optional string direction = 8;  // Raw pagination field
+}
+
+message GetMessageDetailsRequest {
+  string message_id = 1;
+}
+
+message GetMessagesByTransactionRequest {
+  string tx_hash = 1;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 2;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 3;
+  // input pagination token - used by default
+  // (packed version of the raw pagination parameters)
+  optional string page_token = 4;
+  // Raw pagination parameters
+  // (used when api.use_pagination_token=false)
+  optional uint64 timestamp = 5;  // Raw pagination field
+  optional string message_id = 6; // Raw pagination field
+  optional uint32 bridge_id = 7;  // Raw pagination field
+  optional string direction = 8;  // Raw pagination field
+}
+
+message GetMessagesByAddressRequest {
+  string address = 1;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 2;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 3;
+  // input pagination token - used by default
+  // (packed version of the raw pagination parameters)
+  optional string page_token = 4;
+  // Raw pagination parameters
+  // (used when api.use_pagination_token=false)
+  optional uint64 timestamp = 5;  // Raw pagination field
+  optional string message_id = 6; // Raw pagination field
+  optional uint32 bridge_id = 7;  // Raw pagination field
+  optional string direction = 8;  // Raw pagination field
+}
+
+message AddressInfo {
+  string hash = 1;
+  optional string ens_domain_name = 2;
+}
+
+message BridgeInfo {
+  string name = 1;
+  optional string ui_url = 2;
+  optional string docs_url = 3;
+}
+
+message ChainInfo {
+  string id = 1;
+  string name = 2;
+  optional string logo = 3;
+  optional string explorer_url = 4;
+  optional string custom_tx_route = 5;
+  optional string custom_address_route = 6;
+  optional string custom_token_route = 7;
+}
+
+enum MessageStatus {
+  MESSAGE_STATUS_INITIATED = 0;
+  MESSAGE_STATUS_COMPLETED = 1;
+  MESSAGE_STATUS_FAILED = 2;
+}
+
+message InterchainMessage {
+  BridgeInfo bridge = 1;
+  string message_id = 2;
+  MessageStatus status = 3;
+  
+  ChainInfo source_chain = 4;
+  string send_timestamp = 5;
+  optional AddressInfo sender = 6;
+  optional string source_transaction_hash = 7;
+  
+  ChainInfo destination_chain = 8;
+  optional string receive_timestamp = 9;
+  optional AddressInfo recipient = 10;
+  optional string destination_transaction_hash = 11;
+  
+  optional string payload = 12;
+  map<string, string> extra = 13; // additional parsed data
+
+  repeated InterchainTransfer transfers = 14;
+}
+
+message GetMessagesResponse {
+  repeated InterchainMessage items = 1;
+  optional Pagination next_page_params = 2;
+  optional Pagination prev_page_params = 3;
+}
+
+message GetTransfersRequest {
+  optional string q = 1;  // multisearch ability
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 2;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 3;
+  // input pagination token - used by default
+  // (packed version of the raw pagination parameters)
+  optional string page_token = 4;
+  // Raw pagination parameters
+  // (used when api.use_pagination_token=false)
+  optional uint64 timestamp = 5;  // Raw pagination field
+  optional string message_id = 6; // Raw pagination field
+  optional uint32 bridge_id = 7;  // Raw pagination field
+  optional uint64 index = 8;      // Raw pagination field
+  optional string direction = 9;  // Raw pagination field
+}
+
+message GetTransfersByTransactionRequest {
+  string tx_hash = 1;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 2;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 3;
+  // input pagination token - used by default
+  // (packed version of the raw pagination parameters)
+  optional string page_token = 4;
+  // Raw pagination parameters
+  // (used when api.use_pagination_token=false)
+  optional uint64 timestamp = 5;  // Raw pagination field
+  optional string message_id = 6; // Raw pagination field
+  optional uint32 bridge_id = 7;  // Raw pagination field
+  optional uint64 index = 8;      // Raw pagination field
+  optional string direction = 9;  // Raw pagination field
+}
+
+message GetTransfersByAddressRequest {
+  string address = 1;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 2;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 3;
+  // input pagination token - used by default
+  // (packed version of the raw pagination parameters)
+  optional string page_token = 4;
+  // Raw pagination parameters
+  // (used when api.use_pagination_token=false)
+  optional uint64 timestamp = 5;  // Raw pagination field
+  optional string message_id = 6; // Raw pagination field
+  optional uint32 bridge_id = 7;  // Raw pagination field
+  optional uint64 index = 8;      // Raw pagination field
+  optional string direction = 9;  // Raw pagination field
+}
+
+message TokenInfo {
+  reserved 1; // chain_id moved to InterchainTransfer
+  string address_hash = 2;
+  optional string name = 3;
+  optional string symbol = 4;
+  optional string decimals = 5;
+  optional string icon_url = 6;
+}
+
+message InterchainTransfer {
+  BridgeInfo bridge = 1;
+  string message_id = 2;
+  MessageStatus status = 3;
+
+  ChainInfo source_chain = 14;
+  ChainInfo destination_chain = 15;
+  
+  TokenInfo source_token = 4;
+  optional string source_amount = 5;
+  optional string source_transaction_hash = 6;
+  optional AddressInfo sender = 7;
+  string send_timestamp = 8;
+
+
+  TokenInfo destination_token = 9;
+  optional string destination_amount = 10;
+  optional string destination_transaction_hash = 11;
+  optional AddressInfo recipient = 12;
+  optional string receive_timestamp = 13;
+  
+}
+
+message GetTransfersResponse {
+  repeated InterchainTransfer items = 1;
+  optional Pagination next_page_params = 2;
+  optional Pagination prev_page_params = 3;
+}
