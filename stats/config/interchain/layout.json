@@ -14,7 +14,9 @@
       "charts_order": [
         "new_messages_interchain",
         "new_messages_sent_interchain",
-        "new_messages_received_interchain"
+        "new_messages_received_interchain",
+        "messages_growth_sent_interchain",
+        "messages_growth_received_interchain"
       ]
     },
     {

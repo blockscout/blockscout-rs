@@ -385,7 +385,7 @@ impl RuntimeSetup {
             Arc::new(NewTxnsMultichainWindowGroup),
             Arc::new(TxnsGrowthMultichainGroup),
             Arc::new(AccountsGrowthMultichainGroup),
-            // interchain: simple set
+            // interchain
             Arc::new(TotalInterchainMessagesGroup),
             Arc::new(TotalInterchainMessagesReceivedGroup),
             Arc::new(TotalInterchainMessagesSentGroup),

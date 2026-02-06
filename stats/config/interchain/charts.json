@@ -39,6 +39,14 @@
       "title": "New messages received",
       "description": "Number of new interchain messages received per day"
     },
+    "messages_growth_sent_interchain": {
+      "title": "Cumulative messages sent",
+      "description": "Cumulative total of interchain messages sent"
+    },
+    "messages_growth_received_interchain": {
+      "title": "Cumulative messages received",
+      "description": "Cumulative total of interchain messages received"
+    },
     "new_transfers_interchain": {
       "title": "New interchain transfers",
       "description": "Number of new interchain transfers indexed per day"
