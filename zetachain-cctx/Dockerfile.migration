@@ -1,0 +1,33 @@
+# Migration Dockerfile - Container with just and sea-orm-cli for running migrations
+FROM rust:1.75-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install just
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+# Install sea-orm-cli
+RUN cargo install sea-orm-cli
+
+# Set working directory
+WORKDIR /app
+
+# Copy the project files
+COPY . .
+
+# Create app user
+RUN groupadd -r app && useradd -r -g app app
+RUN chown -R app:app /app
+
+# Switch to app user
+USER app
+
+# Default command
+CMD ["just", "--list"] 
