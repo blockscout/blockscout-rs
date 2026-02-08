@@ -20,6 +20,19 @@ use stats::{
 
 use std::{collections::HashSet, sync::Arc};
 
+/// Parameters for constructing [`UpdateService`].
+/// Used to avoid passing too many arguments to [`UpdateService::new`].
+pub struct UpdateServiceConfig {
+    pub db: Arc<DatabaseConnection>,
+    pub indexer_db: Arc<DatabaseConnection>,
+    pub second_indexer_db: Option<Arc<DatabaseConnection>>,
+    pub charts: Arc<RuntimeSetup>,
+    pub status_listener: Option<IndexingStatusListener>,
+    pub mode: Mode,
+    pub multichain_filter: Option<Vec<u64>>,
+    pub interchain_primary_id: Option<u64>,
+}
+
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     indexer_db: Arc<DatabaseConnection>,
@@ -55,27 +68,18 @@ fn group_update_schedule<'a>(
 }
 
 impl UpdateService {
-    pub async fn new(
-        db: Arc<DatabaseConnection>,
-        indexer_db: Arc<DatabaseConnection>,
-        second_indexer_db: Option<Arc<DatabaseConnection>>,
-        charts: Arc<RuntimeSetup>,
-        status_listener: Option<IndexingStatusListener>,
-        mode: Mode,
-        multichain_filter: Option<Vec<u64>>,
-        interchain_primary_id: Option<u64>,
-    ) -> Result<Self, DbErr> {
+    pub async fn new(config: UpdateServiceConfig) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
-        let init_update_tracker = Self::initialize_update_tracker(&charts);
+        let init_update_tracker = Self::initialize_update_tracker(&config.charts);
         Ok(Self {
-            db,
-            indexer_db,
-            second_indexer_db,
-            mode,
-            multichain_filter,
-            interchain_primary_id,
-            charts,
-            status_listener,
+            db: config.db,
+            indexer_db: config.indexer_db,
+            second_indexer_db: config.second_indexer_db,
+            mode: config.mode,
+            multichain_filter: config.multichain_filter,
+            interchain_primary_id: config.interchain_primary_id,
+            charts: config.charts,
+            status_listener: config.status_listener,
             init_update_tracker,
             on_demand_sender: Mutex::new(on_demand.0),
             on_demand_receiver: Mutex::new(on_demand.1),

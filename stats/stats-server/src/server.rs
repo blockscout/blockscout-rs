@@ -12,7 +12,7 @@ use crate::{
         handle_disable_internal_transactions, handle_enable_all_arbitrum,
         handle_enable_all_eip_7702, handle_enable_all_op_stack, handle_enable_zetachain_cctx,
     },
-    update_service::UpdateService,
+    update_service::{UpdateService, UpdateServiceConfig},
 };
 
 use anyhow::{Context, anyhow};
@@ -82,16 +82,16 @@ pub async fn stats(
     }
 
     let update_service = Arc::new(
-        UpdateService::new(
-            db.clone(),
-            indexer.clone(),
-            cctx_indexer.clone(),
-            charts.clone(),
+        UpdateService::new(UpdateServiceConfig {
+            db: db.clone(),
+            indexer_db: indexer.clone(),
+            second_indexer_db: cctx_indexer.clone(),
+            charts: charts.clone(),
             status_listener,
-            settings.mode,
-            settings.multichain_filter,
-            settings.interchain_primary_id,
-        )
+            mode: settings.mode,
+            multichain_filter: settings.multichain_filter,
+            interchain_primary_id: settings.interchain_primary_id,
+        })
         .await?,
     );
     let update_service_cloned = update_service.clone();
