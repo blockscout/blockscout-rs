@@ -69,7 +69,7 @@ where
         let update_range_start = match update_from {
             Some(d) => d,
             None => ChartProps::Resolution::from_date(
-                get_min_date(cx.indexer_db, cx.is_multichain_mode)
+                get_min_date(cx.indexer_db, cx.mode)
                     .await
                     .map(|time| time.date())
                     .map_err(ChartError::IndexerDB)?,

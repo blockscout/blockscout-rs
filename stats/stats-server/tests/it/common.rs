@@ -8,7 +8,7 @@ use blockscout_service_launcher::{
 use reqwest::{RequestBuilder, Response};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use stats_server::{
-    Settings,
+    Mode, Settings,
     auth::{API_KEY_NAME, ApiKey},
 };
 use tokio::{
@@ -124,8 +124,11 @@ pub fn get_test_stats_settings(
     settings.enable_all_arbitrum = true;
     settings.enable_all_op_stack = true;
     settings.enable_all_eip_7702 = true;
-    settings.enable_zetachain_cctx = zetachain_cctx_db.is_some();
-    settings.multichain_mode = false;
+    settings.mode = if zetachain_cctx_db.is_some() {
+        Mode::Zetachain
+    } else {
+        Mode::Blockscout
+    };
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;
     // initialized separately to prevent errors (with `try_init`)

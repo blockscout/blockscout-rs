@@ -3,6 +3,17 @@ name = "stats"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+test-utils = [
+    "dep:tracing-subscriber",
+    "dep:blockscout-service-launcher",
+    "dep:pretty_assertions",
+    "dep:wiremock",
+    "dep:hex-literal",
+    "dep:serde_json",
+]
+
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
@@ -35,7 +46,9 @@ sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ] }
+sea-orm-migration = { workspace = true }
 sea-query = { workspace = true }
+serde = { version = "1", features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 stats-proto = { path = "../stats-proto" }
 thiserror = "1.0"
@@ -71,14 +84,3 @@ sea-orm = { workspace = true, features = [
 serde_json = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 wiremock = { workspace = true }
-
-[features]
-default = []
-test-utils = [
-    "dep:tracing-subscriber",
-    "dep:blockscout-service-launcher",
-    "dep:pretty_assertions",
-    "dep:wiremock",
-    "dep:hex-literal",
-    "dep:serde_json",
-]

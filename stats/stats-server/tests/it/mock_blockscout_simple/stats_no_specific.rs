@@ -5,7 +5,7 @@
 use blockscout_service_launcher::{launcher::GracefulShutdownHandler, test_server::init_server};
 use futures::FutureExt;
 use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_api};
-use stats_server::stats;
+use stats_server::{Mode, stats};
 use tokio::task::JoinSet;
 
 use crate::{
@@ -37,7 +37,7 @@ pub async fn run_chart_pages_tests_with_disabled_chain_specific() {
     );
     settings.enable_all_arbitrum = false;
     settings.enable_all_op_stack = false;
-    settings.enable_zetachain_cctx = false;
+    settings.mode = Mode::Blockscout;
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
     init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;

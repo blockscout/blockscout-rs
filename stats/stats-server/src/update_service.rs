@@ -11,6 +11,7 @@ use crate::{
     InitialUpdateTracker,
     blockscout_waiter::IndexingStatusListener,
     runtime_setup::{RuntimeSetup, UpdateGroupEntry},
+    settings::Mode,
 };
 use stats::{
     ChartKey,
@@ -19,12 +20,26 @@ use stats::{
 
 use std::{collections::HashSet, sync::Arc};
 
+/// Parameters for constructing [`UpdateService`].
+/// Used to avoid passing too many arguments to [`UpdateService::new`].
+pub struct UpdateServiceConfig {
+    pub db: Arc<DatabaseConnection>,
+    pub indexer_db: Arc<DatabaseConnection>,
+    pub second_indexer_db: Option<Arc<DatabaseConnection>>,
+    pub charts: Arc<RuntimeSetup>,
+    pub status_listener: Option<IndexingStatusListener>,
+    pub mode: Mode,
+    pub multichain_filter: Option<Vec<u64>>,
+    pub interchain_primary_id: Option<u64>,
+}
+
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     indexer_db: Arc<DatabaseConnection>,
     second_indexer_db: Option<Arc<DatabaseConnection>>,
-    is_multichain_mode: bool,
+    mode: Mode,
     multichain_filter: Option<Vec<u64>>,
+    interchain_primary_id: Option<u64>,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
     init_update_tracker: InitialUpdateTracker,
@@ -53,25 +68,18 @@ fn group_update_schedule<'a>(
 }
 
 impl UpdateService {
-    pub async fn new(
-        db: Arc<DatabaseConnection>,
-        indexer_db: Arc<DatabaseConnection>,
-        second_indexer_db: Option<Arc<DatabaseConnection>>,
-        charts: Arc<RuntimeSetup>,
-        status_listener: Option<IndexingStatusListener>,
-        is_multichain_mode: bool,
-        multichain_filter: Option<Vec<u64>>,
-    ) -> Result<Self, DbErr> {
+    pub async fn new(config: UpdateServiceConfig) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
-        let init_update_tracker = Self::initialize_update_tracker(&charts);
+        let init_update_tracker = Self::initialize_update_tracker(&config.charts);
         Ok(Self {
-            db,
-            indexer_db,
-            second_indexer_db,
-            is_multichain_mode,
-            multichain_filter,
-            charts,
-            status_listener,
+            db: config.db,
+            indexer_db: config.indexer_db,
+            second_indexer_db: config.second_indexer_db,
+            mode: config.mode,
+            multichain_filter: config.multichain_filter,
+            interchain_primary_id: config.interchain_primary_id,
+            charts: config.charts,
+            status_listener: config.status_listener,
             init_update_tracker,
             on_demand_sender: Mutex::new(on_demand.0),
             on_demand_receiver: Mutex::new(on_demand.1),
@@ -409,20 +417,20 @@ impl UpdateService {
             force_update = force_full,
             "updating group of charts"
         );
-        let Ok(active_migrations) =
-            IndexerMigrations::query_from_db(self.is_multichain_mode, &self.indexer_db)
-                .await
-                .inspect_err(|err| {
-                    tracing::error!("error during blockscout migrations detection: {:?}", err)
-                })
+        let Ok(active_migrations) = IndexerMigrations::query_from_db(self.mode, &self.indexer_db)
+            .await
+            .inspect_err(|err| {
+                tracing::error!("error during blockscout migrations detection: {:?}", err)
+            })
         else {
             return;
         };
 
         let update_parameters = UpdateParameters {
             stats_db: &self.db,
-            is_multichain_mode: self.is_multichain_mode,
+            mode: self.mode,
             multichain_filter: self.multichain_filter.clone(),
+            interchain_primary_id: self.interchain_primary_id,
             indexer_db: &self.indexer_db,
             second_indexer_db: self.second_indexer_db.as_deref(),
             indexer_applied_migrations: active_migrations,

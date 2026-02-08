@@ -120,6 +120,20 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - StatsService
+  /api/v1/pages/interchain/main:
+    get:
+      operationId: StatsService_GetMainPageInterchainStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1MainPageInterchainStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
   /api/v1/pages/main:
     get:
       operationId: StatsService_GetMainPageStats
@@ -364,6 +378,15 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1LineChartSection'
+  v1MainPageInterchainStats:
+    type: object
+    properties:
+      total_interchain_messages:
+        $ref: '#/definitions/v1Counter'
+      total_interchain_messages_sent:
+        $ref: '#/definitions/v1Counter'
+      total_interchain_messages_received:
+        $ref: '#/definitions/v1Counter'
   v1MainPageMultichainStats:
     type: object
     properties:
