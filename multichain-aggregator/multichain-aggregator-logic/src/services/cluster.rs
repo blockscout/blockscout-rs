@@ -32,6 +32,7 @@ use crate::{
         domains::{Domain, DomainInfo, ProtocolInfo},
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
+        portfolio::AddressPortfolio,
         search_results::{QuickSearchResult, Redirect},
         tokens::{AggregatedToken, TokenListUpdate, TokenType},
     },
@@ -41,7 +42,10 @@ use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use itertools::Itertools;
 use regex::Regex;
-use sea_orm::{DatabaseConnection, prelude::DateTime};
+use sea_orm::{
+    DatabaseConnection,
+    prelude::{BigDecimal, DateTime},
+};
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, HashMap, HashSet},
@@ -163,39 +167,22 @@ impl Cluster {
             .map(|c| c.into())
             .collect::<Vec<Chain>>();
 
-        let sort_metric = sort_metric.unwrap_or_default();
-        let metrics_map = self
-            .list_chain_metrics()
-            .await?
-            .into_iter()
-            .filter_map(|metric| {
-                metric
-                    .metric_value_for_sorting(sort_metric)
-                    .map(|v| (metric.chain_id, v))
-            })
+        let metrics = self.list_chain_metrics(sort_metric).await?;
+        let order_map = metrics
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (m.chain_id, i))
             .collect::<HashMap<_, _>>();
 
-        chains.sort_by(|left, right| {
-            // Compare metrics values in descending order
-            let ordering = match (metrics_map.get(&left.id), metrics_map.get(&right.id)) {
-                (Some(left), Some(right)) => right.total_cmp(left),
-                (Some(_), None) => Ordering::Less,
-                (None, Some(_)) => Ordering::Greater,
-                (None, None) => Ordering::Equal,
-            };
-
-            // If metrics values are equal, compare chain ids in ascending order
-            if ordering == Ordering::Equal {
-                left.id.cmp(&right.id)
-            } else {
-                ordering
-            }
-        });
+        chains.sort_by_key(|chain| order_map.get(&chain.id).unwrap_or(&usize::MAX));
 
         Ok(chains)
     }
 
-    pub async fn list_chain_metrics(&self) -> Result<Vec<ChainMetrics>, ServiceError> {
+    pub async fn list_chain_metrics(
+        &self,
+        sort_metric: Option<ChainMetricKind>,
+    ) -> Result<Vec<ChainMetrics>, ServiceError> {
         let chain_ids = self.active_chain_ids().await?;
         let key = format!("{}:chain_metrics", self.name);
 
@@ -206,7 +193,27 @@ impl Cluster {
             )
         };
 
-        let metrics = maybe_cache_lookup!(self.caches.chain_metrics.as_ref(), key, get)?;
+        let mut metrics = maybe_cache_lookup!(self.caches.chain_metrics.as_ref(), key, get)?;
+
+        let sort_metric = sort_metric.unwrap_or_default();
+        metrics.sort_by(|left, right| {
+            let ordering = match (
+                left.metric_value_for_sorting(sort_metric),
+                right.metric_value_for_sorting(sort_metric),
+            ) {
+                (Some(l), Some(r)) => r.total_cmp(&l),
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            };
+
+            if ordering == Ordering::Equal {
+                left.chain_id.cmp(&right.chain_id)
+            } else {
+                ordering
+            }
+        });
+
         Ok(metrics)
     }
 
@@ -344,13 +351,34 @@ impl Cluster {
         Ok(address_info)
     }
 
+    pub async fn get_address_portfolio(
+        &self,
+        address: AddressAlloy,
+        chain_ids: Vec<ChainId>,
+    ) -> Result<AddressPortfolio, ServiceError> {
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+        let chain_values =
+            address_token_balances::portfolio_by_address(&self.db, address, chain_ids).await?;
+        let total_value = chain_values
+            .iter()
+            .fold(BigDecimal::from(0), |acc, v| acc + v.value.clone());
+
+        Ok(AddressPortfolio {
+            total_value,
+            chain_values,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_address_tokens(
         &self,
         address: AddressAlloy,
         token_types: Vec<TokenType>,
         chain_ids: Vec<ChainId>,
+        query: Option<String>,
         page_size: u64,
         page_token: Option<ListAddressTokensPageToken>,
+        filter_poor_reputation: bool,
     ) -> Result<
         (
             Vec<AggregatedAddressTokenBalance>,
@@ -364,8 +392,10 @@ impl Cluster {
             address,
             token_types,
             chain_ids,
+            query,
             page_size,
             page_token,
+            filter_poor_reputation,
         )
         .await?;
 

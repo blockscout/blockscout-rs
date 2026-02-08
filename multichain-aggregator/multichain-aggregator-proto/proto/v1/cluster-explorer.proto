@@ -19,6 +19,8 @@ service ClusterExplorerService {
   rpc GetInteropMessage(GetInteropMessageRequest)
       returns (GetInteropMessageResponse) {}
   rpc GetAddress(GetAddressRequest) returns (GetAddressResponse) {}
+  rpc GetAddressPortfolio(GetAddressPortfolioRequest)
+      returns (GetAddressPortfolioResponse) {}
   rpc ListAddressTokens(ListAddressTokensRequest) returns (ListAddressTokensResponse) {}
   rpc ListClusterTokens(ListClusterTokensRequest) returns (ListClusterTokensResponse) {}
   rpc GetAggregatedToken(GetAggregatedTokenRequest) returns (GetAggregatedTokenResponse) {}
@@ -108,6 +110,9 @@ message ChainMetrics {
 
 message ListChainMetricsRequest {
   string cluster_id = 1;
+  // Metric used to sort chain metrics. Supported values: active_accounts, daily_transactions,
+  // new_addresses, tps. Defaults to active_accounts.
+  optional string sort_by = 2;
 }
 
 message ListChainMetricsResponse {
@@ -174,6 +179,22 @@ message GetAddressRequest {
   string address_hash = 2;
 }
 
+message AddressPortfolio {
+  string total_value = 1;
+  map<string, string> chain_values = 2;
+}
+
+message GetAddressPortfolioRequest {
+  string cluster_id = 1;
+  string address_hash = 2;
+  // Comma-separated list of chain ids to filter by.
+  repeated string chain_id = 3;
+}
+
+message GetAddressPortfolioResponse {
+  AddressPortfolio portfolio = 1;
+}
+
 message BasicDomainInfo {
   string name = 1;
   blockscout.multichainAggregator.v1.ProtocolInfo protocol = 2;
@@ -207,6 +228,9 @@ message ListAddressTokensRequest {
   optional string type = 3;
   // Comma-separated list of chain ids to filter by.
   repeated string chain_id = 4;
+  optional string query = 7;
+  // If true, include tokens with poor reputation in the results. By default they are excluded.
+  optional bool include_poor_reputation_tokens = 8;
   optional uint32 page_size = 5;
   optional string page_token = 6;
 }

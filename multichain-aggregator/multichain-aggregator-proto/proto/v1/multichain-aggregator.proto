@@ -6,6 +6,7 @@ option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
 
 service MultichainAggregatorService {
   rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
+  rpc ImportPoorReputationTokens(ImportPoorReputationTokensRequest) returns (ImportPoorReputationTokensResponse) {}
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
   rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
@@ -354,6 +355,17 @@ message ListBlocksResponse {
   repeated Hash items = 1;
   Pagination next_page_params = 2;
 }
+
+message ImportPoorReputationTokensRequest {
+  message PoorReputationToken {
+    string address_hash = 1;
+    string chain_id = 2;
+  }
+  repeated PoorReputationToken tokens = 1;
+  string api_key = 2;
+}
+
+message ImportPoorReputationTokensResponse { string status = 1; }
 
 message ListTokenUpdatesRequest {
   repeated string chain_id = 1;

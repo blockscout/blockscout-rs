@@ -302,6 +302,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         marketplace_enabled_cache,
         channel.channel_broadcaster(),
         Arc::clone(&cluster_explorer),
+        settings.service.metadata_import_api_key,
     ));
 
     let router = Router {

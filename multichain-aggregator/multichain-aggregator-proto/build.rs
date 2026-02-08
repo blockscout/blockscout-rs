@@ -77,6 +77,7 @@ fn compile(
             ("ListBlocksRequest", "chain_id"),
             ("ListClusterTokensRequest", "chain_id"),
             ("ListAddressTokensRequest", "chain_id"),
+            ("GetAddressPortfolioRequest", "chain_id"),
             ("SearchByQueryRequest", "chain_id"),
             ("ListTokenUpdatesRequest", "chain_id"),
         ],
