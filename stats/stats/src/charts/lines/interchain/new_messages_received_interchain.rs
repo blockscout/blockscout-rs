@@ -6,14 +6,18 @@ use std::ops::Range;
 use crate::{
     chart_prelude::*,
     charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::kinds::data_manipulation::{
-        map::{MapParseTo, MapToString, StripExt},
-        resolutions::sum::SumLowerResolution,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString, StripExt},
+                resolutions::sum::SumLowerResolution,
+            },
+            local_db::parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+        },
+        types::UpdateContext,
     },
-    data_source::kinds::local_db::parameters::update::batching::parameters::{
-        Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-    },
-    data_source::types::UpdateContext,
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::produce_filter_and_values,
@@ -28,13 +32,14 @@ impl StatementFromRange for NewMessagesReceivedInterchainStatement {
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTime<Utc>>>,
     ) -> Statement {
-        let (chain_condition, mut values): (String, Vec<sea_orm::Value>) = match cx.interchain_primary_id {
-            Some(primary_id) => (
-                " AND dst_chain_id = $1".into(),
-                vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
-            ),
-            None => (String::new(), vec![]),
-        };
+        let (chain_condition, mut values): (String, Vec<sea_orm::Value>) =
+            match cx.interchain_primary_id {
+                Some(primary_id) => (
+                    " AND dst_chain_id = $1".into(),
+                    vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
+                ),
+                None => (String::new(), vec![]),
+            };
         let filter_arg_start = values.len() + 1;
         let (range_filter, range_values) =
             produce_filter_and_values(range, "init_timestamp::timestamp", filter_arg_start);

@@ -11,12 +11,30 @@ use crate::{
             MessagesGrowthSentInterchain, MessagesGrowthSentInterchainMonthly,
             MessagesGrowthSentInterchainWeekly, MessagesGrowthSentInterchainYearly,
         },
-        new_messages_interchain::{NewMessagesInterchain, NewMessagesInterchainMonthly, NewMessagesInterchainWeekly, NewMessagesInterchainYearly},
-        new_messages_received_interchain::{NewMessagesReceivedInterchain, NewMessagesReceivedInterchainMonthly, NewMessagesReceivedInterchainWeekly, NewMessagesReceivedInterchainYearly},
-        new_messages_sent_interchain::{NewMessagesSentInterchain, NewMessagesSentInterchainMonthly, NewMessagesSentInterchainWeekly, NewMessagesSentInterchainYearly},
-        new_transfers_interchain::{NewTransfersInterchain, NewTransfersInterchainMonthly, NewTransfersInterchainWeekly, NewTransfersInterchainYearly},
-        new_transfers_received_interchain::{NewTransfersReceivedInterchain, NewTransfersReceivedInterchainMonthly, NewTransfersReceivedInterchainWeekly, NewTransfersReceivedInterchainYearly},
-        new_transfers_sent_interchain::{NewTransfersSentInterchain, NewTransfersSentInterchainMonthly, NewTransfersSentInterchainWeekly, NewTransfersSentInterchainYearly},
+        new_messages_interchain::{
+            NewMessagesInterchain, NewMessagesInterchainMonthly, NewMessagesInterchainWeekly,
+            NewMessagesInterchainYearly,
+        },
+        new_messages_received_interchain::{
+            NewMessagesReceivedInterchain, NewMessagesReceivedInterchainMonthly,
+            NewMessagesReceivedInterchainWeekly, NewMessagesReceivedInterchainYearly,
+        },
+        new_messages_sent_interchain::{
+            NewMessagesSentInterchain, NewMessagesSentInterchainMonthly,
+            NewMessagesSentInterchainWeekly, NewMessagesSentInterchainYearly,
+        },
+        new_transfers_interchain::{
+            NewTransfersInterchain, NewTransfersInterchainMonthly, NewTransfersInterchainWeekly,
+            NewTransfersInterchainYearly,
+        },
+        new_transfers_received_interchain::{
+            NewTransfersReceivedInterchain, NewTransfersReceivedInterchainMonthly,
+            NewTransfersReceivedInterchainWeekly, NewTransfersReceivedInterchainYearly,
+        },
+        new_transfers_sent_interchain::{
+            NewTransfersSentInterchain, NewTransfersSentInterchainMonthly,
+            NewTransfersSentInterchainWeekly, NewTransfersSentInterchainYearly,
+        },
     },
     utils::singleton_groups,
 };

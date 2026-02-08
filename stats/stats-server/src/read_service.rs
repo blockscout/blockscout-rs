@@ -287,9 +287,9 @@ impl ReadService {
         query_time: DateTime<Utc>,
     ) -> Result<Data, ChartError> {
         let migrations = IndexerMigrations::query_from_db(self.mode, &self.indexer)
-        .await
-        .map_err(ChartError::IndexerDB)?;
-    
+            .await
+            .map_err(ChartError::IndexerDB)?;
+
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &self.db,

@@ -1,11 +1,13 @@
 use super::{
-    init_db::{init_db_all, init_db_all_interchain, init_db_all_multichain, init_db_zetachain_cctx},
+    init_db::{
+        init_db_all, init_db_all_interchain, init_db_all_multichain, init_db_zetachain_cctx,
+    },
     mock_blockscout::fill_mock_blockscout_data,
     mock_interchain::fill_mock_interchain_data,
     mock_zetachain_cctx::fill_mock_zetachain_cctx_data,
 };
 use crate::{
-    ChartProperties,
+    ChartProperties, Mode,
     data_source::{
         source::DataSource,
         types::{IndexerMigrations, UpdateContext, UpdateParameters},
@@ -14,7 +16,6 @@ use crate::{
     range::UniversalRange,
     tests::mock_multichain::fill_mock_multichain_data,
     types::{Timespan, timespans::DateValue},
-    Mode,
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -122,8 +123,17 @@ pub async fn simple_test_chart_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false, None, None, false, false)
-            .await;
+        simple_test_chart_inner::<C>(
+            &test_name,
+            expected.clone(),
+            migrations,
+            false,
+            None,
+            None,
+            false,
+            false,
+        )
+        .await;
     }
 }
 

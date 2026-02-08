@@ -413,12 +413,11 @@ impl UpdateService {
             force_update = force_full,
             "updating group of charts"
         );
-        let Ok(active_migrations) =
-            IndexerMigrations::query_from_db(self.mode, &self.indexer_db)
-                .await
-                .inspect_err(|err| {
-                    tracing::error!("error during blockscout migrations detection: {:?}", err)
-                })
+        let Ok(active_migrations) = IndexerMigrations::query_from_db(self.mode, &self.indexer_db)
+            .await
+            .inspect_err(|err| {
+                tracing::error!("error during blockscout migrations detection: {:?}", err)
+            })
         else {
             return;
         };

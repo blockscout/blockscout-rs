@@ -273,8 +273,7 @@ async fn check_if_unsupported_charts_are_enabled(
     setup: &RuntimeSetup,
     indexer_db: &DatabaseConnection,
 ) -> anyhow::Result<()> {
-    let migrations =
-        IndexerMigrations::query_from_db(mode, indexer_db).await?;
+    let migrations = IndexerMigrations::query_from_db(mode, indexer_db).await?;
     if !migrations.denormalization {
         let charts_without_normalization = &[NewBuilderAccounts::name()];
         let mut all_enabled_charts_with_deps = setup.update_groups.values().flat_map(|g| {

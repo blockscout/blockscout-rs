@@ -11,7 +11,9 @@ use sea_orm::{
 use tokio::sync::Mutex;
 use tracing::warn;
 
-use crate::{ChartKey, counters::TxnsStatsValue, mode::Mode, types::new_txns::NewTxnsCombinedPoint};
+use crate::{
+    ChartKey, counters::TxnsStatsValue, mode::Mode, types::new_txns::NewTxnsCombinedPoint,
+};
 
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
@@ -54,7 +56,7 @@ impl<'a> UpdateParameters<'a> {
         Self {
             stats_db: db,
             mode,
-            multichain_filter: None,   // only used when updating the DB
+            multichain_filter: None,     // only used when updating the DB
             interchain_primary_id: None, // only used when updating the DB
             indexer_db: indexer,
             indexer_applied_migrations,
@@ -160,10 +162,7 @@ pub struct IndexerMigrations {
 }
 
 impl IndexerMigrations {
-    pub async fn query_from_db(
-        mode: Mode,
-        indexer: &DatabaseConnection,
-    ) -> Result<Self, DbErr> {
+    pub async fn query_from_db(mode: Mode, indexer: &DatabaseConnection) -> Result<Self, DbErr> {
         match mode {
             Mode::Blockscout | Mode::Zetachain => Self::query_from_blockscout_db(indexer).await,
             _ => Ok(Self::empty()),

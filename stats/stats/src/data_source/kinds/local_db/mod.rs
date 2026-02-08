@@ -27,17 +27,23 @@ use parameters::{
 use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
-    ChartError, ChartKey, IndexingStatus, Mode, charts::{
+    ChartError, ChartKey, IndexingStatus, Mode,
+    charts::{
         ChartProperties, Named, chart_properties_portrait,
         db_interaction::{
             read::{
-                get_chart_metadata, get_min_block_blockscout, interchain::get_min_block_interchain, last_accurate_point, multichain::get_min_block_multichain
+                get_chart_metadata, get_min_block_blockscout, interchain::get_min_block_interchain,
+                last_accurate_point, multichain::get_min_block_multichain,
             },
             write::set_last_updated_at,
         },
-    }, data_source::{
+    },
+    data_source::{
         DataSource, UpdateContext, kinds::local_db::cached::RemoteCachedLocalDbChartSource,
-    }, metrics, range::UniversalRange, utils::day_start
+    },
+    metrics,
+    range::UniversalRange,
+    utils::day_start,
 };
 
 use super::auxiliary::PartialCumulative;

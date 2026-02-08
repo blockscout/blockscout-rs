@@ -22,26 +22,26 @@ fn mock_rows() -> Vec<(NaiveDateTime, i64, i64, bool, bool, u8)> {
         (d("2022-12-20T10:00:00"), 1, 2, true, true, 2),
         (d("2022-12-21T10:00:00"), 1, 3, true, true, 0),
         (d("2022-12-21T11:00:00"), 2, 1, true, false, 3),
-        (d("2022-12-23T10:00:00"), 2, 1, false, true, 1),   // hole on 22nd
-        (d("2022-12-26T10:00:00"), 1, 2, true, false, 5),   // hole 24th-25th
+        (d("2022-12-23T10:00:00"), 2, 1, false, true, 1), // hole on 22nd
+        (d("2022-12-26T10:00:00"), 1, 2, true, false, 5), // hole 24th-25th
         (d("2022-12-27T10:00:00"), 2, 3, true, true, 4),
         (d("2022-12-27T11:00:00"), 3, 1, false, true, 1),
         // Jan 2023: 10 messages, 17 transfers
         (d("2023-01-01T10:00:00"), 1, 2, true, true, 2),
         (d("2023-01-01T11:00:00"), 1, 3, true, false, 1),
         (d("2023-01-02T10:00:00"), 2, 1, false, true, 0),
-        (d("2023-01-04T10:00:00"), 1, 2, true, true, 3),   // hole 3rd
-        (d("2023-01-10T10:00:00"), 1, 3, true, false, 2),  // holes 5th-9th
+        (d("2023-01-04T10:00:00"), 1, 2, true, true, 3), // hole 3rd
+        (d("2023-01-10T10:00:00"), 1, 3, true, false, 2), // holes 5th-9th
         (d("2023-01-10T11:00:00"), 2, 1, true, false, 4),
         (d("2023-01-11T10:00:00"), 3, 2, false, true, 1),
-        (d("2023-01-20T10:00:00"), 1, 2, true, false, 1),  // holes 12th-19th
+        (d("2023-01-20T10:00:00"), 1, 2, true, false, 1), // holes 12th-19th
         (d("2023-01-21T10:00:00"), 2, 1, true, true, 3),
         (d("2023-01-21T11:00:00"), 3, 1, false, true, 0),
         // Feb 2023: 4 messages, 8 transfers
         (d("2023-02-01T10:00:00"), 1, 2, true, true, 2),
         (d("2023-02-01T11:00:00"), 1, 3, true, false, 5),
-        (d("2023-02-05T10:00:00"), 2, 1, false, true, 1),  // holes 2nd-04th
-        (d("2023-02-10T10:00:00"), 1, 2, true, false, 0),  // holes 6th-9th
+        (d("2023-02-05T10:00:00"), 2, 1, false, true, 1), // holes 2nd-04th
+        (d("2023-02-10T10:00:00"), 1, 2, true, false, 0), // holes 6th-9th
     ]
 }
 
@@ -83,7 +83,15 @@ pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_dat
     let msg_placeholders: Vec<String> = (0..n)
         .map(|i| {
             let b = i * 6 + 1;
-            format!("(${}, ${}, ${}, ${}, ${}, ${})", b, b + 1, b + 2, b + 3, b + 4, b + 5)
+            format!(
+                "(${}, ${}, ${}, ${}, ${}, ${})",
+                b,
+                b + 1,
+                b + 2,
+                b + 3,
+                b + 4,
+                b + 5
+            )
         })
         .collect();
     let msg_sql = format!(

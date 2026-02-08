@@ -6,12 +6,14 @@ use std::ops::Range;
 use crate::{
     chart_prelude::*,
     charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::kinds::data_manipulation::{
-        map::{MapParseTo, MapToString, StripExt},
-        resolutions::sum::SumLowerResolution,
-    },
-    data_source::kinds::local_db::parameters::update::batching::parameters::{
-        Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+    data_source::kinds::{
+        data_manipulation::{
+            map::{MapParseTo, MapToString, StripExt},
+            resolutions::sum::SumLowerResolution,
+        },
+        local_db::parameters::update::batching::parameters::{
+            Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+        },
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -95,7 +97,8 @@ pub type NewTransfersInterchainMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewTransfersInterchainMonthlyInt = MapParseTo<StripExt<NewTransfersInterchainMonthly>, i64>;
+pub type NewTransfersInterchainMonthlyInt =
+    MapParseTo<StripExt<NewTransfersInterchainMonthly>, i64>;
 pub type NewTransfersInterchainYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewTransfersInterchainMonthlyInt, Year>>,
     Batch30Years,

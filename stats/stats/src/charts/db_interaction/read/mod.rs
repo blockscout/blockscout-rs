@@ -5,16 +5,18 @@ use sea_orm::{DatabaseConnection, DbErr};
 use thiserror::Error;
 
 use crate::{
-    ChartError, ChartKey, Mode, charts::db_interaction::read::{
-        interchain::get_min_date_interchain,
-        multichain::get_min_date_multichain,
-    }, data_source::{UpdateContext, kinds::remote_db::RemoteQueryBehaviour}, range::UniversalRange
+    ChartError, ChartKey, Mode,
+    charts::db_interaction::read::{
+        interchain::get_min_date_interchain, multichain::get_min_date_multichain,
+    },
+    data_source::{UpdateContext, kinds::remote_db::RemoteQueryBehaviour},
+    range::UniversalRange,
 };
 
 mod blockscout;
 pub mod cached;
-mod local_db;
 pub mod interchain;
+mod local_db;
 pub mod multichain;
 pub mod zetachain_cctx;
 

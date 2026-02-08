@@ -1,8 +1,6 @@
 /// DB read routines for Interchain mode.
 use chrono::{NaiveDateTime, Utc};
-use sea_orm::{
-    DatabaseConnection, DbErr, FromQueryResult, Statement,
-};
+use sea_orm::{DatabaseConnection, DbErr, FromQueryResult, Statement};
 
 #[derive(FromQueryResult, Debug)]
 struct MinTimestamp {

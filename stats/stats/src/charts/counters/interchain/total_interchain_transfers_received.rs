@@ -33,8 +33,9 @@ impl StatementFromUpdateTime for TotalInterchainTransfersReceivedStatement {
     }
 }
 
-pub type TotalInterchainTransfersReceivedRemote =
-    RemoteDatabaseSource<PullOneNowValue<TotalInterchainTransfersReceivedStatement, NaiveDate, i64>>;
+pub type TotalInterchainTransfersReceivedRemote = RemoteDatabaseSource<
+    PullOneNowValue<TotalInterchainTransfersReceivedStatement, NaiveDate, i64>,
+>;
 
 pub struct Properties;
 

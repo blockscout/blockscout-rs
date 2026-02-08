@@ -6,14 +6,18 @@ use std::ops::Range;
 use crate::{
     chart_prelude::*,
     charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::kinds::data_manipulation::{
-        map::{MapParseTo, MapToString, StripExt},
-        resolutions::sum::SumLowerResolution,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString, StripExt},
+                resolutions::sum::SumLowerResolution,
+            },
+            local_db::parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+        },
+        types::UpdateContext,
     },
-    data_source::kinds::local_db::parameters::update::batching::parameters::{
-        Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-    },
-    data_source::types::UpdateContext,
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::produce_filter_and_values,

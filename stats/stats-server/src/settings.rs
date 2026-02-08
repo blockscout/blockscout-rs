@@ -58,7 +58,7 @@ pub struct Settings {
     /// Modes are mutually exclusive by design.
     pub mode: Mode,
 
-    pub blockscout_db_url: Option<String>,  // deprecated, use `indexer_db_url` instead
+    pub blockscout_db_url: Option<String>, // deprecated, use `indexer_db_url` instead
     pub indexer_db_url: Option<String>,
     /// Url for second db of indexer (currently assumed to be CCTX (cross chain transactions) indexer, see `zetachain-cctx` service)
     pub second_indexer_db_url: Option<String>,
