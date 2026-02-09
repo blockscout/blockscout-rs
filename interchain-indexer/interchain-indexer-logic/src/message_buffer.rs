@@ -1,15 +1,68 @@
 //! Tiered message buffer for cross-chain message indexing.
 //!
-//! This module provides a two-tier storage system:
-//! - **Hot tier**: In-memory storage for recent messages (fast access)
-//! - **Cold tier**: Postgres `pending_messages` table for durability
+//! # Why this exists
+//! Indexing cross-chain messages is inherently *eventual* and *out-of-order*. A
+//! single message is observed across multiple chains, multiple transactions,
+//! and potentially multiple retries. We cannot write a final record as soon as
+//! we see the first event, yet we also cannot keep everything in memory
+//! indefinitely. This buffer provides a **durable, concurrent, and
+//! incremental** staging area until messages are ready to be persisted.
 //!
-//! Messages are promoted to `crosschain_messages` when they become "ready".
+//! # Two-tier storage
+//! - **Hot tier (memory, `DashMap`)**
+//!   - Fast mutation during log processing.
+//!   - Holds the latest working state for each message.
+//!   - Entries are evicted by TTL; this is a performance knob, not a durability
+//!     boundary.
+//! - **Cold tier (Postgres, `pending_messages`)**
+//!   - Durable staging for entries evicted from hot tier.
+//!   - On access, entries can be re-hydrated into hot tier.
 //!
-//! Future improvements:
-//! - There might be situations when message is flushed to final storage but
-//!   isn't fully indexed. In that case we don't delete it from pending_messages
-//!   to allow recovery.
+//! # Promotion to final storage
+//! Each entry is periodically **consolidated** into one or more rows in:
+//! - `crosschain_messages` (the main message record)
+//! - `crosschain_transfers` (optional ICTT transfer record)
+//!
+//! The consolidation rules are implemented by the indexer via the
+//! [`Consolidate`] trait. 
+//! 
+//! > Example: In the Avalanche indexer, a message becomes *consolidatable*
+//! > after the `SendCrossChainMessage` event is known and becomes *final* only
+//! > after execution succeeds **and** any ICTT transfer is complete (see
+//! > `indexer/avalanche/consolidation.rs`).
+//!
+//! # Cursor semantics (reorg-safe)
+//! Each entry tracks, per chain, the min/max block numbers that contributed to
+//! it. During maintenance we update `indexer_checkpoints` so the indexer can
+//! advance safely:
+//! - The **realtime cursor** never advances past the lowest `max_block` of
+//!   pending entries.
+//! - The **catchup max** never retreats past the highest `min_block` of pending
+//!   entries. This is intentionally conservative and may re-process some
+//!   blocks; callers must be idempotent. This behavior is a long-term
+//!   correctness guarantee.
+//!
+//! # Concurrency model
+//! - Hot tier mutations are per-key and concurrent (via `DashMap`).
+//! - Maintenance uses a coarse `RwLock` to serialize DB flushes.
+//! - Hot-tier removals are **CAS-protected** by a version counter, preventing
+//!   deletion of entries that were updated concurrently.
+//!
+//! # Usage Example
+//! In the Avalanche indexer:
+//! - `MessageBuffer::alter` is invoked for every Teleporter/ICTT log to
+//!   incrementally update message state (`send`, `receive`, `execution`,
+//!   `transfer`).
+//! - The background task (`MessageBuffer::start`) periodically calls `run()` to
+//!   flush/persist and update cursors.
+//!
+//! # Schema
+//! Mermaid diagram is accessible at
+//! https://mermaid.ai/d/063e4ac1-5682-40ab-b2b4-d0b13c925583 or
+//! https://gist.github.com/fedor-ivn/d6748d6cc7f0e21c71f9d90856bf6c64
+//!
+//! # Future improvements    
+//! - Migrate from using DashMap to `moka::future::Cache`.
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
@@ -32,7 +85,11 @@ use tokio::{sync::RwLock, task::JoinHandle};
 
 use crate::{InterchainDatabase, metrics};
 
-/// Key for identifying a cross-chain message
+/// Key for identifying a cross-chain message within a specific bridge.
+///
+/// The caller defines how `message_id` is derived from chain-specific fields.
+/// Example: the Avalanche indexer maps Teleporter `messageID` to a compact
+/// `i64` (first 8 bytes, big-endian) and combines it with `bridge_id`.
 #[derive(Clone, Copy, Hash, Eq, PartialEq, Debug, Serialize, Deserialize, Default)]
 pub struct Key {
     pub message_id: i64,
@@ -48,6 +105,10 @@ impl Key {
     }
 }
 
+/// Result of consolidating a working entry into final storage models.
+///
+/// `is_final` controls whether the entry can be removed from both tiers after
+/// a successful flush.
 #[derive(Clone, Debug)]
 pub struct ConsolidatedMessage {
     pub is_final: bool,
@@ -55,6 +116,15 @@ pub struct ConsolidatedMessage {
     pub transfers: Vec<crosschain_transfers::ActiveModel>,
 }
 
+/// Converts an in-flight entry into a consolidated database payload.
+///
+/// Returning:
+/// - `Ok(None)` means the entry is *not yet consolidatable* (e.g. missing
+///   the required source-side event). The buffer will keep it in hot/cold
+///   storage and try again later.
+/// - `Ok(Some(..))` yields the models to upsert into final tables.
+///
+/// The implementation decides when an entry becomes *final*.
 pub trait Consolidate:
     Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>
 {
@@ -65,8 +135,12 @@ pub trait Consolidate:
 #[serde(bound(serialize = "T: Serialize", deserialize = "T: for<'a> Deserialize<'a>"))]
 pub struct Entry<T> {
     pub inner: T,
-    /// chain_id -> (min_block, max_block) seen for this entry
+    /// chain_id -> (min_block, max_block) observed for this entry.
+    ///
+    /// These cursors are used to compute conservative `indexer_checkpoints`
+    /// updates during maintenance.
     cursors: HashMap<i64, (i64, i64)>,
+    /// Monotonic version used to detect concurrent modifications.
     version: u64,
     /// Last `version` that was successfully flushed into `crosschain_messages`.
     ///
@@ -146,7 +220,12 @@ fn with_cursors<T>(
         })
 }
 
-/// Configuration for the tiered message buffer
+/// Configuration for the tiered message buffer.
+///
+/// `hot_ttl` controls how long entries may remain only in memory before they
+/// are offloaded to cold storage. It is a performance knob, not a durability
+/// boundary. `maintenance_interval` controls how often maintenance runs (flush
+/// + offload + cursor update).
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Maximum entries in hot tier before forced offload
@@ -167,7 +246,10 @@ impl Default for Config {
     }
 }
 
-/// Tiered message buffer with hot (memory) and cold (Postgres) storage
+/// Tiered message buffer with hot (memory) and cold (Postgres) storage.
+///
+/// This struct is safe to share across tasks; per-message updates are
+/// synchronized by the underlying `DashMap`.
 pub struct MessageBuffer<T: Consolidate> {
     /// Hot tier: in-memory entries
     inner: DashMap<Key, Entry<T>>,
@@ -180,7 +262,10 @@ pub struct MessageBuffer<T: Consolidate> {
 }
 
 impl<T: Consolidate> MessageBuffer<T> {
-    /// Create a new tiered message buffer
+    /// Create a new tiered message buffer.
+    ///
+    /// Note: no data is eagerly loaded from cold storage. Entries are restored
+    /// on-demand via `get_mut_or_default` / `alter`.
     pub fn new(db: InterchainDatabase, config: Config) -> Arc<Self> {
         Arc::new(Self {
             inner: DashMap::new(),
@@ -241,6 +326,9 @@ impl<T: Consolidate> MessageBuffer<T> {
     }
 
     /// Get existing entry or insert a new default entry, returning a mutable reference.
+    ///
+    /// If the entry is restored from cold tier, its `hot_since` is reset to
+    /// `Utc::now()` to ensure a full TTL in memory.
     pub async fn get_mut_or_default(&self, key: Key) -> Result<RefMut<'_, Key, Entry<T>>>
     where
         T: Default,
@@ -272,11 +360,11 @@ impl<T: Consolidate> MessageBuffer<T> {
         Ok(())
     }
 
-    /// Get-or-create the entry, mutate its inner message, and upsert while
-    /// recording cursors.
+    /// Get-or-create the entry, mutate its inner message, and record cursors.
     ///
-    /// This is a convenience helper for indexers that apply small incremental
-    /// updates.
+    /// This is the primary API used by indexers during log processing. It
+    /// ensures that every mutation increments the entry `version` and records
+    /// the chain/block that produced the update (for safe cursor advancement).
     pub async fn alter(
         &self,
         key: Key,
@@ -295,7 +383,19 @@ impl<T: Consolidate> MessageBuffer<T> {
     }
 
     /// Run maintenance: offload stale entries, flush ready entries, update
-    /// cursors
+    /// cursors.
+    ///
+    /// The maintenance loop performs three logical phases inside a DB
+    /// transaction:
+    /// 1. **Offload** stale entries to `pending_messages`.
+    /// 2. **Flush** consolidatable entries to `crosschain_messages` and
+    ///    `crosschain_transfers`.
+    /// 3. **Update** `indexer_checkpoints` based on hot/cold cursors.
+    ///
+    /// After commit, hot entries are removed using CAS to avoid racing with
+    /// concurrent updates. Non-final consolidated entries remain in the hot
+    /// tier, but their `last_flushed_version` is updated to prevent repeated
+    /// upserts until they change.
     ///
     /// Cursor update logic:
     /// - We can only safely advance cursors past blocks where ALL messages have
