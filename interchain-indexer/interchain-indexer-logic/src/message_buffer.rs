@@ -24,8 +24,8 @@
 //! - `crosschain_transfers` (optional ICTT transfer record)
 //!
 //! The consolidation rules are implemented by the indexer via the
-//! [`Consolidate`] trait. 
-//! 
+//! [`Consolidate`] trait.
+//!
 //! > Example: In the Avalanche indexer, a message becomes *consolidatable*
 //! > after the `SendCrossChainMessage` event is known and becomes *final* only
 //! > after execution succeeds **and** any ICTT transfer is complete (see
