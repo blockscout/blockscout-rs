@@ -1,3 +1,13 @@
+//! Avalanche Teleporter (ICM) + ICTT indexer implementation.
+//!
+//! ## Summary
+//! - Streams Teleporter logs across multiple Avalanche L1 chains.
+//! - Groups logs per transaction to preserve execution context.
+//! - Resolves blockchain IDs to EVM chain IDs and filters unknown chains.
+//! - Builds per-message state incrementally in the message buffer.
+//! - Persists finalized records via consolidation rules.
+//!
+//! Detailed semantics live on the individual handlers and helpers below.
 pub mod abi;
 mod blockchain_id_resolver;
 pub mod consolidation;
@@ -176,6 +186,11 @@ impl AvalancheIndexer {
         }
     }
 
+    /// Main indexing loop.
+    ///
+    /// - Restores cursors from checkpoints (or starts from config).
+    /// - Builds one log stream per chain (catchup + realtime).
+    /// - Merges streams and processes batches in order of arrival.
     async fn run(self) -> Result<()> {
         let db = (*self.db).clone();
         let config = self.config;
@@ -411,7 +426,8 @@ impl CrosschainIndexer for AvalancheIndexer {
 
 /// Extract the indexer message key from a Teleporter `messageID`.
 ///
-/// Today we use the first 8 bytes as big-endian i64.
+/// Current mapping uses the first 8 bytes as a big-endian `i64`, combined with
+/// `bridge_id`. This is a convention, not a protocol requirement.
 fn parse_message_key(message_id: &B256, bridge_id: i32) -> Result<(Key, [u8; 8])> {
     let message_id_bytes: [u8; 8] = message_id.as_slice()[..8].try_into()?;
     let id = i64::from_be_bytes(message_id_bytes);
@@ -427,6 +443,10 @@ struct BatchProcessContext<'a> {
     buffer: &'a Arc<MessageBuffer<Message>>,
 }
 
+/// Process a batch of logs for a single chain.
+///
+/// Logs are grouped by transaction hash so we can fetch the full receipt
+/// (including non-Teleporter logs) and block timestamp once per tx.
 async fn process_batch(
     batch: Vec<Log>,
     chain_id: i64,
@@ -498,6 +518,10 @@ async fn process_batch(
     Ok(())
 }
 
+/// Parse sender-side ICTT logs from a receipt.
+///
+/// These logs include `teleporterMessageID`, so we can associate them with the
+/// in-flight message and capture a single sender-side transfer per message.
 fn parse_sender_ictt_log(
     message_id: &B256,
     transfer: &Option<TokenTransfer>,
@@ -591,7 +615,8 @@ fn parse_sender_ictt_log(
     Ok(transfer)
 }
 
-/// Parse receiver-side ICTT outcome logs (which don't include teleporterMessageID).
+/// Parse receiver-side ICTT outcome logs (which don't include
+/// `teleporterMessageID`).
 ///
 /// Callers must enforce the single-outcome invariant first.
 fn parse_receiver_ictt_logs(
@@ -713,8 +738,9 @@ struct LogHandleContext<'a> {
     receipt_logs: &'a [Log],
 }
 
-/// Handle ICM events - only handles Send/Receive/Execute events
-/// ICTT logs are fetched on-demand when processing Receive events
+/// Dispatch Teleporter ICM events to the appropriate handler.
+///
+/// Only Send/Receive/Execute events are handled here; other logs are ignored.
 async fn handle_log(ctx: LogHandleContext<'_>) -> anyhow::Result<()> {
     if let Some(signature) = ctx.log.topic0() {
         match *signature {
@@ -749,8 +775,10 @@ async fn handle_log(ctx: LogHandleContext<'_>) -> anyhow::Result<()> {
     }
 }
 
-/// Handle SendCrossChainMessage - source-side event
-/// Fetches ICTT logs from the same transaction to capture TokensSent/TokensAndCallSent
+/// Handle SendCrossChainMessage - source-side event.
+///
+/// Also parses sender-side ICTT logs from the same receipt to capture
+/// `TokensSent` / `TokensAndCallSent` (or routed variants).
 async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()> {
     let decoded = ctx
         .log
@@ -873,8 +901,10 @@ fn parse_execution_outcome_log(
         .context("no execution outcome log found in receipt")
 }
 
-/// Handle ReceiveCrossChainMessage - destination-side event
-/// Also fetches MessageExecuted/MessageExecutionFailed and ICTT events from same tx
+/// Handle ReceiveCrossChainMessage - destination-side event.
+///
+/// Records reception only. Execution outcome in the same transaction is
+/// currently detected but not persisted (see refactor notes below).
 async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()> {
     let decoded = ctx
         .log
@@ -968,8 +998,10 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
     Ok(())
 }
 
-/// Handle MessageExecuted - can come via retry (retryMessageExecution)
-/// This handles the case where execution happens in a separate transaction from receive
+/// Handle MessageExecuted - authoritative execution outcome.
+///
+/// This is the only place where receiver-side ICTT effects are parsed. It also
+/// supports execution that happens in a separate transaction from receive.
 async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
     let decoded = ctx
         .log
@@ -1041,7 +1073,10 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
     Ok(())
 }
 
-/// Handle MessageExecutionFailed - execution failed, can be retried later
+/// Handle MessageExecutionFailed - execution failed.
+///
+/// The failure is recorded only if we have not already observed success for
+/// the same message.
 async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()> {
     let decoded = ctx
         .log
