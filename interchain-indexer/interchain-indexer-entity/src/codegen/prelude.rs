@@ -6,6 +6,5 @@ pub use super::{
     chains::Entity as Chains, crosschain_messages::Entity as CrosschainMessages,
     crosschain_transfers::Entity as CrosschainTransfers,
     indexer_checkpoints::Entity as IndexerCheckpoints, indexer_failures::Entity as IndexerFailures,
-    indexer_staging::Entity as IndexerStaging, pending_messages::Entity as PendingMessages,
-    tokens::Entity as Tokens,
+    pending_messages::Entity as PendingMessages, tokens::Entity as Tokens,
 };

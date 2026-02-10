@@ -36,8 +36,6 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Chains,
-    #[sea_orm(has_many = "super::indexer_staging::Entity")]
-    IndexerStaging,
 }
 
 impl Related<super::bridges::Entity> for Entity {
@@ -49,12 +47,6 @@ impl Related<super::bridges::Entity> for Entity {
 impl Related<super::chains::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Chains.def()
-    }
-}
-
-impl Related<super::indexer_staging::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::IndexerStaging.def()
     }
 }
 

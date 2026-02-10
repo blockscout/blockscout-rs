@@ -10,7 +10,6 @@ pub mod crosschain_messages;
 pub mod crosschain_transfers;
 pub mod indexer_checkpoints;
 pub mod indexer_failures;
-pub mod indexer_staging;
 pub mod pending_messages;
 pub mod sea_orm_active_enums;
 pub mod tokens;

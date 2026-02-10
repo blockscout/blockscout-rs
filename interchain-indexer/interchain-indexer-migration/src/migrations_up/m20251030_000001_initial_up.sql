@@ -59,27 +59,6 @@ CREATE TABLE tokens (
   PRIMARY KEY (chain_id, address)
 );
 
--- indexer_staging: Indexer Persistent Storage.
--- It's a internal table which can be used by any indexer to store
--- arbitrary data which should be restored in case of service failure
--- or regular rebooting. So it's some kind of in-memory cache persistent snapshot.
--- The content and structure of the item is totally on indexer side.
--- This table just provides a typical fields which could be useful in typycal cases
--- NOTE: Do not use this table intensively since it can affect the database performance
-CREATE TABLE indexer_staging (
-  created_at       TIMESTAMP DEFAULT now(),
-  updated_at       TIMESTAMP DEFAULT now(),
-  
-  id               BIGINT PRIMARY KEY,
-  bridge_id        INTEGER NOT NULL REFERENCES bridges(id),
-  --message_id       BIGINT NOT NULL,   -- each bridge transaction should be linked with another one via this field
-                                      -- should be extracted by indexer from log or calldata before putting record here
-  contract_id      BIGINT REFERENCES bridge_contracts(id), -- optional, pointing to contract where associated item was collected from
-  block_number     BIGINT, -- optional, which block contains associated data
-  tx_hash          BYTEA,
-  data             BYTEA   -- the item
-);
-
 CREATE TYPE message_status AS ENUM ('initiated', 'completed', 'failed');
 
 -- crosschain_messages: canonical cross-chain messages, constructed by indexer workers during collecting bridge transactions
