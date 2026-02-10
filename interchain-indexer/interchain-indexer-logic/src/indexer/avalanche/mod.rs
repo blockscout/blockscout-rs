@@ -8,6 +8,10 @@
 //! - Persists finalized records via consolidation rules.
 //!
 //! Detailed semantics live on the individual handlers and helpers below.
+//!
+//! ## See also
+//! - [All possible ICTT + ICM
+//!   flows](https://blockscout.notion.site/All-possible-ICTT-ICM-flows-2c53d73641f88060b550e882752968ad)
 pub mod abi;
 mod blockchain_id_resolver;
 pub mod consolidation;
@@ -794,8 +798,8 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
     let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
         .context("failed to parse message key")?;
 
-    let dst_chain_id = event.destinationBlockchainID.as_slice();
-    let dst_chain_id = ctx.blockchain_id_resolver.resolve(dst_chain_id).await?;
+    let dst_chain_hex = event.destinationBlockchainID.as_slice();
+    let dst_chain_id = ctx.blockchain_id_resolver.resolve(dst_chain_hex).await?;
 
     let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
 
