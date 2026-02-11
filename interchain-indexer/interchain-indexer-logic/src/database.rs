@@ -1090,15 +1090,20 @@ impl InterchainDatabase {
         }
 
         // Single query: count distinct messages and total transfers via LEFT JOIN
-        // COUNT(DISTINCT m.id) for messages
+        // COUNT(DISTINCT (m.id, m.bridge_id)) for messages (primary key)
         // COUNT(t.id) for transfers (NULL when no transfer exists)
         let result = crosschain_messages::Entity::find()
             .select_only()
             .column_as(
-                Expr::expr(Func::count_distinct(Expr::col((
-                    crosschain_messages::Entity,
-                    crosschain_messages::Column::Id,
-                )))),
+                Expr::expr(Func::count_distinct(Expr::tuple([
+                    Expr::col((crosschain_messages::Entity, crosschain_messages::Column::Id))
+                        .into(),
+                    Expr::col((
+                        crosschain_messages::Entity,
+                        crosschain_messages::Column::BridgeId,
+                    ))
+                    .into(),
+                ]))),
                 "daily_messages",
             )
             .column_as(
