@@ -10,33 +10,24 @@ test-utils = []
 alloy = { workspace = true }
 alloy-json-rpc = { workspace = true }
 anyhow = { workspace = true }
-async-stream = { version = "0.3" }
+async-stream = { workspace = true }
 async-trait = { workspace = true }
-backon = { version = "1" }
-base64 = { version = "0.22", features = ["std"] }
+backon = { workspace = true }
+base64 = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 bs58 = { workspace = true }
-chrono = { version = "0.4" }
-dashmap = { version = "6" }
-## Uncomment this if needed
-#ethabi = { workspace = true }
-#ethers-core = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
 futures = { workspace = true }
 governor = { workspace = true }
-#hex = { workspace = true }
-## Uncomment this if needed
-#ethabi = { workspace = true }
-#ethers-core = { workspace = true }
-hex = { version = "0.4" }
-hex-literal = { version = "0.4" }
+hex = { workspace = true }
+hex-literal = { workspace = true }
 interchain-indexer-entity = { workspace = true }
 interchain-indexer-proto = { workspace = true }
 itertools = { workspace = true }
-#keccak-hash = { workspace = true }
 lazy_static = { workspace = true }
-moka = { version = "0.12", features = ["future"] }
+moka = { workspace = true }
 parking_lot = { workspace = true }
-#mismatch = { workspace = true }
 prometheus = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
@@ -50,22 +41,16 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 thiserror = { workspace = true }
-#semver = { workspace = true }
-#serde = { workspace = true }
-#serde_json = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 tower = { workspace = true }
 tracing = { workspace = true }
-#tonic = { workspace = true, features = ["tls-roots"] }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [
-
     "test-database",
     "database-1",
-
 ] }
 interchain-indexer-migration = { workspace = true }
 pretty_assertions = { workspace = true }
