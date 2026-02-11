@@ -27,8 +27,8 @@ mod helpers;
 
 use anyhow::Result;
 use interchain_indexer_entity::{bridges, sea_orm_active_enums::MessageStatus};
-use sea_orm::prelude::BigDecimal;
 use pretty_assertions::assert_eq;
+use sea_orm::prelude::BigDecimal;
 use std::time::Duration;
 
 use alloy::{
@@ -323,8 +323,14 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     );
 
     // Verify amounts (sender and recipient should match for a successful transfer)
-    assert_eq!(transfer.src_amount, BigDecimal::from(21633300000000000000u128));
-    assert_eq!(transfer.dst_amount, BigDecimal::from(21633300000000000000u128));
+    assert_eq!(
+        transfer.src_amount,
+        BigDecimal::from(21633300000000000000u128)
+    );
+    assert_eq!(
+        transfer.dst_amount,
+        BigDecimal::from(21633300000000000000u128)
+    );
 
     indexer.stop().await;
 
