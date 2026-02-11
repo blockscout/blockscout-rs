@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_with::serde_as;
+use std::time;
 
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -45,4 +46,31 @@ impl Default for IndexerSettings {
             pruning_block_threshold: 1000,
         }
     }
+}
+
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct EigendaV2ServerSettings {
+    #[serde(default = "default_proxy_request_timeout")]
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    pub proxy_request_timeout: time::Duration,
+    #[serde(default = "default_proxy_request_retries")]
+    pub proxy_request_retries: u32,
+}
+
+impl Default for EigendaV2ServerSettings {
+    fn default() -> Self {
+        Self {
+            proxy_request_timeout: default_proxy_request_timeout(),
+            proxy_request_retries: default_proxy_request_retries(),
+        }
+    }
+}
+
+fn default_proxy_request_timeout() -> time::Duration {
+    time::Duration::from_secs(5)
+}
+
+fn default_proxy_request_retries() -> u32 {
+    1
 }
