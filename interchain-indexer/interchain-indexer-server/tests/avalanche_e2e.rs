@@ -61,6 +61,7 @@ fn parse_message_id_from_native_id(native_id: &str) -> i64 {
     i64::from_be_bytes(first8)
 }
 
+use interchain_indexer_entity::sea_orm_active_enums::BridgeType;
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase,
     indexer::avalanche::{
@@ -128,8 +129,8 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     let bridge_config = BridgeConfig {
         bridge_id: bridge_id as i32,
         name: "Test Bridge".into(),
-        bridge_type: "avalanche_native".into(),
-        indexer: String::new(),
+        bridge_type: BridgeType::AvalancheNative,
+        indexer_type: Default::default(),
         enabled: true,
         contracts: vec![
             BridgeContractConfig {
@@ -392,8 +393,8 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
     let bridge_config = BridgeConfig {
         bridge_id: bridge_id as i32,
         name: "Test Bridge".into(),
-        bridge_type: "avalanche_native".into(),
-        indexer: String::new(),
+        bridge_type: BridgeType::AvalancheNative,
+        indexer_type: Default::default(),
         enabled: true,
         contracts: vec![
             // Keep both chain contracts in DB so the resolver can resolve sourceBlockchainID.
@@ -573,8 +574,8 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
     let bridge_config = BridgeConfig {
         bridge_id: bridge_id as i32,
         name: "Test Bridge".into(),
-        bridge_type: "avalanche_native".into(),
-        indexer: String::new(),
+        bridge_type: BridgeType::AvalancheNative,
+        indexer_type: Default::default(),
         enabled: true,
         contracts: vec![
             // Keep both chain contracts in DB so the resolver can resolve destinationBlockchainID.
@@ -736,8 +737,8 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
     let bridge_config = BridgeConfig {
         bridge_id: bridge_id as i32,
         name: "Test Bridge".into(),
-        bridge_type: "avalanche_native".into(),
-        indexer: String::new(),
+        bridge_type: BridgeType::AvalancheNative,
+        indexer_type: Default::default(),
         enabled: true,
         contracts: vec![
             // Keep both chain contracts in DB so the resolver can resolve destinationBlockchainID.

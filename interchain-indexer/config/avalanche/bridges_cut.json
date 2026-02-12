@@ -3,7 +3,7 @@
         "bridge_id": 2,
         "name": "Avalanche ICTT",
         "type": "avalanche_native",
-        "indexer": "AvalancheNative",
+        "indexer_type": "icm_ictt",
         "enabled": true,
         "api_url": null,
         "ui_url": null,

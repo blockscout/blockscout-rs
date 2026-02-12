@@ -5,16 +5,25 @@ use interchain_indexer_entity::{
 };
 use interchain_indexer_logic::{NodeConfig, PoolConfig, build_layered_http_provider};
 use sea_orm::{ActiveValue, entity::ActiveEnum};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, path::Path, str::FromStr, time::Duration};
+
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IndexerType {
+    IcmIctt,
+    #[default]
+    Unknown,
+}
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct BridgeConfig {
     pub bridge_id: i32,
     pub name: String,
-    #[serde(rename = "type")]
-    pub bridge_type: String,
-    pub indexer: String,
+    #[serde(rename = "type", deserialize_with = "deserialize_bridge_type")]
+    pub bridge_type: BridgeType,
+    #[serde(default)]
+    pub indexer_type: IndexerType,
     pub enabled: bool,
     pub api_url: Option<String>,
     pub ui_url: Option<String>,
@@ -32,6 +41,15 @@ pub struct BridgeContractConfig {
     pub abi: Option<String>,
 }
 
+/// Deserialize bridge type from JSON string using SeaORM ActiveEnum
+fn deserialize_bridge_type<'de, D>(deserializer: D) -> Result<BridgeType, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    BridgeType::try_from_value(&s).map_err(serde::de::Error::custom)
+}
+
 /// Deserialize an Ethereum address from a hex string to Vec<u8>
 fn deserialize_address<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
 where
@@ -47,21 +65,10 @@ where
 /// Convert BridgeConfig to bridges::ActiveModel for database operations
 impl From<BridgeConfig> for bridges::ActiveModel {
     fn from(config: BridgeConfig) -> Self {
-        let bridge_type = match BridgeType::try_from_value(&config.bridge_type) {
-            Ok(v) => Some(v),
-            Err(e) => {
-                tracing::warn!(
-                    bridge_type = %config.bridge_type,
-                    err = ?e,
-                    "Unknown bridge type in config; storing as NULL"
-                );
-                None
-            }
-        };
         bridges::ActiveModel {
             id: ActiveValue::Set(config.bridge_id),
             name: ActiveValue::Set(config.name),
-            r#type: ActiveValue::Set(bridge_type),
+            r#type: ActiveValue::Set(Some(config.bridge_type)),
             enabled: ActiveValue::Set(config.enabled),
             api_url: ActiveValue::Set(config.api_url),
             ui_url: ActiveValue::Set(config.ui_url),
@@ -78,8 +85,8 @@ impl From<bridges::Model> for BridgeConfig {
         BridgeConfig {
             bridge_id: model.id,
             name: model.name,
-            bridge_type: model.r#type.map(|t| t.to_value()).unwrap_or_default(),
-            indexer: String::new(), // Not stored in database
+            bridge_type: model.r#type.expect("bridge must have a type"),
+            indexer_type: Default::default(), // Not stored in database
             enabled: model.enabled,
             api_url: model.api_url,
             ui_url: model.ui_url,
@@ -436,7 +443,7 @@ mod tests {
         assert_eq!(bridges.len(), 1);
         assert_eq!(bridges[0].bridge_id, 2);
         assert_eq!(bridges[0].name, "Avalanche ICTT");
-        assert_eq!(bridges[0].bridge_type, "avalanche_native");
+        assert_eq!(bridges[0].bridge_type, BridgeType::AvalancheNative);
         assert_eq!(bridges[0].contracts.len(), 2);
         assert_eq!(bridges[0].contracts[0].chain_id, 43114);
         assert_eq!(bridges[0].contracts[0].version, 1);
@@ -483,7 +490,7 @@ mod tests {
 
         assert_eq!(config.bridge_id, 1);
         assert_eq!(config.name, "Test Bridge");
-        assert_eq!(config.bridge_type, "lockmint");
+        assert_eq!(config.bridge_type, BridgeType::Lockmint);
         assert!(config.enabled);
         assert_eq!(config.api_url, Some("https://api.example.com".to_string()));
         assert_eq!(config.ui_url, Some("https://ui.example.com".to_string()));
@@ -492,7 +499,7 @@ mod tests {
             Some("https://docs.example.com".to_string())
         );
         // indexer and contracts are lost in conversion (not stored in DB)
-        assert_eq!(config.indexer, "");
+        assert_eq!(config.indexer_type, IndexerType::Unknown);
         assert_eq!(config.contracts, vec![]);
     }
 

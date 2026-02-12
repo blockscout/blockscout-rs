@@ -1,6 +1,7 @@
-use crate::{BridgeConfig, ChainConfig, Settings};
+use crate::{BridgeConfig, ChainConfig, Settings, config::IndexerType};
 use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};
+use interchain_indexer_entity::sea_orm_active_enums::BridgeType;
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase,
     indexer::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
@@ -28,8 +29,8 @@ pub async fn spawn_configured_indexers(
             continue;
         }
 
-        match bridge.bridge_type.as_str() {
-            "avalanche_native" => {
+        match bridge.bridge_type {
+            BridgeType::AvalancheNative => {
                 let configs = build_avalanche_chain_configs(bridge, &chain_lookup, chain_providers);
 
                 if configs.is_empty() {
@@ -40,19 +41,32 @@ pub async fn spawn_configured_indexers(
                     continue;
                 }
 
-                let config = AvalancheIndexerConfig::new(
-                    bridge.bridge_id,
-                    configs,
-                    &settings.avalanche_indexer,
-                );
-                let indexer =
-                    AvalancheIndexer::new(Arc::new(db.clone()), config).with_context(|| {
-                        format!(
-                            "failed to spawn Avalanche indexer for bridge {}",
-                            bridge.bridge_id
-                        )
-                    })?;
-                let indexer: Arc<dyn CrosschainIndexer> = Arc::new(indexer);
+                let indexer: Arc<dyn CrosschainIndexer> = match bridge.indexer_type {
+                    IndexerType::IcmIctt => {
+                        let config = AvalancheIndexerConfig::new(
+                            bridge.bridge_id,
+                            configs,
+                            &settings.avalanche_indexer,
+                        );
+                        let indexer = AvalancheIndexer::new(Arc::new(db.clone()), config)
+                            .with_context(|| {
+                                format!(
+                                    "failed to spawn Avalanche indexer for bridge {}",
+                                    bridge.bridge_id
+                                )
+                            })?;
+
+                        Arc::new(indexer)
+                    }
+                    _ => {
+                        tracing::error!(
+                            bridge_id = bridge.bridge_id,
+                            indexer_type =? bridge.indexer_type,
+                            "Unsupported indexer type for Avalanche indexer"
+                        );
+                        continue;
+                    }
+                };
 
                 // Start indexer asynchronously.
                 // NOTE: CrosschainIndexer::start is responsible for spawning internal tasks.
@@ -75,11 +89,11 @@ pub async fn spawn_configured_indexers(
                 tracing::info!(bridge_id = bridge.bridge_id, "Started Avalanche indexer");
                 indexers.push(indexer);
             }
-            other => {
-                tracing::debug!(
+            _ => {
+                tracing::warn!(
                     bridge_id = bridge.bridge_id,
-                    indexer = other,
-                    "No indexer implementation configured for bridge"
+                    bridge_type =? bridge.bridge_type,
+                    "No indexer has been implemented for this bridge type yet."
                 );
             }
         }
