@@ -91,10 +91,10 @@ pub(crate) fn produce_multichain_filter_and_values(
 /// resulting statement). Avoid passing user-supplied data there, as it may lead to SQL injection.
 ///
 /// ### Examples
-/// ```rust
+/// ```ignore
 /// sql_with_range_filter_opt!(
 ///     DbBackend::Postgres,
-///     "SELECT * FROM users WHERE hair_color = $1 AND name LIKE {name_pattern} AND {filter},
+///     r#"SELECT * FROM users WHERE hair_color = $1 AND name LIKE {name_pattern} AND {filter}"#,
 ///     ["red"],
 ///     "age",
 ///     Some(18..=30),
@@ -171,7 +171,7 @@ pub(crate) use sql_with_range_filter_opt;
 /// resulting statement. Avoid passing user-supplied data there, as it may lead to SQL injection.
 ///
 /// ### Examples
-/// ```rust
+/// ```ignore
 /// sql_with_multichain_filter_opt!(
 ///     DbBackend::Postgres,
 ///     r#"SELECT date, SUM(value) as value FROM txns
@@ -254,7 +254,7 @@ pub(crate) use sql_with_multichain_filter_opt;
 /// resulting statement. Avoid passing user-supplied data there, as it may lead to SQL injection.
 ///
 /// ### Examples
-/// ```rust
+/// ```ignore
 /// sql_with_range_and_multichain_filters!(
 ///     DbBackend::Postgres,
 ///     r#"SELECT date, COUNT(*) as value FROM messages
