@@ -173,17 +173,17 @@ CREATE INDEX crosschain_transfers_token_dst_idx
 
 -- indexer_checkpoints: for progress tracking per chain/worker
 CREATE TABLE indexer_checkpoints (
-  bridge_id         INTEGER NOT NULL REFERENCES bridges(id),
-  chain_id          BIGINT NOT NULL REFERENCES chains(id),
+  bridge_id          INTEGER NOT NULL REFERENCES bridges(id),
+  chain_id           BIGINT NOT NULL REFERENCES chains(id),
   
   -- sync checkpoints
-  catchup_min_block BIGINT NOT NULL,
-  catchup_max_block BIGINT NOT NULL,
-  finality_cursor   BIGINT NOT NULL,
-  realtime_cursor   BIGINT NOT NULL,
+  catchup_min_cursor BIGINT NOT NULL,
+  catchup_max_cursor BIGINT NOT NULL,
+  finality_cursor    BIGINT NOT NULL,
+  realtime_cursor    BIGINT NOT NULL,
   
-  created_at        TIMESTAMP DEFAULT now(),
-  updated_at        TIMESTAMP DEFAULT now(),
+  created_at         TIMESTAMP DEFAULT now(),
+  updated_at         TIMESTAMP DEFAULT now(),
 
   PRIMARY KEY (bridge_id, chain_id)
 );

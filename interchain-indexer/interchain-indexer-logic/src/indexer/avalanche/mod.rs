@@ -245,7 +245,7 @@ impl AvalancheIndexer {
 
             let (forward_cursor, backward_cursor) = if let Some(cp) = checkpoint {
                 let forward_cursor = cp.realtime_cursor.max(0) as u64;
-                let backward_cursor = cp.catchup_max_block.max(0) as u64;
+                let backward_cursor = cp.catchup_max_cursor.max(0) as u64;
 
                 tracing::info!(
                     bridge_id,

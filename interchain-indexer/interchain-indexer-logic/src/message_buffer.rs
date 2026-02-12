@@ -403,7 +403,7 @@ impl<T: Consolidate> MessageBuffer<T> {
     /// - Entries still in hot tier or cold storage represent "pending" work
     /// - The realtime_cursor should not advance past the lowest max_block of
     ///   any pending entry
-    /// - The catchup_max_block should not retreat past the highest min_block of
+    /// - The catchup_max_cursor should not retreat past the highest min_block of
     ///   any pending entry
     ///
     /// TODO: In case that buffer is full of entries that aren't too old based
@@ -617,8 +617,8 @@ impl<T: Consolidate> MessageBuffer<T> {
                             indexer_checkpoints::ActiveModel {
                                 bridge_id: ActiveValue::Set(*bridge_id),
                                 chain_id: ActiveValue::Set(*chain_id),
-                                catchup_min_block: ActiveValue::Set(0),
-                                catchup_max_block: ActiveValue::Set(*min),
+                                catchup_min_cursor: ActiveValue::Set(0),
+                                catchup_max_cursor: ActiveValue::Set(*min),
                                 finality_cursor: ActiveValue::Set(0),
                                 realtime_cursor: ActiveValue::Set(*max),
                                 created_at: ActiveValue::NotSet,
@@ -635,9 +635,9 @@ impl<T: Consolidate> MessageBuffer<T> {
                                     indexer_checkpoints::Column::ChainId,
                                 ])
                                 .value(
-                                    indexer_checkpoints::Column::CatchupMaxBlock,
+                                    indexer_checkpoints::Column::CatchupMaxCursor,
                                     Expr::cust(
-                                        "LEAST(indexer_checkpoints.catchup_max_block, EXCLUDED.catchup_max_block)",
+                                        "LEAST(indexer_checkpoints.catchup_max_cursor, EXCLUDED.catchup_max_cursor)",
                                     ),
                                 )
                                 .value(

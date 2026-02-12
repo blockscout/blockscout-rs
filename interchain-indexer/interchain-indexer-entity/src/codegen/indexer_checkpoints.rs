@@ -9,8 +9,8 @@ pub struct Model {
     pub bridge_id: i32,
     #[sea_orm(primary_key, auto_increment = false)]
     pub chain_id: i64,
-    pub catchup_min_block: i64,
-    pub catchup_max_block: i64,
+    pub catchup_min_cursor: i64,
+    pub catchup_max_cursor: i64,
     pub finality_cursor: i64,
     pub realtime_cursor: i64,
     pub created_at: Option<DateTime>,
