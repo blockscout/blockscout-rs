@@ -1,0 +1,25 @@
+[
+    {
+        "bridge_id": 2,
+        "name": "Avalanche ICTT",
+        "type": "avalanche_native",
+        "indexer_type": "icm_ictt",
+        "enabled": true,
+        "api_url": null,
+        "ui_url": null,
+        "contracts": [
+            {
+                "chain_id": 43114,
+                "address": "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf",
+                "version": 1,
+                "started_at_block": 42526120
+            },
+            {
+                "chain_id": 8021,
+                "address": "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf",
+                "version": 1,
+                "started_at_block": 4
+            }
+        ]
+    }
+]

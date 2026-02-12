@@ -1,0 +1,795 @@
+swagger: "2.0"
+info:
+  title: Interchain Indexer service
+  version: 0.1.1
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
+tags:
+  - name: InterchainService
+  - name: InterchainStatisticsService
+  - name: StatusService
+  - name: Health
+host: interchain-indexer.services.blockscout.com
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/interchain/messages:
+    get:
+      operationId: InterchainService_GetMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          description: multisearch ability
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            input pagination token - used by default
+            (packed version of the raw pagination parameters)
+          in: query
+          required: false
+          type: string
+        - name: timestamp
+          description: |-
+            Raw pagination parameters
+            (used when api.use_pagination_token=false)
+
+            Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: message_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+        - name: bridge_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: direction
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/messages/{message_id}:
+    get:
+      operationId: InterchainService_GetMessageDetails
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1InterchainMessage'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/messages:byAddress/{address}:
+    get:
+      operationId: InterchainService_GetMessagesByAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            input pagination token - used by default
+            (packed version of the raw pagination parameters)
+          in: query
+          required: false
+          type: string
+        - name: timestamp
+          description: |-
+            Raw pagination parameters
+            (used when api.use_pagination_token=false)
+
+            Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: message_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+        - name: bridge_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: direction
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/messages:byTx/{tx_hash}:
+    get:
+      operationId: InterchainService_GetMessagesByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            input pagination token - used by default
+            (packed version of the raw pagination parameters)
+          in: query
+          required: false
+          type: string
+        - name: timestamp
+          description: |-
+            Raw pagination parameters
+            (used when api.use_pagination_token=false)
+
+            Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: message_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+        - name: bridge_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: direction
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/transfers:
+    get:
+      operationId: InterchainService_GetTransfers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          description: multisearch ability
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            input pagination token - used by default
+            (packed version of the raw pagination parameters)
+          in: query
+          required: false
+          type: string
+        - name: timestamp
+          description: |-
+            Raw pagination parameters
+            (used when api.use_pagination_token=false)
+
+            Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: message_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+        - name: bridge_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: index
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: direction
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/transfers:byAddress/{address}:
+    get:
+      operationId: InterchainService_GetTransfersByAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            input pagination token - used by default
+            (packed version of the raw pagination parameters)
+          in: query
+          required: false
+          type: string
+        - name: timestamp
+          description: |-
+            Raw pagination parameters
+            (used when api.use_pagination_token=false)
+
+            Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: message_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+        - name: bridge_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: index
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: direction
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/interchain/transfers:byTx/{tx_hash}:
+    get:
+      operationId: InterchainService_GetTransfersByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            input pagination token - used by default
+            (packed version of the raw pagination parameters)
+          in: query
+          required: false
+          type: string
+        - name: timestamp
+          description: |-
+            Raw pagination parameters
+            (used when api.use_pagination_token=false)
+
+            Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: message_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+        - name: bridge_id
+          description: Raw pagination field
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: index
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: direction
+          description: Raw pagination field
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainService
+  /api/v1/stats/common:
+    get:
+      operationId: InterchainStatisticsService_GetCommonStatistics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetCommonStatisticsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: timestamp
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - InterchainStatisticsService
+  /api/v1/stats/daily:
+    get:
+      operationId: InterchainStatisticsService_GetDailyStatistics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetDailyStatisticsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: timestamp
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - InterchainStatisticsService
+  /api/v1/status/indexers:
+    get:
+      operationId: StatusService_GetFullStatus
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1FullStatus'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatusService
+  /api/v1/status/indexers/{indexer_name}:
+    get:
+      operationId: StatusService_GetStatusByIndexerName
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1IndexerStatus'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: indexer_name
+          in: path
+          required: true
+          type: string
+      tags:
+        - StatusService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  protobufNullValue:
+    type: string
+    enum:
+      - NULL_VALUE
+    default: NULL_VALUE
+    description: |-
+      `NullValue` is a singleton enumeration to represent the null value for the
+      `Value` type union.
+
+      The JSON representation for `NullValue` is JSON `null`.
+
+       - NULL_VALUE: Null value.
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1AddressInfo:
+    type: object
+    properties:
+      hash:
+        type: string
+      ens_domain_name:
+        type: string
+  v1BridgeInfo:
+    type: object
+    properties:
+      name:
+        type: string
+      ui_url:
+        type: string
+      docs_url:
+        type: string
+  v1ChainInfo:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      logo:
+        type: string
+      explorer_url:
+        type: string
+      custom_tx_route:
+        type: string
+      custom_address_route:
+        type: string
+      custom_token_route:
+        type: string
+  v1FullStatus:
+    type: object
+    properties:
+      indexers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1IndexerStatus'
+  v1GetCommonStatisticsResponse:
+    type: object
+    properties:
+      timestamp:
+        type: string
+      total_messages:
+        type: string
+        format: uint64
+      total_transfers:
+        type: string
+        format: uint64
+  v1GetDailyStatisticsResponse:
+    type: object
+    properties:
+      date:
+        type: string
+      daily_messages:
+        type: string
+        format: uint64
+      daily_transfers:
+        type: string
+        format: uint64
+  v1GetMessagesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1InterchainMessage'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+      prev_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1GetTransfersResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1InterchainTransfer'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+      prev_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1IndexerStatus:
+    type: object
+    properties:
+      name:
+        type: string
+      description:
+        type: string
+      state:
+        type: string
+      init_timestamp:
+        type: string
+      extra_info:
+        type: object
+  v1InterchainMessage:
+    type: object
+    properties:
+      bridge:
+        $ref: '#/definitions/v1BridgeInfo'
+      message_id:
+        type: string
+      status:
+        $ref: '#/definitions/v1MessageStatus'
+      source_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      send_timestamp:
+        type: string
+      sender:
+        $ref: '#/definitions/v1AddressInfo'
+      source_transaction_hash:
+        type: string
+      destination_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      receive_timestamp:
+        type: string
+      recipient:
+        $ref: '#/definitions/v1AddressInfo'
+      destination_transaction_hash:
+        type: string
+      payload:
+        type: string
+      extra:
+        type: object
+        additionalProperties:
+          type: string
+        title: additional parsed data
+      transfers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1InterchainTransfer'
+  v1InterchainTransfer:
+    type: object
+    properties:
+      bridge:
+        $ref: '#/definitions/v1BridgeInfo'
+      message_id:
+        type: string
+      status:
+        $ref: '#/definitions/v1MessageStatus'
+      source_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      destination_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      source_token:
+        $ref: '#/definitions/v1TokenInfo'
+      source_amount:
+        type: string
+      source_transaction_hash:
+        type: string
+      sender:
+        $ref: '#/definitions/v1AddressInfo'
+      send_timestamp:
+        type: string
+      destination_token:
+        $ref: '#/definitions/v1TokenInfo'
+      destination_amount:
+        type: string
+      destination_transaction_hash:
+        type: string
+      recipient:
+        $ref: '#/definitions/v1AddressInfo'
+      receive_timestamp:
+        type: string
+  v1MessageStatus:
+    type: string
+    enum:
+      - MESSAGE_STATUS_INITIATED
+      - MESSAGE_STATUS_COMPLETED
+      - MESSAGE_STATUS_FAILED
+    default: MESSAGE_STATUS_INITIATED
+  v1Pagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+      timestamp:
+        type: string
+        format: uint64
+      message_id:
+        type: string
+      bridge_id:
+        type: integer
+        format: int64
+      index:
+        type: string
+        format: uint64
+      direction:
+        type: string
+  v1TokenInfo:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      name:
+        type: string
+      symbol:
+        type: string
+      decimals:
+        type: string
+      icon_url:
+        type: string
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: x-api-key
+    in: header
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs
