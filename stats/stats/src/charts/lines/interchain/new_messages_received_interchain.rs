@@ -20,7 +20,6 @@ use crate::{
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
-    utils::produce_filter_and_values,
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{DbBackend, Statement};
@@ -32,29 +31,28 @@ impl StatementFromRange for NewMessagesReceivedInterchainStatement {
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTime<Utc>>>,
     ) -> Statement {
-        let (chain_condition, mut values): (String, Vec<sea_orm::Value>) =
-            match cx.interchain_primary_id {
-                Some(primary_id) => (
-                    " AND dst_chain_id = $1".into(),
-                    vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
-                ),
-                None => (String::new(), vec![]),
-            };
-        let filter_arg_start = values.len() + 1;
-        let (range_filter, range_values) =
-            produce_filter_and_values(range, "init_timestamp::timestamp", filter_arg_start);
-        values.extend(range_values);
-        let sql = format!(
+        let (chain_condition, values) = match cx.interchain_primary_id {
+            Some(primary_id) => (
+                format!(" AND dst_chain_id = $1"),
+                vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
+            ),
+            None => (String::new(), vec![]),
+        };
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
             r#"
                 SELECT
                     init_timestamp::date AS date,
                     COUNT(*)::TEXT AS value
                 FROM crosschain_messages
-                WHERE dst_tx_hash IS NOT NULL{chain_condition}{range_filter}
+                WHERE dst_tx_hash IS NOT NULL {chain_condition} {filter}
                 GROUP BY init_timestamp::date
-            "#
-        );
-        Statement::from_sql_and_values(DbBackend::Postgres, &sql, values)
+            "#,
+            values,
+            "init_timestamp::timestamp",
+            range,
+            chain_condition = chain_condition,
+        )
     }
 }
 
