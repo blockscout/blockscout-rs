@@ -11,6 +11,7 @@ pub mod update_group;
 pub mod update_groups;
 pub mod update_groups_interchain;
 pub mod update_groups_multichain;
+#[macro_use]
 pub mod utils;
 
 #[cfg(any(feature = "test-utils", test))]

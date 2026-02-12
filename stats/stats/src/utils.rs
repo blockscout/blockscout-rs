@@ -79,23 +79,68 @@ pub(crate) fn produce_multichain_filter_and_values(
 
 // had to make macro because otherwise can't use `statement_with_filter_placeholder`
 // in `format!` :(
-/// Add filter statement, if `range` provided.
+/// Construct statement with filter, if `range` provided.
 ///
 /// `statement_with_filter_placeholder` must have `filter` named parameter
-/// `filter_by` is a column/property(?) in SQL used to generate string for `filter`
+/// `filter_by` is a column/property(?) in SQL used to generate string for `filter`.
+///
+/// `$value` or `$values_vec` will be passed as regular values to the statement. Range values
+/// are placed in the back, so do not worry about them when referring to them in the statement.
 ///
 /// all subsequent arguments (after `range` will be passed to `format!` macro to the
-/// resulting statement). of course do not pass user-supplied data there.
+/// resulting statement). Avoid passing user-supplied data there, as it may lead to SQL injection.
+///
+/// ### Examples
+/// ```rust
+/// sql_with_range_filter_opt!(
+///     DbBackend::Postgres,
+///     "SELECT * FROM users WHERE hair_color = $1 AND name LIKE {name_pattern} AND {filter},
+///     ["red"],
+///     "age",
+///     Some(18..=30),
+///     name_pattern = "John%",
+/// );
+/// ```
 macro_rules! sql_with_range_filter_opt {
     (
         $db_backend: expr,
         $statement_with_filter_placeholder: literal,
         [$($value: expr),* $(,)?],
-        $filter_by:expr,
-        $range:expr, $($args:tt)*
+        $($rest_args:tt)*
+    ) => {
+        sql_with_range_filter_opt!(
+            $db_backend,
+            $statement_with_filter_placeholder,
+            ::std::vec![ $($value),* ],
+            $($rest_args)*
+        )
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        $values: expr,
+        $filter_by: expr,
+        $range: expr
     ) => {
         {
-            let mut values = ::std::vec![ $($value),* ];
+            sql_with_range_filter_opt!($db_backend,
+                $statement_with_filter_placeholder,
+                $values,
+                $filter_by,
+                $range,
+            )
+        }
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        $values_vec: expr,
+        $filter_by: expr,
+        $range: expr,
+        $($args:tt)*
+    ) => {
+        {
+            let mut values: ::std::vec::Vec<_> = $values_vec;
             let filter_arg_number_start = values.len()+1;
             let (filter_str, filter_values) = $crate::utils::produce_filter_and_values(
                 $range, $filter_by, filter_arg_number_start
@@ -109,44 +154,74 @@ macro_rules! sql_with_range_filter_opt {
             ::sea_orm::Statement::from_sql_and_values($db_backend, &sql, values)
         }
     };
-    (
-        $db_backend: expr,
-        $statement_with_filter_placeholder: literal,
-        [$($value: expr),* $(,)?],
-        $filter_by:expr,
-        $range:expr
-    ) => {
-        {
-            sql_with_range_filter_opt!($db_backend,
-                $statement_with_filter_placeholder,
-                [$($value),*],
-                $filter_by,
-                $range,
-            )
-        }
-    };
 }
 
 pub(crate) use sql_with_range_filter_opt;
 
 /// Add multichain filter statement, if `multichain_filter` provided and not empty.
 ///
-/// `statement_with_filter_placeholder` must have `multichain_filter` named parameter
+/// `statement_with_filter_placeholder` must have `multichain_filter` named parameter.
 /// `filter_by` is a column/property(?) in SQL used to generate string for `multichain_filter`
-/// (typically "chain_id")
+/// (typically "chain_id").
 ///
-/// all subsequent arguments (after `multichain_filter` will be passed to `format!` macro to the
-/// resulting statement). of course do not pass user-supplied data there.
+/// `$value` or `$values_vec` will be passed as regular values to the statement. Filter values
+/// are placed in the back, so do not worry about them when referring to them in the statement.
+///
+/// All subsequent arguments (after `multichain_filter`) will be passed to `format!` macro to the
+/// resulting statement. Avoid passing user-supplied data there, as it may lead to SQL injection.
+///
+/// ### Examples
+/// ```rust
+/// sql_with_multichain_filter_opt!(
+///     DbBackend::Postgres,
+///     r#"SELECT date, SUM(value) as value FROM txns
+///        WHERE status = $1 {multichain_filter}
+///        GROUP BY date"#,
+///     ["confirmed"],
+///     "chain_id",
+///     Some(vec![1u64, 137, 42161]),
+/// );
+/// ```
 macro_rules! sql_with_multichain_filter_opt {
     (
         $db_backend: expr,
         $statement_with_filter_placeholder: literal,
         [$($value: expr),* $(,)?],
-        $filter_by:expr,
-        $multichain_filter:expr, $($args:tt)*
+        $($rest_args:tt)*
+    ) => {
+        sql_with_multichain_filter_opt!(
+            $db_backend,
+            $statement_with_filter_placeholder,
+            ::std::vec![ $($value),* ],
+            $($rest_args)*
+        )
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        $values: expr,
+        $filter_by: expr,
+        $multichain_filter: expr
     ) => {
         {
-            let mut values = ::std::vec![ $($value),* ];
+            sql_with_multichain_filter_opt!($db_backend,
+                $statement_with_filter_placeholder,
+                $values,
+                $filter_by,
+                $multichain_filter,
+            )
+        }
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        $values_vec: expr,
+        $filter_by: expr,
+        $multichain_filter: expr,
+        $($args:tt)*
+    ) => {
+        {
+            let mut values: ::std::vec::Vec<_> = $values_vec;
             let filter_arg_number_start = values.len()+1;
             let (filter_str, filter_values) = $crate::utils::produce_multichain_filter_and_values(
                 $multichain_filter.as_ref(), $filter_by, filter_arg_number_start
@@ -160,48 +235,85 @@ macro_rules! sql_with_multichain_filter_opt {
             ::sea_orm::Statement::from_sql_and_values($db_backend, &sql, values)
         }
     };
-    (
-        $db_backend: expr,
-        $statement_with_filter_placeholder: literal,
-        [$($value: expr),* $(,)?],
-        $filter_by:expr,
-        $multichain_filter:expr
-    ) => {
-        {
-            sql_with_multichain_filter_opt!($db_backend,
-                $statement_with_filter_placeholder,
-                [$($value),*],
-                $filter_by,
-                $multichain_filter,
-            )
-        }
-    };
 }
 
 pub(crate) use sql_with_multichain_filter_opt;
 
 /// Add both range and multichain filter statements (if provided).
 ///
-/// `statement_with_filter_placeholder` must have both `filter` and `multichain_filter` named parameters
+/// `statement_with_filter_placeholder` must have both `filter` and `multichain_filter` named parameters.
 /// `filter_by` is a column/property(?) in SQL used to generate string for the range filter
-/// (typically a timestamp column)
+/// (typically a timestamp column).
 /// `multichain_filter_by` is a column/property(?) in SQL used to generate string for the multichain filter
-/// (typically "chain_id")
+/// (typically "chain_id").
 ///
-/// all subsequent arguments (after `multichain_filter` will be passed to `format!` macro to the
-/// resulting statement). of course do not pass user-supplied data there.
+/// `$value` or `$values_vec` will be passed as regular values to the statement. Filter values
+/// are placed in the back, so do not worry about them when referring to them in the statement.
+///
+/// All subsequent arguments (after `multichain_filter`) will be passed to `format!` macro to the
+/// resulting statement. Avoid passing user-supplied data there, as it may lead to SQL injection.
+///
+/// ### Examples
+/// ```rust
+/// sql_with_range_and_multichain_filters!(
+///     DbBackend::Postgres,
+///     r#"SELECT date, COUNT(*) as value FROM messages
+///        WHERE status = $1 AND name LIKE {name_pattern} {filter} {multichain_filter}
+///        GROUP BY date"#,
+///     ["delivered"],
+///     "blocks.timestamp",
+///     Some(start_time..end_time),
+///     "chain_id",
+///     Some(vec![1u64, 137]),
+///     name_pattern = "prefix%",
+/// );
+/// ```
 macro_rules! sql_with_range_and_multichain_filters {
     (
         $db_backend: expr,
         $statement_with_filter_placeholder: literal,
         [$($value: expr),* $(,)?],
-        $filter_by:expr,
-        $range:expr,
-        $multichain_filter_by:expr,
-        $multichain_filter:expr, $($args:tt)*
+        $($rest_args:tt)*
+    ) => {
+        sql_with_range_and_multichain_filters!(
+            $db_backend,
+            $statement_with_filter_placeholder,
+            ::std::vec![ $($value),* ],
+            $($rest_args)*
+        )
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        $values: expr,
+        $filter_by: expr,
+        $range: expr,
+        $multichain_filter_by: expr,
+        $multichain_filter: expr
     ) => {
         {
-            let mut values = ::std::vec![ $($value),* ];
+            sql_with_range_and_multichain_filters!($db_backend,
+                $statement_with_filter_placeholder,
+                $values,
+                $filter_by,
+                $range,
+                $multichain_filter_by,
+                $multichain_filter,
+            )
+        }
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        $values_vec: expr,
+        $filter_by: expr,
+        $range: expr,
+        $multichain_filter_by: expr,
+        $multichain_filter: expr,
+        $($args:tt)*
+    ) => {
+        {
+            let mut values: ::std::vec::Vec<_> = $values_vec;
             let filter_arg_number_start = values.len()+1;
             let (range_filter_str, range_filter_values) = $crate::utils::produce_filter_and_values(
                 $range, $filter_by, filter_arg_number_start
@@ -219,26 +331,6 @@ macro_rules! sql_with_range_and_multichain_filters {
                 $($args)*
             );
             ::sea_orm::Statement::from_sql_and_values($db_backend, &sql, values)
-        }
-    };
-    (
-        $db_backend: expr,
-        $statement_with_filter_placeholder: literal,
-        [$($value: expr),* $(,)?],
-        $filter_by:expr,
-        $range:expr,
-        $multichain_filter_by:expr,
-        $multichain_filter:expr
-    ) => {
-        {
-            sql_with_range_and_multichain_filters!($db_backend,
-                $statement_with_filter_placeholder,
-                [$($value),*],
-                $filter_by,
-                $range,
-                $multichain_filter_by,
-                $multichain_filter,
-            )
         }
     };
 }
