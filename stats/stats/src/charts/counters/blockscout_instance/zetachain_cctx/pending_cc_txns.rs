@@ -106,7 +106,7 @@ mod tests {
 
         let mut parameters = UpdateParameters {
             stats_db: &db,
-            mode: crate::Mode::Blockscout,
+            mode: crate::Mode::Zetachain,
             multichain_filter: None,
             interchain_primary_id: None,
             indexer_db: &blockscout,
