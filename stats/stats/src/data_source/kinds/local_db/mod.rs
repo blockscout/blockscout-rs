@@ -190,7 +190,7 @@ where
             Mode::MultichainAggregator => get_min_block_multichain(cx.indexer_db)
                 .await
                 .map_err(ChartError::IndexerDB)?,
-                Mode::Blockscout | Mode::Zetachain => get_min_block_blockscout(cx.indexer_db)
+            Mode::Blockscout | Mode::Zetachain => get_min_block_blockscout(cx.indexer_db)
                 .await
                 .map_err(ChartError::IndexerDB)?,
         };

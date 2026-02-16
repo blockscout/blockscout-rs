@@ -9,8 +9,8 @@ use crate::{
     runtime_setup::RuntimeSetup,
     settings::{
         Mode, Settings, apply_interchain_mode_settings, apply_multichain_mode_settings,
-        handle_disable_internal_transactions, handle_enable_all_arbitrum,
-        handle_enable_all_eip_7702, handle_enable_all_op_stack, apply_zetachain_cctx_mode_settings,
+        apply_zetachain_cctx_mode_settings, handle_disable_internal_transactions,
+        handle_enable_all_arbitrum, handle_enable_all_eip_7702, handle_enable_all_op_stack,
     },
     update_service::{UpdateService, UpdateServiceConfig},
 };
@@ -59,7 +59,7 @@ pub async fn stats(
         Mode::MultichainAggregator => apply_multichain_mode_settings(&mut settings),
         Mode::Interchain => apply_interchain_mode_settings(&mut settings),
         Mode::Zetachain => apply_zetachain_cctx_mode_settings(&mut settings, &mut charts_config),
-        Mode::Blockscout => {},
+        Mode::Blockscout => {}
     }
 
     let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
