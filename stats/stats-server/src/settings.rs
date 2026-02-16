@@ -81,10 +81,14 @@ pub struct Settings {
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
     /// Filter by chain ids for multichain mode.
+    /// TODO: recalculate statistics data when multichain_filter has been changed
+    ///       most likely it's need to implement in conjunction with 3D charts
     #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
     pub multichain_filter: Option<Vec<u64>>,
     /// Set the primary chain_id for Interchain mode
     /// If the primary chain set, send/receive counters and charts will be built around it
+    /// TODO: recalculate statistics data when interchain_primary_id has been changed
+    ///       most likely it's need to implement in conjunction with 3D charts
     pub interchain_primary_id: Option<u64>,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
