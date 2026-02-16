@@ -51,7 +51,7 @@ pub struct Settings {
     ///
     /// The service can be run in one of the following modes:
     /// - `Blockscout`: run the service for a single blockscout instance (default)
-    /// - `Aggregator`: run the service for a multichain_aggregator
+    /// - `MultichainAggregator`: run the service for a multichain_aggregator
     /// - `Zetachain`: run the service for a zetachain instance
     /// - `Interchain`: run the service for a interchain indexer (aka Universal Bridge Indexer)
     ///

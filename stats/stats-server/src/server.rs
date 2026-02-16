@@ -56,7 +56,7 @@ pub async fn stats(
     );
     handle_enable_zetachain_cctx(&mut settings, &mut charts_config);
     match settings.mode {
-        Mode::Aggregator => apply_multichain_mode_settings(&mut settings),
+        Mode::MultichainAggregator => apply_multichain_mode_settings(&mut settings),
         Mode::Interchain => apply_interchain_mode_settings(&mut settings),
         _ => {}
     }

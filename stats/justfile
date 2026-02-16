@@ -66,7 +66,7 @@ restart-generate-entities:
     just stop-postgres
 
 run-multichain:
-    STATS__MODE=aggregator \
+    STATS__MODE=multichain_aggregator \
     STATS__MULTICHAIN_FILTER=10,130 \
     STATS__CHARTS_CONFIG=config/multichain/charts.json \
     STATS__LAYOUT_CONFIG=config/multichain/layout.json \

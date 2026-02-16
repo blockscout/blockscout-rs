@@ -73,7 +73,7 @@ where
         test_name,
         expected,
         IndexerMigrations::latest(),
-        Mode::Aggregator,
+        Mode::MultichainAggregator,
         multichain_filter,
         None,
     )
@@ -408,7 +408,7 @@ pub async fn simple_test_counter_multichain<C>(
         expected,
         update_time,
         IndexerMigrations::latest(),
-        Mode::Aggregator,
+        Mode::MultichainAggregator,
         multichain_filter,
         None,
     )
@@ -591,7 +591,7 @@ pub async fn prepare_multichain_chart_test<C: DataSource + ChartProperties>(
         .map(|t| t.and_utc())
         .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
     let (init_time, db, indexer, _) =
-        prepare_chart_test_inner::<C>(test_name, init_time, Mode::Aggregator).await;
+        prepare_chart_test_inner::<C>(test_name, init_time, Mode::MultichainAggregator).await;
     (init_time, db, indexer)
 }
 
@@ -603,7 +603,7 @@ async fn prepare_chart_test_inner<C: DataSource + ChartProperties>(
     let _ = tracing_subscriber::fmt::try_init();
     let (db, indexer) = match mode {
         Mode::Interchain => init_db_all_interchain(test_name).await,
-        Mode::Aggregator => init_db_all_multichain(test_name).await,
+        Mode::MultichainAggregator => init_db_all_multichain(test_name).await,
         Mode::Blockscout | Mode::Zetachain => init_db_all(test_name).await,
     };
     let zetachain_cctx = match mode {
@@ -629,7 +629,7 @@ async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
         prepare_chart_test_inner::<C>(test_name, init_time, mode).await;
     match mode {
         Mode::Interchain => fill_mock_interchain_data(&indexer, max_date).await,
-        Mode::Aggregator => fill_mock_multichain_data(&indexer, max_date).await,
+        Mode::MultichainAggregator => fill_mock_multichain_data(&indexer, max_date).await,
         Mode::Blockscout | Mode::Zetachain => fill_mock_blockscout_data(&indexer, max_date).await,
     }
     if let Some(zetachain_cctx) = &zetachain_cctx {

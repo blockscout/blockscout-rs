@@ -55,7 +55,7 @@ pub async fn get_min_date(
 ) -> Result<NaiveDateTime, DbErr> {
     match mode {
         Mode::Interchain => get_min_date_interchain(indexer_db).await,
-        Mode::Aggregator => get_min_date_multichain(indexer_db).await,
+        Mode::MultichainAggregator => get_min_date_multichain(indexer_db).await,
         _ => get_min_date_blockscout(indexer_db).await,
     }
 }

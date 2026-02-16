@@ -187,7 +187,7 @@ where
             Mode::Interchain => get_min_block_interchain(cx.indexer_db)
                 .await
                 .map_err(ChartError::IndexerDB)?,
-            Mode::Aggregator => get_min_block_multichain(cx.indexer_db)
+            Mode::MultichainAggregator => get_min_block_multichain(cx.indexer_db)
                 .await
                 .map_err(ChartError::IndexerDB)?,
             _ => get_min_block_blockscout(cx.indexer_db)

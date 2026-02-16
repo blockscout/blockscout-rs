@@ -20,7 +20,7 @@ pub struct UpdateParameters<'a> {
     pub stats_db: &'a DatabaseConnection,
     /// Service mode (from settings); determines indexer type and query branching.
     pub mode: Mode,
-    /// Chain IDs to filter by in multichain (Aggregator) mode
+    /// Chain IDs to filter by in MultichainAggregator mode
     pub multichain_filter: Option<Vec<u64>>,
     /// If the primary chain set, send/receive counters and charts will be built around it
     pub interchain_primary_id: Option<u64>,
