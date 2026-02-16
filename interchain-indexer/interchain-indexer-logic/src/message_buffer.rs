@@ -31,7 +31,7 @@
 //! > after execution succeeds **and** any ICTT transfer is complete (see
 //! > `indexer/avalanche/consolidation.rs`).
 //!
-//! # Cursor semantics (reorg-safe)
+//! # Cursor semantics
 //! Each entry tracks, per chain, the min/max block numbers that contributed to
 //! it. During maintenance we update `indexer_checkpoints` so the indexer can
 //! advance safely:
@@ -66,6 +66,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use alloy::primitives::{BlockNumber, ChainId};
 use anyhow::{Context, Result};
 use chrono::{NaiveDateTime, TimeDelta, Utc};
 use dashmap::{
@@ -77,12 +78,13 @@ use interchain_indexer_entity::{
 };
 use itertools::Itertools;
 use sea_orm::{
-    ActiveValue, DbErr, EntityTrait, Iterable, QueryFilter, TransactionTrait,
+    ActiveValue, DatabaseTransaction, DbErr, EntityTrait, Iterable, QueryFilter, TransactionTrait,
     sea_query::{Expr, OnConflict},
 };
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, task::JoinHandle};
 
+use crate::cursor::{BridgeId, Cursor, CursorBlocksBuilder, Cursors};
 use crate::{InterchainDatabase, metrics};
 
 /// Key for identifying a cross-chain message within a specific bridge.
@@ -93,11 +95,11 @@ use crate::{InterchainDatabase, metrics};
 #[derive(Clone, Copy, Hash, Eq, PartialEq, Debug, Serialize, Deserialize, Default)]
 pub struct Key {
     pub message_id: i64,
-    pub bridge_id: i32,
+    pub bridge_id: BridgeId,
 }
 
 impl Key {
-    pub fn new(message_id: i64, bridge_id: i32) -> Self {
+    pub fn new(message_id: i64, bridge_id: BridgeId) -> Self {
         Self {
             message_id,
             bridge_id,
@@ -139,15 +141,15 @@ pub struct Entry<T> {
     ///
     /// These cursors are used to compute conservative `indexer_checkpoints`
     /// updates during maintenance.
-    cursors: HashMap<i64, (i64, i64)>,
+    touched_blocks: HashMap<ChainId, Vec<BlockNumber>>,
     /// Monotonic version used to detect concurrent modifications.
-    version: u64,
+    version: u16,
     /// Last `version` that was successfully flushed into `crosschain_messages`.
     ///
     /// This is used to avoid repeatedly upserting "consolidated but not final"
     /// entries when they haven't changed.
     #[serde(default)]
-    last_flushed_version: u64,
+    last_flushed_version: u16,
     /// Hot-tier insertion timestamp used for TTL-based eviction.
     ///
     /// This field is intentionally not persisted in cold storage payloads;
@@ -164,7 +166,7 @@ impl<T: Consolidate> Entry<T> {
     fn new(inner: T) -> Self {
         Self {
             inner,
-            cursors: HashMap::new(),
+            touched_blocks: HashMap::new(),
             version: 0,
             last_flushed_version: 0,
             hot_since: now_naive_utc(),
@@ -173,24 +175,26 @@ impl<T: Consolidate> Entry<T> {
 
     /// Record that data from a specific block was added to this message.
     /// Updates both min and max to properly track bidirectional cursor movement.
-    fn record_block(&mut self, chain_id: i64, block_number: i64) -> &Self {
-        self.cursors
+    fn record_block(&mut self, chain_id: ChainId, block_number: BlockNumber) -> &Self {
+        self.touched_blocks
             .entry(chain_id)
-            .and_modify(|(min, max)| {
-                *min = (*min).min(block_number);
-                *max = (*max).max(block_number);
+            .and_modify(|set| {
+                set.push(block_number);
             })
-            .or_insert((block_number, block_number));
+            .or_insert(vec![block_number]);
         self
     }
 
     /// Increment version to indicate modification.
-    fn touch(&mut self) -> &Self {
-        self.version = self.version.wrapping_add(1);
-        self
+    fn touch(&mut self) -> Result<&Self> {
+        self.version = self
+            .version
+            .checked_add(1)
+            .context("version overflow in message buffer entry")?;
+        Ok(self)
     }
 
-    fn flushed_at(mut self, version: u64) -> Self {
+    fn flushed_at(mut self, version: u16) -> Self {
         self.last_flushed_version = version;
         self
     }
@@ -199,25 +203,6 @@ impl<T: Consolidate> Entry<T> {
     fn is_dirty(&self) -> bool {
         self.version > self.last_flushed_version
     }
-}
-
-fn with_cursors<T>(
-    key: Key,
-    entry: &Entry<T>,
-    cursors: HashMap<(i32, i64), (i64, i64)>,
-) -> HashMap<(i32, i64), (i64, i64)> {
-    entry
-        .cursors
-        .iter()
-        .fold(cursors, |mut acc, (&chain_id, &(min, max))| {
-            acc.entry((key.bridge_id, chain_id))
-                .and_modify(|(existing_min, existing_max)| {
-                    *existing_min = (*existing_min).min(min);
-                    *existing_max = (*existing_max).max(max);
-                })
-                .or_insert((min, max));
-            acc
-        })
 }
 
 /// Configuration for the tiered message buffer.
@@ -285,7 +270,7 @@ impl<T: Consolidate> MessageBuffer<T> {
     async fn restore(&self, key: Key) -> Result<Option<Entry<T>>> {
         let row = self
             .db
-            .get_pending_message(key.message_id, key.bridge_id)
+            .get_pending_message(key.message_id, key.bridge_id as i32)
             .await?;
 
         let bridge = key.bridge_id.to_string();
@@ -368,8 +353,8 @@ impl<T: Consolidate> MessageBuffer<T> {
     pub async fn alter(
         &self,
         key: Key,
-        chain_id: i64,
-        block_number: i64,
+        chain_id: ChainId,
+        block_number: BlockNumber,
         mutator: impl FnOnce(&mut T) -> Result<()>,
     ) -> Result<()>
     where
@@ -378,7 +363,7 @@ impl<T: Consolidate> MessageBuffer<T> {
         let mut entry = self.get_mut_or_default(key).await?;
         mutator(&mut entry.inner)?;
         entry.record_block(chain_id, block_number);
-        entry.touch();
+        entry.touch()?;
         Ok(())
     }
 
@@ -417,14 +402,13 @@ impl<T: Consolidate> MessageBuffer<T> {
         let mut consolidated_entries = Vec::new();
         let mut stale_entries = Vec::new();
         // Store (key, version) pairs for CAS removal after DB commit
-        let mut keys_to_remove_from_hot: Vec<(Key, u64)> = Vec::new();
+        let mut keys_to_remove_from_hot: Vec<(Key, u16)> = Vec::new();
         let mut keys_to_remove_from_pending = Vec::new();
-        let mut hot_cursors = HashMap::<(_, _), (_, _)>::new();
-        let mut cold_cursors = HashMap::<(_, _), (_, _)>::new();
+        let mut cursor_builder = CursorBlocksBuilder::new();
 
         // Track which keys were flushed so we can update `last_flushed_version` after commit.
         // (We only need this for non-final entries that remain in hot tier.)
-        let mut keys_to_flush: Vec<(Key, u64)> = Vec::new();
+        let mut keys_to_flush: Vec<(Key, u16)> = Vec::new();
 
         // Diagnostics: why entries are not being removed
         let mut not_consolidatable_count = 0usize;
@@ -474,39 +458,23 @@ impl<T: Consolidate> MessageBuffer<T> {
                     stale_entries.push((key, entry.clone()));
                 }
                 keys_to_remove_from_hot.push((key, entry_version));
-                cold_cursors = with_cursors(key, entry.value(), cold_cursors);
+                cursor_builder.merge_cold(key.bridge_id, &entry.touched_blocks);
             } else {
-                hot_cursors = with_cursors(key, entry.value(), hot_cursors);
+                cursor_builder.merge_hot(key.bridge_id, &entry.touched_blocks);
             }
         }
-
-        let cursors: HashMap<(i32, i64), (i64, i64)> = cold_cursors
-            .into_iter()
-            .map(|(key, (cold_min, cold_max))| {
-                hot_cursors
-                    .get(&key)
-                    .map(|&(hot_min, hot_max)| {
-                        // Bound cursor updates by what's still pending in hot tier
-                        // NOTE: this may cause some blocks to be processed twice,
-                        // so handlers and inserts should be idempotent.
-                        let min = cold_min.max(hot_min.saturating_add(1));
-                        let max = cold_max.min(hot_max.saturating_sub(1));
-                        (key, (min, max))
-                    })
-                    .unwrap_or((key, (cold_min, cold_max)))
-            })
-            .filter(|(_, (min, max))| max >= min)
-            .collect();
 
         let ready_count = consolidated_entries.len();
         let stale_count = stale_entries.len();
 
-        self.db
+        let cursors = self
             .db
-            .transaction::<_, (), DbErr>(|tx| {
-                let cursors = cursors.clone();
+            .db
+            .transaction::<_, Cursors, DbErr>(|tx| {
+                let cursor_builder = cursor_builder.clone();
                 Box::pin(async move {
-                    let batch_size = (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
+                    let batch_size =
+                        (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
                     for batch in stale_entries.chunks(batch_size) {
                         let models: Vec<pending_messages::ActiveModel> = batch
                             .iter()
@@ -518,7 +486,7 @@ impl<T: Consolidate> MessageBuffer<T> {
                                 })?;
                                 Ok(pending_messages::ActiveModel {
                                     message_id: ActiveValue::Set(key.message_id),
-                                    bridge_id: ActiveValue::Set(key.bridge_id),
+                                    bridge_id: ActiveValue::Set(key.bridge_id as i32),
                                     payload: ActiveValue::Set(payload),
                                     created_at: ActiveValue::Set(Some(entry.hot_since)),
                                 })
@@ -539,7 +507,8 @@ impl<T: Consolidate> MessageBuffer<T> {
                     }
 
                     // 2. Flush ready entries to final storage
-                    let batch_size = (u16::MAX - 100) as usize / crosschain_messages::Column::iter().count();
+                    let batch_size =
+                        (u16::MAX - 100) as usize / crosschain_messages::Column::iter().count();
                     let (messages, transfers): (Vec<_>, Vec<_>) = consolidated_entries
                         .into_iter()
                         .map(|c| (c.message, c.transfers))
@@ -568,7 +537,8 @@ impl<T: Consolidate> MessageBuffer<T> {
                             .await?;
                     }
 
-                    let batch_size = (u16::MAX - 100) as usize / crosschain_transfers::Column::iter().count();
+                    let batch_size =
+                        (u16::MAX - 100) as usize / crosschain_transfers::Column::iter().count();
                     for batch in transfers.chunks(batch_size) {
                         crosschain_transfers::Entity::insert_many(batch.to_vec())
                             .on_conflict(
@@ -577,27 +547,26 @@ impl<T: Consolidate> MessageBuffer<T> {
                                     crosschain_transfers::Column::BridgeId,
                                     crosschain_transfers::Column::Index,
                                 ])
-                                .update_columns(
-                                    crosschain_transfers::Column::iter()
-                                        .filter(|c| !matches!(
-                                            c,
-                                            crosschain_transfers::Column::Id
-                                                | crosschain_transfers::Column::MessageId
-                                                | crosschain_transfers::Column::BridgeId
-                                                | crosschain_transfers::Column::Index
-                                                | crosschain_transfers::Column::CreatedAt
-                                        ))
-                                )
+                                .update_columns(crosschain_transfers::Column::iter().filter(|c| {
+                                    !matches!(
+                                        c,
+                                        crosschain_transfers::Column::Id
+                                            | crosschain_transfers::Column::MessageId
+                                            | crosschain_transfers::Column::BridgeId
+                                            | crosschain_transfers::Column::Index
+                                            | crosschain_transfers::Column::CreatedAt
+                                    )
+                                }))
                                 .to_owned(),
                             )
                             .exec(tx)
                             .await?;
                     }
 
-                    let batch_size = (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
+                    let batch_size =
+                        (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
                     for batch in keys_to_remove_from_pending.chunks(batch_size) {
-                        let batch = batch.iter()
-                            .map(|k| (k.message_id, k.bridge_id));
+                        let batch = batch.iter().map(|k| (k.message_id, k.bridge_id));
 
                         pending_messages::Entity::delete_many()
                             .filter(
@@ -611,52 +580,10 @@ impl<T: Consolidate> MessageBuffer<T> {
                             .await?;
                     }
 
-                    let models: Vec<_> = cursors
-                        .iter()
-                        .map(|((bridge_id, chain_id), (min, max))| {
-                            indexer_checkpoints::ActiveModel {
-                                bridge_id: ActiveValue::Set(*bridge_id),
-                                chain_id: ActiveValue::Set(*chain_id),
-                                catchup_min_cursor: ActiveValue::Set(0),
-                                catchup_max_cursor: ActiveValue::Set(*min),
-                                finality_cursor: ActiveValue::Set(0),
-                                realtime_cursor: ActiveValue::Set(*max),
-                                created_at: ActiveValue::NotSet,
-                                updated_at: ActiveValue::NotSet,
-                            }
-                        })
-                        .collect();
-
-                        indexer_checkpoints::Entity::insert_many(models)
-                            .on_empty_do_nothing()
-                            .on_conflict(
-                                OnConflict::columns([
-                                    indexer_checkpoints::Column::BridgeId,
-                                    indexer_checkpoints::Column::ChainId,
-                                ])
-                                .value(
-                                    indexer_checkpoints::Column::CatchupMaxCursor,
-                                    Expr::cust(
-                                        "LEAST(indexer_checkpoints.catchup_max_cursor, EXCLUDED.catchup_max_cursor)",
-                                    ),
-                                )
-                                .value(
-                                    indexer_checkpoints::Column::RealtimeCursor,
-                                    Expr::cust(
-                                        "GREATEST(indexer_checkpoints.realtime_cursor, EXCLUDED.realtime_cursor)",
-                                    ),
-                                )
-                                .value(
-                                    indexer_checkpoints::Column::UpdatedAt,
-                                    Expr::current_timestamp(),
-                                )
-                                .to_owned(),
-                            )
-                            .exec(tx)
-                            .await?;
-
-
-                    Ok(())
+                    let existing = fetch_existing_cursors(&cursor_builder, tx).await?;
+                    let cursors = cursor_builder.calculate_updates(&existing);
+                    update_indexer_cursors(tx, &cursors).await?;
+                    Ok(cursors)
                 })
             })
             .await
@@ -733,18 +660,16 @@ impl<T: Consolidate> MessageBuffer<T> {
                     .set(*count as f64);
             });
 
-        cursors
-            .iter()
-            .for_each(|((bridge_id, chain_id), (catchup_min, realtime_max))| {
-                let bridge_label = bridge_id.to_string();
-                let chain_label = chain_id.to_string();
-                metrics::BUFFER_CATCHUP_CURSOR
-                    .with_label_values(&[&bridge_label, &chain_label])
-                    .set(*catchup_min as f64);
-                metrics::BUFFER_REALTIME_CURSOR
-                    .with_label_values(&[&bridge_label, &chain_label])
-                    .set(*realtime_max as f64);
-            });
+        cursors.iter().for_each(|((bridge_id, chain_id), cursor)| {
+            let bridge_label = bridge_id.to_string();
+            let chain_label = chain_id.to_string();
+            metrics::BUFFER_CATCHUP_CURSOR
+                .with_label_values(&[&bridge_label, &chain_label])
+                .set(cursor.backward as f64);
+            metrics::BUFFER_REALTIME_CURSOR
+                .with_label_values(&[&bridge_label, &chain_label])
+                .set(cursor.forward as f64);
+        });
 
         Ok(())
     }
@@ -790,6 +715,92 @@ impl<T: Consolidate> MessageBuffer<T> {
     }
 }
 
+async fn fetch_existing_cursors(
+    cursor_builder: &CursorBlocksBuilder,
+    tx: &DatabaseTransaction,
+) -> Result<Cursors, DbErr> {
+    let tuples = cursor_builder
+        .inner
+        .keys()
+        .map(|(bridge_id, chain_id)| (*bridge_id as i32, *chain_id as i64))
+        .collect_vec();
+
+    let cursors = indexer_checkpoints::Entity::find()
+        .filter(
+            Expr::tuple([
+                Expr::col(indexer_checkpoints::Column::BridgeId).into(),
+                Expr::col(indexer_checkpoints::Column::ChainId).into(),
+            ])
+            .in_tuples(tuples),
+        )
+        .all(tx)
+        .await?
+        .into_iter()
+        .map(|model| {
+            (
+                (model.bridge_id as BridgeId, model.chain_id as ChainId),
+                Cursor {
+                    backward: model.catchup_max_cursor.max(0) as BlockNumber,
+                    forward: model.realtime_cursor.max(0) as BlockNumber,
+                },
+            )
+        })
+        .collect();
+
+    Ok(cursors)
+}
+
+async fn update_indexer_cursors(
+    tx: &DatabaseTransaction,
+    cursors: &HashMap<(BridgeId, ChainId), Cursor>,
+) -> Result<(), DbErr> {
+    let models: Vec<_> = cursors
+        .iter()
+        .map(
+            |((bridge_id, chain_id), cursor)| indexer_checkpoints::ActiveModel {
+                bridge_id: ActiveValue::Set(*bridge_id as i32),
+                chain_id: ActiveValue::Set(*chain_id as i64),
+                catchup_min_cursor: ActiveValue::Set(0),
+                catchup_max_cursor: ActiveValue::Set(cursor.backward as i64),
+                finality_cursor: ActiveValue::Set(0),
+                realtime_cursor: ActiveValue::Set(cursor.forward as i64),
+                created_at: ActiveValue::NotSet,
+                updated_at: ActiveValue::NotSet,
+            },
+        )
+        .collect();
+
+    indexer_checkpoints::Entity::insert_many(models)
+        .on_empty_do_nothing()
+        .on_conflict(
+            OnConflict::columns([
+                indexer_checkpoints::Column::BridgeId,
+                indexer_checkpoints::Column::ChainId,
+            ])
+            .value(
+                indexer_checkpoints::Column::CatchupMaxCursor,
+                Expr::cust(
+                    "LEAST(indexer_checkpoints.catchup_max_cursor, EXCLUDED.catchup_max_cursor)",
+                ),
+            )
+            .value(
+                indexer_checkpoints::Column::RealtimeCursor,
+                Expr::cust(
+                    "GREATEST(indexer_checkpoints.realtime_cursor, EXCLUDED.realtime_cursor)",
+                ),
+            )
+            .value(
+                indexer_checkpoints::Column::UpdatedAt,
+                Expr::current_timestamp(),
+            )
+            .to_owned(),
+        )
+        .exec(tx)
+        .await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::DateTime;
@@ -818,7 +829,7 @@ mod tests {
                 is_final: self.is_final,
                 message: crosschain_messages::ActiveModel {
                     id: ActiveValue::Set(key.message_id),
-                    bridge_id: ActiveValue::Set(key.bridge_id),
+                    bridge_id: ActiveValue::Set(key.bridge_id as i32),
                     status: ActiveValue::Set(MessageStatus::Initiated),
                     ..Default::default()
                 },
@@ -853,7 +864,7 @@ mod tests {
         assert!(!entry.is_dirty());
 
         // After a change, version increments and needs_flush becomes true.
-        entry.touch();
+        entry.touch().unwrap();
         assert!(entry.is_dirty());
 
         // Simulate successful flush.
@@ -861,7 +872,7 @@ mod tests {
         assert!(!entry.is_dirty());
 
         // Another modification should require a flush again.
-        entry.touch();
+        entry.touch().unwrap();
         assert!(entry.is_dirty());
     }
 
@@ -886,7 +897,11 @@ mod tests {
         let entry = buffer.inner.get(&key).expect("entry must exist");
         assert_eq!(entry.inner.counter, 1);
         assert_eq!(entry.version, 1, "touch() must bump version");
-        assert_eq!(entry.cursors.get(&100), Some(&(123, 123)));
+        let blocks = entry
+            .touched_blocks
+            .get(&100)
+            .expect("touched blocks missing");
+        assert_eq!(blocks.as_slice(), &[123]);
     }
 
     #[tokio::test]
@@ -906,7 +921,11 @@ mod tests {
 
         let entry = buffer.inner.get(&key).expect("entry must exist");
         assert_eq!(entry.inner.counter, 10);
-        assert_eq!(entry.cursors.get(&200), Some(&(7, 7)));
+        let blocks = entry
+            .touched_blocks
+            .get(&200)
+            .expect("touched blocks missing");
+        assert_eq!(blocks.as_slice(), &[7]);
         assert_eq!(entry.version, 1);
     }
 
@@ -921,7 +940,7 @@ mod tests {
             let buffer = buffer.clone();
             async move {
                 buffer
-                    .alter(key, 300, i as i64, |m| {
+                    .alter(key, 300, i, |m| {
                         m.counter += 1;
                         Ok(())
                     })
@@ -938,7 +957,13 @@ mod tests {
         assert_eq!(entry.inner.counter, 32);
         assert_eq!(entry.version, 32);
         // Concurrent updates should serialize per key; cursor range should cover all blocks.
-        assert_eq!(entry.cursors.get(&300), Some(&(0, 31)));
+        let blocks = entry
+            .touched_blocks
+            .get(&300)
+            .expect("touched blocks missing");
+        let mut sorted = blocks.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, (0..=31).collect::<Vec<_>>());
     }
 
     #[tokio::test]
@@ -963,7 +988,7 @@ mod tests {
         // Ensure FK prerequisites exist.
         // pending_messages.bridge_id references bridges table.
         db.upsert_bridges(vec![bridges::ActiveModel {
-            id: ActiveValue::Set(key.bridge_id),
+            id: ActiveValue::Set(key.bridge_id as i32),
             name: ActiveValue::Set("test_bridge".to_string()),
             enabled: ActiveValue::Set(true),
             ..Default::default()
@@ -974,7 +999,7 @@ mod tests {
         // Seed cold tier.
         db.upsert_pending_message(pending_messages::ActiveModel {
             message_id: ActiveValue::Set(key.message_id),
-            bridge_id: ActiveValue::Set(key.bridge_id),
+            bridge_id: ActiveValue::Set(key.bridge_id as i32),
             payload: ActiveValue::Set(serde_json::to_value(&cold_entry).unwrap()),
             created_at: ActiveValue::Set(Some(Utc::now().naive_utc())),
         })
@@ -1000,7 +1025,11 @@ mod tests {
             .expect("entry must be promoted to hot tier");
         assert_eq!(entry.inner.counter, 6);
         assert_eq!(entry.version, 1);
-        assert_eq!(entry.cursors.get(&777), Some(&(42, 42)));
+        let blocks = entry
+            .touched_blocks
+            .get(&777)
+            .expect("touched blocks missing");
+        assert_eq!(blocks.as_slice(), &[42]);
     }
 
     #[tokio::test]
@@ -1019,7 +1048,7 @@ mod tests {
 
         // Ensure FK prerequisites exist.
         db.upsert_bridges(vec![bridges::ActiveModel {
-            id: ActiveValue::Set(key.bridge_id),
+            id: ActiveValue::Set(key.bridge_id as i32),
             name: ActiveValue::Set("test_bridge".to_string()),
             enabled: ActiveValue::Set(true),
             ..Default::default()
@@ -1037,7 +1066,7 @@ mod tests {
 
         db.upsert_pending_message(pending_messages::ActiveModel {
             message_id: ActiveValue::Set(key.message_id),
-            bridge_id: ActiveValue::Set(key.bridge_id),
+            bridge_id: ActiveValue::Set(key.bridge_id as i32),
             payload: ActiveValue::Set(serde_json::to_value(&cold_entry).unwrap()),
             created_at: ActiveValue::NotSet,
         })

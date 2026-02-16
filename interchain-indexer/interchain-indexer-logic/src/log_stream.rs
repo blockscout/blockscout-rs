@@ -11,8 +11,8 @@ pub struct LogStreamBuilder {
     provider: DynProvider<Ethereum>,
     filter: Filter,
     genesis_block: u64,
-    forward_cursor: u64,
-    backward_cursor: u64,
+    realtime_cursor: u64,
+    catchup_cursor: u64,
     poll_interval: Duration,
     batch_size: u64,
     bridge_id: Option<i32>,
@@ -26,8 +26,8 @@ impl LogStreamBuilder {
             provider,
             filter: Filter::default(),
             genesis_block: 0,
-            forward_cursor: 0,
-            backward_cursor: 0,
+            realtime_cursor: 0,
+            catchup_cursor: 0,
             stream: stream::empty::<Vec<Log>>().boxed(),
             poll_interval: Duration::from_secs(10),
             batch_size: 100,
@@ -66,13 +66,13 @@ impl LogStreamBuilder {
         self
     }
 
-    pub fn forward_cursor(mut self, forward_cursor: u64) -> Self {
-        self.forward_cursor = forward_cursor;
+    pub fn realtime_cursor(mut self, realtime_cursor: u64) -> Self {
+        self.realtime_cursor = realtime_cursor;
         self
     }
 
-    pub fn backward_cursor(mut self, backward_cursor: u64) -> Self {
-        self.backward_cursor = backward_cursor;
+    pub fn catchup_cursor(mut self, catchup_cursor: u64) -> Self {
+        self.catchup_cursor = catchup_cursor;
         self
     }
 
@@ -83,7 +83,7 @@ impl LogStreamBuilder {
         let batch_size = self.batch_size;
         let batch_span = batch_size.saturating_sub(1);
         let genesis_block = self.genesis_block;
-        let backward_cursor = self.backward_cursor;
+        let backward_cursor = self.catchup_cursor;
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
 
@@ -127,7 +127,11 @@ impl LogStreamBuilder {
             }
 
             tracing::info!(bridge_id, chain_id, genesis_block, "catchup complete, reached genesis block");
-        };
+        }.map(|mut logs| {
+            logs.sort_by_key(|log| (log.block_number, log.log_index));
+            logs.reverse();
+            logs
+        });
 
         self.stream = stream::select(self.stream, stream).boxed();
         self
@@ -139,12 +143,12 @@ impl LogStreamBuilder {
         let poll_interval = self.poll_interval;
         let batch_size = self.batch_size;
         let batch_span = batch_size.saturating_sub(1);
-        let forward_cursor = self.forward_cursor;
+        let realtime_cursor = self.realtime_cursor;
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
 
         let stream = async_stream::stream! {
-            let mut from_block = forward_cursor;
+            let mut from_block = realtime_cursor;
             loop {
                 let to_block = provider
                     .get_block_number()
@@ -192,19 +196,25 @@ impl LogStreamBuilder {
 
                 tokio::time::sleep(poll_interval).await;
             }
-        };
+        }.map(|mut logs| {
+            logs.sort_by_key(|log| (log.block_number, log.log_index));
+            logs
+        });
 
         self.stream = stream::select(self.stream, stream).boxed();
         self
     }
 
-    pub fn into_stream(self) -> stream::BoxStream<'static, Vec<Log>> {
-        let ordered_stream = self.stream.map(|mut logs| {
-            logs.sort_by_key(|log| (log.block_number, log.log_index));
-            logs
-        });
-
-        Box::pin(ordered_stream)
+    pub fn into_stream(self) -> Result<stream::BoxStream<'static, Vec<Log>>> {
+        if self.realtime_cursor < self.catchup_cursor {
+            Err(anyhow::anyhow!(
+                "realtime_cursor ({}) must be >= catchup_cursor ({})",
+                self.realtime_cursor,
+                self.catchup_cursor
+            ))
+        } else {
+            Ok(Box::pin(self.stream))
+        }
     }
 }
 

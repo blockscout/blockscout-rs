@@ -243,19 +243,19 @@ impl AvalancheIndexer {
             // Restore checkpoint if it exists for this bridge and chain.
             let checkpoint = db.get_checkpoint(bridge_id as u64, chain_id as u64).await?;
 
-            let (forward_cursor, backward_cursor) = if let Some(cp) = checkpoint {
-                let forward_cursor = cp.realtime_cursor.max(0) as u64;
-                let backward_cursor = cp.catchup_max_cursor.max(0) as u64;
+            let (realtime_cursor, catchup_cursor) = if let Some(cp) = checkpoint {
+                let realtime_cursor = cp.realtime_cursor.max(0) as u64;
+                let catchup_cursor = cp.catchup_max_cursor.max(0) as u64;
 
                 tracing::info!(
                     bridge_id,
                     chain_id,
-                    forward_cursor,
-                    backward_cursor,
+                    realtime_cursor,
+                    catchup_cursor,
                     "restored Avalanche indexer checkpoint"
                 );
 
-                (forward_cursor, backward_cursor)
+                (realtime_cursor, catchup_cursor)
             } else {
                 // No checkpoint yet: start from configuration.
                 let latest_block = provider.get_block_number().await.with_context(|| {
@@ -277,11 +277,11 @@ impl AvalancheIndexer {
                 .poll_interval(poll_interval)
                 .batch_size(batch_size)
                 .genesis_block(start_block)
-                .forward_cursor(forward_cursor)
-                .backward_cursor(backward_cursor)
+                .realtime_cursor(realtime_cursor)
+                .catchup_cursor(catchup_cursor)
                 .catchup()
                 .realtime()
-                .into_stream()
+                .into_stream()?
                 .map(move |logs| (chain_id, stream_provider.clone(), logs))
                 .boxed();
 
@@ -435,6 +435,7 @@ impl CrosschainIndexer for AvalancheIndexer {
 fn parse_message_key(message_id: &B256, bridge_id: i32) -> Result<(Key, [u8; 8])> {
     let message_id_bytes: [u8; 8] = message_id.as_slice()[..8].try_into()?;
     let id = i64::from_be_bytes(message_id_bytes);
+    let bridge_id = i16::try_from(bridge_id).context("bridge_id out of range")?;
     Ok((Key::new(id, bridge_id), message_id_bytes))
 }
 
@@ -820,8 +821,11 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         return Ok(());
     }
 
+    let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
+    let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
+
     ctx.buffer
-        .alter(key, ctx.chain_id, ctx.block_number, |msg| {
+        .alter(key, chain_id, block_number, |msg| {
         let transfers: Vec<TokenTransfer> = ctx.receipt_logs
             .iter()
             .filter_map(|log| parse_sender_ictt_log(&event.messageID, &msg.transfer, log).transpose())
@@ -973,8 +977,11 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
         .transpose()
         .unwrap_or(None);
 
+    let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
+    let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
+
     ctx.buffer
-        .alter(key, ctx.chain_id, ctx.block_number, |msg| {
+        .alter(key, chain_id, block_number, |msg| {
             msg.receive = Some(AnnotatedEvent {
                 event,
                 transaction_hash,
@@ -1045,8 +1052,11 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
 
     let destination_chain_id = ctx.chain_id;
 
+    let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
+    let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
+
     ctx.buffer
-        .alter(key, ctx.chain_id, ctx.block_number, |msg| {
+        .alter(key, chain_id, block_number, |msg| {
             // Receiver-side effects are parsed on MessageExecuted only.
             // Enforce a strict invariant to avoid ambiguous attribution.
             msg.execution = Some(MessageExecutionOutcome::Succeeded(AnnotatedEvent {
@@ -1120,8 +1130,11 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
     let destination_chain_id = ctx.chain_id;
 
+    let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
+    let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
+
     ctx.buffer
-        .alter(key, ctx.chain_id, ctx.block_number, |msg| {
+        .alter(key, chain_id, block_number, |msg| {
             // Only update if not already succeeded (don't overwrite success with failure)
             if !matches!(msg.execution, Some(MessageExecutionOutcome::Succeeded(_))) {
                 msg.execution = Some(MessageExecutionOutcome::Failed(

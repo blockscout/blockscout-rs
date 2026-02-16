@@ -80,7 +80,7 @@ impl Consolidate for Message {
 
         let message = crosschain_messages::ActiveModel {
             id: ActiveValue::Set(key.message_id),
-            bridge_id: ActiveValue::Set(key.bridge_id),
+            bridge_id: ActiveValue::Set(key.bridge_id as i32),
             status: ActiveValue::Set(status),
             src_chain_id: ActiveValue::Set(send.source_chain_id),
             dst_chain_id: ActiveValue::Set(destination_chain_id.into()),
@@ -151,7 +151,7 @@ fn build_transfer(
                 .unwrap_or(recipient);
             let model = crosschain_transfers::ActiveModel {
                 message_id: ActiveValue::Set(key.message_id),
-                bridge_id: ActiveValue::Set(key.bridge_id),
+                bridge_id: ActiveValue::Set(key.bridge_id as i32),
                 // Always 0 for ICTT transfers
                 index: ActiveValue::Set(0),
                 token_src_chain_id: ActiveValue::Set(src_chain_id),
@@ -196,7 +196,7 @@ fn build_transfer(
 
             let model = crosschain_transfers::ActiveModel {
                 message_id: ActiveValue::Set(key.message_id),
-                bridge_id: ActiveValue::Set(key.bridge_id),
+                bridge_id: ActiveValue::Set(key.bridge_id as i32),
                 index: ActiveValue::Set(0),
                 // Set required chain ID fields
                 token_src_chain_id: ActiveValue::Set(src_chain_id),

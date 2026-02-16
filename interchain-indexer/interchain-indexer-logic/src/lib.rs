@@ -1,5 +1,6 @@
 pub mod avalanche_data_api;
 mod chain_info;
+mod cursor;
 mod database;
 mod error;
 mod message_buffer;
