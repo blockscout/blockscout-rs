@@ -94,8 +94,10 @@ impl BlockchainIdResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::avalanche_data_api::{AvalancheDataApiClientSettings, AvalancheDataApiNetwork};
-    use crate::test_utils;
+    use crate::{
+        avalanche_data_api::{AvalancheDataApiClientSettings, AvalancheDataApiNetwork},
+        test_utils,
+    };
 
     /// End-to-end test for the resolver.
     ///

@@ -84,8 +84,11 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, task::JoinHandle};
 
-use crate::cursor::{BridgeId, Cursor, CursorBlocksBuilder, Cursors};
-use crate::{InterchainDatabase, metrics};
+use crate::{
+    InterchainDatabase,
+    cursor::{BridgeId, Cursor, CursorBlocksBuilder, Cursors},
+    metrics,
+};
 
 /// Key for identifying a cross-chain message within a specific bridge.
 ///
