@@ -33,7 +33,7 @@ impl StatementFromRange for NewMessagesReceivedInterchainStatement {
     ) -> Statement {
         let (chain_condition, values) = match cx.interchain_primary_id {
             Some(primary_id) => (
-                format!(" AND dst_chain_id = $1"),
+                " AND dst_chain_id = $1".to_string(),
                 vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
             ),
             None => (String::new(), vec![]),
