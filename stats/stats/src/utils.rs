@@ -26,7 +26,8 @@ pub fn interval_24h(until: DateTime<Utc>) -> RangeInclusive<DateTime<Utc>> {
 /// ### Results
 /// Vec should be appended to the args.
 /// String should be inserted in places for filter.
-pub(crate) fn produce_filter_and_values(
+#[doc(hidden)]
+pub fn produce_filter_and_values(
     range: Option<Range<DateTime<Utc>>>,
     filter_by: &str,
     filter_arg_number_start: usize,
@@ -55,7 +56,8 @@ pub(crate) fn produce_filter_and_values(
 /// ### Results
 /// Vec should be appended to the args.
 /// String should be inserted in places for filter.
-pub(crate) fn produce_multichain_filter_and_values(
+#[doc(hidden)]
+pub fn produce_multichain_filter_and_values(
     multichain_filter: Option<&Vec<u64>>,
     filter_by: &str,
     filter_arg_number_start: usize,
@@ -91,16 +93,22 @@ pub(crate) fn produce_multichain_filter_and_values(
 /// resulting statement). Avoid passing user-supplied data there, as it may lead to SQL injection.
 ///
 /// ### Examples
-/// ```ignore
+/// ```rust
+/// # use chrono::{DateTime, Utc};
+/// # use sea_orm::{DbBackend, Value};
+/// # use stats::sql_with_range_filter_opt;
+/// # let start = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+/// # let end = DateTime::<Utc>::from_timestamp(1, 0).unwrap();
 /// sql_with_range_filter_opt!(
 ///     DbBackend::Postgres,
 ///     r#"SELECT * FROM users WHERE hair_color = $1 AND name LIKE {name_pattern} AND {filter}"#,
-///     ["red"],
+///     ["red".into()],
 ///     "age",
-///     Some(18..=30),
+///     Some(start..end),
 ///     name_pattern = "John%",
 /// );
 /// ```
+#[macro_export]
 macro_rules! sql_with_range_filter_opt {
     (
         $db_backend: expr,
@@ -171,17 +179,20 @@ pub(crate) use sql_with_range_filter_opt;
 /// resulting statement. Avoid passing user-supplied data there, as it may lead to SQL injection.
 ///
 /// ### Examples
-/// ```ignore
+/// ```rust
+/// # use sea_orm::{DbBackend, Value};
+/// # use stats::sql_with_multichain_filter_opt;
 /// sql_with_multichain_filter_opt!(
 ///     DbBackend::Postgres,
 ///     r#"SELECT date, SUM(value) as value FROM txns
 ///        WHERE status = $1 {multichain_filter}
 ///        GROUP BY date"#,
-///     ["confirmed"],
+///     ["confirmed".into()],
 ///     "chain_id",
 ///     Some(vec![1u64, 137, 42161]),
 /// );
 /// ```
+#[macro_export]
 macro_rules! sql_with_multichain_filter_opt {
     (
         $db_backend: expr,
@@ -254,13 +265,18 @@ pub(crate) use sql_with_multichain_filter_opt;
 /// resulting statement. Avoid passing user-supplied data there, as it may lead to SQL injection.
 ///
 /// ### Examples
-/// ```ignore
+/// ```rust
+/// # use chrono::{DateTime, Utc};
+/// # use sea_orm::{DbBackend, Value};
+/// # use stats::sql_with_range_and_multichain_filters;
+/// # let start_time = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+/// # let end_time = DateTime::<Utc>::from_timestamp(1, 0).unwrap();
 /// sql_with_range_and_multichain_filters!(
 ///     DbBackend::Postgres,
 ///     r#"SELECT date, COUNT(*) as value FROM messages
 ///        WHERE status = $1 AND name LIKE {name_pattern} {filter} {multichain_filter}
 ///        GROUP BY date"#,
-///     ["delivered"],
+///     ["delivered".into()],
 ///     "blocks.timestamp",
 ///     Some(start_time..end_time),
 ///     "chain_id",
@@ -268,6 +284,7 @@ pub(crate) use sql_with_multichain_filter_opt;
 ///     name_pattern = "prefix%",
 /// );
 /// ```
+#[macro_export]
 macro_rules! sql_with_range_and_multichain_filters {
     (
         $db_backend: expr,
