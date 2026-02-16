@@ -4,79 +4,70 @@ use alloy::{
     rpc::types::{Filter, Log},
 };
 use anyhow::Result;
+use bon::Builder;
 use futures::{StreamExt, stream};
 use std::time::Duration;
 
-pub struct LogStreamBuilder {
+use crate::log_stream::log_stream_builder::{
+    IsSet, IsUnset, SetEnableCatchup, SetEnableRealtime, State,
+};
+
+#[derive(Builder)]
+#[builder(finish_fn(name = build_config))]
+pub struct LogStream {
+    #[builder(start_fn)]
     provider: DynProvider<Ethereum>,
+    #[builder(default = Filter::default())]
     filter: Filter,
+    #[builder(default = 0)]
     genesis_block: u64,
+    #[builder(default = 0)]
     realtime_cursor: u64,
+    #[builder(default = 0)]
     catchup_cursor: u64,
+    #[builder(default = Duration::from_secs(10))]
     poll_interval: Duration,
+    #[builder(default = 100)]
     batch_size: u64,
     bridge_id: Option<i32>,
     chain_id: Option<i64>,
-    stream: stream::BoxStream<'static, Vec<Log>>,
+    #[builder(setters(vis = ""))]
+    enable_catchup: bool,
+    #[builder(setters(vis = ""))]
+    enable_realtime: bool,
 }
 
-impl LogStreamBuilder {
-    pub fn new(provider: DynProvider<Ethereum>) -> Self {
-        Self {
-            provider,
-            filter: Filter::default(),
-            genesis_block: 0,
-            realtime_cursor: 0,
-            catchup_cursor: 0,
-            stream: stream::empty::<Vec<Log>>().boxed(),
-            poll_interval: Duration::from_secs(10),
-            batch_size: 100,
-            bridge_id: None,
-            chain_id: None,
-        }
+impl<S: State> LogStreamBuilder<S> {
+    /// Enable realtime mode, which will continuously poll for new logs starting
+    /// from `realtime_cursor` until the stream is dropped.
+    pub fn realtime(self) -> LogStreamBuilder<SetEnableRealtime<S>>
+    where
+        S::EnableRealtime: IsUnset,
+    {
+        self.enable_realtime(true)
     }
 
-    /// Attach optional context that will be included in all logs emitted by this stream.
-    ///
-    /// This is intentionally lightweight and avoids requiring callers to always route logs through
-    /// spans. When used, every info/debug/error line from the stream becomes attributable.
-    pub fn with_context(mut self, bridge_id: i32, chain_id: i64) -> Self {
-        self.bridge_id = Some(bridge_id);
-        self.chain_id = Some(chain_id);
-        self
+    /// Enable catchup mode, which will fetch historical logs starting from
+    /// `catchup_cursor` down to `genesis_block`.
+    pub fn catchup(self) -> LogStreamBuilder<SetEnableCatchup<S>>
+    where
+        S::EnableCatchup: IsUnset,
+    {
+        self.enable_catchup(true)
     }
 
-    pub fn filter(mut self, filter: Filter) -> Self {
-        self.filter = filter;
-        self
+    /// Finish the builder and immediately produce the merged log stream.
+    pub fn build(self) -> anyhow::Result<stream::BoxStream<'static, Vec<Log>>>
+    where
+        S::EnableCatchup: IsSet,
+        S::EnableRealtime: IsSet,
+    {
+        self.build_config().into_stream()
     }
+}
 
-    pub fn genesis_block(mut self, genesis_block: u64) -> Self {
-        self.genesis_block = genesis_block;
-        self
-    }
-
-    pub fn poll_interval(mut self, poll_interval: Duration) -> Self {
-        self.poll_interval = poll_interval;
-        self
-    }
-
-    pub fn batch_size(mut self, batch_size: u64) -> Self {
-        self.batch_size = batch_size;
-        self
-    }
-
-    pub fn realtime_cursor(mut self, realtime_cursor: u64) -> Self {
-        self.realtime_cursor = realtime_cursor;
-        self
-    }
-
-    pub fn catchup_cursor(mut self, catchup_cursor: u64) -> Self {
-        self.catchup_cursor = catchup_cursor;
-        self
-    }
-
-    pub fn catchup(mut self) -> Self {
+impl LogStream {
+    fn build_catchup_stream(&self) -> stream::BoxStream<'static, Vec<Log>> {
         let provider = self.provider.clone();
         let filter = self.filter.clone();
         let poll_interval = self.poll_interval;
@@ -87,7 +78,7 @@ impl LogStreamBuilder {
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
 
-        let stream = async_stream::stream! {
+        async_stream::stream! {
             let mut to_block = backward_cursor;
             while to_block >= genesis_block {
                 let from_block = to_block.saturating_sub(batch_span).max(genesis_block);
@@ -127,17 +118,16 @@ impl LogStreamBuilder {
             }
 
             tracing::info!(bridge_id, chain_id, genesis_block, "catchup complete, reached genesis block");
-        }.map(|mut logs| {
+        }
+        .map(|mut logs| {
             logs.sort_by_key(|log| (log.block_number, log.log_index));
             logs.reverse();
             logs
-        });
-
-        self.stream = stream::select(self.stream, stream).boxed();
-        self
+        })
+        .boxed()
     }
 
-    pub fn realtime(mut self) -> Self {
+    fn build_realtime_stream(&self) -> stream::BoxStream<'static, Vec<Log>> {
         let provider = self.provider.clone();
         let filter = self.filter.clone();
         let poll_interval = self.poll_interval;
@@ -147,7 +137,7 @@ impl LogStreamBuilder {
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
 
-        let stream = async_stream::stream! {
+        async_stream::stream! {
             let mut from_block = realtime_cursor;
             loop {
                 let to_block = provider
@@ -196,13 +186,12 @@ impl LogStreamBuilder {
 
                 tokio::time::sleep(poll_interval).await;
             }
-        }.map(|mut logs| {
+        }
+        .map(|mut logs| {
             logs.sort_by_key(|log| (log.block_number, log.log_index));
             logs
-        });
-
-        self.stream = stream::select(self.stream, stream).boxed();
-        self
+        })
+        .boxed()
     }
 
     pub fn into_stream(self) -> Result<stream::BoxStream<'static, Vec<Log>>> {
@@ -211,10 +200,20 @@ impl LogStreamBuilder {
                 "realtime_cursor ({}) must be >= catchup_cursor ({})",
                 self.realtime_cursor,
                 self.catchup_cursor
-            ))
-        } else {
-            Ok(Box::pin(self.stream))
+            ))?;
+        };
+
+        let mut combined = stream::empty().boxed();
+
+        if self.enable_catchup {
+            combined = stream::select(combined, self.build_catchup_stream()).boxed();
         }
+
+        if self.enable_realtime {
+            combined = stream::select(combined, self.build_realtime_stream()).boxed();
+        }
+
+        Ok(Box::pin(combined))
     }
 }
 

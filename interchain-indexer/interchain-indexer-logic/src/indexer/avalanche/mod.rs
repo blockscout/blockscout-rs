@@ -42,7 +42,7 @@ use tonic::async_trait;
 use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
     avalanche::settings::AvalancheIndexerSettings,
-    log_stream::LogStreamBuilder,
+    log_stream::LogStream,
     message_buffer::{Config, Key, MessageBuffer},
 };
 
@@ -271,17 +271,18 @@ impl AvalancheIndexer {
             tracing::info!(bridge_id, chain_id, "configured log stream");
 
             let stream_provider = provider.clone();
-            let stream = LogStreamBuilder::new(provider.clone())
-                .with_context(bridge_id, chain_id)
+            let stream = LogStream::builder(provider.clone())
                 .filter(filter)
                 .poll_interval(poll_interval)
                 .batch_size(batch_size)
                 .genesis_block(start_block)
                 .realtime_cursor(realtime_cursor)
                 .catchup_cursor(catchup_cursor)
+                .bridge_id(bridge_id)
+                .chain_id(chain_id)
                 .catchup()
                 .realtime()
-                .into_stream()?
+                .build()?
                 .map(move |logs| (chain_id, stream_provider.clone(), logs))
                 .boxed();
 
