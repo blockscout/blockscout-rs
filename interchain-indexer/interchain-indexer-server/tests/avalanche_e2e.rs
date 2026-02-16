@@ -136,14 +136,14 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
             BridgeContractConfig {
                 chain_id: chain_id_src as i64,
                 address: teleporter_address.into(),
-                started_at_block: block_number_src as i64,
+                started_at_block: block_number_src,
                 version: 1,
                 abi: None,
             },
             BridgeContractConfig {
                 chain_id: chain_id_dest as i64,
                 address: teleporter_address.into(),
-                started_at_block: block_number_dest as i64,
+                started_at_block: block_number_dest,
                 version: 1,
                 abi: None,
             },
@@ -408,7 +408,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
             BridgeContractConfig {
                 chain_id: chain_id_dest as i64,
                 address: teleporter_address.into(),
-                started_at_block: block_number_dest as i64,
+                started_at_block: block_number_dest,
                 version: 1,
                 abi: None,
             },
@@ -582,7 +582,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
             BridgeContractConfig {
                 chain_id: chain_id_src as i64,
                 address: teleporter_address.into(),
-                started_at_block: block_number_src as i64,
+                started_at_block: block_number_src,
                 version: 1,
                 abi: None,
             },
@@ -745,7 +745,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
             BridgeContractConfig {
                 chain_id: chain_id_src as i64,
                 address: teleporter_address.into(),
-                started_at_block: block_number_src as i64,
+                started_at_block: block_number_src,
                 version: 1,
                 abi: None,
             },

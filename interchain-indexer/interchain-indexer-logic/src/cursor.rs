@@ -54,14 +54,6 @@ pub(crate) struct BlockSets {
 }
 
 impl BlockSets {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    pub(crate) fn bootstrap_cursor(&self) -> Option<Cursor> {
-        Self::bootstrap_cursor_with_sets(&self.cold, &self.hot)
-    }
-
     pub(crate) fn extend_cursor(&self, cursor: Cursor) -> Cursor {
         let backward = extend_cursor_boundary(
             ScanDirection::Backward,
@@ -79,14 +71,15 @@ impl BlockSets {
         Cursor { backward, forward }
     }
 
-    pub(crate) fn bootstrap_cursor_with_sets(
-        cold: &BTreeSet<BlockNumber>,
-        hot: &BTreeSet<BlockNumber>,
-    ) -> Option<Cursor> {
+    pub(crate) fn bootstrap_cursor(&self) -> Option<Cursor> {
         // Filter out cold blocks that are also hot - these can never be included
         // in a scannable range as they contain blocking data
-        let scannable_blocks: Vec<BlockNumber> =
-            cold.iter().copied().filter(|b| !hot.contains(b)).collect();
+        let scannable_blocks: Vec<BlockNumber> = self
+            .cold
+            .iter()
+            .copied()
+            .filter(|b| !self.hot.contains(b))
+            .collect();
 
         if scannable_blocks.is_empty() {
             return None;
@@ -108,7 +101,7 @@ impl BlockSets {
 
             // Check if hot blocks exist in gap (prev + 1)..block
             // If yes, this gap splits the range - start a new range at current block
-            if hot.range((prev + 1)..block).next().is_some() {
+            if self.hot.range((prev + 1)..block).next().is_some() {
                 current_range_start = block;
             }
 
@@ -182,10 +175,7 @@ impl CursorBlocksBuilder {
         mut apply: impl FnMut(&mut BlockSets, &Vec<BlockNumber>),
     ) {
         for (&chain_id, blocks) in touched_blocks {
-            let sets = self
-                .inner
-                .entry((bridge_id, chain_id))
-                .or_insert_with(BlockSets::new);
+            let sets = self.inner.entry((bridge_id, chain_id)).or_default();
             apply(sets, blocks);
         }
     }
@@ -339,8 +329,14 @@ mod tests {
         };
 
         let updated = sets.extend_cursor(cursor);
-        assert_eq!(updated.backward, 8, "extends backward to block right after hot=7");
-        assert_eq!(updated.forward, 22, "extends forward to block right before hot=23");
+        assert_eq!(
+            updated.backward, 8,
+            "extends backward to block right after hot=7"
+        );
+        assert_eq!(
+            updated.forward, 22,
+            "extends forward to block right before hot=23"
+        );
     }
 
     #[rstest]

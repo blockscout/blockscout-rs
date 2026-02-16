@@ -136,13 +136,12 @@ fn build_avalanche_chain_configs(
             continue;
         };
         let contract_address = Address::from(address_bytes);
-        let start_block = contract.started_at_block.max(0) as u64;
 
         chain_configs.push(AvalancheChainConfig {
             chain_id: contract.chain_id,
+            start_block: contract.started_at_block,
             provider: provider.clone(),
             contract_address,
-            start_block,
         });
     }
 
