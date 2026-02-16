@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
-use backon::{ExponentialBuilder, Retryable};
-use reqwest::{StatusCode, Url, header};
-use thiserror::Error;
+use reqwest::{Url, header};
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 
 pub const DATA_API_BASE_URL: &str = "https://data-api.avax.network";
 
@@ -47,7 +47,7 @@ impl TryFrom<&str> for AvalancheDataApiNetwork {
 
 #[derive(Clone, Debug)]
 pub struct AvalancheDataApiClient {
-    client: reqwest::Client,
+    client: ClientWithMiddleware,
     network: AvalancheDataApiNetwork,
     api_key: Option<String>,
 }
@@ -62,52 +62,22 @@ pub struct GetBlockchainByIdResponse {
     pub evm_chain_id: Option<i64>,
 }
 
-#[derive(Debug, Error)]
-#[error("{inner}")]
-struct RetryError {
-    #[source]
-    inner: anyhow::Error,
-    is_retryable: bool,
-}
-
-impl RetryError {
-    fn retryable(inner: impl Into<anyhow::Error>) -> Self {
-        Self {
-            inner: inner.into(),
-            is_retryable: true,
-        }
-    }
-
-    fn permanent(inner: impl Into<anyhow::Error>) -> Self {
-        Self {
-            inner: inner.into(),
-            is_retryable: false,
-        }
-    }
-
-    fn into_inner(self) -> anyhow::Error {
-        self.inner
-    }
-}
-
 impl AvalancheDataApiClient {
     pub fn new(network: AvalancheDataApiNetwork, api_key: Option<String>) -> Self {
-        Self {
-            client: reqwest::Client::builder()
-                .connect_timeout(Duration::from_secs(5))
-                .timeout(Duration::from_secs(15))
-                .build()
-                .expect("Failed to build reqwest client"),
-            network,
-            api_key,
-        }
-    }
+        let base_client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(15))
+            .build()
+            .expect("failed to build reqwest client");
 
-    pub fn with_client(
-        client: reqwest::Client,
-        network: AvalancheDataApiNetwork,
-        api_key: Option<String>,
-    ) -> Self {
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(Duration::from_millis(200), Duration::from_secs(5))
+            .build_with_max_retries(5);
+
+        let client = ClientBuilder::new(base_client)
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
         Self {
             client,
             network,
@@ -130,62 +100,26 @@ impl AvalancheDataApiClient {
         blockchain_id: &[u8; 32],
     ) -> Result<GetBlockchainByIdResponse> {
         let url = self.blockchain_url(blockchain_id)?;
-        self.fetch_with_backoff(url).await
-    }
 
-    async fn fetch_with_backoff(&self, url: Url) -> Result<GetBlockchainByIdResponse> {
-        let fetch = || async {
-            let req = self
-                .client
-                .get(url.as_str())
-                .header(header::ACCEPT, "application/json");
+        let mut req = self
+            .client
+            .get(url.as_str())
+            .header(header::ACCEPT, "application/json");
 
-            let req = if let Some(key) = self.api_key.as_deref() {
-                req.header("x-glacier-api-key", key)
-            } else {
-                req
-            };
+        if let Some(key) = self.api_key.as_deref() {
+            req = req.header("x-glacier-api-key", key);
+        }
 
-            let resp = req.send().await.map_err(RetryError::retryable)?;
-
-            match resp.status() {
-                status if status.is_success() => resp
-                    .json::<GetBlockchainByIdResponse>()
-                    .await
-                    .map_err(RetryError::retryable),
-
-                StatusCode::TOO_MANY_REQUESTS => {
-                    Err(RetryError::retryable(anyhow!("rate limited")))
-                }
-
-                status if status.is_server_error() => {
-                    Err(RetryError::retryable(anyhow!("server error: {status}")))
-                }
-
-                status => {
-                    let body = resp.text().await.unwrap_or_default();
-                    Err(RetryError::permanent(anyhow!(
-                        "unexpected response: {} - {}",
-                        status,
-                        body
-                    )))
-                }
-            }
-        };
-
-        let backoff = ExponentialBuilder::default()
-            .with_min_delay(Duration::from_millis(200))
-            .with_max_delay(Duration::from_secs(5))
-            .with_max_times(5);
-
-        fetch
-            .retry(backoff)
-            .when(|e| e.is_retryable)
-            .notify(|err, duration| {
-                tracing::warn!(?url, ?err, ?duration, "retrying Avalanche Data API request");
-            })
+        let response = req
+            .send()
             .await
-            .map_err(RetryError::into_inner)
-            .context("Avalanche Data API request failed")
+            .context("Avalanche Data API request failed")?
+            .error_for_status()
+            .context("Avalanche Data API returned non-success status")?
+            .json::<GetBlockchainByIdResponse>()
+            .await
+            .context("failed to deserialize Avalanche Data API response")?;
+
+        Ok(response)
     }
 }
