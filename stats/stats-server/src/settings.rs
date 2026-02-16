@@ -286,14 +286,10 @@ pub fn handle_enable_all_eip_7702(
     }
 }
 
-pub fn handle_enable_zetachain_cctx(
+pub fn apply_zetachain_cctx_mode_settings(
     settings: &mut Settings,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
-    if settings.mode != Mode::Zetachain {
-        return;
-    }
-
     enable_charts(
         &[
             NewZetachainCrossChainTxns::key().name(),
