@@ -27,7 +27,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::{Context, Error, Result, anyhow};
-use futures::{StreamExt, TryStreamExt, stream};
+use futures::{StreamExt, TryStreamExt, stream, stream::SelectAll};
 use itertools::Itertools;
 use std::sync::atomic::Ordering;
 
@@ -232,7 +232,7 @@ impl AvalancheIndexer {
             "starting Avalanche indexer"
         );
 
-        let mut combined_stream = stream::empty::<(i64, DynProvider<Ethereum>, Vec<Log>)>().boxed();
+        let mut combined_stream = SelectAll::new();
 
         for chain in chains {
             let chain_id = chain.chain_id;
@@ -285,7 +285,7 @@ impl AvalancheIndexer {
                 .map(move |logs| (chain_id, stream_provider.clone(), logs))
                 .boxed();
 
-            combined_stream = stream::select(combined_stream, stream).boxed();
+            combined_stream.push(stream);
         }
 
         let batch_ctx = BatchProcessContext {
