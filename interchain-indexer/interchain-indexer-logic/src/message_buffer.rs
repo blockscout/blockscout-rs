@@ -135,7 +135,7 @@ pub trait Consolidate:
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound(serialize = "T: Serialize", deserialize = "T: for<'a> Deserialize<'a>"))]
-pub struct Entry<T> {
+pub struct BufferItem<T> {
     pub inner: T,
     /// chain_id -> (min_block, max_block) observed for this entry.
     ///
@@ -162,7 +162,7 @@ fn now_naive_utc() -> NaiveDateTime {
     Utc::now().naive_utc()
 }
 
-impl<T: Consolidate> Entry<T> {
+impl<T: Consolidate> BufferItem<T> {
     fn new(inner: T) -> Self {
         Self {
             inner,
@@ -237,7 +237,7 @@ impl Default for Config {
 /// synchronized by the underlying `DashMap`.
 pub struct MessageBuffer<T: Consolidate> {
     /// Hot tier: in-memory entries
-    inner: DashMap<Key, Entry<T>>,
+    inner: DashMap<Key, BufferItem<T>>,
     /// Configuration
     config: Config,
     /// Database connection for cold tier operations
@@ -267,7 +267,7 @@ impl<T: Consolidate> MessageBuffer<T> {
         self.inner.len()
     }
 
-    async fn restore(&self, key: Key) -> Result<Option<Entry<T>>> {
+    async fn restore(&self, key: Key) -> Result<Option<BufferItem<T>>> {
         let row = self
             .db
             .get_pending_message(key.message_id, key.bridge_id as i32)
@@ -294,7 +294,7 @@ impl<T: Consolidate> MessageBuffer<T> {
     /// Checks:
     /// 1. hot tier
     /// 2. cold tier (pending_messages)
-    pub async fn _get_mut(&self, key: Key) -> Result<Option<RefMut<'_, Key, Entry<T>>>> {
+    pub async fn _get_mut(&self, key: Key) -> Result<Option<RefMut<'_, Key, BufferItem<T>>>> {
         match self.inner.get_mut(&key) {
             Some(value) => Ok(Some(value)),
             None => {
@@ -314,7 +314,7 @@ impl<T: Consolidate> MessageBuffer<T> {
     ///
     /// If the entry is restored from cold tier, its `hot_since` is reset to
     /// `Utc::now()` to ensure a full TTL in memory.
-    pub async fn get_mut_or_default(&self, key: Key) -> Result<RefMut<'_, Key, Entry<T>>>
+    pub async fn get_mut_or_default(&self, key: Key) -> Result<RefMut<'_, Key, BufferItem<T>>>
     where
         T: Default,
     {
@@ -324,7 +324,7 @@ impl<T: Consolidate> MessageBuffer<T> {
                 let value = self
                     .restore(key)
                     .await?
-                    .unwrap_or_else(|| Entry::new(T::default()));
+                    .unwrap_or_else(|| BufferItem::new(T::default()));
 
                 let entry = match self.inner.entry(key) {
                     DashEntry::Occupied(entry) => entry.into_ref(),
@@ -854,7 +854,7 @@ mod tests {
 
     #[test]
     fn test_entry_needs_flush_tracks_last_flushed_version() {
-        let mut entry = Entry::new(DummyMessage {
+        let mut entry = BufferItem::new(DummyMessage {
             consolidatable: true,
             is_final: false,
             counter: 0,
@@ -884,7 +884,7 @@ mod tests {
 
         buffer
             .inner
-            .insert(key, Entry::new(DummyMessage::default()));
+            .insert(key, BufferItem::new(DummyMessage::default()));
 
         buffer
             .alter(key, 100, 123, |m| {
@@ -979,7 +979,7 @@ mod tests {
         let buffer = MessageBuffer::new(db.clone(), config);
 
         let key = Key::new(10, 1);
-        let cold_entry = Entry::new(DummyMessage {
+        let cold_entry = BufferItem::new(DummyMessage {
             consolidatable: false,
             is_final: false,
             counter: 5,
@@ -1057,7 +1057,7 @@ mod tests {
         .unwrap();
 
         let payload_created_at = DateTime::from_timestamp(1_000, 0).unwrap().naive_utc();
-        let mut cold_entry = Entry::new(DummyMessage {
+        let mut cold_entry = BufferItem::new(DummyMessage {
             consolidatable: false,
             is_final: false,
             counter: 0,
