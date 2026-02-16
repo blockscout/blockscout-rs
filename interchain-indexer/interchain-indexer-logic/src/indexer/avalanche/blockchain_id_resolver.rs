@@ -1,8 +1,9 @@
-use crate::{InterchainDatabase, avalanche_data_api::AvalancheDataApiClient};
+use crate::{
+    InterchainDatabase,
+    avalanche_data_api::{AvalancheDataApiClient, AvalancheDataApiClientSettings},
+};
 use anyhow::{Context, Result, anyhow};
 use moka::future::Cache;
-
-pub use crate::avalanche_data_api::AvalancheDataApiNetwork;
 
 /// Cache key: (network, blockchain_id_hex)
 type CacheKey = [u8; 32];
@@ -17,13 +18,9 @@ pub struct BlockchainIdResolver {
 }
 
 impl BlockchainIdResolver {
-    pub fn new(
-        network: AvalancheDataApiNetwork,
-        api_key: Option<String>,
-        db: InterchainDatabase,
-    ) -> Self {
+    pub fn new(settings: AvalancheDataApiClientSettings, db: InterchainDatabase) -> Self {
         Self {
-            data_api: AvalancheDataApiClient::new(network, api_key),
+            data_api: AvalancheDataApiClient::from_settings(settings),
             cache: Cache::new(10_000),
             db,
         }
@@ -97,6 +94,7 @@ impl BlockchainIdResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::avalanche_data_api::{AvalancheDataApiClientSettings, AvalancheDataApiNetwork};
     use crate::test_utils;
 
     /// End-to-end test for the resolver.
@@ -127,11 +125,13 @@ mod tests {
             .or_else(|| std::env::var("AVALANCHE_DATA_API_KEY").ok())
             .filter(|s| !s.trim().is_empty());
 
-        let resolver = BlockchainIdResolver::new(
-            AvalancheDataApiNetwork::Mainnet,
+        let settings = AvalancheDataApiClientSettings {
+            network: AvalancheDataApiNetwork::Mainnet,
             api_key,
-            interchain_db.clone(),
-        );
+            ..Default::default()
+        };
+
+        let resolver = BlockchainIdResolver::new(settings, interchain_db.clone());
 
         let resolved = resolver.resolve(&bytes).await?;
         anyhow::ensure!(resolved == 8021, "expected 8021, got {:?}", resolved);

@@ -1,48 +1,30 @@
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use reqwest::{Url, header};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
+use strum_macros::{AsRefStr, EnumString};
 
 pub const DATA_API_BASE_URL: &str = "https://data-api.avax.network";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct AvalancheDataApiClientSettings {
+    pub network: AvalancheDataApiNetwork,
+    pub api_key: Option<String>,
+}
+
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Hash, Default, EnumString, AsRefStr, Serialize, Deserialize,
+)]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum AvalancheDataApiNetwork {
     #[default]
     Mainnet,
     Fuji,
     Testnet,
-}
-
-impl AvalancheDataApiNetwork {
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Mainnet => "mainnet",
-            Self::Fuji => "fuji",
-            Self::Testnet => "testnet",
-        }
-    }
-
-    pub fn from_env_or_default() -> Self {
-        std::env::var("AVALANCHE_DATA_API_NETWORK")
-            .ok()
-            .and_then(|v| Self::try_from(v.as_str()).ok())
-            .unwrap_or(Self::Mainnet)
-    }
-}
-
-impl TryFrom<&str> for AvalancheDataApiNetwork {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &str) -> Result<Self> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "mainnet" => Ok(Self::Mainnet),
-            "fuji" => Ok(Self::Fuji),
-            "testnet" => Ok(Self::Testnet),
-            other => Err(anyhow!("unknown network: {}", other)),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -85,11 +67,15 @@ impl AvalancheDataApiClient {
         }
     }
 
+    pub fn from_settings(settings: AvalancheDataApiClientSettings) -> Self {
+        Self::new(settings.network, settings.api_key)
+    }
+
     fn blockchain_url(&self, blockchain_id: &[u8; 32]) -> Result<Url> {
         let blockchain_id_cb58 = bs58::encode(blockchain_id).as_cb58(None).into_string();
         let url = format!(
             "{DATA_API_BASE_URL}/v1/networks/{}/blockchains/{}",
-            self.network.as_str(),
+            self.network.as_ref(),
             blockchain_id_cb58
         );
         Url::parse(&url).with_context(|| format!("failed to parse URL {url}"))

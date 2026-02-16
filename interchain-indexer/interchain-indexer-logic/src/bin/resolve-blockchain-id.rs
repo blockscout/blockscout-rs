@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use interchain_indexer_logic::avalanche_data_api::{
-    AvalancheDataApiClient, AvalancheDataApiNetwork,
+    AvalancheDataApiClient, AvalancheDataApiClientSettings, AvalancheDataApiNetwork,
 };
 
 fn usage() -> &'static str {
@@ -14,7 +14,7 @@ fn parse_args() -> Result<(String, AvalancheDataApiNetwork)> {
         return Err(anyhow!("missing <blockchain_id>\n\n{}", usage()));
     };
 
-    let mut network = AvalancheDataApiNetwork::from_env_or_default();
+    let mut network = AvalancheDataApiNetwork::default();
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -78,15 +78,13 @@ async fn main() -> Result<()> {
     let bytes = parse_blockchain_id(&id)?;
     let cb58 = bs58::encode(bytes).as_cb58(None).into_string();
 
-    let api_key = std::env::var("AVALANCHE_GLACIER_API_KEY")
-        .ok()
-        .or_else(|| std::env::var("AVALANCHE_DATA_API_KEY").ok())
-        .filter(|s| !s.trim().is_empty());
+    let mut settings = AvalancheDataApiClientSettings::default();
+    settings.network = network;
 
-    let data_api = AvalancheDataApiClient::new(network, api_key);
+    let data_api = AvalancheDataApiClient::from_settings(settings);
     let resp = data_api.get_blockchain_by_id(&bytes).await?;
 
-    println!("network:            {}", network.as_str());
+    println!("network:            {}", network.as_ref());
     println!("blockchainId(cb58): {}", cb58);
     println!("blockchainId(hex):  0x{}", hex::encode(bytes));
     println!("blockchainName:     {}", resp.blockchain_name);

@@ -2,6 +2,8 @@ use serde::Deserialize;
 use serde_with::serde_as;
 use std::time::Duration;
 
+use crate::avalanche_data_api::AvalancheDataApiClientSettings;
+
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, serde::Serialize)]
 #[serde(deny_unknown_fields)]
@@ -13,6 +15,8 @@ pub struct AvalancheIndexerSettings {
     pub batch_size: u64,
     #[serde(default)]
     pub process_unknown_chains: bool,
+    #[serde(default)]
+    pub data_api_client_settings: AvalancheDataApiClientSettings,
 }
 
 impl Default for AvalancheIndexerSettings {
@@ -21,6 +25,7 @@ impl Default for AvalancheIndexerSettings {
             pull_interval_ms: default_pull_interval(),
             batch_size: default_batch_size(),
             process_unknown_chains: false,
+            data_api_client_settings: AvalancheDataApiClientSettings::default(),
         }
     }
 }

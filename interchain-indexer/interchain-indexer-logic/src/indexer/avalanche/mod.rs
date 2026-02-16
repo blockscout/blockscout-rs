@@ -42,12 +42,13 @@ use tonic::async_trait;
 use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
     avalanche::settings::AvalancheIndexerSettings,
+    avalanche_data_api::AvalancheDataApiClientSettings,
     log_stream::LogStream,
     message_buffer::{Config, Key, MessageBuffer},
 };
 
 use abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
-use blockchain_id_resolver::{AvalancheDataApiNetwork, BlockchainIdResolver};
+use blockchain_id_resolver::BlockchainIdResolver;
 
 use types::{
     AnnotatedEvent, AnnotatedICTTSource, CallOutcome, Message, MessageExecutionOutcome,
@@ -209,22 +210,8 @@ impl AvalancheIndexer {
 
         let chain_ids: HashSet<i64> = chains.iter().map(|c| c.chain_id).collect();
 
-        let data_api_network = std::env::var("AVALANCHE_DATA_API_NETWORK")
-            .ok()
-            .and_then(|v| match v.to_ascii_lowercase().as_str() {
-                "mainnet" => Some(AvalancheDataApiNetwork::Mainnet),
-                "fuji" => Some(AvalancheDataApiNetwork::Fuji),
-                "testnet" => Some(AvalancheDataApiNetwork::Testnet),
-                _ => None,
-            })
-            .unwrap_or(AvalancheDataApiNetwork::Mainnet);
-
-        let data_api_key = std::env::var("AVALANCHE_GLACIER_API_KEY")
-            .ok()
-            .or_else(|| std::env::var("AVALANCHE_DATA_API_KEY").ok());
-
-        let blockchain_id_resolver =
-            BlockchainIdResolver::new(data_api_network, data_api_key, db.clone());
+        let data_api_settings = AvalancheDataApiClientSettings::default();
+        let blockchain_id_resolver = BlockchainIdResolver::new(data_api_settings, db.clone());
 
         tracing::info!(
             bridge_id,

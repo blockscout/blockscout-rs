@@ -70,6 +70,8 @@ sea-orm-migration = { version = "1.1.14", features = [
 serde = { version = "1.0" }
 serde_json = { version = "1.0.96" }
 serde_with = { version = "3.6.1" }
+strum = { version = "0.27" }
+strum_macros = { version = "0.27" }
 thiserror = { version = "2.0.10" }
 tokio = { version = "1.47", features = ["full"] }
 tonic = { version = "0.14" }
