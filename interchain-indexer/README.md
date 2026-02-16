@@ -60,11 +60,13 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 
 [anchor]: <> (anchors.envs.start.avalanche)
 
-| Variable                                                        | Req&#x200B;uir&#x200B;ed | Description | Default value |
-| --------------------------------------------------------------- | ------------------------ | ----------- | ------------- |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`             |                          | Number of contract events to be pulled at once. | `1000`        |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`       |                          | Duration between pulling contract events. Unit: `milliseconds` | `10000`       |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PROCESS_UNKNOWN_CHAINS` |                          | Enable messages/transfers processing from/to non-indexing chains. | `false`       |
+| Variable                                                                   | Req&#x200B;uir&#x200B;ed | Description                                                            | Default value |
+| -------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------- | ------------- |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`                        |                          | Number of contract events to be pulled at once.                        | `1000`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`                  |                          | Duration between pulling contract events. Unit: `milliseconds`         | `10000`       |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PROCESS_UNKNOWN_CHAINS`            |                          | Enable messages/transfers processing from/to non-indexing chains.      | `false`       |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__NETWORK` | true                     | Avalanche Data API network. One of `mainnet`, `fuji`, `testnet`.       |               |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__API_KEY` |                          | API key for Avalanche Data API (`x-glacier-api-key` header). Optional. | `null`        |
 
 [anchor]: <> (anchors.envs.end.avalanche)
 
