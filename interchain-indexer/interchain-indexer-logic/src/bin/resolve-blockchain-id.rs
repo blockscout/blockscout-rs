@@ -78,8 +78,10 @@ async fn main() -> Result<()> {
     let bytes = parse_blockchain_id(&id)?;
     let cb58 = bs58::encode(bytes).as_cb58(None).into_string();
 
-    let mut settings = AvalancheDataApiClientSettings::default();
-    settings.network = network;
+    let settings = AvalancheDataApiClientSettings {
+        network,
+        ..Default::default()
+    };
 
     let data_api = AvalancheDataApiClient::from_settings(settings);
     let resp = data_api.get_blockchain_by_id(&bytes).await?;

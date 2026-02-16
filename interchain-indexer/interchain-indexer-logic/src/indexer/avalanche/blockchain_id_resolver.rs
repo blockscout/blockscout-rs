@@ -130,7 +130,6 @@ mod tests {
         let settings = AvalancheDataApiClientSettings {
             network: AvalancheDataApiNetwork::Mainnet,
             api_key,
-            ..Default::default()
         };
 
         let resolver = BlockchainIdResolver::new(settings, interchain_db.clone());
