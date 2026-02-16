@@ -20,7 +20,6 @@ use crate::{
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
-    utils::produce_filter_and_values,
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{DbBackend, Statement};
@@ -32,30 +31,29 @@ impl StatementFromRange for NewTransfersSentInterchainStatement {
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTime<Utc>>>,
     ) -> Statement {
-        let (chain_condition, mut values): (String, Vec<sea_orm::Value>) =
-            match cx.interchain_primary_id {
-                Some(primary_id) => (
-                    " AND m.src_chain_id = $1".into(),
-                    vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
-                ),
-                None => (String::new(), vec![]),
-            };
-        let filter_arg_start = values.len() + 1;
-        let (range_filter, range_values) =
-            produce_filter_and_values(range, "m.init_timestamp::timestamp", filter_arg_start);
-        values.extend(range_values);
-        let sql = format!(
+        let (chain_condition, values) = match cx.interchain_primary_id {
+            Some(primary_id) => (
+                " AND m.src_chain_id = $1".into(),
+                vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
+            ),
+            None => (String::new(), vec![]),
+        };
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
             r#"
                 SELECT
                     m.init_timestamp::date AS date,
                     COUNT(*)::TEXT AS value
                 FROM crosschain_transfers t
                 INNER JOIN crosschain_messages m ON t.message_id = m.id
-                WHERE m.src_tx_hash IS NOT NULL{chain_condition}{range_filter}
+                WHERE m.src_tx_hash IS NOT NULL {chain_condition} {filter}
                 GROUP BY m.init_timestamp::date
-            "#
-        );
-        Statement::from_sql_and_values(DbBackend::Postgres, &sql, values)
+            "#,
+            values,
+            "m.init_timestamp::timestamp",
+            range,
+            chain_condition = chain_condition,
+        )
     }
 }
 
