@@ -37,7 +37,7 @@ pub struct BridgeContractConfig {
     #[serde(deserialize_with = "deserialize_address")]
     pub address: Vec<u8>,
     pub version: i16,
-    pub started_at_block: i64,
+    pub started_at_block: u64,
     pub abi: Option<String>,
 }
 
@@ -120,7 +120,9 @@ impl BridgeContractConfig {
             chain_id: ActiveValue::Set(self.chain_id),
             address: ActiveValue::Set(self.address.clone()),
             version: ActiveValue::Set(self.version),
-            started_at_block: ActiveValue::Set(Some(self.started_at_block)),
+            started_at_block: ActiveValue::Set(Some(
+                i64::try_from(self.started_at_block).expect("started_at_block must fit into i64"),
+            )),
             abi: ActiveValue::Set(abi_value),
             ..Default::default()
         }
@@ -131,13 +133,14 @@ impl BridgeContractConfig {
 /// Note: This conversion loses the `id` and `bridge_id` fields
 impl From<bridge_contracts::Model> for BridgeContractConfig {
     fn from(model: bridge_contracts::Model) -> Self {
+        let started_at_block = model.validated_started_at_block();
         let abi_string = model.abi.and_then(|json| serde_json::to_string(&json).ok());
 
         BridgeContractConfig {
             chain_id: model.chain_id,
             address: model.address,
             version: model.version,
-            started_at_block: model.started_at_block.unwrap_or(0),
+            started_at_block,
             abi: abi_string,
         }
     }
@@ -546,6 +549,33 @@ mod tests {
         assert_eq!(config.address, vec![0x12; 20]);
         assert_eq!(config.version, 1);
         assert_eq!(config.started_at_block, 12345);
+    }
+
+    #[test]
+    fn test_model_to_bridge_contract_config_clamps_started_at_block() {
+        use interchain_indexer_entity::bridge_contracts;
+
+        let common = bridge_contracts::Model {
+            id: 1,
+            bridge_id: 100,
+            chain_id: 1,
+            address: vec![0x12; 20],
+            version: 1,
+            abi: None,
+            created_at: None,
+            updated_at: None,
+            started_at_block: None,
+        };
+
+        let none_block: BridgeContractConfig = common.clone().into();
+        assert_eq!(none_block.started_at_block, 0);
+
+        let negative_block: BridgeContractConfig = bridge_contracts::Model {
+            started_at_block: Some(-42),
+            ..common
+        }
+        .into();
+        assert_eq!(negative_block.started_at_block, 0);
     }
 
     #[test]

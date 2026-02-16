@@ -244,8 +244,8 @@ impl AvalancheIndexer {
             let checkpoint = db.get_checkpoint(bridge_id as u64, chain_id as u64).await?;
 
             let (realtime_cursor, catchup_cursor) = if let Some(cp) = checkpoint {
-                let realtime_cursor = cp.realtime_cursor.max(0) as u64;
-                let catchup_cursor = cp.catchup_max_cursor.max(0) as u64;
+                let realtime_cursor = cp.validated_realtime_cursor();
+                let catchup_cursor = cp.validated_catchup_cursor();
 
                 tracing::info!(
                     bridge_id,
