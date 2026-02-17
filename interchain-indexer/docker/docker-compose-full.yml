@@ -1,0 +1,170 @@
+
+services:
+  redis-db:
+    image: 'redis:alpine'
+    container_name: redis-db
+    command: redis-server
+  db-init:
+    image: postgres:15
+    entrypoint:
+      - sh
+      - -c
+      - |
+        chown -R 2000:2000 /var/lib/postgresql/data
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  db:
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    image: postgres:15
+    shm_size: 256m
+    restart: always
+    container_name: 'db'
+    command: postgres -c 'max_connections=200' -c 'client_connection_check_interval=60000'
+    environment:
+        POSTGRES_PASSWORD: ""
+        POSTGRES_USER: "postgres"
+        POSTGRES_HOST_AUTH_METHOD: "trust"
+    ports:
+      - target: 5432
+        published: 7432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  backend:
+    depends_on:
+      - db
+      - redis-db
+    image: ghcr.io/blockscout/blockscout-private:9.3.5
+    pull_policy: always
+    restart: always
+    stop_grace_period: 5m
+    container_name: 'backend'
+    command: sh -c 'bin/blockscout eval "Elixir.Explorer.ReleaseTasks.create_and_migrate()" && bin/blockscout start'
+    environment:
+      ETHEREUM_JSONRPC_VARIANT: geth
+      ETHEREUM_JSONRPC_HTTP_URL: https://subnets.avax.network/numi/mainnet/rpc 
+      ETHEREUM_JSONRPC_TRACE_URL: https://subnets.avax.network/numi/mainnet/rpc 
+      DATABASE_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout # TODO: default, please change
+      SECRET_KEY_BASE: 56NtB48ear7+wMSf0IQuWDAAazhpb31qyc7GiyspBP2vh7t5zlCsF5QDv76chXeN # TODO: default, please change
+      NETWORK: EVM 
+      SUBNETWORK: MySubnet # TODO: what is this ?
+      PORT: 4000 
+      INDEXER_DISABLE_PENDING_TRANSACTIONS_FETCHER: false
+      INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: false
+      ECTO_USE_SSL: false
+      DISABLE_EXCHANGE_RATES: true
+      SUPPORTED_CHAINS: "[]"
+      TXS_STATS_DAYS_TO_COMPILE_AT_INIT: 10
+      MICROSERVICE_SC_VERIFIER_ENABLED: false
+      MICROSERVICE_SC_VERIFIER_URL: http://sc-verifier:8050
+      MICROSERVICE_SC_VERIFIER_TYPE: sc_verifier
+      MICROSERVICE_VISUALIZE_SOL2UML_ENABLED: false
+      MICROSERVICE_VISUALIZE_SOL2UML_URL: http://visualizer:8050
+      MICROSERVICE_SIG_PROVIDER_ENABLED: false
+      MICROSERVICE_SIG_PROVIDER_URL: http://sig-provider:8050
+    ports:
+      - "4000:4000"
+    links:
+      - db:database
+    # volumes:
+    #   - /etc/blockscout/conf/custom/images:/app/apps/block_scout_web/assets/static/images
+
+  interchain-indexer-db:
+    image: postgres:17
+    container_name: 'interchain-indexer-postgres'
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
+    ports:
+      - target: 5432
+        published: 9432
+    volumes:
+      - ./postgres_data_interchain:/var/lib/postgresql/data
+
+  interchain-indexer:
+    image: ghcr.io/blockscout/interchain-indexer:latest
+    container_name: 'interchain-indexer'
+    restart: always
+    depends_on:
+      - interchain-indexer-db
+    ports:
+      - "8050:8050"
+      - "8051:8051"
+      - "6060:6060"
+    env_file:
+      - .env
+    environment:
+      INTERCHAIN_INDEXER__DATABASE__CONNECT__URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@interchain-indexer-db:5432/interchain_indexer
+      INTERCHAIN_INDEXER__DATABASE__CREATE_DATABASE: true
+      INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS: true
+      INTERCHAIN_INDEXER__CHAINS_CONFIG: /app/config/chains.json
+      INTERCHAIN_INDEXER__BRIDGES_CONFIG: /app/config/bridges.json
+      INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN: true
+      INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL: https://contracts-info-test.k8s-dev.blockscout.com
+      INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS: 8021
+      INTERCHAIN_INDEXER__METRICS__ENABLED: true
+      INTERCHAIN_INDEXER__METRICS__ADDR: 0.0.0.0:6060
+    volumes:
+      - ./config:/app/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  bc_frontend:
+    depends_on:
+      - backend
+      - caddy
+    image: ghcr.io/blockscout/frontend-private:cross-chain-alpha.0
+    pull_policy: always
+    platform: linux/amd64
+    restart: always
+    container_name: 'bc_frontend'
+    environment:
+      NEXT_PUBLIC_API_HOST: localhost
+      #NEXT_PUBLIC_API_PROTOCOL: http
+      #NEXT_PUBLIC_API_BASE_PATH: /
+      #FAVICON_MASTER_URL: https://ash.center/img/ash-logo.svg # TODO: change to dynamic ?
+      NEXT_PUBLIC_NETWORK_NAME: NUMINE
+      #NEXT_PUBLIC_NETWORK_SHORT_NAME: NUMINE
+      NEXT_PUBLIC_NETWORK_ID: 8021
+      NEXT_PUBLIC_NETWORK_RPC_URL: https://subnets.avax.network/numi/mainnet/rpc
+      NEXT_PUBLIC_NETWORK_CURRENCY_NAME: numine
+      NEXT_PUBLIC_NETWORK_CURRENCY_SYMBOL: NUM
+      #NEXT_PUBLIC_NETWORK_CURRENCY_DECIMALS: 18 
+      NEXT_PUBLIC_APP_HOST: localhost
+      #NEXT_PUBLIC_APP_PROTOCOL: http
+
+      NEXT_PUBLIC_INTERCHAIN_INDEXER_API_HOST: http://interchain-indexer:8050
+      NEXT_PUBLIC_CROSS_CHAIN_TXS_ENABLED: true
+      NEXT_PUBLIC_HOMEPAGE_CHARTS: "['daily_txs']"
+      #NEXT_PUBLIC_IS_TESTNET: true
+      #NEXT_PUBLIC_API_WEBSOCKET_PROTOCOL: wss
+      #NEXT_PUBLIC_API_SPEC_URL: https://raw.githubusercontent.com/blockscout/blockscout-api-v2-swagger/main/swagger.yaml
+      #NEXT_PUBLIC_VISUALIZE_API_HOST: https://1.2.3.4.sslip.io
+      #NEXT_PUBLIC_VISUALIZE_API_BASE_PATH: /visualizer-service
+      #NEXT_PUBLIC_STATS_API_HOST: ""
+      #NEXT_PUBLIC_STATS_API_BASE_PATH: /stats-service
+  caddy:
+    depends_on:
+      - backend
+    image: caddy:latest
+    container_name: caddy
+    restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - "./Caddyfile:/etc/caddy/Caddyfile"
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
