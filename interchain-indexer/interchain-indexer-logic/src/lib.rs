@@ -1,4 +1,5 @@
 pub mod avalanche_data_api;
+mod bulk;
 mod chain_info;
 mod cursor;
 mod database;

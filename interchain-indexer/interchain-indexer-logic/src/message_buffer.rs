@@ -86,6 +86,7 @@ use tokio::{sync::RwLock, task::JoinHandle};
 
 use crate::{
     InterchainDatabase,
+    bulk::{batched_upsert, run_in_batches},
     cursor::{BridgeId, Cursor, CursorBlocksBuilder, Cursors},
     metrics,
 };
@@ -474,119 +475,15 @@ impl<T: Consolidate> MessageBuffer<T> {
             .db
             .db
             .transaction::<_, Cursors, DbErr>(|tx| {
-                let cursor_builder = cursor_builder.clone();
                 Box::pin(async move {
-                    let batch_size =
-                        (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
-                    for batch in stale_entries.chunks(batch_size) {
-                        let models: Vec<pending_messages::ActiveModel> = batch
-                            .iter()
-                            .map(|(key, entry)| {
-                                let payload = serde_json::to_value(entry).map_err(|e| {
-                                    DbErr::Custom(format!(
-                                        "pending_messages payload serialize failed: {e}"
-                                    ))
-                                })?;
-                                Ok(pending_messages::ActiveModel {
-                                    message_id: ActiveValue::Set(key.message_id),
-                                    bridge_id: ActiveValue::Set(key.bridge_id as i32),
-                                    payload: ActiveValue::Set(payload),
-                                    created_at: ActiveValue::Set(Some(entry.hot_since)),
-                                })
-                            })
-                            .collect::<Result<_, DbErr>>()?;
+                    offload_stale_to_pending(tx, &stale_entries).await?;
+                    flush_to_final_storage(tx, consolidated_entries).await?;
+                    remove_finalized_from_pending(tx, &keys_to_remove_from_pending).await?;
 
-                        pending_messages::Entity::insert_many(models)
-                            .on_conflict(
-                                OnConflict::columns([
-                                    pending_messages::Column::MessageId,
-                                    pending_messages::Column::BridgeId,
-                                ])
-                                .update_column(pending_messages::Column::Payload)
-                                .to_owned(),
-                            )
-                            .exec(tx)
-                            .await?;
-                    }
-
-                    // 2. Flush ready entries to final storage
-                    let batch_size =
-                        (u16::MAX - 100) as usize / crosschain_messages::Column::iter().count();
-                    let (messages, transfers): (Vec<_>, Vec<_>) = consolidated_entries
-                        .into_iter()
-                        .map(|c| (c.message, c.transfers))
-                        .unzip();
-                    let transfers = transfers.into_iter().flatten().collect::<Vec<_>>();
-
-                    for batch in messages.chunks(batch_size) {
-                        crosschain_messages::Entity::insert_many(batch.to_vec())
-                            .on_conflict(
-                                OnConflict::columns([
-                                    crosschain_messages::Column::Id,
-                                    crosschain_messages::Column::BridgeId,
-                                ])
-                                .update_columns([
-                                    crosschain_messages::Column::Status,
-                                    crosschain_messages::Column::DstChainId,
-                                    crosschain_messages::Column::DstTxHash,
-                                    crosschain_messages::Column::LastUpdateTimestamp,
-                                    crosschain_messages::Column::SenderAddress,
-                                    crosschain_messages::Column::RecipientAddress,
-                                    crosschain_messages::Column::Payload,
-                                ])
-                                .to_owned(),
-                            )
-                            .exec(tx)
-                            .await?;
-                    }
-
-                    let batch_size =
-                        (u16::MAX - 100) as usize / crosschain_transfers::Column::iter().count();
-                    for batch in transfers.chunks(batch_size) {
-                        crosschain_transfers::Entity::insert_many(batch.to_vec())
-                            .on_conflict(
-                                OnConflict::columns([
-                                    crosschain_transfers::Column::MessageId,
-                                    crosschain_transfers::Column::BridgeId,
-                                    crosschain_transfers::Column::Index,
-                                ])
-                                .update_columns(crosschain_transfers::Column::iter().filter(|c| {
-                                    !matches!(
-                                        c,
-                                        crosschain_transfers::Column::Id
-                                            | crosschain_transfers::Column::MessageId
-                                            | crosschain_transfers::Column::BridgeId
-                                            | crosschain_transfers::Column::Index
-                                            | crosschain_transfers::Column::CreatedAt
-                                    )
-                                }))
-                                .to_owned(),
-                            )
-                            .exec(tx)
-                            .await?;
-                    }
-
-                    let batch_size =
-                        (u16::MAX - 100) as usize / pending_messages::Column::iter().count();
-                    for batch in keys_to_remove_from_pending.chunks(batch_size) {
-                        let batch = batch.iter().map(|k| (k.message_id, k.bridge_id));
-
-                        pending_messages::Entity::delete_many()
-                            .filter(
-                                Expr::tuple([
-                                    Expr::col(pending_messages::Column::MessageId).into(),
-                                    Expr::col(pending_messages::Column::BridgeId).into(),
-                                ])
-                                .in_tuples(batch),
-                            )
-                            .exec(tx)
-                            .await?;
-                    }
-
-                    let existing = fetch_existing_cursors(&cursor_builder, tx).await?;
-                    let cursors = cursor_builder.calculate_updates(&existing);
-                    update_indexer_cursors(tx, &cursors).await?;
-                    Ok(cursors)
+                    let old = fetch_cursors(&cursor_builder, tx).await?;
+                    let new = cursor_builder.calculate_updates(&old);
+                    upsert_cursors(tx, &new).await?;
+                    Ok(new)
                 })
             })
             .await
@@ -718,7 +615,116 @@ impl<T: Consolidate> MessageBuffer<T> {
     }
 }
 
-async fn fetch_existing_cursors(
+fn pending_messages_on_conflict() -> OnConflict {
+    OnConflict::columns([
+        pending_messages::Column::MessageId,
+        pending_messages::Column::BridgeId,
+    ])
+    .update_column(pending_messages::Column::Payload)
+    .to_owned()
+}
+
+fn crosschain_messages_on_conflict() -> OnConflict {
+    OnConflict::columns([
+        crosschain_messages::Column::Id,
+        crosschain_messages::Column::BridgeId,
+    ])
+    .update_columns([
+        crosschain_messages::Column::Status,
+        crosschain_messages::Column::DstChainId,
+        crosschain_messages::Column::DstTxHash,
+        crosschain_messages::Column::LastUpdateTimestamp,
+        crosschain_messages::Column::SenderAddress,
+        crosschain_messages::Column::RecipientAddress,
+        crosschain_messages::Column::Payload,
+    ])
+    .to_owned()
+}
+
+fn crosschain_transfers_on_conflict() -> OnConflict {
+    OnConflict::columns([
+        crosschain_transfers::Column::MessageId,
+        crosschain_transfers::Column::BridgeId,
+        crosschain_transfers::Column::Index,
+    ])
+    .update_columns(crosschain_transfers::Column::iter().filter(|column| {
+        !matches!(
+            column,
+            crosschain_transfers::Column::Id
+                | crosschain_transfers::Column::MessageId
+                | crosschain_transfers::Column::BridgeId
+                | crosschain_transfers::Column::Index
+                | crosschain_transfers::Column::CreatedAt
+        )
+    }))
+    .to_owned()
+}
+
+async fn offload_stale_to_pending<T: Consolidate>(
+    tx: &DatabaseTransaction,
+    stale_entries: &[(Key, BufferItem<T>)],
+) -> Result<(), DbErr> {
+    let models: Vec<pending_messages::ActiveModel> = stale_entries
+        .iter()
+        .map(|(key, entry)| {
+            let payload = serde_json::to_value(entry).map_err(|e| {
+                DbErr::Custom(format!("pending_messages payload serialize failed: {e}"))
+            })?;
+            Ok(pending_messages::ActiveModel {
+                message_id: ActiveValue::Set(key.message_id),
+                bridge_id: ActiveValue::Set(key.bridge_id as i32),
+                payload: ActiveValue::Set(payload),
+                created_at: ActiveValue::Set(Some(entry.hot_since)),
+            })
+        })
+        .collect::<Result<_, DbErr>>()?;
+
+    batched_upsert(tx, &models, pending_messages_on_conflict()).await
+}
+
+async fn flush_to_final_storage(
+    tx: &DatabaseTransaction,
+    consolidated_entries: Vec<ConsolidatedMessage>,
+) -> Result<(), DbErr> {
+    let (messages, transfers): (Vec<_>, Vec<_>) = consolidated_entries
+        .into_iter()
+        .map(|c| (c.message, c.transfers))
+        .unzip();
+    let transfers = transfers.into_iter().flatten().collect::<Vec<_>>();
+
+    batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
+    batched_upsert(tx, &transfers, crosschain_transfers_on_conflict()).await?;
+
+    Ok(())
+}
+
+async fn remove_finalized_from_pending(
+    tx: &DatabaseTransaction,
+    keys_to_remove_from_pending: &[Key],
+) -> Result<(), DbErr> {
+    let keys: Vec<(i64, i32)> = keys_to_remove_from_pending
+        .iter()
+        .map(|k| (k.message_id, k.bridge_id as i32))
+        .collect();
+
+    // row width = 2 (message_id, bridge_id)
+    run_in_batches(&keys, 2, |batch| async {
+        pending_messages::Entity::delete_many()
+            .filter(
+                Expr::tuple([
+                    Expr::col(pending_messages::Column::MessageId).into(),
+                    Expr::col(pending_messages::Column::BridgeId).into(),
+                ])
+                .in_tuples(batch.iter().copied()),
+            )
+            .exec(tx)
+            .await
+            .map(|_| ())
+    })
+    .await
+}
+
+async fn fetch_cursors(
     cursor_builder: &CursorBlocksBuilder,
     tx: &DatabaseTransaction,
 ) -> Result<Cursors, DbErr> {
@@ -753,7 +759,7 @@ async fn fetch_existing_cursors(
     Ok(cursors)
 }
 
-async fn update_indexer_cursors(
+async fn upsert_cursors(
     tx: &DatabaseTransaction,
     cursors: &HashMap<(BridgeId, ChainId), Cursor>,
 ) -> Result<(), DbErr> {
