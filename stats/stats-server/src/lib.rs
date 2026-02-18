@@ -13,6 +13,6 @@ pub use config::env as config_env;
 pub use read_service::ReadService;
 pub use runtime_setup::RuntimeSetup;
 pub use server::stats;
-pub use settings::Settings;
+pub use settings::{Mode, Settings};
 pub use update_service::UpdateService;
 pub use update_tracker::InitialUpdateTracker;

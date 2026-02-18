@@ -4,6 +4,7 @@ use itertools::Itertools;
 
 pub mod init_db;
 pub mod mock_blockscout;
+pub mod mock_interchain;
 pub mod mock_multichain;
 pub mod mock_zetachain_cctx;
 pub mod point_construction;

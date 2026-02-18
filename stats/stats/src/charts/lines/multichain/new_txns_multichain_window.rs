@@ -102,8 +102,9 @@ mod tests {
 
         let mut parameters = UpdateParameters {
             stats_db: &db,
-            is_multichain_mode: true,
+            mode: crate::Mode::MultichainAggregator,
             multichain_filter: None,
+            interchain_primary_id: None,
             indexer_db: &indexer,
             second_indexer_db: None,
             indexer_applied_migrations: IndexerMigrations::latest(),

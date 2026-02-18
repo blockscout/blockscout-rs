@@ -39,6 +39,7 @@ service StatsService {
   rpc GetTransactionsPageStats(GetTransactionsPageStatsRequest) returns (TransactionsPageStats);
   rpc GetContractsPageStats(GetContractsPageStatsRequest) returns (ContractsPageStats);
   rpc GetMainPageMultichainStats(GetMainPageStatsRequest) returns (MainPageMultichainStats);
+  rpc GetMainPageInterchainStats(GetMainPageStatsRequest) returns (MainPageInterchainStats);
   rpc GetUpdateStatus(GetUpdateStatusRequest) returns (UpdateStatus);
   rpc BatchUpdateCharts(BatchUpdateChartsRequest) returns (BatchUpdateChartsResult) {
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
@@ -166,6 +167,12 @@ message MainPageMultichainStats {
   optional Counter yesterday_txns_multichain = 3;
 
   optional LineChart new_txns_multichain_window = 4;
+}
+
+message MainPageInterchainStats {
+  optional Counter total_interchain_messages = 1;
+  optional Counter total_interchain_messages_sent = 2;
+  optional Counter total_interchain_messages_received = 3;
 }
 
 message GetUpdateStatusRequest {}

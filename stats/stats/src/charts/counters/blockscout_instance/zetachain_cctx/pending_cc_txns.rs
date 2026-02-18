@@ -106,8 +106,9 @@ mod tests {
 
         let mut parameters = UpdateParameters {
             stats_db: &db,
-            is_multichain_mode: false,
+            mode: crate::Mode::Zetachain,
             multichain_filter: None,
+            interchain_primary_id: None,
             indexer_db: &blockscout,
             indexer_applied_migrations: IndexerMigrations::latest(),
             second_indexer_db: Some(&zetachain_cctx),
