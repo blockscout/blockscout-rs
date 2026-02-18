@@ -42,11 +42,8 @@ services:
       INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS: 8021
       INTERCHAIN_INDEXER__METRICS__ENABLED: true
       INTERCHAIN_INDEXER__METRICS__ADDR: 0.0.0.0:6060
-    #env_file:
-      ## optional: if provided, would overwrite values from configuration file
-      #- ./interchain-indexer-server/config/base.env
-    #volumes:
-      ## optional: you can use default config or provide custom via file
-      #- ./interchain-indexer-server/config/example.toml:/app/config.toml
+    volumes:
+      # NOTE: the config folder is located in the root of the project
+      - ../config:/app/config
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -2,10 +2,11 @@
 
 This directory contains a production-style deployment of **Interchain Indexer** using the pre-built image and local configuration files.
 
+**NOTE** These instructions are only related to the main compose file (`docker-compose.yml`). Another one, `docker-compose-ubi.yml`, is intended to set up a single Universal Bridge Indexer instance without backend/frontend (moreover, it uses the top-level `config` folder to load appropriate bridges/chains configuration).
+
 ## Prerequisites
 
 - Docker and Docker Compose
-- A `.env` file in this directory with database credentials
 
 ## Quick Start
 
@@ -13,11 +14,9 @@ This directory contains a production-style deployment of **Interchain Indexer** 
 docker-compose up -d
 ```
 
-Ensure a `.env` file exists
-
 ---
 
-## 1. Tuning configuration: `chains.json` and `bridges.json`
+## 1. Tuning Universal Bridge Indexer configuration: `chains.json` and `bridges.json`
 
 Configuration is mounted from `./config` into the container. The service reads:
 
@@ -29,7 +28,7 @@ Edit the files under `./config/` and restart the interchain-indexer service for 
 It’s recommended to drop the database (if the service has been started before) when you modify the config files:
 
 ```bash
-`docker-compose down -v`
+docker-compose down -v
 ```
 
 ### `config/chains.json`
@@ -61,52 +60,64 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 | `api_url` / `ui_url` | Optional external links. |
 | `contracts`  | Per-chain contract config: `chain_id`, `address`, `version`, `started_at_block`. |
 
-**`started_at_block`** — indexer starts scanning from this block on each chain; set it to reduce initial sync time or to start from a specific deployment block.
+**`started_at_block`** — indexer starts scanning from this block on associated chain; set it to reduce initial sync time or to start from a specific deployment block.
 
-After editing JSON, restart the service:
+## 2. Tuning backend/frontend configuration: `docker-compose.yml`
+
+Unlike the Universal Bridge Indexer, which can index messages across multiple blockchains, the frontend and backend must be configured for a single network. To do this, adjust the following environment variables in the `docker-compose.yml` file:
+
+### For `backend`:
+- `ETHEREUM_JSONRPC_HTTP_URL`, `ETHEREUM_JSONRPC_TRACE_URL` - RPC node URL
+- `FIRST_BLOCK`, `TRACE_FIRST_BLOCK` - the block from which to start indexing the chain. Please note that it is advisable to set these variables for long-established networks to reduce synchronization time and reduce the load on the node. For newly created networks, these variables can be set to zero or removed.
+
+### For `frontend`:
+- `FAVICON_MASTER_URL` - Explorer tab icon
+- `NEXT_PUBLIC_NETWORK_NAME` - Chain name
+- `NEXT_PUBLIC_NETWORK_ID` - EVM Chain ID
+- `NEXT_PUBLIC_NETWORK_RPC_URL` - RPC node URL
+- `NEXT_PUBLIC_NETWORK_CURRENCY_NAME` - Native token name
+- `NEXT_PUBLIC_NETWORK_CURRENCY_SYMBOL` - Native token symbol
+
+### For `interchain-indexer`:
+- `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS` - It is recommended to set the current EVM chain ID to exclude token info requests for it. The token info service will most likely not contain token information for a newly created L1.
+
+---
+
+## 3. Starting the containers
+
+Provide GitHub credentials to access the `ghcr.io` repository (to pull private images). Use your access token as a password.
 
 ```bash
-docker-compose restart interchain-indexer
+docker login ghcr.io -u YOUR_GITHUB_USERNAME
 ```
 
----
+Start the containers:
 
-## 2. Database authentication (`.env`)
-
-Database connection and auth are controlled by environment variables. The compose file uses `env_file: .env`, so you can keep secrets and overrides in a single place.
-
-**Variables used for Postgres:**
-
-| Variable                      | Description |
-| ----------------------------- | ----------- |
-| `POSTGRES_USER`               | PostgreSQL user (used by both the database container and the indexer). |
-| `POSTGRES_PASSWORD`           | PostgreSQL password. |
-| `POSTGRES_HOST_AUTH_METHOD`   | Optional; default in compose is `scram-sha-256`. |
-
-The indexer’s connection URL is set in the compose file as:
-
-`postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/interchain_indexer`
-
-So changing `POSTGRES_USER` and `POSTGRES_PASSWORD` in `.env` is enough to tune database auth. Ensure the same `.env` is used when you run `docker compose` (from this directory or with `-f docker/docker-compose.yml`).
-
-**Example `.env` in the `docker` folder:**
-
-```env
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=admin
+```bash
+docker-compose up -d
 ```
 
----
+You can observe container logs by entering the following command:
 
-## 3. Usage: API, Swagger, and metrics
+```bash
+docker-compose logs -f SERVICE_NAME
+```
 
-Once the stack is running:
+...where `SERVICE_NAME` is one of the following (leave it empty to observe full logs):
+- `db`: Postgres database
+- `backend`: the main Blockscout API Backend
+- `interchain-indexer`: Universal Bridge Indexer
+- `frontend`: Blockscout frontend web-server
 
-- **HTTP API** — `http://localhost:8050`
-- **gRPC** — `localhost:8051` (disabled by default)
-- **Prometheus metrics** — `http://localhost:6060/metrics`
+## 4. Usage: Frontend, API, Swagger, and metrics
+
+When the stack is running, you can access the frontend by entering `http://localhost` in your browser.
+
+Please keep in mind it could take some time for the web server to start up (depending on your host machine performance).
 
 ### REST API and Swagger
+
+Additionally Universal Bridge Indexer resources are mapped to the `8050` TCP port:
 
 - **Swagger UI / OpenAPI spec**  
   Open in a browser:  
@@ -114,16 +125,21 @@ Once the stack is running:
   (Use this URL in Swagger Editor or any OpenAPI tool; the service may also expose a Swagger UI path — check the same base path under `/api/v1/docs/` if available.)
 
 - **Main REST endpoints** (see Swagger for full request/response schemas):
-  - **GET** `/api/v1/interchain/messages` — paginated cross-chain messages (optional query: `page_size`, `page_token`, etc.).
-  - **GET** `/api/v1/interchain/transfers` — paginated cross-chain transfers.
+  - **GET** `http://localhost:8050/api/v1/interchain/messages` — paginated cross-chain messages (optional query: `page_size`, `page_token`, etc.).
+  - **GET** `http://localhost:8050/api/v1/interchain/transfers` — paginated cross-chain transfers.
 
-- **Health / status**  
-  Use the paths defined in the Swagger spec (e.g. health or status endpoints) under `http://localhost:8050`.
+- **The simplest counters** (will be moved to the separate stats service soon):
+  - **GET** `http://localhost:8050/api/v1/stats/common` — total indexed messages and transfers.
+  - **GET** `http://localhost:8050/api/v1/stats/daily` — daily indexed messages and transfers.
 
-### Stopping
+- **Health / Status endpoints**
+  - **GET** `http://localhost:8050/health` - overall service health status (should be `SERVING` if all is fine)
+  - **GET** `http://localhost:8050/api/v1/status/indexers` - status and detailed info for indexers
+
+### Stopping the containers
 
 ```bash
 docker-compose down
 ```
 
-Data is persisted in the `./database` volume (relative to the compose file). Remove the volume as well to start with a clean DB: `docker-compose down -v` (only if you intend to drop all data).
+Data is persisted in the `./database` volume (relative to the compose file). Remove the folder or run `docker-compose down -v` to start with a clean DB (only if you intend to drop all indexed data).

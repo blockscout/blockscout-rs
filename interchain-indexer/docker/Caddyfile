@@ -28,6 +28,6 @@ localhost {
     
     # Frontend (default catch-all)
     handle {
-        reverse_proxy bc_frontend:3000
+        reverse_proxy frontend:3000
     }
 }
