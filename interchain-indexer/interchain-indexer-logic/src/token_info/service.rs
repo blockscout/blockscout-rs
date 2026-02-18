@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::{InterchainDatabase, TokenInfoServiceSettings};
 use alloy::{network::Ethereum, providers::DynProvider};
@@ -33,6 +36,11 @@ pub struct TokenInfoService {
 
     // Cache of failed token info requests to avoid repeated attempts
     error_cache: RwLock<HashMap<TokenKey, DateTime<Utc>>>,
+
+    // Keys currently being fetched in the background to prevent duplicate spawns.
+    // We can't reuse per_key_locks for this: MutexGuard borrows from the Mutex,
+    // so we cannot move the guard into a spawned task (the borrow checker forbids it).
+    in_flight_fetches: Arc<RwLock<HashSet<TokenKey>>>,
 }
 
 impl TokenInfoService {
@@ -56,11 +64,12 @@ impl TokenInfoService {
             token_info_cache: Arc::new(RwLock::new(HashMap::new())),
             per_key_locks: RwLock::new(HashMap::new()),
             error_cache: RwLock::new(HashMap::new()),
+            in_flight_fetches: Arc::new(RwLock::new(HashSet::new())),
         }
     }
 
     pub async fn get_token_info(
-        &self,
+        self: Arc<Self>,
         chain_id: i64,
         address: Vec<u8>,
     ) -> anyhow::Result<TokenInfoModel> {
@@ -116,66 +125,42 @@ impl TokenInfoService {
                 return Ok(model);
             }
 
-            // Not in DB: fetch on-chain via RPC provider
-            let provider = self
+            // Not in DB: spawn background fetch and return bare model immediately.
+            // Use in_flight_fetches to prevent duplicate spawns (we can't reuse per_key_locks:
+            // MutexGuard borrows from the Mutex, so we cannot move it into a spawned task).
+            let _provider = self
                 .providers
                 .get(&chain_id)
                 .ok_or_else(|| anyhow::anyhow!("Provider not found for chain_id={}", chain_id))?;
 
-            // Fetch token info on-chain and icon in parallel
-            let onchain_future =
-                self.try_fetch_token_info_onchain(provider, chain_id, address.clone());
-            let icon_future = self.try_fetch_token_icon(chain_id, address.clone());
+            let should_spawn = {
+                let mut in_flight = self.in_flight_fetches.write();
+                in_flight.insert(key.clone())
+            };
 
-            let (onchain_result, icon_result) = tokio::join!(onchain_future, icon_future);
-
-            match onchain_result {
-                Ok(token_info) => {
-                    // Use the icon from the external API if available
-                    let icon_url = icon_result.ok().flatten();
-
-                    let model = TokenInfoModel {
-                        chain_id,
-                        address,
-                        name: Some(token_info.name),
-                        symbol: Some(token_info.symbol),
-                        token_icon: icon_url,
-                        decimals: Some(token_info.decimals as i16),
-                        created_at: None,
-                        updated_at: None,
-                    };
-
-                    let active_model = tokens::ActiveModel {
-                        chain_id: Set(chain_id),
-                        address: Set(model.address.clone()),
-                        symbol: Set(model.symbol.clone()),
-                        name: Set(model.name.clone()),
-                        token_icon: Set(model.token_icon.clone()),
-                        decimals: Set(model.decimals),
-                        ..Default::default()
-                    };
-
-                    self.db.upsert_token_info(active_model).await?;
-
-                    {
-                        let mut cache = self.token_info_cache.write();
-                        cache.entry(key.clone()).or_insert_with(|| model.clone());
-                    }
-
-                    // Invalidate error cache for this key on success
-                    {
-                        let mut error_cache = self.error_cache.write();
-                        error_cache.remove(&key);
-                    }
-
-                    Ok(model)
-                }
-                Err(e) => {
-                    let mut error_cache = self.error_cache.write();
-                    error_cache.insert(key.clone(), Utc::now());
-                    Err(e)
-                }
+            if should_spawn {
+                let service = self.clone();
+                let chain_id = key.0;
+                let address = key.1.clone();
+                let key_clone = key.clone();
+                tokio::spawn(async move {
+                    service
+                        .fetch_token_info_from_chain_and_persist(chain_id, address, key_clone)
+                        .await;
+                });
             }
+
+            // Return bare model immediately without waiting
+            Ok(TokenInfoModel {
+                chain_id,
+                address: key.1.clone(),
+                name: None,
+                symbol: None,
+                token_icon: None,
+                decimals: None,
+                created_at: None,
+                updated_at: None,
+            })
         }
         .await;
 
@@ -187,6 +172,85 @@ impl TokenInfoService {
         self.remove_lock_for_key(&key);
 
         res
+    }
+
+    fn remove_from_in_flight(&self, key: &TokenKey) {
+        let mut in_flight = self.in_flight_fetches.write();
+        in_flight.remove(key);
+    }
+
+    /// Fetches token info via RPC and token icon via external API, then persists to DB and cache.
+    async fn fetch_token_info_from_chain_and_persist(
+        self: Arc<Self>,
+        chain_id: i64,
+        address: Vec<u8>,
+        key: TokenKey,
+    ) {
+        let provider = match self.providers.get(&chain_id) {
+            Some(p) => p,
+            None => {
+                self.remove_from_in_flight(&key);
+                return;
+            }
+        };
+
+        let onchain_future = self.try_fetch_token_info_onchain(provider, chain_id, address.clone());
+        let icon_future = self.try_fetch_token_icon(chain_id, address.clone());
+
+        let (onchain_result, icon_result) = tokio::join!(onchain_future, icon_future);
+
+        match onchain_result {
+            Ok(token_info) => {
+                let icon_url = icon_result.ok().flatten();
+
+                let model = TokenInfoModel {
+                    chain_id,
+                    address,
+                    name: Some(token_info.name),
+                    symbol: Some(token_info.symbol),
+                    token_icon: icon_url,
+                    decimals: Some(token_info.decimals as i16),
+                    created_at: None,
+                    updated_at: None,
+                };
+
+                let active_model = tokens::ActiveModel {
+                    chain_id: Set(chain_id),
+                    address: Set(model.address.clone()),
+                    symbol: Set(model.symbol.clone()),
+                    name: Set(model.name.clone()),
+                    token_icon: Set(model.token_icon.clone()),
+                    decimals: Set(model.decimals),
+                    ..Default::default()
+                };
+
+                if let Err(e) = self.db.upsert_token_info(active_model).await {
+                    tracing::warn!(
+                        chain_id = chain_id,
+                        address = hex::encode(&model.address),
+                        error = ?e,
+                        "Failed to upsert token info in background"
+                    );
+                } else {
+                    let mut cache = self.token_info_cache.write();
+                    cache.entry(key.clone()).or_insert_with(|| model.clone());
+                }
+
+                let mut error_cache = self.error_cache.write();
+                error_cache.remove(&key);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    chain_id = chain_id,
+                    address = hex::encode(&address),
+                    error = ?e,
+                    "Background token info fetch failed"
+                );
+                let mut error_cache = self.error_cache.write();
+                error_cache.insert(key.clone(), Utc::now());
+            }
+        }
+        self.remove_from_in_flight(&key);
     }
 
     /// Checks if an existing token (from cache or DB) needs an icon update.

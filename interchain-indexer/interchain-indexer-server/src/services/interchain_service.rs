@@ -331,8 +331,8 @@ impl InterchainServiceImpl {
 
     async fn get_token_info(&self, chain_id: i64, address: Vec<u8>) -> Option<TokenInfo> {
         let address_hex = to_hex_prefixed(address.as_slice());
-        self
-            .token_info_service
+        self.token_info_service
+            .clone()
             .get_token_info(chain_id, address)
             .await
             .inspect_err(|e| tracing::error!(err = ?e, chain_id, address =? address_hex, "Failed to get token info"))
