@@ -8,6 +8,7 @@ use blockscout_service_launcher::{
 use interchain_indexer_logic::{
     ChainInfoServiceSettings, TokenInfoServiceSettings,
     avalanche::settings::AvalancheIndexerSettings, example::settings::ExampleIndexerSettings,
+    settings::MessageBufferSettings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +23,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub chain_info: ChainInfoServiceSettings,
+
+    #[serde(default)]
+    pub buffer_settings: MessageBufferSettings,
 
     #[serde(default)]
     pub example_indexer: ExampleIndexerSettings,
@@ -75,6 +79,7 @@ impl Settings {
                 connect_options: Default::default(),
             },
             api: Default::default(),
+            buffer_settings: Default::default(),
         }
     }
 }

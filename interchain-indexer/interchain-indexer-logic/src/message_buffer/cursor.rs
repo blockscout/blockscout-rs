@@ -130,14 +130,10 @@ pub(crate) struct CursorBlocksBuilder {
 }
 
 impl CursorBlocksBuilder {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
     pub(crate) fn merge_cold(
         &mut self,
         bridge_id: BridgeId,
-        touched_blocks: &HashMap<ChainId, Vec<BlockNumber>>,
+        touched_blocks: &HashMap<ChainId, BTreeSet<BlockNumber>>,
     ) {
         self.merge(bridge_id, touched_blocks, |sets, blocks| {
             sets.cold.extend(blocks.iter().copied())
@@ -147,7 +143,7 @@ impl CursorBlocksBuilder {
     pub(crate) fn merge_hot(
         &mut self,
         bridge_id: BridgeId,
-        touched_blocks: &HashMap<ChainId, Vec<BlockNumber>>,
+        touched_blocks: &HashMap<ChainId, BTreeSet<BlockNumber>>,
     ) {
         self.merge(bridge_id, touched_blocks, |sets, blocks| {
             sets.hot.extend(blocks.iter().copied())
@@ -171,8 +167,8 @@ impl CursorBlocksBuilder {
     fn merge(
         &mut self,
         bridge_id: BridgeId,
-        touched_blocks: &HashMap<ChainId, Vec<BlockNumber>>,
-        mut apply: impl FnMut(&mut BlockSets, &Vec<BlockNumber>),
+        touched_blocks: &HashMap<ChainId, BTreeSet<BlockNumber>>,
+        mut apply: impl FnMut(&mut BlockSets, &BTreeSet<BlockNumber>),
     ) {
         for (&chain_id, blocks) in touched_blocks {
             let sets = self.inner.entry((bridge_id, chain_id)).or_default();
@@ -273,14 +269,14 @@ mod tests {
     #[test]
     fn cursor_blocks_builder_separates_cold_and_hot() {
         let mut touched = HashMap::new();
-        touched.insert(1u64, vec![10, 12, 12, 13]);
-        touched.insert(2u64, vec![7, 8]);
+        touched.insert(1u64, set(&[10, 12, 12, 13]));
+        touched.insert(2u64, set(&[7, 8]));
 
-        let mut builder = CursorBlocksBuilder::new();
+        let mut builder = CursorBlocksBuilder::default();
         builder.merge_cold(5, &touched);
 
         let mut hot = HashMap::new();
-        hot.insert(1u64, vec![9]);
+        hot.insert(1u64, set(&[9]));
         builder.merge_hot(5, &hot);
 
         let sets = builder.inner.get(&(5, 1)).cloned().expect("missing chain1");
@@ -295,9 +291,9 @@ mod tests {
     #[test]
     fn cursor_blocks_builder_keys_iterator() {
         let mut touched = HashMap::new();
-        touched.insert(1u64, vec![1]);
+        touched.insert(1u64, set(&[1]));
 
-        let mut builder = CursorBlocksBuilder::new();
+        let mut builder = CursorBlocksBuilder::default();
         builder.merge_cold(1, &touched);
         builder.merge_hot(2, &touched);
 
@@ -339,119 +335,225 @@ mod tests {
         );
     }
 
+    struct ExtendBoundaryCase {
+        direction: ScanDirection,
+        boundary: BlockNumber,
+        cold: &'static [BlockNumber],
+        hot: &'static [BlockNumber],
+        expected: BlockNumber,
+    }
+
     #[rstest]
-    #[case::backward_stops_at_direct_hot(
-        ScanDirection::Backward,
-        10,
-        &[5, 7, 8, 9, 10],
-        &[7],
-        8
-    )]
-    #[case::backward_stops_at_hot_in_gap(ScanDirection::Backward, 10, &[5, 10], &[7], 8)]
-    #[case::forward_extends_through_gaps(ScanDirection::Forward, 10, &[10, 15, 20], &[], 20)]
-    #[case::forward_stops_at_hot_in_gap(ScanDirection::Forward, 10, &[10, 20], &[15], 14)]
-    #[case::backward_no_cold_below(ScanDirection::Backward, 10, &[10, 15], &[], 10)]
-    #[case::forward_no_cold_above(ScanDirection::Forward, 20, &[10, 15, 20], &[], 20)]
-    #[case::forward_stops_at_direct_hot(
-        ScanDirection::Forward,
-        10,
-        &[10, 12, 15, 20],
-        &[15],
-        12
-    )]
-    #[case::boundary_is_hot_no_effect(
-        ScanDirection::Forward,
-        10,
-        &[10, 12, 15],
-        &[10],
-        15
-    )]
+    #[case::backward_stops_at_direct_hot(ExtendBoundaryCase {
+        direction: ScanDirection::Backward,
+        boundary: 10,
+        cold: &[5, 7, 8, 9, 10],
+        hot: &[7],
+        expected: 8,
+    })]
+    #[case::backward_stops_at_hot_in_gap(ExtendBoundaryCase {
+        direction: ScanDirection::Backward,
+        boundary: 10,
+        cold: &[5, 10],
+        hot: &[7],
+        expected: 8,
+    })]
+    #[case::forward_extends_through_gaps(ExtendBoundaryCase {
+        direction: ScanDirection::Forward,
+        boundary: 10,
+        cold: &[10, 15, 20],
+        hot: &[],
+        expected: 20,
+    })]
+    #[case::forward_stops_at_hot_in_gap(ExtendBoundaryCase {
+        direction: ScanDirection::Forward,
+        boundary: 10,
+        cold: &[10, 20],
+        hot: &[15],
+        expected: 14,
+    })]
+    #[case::backward_no_cold_below(ExtendBoundaryCase {
+        direction: ScanDirection::Backward,
+        boundary: 10,
+        cold: &[10, 15],
+        hot: &[],
+        expected: 10,
+    })]
+    #[case::forward_no_cold_above(ExtendBoundaryCase {
+        direction: ScanDirection::Forward,
+        boundary: 20,
+        cold: &[10, 15, 20],
+        hot: &[],
+        expected: 20,
+    })]
+    #[case::forward_stops_at_direct_hot(ExtendBoundaryCase {
+        direction: ScanDirection::Forward,
+        boundary: 10,
+        cold: &[10, 12, 15, 20],
+        hot: &[15],
+        expected: 12,
+    })]
+    #[case::boundary_is_hot_no_effect(ExtendBoundaryCase {
+        direction: ScanDirection::Forward,
+        boundary: 10,
+        cold: &[10, 12, 15],
+        hot: &[10],
+        expected: 15,
+    })]
     fn extend_boundary(
-        #[case] direction: ScanDirection,
-        #[case] boundary: BlockNumber,
-        #[case] cold_blocks: &[BlockNumber],
-        #[case] hot_blocks: &[BlockNumber],
-        #[case] expected: BlockNumber,
+        #[case] ExtendBoundaryCase {
+            direction,
+            boundary,
+            cold,
+            hot,
+            expected,
+        }: ExtendBoundaryCase,
     ) {
-        let cold = set(cold_blocks);
-        let hot = set(hot_blocks);
+        let cold = set(cold);
+        let hot = set(hot);
 
         let updated = extend_cursor_boundary(direction, boundary, &cold, &hot);
 
         assert_eq!(updated, expected);
     }
 
+    struct ExtendCursorCase {
+        backward: BlockNumber,
+        forward: BlockNumber,
+        cold: &'static [BlockNumber],
+        hot: &'static [BlockNumber],
+        expected_backward: BlockNumber,
+        expected_forward: BlockNumber,
+    }
+
     #[rstest]
-    #[case::stops_at_direct_hot(
-        (10, 20),
-        &[7, 8, 9, 10, 11, 21, 22, 23],
-        &[8, 22],
-        (9, 21)
-    )]
-    #[case::bridges_all_gaps_no_hot((10, 20), &[5, 9, 10, 21, 25], &[], (5, 25))]
-    #[case::stops_at_hot_in_gap((10, 20), &[5, 9, 10, 21, 25], &[7, 23], (8, 22))]
-    #[case::extends_both_no_hot((10, 20), &[5, 10, 20, 25], &[], (5, 25))]
-    #[case::boundary_is_hot_extends((10, 20), &[5, 10, 20, 25], &[10, 20], (5, 25))]
-    #[case::advances_to_block_before_hot(
-        (10, 10),
-        &[10, 20],
-        &[15],
-        (10, 14)
-    )]
+    #[case::stops_at_direct_hot(ExtendCursorCase {
+        backward: 10,
+        forward: 20,
+        cold: &[7, 8, 9, 10, 11, 21, 22, 23],
+        hot: &[8, 22],
+        expected_backward: 9,
+        expected_forward: 21,
+    })]
+    #[case::bridges_all_gaps_no_hot(ExtendCursorCase {
+        backward: 10,
+        forward: 20,
+        cold: &[5, 9, 10, 21, 25],
+        hot: &[],
+        expected_backward: 5,
+        expected_forward: 25,
+    })]
+    #[case::stops_at_hot_in_gap(ExtendCursorCase {
+        backward: 10,
+        forward: 20,
+        cold: &[5, 9, 10, 21, 25],
+        hot: &[7, 23],
+        expected_backward: 8,
+        expected_forward: 22,
+    })]
+    #[case::extends_both_no_hot(ExtendCursorCase {
+        backward: 10,
+        forward: 20,
+        cold: &[5, 10, 20, 25],
+        hot: &[],
+        expected_backward: 5,
+        expected_forward: 25,
+    })]
+    #[case::boundary_is_hot_extends(ExtendCursorCase {
+        backward: 10,
+        forward: 20,
+        cold: &[5, 10, 20, 25],
+        hot: &[10, 20],
+        expected_backward: 5,
+        expected_forward: 25,
+    })]
+    #[case::advances_to_block_before_hot(ExtendCursorCase {
+        backward: 10,
+        forward: 10,
+        cold: &[10, 20],
+        hot: &[15],
+        expected_backward: 10,
+        expected_forward: 14,
+    })]
     fn extend_cursor(
-        #[case] initial_cursor: (BlockNumber, BlockNumber),
-        #[case] cold_blocks: &[BlockNumber],
-        #[case] hot_blocks: &[BlockNumber],
-        #[case] expected_cursor: (BlockNumber, BlockNumber),
+        #[case] ExtendCursorCase {
+            backward,
+            forward,
+            cold,
+            hot,
+            expected_backward,
+            expected_forward,
+        }: ExtendCursorCase,
     ) {
         let sets = BlockSets {
-            cold: set(cold_blocks),
-            hot: set(hot_blocks),
+            cold: set(cold),
+            hot: set(hot),
         };
 
         // The cursor represents scan coverage, not just event locations. It can
         // advance to blocks in gaps (scanned but empty) and will stop at the
         // block right before a hot barrier.
-        let initial = Cursor {
-            backward: initial_cursor.0,
-            forward: initial_cursor.1,
-        };
+        let initial = Cursor { backward, forward };
         let updated = sets.extend_cursor(initial);
 
-        assert_eq!(updated.backward, expected_cursor.0);
-        assert_eq!(updated.forward, expected_cursor.1);
+        assert_eq!(updated.backward, expected_backward);
+        assert_eq!(updated.forward, expected_forward);
+    }
+
+    struct BootstrapCase {
+        cold: &'static [BlockNumber],
+        hot: &'static [BlockNumber],
+        expected: Option<(BlockNumber, BlockNumber)>,
     }
 
     #[rstest]
-    #[case::longest_range_before_hot(
-        &[1, 2, 3, 10, 12, 13, 20],
-        &[11],
-        Some((1, 10))
-    )]
-    #[case::bridges_all_gaps_no_hot(&[1, 5, 10, 20], &[], Some((1, 20)))]
-    #[case::none_when_all_cold_is_hot(&[5, 6, 7], &[5, 6, 7], None)]
-    #[case::single_cold_block(&[42], &[], Some((42, 42)))]
-    #[case::empty_cold_set(&[], &[], None)]
-    #[case::second_range_is_longer(
-        &[1, 2, 10, 11, 12, 13, 20],
-        &[5],
-        Some((10, 20))
-    )]
+    #[case::longest_range_before_hot(BootstrapCase {
+        cold: &[1, 2, 3, 10, 12, 13, 20],
+        hot: &[11],
+        expected: Some((1, 10)),
+    })]
+    #[case::bridges_all_gaps_no_hot(BootstrapCase {
+        cold: &[1, 5, 10, 20],
+        hot: &[],
+        expected: Some((1, 20)),
+    })]
+    #[case::none_when_all_cold_is_hot(BootstrapCase {
+        cold: &[5, 6, 7],
+        hot: &[5, 6, 7],
+        expected: None,
+    })]
+    #[case::single_cold_block(BootstrapCase {
+        cold: &[42],
+        hot: &[],
+        expected: Some((42, 42)),
+    })]
+    #[case::empty_cold_set(BootstrapCase {
+        cold: &[],
+        hot: &[],
+        expected: None,
+    })]
+    #[case::second_range_is_longer(BootstrapCase {
+        cold: &[1, 2, 10, 11, 12, 13, 20],
+        hot: &[5],
+        expected: Some((10, 20)),
+    })]
     fn bootstrap(
-        #[case] cold_blocks: &[BlockNumber],
-        #[case] hot_blocks: &[BlockNumber],
-        #[case] expected_cursor: Option<(BlockNumber, BlockNumber)>,
+        #[case] BootstrapCase {
+            cold,
+            hot,
+            expected,
+        }: BootstrapCase,
     ) {
         let sets = BlockSets {
-            cold: set(cold_blocks),
-            hot: set(hot_blocks),
+            cold: set(cold),
+            hot: set(hot),
         };
 
         let cursor = sets.bootstrap_cursor();
 
         assert_eq!(
             cursor.map(|value| (value.backward, value.forward)),
-            expected_cursor
+            expected
         );
     }
 }

@@ -44,7 +44,8 @@ use crate::{
     avalanche::settings::AvalancheIndexerSettings,
     avalanche_data_api::AvalancheDataApiClientSettings,
     log_stream::LogStream,
-    message_buffer::{Config, Key, MessageBuffer},
+    message_buffer::{Key, MessageBuffer},
+    settings::MessageBufferSettings,
 };
 
 use abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
@@ -69,6 +70,7 @@ pub struct AvalancheIndexerConfig {
     pub chains: Vec<AvalancheChainConfig>,
     pub poll_interval: Duration,
     pub batch_size: u64,
+    pub buffer_settings: MessageBufferSettings,
     /// If true, do not drop ICM events whose resolved EVM chain id is not present in
     /// `tracked_chain_ids`.
     ///
@@ -87,6 +89,7 @@ impl AvalancheIndexerConfig {
             chains,
             poll_interval: settings.pull_interval_ms,
             batch_size: settings.batch_size,
+            buffer_settings: MessageBufferSettings::default(),
             process_unknown_chains: settings.process_unknown_chains,
         }
     }
@@ -98,6 +101,11 @@ impl AvalancheIndexerConfig {
 
     pub fn with_batch_size(mut self, batch_size: u64) -> Self {
         self.batch_size = batch_size;
+        self
+    }
+
+    pub fn with_buffer_settings(mut self, buffer_settings: MessageBufferSettings) -> Self {
+        self.buffer_settings = buffer_settings;
         self
     }
 }
@@ -161,8 +169,7 @@ impl AvalancheIndexer {
             ));
         }
 
-        let buffer_config = Config::default();
-        let buffer = MessageBuffer::new((*db).clone(), buffer_config);
+        let buffer = MessageBuffer::new((*db).clone(), config.buffer_settings.clone());
 
         Ok(Self {
             db,
@@ -206,6 +213,7 @@ impl AvalancheIndexer {
             poll_interval,
             batch_size,
             process_unknown_chains,
+            ..
         } = config;
 
         let chain_ids: HashSet<i64> = chains.iter().map(|c| c.chain_id).collect();

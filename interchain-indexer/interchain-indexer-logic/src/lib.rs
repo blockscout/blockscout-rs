@@ -1,12 +1,11 @@
 pub mod avalanche_data_api;
 mod bulk;
 mod chain_info;
-mod cursor;
 mod database;
 mod error;
 mod message_buffer;
-pub mod metrics;
 mod provider_layers;
+pub mod settings;
 
 // pub mod event_handler;
 pub mod indexer;
@@ -22,4 +21,5 @@ pub use database::*;
 pub use error::ApiError;
 pub use indexer::*;
 pub use provider_layers::*;
+pub use settings::MessageBufferSettings;
 pub use token_info::{TokenInfoService, TokenInfoServiceSettings};

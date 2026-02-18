@@ -47,7 +47,8 @@ pub async fn spawn_configured_indexers(
                             bridge.bridge_id,
                             configs,
                             &settings.avalanche_indexer,
-                        );
+                        )
+                        .with_buffer_settings(settings.buffer_settings.clone());
                         let indexer = AvalancheIndexer::new(Arc::new(db.clone()), config)
                             .with_context(|| {
                                 format!(
