@@ -207,6 +207,7 @@ pub fn base_normal_tokens_query(
     chain_ids: Vec<ChainId>,
     token_types: Vec<TokenType>,
     search_query: Option<String>,
+    filter_poor_reputation: bool,
 ) -> Select<Entity> {
     let addresses_rel = Entity::belongs_to(entity::addresses::Entity)
         .from((Column::AddressHash, Column::ChainId))
@@ -216,8 +217,20 @@ pub fn base_normal_tokens_query(
         ))
         .into();
 
+    let poor_rep_rel = Entity::belongs_to(entity::poor_reputation_tokens::Entity)
+        .from((Column::AddressHash, Column::ChainId))
+        .to((
+            entity::poor_reputation_tokens::Column::AddressHash,
+            entity::poor_reputation_tokens::Column::ChainId,
+        ))
+        .into();
+
     Entity::find()
         .join(JoinType::LeftJoin, addresses_rel)
+        .apply_if(filter_poor_reputation.then_some(()), |q, _| {
+            q.join(JoinType::LeftJoin, poor_rep_rel)
+                .filter(entity::poor_reputation_tokens::Column::AddressHash.is_null())
+        })
         .apply_if(
             (!chain_ids.is_empty()).then_some(chain_ids),
             |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
@@ -257,7 +270,7 @@ pub async fn get_aggregated_token<C>(
 where
     C: ConnectionTrait + TransactionTrait,
 {
-    let token = base_normal_tokens_query(vec![address_hash], vec![chain_id], vec![], None)
+    let token = base_normal_tokens_query(vec![address_hash], vec![chain_id], vec![], None, false)
         .into_partial_model::<AggregatedToken>()
         .one(db)
         .await?;
@@ -291,6 +304,7 @@ where
         chain_ids,
         token_types,
         query,
+        true,
     ))
     .as_query()
     .to_owned();

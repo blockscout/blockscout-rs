@@ -98,6 +98,8 @@ pub struct ServiceSettings {
     pub native_coin_update_concurrency: usize,
     #[serde(default)]
     pub initialize_native_coins: bool,
+    #[serde(default)]
+    pub metadata_import_api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -182,6 +184,7 @@ impl Settings {
                 native_coin_price_update_interval: default_native_coin_price_update_interval(),
                 native_coin_update_concurrency: default_native_coin_update_concurrency(),
                 initialize_native_coins: false,
+                metadata_import_api_key: None,
             },
             cache: None,
             cluster_explorer: Default::default(),

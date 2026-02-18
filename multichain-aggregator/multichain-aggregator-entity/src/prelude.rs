@@ -6,5 +6,6 @@ pub use super::{
     api_keys::Entity as ApiKeys, block_ranges::Entity as BlockRanges, chains::Entity as Chains,
     counters_global_imported::Entity as CountersGlobalImported, dapps::Entity as Dapps,
     hashes::Entity as Hashes, interop_messages::Entity as InteropMessages,
-    interop_messages_transfers::Entity as InteropMessagesTransfers, tokens::Entity as Tokens,
+    interop_messages_transfers::Entity as InteropMessagesTransfers,
+    poor_reputation_tokens::Entity as PoorReputationTokens, tokens::Entity as Tokens,
 };

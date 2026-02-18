@@ -10,6 +10,7 @@ use multichain_aggregator_logic::{
     types::{addresses::proto_token_type_to_db_token_type, tokens::TokenType},
 };
 use multichain_aggregator_proto::blockscout::cluster_explorer::v1::*;
+use sea_orm::Iterable;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
@@ -64,8 +65,9 @@ impl ClusterExplorerService for ClusterExplorer {
     ) -> Result<Response<ListChainMetricsResponse>, Status> {
         let inner = request.into_inner();
 
+        let sort_metric = inner.sort_by.map(parse_query).transpose()?;
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let metrics = cluster.list_chain_metrics().await?;
+        let metrics = cluster.list_chain_metrics(sort_metric).await?;
 
         let items = metrics.into_iter().map(|m| m.into()).collect();
 
@@ -153,6 +155,23 @@ impl ClusterExplorerService for ClusterExplorer {
         Ok(Response::new(address_info.into()))
     }
 
+    async fn get_address_portfolio(
+        &self,
+        request: Request<GetAddressPortfolioRequest>,
+    ) -> Result<Response<GetAddressPortfolioResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let address = parse_query(inner.address_hash)?;
+        let chain_ids = parse_chain_ids(inner.chain_id)?;
+
+        let portfolio = cluster.get_address_portfolio(address, chain_ids).await?;
+
+        Ok(Response::new(GetAddressPortfolioResponse {
+            portfolio: Some(portfolio.into()),
+        }))
+    }
+
     async fn list_address_tokens(
         &self,
         request: Request<ListAddressTokensRequest>,
@@ -163,6 +182,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let token_types = parse_token_types(inner.r#type)?;
         let address = parse_query(inner.address_hash)?;
         let chain_ids = parse_chain_ids(inner.chain_id)?;
+        let filter_poor_reputation = !inner.include_poor_reputation_tokens.unwrap_or(false);
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;
 
@@ -171,8 +191,10 @@ impl ClusterExplorerService for ClusterExplorer {
                 address,
                 token_types,
                 chain_ids,
+                inner.query,
                 page_size as u64,
                 page_token,
+                filter_poor_reputation,
             )
             .await?;
 
@@ -190,6 +212,15 @@ impl ClusterExplorerService for ClusterExplorer {
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let token_types = parse_token_types(inner.r#type)?;
+        // Always exclude NATIVE token type from cluster tokens listing.
+        let token_types = if token_types.is_empty() {
+            TokenType::iter().collect()
+        } else {
+            token_types
+        }
+        .into_iter()
+        .filter(|t| *t != TokenType::Native)
+        .collect();
         let chain_ids = parse_chain_ids(inner.chain_id)?;
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;

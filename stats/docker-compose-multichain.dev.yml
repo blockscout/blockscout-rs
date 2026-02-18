@@ -125,7 +125,7 @@ services:
     restart: always
     container_name: 'stats'
     environment:
-      - STATS__MULTICHAIN_MODE=true
+      - STATS__MODE=multichain_aggregator
       - STATS__DB_URL=postgres://stats:n0uejXPl61ci6ldCuE2gQU5Y@stats-db:5432/stats
       - STATS__INDEXER_DB_URL=${STATS__BLOCKSCOUT_DB_URL:-postgresql://multichain_aggregator:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/multichain_aggregator}
       - STATS__CREATE_DATABASE=true
