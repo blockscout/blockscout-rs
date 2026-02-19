@@ -1,4 +1,3 @@
-
 services:
   redis-db:
     image: 'redis:alpine'
@@ -46,15 +45,18 @@ services:
       ETHEREUM_JSONRPC_TRACE_URL: https://subnets.avax.network/numi/mainnet/rpc
       # TODO: if the network was deployed a long ago, tune these values
       # to reduce sync time and take care of RPC node resources
-      # You can remove/comment the following 2 lines for newly created network
+      # You can remove/comment the following 4 lines for newly created network
       FIRST_BLOCK: 557000
       TRACE_FIRST_BLOCK: 557000
+      # INDEXER_CATCHUP_BLOCKS_BATCH_SIZE: 20
+      # INDEXER_CATCHUP_BLOCKS_CONCURRENCY: 1
       DATABASE_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
       SECRET_KEY_BASE: 56NtB48ear7+wMSf0IQuWDAAazhpb31qyc7GiyspBP2vh7t5zlCsF5QDv76chXeN # TODO: default, please change
-      NETWORK: EVM 
+      NETWORK: EVM
       PORT: 4000 
       INDEXER_DISABLE_PENDING_TRANSACTIONS_FETCHER: true
       INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: true
+      INDEXER_DISABLE_HOT_SMART_CONTRACTS_FETCHER: true
       DISABLE_MARKET: 'true'
       ECTO_USE_SSL: false
       DISABLE_EXCHANGE_RATES: true
