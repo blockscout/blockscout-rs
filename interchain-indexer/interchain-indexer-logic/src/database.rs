@@ -274,7 +274,8 @@ impl InterchainDatabase {
 
         if res.rows_affected == 0 {
             return Err(anyhow::anyhow!(
-                "failed to upsert avalanche_icm_blockchain_ids: insert failed and no row updated"
+                "failed to upsert avalanche_icm_blockchain_ids: insert \
+                 failed and no row updated"
             ));
         }
 
@@ -308,7 +309,8 @@ impl InterchainDatabase {
                             && existing.name != *expected_name
                         {
                             let err_msg = format!(
-                                "Bridge with id {} exists but has different name: expected '{}', found '{}'",
+                                "Bridge with id {} exists but has different \
+                                 name: expected '{}', found '{}'",
                                 existing.id, expected_name, existing.name
                             );
                             tracing::error!("{}", err_msg);

@@ -600,7 +600,8 @@ fn parse_receiver_ictt_logs(
         .find(|(_, count)| **count > 1)
         .map_or(Ok(()), |(outcome, _)| {
             Err(anyhow!(
-                "receiver-side invariant violated: multiple {} logs in one receipt",
+                "receiver-side invariant violated: multiple {} logs in \
+                 one receipt",
                 hex::encode(outcome)
             ))
         })?;
@@ -609,7 +610,8 @@ fn parse_receiver_ictt_logs(
         && counts.contains_key(&ITokenTransferrer::CallFailed::SIGNATURE_HASH)
     {
         Err(anyhow!(
-            "receiver-side invariant violated: both CallSucceeded and CallFailed present in one receipt"
+            "receiver-side invariant violated: both CallSucceeded and \
+             CallFailed present in one receipt"
         ))?;
     }
 
@@ -779,26 +781,33 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
 
     ctx.buffer
         .alter(key, chain_id, block_number, |msg| {
-        let transfers: Vec<TokenTransfer> = ctx.receipt_logs
-            .iter()
-            .filter_map(|log| parse_sender_ictt_log(&event.messageID, &msg.transfer, log).transpose())
-            .collect::<Result<Vec<_>>>()?;
+            let transfers: Vec<TokenTransfer> = ctx
+                .receipt_logs
+                .iter()
+                .filter_map(|log| {
+                    parse_sender_ictt_log(&event.messageID, &msg.transfer, log).transpose()
+                })
+                .collect::<Result<Vec<_>>>()?;
 
-        let transfer = (transfers.len() <= 1).then_some(transfers.first()).context(
-            "multiple sender-side ICTT transfers found for one teleporter message in a single receipt",
-        )?.cloned();
+            let transfer = (transfers.len() <= 1)
+                .then_some(transfers.first())
+                .context(
+                    "multiple sender-side ICTT transfers found for \
+                     one teleporter message in a single receipt",
+                )?
+                .cloned();
 
-        msg.send = Some(AnnotatedEvent{
-            event,
-            transaction_hash,
-            block_number: ctx.block_number,
-            block_timestamp: ctx.block_timestamp,
-            source_chain_id: ctx.chain_id,
-            destination_chain_id,
-        });
-        msg.transfer = transfer;
-        Ok(())
-    })
+            msg.send = Some(AnnotatedEvent {
+                event,
+                transaction_hash,
+                block_number: ctx.block_number,
+                block_timestamp: ctx.block_timestamp,
+                source_chain_id: ctx.chain_id,
+                destination_chain_id,
+            });
+            msg.transfer = transfer;
+            Ok(())
+        })
         .await?;
 
     tracing::debug!(

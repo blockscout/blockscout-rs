@@ -41,7 +41,8 @@ impl Consolidate for Message {
         .all_equal_value()
         .map_err(|mismatch| {
             anyhow::anyhow!(
-                "destination chain id mismatch across events: {mismatch:?} (send/receive/execution must agree)"
+                "destination chain id mismatch across events: {mismatch:?} \
+                 (send/receive/execution must agree)"
             )
         })?;
 

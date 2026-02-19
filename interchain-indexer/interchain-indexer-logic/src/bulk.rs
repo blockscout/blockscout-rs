@@ -25,7 +25,8 @@ fn batch_size_for_width(width: usize) -> Result<usize, DbErr> {
     let batch_size = PG_BIND_PARAM_LIMIT / width;
     if batch_size == 0 {
         Err(DbErr::Custom(format!(
-            "row width {width} exceeds PostgreSQL bind parameter limit {PG_BIND_PARAM_LIMIT}"
+            "row width {width} exceeds PostgreSQL bind parameter limit \
+             {PG_BIND_PARAM_LIMIT}"
         )))?;
     }
 

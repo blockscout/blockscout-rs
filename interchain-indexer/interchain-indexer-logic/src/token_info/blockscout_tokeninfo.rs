@@ -97,7 +97,8 @@ impl BlockscoutTokenInfoClient {
     pub fn new(settings: BlockscoutTokenInfoClientSettings) -> Self {
         if settings.url.is_none() {
             tracing::warn!(
-                "Blockscout token info URL not configured. Token icons will not available."
+                "Blockscout token info URL not configured. Token icons will \
+                 not be available."
             );
         }
 

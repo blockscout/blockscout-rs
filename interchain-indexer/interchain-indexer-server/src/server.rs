@@ -115,7 +115,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     }
 
     tracing::info!(
-        "Loaded {} chains ({}), {} bridges ({}) and {} bridge contracts from JSON files",
+        "Loaded {} chains ({}), {} bridges ({}) and {} bridge contracts from \
+         JSON files",
         chains.len(),
         chains
             .iter()
