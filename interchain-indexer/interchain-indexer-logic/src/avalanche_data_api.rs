@@ -10,7 +10,7 @@ use strum_macros::{AsRefStr, EnumString};
 pub const DATA_API_BASE_URL: &str = "https://data-api.avax.network";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct AvalancheDataApiClientSettings {
     pub network: AvalancheDataApiNetwork,
     pub api_key: Option<String>,

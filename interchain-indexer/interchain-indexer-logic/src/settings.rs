@@ -4,7 +4,7 @@ use std::time::Duration;
 
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct MessageBufferSettings {
     #[serde(default = "default_hot_ttl")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]

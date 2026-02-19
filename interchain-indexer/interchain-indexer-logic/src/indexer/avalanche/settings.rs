@@ -6,7 +6,7 @@ use crate::avalanche_data_api::AvalancheDataApiClientSettings;
 
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, serde::Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct AvalancheIndexerSettings {
     #[serde(default = "default_pull_interval")]
     #[serde_as(as = "serde_with::DurationMilliSeconds<u64>")]

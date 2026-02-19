@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use interchain_indexer_entity::sea_orm_active_enums::BridgeType;
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase,
-    indexer::avalanche::{AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig},
+    indexer::avalanche::{AvalancheChainConfig, AvalancheIndexer},
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -43,19 +43,19 @@ pub async fn spawn_configured_indexers(
 
                 let indexer: Arc<dyn CrosschainIndexer> = match bridge.indexer_type {
                     IndexerType::IcmIctt => {
-                        let config = AvalancheIndexerConfig::new(
+                        let indexer = AvalancheIndexer::new(
+                            Arc::new(db.clone()),
                             bridge.bridge_id,
                             configs,
                             &settings.avalanche_indexer,
+                            &settings.buffer_settings,
                         )
-                        .with_buffer_settings(settings.buffer_settings.clone());
-                        let indexer = AvalancheIndexer::new(Arc::new(db.clone()), config)
-                            .with_context(|| {
-                                format!(
-                                    "failed to spawn Avalanche indexer for bridge {}",
-                                    bridge.bridge_id
-                                )
-                            })?;
+                        .with_context(|| {
+                            format!(
+                                "failed to spawn Avalanche indexer for bridge {}",
+                                bridge.bridge_id
+                            )
+                        })?;
 
                         Arc::new(indexer)
                     }

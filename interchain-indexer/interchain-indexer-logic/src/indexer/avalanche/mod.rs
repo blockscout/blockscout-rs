@@ -34,7 +34,6 @@ use std::sync::atomic::Ordering;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::Duration,
 };
 use tokio::task::JoinHandle;
 use tonic::async_trait;
@@ -42,10 +41,8 @@ use tonic::async_trait;
 use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
     avalanche::settings::AvalancheIndexerSettings,
-    avalanche_data_api::AvalancheDataApiClientSettings,
     log_stream::LogStream,
     message_buffer::{Key, MessageBuffer},
-    settings::MessageBufferSettings,
 };
 
 use abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
@@ -64,55 +61,11 @@ pub struct AvalancheChainConfig {
     pub start_block: u64,
 }
 
-#[derive(Clone, Debug)]
-pub struct AvalancheIndexerConfig {
-    pub bridge_id: i32,
-    pub chains: Vec<AvalancheChainConfig>,
-    pub poll_interval: Duration,
-    pub batch_size: u64,
-    pub buffer_settings: MessageBufferSettings,
-    /// If true, do not drop ICM events whose resolved EVM chain id is not present in
-    /// `tracked_chain_ids`.
-    ///
-    /// Chains without an EVM chain id (resolver returns `None`) are still skipped.
-    pub process_unknown_chains: bool,
-}
-
-impl AvalancheIndexerConfig {
-    pub fn new(
-        bridge_id: i32,
-        chains: Vec<AvalancheChainConfig>,
-        settings: &AvalancheIndexerSettings,
-    ) -> Self {
-        Self {
-            bridge_id,
-            chains,
-            poll_interval: settings.pull_interval_ms,
-            batch_size: settings.batch_size,
-            buffer_settings: MessageBufferSettings::default(),
-            process_unknown_chains: settings.process_unknown_chains,
-        }
-    }
-
-    pub fn with_poll_interval(mut self, poll_interval: Duration) -> Self {
-        self.poll_interval = poll_interval;
-        self
-    }
-
-    pub fn with_batch_size(mut self, batch_size: u64) -> Self {
-        self.batch_size = batch_size;
-        self
-    }
-
-    pub fn with_buffer_settings(mut self, buffer_settings: MessageBufferSettings) -> Self {
-        self.buffer_settings = buffer_settings;
-        self
-    }
-}
-
 pub struct AvalancheIndexer {
     db: Arc<InterchainDatabase>,
-    config: AvalancheIndexerConfig,
+    bridge_id: i32,
+    chains: Vec<AvalancheChainConfig>,
+    settings: AvalancheIndexerSettings,
     buffer: Arc<MessageBuffer<Message>>,
     buffer_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
 
@@ -162,18 +115,26 @@ impl Drop for IndexerCleanupGuard {
 }
 
 impl AvalancheIndexer {
-    pub fn new(db: Arc<InterchainDatabase>, config: AvalancheIndexerConfig) -> Result<Self> {
-        if config.chains.is_empty() {
+    pub fn new(
+        db: Arc<InterchainDatabase>,
+        bridge_id: i32,
+        chains: Vec<AvalancheChainConfig>,
+        settings: &AvalancheIndexerSettings,
+        buffer_settings: &crate::MessageBufferSettings,
+    ) -> Result<Self> {
+        if chains.is_empty() {
             return Err(anyhow!(
                 "Avalanche indexer requires at least one configured chain"
             ));
         }
 
-        let buffer = MessageBuffer::new((*db).clone(), config.buffer_settings.clone());
+        let buffer = MessageBuffer::new((*db).clone(), buffer_settings.clone());
 
         Ok(Self {
             db,
-            config,
+            bridge_id,
+            chains,
+            settings: settings.clone(),
             buffer,
             buffer_handle: Arc::new(parking_lot::RwLock::new(None)),
             is_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -187,7 +148,9 @@ impl AvalancheIndexer {
     fn clone_for_task(&self) -> Self {
         Self {
             db: self.db.clone(),
-            config: self.config.clone(),
+            bridge_id: self.bridge_id,
+            chains: self.chains.clone(),
+            settings: self.settings.clone(),
             buffer: self.buffer.clone(),
             buffer_handle: self.buffer_handle.clone(),
             is_running: self.is_running.clone(),
@@ -205,20 +168,14 @@ impl AvalancheIndexer {
     /// - Merges streams and processes batches in order of arrival.
     async fn run(self) -> Result<()> {
         let db = (*self.db).clone();
-        let config = self.config;
+        let bridge_id = self.bridge_id;
+        let chains = self.chains;
+        let settings = self.settings;
         let buffer = self.buffer;
-        let AvalancheIndexerConfig {
-            bridge_id,
-            chains,
-            poll_interval,
-            batch_size,
-            process_unknown_chains,
-            ..
-        } = config;
 
         let chain_ids: HashSet<i64> = chains.iter().map(|c| c.chain_id).collect();
 
-        let data_api_settings = AvalancheDataApiClientSettings::default();
+        let data_api_settings = settings.data_api_client_settings.clone();
         let blockchain_id_resolver = BlockchainIdResolver::new(data_api_settings, db.clone());
 
         tracing::info!(
@@ -268,8 +225,8 @@ impl AvalancheIndexer {
             let stream_provider = provider.clone();
             let stream = LogStream::builder(provider.clone())
                 .filter(filter)
-                .poll_interval(poll_interval)
-                .batch_size(batch_size)
+                .poll_interval(settings.pull_interval_ms)
+                .batch_size(settings.batch_size)
                 .genesis_block(start_block)
                 .realtime_cursor(realtime_cursor)
                 .catchup_cursor(catchup_cursor)
@@ -287,7 +244,7 @@ impl AvalancheIndexer {
         let batch_ctx = BatchProcessContext {
             bridge_id,
             chain_ids: &chain_ids,
-            process_unknown_chains,
+            process_unknown_chains: settings.process_unknown_chains,
             blockchain_id_resolver: &blockchain_id_resolver,
             buffer: &buffer,
         };
@@ -332,7 +289,7 @@ impl CrosschainIndexer for AvalancheIndexer {
             .is_err()
         {
             tracing::warn!(
-                bridge_id = self.config.bridge_id,
+                bridge_id = self.bridge_id,
                 "Avalanche indexer already running"
             );
             return Ok(());
@@ -352,7 +309,7 @@ impl CrosschainIndexer for AvalancheIndexer {
         *self.state.write() = CrosschainIndexerState::Running;
 
         let this = self.clone_for_task();
-        let bridge_id = this.config.bridge_id;
+        let bridge_id = this.bridge_id;
 
         let handle = tokio::spawn(async move {
             // Extract Arc references before moving `this` into run()
@@ -409,15 +366,15 @@ impl CrosschainIndexer for AvalancheIndexer {
             extra_info: std::collections::HashMap::from([
                 (
                     "chains_count".to_string(),
-                    serde_json::json!(self.config.chains.len()),
+                    serde_json::json!(self.chains.len()),
                 ),
                 (
                     "poll_interval_secs".to_string(),
-                    serde_json::json!(self.config.poll_interval.as_secs()),
+                    serde_json::json!(self.settings.pull_interval_ms.as_secs()),
                 ),
                 (
                     "batch_size".to_string(),
-                    serde_json::json!(self.config.batch_size),
+                    serde_json::json!(self.settings.batch_size),
                 ),
             ]),
         }

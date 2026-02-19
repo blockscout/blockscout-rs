@@ -65,8 +65,7 @@ use interchain_indexer_entity::sea_orm_active_enums::BridgeType;
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase,
     indexer::avalanche::{
-        AvalancheChainConfig, AvalancheIndexer, AvalancheIndexerConfig,
-        settings::AvalancheIndexerSettings,
+        AvalancheChainConfig, AvalancheIndexer, settings::AvalancheIndexerSettings,
     },
 };
 use interchain_indexer_server::{BridgeConfig, BridgeContractConfig, ChainConfig, ExplorerConfig};
@@ -114,6 +113,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
             name: name_src.into(),
             icon: String::new(),
             explorer: ExplorerConfig::default(),
+            pool_config: Default::default(),
             rpcs: vec![],
         },
         ChainConfig {
@@ -121,6 +121,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
             name: name_dest.into(),
             icon: String::new(),
             explorer: ExplorerConfig::default(),
+            pool_config: Default::default(),
             rpcs: vec![],
         },
     ];
@@ -200,14 +201,13 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         },
     ];
 
-    let indexer_config = AvalancheIndexerConfig::new(
+    let indexer = AvalancheIndexer::new(
+        std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
         &Default::default(),
-    );
-
-    let indexer =
-        AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
+        &Default::default(),
+    )?;
     indexer.start().await?;
 
     let start = std::time::Instant::now();
@@ -378,6 +378,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
             name: name_src.into(),
             icon: String::new(),
             explorer: ExplorerConfig::default(),
+            pool_config: Default::default(),
             rpcs: vec![],
         },
         ChainConfig {
@@ -385,6 +386,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
             name: name_dest.into(),
             icon: String::new(),
             explorer: ExplorerConfig::default(),
+            pool_config: Default::default(),
             rpcs: vec![],
         },
     ];
@@ -464,16 +466,19 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         },
     ];
 
-    let indexer_config = AvalancheIndexerConfig::new(
+    let settings = AvalancheIndexerSettings {
+        pull_interval_ms: Duration::from_millis(200),
+        batch_size: 25,
+        ..Default::default()
+    };
+
+    let indexer = AvalancheIndexer::new(
+        std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
+        &settings,
         &Default::default(),
-    )
-    .with_poll_interval(Duration::from_millis(200))
-    .with_batch_size(25);
-
-    let indexer =
-        AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
+    )?;
     indexer.start().await?;
 
     // Expected message native_id from the test blocks (same as full e2e).
@@ -559,6 +564,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
             name: name_src.into(),
             icon: String::new(),
             explorer: ExplorerConfig::default(),
+            pool_config: Default::default(),
             rpcs: vec![],
         },
         ChainConfig {
@@ -566,6 +572,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
             name: name_dest.into(),
             icon: String::new(),
             explorer: ExplorerConfig::default(),
+            pool_config: Default::default(),
             rpcs: vec![],
         },
     ];
@@ -646,16 +653,19 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         },
     ];
 
-    let indexer_config = AvalancheIndexerConfig::new(
+    let settings = AvalancheIndexerSettings {
+        pull_interval_ms: Duration::from_millis(200),
+        batch_size: 25,
+        ..Default::default()
+    };
+
+    let indexer = AvalancheIndexer::new(
+        std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
+        &settings,
         &Default::default(),
-    )
-    .with_poll_interval(Duration::from_millis(200))
-    .with_batch_size(25);
-
-    let indexer =
-        AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
+    )?;
     indexer.start().await?;
 
     // Expected message native_id from the test blocks.
@@ -730,6 +740,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         name: name_src.into(),
         icon: String::new(),
         explorer: ExplorerConfig::default(),
+        pool_config: Default::default(),
         rpcs: vec![],
     }];
 
@@ -787,17 +798,19 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
     }];
 
     let settings = AvalancheIndexerSettings {
+        pull_interval_ms: Duration::from_millis(200),
+        batch_size: 25,
         process_unknown_chains: true,
         ..Default::default()
     };
 
-    let indexer_config =
-        AvalancheIndexerConfig::new(bridge_config.bridge_id, avalanche_chains, &settings)
-            .with_poll_interval(Duration::from_millis(200))
-            .with_batch_size(25);
-
-    let indexer =
-        AvalancheIndexer::new(std::sync::Arc::new(interchain_db.clone()), indexer_config)?;
+    let indexer = AvalancheIndexer::new(
+        std::sync::Arc::new(interchain_db.clone()),
+        bridge_config.bridge_id,
+        avalanche_chains,
+        &settings,
+        &Default::default(),
+    )?;
     indexer.start().await?;
 
     // Expected message native_id from the test blocks.

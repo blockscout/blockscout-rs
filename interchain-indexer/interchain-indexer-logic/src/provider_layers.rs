@@ -27,6 +27,8 @@ use governor::{
 };
 use parking_lot::RwLock;
 use rand::seq::IndexedRandom;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use tokio::time::sleep;
 use tower::{Layer, Service, ServiceBuilder};
 
@@ -43,8 +45,11 @@ pub struct NodeConfig {
 }
 
 /// Global configuration for the layered transport stack.
-#[derive(Clone)]
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
 pub struct PoolConfig {
+    #[serde_as(as = "serde_with::DurationMilliSeconds<u64>")]
     pub health_period: Duration,
     pub max_block_lag: u64,
     pub retry_count: u32,
@@ -56,10 +61,26 @@ impl Default for PoolConfig {
     fn default() -> Self {
         Self {
             health_period: Duration::from_millis(1000),
-            max_block_lag: 20,
-            retry_count: 10,
-            retry_initial_delay_ms: 50,
-            retry_max_delay_ms: 500,
+            max_block_lag: 100,
+            retry_count: 3,
+            retry_initial_delay_ms: 5,
+            retry_max_delay_ms: 100,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct NodeDefaultSettings {
+    pub cooldown_threshold: u32,
+    pub cooldown_secs: u64,
+}
+
+impl Default for NodeDefaultSettings {
+    fn default() -> Self {
+        Self {
+            cooldown_threshold: 1,
+            cooldown_secs: 60,
         }
     }
 }

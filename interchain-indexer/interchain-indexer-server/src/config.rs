@@ -197,7 +197,7 @@ impl From<ChainConfig> for chains::ActiveModel {
 }
 
 /// Convert chains::Model to ChainConfig
-/// Note: This conversion loses the `rpcs` field as it's not stored in the chains table
+/// Note: This conversion loses the `rpcs` field as it's not stored in the chains table.
 impl From<chains::Model> for ChainConfig {
     fn from(model: chains::Model) -> Self {
         // Extract custom routes from JSON
@@ -228,6 +228,7 @@ impl From<chains::Model> for ChainConfig {
                 custom_address_route,
                 custom_token_route,
             },
+            pool_config: PoolConfig::default(),
             rpcs: vec![], // RPCs are not stored in database
         }
     }
@@ -249,6 +250,8 @@ pub struct ChainConfig {
     pub icon: String,
     #[serde(default)]
     pub explorer: ExplorerConfig,
+    #[serde(default)]
+    pub pool_config: PoolConfig,
     pub rpcs: Vec<HashMap<String, RpcProviderConfig>>,
 }
 
@@ -261,6 +264,10 @@ pub struct RpcProviderConfig {
     max_rps: u32,
     #[serde(default = "default_error_threshold")]
     error_threshold: u32,
+    #[serde(default = "default_cooldown_threshold")]
+    cooldown_threshold: u32,
+    #[serde(default = "default_cooldown_secs")]
+    cooldown_secs: u64,
     #[serde(default = "default_multicall_batching_us")]
     multicall_batching_us: u64,
     #[serde(default)]
@@ -277,6 +284,14 @@ fn default_max_rps() -> u32 {
 
 fn default_error_threshold() -> u32 {
     3
+}
+
+fn default_cooldown_threshold() -> u32 {
+    1
+}
+
+fn default_cooldown_secs() -> u64 {
+    60
 }
 
 fn default_multicall_batching_us() -> u64 {
@@ -319,19 +334,6 @@ pub async fn create_provider_pools_from_chains(
 ) -> Result<HashMap<i64, DynProvider<Ethereum>>> {
     let mut pools = HashMap::new();
 
-    // Default pool configuration
-    let pool_config = PoolConfig {
-        health_period: Duration::from_secs(1),
-        max_block_lag: 100,
-        retry_count: 3,
-        retry_initial_delay_ms: 5,
-        retry_max_delay_ms: 100,
-    };
-
-    // Default node configuration values
-    const DEFAULT_COOLDOWN_THRESHOLD: u32 = 1;
-    const DEFAULT_COOLDOWN_SECS: u64 = 60;
-
     for chain in chains {
         if chain.chain_id < 0 {
             tracing::warn!(
@@ -360,8 +362,8 @@ pub async fn create_provider_pools_from_chains(
                     http_url: url,
                     max_rps: rpc_config.max_rps,
                     error_threshold: rpc_config.error_threshold,
-                    cooldown_threshold: DEFAULT_COOLDOWN_THRESHOLD,
-                    cooldown: Duration::from_secs(DEFAULT_COOLDOWN_SECS),
+                    cooldown_threshold: rpc_config.cooldown_threshold,
+                    cooldown: Duration::from_secs(rpc_config.cooldown_secs),
                     multicall_batching_wait: Duration::from_micros(
                         rpc_config.multicall_batching_us,
                     ),
@@ -378,7 +380,7 @@ pub async fn create_provider_pools_from_chains(
                 anyhow::bail!("Duplicate chain_id {} in chains config", chain.chain_id,);
             }
 
-            match build_layered_http_provider(node_configs, pool_config.clone()) {
+            match build_layered_http_provider(node_configs, chain.pool_config.clone()) {
                 Ok(provider) => {
                     tracing::info!(
                         chain_id = chain.chain_id,
@@ -590,6 +592,7 @@ mod tests {
                 custom_address_route: None,
                 custom_token_route: None,
             },
+            pool_config: Default::default(),
             rpcs: vec![],
         };
 
@@ -629,6 +632,7 @@ mod tests {
                 custom_address_route: None,
                 custom_token_route: None,
             },
+            pool_config: Default::default(),
             rpcs: vec![],
         };
 
