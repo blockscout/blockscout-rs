@@ -16,6 +16,7 @@ mod m20260119_122518_add_token_updates_index;
 mod m20260121_183201_add_zrc2_token_type;
 mod m20260122_155207_add_native_token_type;
 mod m20260201_195943_add_poor_reputation_tokens;
+mod m20260219_125236_add_erc7984_token_type;
 
 pub struct Migrator;
 
@@ -38,6 +39,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260121_183201_add_zrc2_token_type::Migration),
             Box::new(m20260122_155207_add_native_token_type::Migration),
             Box::new(m20260201_195943_add_poor_reputation_tokens::Migration),
+            Box::new(m20260219_125236_add_erc7984_token_type::Migration),
         ]
     }
 }
