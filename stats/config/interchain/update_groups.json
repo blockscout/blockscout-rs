@@ -1,17 +1,17 @@
 {
   "schedules": {
-    "total_interchain_messages_group": "0 10 0 * * * *",
-    "total_interchain_messages_sent_group": "0 10 0 * * * *",
-    "total_interchain_messages_received_group": "0 10 0 * * * *",
-    "total_interchain_transfers_group": "0 10 0 * * * *",
-    "total_interchain_transfers_sent_group": "0 10 0 * * * *",
-    "total_interchain_transfers_received_group": "0 10 0 * * * *",
-    "total_interchain_transfer_users_group": "0 10 0 * * * *",
-    "new_messages_interchain_group": "0 10 0 * * * *",
-    "new_messages_sent_interchain_group": "0 10 0 * * * *",
-    "new_messages_received_interchain_group": "0 10 0 * * * *",
-    "new_transfers_interchain_group": "0 10 0 * * * *",
-    "new_transfers_sent_interchain_group": "0 10 0 * * * *",
-    "new_transfers_received_interchain_group": "0 10 0 * * * *"
+    "total_interchain_messages_group": "0 0 */2 * * * *",
+    "total_interchain_messages_sent_group": "0 0 */2 * * * *",
+    "total_interchain_messages_received_group": "0 0 */2 * * * *",
+    "total_interchain_transfers_group": "0 0 */2 * * * *",
+    "total_interchain_transfers_sent_group": "0 0 */2 * * * *",
+    "total_interchain_transfers_received_group": "0 0 */2 * * * *",
+    "total_interchain_transfer_users_group": "0 30 0 * * * *",
+    "new_messages_interchain_group": "0 0 */2 * * * *",
+    "new_messages_sent_interchain_group": "0 0 */2 * * * *",
+    "new_messages_received_interchain_group": "0 0 */2 * * * *",
+    "new_transfers_interchain_group": "0 0 */2 * * * *",
+    "new_transfers_sent_interchain_group": "0 0 */2 * * * *",
+    "new_transfers_received_interchain_group": "0 0 */2 * * * *"
   }
 }
