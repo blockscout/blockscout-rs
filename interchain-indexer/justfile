@@ -1,0 +1,99 @@
+default:
+    just --list --unsorted
+
+db-host := env_var_or_default('DB_HOST', "localhost")
+db-port := env_var_or_default('DB_PORT', "5432")
+db-user := env_var_or_default('DB_USER', "postgres")
+db-password := env_var_or_default('DB_PASSWORD', "admin")
+db-name := env_var_or_default('DB_NAME', "interchain_indexer")
+export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+export RUST_LOG := env_var_or_default('RUST_LOG', "info")
+
+docker-name := env_var_or_default('DOCKER_NAME', "interchain-indexer-postgres-dev")
+test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
+
+
+start-postgres:
+    # we run it in --rm mode, so all data will be deleted after stopping
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres -N 500
+    sleep 3
+    # wait for postgres to start, but only if db_name is not empty
+    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'
+
+stop-postgres:
+    docker kill {{docker-name}}
+
+test *args:
+    cargo test {{args}} -- --include-ignored
+
+test-with-db *args:
+    -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
+
+stop-test-postgres:
+    just docker-name="{{docker-name}}-test" stop-postgres
+
+run:
+    INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
+    INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
+    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/avalanche/chains.json \
+    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/avalanche/bridges.json \
+    INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN=true \
+    INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
+    INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS=8021 \
+    cargo run --bin interchain-indexer-server
+
+run-dev:
+    dotenv -f .env run just run
+
+generate-entities *args:
+    sea-orm-cli generate entity -o interchain-indexer-entity/src/codegen
+    cargo fmt --all -- --config imports_granularity=Crate
+    ./scripts/bigdecimal_rename.sh interchain-indexer-entity/src/codegen
+
+new-migration name:
+    ./scripts/update_migration.sh {{name}}
+
+migrate-up:
+    sea-orm-cli migrate -d interchain-indexer-migration up
+
+migrate-down:
+    sea-orm-cli migrate -d interchain-indexer-migration down
+
+# rollback and reapply all migrations
+migrate-refresh:
+    sea-orm-cli migrate -d interchain-indexer-migration refresh
+
+# drop all tables and reapply all migrations
+migrate-fresh:
+    sea-orm-cli migrate -d interchain-indexer-migration fresh
+
+migrate-fresh-generate-entities *args:
+    just migrate-fresh
+    just generate-entities {{args}}
+
+psql:
+    psql ${DATABASE_URL}
+
+# wipe DB
+flush-database:
+    sea-orm-cli migrate -d interchain-indexer-migration reset
+
+# apply the basic formatting 
+format:
+    cargo sort --workspace
+    cargo fmt --all -- --config imports_granularity=Crate
+
+# check and lint the code
+check:
+    cargo check
+    cargo clippy --all --all-targets --all-features -- -D warnings
+
+insert-test-data:
+     docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} < interchain-indexer-migration/src/mock_data/test_data.sql
+
+check-envs:
+    cargo run --bin check-envs -- --validate-only
+
+generate-envs:
+    cargo run --bin check-envs

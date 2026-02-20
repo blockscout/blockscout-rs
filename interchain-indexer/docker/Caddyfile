@@ -1,0 +1,33 @@
+localhost {
+    # Backend API routes
+    handle /api* {
+        reverse_proxy backend:4000
+    }
+    
+    handle /socket* {
+        reverse_proxy backend:4000
+    }
+    
+    handle /sitemap.xml {
+        reverse_proxy backend:4000
+    }
+    
+    handle /auth* {
+        reverse_proxy backend:4000
+    }
+    
+    handle /metrics {
+        reverse_proxy backend:4000
+    }
+    
+    # Shared files with directory browsing
+    handle /shared/* {
+        root * /var
+        file_server browse
+    }
+    
+    # Frontend (default catch-all)
+    handle {
+        reverse_proxy frontend:3000
+    }
+}

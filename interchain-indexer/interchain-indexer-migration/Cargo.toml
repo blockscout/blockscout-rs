@@ -1,0 +1,15 @@
+[package]
+name = "interchain-indexer-migration"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "migration"
+path = "src/lib.rs"
+
+[dependencies]
+async-std = { workspace = true, features = ["attributes", "tokio1"] }
+sea-orm-migration = { workspace = true, features = [ "runtime-tokio-rustls", "sqlx-postgres" ] }
+
+

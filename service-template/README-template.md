@@ -12,7 +12,7 @@ TODO: this is codegenerated text, change it and provide description of service
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.
 + Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
-+ Execute `just` to see avaliable dev commands
++ Execute `just` to see available dev commands
 
 ```bash
 just
@@ -62,6 +62,6 @@ or run with ENVs from .env current
 `Router` and `Router` have similar names, but are actually distinct types
 ```
 
-To fix this error you need to change tonic version of `tonic` in `blockscout-service-launcer` to `0.8`
+To fix this error you need to change tonic version of `tonic` in `blockscout-service-launcher` to `0.8`
 
 For now you can only change in `Cargo.lock`
