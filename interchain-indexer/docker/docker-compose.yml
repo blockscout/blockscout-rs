@@ -33,7 +33,7 @@ services:
     depends_on:
       - db
       - redis-db
-    image: ghcr.io/blockscout/blockscout-private:9.3.5
+    image: ghcr.io/evgenkor/blockscout-private:9.3.5
     pull_policy: always
     restart: always
     stop_grace_period: 5m
@@ -99,7 +99,7 @@ services:
     depends_on:
       - backend
       - caddy
-    image: ghcr.io/blockscout/frontend-private:cross-chain-alpha.0
+    image: ghcr.io/evgenkor/frontend-private:cross-chain-alpha.0
     pull_policy: always
     platform: linux/amd64
     restart: always
