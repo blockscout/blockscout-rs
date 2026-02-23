@@ -5,23 +5,38 @@ package blockscout.multichainAggregator.v1;
 option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
 
 service MultichainAggregatorService {
+  // Imports a batch of addresses, hashes (blocks/transactions), and token-related data into the aggregator.
   rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
+  // Imports tokens marked with poor reputation so they can be included in aggregator results.
   rpc ImportPoorReputationTokens(ImportPoorReputationTokensRequest) returns (ImportPoorReputationTokensResponse) {}
+  // Unified quick search across addresses, blocks, transactions, block numbers, dapps, tokens, NFTs, and domains; supports unlimited results per chain.
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
+  // Lists addresses matching a query string; optional chain filter and pagination.
   rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
+  // Lists tokens with optional filters and pagination.
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
+  // Lists transactions (hashes) with optional filters and pagination.
   rpc ListTransactions(ListTransactionsRequest)
       returns (ListTransactionsResponse) {}
+  // Lists NFTs with optional filters and pagination.
   rpc ListNfts(ListNftsRequest) returns (ListNftsResponse) {}
+  // Lists chains; optional filter for only active chains.
   rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
+  // Lists dapps with optional query, categories, and chain filters.
   rpc ListDapps(ListDappsRequest) returns (ListDappsResponse) {}
+  // Lists chains associated with a dapp.
   rpc ListDappChains(ListDappChainsRequest) returns (ListDappChainsResponse) {}
+  // Lists dapp categories.
   rpc ListDappCategories(ListDappCategoriesRequest)
       returns (ListDappCategoriesResponse) {}
+  // Lists domains with optional filters and pagination.
   rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse) {}
+  // Lists block numbers (chain + block number) with optional filters and pagination.
   rpc ListBlockNumbers(ListBlockNumbersRequest)
       returns (ListBlockNumbersResponse) {}
+  // Lists blocks (hashes) with optional filters and pagination.
   rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse) {}
+  // Lists token update events with optional filters and pagination.
   rpc ListTokenUpdates(ListTokenUpdatesRequest) returns (ListTokenUpdatesResponse) {}
 }
 

@@ -13,6 +13,7 @@ produces:
 paths:
   /api/v1/addresses:
     get:
+      summary: Lists addresses matching a query string; optional chain filter and pagination.
       operationId: MultichainAggregatorService_ListAddresses
       responses:
         "200":
@@ -48,6 +49,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/block-numbers:
     get:
+      summary: Lists block numbers (chain + block number) with optional filters and pagination.
       operationId: MultichainAggregatorService_ListBlockNumbers
       responses:
         "200":
@@ -83,6 +85,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/blocks:
     get:
+      summary: Lists blocks (hashes) with optional filters and pagination.
       operationId: MultichainAggregatorService_ListBlocks
       responses:
         "200":
@@ -118,6 +121,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/chains:
     get:
+      summary: Lists chains; optional filter for only active chains.
       operationId: MultichainAggregatorService_ListChains
       responses:
         "200":
@@ -961,6 +965,7 @@ paths:
         - ClusterExplorerService
   /api/v1/dapps:
     get:
+      summary: Lists dapps with optional query, categories, and chain filters.
       operationId: MultichainAggregatorService_ListDapps
       responses:
         "200":
@@ -991,6 +996,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/dapps/categories:
     get:
+      summary: Lists dapp categories.
       operationId: MultichainAggregatorService_ListDappCategories
       responses:
         "200":
@@ -1005,6 +1011,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/dapps/chains:
     get:
+      summary: Lists chains associated with a dapp.
       operationId: MultichainAggregatorService_ListDappChains
       responses:
         "200":
@@ -1019,6 +1026,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/domains:
     get:
+      summary: Lists domains with optional filters and pagination.
       operationId: MultichainAggregatorService_ListDomains
       responses:
         "200":
@@ -1054,6 +1062,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/import:batch:
     post:
+      summary: Imports a batch of addresses, hashes (blocks/transactions), and token-related data into the aggregator.
       operationId: MultichainAggregatorService_BatchImport
       responses:
         "200":
@@ -1074,6 +1083,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/import:poor-reputation-tokens:
     post:
+      summary: Imports tokens marked with poor reputation so they can be included in aggregator results.
       operationId: MultichainAggregatorService_ImportPoorReputationTokens
       responses:
         "200":
@@ -1094,6 +1104,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/nfts:
     get:
+      summary: Lists NFTs with optional filters and pagination.
       operationId: MultichainAggregatorService_ListNfts
       responses:
         "200":
@@ -1129,6 +1140,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/search:quick:
     get:
+      summary: Unified quick search across addresses, blocks, transactions, block numbers, dapps, tokens, NFTs, and domains; supports unlimited results per chain.
       operationId: MultichainAggregatorService_QuickSearch
       responses:
         "200":
@@ -1152,6 +1164,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/tokens:
     get:
+      summary: Lists tokens with optional filters and pagination.
       operationId: MultichainAggregatorService_ListTokens
       responses:
         "200":
@@ -1187,6 +1200,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/tokens/updates:
     get:
+      summary: Lists token update events with optional filters and pagination.
       operationId: MultichainAggregatorService_ListTokenUpdates
       responses:
         "200":
@@ -1218,6 +1232,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/transactions:
     get:
+      summary: Lists transactions (hashes) with optional filters and pagination.
       operationId: MultichainAggregatorService_ListTransactions
       responses:
         "200":
