@@ -28,4 +28,6 @@ pub enum TokenType {
     Zrc2,
     #[sea_orm(string_value = "NATIVE")]
     Native,
+    #[sea_orm(string_value = "ERC-7984")]
+    Erc7984,
 }
