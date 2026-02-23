@@ -292,10 +292,15 @@ paths:
           in: path
           required: true
           type: string
-        - name: sort_by
+        - name: sort
           description: |-
             Metric used to sort chain metrics. Supported values: active_accounts, daily_transactions,
             new_addresses, tps. Defaults to active_accounts.
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: 'Sort order: "asc" or "desc". Defaults to "desc" (higher values first).'
           in: query
           required: false
           type: string
@@ -318,10 +323,15 @@ paths:
           in: path
           required: true
           type: string
-        - name: sort_by
+        - name: sort
           description: |-
             Metric used to sort chains. Supported values: active_accounts, daily_transactions,
             new_addresses, tps. Defaults to active_accounts.
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: 'Sort order: "asc" or "desc". Defaults to "desc" (higher values first).'
           in: query
           required: false
           type: string
