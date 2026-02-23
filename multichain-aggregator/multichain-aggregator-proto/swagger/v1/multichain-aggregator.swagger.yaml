@@ -2255,6 +2255,7 @@ definitions:
       - TOKEN_TYPE_ERC_7802
       - TOKEN_TYPE_ZRC_2
       - TOKEN_TYPE_NATIVE
+      - TOKEN_TYPE_ERC_7984
     default: TOKEN_TYPE_UNSPECIFIED
   v1WeeklyMetric:
     type: object
