@@ -27,6 +27,7 @@ use crate::{
         addresses::{AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chain_metrics::{ChainMetricKind, ChainMetrics},
+        order_direction::OrderDirection,
         chains::Chain,
         dapp::MarketplaceDapp,
         domains::{Domain, DomainInfo, ProtocolInfo},
@@ -158,6 +159,7 @@ impl Cluster {
     pub async fn list_chains(
         &self,
         sort_metric: Option<ChainMetricKind>,
+        order_direction: Option<OrderDirection>,
     ) -> Result<Vec<Chain>, ServiceError> {
         let chain_ids = self.active_chain_ids().await?.into_iter().collect();
 
@@ -167,7 +169,9 @@ impl Cluster {
             .map(|c| c.into())
             .collect::<Vec<Chain>>();
 
-        let metrics = self.list_chain_metrics(sort_metric).await?;
+        let metrics = self
+            .list_chain_metrics(sort_metric, order_direction)
+            .await?;
         let order_map = metrics
             .iter()
             .enumerate()
@@ -182,6 +186,7 @@ impl Cluster {
     pub async fn list_chain_metrics(
         &self,
         sort_metric: Option<ChainMetricKind>,
+        order_direction: Option<OrderDirection>,
     ) -> Result<Vec<ChainMetrics>, ServiceError> {
         let chain_ids = self.active_chain_ids().await?;
         let key = format!("{}:chain_metrics", self.name);
@@ -196,12 +201,19 @@ impl Cluster {
         let mut metrics = maybe_cache_lookup!(self.caches.chain_metrics.as_ref(), key, get)?;
 
         let sort_metric = sort_metric.unwrap_or_default();
+        let desc = order_direction.unwrap_or_default() == OrderDirection::Desc;
         metrics.sort_by(|left, right| {
             let ordering = match (
                 left.metric_value_for_sorting(sort_metric),
                 right.metric_value_for_sorting(sort_metric),
             ) {
-                (Some(l), Some(r)) => r.total_cmp(&l),
+                (Some(l), Some(r)) => {
+                    if desc {
+                        r.total_cmp(&l)
+                    } else {
+                        l.total_cmp(&r)
+                    }
+                }
                 (Some(_), None) => Ordering::Less,
                 (None, Some(_)) => Ordering::Greater,
                 (None, None) => Ordering::Equal,

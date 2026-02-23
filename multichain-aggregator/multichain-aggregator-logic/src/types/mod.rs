@@ -6,6 +6,7 @@ pub mod batch_import_request;
 pub mod block_ranges;
 pub mod chain_metrics;
 pub mod chains;
+pub mod order_direction;
 pub mod counters;
 pub mod dapp;
 pub mod domains;
