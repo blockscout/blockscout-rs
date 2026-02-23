@@ -13,6 +13,7 @@ produces:
 paths:
   /api/v1/addresses:
     get:
+      summary: Lists addresses matching a query string; optional chain filter and pagination.
       operationId: MultichainAggregatorService_ListAddresses
       responses:
         "200":
@@ -48,6 +49,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/block-numbers:
     get:
+      summary: Lists block numbers (chain + block number) with optional filters and pagination.
       operationId: MultichainAggregatorService_ListBlockNumbers
       responses:
         "200":
@@ -83,6 +85,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/blocks:
     get:
+      summary: Lists blocks (hashes) with optional filters and pagination.
       operationId: MultichainAggregatorService_ListBlocks
       responses:
         "200":
@@ -118,6 +121,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/chains:
     get:
+      summary: Lists chains; optional filter for only active chains.
       operationId: MultichainAggregatorService_ListChains
       responses:
         "200":
@@ -137,6 +141,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/clusters/{cluster_id}/addresses/{address_hash}:
     get:
+      summary: 'Returns aggregated address info across the cluster: balances, contract/verification status, domains.'
       operationId: ClusterExplorerService_GetAddress
       responses:
         "200":
@@ -160,6 +165,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/addresses/{address_hash}/domains:
     get:
+      summary: Lists domains (e.g. ENS names) associated with an address in the cluster; supports pagination.
       operationId: ClusterExplorerService_LookupAddressDomains
       responses:
         "200":
@@ -192,6 +198,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/addresses/{address_hash}/portfolio:
     get:
+      summary: Returns total portfolio value for an address, optionally filtered by chain ids.
       operationId: ClusterExplorerService_GetAddressPortfolio
       responses:
         "200":
@@ -223,6 +230,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/addresses/{address_hash}/tokens:
     get:
+      summary: Lists token balances for an address with optional type/chain/query filters and pagination.
       operationId: ClusterExplorerService_ListAddressTokens
       responses:
         "200":
@@ -277,6 +285,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/chain-metrics:
     get:
+      summary: Returns chain-level metrics (TPS, new addresses, daily transactions, active accounts) with week-over-week deltas.
       operationId: ClusterExplorerService_ListChainMetrics
       responses:
         "200":
@@ -308,6 +317,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/chains:
     get:
+      summary: Lists all chains in the cluster, optionally sorted by a metric (e.g. active_accounts, tps).
       operationId: ClusterExplorerService_ListClusterChains
       responses:
         "200":
@@ -339,6 +349,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/domain-protocols:
     get:
+      summary: Lists domain name protocols (e.g. ENS) supported in the cluster.
       operationId: ClusterExplorerService_ListDomainProtocols
       responses:
         "200":
@@ -358,6 +369,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/messages:
     get:
+      summary: Lists interop (cross-chain) messages with optional filters (chains, nonce, address, direction); supports pagination.
       operationId: ClusterExplorerService_ListInteropMessages
       responses:
         "200":
@@ -409,6 +421,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/messages/count:
     get:
+      summary: Returns the count of interop messages for a given chain in the cluster.
       operationId: ClusterExplorerService_CountInteropMessages
       responses:
         "200":
@@ -432,6 +445,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/messages/{init_chain_id}/{nonce}:
     get:
+      summary: Fetches a single interop message by init_chain_id and nonce.
       operationId: ClusterExplorerService_GetInteropMessage
       responses:
         "200":
@@ -460,6 +474,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/addresses:
     get:
+      summary: Full-text search for addresses by query string; optional chain filter and pagination.
       operationId: ClusterExplorerService_SearchAddresses
       responses:
         "200":
@@ -500,6 +515,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/block-numbers:
     get:
+      summary: Full-text search for block numbers (returns chain + block number); optional chain filter and pagination.
       operationId: ClusterExplorerService_SearchBlockNumbers
       responses:
         "200":
@@ -540,6 +556,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/blocks:
     get:
+      summary: Full-text search for blocks (returns block hashes); optional chain filter and pagination.
       operationId: ClusterExplorerService_SearchBlocks
       responses:
         "200":
@@ -580,6 +597,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/dapps:
     get:
+      summary: Full-text search for dapps; optional chain filter and pagination.
       operationId: ClusterExplorerService_SearchDapps
       responses:
         "200":
@@ -620,6 +638,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/domains:
     get:
+      summary: Full-text search for domains; optional chain filter and pagination.
       operationId: ClusterExplorerService_SearchDomains
       responses:
         "200":
@@ -660,6 +679,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/nfts:
     get:
+      summary: Full-text search for NFTs by query string; optional chain filter and pagination.
       operationId: ClusterExplorerService_SearchNfts
       responses:
         "200":
@@ -700,6 +720,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/tokens:
     get:
+      summary: Full-text search for tokens; optional chain filter and pagination.
       operationId: ClusterExplorerService_SearchTokens
       responses:
         "200":
@@ -740,6 +761,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/transactions:
     get:
+      summary: Full-text search for transactions (returns transaction hashes); optional chain filter and pagination.
       operationId: ClusterExplorerService_SearchTransactions
       responses:
         "200":
@@ -780,6 +802,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search:check-redirect:
     get:
+      summary: Checks whether the given query should redirect to a specific entity type and chain (e.g. block, transaction, address).
       operationId: ClusterExplorerService_CheckRedirect
       responses:
         "200":
@@ -803,6 +826,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search:quick:
     get:
+      summary: Unified quick search across addresses, blocks, transactions, block numbers, dapps, tokens, NFTs, and domains; supports unlimited results per chain.
       operationId: ClusterExplorerService_QuickSearch
       responses:
         "200":
@@ -830,6 +854,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/tokens:
     get:
+      summary: Lists tokens present in the cluster with optional type/chain/query filters and pagination.
       operationId: ClusterExplorerService_ListClusterTokens
       responses:
         "200":
@@ -875,6 +900,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/tokens/{address_hash}:
     get:
+      summary: Returns aggregated token info for a given token address and chain in the cluster.
       operationId: ClusterExplorerService_GetAggregatedToken
       responses:
         "200":
@@ -902,6 +928,7 @@ paths:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/tokens/{address_hash}/holders:
     get:
+      summary: Lists holders of a token (by address and chain) with pagination.
       operationId: ClusterExplorerService_ListTokenHolders
       responses:
         "200":
@@ -938,6 +965,7 @@ paths:
         - ClusterExplorerService
   /api/v1/dapps:
     get:
+      summary: Lists dapps with optional query, categories, and chain filters.
       operationId: MultichainAggregatorService_ListDapps
       responses:
         "200":
@@ -968,6 +996,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/dapps/categories:
     get:
+      summary: Lists dapp categories.
       operationId: MultichainAggregatorService_ListDappCategories
       responses:
         "200":
@@ -982,6 +1011,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/dapps/chains:
     get:
+      summary: Lists chains associated with a dapp.
       operationId: MultichainAggregatorService_ListDappChains
       responses:
         "200":
@@ -996,6 +1026,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/domains:
     get:
+      summary: Lists domains with optional filters and pagination.
       operationId: MultichainAggregatorService_ListDomains
       responses:
         "200":
@@ -1031,6 +1062,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/import:batch:
     post:
+      summary: Imports a batch of addresses, hashes (blocks/transactions), and token-related data into the aggregator.
       operationId: MultichainAggregatorService_BatchImport
       responses:
         "200":
@@ -1051,6 +1083,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/import:poor-reputation-tokens:
     post:
+      summary: Imports tokens marked with poor reputation so they can be included in aggregator results.
       operationId: MultichainAggregatorService_ImportPoorReputationTokens
       responses:
         "200":
@@ -1071,6 +1104,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/nfts:
     get:
+      summary: Lists NFTs with optional filters and pagination.
       operationId: MultichainAggregatorService_ListNfts
       responses:
         "200":
@@ -1106,6 +1140,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/search:quick:
     get:
+      summary: Unified quick search across addresses, blocks, transactions, block numbers, dapps, tokens, NFTs, and domains; supports unlimited results per chain.
       operationId: MultichainAggregatorService_QuickSearch
       responses:
         "200":
@@ -1129,6 +1164,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/tokens:
     get:
+      summary: Lists tokens with optional filters and pagination.
       operationId: MultichainAggregatorService_ListTokens
       responses:
         "200":
@@ -1164,6 +1200,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/tokens/updates:
     get:
+      summary: Lists token update events with optional filters and pagination.
       operationId: MultichainAggregatorService_ListTokenUpdates
       responses:
         "200":
@@ -1195,6 +1232,7 @@ paths:
         - MultichainAggregatorService
   /api/v1/transactions:
     get:
+      summary: Lists transactions (hashes) with optional filters and pagination.
       operationId: MultichainAggregatorService_ListTransactions
       responses:
         "200":
