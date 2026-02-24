@@ -8,7 +8,7 @@ Rules for writing and organizing tests. See also `../../RUST_CODE_STYLE_GUIDE.md
 // Async tests
 #[tokio::test]
 
-// Database tests (require `just test-with-db`)
+// Database tests: keep `#[tokio::test]` for async DB calls and `#[ignore]` to run them intentionally (typically via `just test-with-db`)
 #[tokio::test]
 #[ignore]
 
@@ -79,10 +79,10 @@ fill_mock_interchain_database(&db).await;
 ## Running Tests
 
 ```bash
-# All tests except database tests
+# Runs all tests, including `#[ignore]`
 just test
 
-# Include database tests
+# Runs all tests with a temporary Postgres instance
 just test-with-db
 
 # Specific test

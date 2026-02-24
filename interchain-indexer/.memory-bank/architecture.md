@@ -31,7 +31,7 @@ InterchainDatabase (upserts)
 
 Location: `interchain-indexer-logic/src/indexer/crosschain_indexer.rs`
 
-Plugin interface for bridge indexers. Selected by matching `name()` against `bridges.json` → `indexer` field.
+Plugin interface for bridge indexers.
 
 ```rust
 pub trait CrosschainIndexer: Send + Sync {
