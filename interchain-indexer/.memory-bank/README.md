@@ -21,6 +21,12 @@ This directory is a shared knowledge base for AI coding assistants. It provides 
 │   ├── async-patterns.md
 │   ├── database.md
 │   └── testing.md
+├── workflows/           # Tool-agnostic task workflows (shared across all AIDEs)
+│   ├── gh-issue-bug.md
+│   ├── gh-issue-improvement.md
+│   ├── gh-issue-publish.md
+│   └── scripts/
+│       └── gh-issue-publish.sh
 └── adr/                 # Architectural Decision Records
     ├── README.md
     └── template.md
@@ -30,7 +36,9 @@ This directory is a shared knowledge base for AI coding assistants. It provides 
 
 1. **AGENTS.md** (project root) is the canonical entry point, read by all tools
 2. **rules/** files use frontmatter with both `paths:` and `globs:` for cross-tool compatibility
-3. Symlinks connect tool-specific directories to this shared source
+3. **workflows/** holds reusable task procedures — tool-specific integrations (e.g.,
+   `.claude/skills/`) are thin wrappers that reference these files
+4. Symlinks connect tool-specific directories to this shared source
 
 ## Memory Protocol
 

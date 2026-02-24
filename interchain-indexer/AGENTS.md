@@ -68,3 +68,18 @@ When you discover a non-obvious pattern or gotcha, update .memory-bank/gotchas.m
 When making an architectural decision, add an ADR to .memory-bank/adr/
 When corrected about a convention, update the relevant file in .memory-bank/rules/
 When a new coding rule emerges, update the relevant file in .memory-bank/rules/ or create a new one if needed.
+
+## Workflows
+
+Reusable task procedures are in `.memory-bank/workflows/`. These are tool-agnostic —
+tool-specific integrations (e.g., Claude Code `/skills`) are thin wrappers.
+
+For GitHub Copilot Chat to discover and use project skills, enable this VS Code setting:
+
+```json
+"chat.useClaudeSkills": true
+```
+
+- `gh-issue-bug.md` — draft a GitHub bug report
+- `gh-issue-improvement.md` — draft a GitHub enhancement proposal
+- `gh-issue-publish.md` — publish a drafted issue via the `gh` CLI
