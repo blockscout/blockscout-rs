@@ -14,9 +14,8 @@ This directory is a shared knowledge base for AI coding assistants. It provides 
 ├── README.md            # This file
 ├── project-context.md   # Project purpose, stack, key modules
 ├── architecture.md      # Module map, data flow, key abstractions
-├── conventions.md       # Coding style, naming, import patterns
 ├── gotchas.md           # Non-obvious traps: Symptom → Root cause → Fix
-├── rules/               # Scoped instructions (symlinked to tool dirs)
+├── rules/               # Coding conventions (symlinked to tool dirs)
 │   ├── rust-style.md
 │   ├── error-handling.md
 │   ├── async-patterns.md
@@ -39,7 +38,7 @@ When working on this codebase:
 
 - **Discover a non-obvious pattern or gotcha?** → Update `gotchas.md`
 - **Make an architectural decision?** → Add an ADR to `adr/`
-- **Get corrected about a convention?** → Update `conventions.md`
+- **Get corrected about a convention?** → Update the relevant file in `rules/`
 - **Learn something project-specific?** → Update relevant file
 
 This keeps the knowledge base current and useful for future sessions.
