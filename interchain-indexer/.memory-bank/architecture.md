@@ -80,6 +80,20 @@ pub trait Consolidate {
 
 Returns `Some` when message has reached finality (all expected events received).
 
+## Global Services
+
+### ChainInfoService
+
+Location: `interchain-indexer-logic/src/chain_info/`
+
+Cached chain metadata (name, icon, explorer URLs). Falls back to "Unknown" for unconfigured chains.
+
+### TokenInfoService
+
+Location: `interchain-indexer-logic/src/token_info/`
+
+Resolves token metadata (symbol, decimals, icon) via on-chain calls and Blockscout API. Uses per-key locking and background fetching to avoid duplicate requests.
+
 <!-- TODO: Replace ASCII schema with more descriptive diagram from Notion -->
 ## Database Schema
 
