@@ -74,3 +74,13 @@ Non-obvious traps and their solutions.
 **Root cause:** `IndexerCleanupGuard` implements `Drop` to ensure state transitions even on panic.
 
 **Fix:** After a panic, the indexer may need a full restart. Check logs for the panic cause before restarting.
+
+---
+
+## `started_at_block = NULL` Means "Index from Genesis"
+
+**Symptom:** Indexing starts at block `0` when `started_at_block` is unset.
+
+**Root cause:** `bridge_contracts.started_at_block` is nullable; `None` maps to `.unwrap_or(0)` in `BridgeContractConfig`.
+
+**Fix:** Set `started_at_block` only for non-genesis starts. Treat `NULL` as expected (no warning).

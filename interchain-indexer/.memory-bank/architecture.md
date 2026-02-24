@@ -2,7 +2,7 @@
 
 ## High-Level Data Flow
 
-```
+```text
 Blockchain RPC
     ↓
 LogStream (catchup + realtime modes)
@@ -83,7 +83,7 @@ Returns `Some` when message has reached finality (all expected events received).
 <!-- TODO: Replace ASCII schema with more descriptive diagram from Notion -->
 ## Database Schema
 
-```
+```text
 chains (chain_id, name, native_id, explorer_url)
     ↑
 bridges (bridge_id, name, indexer, status)

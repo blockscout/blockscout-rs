@@ -78,7 +78,7 @@ let result = self.fetch().await.inspect_err(|e| {
 
 ## Recovery Patterns
 
-- Use `inspect_err()` for logging without consuming the error
+- Use `inspect_err()` only at handling boundaries (e.g., metrics/logging), not during propagation.
 - Use `unwrap_or_default()` only for truly optional values
 - Prefer explicit handling over silent defaults
 

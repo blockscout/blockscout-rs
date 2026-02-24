@@ -1,6 +1,6 @@
 # Testing Rules
 
-Rules for writing and organizing tests. See also `../RUST_CODE_STYLE_GUIDE.md` for monorepo-wide conventions.
+Rules for writing and organizing tests. See also `../../RUST_CODE_STYLE_GUIDE.md` for monorepo-wide conventions.
 
 ## Test Attributes
 
