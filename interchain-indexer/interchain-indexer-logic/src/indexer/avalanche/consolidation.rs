@@ -202,8 +202,8 @@ fn build_transfer(
     key: &Key,
     send: &AnnotatedEvent<super::abi::ITeleporterMessenger::SendCrossChainMessage>,
 ) -> Result<crosschain_transfers::ActiveModel> {
-    let token_src_chain_id = ActiveValue::Set(send.source_chain_id.try_into()?);
-    let token_dst_chain_id = ActiveValue::Set(send.destination_chain_id.try_into()?);
+    let token_src_chain_id = ActiveValue::Set(send.source_chain_id);
+    let token_dst_chain_id = ActiveValue::Set(send.destination_chain_id);
 
     match transfer {
         TokenTransfer::Sent(src, dest) => {
