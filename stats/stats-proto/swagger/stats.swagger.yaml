@@ -18,6 +18,9 @@ produces:
 paths:
   /api/v1/charts/batch-update:
     post:
+      summary: |-
+        Triggers a batch update of the specified charts (or all charts).
+        Requires API key authentication.
       operationId: StatsService_BatchUpdateCharts
       responses:
         "200":
@@ -40,6 +43,7 @@ paths:
         - ApiKeyAuth: []
   /api/v1/counters:
     get:
+      summary: Returns all available counter stats for the stats page.
       operationId: StatsService_GetCounters
       responses:
         "200":
@@ -54,6 +58,9 @@ paths:
         - StatsService
   /api/v1/lines:
     get:
+      summary: |-
+        Returns metadata (title, description, available resolutions) for all
+        line charts, organized into sections.
       operationId: StatsService_GetLineCharts
       responses:
         "200":
@@ -68,6 +75,9 @@ paths:
         - StatsService
   /api/v1/lines/{name}:
     get:
+      summary: |-
+        Returns data points for a specific line chart, with optional date range
+        and resolution filtering.
       operationId: StatsService_GetLineChart
       responses:
         "200":
@@ -80,6 +90,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: name
+          description: Identifier of the chart to retrieve (matches chart id).
           in: path
           required: true
           type: string
@@ -108,6 +119,7 @@ paths:
         - StatsService
   /api/v1/pages/contracts:
     get:
+      summary: Returns stats to be displayed on the contracts page.
       operationId: StatsService_GetContractsPageStats
       responses:
         "200":
@@ -122,6 +134,7 @@ paths:
         - StatsService
   /api/v1/pages/interchain/main:
     get:
+      summary: Returns interchain messaging stats to be displayed on the main page of interchain indexer.
       operationId: StatsService_GetMainPageInterchainStats
       responses:
         "200":
@@ -136,6 +149,7 @@ paths:
         - StatsService
   /api/v1/pages/main:
     get:
+      summary: Returns stats to be displayed on the main page of indexer.
       operationId: StatsService_GetMainPageStats
       responses:
         "200":
@@ -150,6 +164,7 @@ paths:
         - StatsService
   /api/v1/pages/multichain/main:
     get:
+      summary: Returns multichain-aggregated stats to be displayed on the main page of multichain indexer.
       operationId: StatsService_GetMainPageMultichainStats
       responses:
         "200":
@@ -164,6 +179,7 @@ paths:
         - StatsService
   /api/v1/pages/transactions:
     get:
+      summary: Returns stats to be displayed on the transactions page.
       operationId: StatsService_GetTransactionsPageStats
       responses:
         "200":
@@ -178,6 +194,9 @@ paths:
         - StatsService
   /api/v1/update-status:
     get:
+      summary: |-
+        Returns the current status of chart data updates, broken down by
+        indexing dependency type (independent, blocks, internal transactions, etc.).
       operationId: StatsService_GetUpdateStatus
       responses:
         "200":
@@ -255,32 +274,40 @@ definitions:
         type: array
         items:
           type: string
+        description: Ids of specific charts to update.
       update_all:
         type: boolean
-        title: Will ignore `chart_names` and update all charts
+        description: Will ignore `chart_names` and update all charts.
       from:
         type: string
-        title: Default is today
+        description: Start date for the update range. Default is today.
       update_later:
         type: boolean
+        description: |-
+          If true, update the charts later according to their
+          schedule rather than running it immediately.
   v1BatchUpdateChartsResult:
     type: object
     properties:
       total:
         type: integer
         format: int64
+        description: Total number of charts in the request.
       total_rejected:
         type: integer
         format: int64
+        description: Total number of charts that were rejected.
       accepted:
         type: array
         items:
           type: string
+        description: Names/ids of charts that were accepted for update.
       rejected:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1BatchUpdateChartRejection'
+        description: Charts that were rejected, each with a reason.
   v1ChartSubsetUpdateStatus:
     type: string
     enum:
@@ -307,6 +334,9 @@ definitions:
         $ref: '#/definitions/v1Counter'
       new_verified_contracts_24h:
         $ref: '#/definitions/v1Counter'
+    description: |-
+      Pre-assembled set of statistics for the contracts page.
+      Fields are optional because individual charts may be disabled.
   v1Counter:
     type: object
     properties:
@@ -318,6 +348,7 @@ definitions:
         type: string
       units:
         type: string
+        description: Measurement units (e.g. "seconds", "ETH"), if applicable.
       description:
         type: string
   v1Counters:
@@ -343,6 +374,7 @@ definitions:
           $ref: '#/definitions/v1Point'
       info:
         $ref: '#/definitions/v1LineChartInfo'
+    description: 'A line chart: its metadata and the series of data points.'
   v1LineChartInfo:
     type: object
     properties:
@@ -358,6 +390,8 @@ definitions:
         type: array
         items:
           type: string
+        description: Available time resolutions for this chart (e.g. "DAY", "WEEK").
+    description: Metadata describing a line chart.
   v1LineChartSection:
     type: object
     properties:
@@ -370,6 +404,9 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1LineChartInfo'
+    description: |-
+      A named group of related line charts.
+      Mainly intended for corresponding UI layout.
   v1LineCharts:
     type: object
     properties:
@@ -387,6 +424,9 @@ definitions:
         $ref: '#/definitions/v1Counter'
       total_interchain_messages_received:
         $ref: '#/definitions/v1Counter'
+    description: |-
+      Interchain messaging statistics for the main page.
+      Fields are optional because individual charts may be disabled.
   v1MainPageMultichainStats:
     type: object
     properties:
@@ -398,6 +438,9 @@ definitions:
         $ref: '#/definitions/v1Counter'
       new_txns_multichain_window:
         $ref: '#/definitions/v1LineChart'
+    description: |-
+      Multichain-aggregated statistics for the main page of multichain indexer.
+      Fields are optional because individual charts may be disabled.
   v1MainPageStats:
     type: object
     properties:
@@ -417,6 +460,7 @@ definitions:
         $ref: '#/definitions/v1Counter'
       op_stack_total_operational_transactions:
         $ref: '#/definitions/v1Counter'
+        description: OP-Stack-specific variants of operational transaction counters.
       op_stack_yesterday_operational_transactions:
         $ref: '#/definitions/v1Counter'
       daily_new_transactions:
@@ -425,18 +469,30 @@ definitions:
         $ref: '#/definitions/v1LineChart'
       op_stack_daily_new_operational_transactions:
         $ref: '#/definitions/v1LineChart'
+    description: |-
+      Pre-assembled set of statistics for the main indexer page.
+      Fields are optional because individual charts may be disabled.
   v1Point:
     type: object
     properties:
       date:
         type: string
+        description: Start date of the period this point covers.
       date_to:
         type: string
+        description: |-
+          End date of the period (relevant for aggregated resolutions
+          like WEEK, MONTH, YEAR; equal to `date` for DAY resolution).
       value:
         type: string
       is_approximate:
         type: boolean
-    title: All integers are encoded as strings to prevent data loss
+        description: |-
+          True when the value is an approximation (i.e. the period is
+          not yet complete).
+    description: |-
+      A single data point on a line chart.
+      All integers are encoded as strings to prevent data loss.
   v1Resolution:
     type: string
     enum:
@@ -467,6 +523,9 @@ definitions:
         $ref: '#/definitions/v1Counter'
       pending_zetachain_cross_chain_txns:
         $ref: '#/definitions/v1Counter'
+    description: |-
+      Pre-assembled set of statistics for the transactions page.
+      Fields are optional because individual charts may be disabled.
   v1UpdateStatus:
     type: object
     properties:

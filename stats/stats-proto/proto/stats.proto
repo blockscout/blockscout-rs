@@ -32,15 +32,29 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 };
 
 service StatsService {
+  // Returns all available counter stats for the stats page.
   rpc GetCounters(GetCountersRequest) returns (Counters);
+  // Returns metadata (title, description, available resolutions) for all
+  // line charts, organized into sections.
   rpc GetLineCharts(GetLineChartsRequest) returns (LineCharts);
+  // Returns data points for a specific line chart, with optional date range
+  // and resolution filtering.
   rpc GetLineChart(GetLineChartRequest) returns (LineChart);
+  // Returns stats to be displayed on the main page of indexer.
   rpc GetMainPageStats(GetMainPageStatsRequest) returns (MainPageStats);
+  // Returns stats to be displayed on the transactions page.
   rpc GetTransactionsPageStats(GetTransactionsPageStatsRequest) returns (TransactionsPageStats);
+  // Returns stats to be displayed on the contracts page.
   rpc GetContractsPageStats(GetContractsPageStatsRequest) returns (ContractsPageStats);
+  // Returns multichain-aggregated stats to be displayed on the main page of multichain indexer.
   rpc GetMainPageMultichainStats(GetMainPageStatsRequest) returns (MainPageMultichainStats);
+  // Returns interchain messaging stats to be displayed on the main page of interchain indexer.
   rpc GetMainPageInterchainStats(GetMainPageStatsRequest) returns (MainPageInterchainStats);
+  // Returns the current status of chart data updates, broken down by
+  // indexing dependency type (independent, blocks, internal transactions, etc.).
   rpc GetUpdateStatus(GetUpdateStatusRequest) returns (UpdateStatus);
+  // Triggers a batch update of the specified charts (or all charts).
+  // Requires API key authentication.
   rpc BatchUpdateCharts(BatchUpdateChartsRequest) returns (BatchUpdateChartsResult) {
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       security: {
@@ -57,6 +71,7 @@ message Counter {
   string id = 1;
   string value = 2;
   string title = 3;
+  // Measurement units (e.g. "seconds", "ETH"), if applicable.
   optional string units = 4;
   string description = 5;
 }
@@ -78,14 +93,18 @@ message GetLineChartsRequest {}
 // todo: replace LineChartInfo::resolutions with enum when supported
 // (probably this https://github.com/blockscout/actix-prost/pull/24/files)
 
+// Metadata describing a line chart.
 message LineChartInfo {
   string id = 1;
   string title = 2;
   string description = 3;
   optional string units = 4;
+  // Available time resolutions for this chart (e.g. "DAY", "WEEK").
   repeated string resolutions = 5;
 }
 
+// A named group of related line charts.
+// Mainly intended for corresponding UI layout.
 message LineChartSection {
   string id = 1;
   string title = 2;
@@ -97,6 +116,7 @@ message LineCharts {
 }
 
 message GetLineChartRequest {
+  // Identifier of the chart to retrieve (matches chart id).
   string name = 1;
   // Default is first data point
   optional string from = 2;
@@ -105,14 +125,21 @@ message GetLineChartRequest {
   Resolution resolution = 4;
 }
 
-// All integers are encoded as strings to prevent data loss
+// A single data point on a line chart.
+// All integers are encoded as strings to prevent data loss.
 message Point {
+  // Start date of the period this point covers.
   string date = 1;
+  // End date of the period (relevant for aggregated resolutions
+  // like WEEK, MONTH, YEAR; equal to `date` for DAY resolution).
   string date_to = 4;
   string value = 2;
+  // True when the value is an approximation (i.e. the period is
+  // not yet complete).
   bool is_approximate = 3;
 }
 
+// A line chart: its metadata and the series of data points.
 message LineChart {
   repeated Point chart = 1;
   LineChartInfo info = 2;
@@ -120,6 +147,8 @@ message LineChart {
 
 message GetMainPageStatsRequest {}
 
+// Pre-assembled set of statistics for the main indexer page.
+// Fields are optional because individual charts may be disabled.
 message MainPageStats {
   optional Counter average_block_time = 1;
   optional Counter total_addresses = 2;
@@ -128,6 +157,7 @@ message MainPageStats {
   optional Counter yesterday_transactions = 5;
   optional Counter total_operational_transactions = 6;
   optional Counter yesterday_operational_transactions = 7;
+  // OP-Stack-specific variants of operational transaction counters.
   optional Counter op_stack_total_operational_transactions = 10;
   optional Counter op_stack_yesterday_operational_transactions = 11;
 
@@ -138,6 +168,8 @@ message MainPageStats {
 
 message GetTransactionsPageStatsRequest {}
 
+// Pre-assembled set of statistics for the transactions page.
+// Fields are optional because individual charts may be disabled.
 message TransactionsPageStats {
   optional Counter pending_transactions_30m = 1;
   optional Counter transactions_fee_24h = 2;
@@ -152,6 +184,8 @@ message TransactionsPageStats {
 
 message GetContractsPageStatsRequest {}
 
+// Pre-assembled set of statistics for the contracts page.
+// Fields are optional because individual charts may be disabled.
 message ContractsPageStats {
   optional Counter total_contracts = 1;
   optional Counter new_contracts_24h = 2;
@@ -161,6 +195,8 @@ message ContractsPageStats {
 
 message MainPageMultichainStatsRequest {}
 
+// Multichain-aggregated statistics for the main page of multichain indexer.
+// Fields are optional because individual charts may be disabled.
 message MainPageMultichainStats {
   optional Counter total_multichain_txns = 1;
   optional Counter total_multichain_addresses = 2;
@@ -169,6 +205,8 @@ message MainPageMultichainStats {
   optional LineChart new_txns_multichain_window = 4;
 }
 
+// Interchain messaging statistics for the main page.
+// Fields are optional because individual charts may be disabled.
 message MainPageInterchainStats {
   optional Counter total_interchain_messages = 1;
   optional Counter total_interchain_messages_sent = 2;
@@ -208,11 +246,14 @@ message UpdateStatus {
 }
 
 message BatchUpdateChartsRequest {
+  // Ids of specific charts to update.
   repeated string chart_names = 1;
-  // Will ignore `chart_names` and update all charts
+  // Will ignore `chart_names` and update all charts.
   optional bool update_all = 4;
-  // Default is today
+  // Start date for the update range. Default is today.
   optional string from = 2;
+  // If true, update the charts later according to their
+  // schedule rather than running it immediately.
   optional bool update_later = 3;
 }
 
@@ -222,8 +263,12 @@ message BatchUpdateChartRejection {
 }
 
 message BatchUpdateChartsResult {
+  // Total number of charts in the request.
   uint32 total = 1;
+  // Total number of charts that were rejected.
   uint32 total_rejected = 2;
+  // Names/ids of charts that were accepted for update.
   repeated string accepted = 3;
+  // Charts that were rejected, each with a reason.
   repeated BatchUpdateChartRejection rejected = 4;
 }
