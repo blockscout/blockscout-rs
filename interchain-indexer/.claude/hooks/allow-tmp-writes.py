@@ -39,22 +39,25 @@ def is_tmp_path(file_path: str) -> bool:
     # Normalize path separators for consistency
     normalized = file_path.replace("\\", "/")
 
-    # Reject any path containing parent directory references
-    if ".." in normalized:
+    project_dir = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    project_tmp = os.path.join(project_dir, "tmp")
+    project_tmp_real = os.path.realpath(project_tmp)
+
+    if os.path.isabs(normalized):
+        target_path = normalized
+    else:
+        target_path = os.path.join(project_dir, normalized)
+    target_real = os.path.realpath(target_path)
+
+    try:
+        is_within_tmp = (
+            os.path.commonpath([target_real, project_tmp_real]) == project_tmp_real
+        )
+    except ValueError:
         return False
 
-    # Handle absolute paths: allow if within CLAUDE_PROJECT_DIR/tmp/
-    if normalized.startswith("/"):
-        project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
-        if project_dir:
-            project_tmp = f"{project_dir.rstrip('/')}/tmp/"
-            if normalized.startswith(project_tmp):
-                return True
-        return False
-
-    # Only allow paths that start with tmp/ or ./tmp/
-    # This ensures we're writing files within the tmp/ directory
-    return normalized.startswith("tmp/") or normalized.startswith("./tmp/")
+    # Must resolve strictly inside tmp/, not to tmp/ itself.
+    return is_within_tmp and target_real != project_tmp_real
 
 
 def main():

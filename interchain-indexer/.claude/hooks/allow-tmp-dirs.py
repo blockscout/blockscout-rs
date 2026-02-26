@@ -16,6 +16,7 @@ Usage in skill frontmatter:
 
 import json
 import os
+import shlex
 import sys
 
 
@@ -45,8 +46,13 @@ def is_tmp_mkdir_command(command: str) -> bool:
     # Normalize whitespace
     normalized = " ".join(command.split())
 
-    # Check if it's a mkdir command
-    if not normalized.startswith("mkdir"):
+    # Check if it's exactly a mkdir command (allowing absolute/relative path to mkdir)
+    try:
+        parts = shlex.split(normalized)
+    except ValueError:
+        return False
+
+    if not parts or os.path.basename(parts[0]) != "mkdir":
         return False
 
     # Reject commands with shell operators or metacharacters
@@ -56,7 +62,6 @@ def is_tmp_mkdir_command(command: str) -> bool:
 
     # Extract all arguments after flags
     # Pattern: mkdir [-p] [other flags] path1 [path2...]
-    parts = normalized.split()
     paths = []
     skip_next = False
 

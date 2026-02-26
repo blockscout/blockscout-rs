@@ -40,7 +40,7 @@ impl SourceData {
             source_transaction_hash: Some(send.transaction_hash),
             sender_address: Some(send.event.message.originSenderAddress),
             recipient_address: Some(send.event.message.destinationAddress),
-            payload: send.event.message.message.clone().into(),
+            payload: Some(send.event.message.message.clone()),
         })
     }
 
