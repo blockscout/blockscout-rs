@@ -21,6 +21,7 @@ pub enum IndexerType {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct BridgeConfig {
     pub bridge_id: i32,
     pub name: String,
@@ -35,7 +36,7 @@ pub struct BridgeConfig {
     /// When set, process messages involving unknown chains if one end is this chain.
     /// Must be one of the chains configured in `contracts`. Validated at startup.
     #[serde(default)]
-    pub home_chain: Option<ChainId>,
+    pub home_chain_id: Option<ChainId>,
     pub contracts: Vec<BridgeContractConfig>,
 }
 
@@ -99,7 +100,7 @@ impl From<bridges::Model> for BridgeConfig {
             api_url: model.api_url,
             ui_url: model.ui_url,
             docs_url: model.docs_url,
-            home_chain: None,
+            home_chain_id: None,
             contracts: vec![], // Contracts are in a separate table
         }
     }
@@ -462,7 +463,7 @@ mod tests {
         assert_eq!(bridges[0].contracts[0].chain_id, 43114);
         assert_eq!(bridges[0].contracts[0].version, 1);
         assert_eq!(bridges[0].contracts[0].started_at_block, 42526120);
-        assert_eq!(bridges[0].home_chain, None);
+        assert_eq!(bridges[0].home_chain_id, None);
     }
 
     #[test]
@@ -485,7 +486,31 @@ mod tests {
 
         let bridges: Vec<BridgeConfig> = serde_json::from_str(json).unwrap();
         assert_eq!(bridges.len(), 1);
-        assert_eq!(bridges[0].home_chain, None);
+        assert_eq!(bridges[0].home_chain_id, None);
+    }
+
+    #[test]
+    fn test_deserialize_bridge_with_home_chain_id_field() {
+        let json = r#"
+        [
+            {
+                "bridge_id": 7,
+                "name": "With Home Chain",
+                "type": "avalanche_native",
+                "indexer_type": "icm_ictt",
+                "enabled": true,
+                "api_url": null,
+                "ui_url": null,
+                "docs_url": null,
+                "home_chain_id": 43114,
+                "contracts": []
+            }
+        ]
+        "#;
+
+        let bridges: Vec<BridgeConfig> = serde_json::from_str(json).unwrap();
+        assert_eq!(bridges.len(), 1);
+        assert_eq!(bridges[0].home_chain_id, Some(43114));
     }
 
     #[test]
@@ -538,7 +563,7 @@ mod tests {
         );
         // indexer and contracts are lost in conversion (not stored in DB)
         assert_eq!(config.indexer_type, IndexerType::Unknown);
-        assert_eq!(config.home_chain, None);
+        assert_eq!(config.home_chain_id, None);
         assert_eq!(config.contracts, vec![]);
     }
 

@@ -47,7 +47,7 @@ pub async fn spawn_configured_indexers(
                             Arc::new(db.clone()),
                             bridge.bridge_id,
                             configs,
-                            bridge.home_chain,
+                            bridge.home_chain_id,
                             &settings.avalanche_indexer,
                             &settings.buffer_settings,
                         )

@@ -1,4 +1,4 @@
-# ADR-002: Per-Bridge `home_chain` Filtering for Unknown Chains
+# ADR-002: Per-Bridge `home_chain_id` Filtering for Unknown Chains
 
 **Date:** 2026-02-25
 
@@ -16,21 +16,21 @@ Requirements:
 Move unknown-chain policy into `bridges.json` as:
 
 ```rust
-home_chain: Option<ChainId>
+home_chain_id: Option<ChainId>
 ```
 
 Behavior per bridge:
 
-- `home_chain = None` (or omitted/null):
+- `home_chain_id = None` (or omitted/null):
   - process only messages where both source and destination chains are configured for that bridge.
-- `home_chain = Some(id)`:
+- `home_chain_id = Some(id)`:
   - still process all configured↔configured messages;
   - additionally process one-configured/one-unknown messages **only if** `source == id || destination == id`.
 - both unknown endpoints are always skipped.
 
 Validation:
 
-- Startup fails if `home_chain` is set but not present in the bridge’s configured contracts.
+- Startup fails if `home_chain_id` is set but not present in the bridge’s configured contracts.
 - `ChainId (u64)` is converted to `i64` internally with range checks.
 
 ## Consequences
@@ -55,7 +55,7 @@ Validation:
 
 1. Keep global settings and pass overrides per bridge.
 	- Rejected: duplicate configuration paths.
-2. `home_chains: Vec<ChainId>`.
+2. `home_chain_ids: Vec<ChainId>`.
 	- Rejected for now: unnecessary complexity for current use cases.
 3. Pair whitelist `(chain_a, chain_b)`.
 	- Rejected: high config complexity and poor maintainability.

@@ -28,11 +28,11 @@ Filtering happens in 4 event handlers:
 - `handle_message_executed()` - checks **source_chain_id**
 - `handle_message_execution_failed()` - checks **source_chain_id**
 
-If a chain is not in `chain_ids` and bridge `home_chain` is not configured (strict mode), the event is skipped with a `tracing::trace!` log.
+If a chain is not in `chain_ids` and bridge `home_chain_id` is not configured (strict mode), the event is skipped with a `tracing::trace!` log.
 
 **Fix:**
 1. Add the chain to the bridge's configured chains in `bridges.json` (and ensure it has RPC config in `chains.json`)
-2. OR set `home_chain: <chain_id>` in `bridges.json` to index one-known/one-unknown messages only when one endpoint equals that chain
+2. OR set `home_chain_id: <chain_id>` in `bridges.json` to index one-known/one-unknown messages only when one endpoint equals that chain
 3. Check trace-level logs for "skipping ... not home-chain message" messages
 
 **Note:** The filtering happens BEFORE messages enter the buffer, so unfiltered messages never reach consolidation or database layers.
@@ -109,7 +109,7 @@ If a chain is not in `chain_ids` and bridge `home_chain` is not configured (stri
 
 1. **Create a new bridge** for the chain pair (e.g., A ↔ C) with proper contracts config
 2. **Update the original bridge** to stop processing the now-configured pair:
-   - Set `home_chain: null` (or remove `home_chain`) for strict mode
+   - Set `home_chain_id: null` (or remove `home_chain_id`) for strict mode
 3. **Delete partial messages** from the original bridge (`DELETE FROM crosschain_messages WHERE bridge_id = X AND src_chain_id = C OR dst_chain_id = C`)
 4. **Restart** — the new bridge indexes A ↔ C with full data
 
@@ -119,15 +119,15 @@ If a chain is not in `chain_ids` and bridge `home_chain` is not configured (stri
 [
    {
       "name": "A-B strict bridge",
-      "home_chain": null
+      "home_chain_id": null
    },
    {
       "name": "A-C strict bridge",
-      "home_chain": null
+      "home_chain_id": null
    },
    {
       "name": "Monitoring bridge",
-      "home_chain": 43114
+      "home_chain_id": 43114
    }
 ]
 ```
