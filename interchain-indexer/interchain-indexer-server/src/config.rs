@@ -1,4 +1,8 @@
-use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
+use alloy::{
+    network::Ethereum,
+    primitives::{Address, ChainId},
+    providers::DynProvider,
+};
 use anyhow::{Context, Result};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
@@ -28,6 +32,10 @@ pub struct BridgeConfig {
     pub api_url: Option<String>,
     pub ui_url: Option<String>,
     pub docs_url: Option<String>,
+    /// When set, process messages involving unknown chains if one end is this chain.
+    /// Must be one of the chains configured in `contracts`. Validated at startup.
+    #[serde(default)]
+    pub home_chain: Option<ChainId>,
     pub contracts: Vec<BridgeContractConfig>,
 }
 
@@ -91,6 +99,7 @@ impl From<bridges::Model> for BridgeConfig {
             api_url: model.api_url,
             ui_url: model.ui_url,
             docs_url: model.docs_url,
+            home_chain: None,
             contracts: vec![], // Contracts are in a separate table
         }
     }
@@ -453,6 +462,30 @@ mod tests {
         assert_eq!(bridges[0].contracts[0].chain_id, 43114);
         assert_eq!(bridges[0].contracts[0].version, 1);
         assert_eq!(bridges[0].contracts[0].started_at_block, 42526120);
+        assert_eq!(bridges[0].home_chain, None);
+    }
+
+    #[test]
+    fn test_deserialize_bridge_without_home_chain_field() {
+        let json = r#"
+        [
+            {
+                "bridge_id": 7,
+                "name": "No Home Chain",
+                "type": "avalanche_native",
+                "indexer_type": "icm_ictt",
+                "enabled": true,
+                "api_url": null,
+                "ui_url": null,
+                "docs_url": null,
+                "contracts": []
+            }
+        ]
+        "#;
+
+        let bridges: Vec<BridgeConfig> = serde_json::from_str(json).unwrap();
+        assert_eq!(bridges.len(), 1);
+        assert_eq!(bridges[0].home_chain, None);
     }
 
     #[test]
@@ -505,6 +538,7 @@ mod tests {
         );
         // indexer and contracts are lost in conversion (not stored in DB)
         assert_eq!(config.indexer_type, IndexerType::Unknown);
+        assert_eq!(config.home_chain, None);
         assert_eq!(config.contracts, vec![]);
     }
 

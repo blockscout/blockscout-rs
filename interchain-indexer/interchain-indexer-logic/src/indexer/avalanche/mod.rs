@@ -21,12 +21,12 @@ pub mod types;
 use alloy::{
     hex,
     network::Ethereum,
-    primitives::{Address, B256},
+    primitives::{Address, B256, ChainId},
     providers::{DynProvider, Provider as _},
     rpc::types::{Block, Filter, Log},
     sol_types::SolEvent,
 };
-use anyhow::{Context, Error, Result, anyhow};
+use anyhow::{Context, Error, Result, anyhow, ensure};
 use futures::{StreamExt, TryStreamExt, stream, stream::SelectAll};
 use itertools::Itertools;
 use std::sync::atomic::Ordering;
@@ -65,6 +65,7 @@ pub struct AvalancheIndexer {
     db: Arc<InterchainDatabase>,
     bridge_id: i32,
     chains: Vec<AvalancheChainConfig>,
+    home_chain: Option<i64>,
     settings: AvalancheIndexerSettings,
     buffer: Arc<MessageBuffer<Message>>,
     buffer_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
@@ -119,14 +120,31 @@ impl AvalancheIndexer {
         db: Arc<InterchainDatabase>,
         bridge_id: i32,
         chains: Vec<AvalancheChainConfig>,
+        home_chain: Option<ChainId>,
         settings: &AvalancheIndexerSettings,
         buffer_settings: &crate::MessageBufferSettings,
     ) -> Result<Self> {
-        if chains.is_empty() {
-            return Err(anyhow!(
-                "Avalanche indexer requires at least one configured chain"
-            ));
-        }
+        ensure!(
+            !chains.is_empty(),
+            "Avalanche indexer requires at least one configured chain"
+        );
+
+        // Validate home_chain if set: it must be one of the configured chains.
+        let home_chain = home_chain
+            .map(i64::try_from)
+            .transpose()
+            .context("home_chain exceeds i64::MAX")?
+            .map(|chain_id| {
+                if chains.iter().any(|c| c.chain_id == chain_id) {
+                    Ok(chain_id)
+                } else {
+                    Err(anyhow!(
+                        "home_chain ({}) must be one of the configured chains for this bridge",
+                        chain_id
+                    ))
+                }
+            })
+            .transpose()?;
 
         let buffer = MessageBuffer::new((*db).clone(), buffer_settings.clone());
 
@@ -134,6 +152,7 @@ impl AvalancheIndexer {
             db,
             bridge_id,
             chains,
+            home_chain,
             settings: settings.clone(),
             buffer,
             buffer_handle: Arc::new(parking_lot::RwLock::new(None)),
@@ -150,6 +169,7 @@ impl AvalancheIndexer {
             db: self.db.clone(),
             bridge_id: self.bridge_id,
             chains: self.chains.clone(),
+            home_chain: self.home_chain,
             settings: self.settings.clone(),
             buffer: self.buffer.clone(),
             buffer_handle: self.buffer_handle.clone(),
@@ -170,6 +190,7 @@ impl AvalancheIndexer {
         let db = (*self.db).clone();
         let bridge_id = self.bridge_id;
         let chains = self.chains;
+        let home_chain = self.home_chain;
         let settings = self.settings;
         let buffer = self.buffer;
 
@@ -244,7 +265,7 @@ impl AvalancheIndexer {
         let batch_ctx = BatchProcessContext {
             bridge_id,
             chain_ids: &chain_ids,
-            process_unknown_chains: settings.process_unknown_chains,
+            home_chain,
             blockchain_id_resolver: &blockchain_id_resolver,
             buffer: &buffer,
         };
@@ -360,24 +381,58 @@ impl CrosschainIndexer for AvalancheIndexer {
     }
 
     fn get_status(&self) -> CrosschainIndexerStatus {
+        let mut extra_info = std::collections::HashMap::from([
+            (
+                "chains_count".to_string(),
+                serde_json::json!(self.chains.len()),
+            ),
+            (
+                "poll_interval_secs".to_string(),
+                serde_json::json!(self.settings.pull_interval_ms.as_secs()),
+            ),
+            (
+                "batch_size".to_string(),
+                serde_json::json!(self.settings.batch_size),
+            ),
+        ]);
+
+        if let Some(home) = self.home_chain {
+            extra_info.insert("home_chain".to_string(), serde_json::json!(home));
+        }
+
         CrosschainIndexerStatus {
             state: self.state.read().clone(),
             init_timestamp: self.init_timestamp,
-            extra_info: std::collections::HashMap::from([
-                (
-                    "chains_count".to_string(),
-                    serde_json::json!(self.chains.len()),
-                ),
-                (
-                    "poll_interval_secs".to_string(),
-                    serde_json::json!(self.settings.pull_interval_ms.as_secs()),
-                ),
-                (
-                    "batch_size".to_string(),
-                    serde_json::json!(self.settings.batch_size),
-                ),
-            ]),
+            extra_info,
         }
+    }
+}
+
+/// Check if a cross-chain message should be processed based on chain configuration.
+///
+/// `chain_ids` contains every chain that has a configured contract for this
+/// bridge. `home_chain` enables unknown-chain processing only when one message
+/// endpoint equals the configured home chain.
+///
+/// | source configured | dest configured | home_chain | result      |
+/// |:-----------------:|:---------------:|:----------:|:-----------:|
+/// | ✓                 | ✓               | any        | ✓           |
+/// | ✗                 | ✗               | any        | ✗           |
+/// | one               | one             | None       | ✗           |
+/// | one               | one             | Some(h)    | src==h \|\| dst==h |
+fn should_process_message(
+    source_chain_id: i64,
+    dest_chain_id: i64,
+    chain_ids: &HashSet<i64>,
+    home_chain: Option<i64>,
+) -> bool {
+    if let Some(chain_id) = home_chain {
+        source_chain_id == chain_id || dest_chain_id == chain_id
+    } else {
+        let source = chain_ids.contains(&source_chain_id);
+        let dest = chain_ids.contains(&dest_chain_id);
+        // both configured: always process
+        source && dest
     }
 }
 
@@ -396,7 +451,9 @@ fn parse_message_key(message_id: &B256, bridge_id: i32) -> Result<(Key, [u8; 8])
 struct BatchProcessContext<'a> {
     bridge_id: i32,
     chain_ids: &'a HashSet<i64>,
-    process_unknown_chains: bool,
+    /// Process messages involving one unknown chain only if one endpoint is
+    /// this configured home chain.
+    home_chain: Option<i64>,
     blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
 }
@@ -463,7 +520,7 @@ async fn process_batch(
                 log,
                 bridge_id: ctx.bridge_id,
                 chain_ids: ctx.chain_ids,
-                process_unknown_chains: ctx.process_unknown_chains,
+                home_chain: ctx.home_chain,
                 blockchain_id_resolver: ctx.blockchain_id_resolver,
                 buffer: ctx.buffer,
                 receipt_logs,
@@ -687,7 +744,9 @@ struct LogHandleContext<'a> {
     block_timestamp: chrono::NaiveDateTime,
     bridge_id: i32,
     chain_ids: &'a HashSet<i64>,
-    process_unknown_chains: bool,
+    /// Process messages involving one unknown chain only if one endpoint is
+    /// this configured home chain.
+    home_chain: Option<i64>,
     blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
 
@@ -761,17 +820,23 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
 
     let destination_chain_id = dst_chain_id;
 
-    if !ctx.chain_ids.contains(&destination_chain_id) && !ctx.process_unknown_chains {
+    if !should_process_message(
+        ctx.chain_id,
+        destination_chain_id,
+        ctx.chain_ids,
+        ctx.home_chain,
+    ) {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             destination_blockchain_id = %destination_hex,
-            chain_id = ctx.chain_id,
+            source_chain_id = ctx.chain_id,
+            destination_chain_id,
             block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
-            destination_chain_id,
-            "skipping SendCrossChainMessage to unknown chain"
+            home_chain = ?ctx.home_chain,
+            "skipping SendCrossChainMessage: destination chain not configured and not home-chain message"
         );
         return Ok(());
     }
@@ -895,17 +960,18 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
 
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
-    if !ctx.chain_ids.contains(&source_chain_id) && !ctx.process_unknown_chains {
+    if !should_process_message(source_chain_id, ctx.chain_id, ctx.chain_ids, ctx.home_chain) {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            chain_id = ctx.chain_id,
+            source_chain_id,
+            destination_chain_id = ctx.chain_id,
             block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
-            source_chain_id,
-            "skipping ReceiveCrossChainMessage from unknown chain"
+            home_chain = ?ctx.home_chain,
+            "skipping ReceiveCrossChainMessage: source chain not configured and not home-chain message"
         );
         return Ok(());
     }
@@ -939,11 +1005,16 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
         .transpose()
         .unwrap_or(None);
 
+    let source_is_unknown = !ctx.chain_ids.contains(&source_chain_id);
+
     let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
     let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
 
     ctx.buffer
         .alter(key, chain_id, block_number, |msg| {
+            if source_is_unknown {
+                msg.source_chain_is_unknown = true;
+            }
             msg.receive = Some(AnnotatedEvent {
                 event,
                 transaction_hash,
@@ -965,6 +1036,7 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
         signature = %topic0,
         source_blockchain_id = %source_hex,
         source_chain_id,
+        source_is_unknown,
         "processed ReceiveCrossChainMessage"
     );
 
@@ -997,28 +1069,33 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
 
     let source_chain_id = src_chain_id;
 
-    if !ctx.chain_ids.contains(&source_chain_id) && !ctx.process_unknown_chains {
+    if !should_process_message(source_chain_id, ctx.chain_id, ctx.chain_ids, ctx.home_chain) {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            chain_id = ctx.chain_id,
+            source_chain_id,
+            destination_chain_id = ctx.chain_id,
             block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
-            source_chain_id,
-            "skipping MessageExecuted from unknown chain"
+            home_chain = ?ctx.home_chain,
+            "skipping MessageExecuted: source chain not configured and not home-chain message"
         );
         return Ok(());
     }
 
     let destination_chain_id = ctx.chain_id;
+    let source_is_unknown = !ctx.chain_ids.contains(&source_chain_id);
 
     let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
     let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
 
     ctx.buffer
         .alter(key, chain_id, block_number, |msg| {
+            if source_is_unknown {
+                msg.source_chain_is_unknown = true;
+            }
             // Receiver-side effects are parsed on MessageExecuted only.
             // Enforce a strict invariant to avoid ambiguous attribution.
             msg.execution = Some(MessageExecutionOutcome::Succeeded(AnnotatedEvent {
@@ -1043,6 +1120,7 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
         signature = %topic0,
         source_blockchain_id = %source_hex,
         source_chain_id,
+        source_is_unknown,
         "processed MessageExecuted"
     );
 
@@ -1075,28 +1153,33 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
     let source_chain_id = src_chain_id;
 
-    if !ctx.chain_ids.contains(&source_chain_id) && !ctx.process_unknown_chains {
+    if !should_process_message(source_chain_id, ctx.chain_id, ctx.chain_ids, ctx.home_chain) {
         tracing::trace!(
             message_id = %hex::encode(message_id_bytes),
             source_blockchain_id = %source_hex,
-            chain_id = ctx.chain_id,
+            source_chain_id,
+            destination_chain_id = ctx.chain_id,
             block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
             signature = %topic0,
-            source_chain_id,
-            "skipping MessageExecutionFailed from unknown chain"
+            home_chain = ?ctx.home_chain,
+            "skipping MessageExecutionFailed: source chain not configured and not home-chain message"
         );
         return Ok(());
     }
 
     let destination_chain_id = ctx.chain_id;
+    let source_is_unknown = !ctx.chain_ids.contains(&source_chain_id);
 
     let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
     let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
 
     ctx.buffer
         .alter(key, chain_id, block_number, |msg| {
+            if source_is_unknown {
+                msg.source_chain_is_unknown = true;
+            }
             // Only update if not already succeeded (don't overwrite success with failure)
             if !matches!(msg.execution, Some(MessageExecutionOutcome::Succeeded(_))) {
                 msg.execution = Some(MessageExecutionOutcome::Failed(
@@ -1125,6 +1208,7 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
         signature = %topic0,
         source_blockchain_id = %source_hex,
         source_chain_id,
+        source_is_unknown,
         "processed MessageExecutionFailed"
     );
 

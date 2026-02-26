@@ -18,12 +18,24 @@ Non-obvious traps and their solutions.
 
 **Symptom:** Events from a chain are not being indexed, only trace-level logs visible.
 
-**Root cause:** When processing Avalanche events, the indexer checks if the source/destination chain is in the bridge's configured `chain_ids`. If not, and `process_unknown_chains` is `false` (default), the event is skipped with a `tracing::trace!` log.
+**Root cause:** When processing Avalanche events, the indexer checks if the source/destination chain is in the bridge's configured `chain_ids`. The `chain_ids` HashSet is built from all chains that have:
+1. A contract listed in `bridges.json` for this bridge
+2. A chain configuration in `chains.json` with at least one enabled RPC provider
+
+Filtering happens in 4 event handlers:
+- `handle_send_cross_chain_message()` - checks **destination_chain_id**
+- `handle_receive_cross_chain_message()` - checks **source_chain_id**
+- `handle_message_executed()` - checks **source_chain_id**
+- `handle_message_execution_failed()` - checks **source_chain_id**
+
+If a chain is not in `chain_ids` and bridge `home_chain` is not configured (strict mode), the event is skipped with a `tracing::trace!` log.
 
 **Fix:**
-1. Add the chain to the bridge's configured chains in `bridges.json`
-2. OR set `process_unknown_chains: true` in indexer settings to index events involving any chain
-3. Check trace-level logs for "skipping ... to/from unknown chain" messages
+1. Add the chain to the bridge's configured chains in `bridges.json` (and ensure it has RPC config in `chains.json`)
+2. OR set `home_chain: <chain_id>` in `bridges.json` to index one-known/one-unknown messages only when one endpoint equals that chain
+3. Check trace-level logs for "skipping ... not home-chain message" messages
+
+**Note:** The filtering happens BEFORE messages enter the buffer, so unfiltered messages never reach consolidation or database layers.
 
 ---
 
@@ -84,3 +96,40 @@ Non-obvious traps and their solutions.
 **Root cause:** `bridge_contracts.started_at_block` is nullable; `None` maps to `.unwrap_or(0)` in `BridgeContractConfig`.
 
 **Fix:** Set `started_at_block` only for non-genesis starts. Treat `NULL` as expected (no warning).
+
+---
+
+## Upgrading Unknown Chains to Proper Bridges
+
+**Symptom:** You have partial messages (unknown source chain) and want to properly index that chain pair.
+
+**Root cause:** Messages from unknown chains are indexed with `init_timestamp = last_update_timestamp` and no `src_tx_hash`. Re-indexing the source chain alone won't "upgrade" existing messages — the upsert would overwrite destination-side data with incomplete source-only data.
+
+**Procedure:**
+
+1. **Create a new bridge** for the chain pair (e.g., A ↔ C) with proper contracts config
+2. **Update the original bridge** to stop processing the now-configured pair:
+   - Set `home_chain: null` (or remove `home_chain`) for strict mode
+3. **Delete partial messages** from the original bridge (`DELETE FROM crosschain_messages WHERE bridge_id = X AND src_chain_id = C OR dst_chain_id = C`)
+4. **Restart** — the new bridge indexes A ↔ C with full data
+
+**Production model:**
+
+```json
+[
+   {
+      "name": "A-B strict bridge",
+      "home_chain": null
+   },
+   {
+      "name": "A-C strict bridge",
+      "home_chain": null
+   },
+   {
+      "name": "Monitoring bridge",
+      "home_chain": 43114
+   }
+]
+```
+
+**Key insight:** Don't try to incrementally upgrade partial messages. Clean delete + fresh re-index is simpler and safer.
