@@ -3,7 +3,7 @@
         "bridge_id": 1,
         "name": "OmniBridge",
         "type": "lockmint",
-        "indexer": "OmniBridge",
+        "indexer_type": "unknown",
         "enabled": true,
         "api_url": null,
         "ui_url": "https://bridge.gnosischain.com",

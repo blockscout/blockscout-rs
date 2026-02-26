@@ -152,7 +152,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
-        home_chain: None,
+        home_chain_id: None,
     };
 
     assert_eq!(provider_src.get_block_number().await?, block_number_src);
@@ -206,7 +206,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
-        bridge_config.home_chain,
+        bridge_config.home_chain_id,
         &Default::default(),
         &Default::default(),
     )?;
@@ -420,7 +420,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
-        home_chain: None,
+        home_chain_id: None,
     };
 
     assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
@@ -479,7 +479,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
-        bridge_config.home_chain,
+        bridge_config.home_chain_id,
         &settings,
         &Default::default(),
     )?;
@@ -608,7 +608,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
-        home_chain: None,
+        home_chain_id: None,
     };
 
     assert_eq!(provider_src.get_block_number().await?, block_number_src);
@@ -668,7 +668,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
-        bridge_config.home_chain,
+        bridge_config.home_chain_id,
         &settings,
         &Default::default(),
     )?;
@@ -740,7 +740,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
     let teleporter_address = "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf";
 
     // Only the source chain is tracked by the indexer. Destination is intentionally omitted
-    // to exercise bridge-level `home_chain` filtering.
+    // to exercise bridge-level `home_chain_id` filtering.
     let chains = [ChainConfig {
         chain_id: chain_id_src as i64,
         name: name_src.into(),
@@ -770,7 +770,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         api_url: None,
         ui_url: None,
         docs_url: None,
-        home_chain: Some(chain_id_src),
+        home_chain_id: Some(chain_id_src),
     };
 
     assert_eq!(provider_src.get_block_number().await?, block_number_src);
@@ -814,7 +814,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
-        bridge_config.home_chain,
+        bridge_config.home_chain_id,
         &settings,
         &Default::default(),
     )?;
@@ -930,7 +930,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         api_url: None,
         ui_url: None,
         docs_url: None,
-        home_chain: Some(chain_id_dest),
+        home_chain_id: Some(chain_id_dest),
     };
 
     assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
@@ -974,7 +974,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
-        bridge_config.home_chain,
+        bridge_config.home_chain_id,
         &settings,
         &Default::default(),
     )?;
@@ -1129,7 +1129,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
-        home_chain: None,
+        home_chain_id: None,
     };
 
     let db_guard = helpers::init_db("avalanche_e2e", "configured_source_waits").await;
@@ -1186,7 +1186,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
-        bridge_config.home_chain,
+        bridge_config.home_chain_id,
         &settings,
         &Default::default(),
     )?;
@@ -1233,10 +1233,10 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
     Ok(())
 }
 
-/// Verifies that `home_chain` filtering works for unknown source chain
+/// Verifies that `home_chain_id` filtering works for unknown source chain
 /// messages.
 ///
-/// When `home_chain = Some(dest)`, only messages where one endpoint is the
+/// When `home_chain_id = Some(dest)`, only messages where one endpoint is the
 /// destination chain should be processed when the source is unknown.
 #[tokio::test]
 #[ignore = "requires network access and Anvil binary"]
@@ -1286,12 +1286,12 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
-        home_chain: Some(chain_id_dest),
+        home_chain_id: Some(chain_id_dest),
     };
 
     assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
 
-    let db_guard = helpers::init_db("avalanche_e2e", "home_chain_filter").await;
+    let db_guard = helpers::init_db("avalanche_e2e", "home_chain_id_filter").await;
     let db = db_guard.client();
     let interchain_db = InterchainDatabase::new(db.clone());
 
@@ -1319,7 +1319,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         start_block: block_number_dest,
     }];
 
-    // home_chain = dest chain (Numine, 8021). Unknown source → Numine should be processed.
+    // home_chain_id = dest chain (Numine, 8021). Unknown source → Numine should be processed.
     let settings = AvalancheIndexerSettings {
         pull_interval_ms: Duration::from_millis(200),
         batch_size: 25,
@@ -1330,7 +1330,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         bridge_config.bridge_id,
         avalanche_chains,
-        bridge_config.home_chain,
+        bridge_config.home_chain_id,
         &settings,
         &Default::default(),
     )?;
