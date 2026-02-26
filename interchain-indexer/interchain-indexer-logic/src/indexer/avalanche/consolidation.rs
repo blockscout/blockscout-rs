@@ -19,7 +19,7 @@ use super::types::{
 #[derive(Clone, Debug, Default)]
 struct SourceData {
     init_timestamp: chrono::NaiveDateTime,
-    source_chaind_id: ChainId,
+    source_chain_id: ChainId,
     message_id: MessageId,
     source_transaction_hash: Option<TxHash>,
     sender_address: Option<Address>,
@@ -31,47 +31,51 @@ impl SourceData {
     /// Build from the send event (normal path - has all data).
     fn from_send(
         send: &AnnotatedEvent<super::abi::ITeleporterMessenger::SendCrossChainMessage>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        Ok(Self {
             init_timestamp: send.block_timestamp,
-            source_chaind_id: send.source_chain_id as u64,
+            source_chain_id: u64::try_from(send.source_chain_id)
+                .context("source_chain_id out of range")?,
             message_id: send.event.messageID,
             source_transaction_hash: Some(send.transaction_hash),
             sender_address: Some(send.event.message.originSenderAddress),
             recipient_address: Some(send.event.message.destinationAddress),
             payload: send.event.message.message.clone().into(),
-        }
+        })
     }
 
     /// Build from the receive event (fallback for unknown source chain).
     /// Uses the destination-side timestamp as `init_timestamp`.
     fn from_receive(
         receive: &AnnotatedEvent<super::abi::ITeleporterMessenger::ReceiveCrossChainMessage>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        Ok(Self {
             init_timestamp: receive.block_timestamp,
-            source_chaind_id: receive.source_chain_id as u64,
+            source_chain_id: u64::try_from(receive.source_chain_id)
+                .context("source_chain_id out of range")?,
             message_id: receive.event.messageID,
             ..Default::default()
-        }
+        })
     }
 
     /// Build from an execution outcome (fallback for unknown source chain
     /// when only execution events are available).
-    fn from_execution(execution: &MessageExecutionOutcome) -> Self {
+    fn from_execution(execution: &MessageExecutionOutcome) -> Result<Self> {
         match execution {
-            MessageExecutionOutcome::Succeeded(e) => Self {
+            MessageExecutionOutcome::Succeeded(e) => Ok(Self {
                 init_timestamp: e.block_timestamp,
-                source_chaind_id: e.source_chain_id as u64,
+                source_chain_id: u64::try_from(e.source_chain_id)
+                    .context("source_chain_id out of range")?,
                 message_id: e.event.messageID,
                 ..Default::default()
-            },
-            MessageExecutionOutcome::Failed(e) => Self {
+            }),
+            MessageExecutionOutcome::Failed(e) => Ok(Self {
                 init_timestamp: e.block_timestamp,
-                source_chaind_id: e.source_chain_id as u64,
+                source_chain_id: u64::try_from(e.source_chain_id)
+                    .context("source_chain_id out of range")?,
                 message_id: e.event.messageID,
                 ..Default::default()
-            },
+            }),
         }
     }
 }
@@ -81,12 +85,12 @@ impl Consolidate for Message {
         // Decide if we can consolidate and extract source data.
         let source_data = match (&self.send, self.source_chain_is_unknown) {
             // Case 1: Have send event - use it (normal path).
-            (Some(send), _) => SourceData::from_send(send),
+            (Some(send), _) => SourceData::from_send(send)?,
 
             // Case 2: No send, source is UNKNOWN - fall back to receive/execution.
             (None, true) => match (&self.receive, &self.execution) {
-                (Some(receive), _) => SourceData::from_receive(receive),
-                (None, Some(exec)) => SourceData::from_execution(exec),
+                (Some(receive), _) => SourceData::from_receive(receive)?,
+                (None, Some(exec)) => SourceData::from_execution(exec)?,
                 (None, None) => return Ok(None),
             },
 
@@ -157,7 +161,7 @@ impl Consolidate for Message {
             id: ActiveValue::Set(key.message_id),
             bridge_id: ActiveValue::Set(key.bridge_id as i32),
             status: ActiveValue::Set(status),
-            src_chain_id: ActiveValue::Set(source_data.source_chaind_id.try_into()?),
+            src_chain_id: ActiveValue::Set(source_data.source_chain_id.try_into()?),
             dst_chain_id: ActiveValue::Set(destination_chain_id.into()),
             native_id: ActiveValue::Set(Some(source_data.message_id.as_slice().to_vec())),
             init_timestamp: ActiveValue::Set(source_data.init_timestamp),
@@ -207,7 +211,7 @@ fn build_transfer(
 
     match transfer {
         TokenTransfer::Sent(src, dest) => {
-            // This should newer happen because we cannot call this function without a
+            // This should never happen because we cannot call this function without a
             // send event. And if there were sent event, src must be Some.
             let src = src.as_ref().context("missing source side of a transfer")?;
             let (sender, amount, dst_token_addr, recipient, src_token_addr) = match src {

@@ -387,8 +387,8 @@ impl CrosschainIndexer for AvalancheIndexer {
                 serde_json::json!(self.chains.len()),
             ),
             (
-                "poll_interval_secs".to_string(),
-                serde_json::json!(self.settings.pull_interval_ms.as_secs()),
+                "poll_interval_ms".to_string(),
+                serde_json::json!(self.settings.pull_interval_ms.as_millis()),
             ),
             (
                 "batch_size".to_string(),
@@ -426,13 +426,13 @@ fn should_process_message(
     chain_ids: &HashSet<i64>,
     home_chain: Option<i64>,
 ) -> bool {
-    if let Some(chain_id) = home_chain {
-        source_chain_id == chain_id || dest_chain_id == chain_id
-    } else {
-        let source = chain_ids.contains(&source_chain_id);
-        let dest = chain_ids.contains(&dest_chain_id);
-        // both configured: always process
-        source && dest
+    let source = chain_ids.contains(&source_chain_id);
+    let dest = chain_ids.contains(&dest_chain_id);
+
+    match home_chain {
+        _ if source && dest => true,
+        Some(chain_id) => source_chain_id == chain_id || dest_chain_id == chain_id,
+        None => false,
     }
 }
 
