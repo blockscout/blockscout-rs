@@ -74,12 +74,6 @@ When a new coding rule emerges, update the relevant file in .memory-bank/rules/ 
 Reusable task procedures are in `.memory-bank/workflows/`. These are tool-agnostic —
 tool-specific integrations (e.g., Claude Code `/skills`) are thin wrappers.
 
-For GitHub Copilot Chat to discover and use project skills, enable this VS Code setting:
-
-```json
-"chat.useClaudeSkills": true
-```
-
 - `gh-issue-bug.md` — draft a GitHub bug report
 - `gh-issue-improvement.md` — draft a GitHub enhancement proposal
 - `gh-issue-publish.md` — publish a drafted issue via the `gh` CLI
