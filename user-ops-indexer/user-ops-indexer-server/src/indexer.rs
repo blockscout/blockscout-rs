@@ -20,7 +20,9 @@ pub async fn run(
 
     let mut status = IndexerStatus::default();
     status.v06.enabled = settings.indexer.entrypoints.v06;
-    status.v07_v08.enabled = settings.indexer.entrypoints.v07 || settings.indexer.entrypoints.v08;
+    status.v07_v09.enabled = settings.indexer.entrypoints.v07
+        || settings.indexer.entrypoints.v08
+        || settings.indexer.entrypoints.v09;
     let status = Arc::new(RwLock::new(status));
     let status_res = status.clone();
 
@@ -46,7 +48,10 @@ pub async fn run(
         tracing::warn!("indexer for v0.6 is disabled in settings");
     }
 
-    if settings.indexer.entrypoints.v07 || settings.indexer.entrypoints.v08 {
+    if settings.indexer.entrypoints.v07
+        || settings.indexer.entrypoints.v08
+        || settings.indexer.entrypoints.v09
+    {
         start_indexer_with_retries(
             db_connection.clone(),
             settings.indexer.clone(),
@@ -61,12 +66,17 @@ pub async fn run(
                 } else {
                     vec![]
                 },
+                v09_entry_points: if settings.indexer.entrypoints.v09 {
+                    settings.indexer.entrypoints.v09_entry_point.clone()
+                } else {
+                    vec![]
+                },
             },
             tx.clone(),
         )
         .await?;
     } else {
-        tracing::warn!("indexer for v0.7 and v0.8 is disabled in settings");
+        tracing::warn!("indexers for v0.7, v0.8, v0.9 are disabled in settings");
     }
 
     Ok(status_res)
