@@ -38,7 +38,7 @@ enum ParseError {
     },
     #[error("{key} value is not valid \"u64\" type; actual={ty}")]
     InvalidU64Value { key: &'static str, ty: Type },
-    #[error("invalid integrity hash size; expected={EXPECTED_INTEGRITY_HASH_SIZE}, found=0")]
+    #[error("invalid integrity hash size; expected={}, found={0}", EXPECTED_INTEGRITY_HASH_SIZE)]
     InvalidIntegrityHashSize(usize),
     #[error("invalid compiler map size; expected=1, found={0}")]
     InvalidCompilerMapSize(usize),
