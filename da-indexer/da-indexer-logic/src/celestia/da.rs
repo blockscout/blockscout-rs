@@ -105,7 +105,7 @@ impl DA for CelestiaDA {
         txn.commit().await?;
 
         // this is not accurate, just to indicate progress
-        if job.height % 1000 == 0 {
+        if job.height.is_multiple_of(1000) {
             tracing::info!(height = job.height, "processed height");
         }
 
