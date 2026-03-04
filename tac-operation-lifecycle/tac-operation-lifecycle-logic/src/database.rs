@@ -1,7 +1,9 @@
 use crate::{
     client::models::{
         operations::Operations as ApiOperations,
-        profiling::{BlockchainType, OperationData as ApiOperationData, OperationMetaInfo},
+        profiling::{
+            BlockchainType, OperationData as ApiOperationData, OperationMetaInfo, OperationType,
+        },
     },
     utils::{
         blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address,
@@ -686,7 +688,7 @@ impl TacDatabase {
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![
             format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
-            "op_type = 'PENDING'".to_string(),
+            "(op_type = 'PENDING' OR op_type = 'INSUFFICIENT-FEE')".to_string(),
         ];
 
         let sql = self.build_operation_query(
@@ -822,7 +824,9 @@ impl TacDatabase {
     ) -> Result<(), DbErr> {
         let mut operation_model: operation::ActiveModel = operation.clone().into();
         operation_model.updated_at = Set(chrono::Utc::now().naive_utc());
-        operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
+        operation_model.op_type = Set(Some(
+            Self::derive_operation_type(operation_data).to_string(),
+        ));
         operation_model.status = Set(new_status.clone());
 
         if let Some((address, blockchain)) = operation_data
@@ -858,6 +862,31 @@ impl TacDatabase {
         Ok(())
     }
 
+    fn derive_operation_type(operation_data: &ApiOperationData) -> OperationType {
+        let has_insufficient_fee_note = operation_data
+            .stages
+            .values()
+            .filter_map(|stage| stage.stage_data.as_ref())
+            .any(|stage_data| {
+                if stage_data.success {
+                    return false;
+                }
+
+                let note = match stage_data.note.as_ref() {
+                    Some(note) => note.to_lowercase(),
+                    None => return false,
+                };
+
+                note.contains("insufficient") && note.contains("fee")
+            });
+
+        if operation_data.operation_type == OperationType::Pending && has_insufficient_fee_note {
+            OperationType::InsufficientFee
+        } else {
+            operation_data.operation_type.clone()
+        }
+    }
+
     async fn store_operation_stages(
         tx: &DatabaseTransaction,
         operation: &operation::Model,
@@ -885,9 +914,8 @@ impl TacDatabase {
                     .exec_with_returning(tx)
                     .await?;
 
-                // store transactions for this stage
-                let transaction_models = data
-                    .transactions
+                let transactions = data.transactions.as_deref().unwrap_or(&[]);
+                let transaction_models = transactions
                     .iter()
                     .map(|a_tx| transaction::ActiveModel {
                         id: NotSet,
@@ -898,9 +926,11 @@ impl TacDatabase {
                     })
                     .collect::<Vec<_>>();
 
-                transaction::Entity::insert_many(transaction_models)
-                    .exec(tx)
-                    .await?;
+                if !transaction_models.is_empty() {
+                    transaction::Entity::insert_many(transaction_models)
+                        .exec(tx)
+                        .await?;
+                }
             }
         }
 

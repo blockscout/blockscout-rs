@@ -38,6 +38,7 @@ enum OperationType {
   TON_TAC = 4;
   ROLLBACK = 5;
   UNKNOWN = 6;
+  INSUFFICIENT_FEE = 7;
 }
 
 message OperationsResponse {
