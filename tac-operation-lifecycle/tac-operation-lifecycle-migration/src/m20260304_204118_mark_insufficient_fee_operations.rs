@@ -53,6 +53,7 @@ mod tests {
     use crate::Migrator;
 
     #[async_std::test]
+    #[ignore = "needs database to run"]
     async fn migration_marks_and_reverts_insufficient_fee_operations() {
         let db = TestDbGuard::new::<Migrator>("migration_insufficient_fee").await;
         let conn = db.client();
