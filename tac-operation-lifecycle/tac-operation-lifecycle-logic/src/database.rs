@@ -1374,7 +1374,12 @@ impl TacDatabase {
         let mut result = vec![];
         for (op_model, stages_map) in operations_map.into_values() {
             let mut stages: Vec<_> = stages_map.into_values().collect();
-            stages.sort_by_key(|(stage, _)| stage.timestamp);
+            stages.sort_by(|(a, _), (b, _)| {
+                let key = |stage: &operation_stage::Model| {
+                    (stage.timestamp, stage.stage_type_id, stage.id)
+                };
+                key(a).cmp(&key(b))
+            });
             result.push((op_model, stages));
         }
 
