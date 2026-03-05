@@ -60,7 +60,9 @@ impl OperationType {
     }
 
     pub fn is_finalized(&self) -> bool {
-        self != &OperationType::Pending && self != &OperationType::Unknown
+        self != &OperationType::Pending
+            && self != &OperationType::Unknown
+            && self != &OperationType::InsufficientFee
     }
 }
 
