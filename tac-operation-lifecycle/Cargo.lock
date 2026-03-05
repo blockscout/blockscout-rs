@@ -4605,6 +4605,7 @@ name = "tac-operation-lifecycle-migration"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "blockscout-service-launcher",
  "sea-orm-migration",
  "tac-operation-lifecycle-entity",
 ]

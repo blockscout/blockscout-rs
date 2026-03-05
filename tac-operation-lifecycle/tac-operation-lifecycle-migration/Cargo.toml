@@ -21,3 +21,6 @@ features = [
   "runtime-tokio-rustls",  # `ASYNC_RUNTIME` feature
   "sqlx-postgres",         # `DATABASE_DRIVER` feature
 ]
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = ["test-database", "database-1"] }
