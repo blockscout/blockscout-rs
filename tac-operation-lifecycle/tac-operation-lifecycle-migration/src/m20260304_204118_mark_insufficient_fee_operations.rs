@@ -61,6 +61,11 @@ mod tests {
             .await
             .expect("failed to roll back target migration");
 
+        // op1: should be changed to INSUFFICIENT-FEE
+        // op2: should be left as PENDING (op stage is successful)
+        // op3: should be left as PENDING (error message doesn't match pattern)
+        // op4: should be left as ROLLBACK (op_type is not PENDING)
+        // op5: should be left as PENDING (op stage doesn't contain note)
         conn.execute_unprepared(
             r#"
             INSERT INTO "stage_type" ("id", "name") VALUES (1, 'mock-stage');
@@ -68,18 +73,20 @@ mod tests {
             INSERT INTO "operation" (
                 "id", "op_type", "timestamp", "next_retry", "status", "retry_count", "inserted_at", "updated_at"
             ) VALUES
-                ('op_match', 'PENDING', NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW()),
-                ('op_success', 'PENDING', NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW()),
-                ('op_missing_fee_word', 'PENDING', NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW()),
-                ('op_rollback', 'ROLLBACK', NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW());
+                ('op1', 'PENDING',  NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW()),
+                ('op2', 'PENDING',  NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW()),
+                ('op3', 'PENDING',  NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW()),
+                ('op4', 'ROLLBACK', NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW()),
+                ('op5', 'PENDING',  NOW(), NULL, 'pending'::status_enum, 0, NOW(), NOW());
 
             INSERT INTO "operation_stage" (
                 "operation_id", "stage_type_id", "success", "timestamp", "note", "inserted_at"
             ) VALUES
-                ('op_match', 1, FALSE, NOW(), '{"content":"insufficient executor fee","errorName":"","internalBytesError":"","internalMsg":""}', NOW()),
-                ('op_success', 1, TRUE, NOW(), 'Error: insufficient fee', NOW()),
-                ('op_missing_fee_word', 1, FALSE, NOW(), 'Error: insufficient balance', NOW()),
-                ('op_rollback', 1, FALSE, NOW(), '{"content":"insufficient extra fee"}', NOW());
+                ('op1', 1, FALSE, NOW(), '{"content":"insufficient executor fee","errorName":"","internalBytesError":"","internalMsg":""}', NOW()),
+                ('op2', 1, TRUE,  NOW(), 'Error: insufficient fee', NOW()),
+                ('op3', 1, FALSE, NOW(), 'Error: insufficient balance', NOW()),
+                ('op4', 1, FALSE, NOW(), '{"content":"insufficient extra fee"}', NOW()),
+                ('op5', 1, FALSE, NOW(), NULL, NOW());
             "#,
         )
         .await
@@ -89,25 +96,51 @@ mod tests {
             .await
             .expect("failed to apply target migration");
 
-        assert_eq!(fetch_op_type(conn.as_ref(), "op_match").await, Some("INSUFFICIENT-FEE".to_string()));
-        assert_eq!(fetch_op_type(conn.as_ref(), "op_success").await, Some("PENDING".to_string()));
         assert_eq!(
-            fetch_op_type(conn.as_ref(), "op_missing_fee_word").await,
+            fetch_op_type(conn.as_ref(), "op1").await,
+            Some("INSUFFICIENT-FEE".to_string())
+        );
+        assert_eq!(
+            fetch_op_type(conn.as_ref(), "op2").await,
             Some("PENDING".to_string())
         );
-        assert_eq!(fetch_op_type(conn.as_ref(), "op_rollback").await, Some("ROLLBACK".to_string()));
+        assert_eq!(
+            fetch_op_type(conn.as_ref(), "op3").await,
+            Some("PENDING".to_string())
+        );
+        assert_eq!(
+            fetch_op_type(conn.as_ref(), "op4").await,
+            Some("ROLLBACK".to_string())
+        );
+        assert_eq!(
+            fetch_op_type(conn.as_ref(), "op5").await,
+            Some("PENDING".to_string())
+        );
 
         Migrator::down(conn.as_ref(), Some(1))
             .await
             .expect("failed to roll back target migration");
 
-        assert_eq!(fetch_op_type(conn.as_ref(), "op_match").await, Some("PENDING".to_string()));
-        assert_eq!(fetch_op_type(conn.as_ref(), "op_success").await, Some("PENDING".to_string()));
         assert_eq!(
-            fetch_op_type(conn.as_ref(), "op_missing_fee_word").await,
+            fetch_op_type(conn.as_ref(), "op1").await,
             Some("PENDING".to_string())
         );
-        assert_eq!(fetch_op_type(conn.as_ref(), "op_rollback").await, Some("ROLLBACK".to_string()));
+        assert_eq!(
+            fetch_op_type(conn.as_ref(), "op2").await,
+            Some("PENDING".to_string())
+        );
+        assert_eq!(
+            fetch_op_type(conn.as_ref(), "op3").await,
+            Some("PENDING".to_string())
+        );
+        assert_eq!(
+            fetch_op_type(conn.as_ref(), "op4").await,
+            Some("ROLLBACK".to_string())
+        );
+        assert_eq!(
+            fetch_op_type(conn.as_ref(), "op5").await,
+            Some("PENDING".to_string())
+        );
     }
 
     async fn fetch_op_type(conn: &impl ConnectionTrait, id: &str) -> Option<String> {
