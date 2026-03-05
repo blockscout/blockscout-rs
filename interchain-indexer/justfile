@@ -81,13 +81,19 @@ flush-database:
 
 # apply the basic formatting 
 format:
-    cargo sort --workspace
+    # `cargo sort` requires `cargo-sort`; skip when it's not installed.
+    if cargo sort --version >/dev/null 2>&1; then cargo sort --workspace; else echo "cargo-sort is not installed, skipping cargo sort"; fi
     cargo fmt --all -- --config imports_granularity=Crate
 
 # check and lint the code
 check:
     cargo check
     cargo clippy --all --all-targets --all-features -- -D warnings
+
+# run formatting and checks together
+format-check:
+    just format
+    just check
 
 insert-test-data:
      docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} < interchain-indexer-migration/src/mock_data/test_data.sql
