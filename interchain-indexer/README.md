@@ -32,6 +32,43 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
     - **TokenFetcher** fetches metadata for newly encountered tokens.
     - **Renderer** serves processed data to users and external consumers.
 
+## Configuration JSON Files
+
+The service reads configuration from two JSON files:
+
+- **Chains** — `INTERCHAIN_INDEXER__CHAINS_CONFIG` (e.g. `config/avalanche/chains.json`)
+- **Bridges** — `INTERCHAIN_INDEXER__BRIDGES_CONFIG` (e.g. `config/avalanche/bridges.json`)
+
+### `chains.json`
+
+Defines the blockchains the indexer knows about. Each entry describes one chain:
+
+| Field        | Description |
+| ------------ | ----------- |
+| `chain_id`   | Numeric chain identifier (e.g. 43114 for Avalanche C-Chain). |
+| `name`       | Human-readable chain name. |
+| `native_id`  | Chain’s native/subnet id (hex), used for interchain routing. |
+| `icon`       | Optional URL to chain icon. |
+| `explorer`   | Optional explorer base URL and routes: `url`, `custom_tx_route`, `custom_address_route`, `custom_token_route`. |
+| `rpcs`       | RPC config per chain. |
+
+### `bridges.json`
+
+Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridge:
+
+| Field        | Description |
+| ------------ | ----------- |
+| `bridge_id`  | Unique numeric id for the bridge. |
+| `name`       | Human-readable bridge name. |
+| `type`       | Bridge type (e.g. `avalanche_native`). |
+| `indexer_type` | Indexer implementation (e.g. `icm_ictt`). |
+| `enabled`    | Whether this bridge is indexed. |
+| `api_url` / `ui_url` / `docs_url` | Optional external links. |
+| `home_chain_id` | Optional chain id used to allow processing messages with one unknown endpoint when the other endpoint is this chain. |
+| `contracts`  | Per-chain contract config: `chain_id`, `address`, `version`, `started_at_block`. |
+
+**`started_at_block`** — indexer starts scanning from this block on associated chain; set it to reduce initial sync time or to start from a specific deployment block.
+
 ## Envs
 
 ### Main Service Settings

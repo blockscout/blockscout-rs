@@ -7,6 +7,8 @@
         "enabled": true,
         "api_url": null,
         "ui_url": null,
+        "docs_url": null,
+        "home_chain_id": 8021,
         "contracts": [
             {
                 "chain_id": 43114,

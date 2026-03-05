@@ -463,7 +463,7 @@ mod tests {
         assert_eq!(bridges[0].contracts[0].chain_id, 43114);
         assert_eq!(bridges[0].contracts[0].version, 1);
         assert_eq!(bridges[0].contracts[0].started_at_block, 42526120);
-        assert_eq!(bridges[0].home_chain_id, None);
+        assert_eq!(bridges[0].home_chain_id, Some(8021));
     }
 
     #[test]
