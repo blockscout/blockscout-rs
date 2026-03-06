@@ -152,6 +152,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
+        process_unknown_chains: false,
         home_chain_id: None,
     };
 
@@ -207,6 +208,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
         &Default::default(),
         &Default::default(),
     )?;
@@ -420,6 +422,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
+        process_unknown_chains: false,
         home_chain_id: None,
     };
 
@@ -480,6 +483,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
     )?;
@@ -608,6 +612,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
+        process_unknown_chains: false,
         home_chain_id: None,
     };
 
@@ -669,6 +674,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
     )?;
@@ -770,6 +776,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         api_url: None,
         ui_url: None,
         docs_url: None,
+        process_unknown_chains: true,
         home_chain_id: Some(chain_id_src),
     };
 
@@ -815,6 +822,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
     )?;
@@ -930,6 +938,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         api_url: None,
         ui_url: None,
         docs_url: None,
+        process_unknown_chains: true,
         home_chain_id: Some(chain_id_dest),
     };
 
@@ -975,6 +984,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
     )?;
@@ -1041,6 +1051,300 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
     assert!(
         transfers.is_empty(),
         "No ICTT transfers should be present when source chain is unknown (no TokensSent event)"
+    );
+
+    indexer.stop().await;
+    Ok(())
+}
+
+/// Verifies `(process_unknown_chains = true, home_chain_id = None)` behavior.
+///
+/// With only destination configured, a message from unknown source should still
+/// be processed and consolidated because unknown-chain handling is enabled and
+/// there is no home-chain narrowing.
+#[tokio::test]
+#[ignore = "requires network access and Anvil binary"]
+async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_test_writer()
+        .try_init();
+
+    // Source chain is NOT configured - it's "unknown".
+    let chain_id_src = 43114;
+
+    let (name_dest, rpc_url_dest, block_number_dest, chain_id_dest, native_id_dest) = (
+        "Numine",
+        "https://subnets.avax.network/numi/mainnet/rpc",
+        269775,
+        8021,
+        "0xd32cc4660bcf8fa7971589f666fddb5ab22aee7e75dcb30b19829a65d4fb0063",
+    );
+    let provider_dest = forked_provider(rpc_url_dest, block_number_dest);
+
+    let teleporter_address = "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf";
+
+    // Only destination chain is configured for the indexer.
+    let chains = [ChainConfig {
+        chain_id: chain_id_dest as i64,
+        name: name_dest.into(),
+        icon: String::new(),
+        explorer: ExplorerConfig::default(),
+        pool_config: Default::default(),
+        rpcs: vec![],
+    }];
+
+    let bridge_id = 1u64;
+    let bridge_config = BridgeConfig {
+        bridge_id: bridge_id as i32,
+        name: "Test Bridge".into(),
+        bridge_type: BridgeType::AvalancheNative,
+        indexer_type: Default::default(),
+        enabled: true,
+        contracts: vec![BridgeContractConfig {
+            chain_id: chain_id_dest as i64,
+            address: teleporter_address.into(),
+            started_at_block: block_number_dest,
+            version: 1,
+            abi: None,
+        }],
+        api_url: None,
+        ui_url: None,
+        docs_url: None,
+        process_unknown_chains: true,
+        home_chain_id: None,
+    };
+
+    assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
+
+    let db_guard = helpers::init_db("avalanche_e2e", "unknown_source_no_home").await;
+    let db = db_guard.client();
+    let interchain_db = InterchainDatabase::new(db.clone());
+
+    let chains = chains
+        .iter()
+        .map(|c| interchain_indexer_entity::chains::ActiveModel::from(c.clone()))
+        .collect::<Vec<interchain_indexer_entity::chains::ActiveModel>>();
+    interchain_db.upsert_chains(chains).await?;
+
+    interchain_db
+        .upsert_avalanche_icm_blockchain_id(
+            decode_blockchain_id(native_id_dest),
+            chain_id_dest as i64,
+        )
+        .await?;
+
+    let bridges = [bridges::ActiveModel::from(bridge_config.clone())].to_vec();
+    interchain_db.upsert_bridges(bridges).await?;
+
+    let contract_address: Address = teleporter_address.parse()?;
+    let avalanche_chains = vec![AvalancheChainConfig {
+        chain_id: chain_id_dest as i64,
+        provider: provider_dest,
+        contract_address,
+        start_block: block_number_dest,
+    }];
+
+    let settings = AvalancheIndexerSettings {
+        pull_interval_ms: Duration::from_millis(200),
+        batch_size: 25,
+        ..Default::default()
+    };
+
+    let indexer = AvalancheIndexer::new(
+        std::sync::Arc::new(interchain_db.clone()),
+        bridge_config.bridge_id,
+        avalanche_chains,
+        bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
+        &settings,
+        &Default::default(),
+    )?;
+    indexer.start().await?;
+
+    let expected_message_native_id =
+        "0x6a806e48ef1315a93955b4505ebfbcb9ed45d142bf850c4ce3e67616be485f07";
+
+    let start = std::time::Instant::now();
+    let (message, _transfers) = loop {
+        let (messages, _pagination) = interchain_db
+            .get_crosschain_messages(None, None, 100, false, None)
+            .await?;
+
+        if let Some(found) = messages
+            .into_iter()
+            .find(|(m, _)| to_hex(&m.native_id) == expected_message_native_id)
+        {
+            break found;
+        }
+
+        if start.elapsed() > Duration::from_secs(15) {
+            return Err(anyhow::anyhow!(
+                "Timeout waiting for unknown-source message without home_chain_id"
+            ));
+        }
+
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    };
+
+    assert_eq!(message.bridge_id, bridge_id as i32);
+    assert_eq!(message.src_chain_id, chain_id_src as i64);
+    assert_eq!(message.dst_chain_id, Some(chain_id_dest as i64));
+    assert_eq!(message.status, MessageStatus::Completed);
+
+    indexer.stop().await;
+    Ok(())
+}
+
+/// Verifies `(process_unknown_chains = false, home_chain_id = Some(h))`
+/// behavior for unknown-source traffic.
+///
+/// Even when `home_chain_id` matches the configured destination chain, unknown
+/// source messages must be skipped because strict unknown-chain filtering is
+/// applied first.
+#[tokio::test]
+#[ignore = "requires network access and Anvil binary"]
+async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_test_writer()
+        .try_init();
+
+    let (chain_id_src, native_id_src) = (
+        43114,
+        "0x0427d4b22a2a78bcddd456742caf91b56badbff985ee19aef14573e7343fd652",
+    );
+
+    let (name_dest, rpc_url_dest, block_number_dest, chain_id_dest, native_id_dest) = (
+        "Numine",
+        "https://subnets.avax.network/numi/mainnet/rpc",
+        269775,
+        8021,
+        "0xd32cc4660bcf8fa7971589f666fddb5ab22aee7e75dcb30b19829a65d4fb0063",
+    );
+    let provider_dest = forked_provider(rpc_url_dest, block_number_dest);
+
+    let teleporter_address = "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf";
+
+    // Only destination chain configured.
+    let chains = [ChainConfig {
+        chain_id: chain_id_dest as i64,
+        name: name_dest.into(),
+        icon: String::new(),
+        explorer: ExplorerConfig::default(),
+        pool_config: Default::default(),
+        rpcs: vec![],
+    }];
+
+    let bridge_id = 1u64;
+    let bridge_config = BridgeConfig {
+        bridge_id: bridge_id as i32,
+        name: "Test Bridge".into(),
+        bridge_type: BridgeType::AvalancheNative,
+        indexer_type: Default::default(),
+        enabled: true,
+        contracts: vec![BridgeContractConfig {
+            chain_id: chain_id_dest as i64,
+            address: teleporter_address.into(),
+            started_at_block: block_number_dest,
+            version: 1,
+            abi: None,
+        }],
+        api_url: None,
+        ui_url: None,
+        docs_url: None,
+        process_unknown_chains: false,
+        home_chain_id: Some(chain_id_dest),
+    };
+
+    assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
+
+    let db_guard = helpers::init_db("avalanche_e2e", "strict_home_unknown_filter").await;
+    let db = db_guard.client();
+    let interchain_db = InterchainDatabase::new(db.clone());
+
+    let chains = chains
+        .iter()
+        .map(|c| interchain_indexer_entity::chains::ActiveModel::from(c.clone()))
+        .collect::<Vec<interchain_indexer_entity::chains::ActiveModel>>();
+    interchain_db.upsert_chains(chains).await?;
+
+    interchain_db
+        .upsert_avalanche_icm_blockchain_id(
+            decode_blockchain_id(native_id_dest),
+            chain_id_dest as i64,
+        )
+        .await?;
+
+    let bridges = [bridges::ActiveModel::from(bridge_config.clone())].to_vec();
+    interchain_db.upsert_bridges(bridges).await?;
+
+    let contract_address: Address = teleporter_address.parse()?;
+    let avalanche_chains = vec![AvalancheChainConfig {
+        chain_id: chain_id_dest as i64,
+        provider: provider_dest,
+        contract_address,
+        start_block: block_number_dest,
+    }];
+
+    let settings = AvalancheIndexerSettings {
+        pull_interval_ms: Duration::from_millis(200),
+        batch_size: 25,
+        ..Default::default()
+    };
+
+    let indexer = AvalancheIndexer::new(
+        std::sync::Arc::new(interchain_db.clone()),
+        bridge_config.bridge_id,
+        avalanche_chains,
+        bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
+        &settings,
+        &Default::default(),
+    )?;
+    indexer.start().await?;
+
+    let expected_message_native_id =
+        "0x6a806e48ef1315a93955b4505ebfbcb9ed45d142bf850c4ce3e67616be485f07";
+    let expected_message_id = parse_message_id_from_native_id(expected_message_native_id);
+
+    // Wait until the unknown source blockchainID has been resolved and persisted.
+    // In strict mode the message is skipped, so checkpoints may never be created.
+    let start = std::time::Instant::now();
+    loop {
+        if interchain_db
+            .get_avalanche_icm_chain_id_by_blockchain_id(&decode_blockchain_id(native_id_src))
+            .await?
+            == Some(chain_id_src as i64)
+        {
+            break;
+        }
+
+        if start.elapsed() > Duration::from_secs(8) {
+            return Err(anyhow::anyhow!(
+                "Timeout waiting for source blockchainID resolution before strict filter assertions"
+            ));
+        }
+
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    let (messages, _pagination) = interchain_db
+        .get_crosschain_messages(None, None, 100, false, None)
+        .await?;
+    assert!(
+        messages
+            .iter()
+            .all(|(m, _)| to_hex(&m.native_id) != expected_message_native_id),
+        "unknown-source message should be filtered out in strict mode even when home_chain_id matches"
+    );
+
+    assert!(
+        interchain_db
+            .get_pending_message(expected_message_id, bridge_id as i32)
+            .await?
+            .is_none(),
+        "filtered message must not enter pending_messages"
     );
 
     indexer.stop().await;
@@ -1129,6 +1433,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
+        process_unknown_chains: false,
         home_chain_id: None,
     };
 
@@ -1187,6 +1492,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
     )?;
@@ -1286,6 +1592,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         api_url: None,
         ui_url: None,
         docs_url: None,
+        process_unknown_chains: true,
         home_chain_id: Some(chain_id_dest),
     };
 
@@ -1331,6 +1638,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
+        bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
     )?;

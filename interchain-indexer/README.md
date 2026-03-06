@@ -64,8 +64,18 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 | `indexer_type` | Indexer implementation (e.g. `icm_ictt`). |
 | `enabled`    | Whether this bridge is indexed. |
 | `api_url` / `ui_url` / `docs_url` | Optional external links. |
-| `home_chain_id` | Optional chain id used to allow processing messages with one unknown endpoint when the other endpoint is this chain. |
+| `process_unknown_chains` | When `true`, allow messages with one unknown endpoint. When `false` (default), both endpoints must be configured chains. |
+| `home_chain_id` | Optional chain id that narrows processing to messages where at least one endpoint is this chain. |
 | `contracts`  | Per-chain contract config: `chain_id`, `address`, `version`, `started_at_block`. |
+
+`process_unknown_chains` and `home_chain_id` apply as two sequential filters:
+
+| `process_unknown_chains` | `home_chain_id` | Behavior |
+| ------------------------ | --------------- | -------- |
+| `false` (default) | `None` | Only process messages where both endpoints are configured chains. |
+| `false` | `Some(h)` | Both endpoints must be configured and at least one endpoint must be `h`. |
+| `true` | `None` | Process messages with at least one configured endpoint. |
+| `true` | `Some(h)` | Process messages where at least one endpoint is `h` (unknown chains allowed). |
 
 **`started_at_block`** — indexer starts scanning from this block on associated chain; set it to reduce initial sync time or to start from a specific deployment block.
 

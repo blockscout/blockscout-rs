@@ -8,6 +8,7 @@
         "api_url": null,
         "ui_url": null,
         "docs_url": null,
+        "process_unknown_chains": true,
         "home_chain_id": 8021,
         "contracts": [
             {

@@ -18,7 +18,11 @@ Non-obvious traps and their solutions.
 
 **Symptom:** Events from a chain are not being indexed, only trace-level logs visible.
 
-**Root cause:** When processing Avalanche events, the indexer checks if the source/destination chain is in the bridge's configured `chain_ids`. The `chain_ids` HashSet is built from all chains that have:
+**Root cause:** Avalanche message filtering now has two sequential bridge-level filters:
+1. `process_unknown_chains` (chain-config filter)
+2. `home_chain_id` (endpoint narrowing filter)
+
+The `chain_ids` HashSet is built from all chains that have:
 1. A contract listed in `bridges.json` for this bridge
 2. A chain configuration in `chains.json` with at least one enabled RPC provider
 
@@ -28,14 +32,20 @@ Filtering happens in 4 event handlers:
 - `handle_message_executed()` - checks **source_chain_id**
 - `handle_message_execution_failed()` - checks **source_chain_id**
 
-If a chain is not in `chain_ids` and bridge `home_chain_id` is not configured (strict mode), the event is skipped with a `tracing::trace!` log.
+Events are skipped when they fail either filter:
+- both endpoints unknown are always skipped
+- one-known/one-unknown requires `process_unknown_chains: true`
+- if `home_chain_id` is set, at least one endpoint must equal it (even for configured-chain <> configured-chain messages)
 
 **Fix:**
 1. Add the chain to the bridge's configured chains in `bridges.json` (and ensure it has RPC config in `chains.json`)
-2. OR set `home_chain_id: <chain_id>` in `bridges.json` to index one-known/one-unknown messages only when one endpoint equals that chain
-3. Check trace-level logs for "skipping ... not home-chain message" messages
+2. OR set `process_unknown_chains: true` to allow one-known/one-unknown messages
+3. Optionally set `home_chain_id: <chain_id>` to narrow to messages touching a specific chain
+4. Check trace-level logs for "filtered by bridge chain policy"
 
 **Note:** The filtering happens BEFORE messages enter the buffer, so unfiltered messages never reach consolidation or database layers.
+
+**Testing note:** When every log in a batch is filtered out by bridge policy, no buffer mutation happens, so `indexer_checkpoints` may remain empty for that chain/bridge. In strict-filter tests, prefer asserting message/pending absence (or blockchain-ID resolution) instead of waiting for checkpoint rows.
 
 ---
 
@@ -109,7 +119,8 @@ If a chain is not in `chain_ids` and bridge `home_chain_id` is not configured (s
 
 1. **Create a new bridge** for the chain pair (e.g., A ↔ C) with proper contracts config
 2. **Update the original bridge** to stop processing the now-configured pair:
-   - Set `home_chain_id: null` (or remove `home_chain_id`) for strict mode
+   - set `process_unknown_chains: false`
+   - set `home_chain_id: null` (or remove `home_chain_id`) for strict mode
 3. **Delete partial messages** from the original bridge (`DELETE FROM crosschain_messages WHERE bridge_id = X AND src_chain_id = C OR dst_chain_id = C`)
 4. **Restart** — the new bridge indexes A ↔ C with full data
 
@@ -119,14 +130,17 @@ If a chain is not in `chain_ids` and bridge `home_chain_id` is not configured (s
 [
    {
       "name": "A-B strict bridge",
+      "process_unknown_chains": false,
       "home_chain_id": null
    },
    {
       "name": "A-C strict bridge",
+      "process_unknown_chains": false,
       "home_chain_id": null
    },
    {
       "name": "Monitoring bridge",
+      "process_unknown_chains": true,
       "home_chain_id": 43114
    }
 ]

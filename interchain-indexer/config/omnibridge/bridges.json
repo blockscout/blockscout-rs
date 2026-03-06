@@ -8,6 +8,7 @@
         "api_url": null,
         "ui_url": "https://bridge.gnosischain.com",
         "docs_url": null,
+        "process_unknown_chains": false,
         "home_chain_id": null,
         "contracts": [
             {
