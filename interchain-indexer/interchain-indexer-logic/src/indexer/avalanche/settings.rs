@@ -14,8 +14,6 @@ pub struct AvalancheIndexerSettings {
     #[serde(default = "default_batch_size")]
     pub batch_size: u64,
     #[serde(default)]
-    pub process_unknown_chains: bool,
-    #[serde(default)]
     pub data_api_client_settings: AvalancheDataApiClientSettings,
 }
 
@@ -24,7 +22,6 @@ impl Default for AvalancheIndexerSettings {
         Self {
             pull_interval_ms: default_pull_interval(),
             batch_size: default_batch_size(),
-            process_unknown_chains: false,
             data_api_client_settings: AvalancheDataApiClientSettings::default(),
         }
     }

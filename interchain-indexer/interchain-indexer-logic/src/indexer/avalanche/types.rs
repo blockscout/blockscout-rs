@@ -1,7 +1,9 @@
-use alloy::primitives::{Address, B256};
+use alloy::primitives::{Address, B256, FixedBytes};
 use serde::{Deserialize, Serialize};
 
 use super::abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
+
+pub type MessageId = FixedBytes<32>;
 
 /// Source-side ICTT event with contract address.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -66,4 +68,8 @@ pub(crate) struct Message {
     pub(crate) execution: Option<MessageExecutionOutcome>,
     /// ICTT token transfer (optional, only for ICTT messages).
     pub(crate) transfer: Option<TokenTransfer>,
+    /// True when source chain is not in chain_ids (unknown chain scenario).
+    /// When true, consolidation can proceed without the send event,
+    /// using destination-side timestamps as `init_timestamp`.
+    pub(crate) source_chain_is_unknown: bool,
 }

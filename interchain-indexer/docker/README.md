@@ -55,9 +55,11 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 | `bridge_id`  | Unique numeric id for the bridge. |
 | `name`       | Human-readable bridge name. |
 | `type`       | Bridge type (e.g. `avalanche_native`). |
-| `indexer`    | Indexer implementation (e.g. `AvalancheNative`). |
+| `indexer_type` | Indexer implementation (e.g. `icm_ictt`). |
 | `enabled`    | Whether this bridge is indexed. |
-| `api_url` / `ui_url` | Optional external links. |
+| `api_url` / `ui_url` / `docs_url` | Optional external links. |
+| `process_unknown_chains` | When `true`, allow messages with one unknown endpoint. When `false` (default), both endpoints must be configured chains. |
+| `home_chain_id` | Optional chain id that narrows processing to messages where at least one endpoint is this chain. |
 | `contracts`  | Per-chain contract config: `chain_id`, `address`, `version`, `started_at_block`. |
 
 **`started_at_block`** — indexer starts scanning from this block on associated chain; set it to reduce initial sync time or to start from a specific deployment block.

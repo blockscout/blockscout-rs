@@ -126,3 +126,4 @@ Primary implementation for Avalanche ecosystem:
   - Blockchain ID resolution (native → EVM)
   - Transaction-grouped event processing
   - Incremental message state building
+  - Chain-based event filtering

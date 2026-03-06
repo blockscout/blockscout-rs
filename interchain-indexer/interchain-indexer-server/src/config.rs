@@ -1,4 +1,8 @@
-use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
+use alloy::{
+    network::Ethereum,
+    primitives::{Address, ChainId},
+    providers::DynProvider,
+};
 use anyhow::{Context, Result};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
@@ -17,6 +21,7 @@ pub enum IndexerType {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct BridgeConfig {
     pub bridge_id: i32,
     pub name: String,
@@ -28,6 +33,16 @@ pub struct BridgeConfig {
     pub api_url: Option<String>,
     pub ui_url: Option<String>,
     pub docs_url: Option<String>,
+    /// When true, process messages involving at least one unknown chain
+    /// (i.e. a chain not in `contracts`). When false (default), both endpoints
+    /// must be configured chains.
+    #[serde(default)]
+    pub process_unknown_chains: bool,
+    /// Optional chain id that narrows processing to messages where one endpoint
+    /// equals this chain. Must be one of the chains configured in `contracts`.
+    /// Validated at startup.
+    #[serde(default)]
+    pub home_chain_id: Option<ChainId>,
     pub contracts: Vec<BridgeContractConfig>,
 }
 
@@ -91,6 +106,8 @@ impl From<bridges::Model> for BridgeConfig {
             api_url: model.api_url,
             ui_url: model.ui_url,
             docs_url: model.docs_url,
+            process_unknown_chains: false,
+            home_chain_id: None,
             contracts: vec![], // Contracts are in a separate table
         }
     }
@@ -453,6 +470,58 @@ mod tests {
         assert_eq!(bridges[0].contracts[0].chain_id, 43114);
         assert_eq!(bridges[0].contracts[0].version, 1);
         assert_eq!(bridges[0].contracts[0].started_at_block, 42526120);
+        assert!(bridges[0].process_unknown_chains);
+        assert_eq!(bridges[0].home_chain_id, Some(8021));
+    }
+
+    #[test]
+    fn test_deserialize_bridge_without_home_chain_field() {
+        let json = r#"
+        [
+            {
+                "bridge_id": 7,
+                "name": "No Home Chain",
+                "type": "avalanche_native",
+                "indexer_type": "icm_ictt",
+                "enabled": true,
+                "api_url": null,
+                "ui_url": null,
+                "docs_url": null,
+                "contracts": []
+            }
+        ]
+        "#;
+
+        let bridges: Vec<BridgeConfig> = serde_json::from_str(json).unwrap();
+        assert_eq!(bridges.len(), 1);
+        assert!(!bridges[0].process_unknown_chains);
+        assert_eq!(bridges[0].home_chain_id, None);
+    }
+
+    #[test]
+    fn test_deserialize_bridge_with_home_chain_id_field() {
+        let json = r#"
+        [
+            {
+                "bridge_id": 7,
+                "name": "With Home Chain",
+                "type": "avalanche_native",
+                "indexer_type": "icm_ictt",
+                "enabled": true,
+                "api_url": null,
+                "ui_url": null,
+                "docs_url": null,
+                "process_unknown_chains": true,
+                "home_chain_id": 43114,
+                "contracts": []
+            }
+        ]
+        "#;
+
+        let bridges: Vec<BridgeConfig> = serde_json::from_str(json).unwrap();
+        assert_eq!(bridges.len(), 1);
+        assert!(bridges[0].process_unknown_chains);
+        assert_eq!(bridges[0].home_chain_id, Some(43114));
     }
 
     #[test]
@@ -505,6 +574,8 @@ mod tests {
         );
         // indexer and contracts are lost in conversion (not stored in DB)
         assert_eq!(config.indexer_type, IndexerType::Unknown);
+        assert!(!config.process_unknown_chains);
+        assert_eq!(config.home_chain_id, None);
         assert_eq!(config.contracts, vec![]);
     }
 
