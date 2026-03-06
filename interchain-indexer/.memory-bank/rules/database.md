@@ -53,6 +53,10 @@ Use `batched_upsert()` or `run_in_batches()` from `bulk.rs`.
 - Auto-generated entities go in `interchain-indexer-entity/src/codegen/`
 - Manual customizations go in `interchain-indexer-entity/src/manual/`
 - Regenerate with `just generate-entities` (overwrites codegen/)
+- Ensure local DB is running and schema is current before generation:
+  `just start-postgres` + `just migrate-up`
+- If generation fails due stale local DB state, restart and re-run migrations
+  before generation
 
 ## Migrations
 
@@ -80,6 +84,7 @@ impl From<Config> for entity::ActiveModel {
 - Use `Expr::current_timestamp()` for `updated_at` in upserts
 - Store timestamps as `DateTime<Utc>` (chrono)
 - Database stores as `TIMESTAMP WITH TIME ZONE`
+- Prefer application-managed `updated_at` writes for deterministic behavior
 
 ## Pagination
 

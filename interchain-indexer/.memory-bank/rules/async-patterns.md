@@ -17,20 +17,23 @@ Rules for async code in indexers, message buffer, and server components.
 
 ## Trait Methods
 
-Use `#[async_trait]` for async methods in traits:
+Prefer stabilized Rust async traits for statically-dispatched traits.
+Use `#[async_trait]` only when dynamic dispatch (`dyn Trait`) is required.
 
 ```rust
-use async_trait::async_trait;
-
-#[async_trait]
 pub trait CrosschainIndexer: Send + Sync {
     async fn start(&self) -> Result<(), Error>;
 }
 ```
 
+If the trait must be used as a trait object (`Box<dyn CrosschainIndexer>`), use
+`#[async_trait]` intentionally and document why dynamic dispatch is needed.
+
 ## Shared State
 
-Use `Arc<RwLock<T>>` for shared mutable state across tasks:
+Use `Arc<RwLock<T>>` for shared mutable state snapshots across tasks.
+Use channels when ownership transfer or event
+fan-out is the natural model.
 
 ```rust
 // Good
@@ -44,7 +47,9 @@ let state = self.state.read().await;
 
 ## Per-Key Locking
 
-Use `DashMap` for concurrent access to keyed data:
+Use `DashMap` only when keyed-concurrency contention is real and measured.
+For simpler flows, prefer explicit lock-based maps for clearer locking behavior.
+When using `DashMap`, follow its locking caveats carefully to avoid deadlocks.
 
 ```rust
 // Good: lock-free concurrent hashmap
@@ -54,15 +59,22 @@ let buffer: DashMap<Key, Entry> = DashMap::new();
 buffer.entry(key).or_insert_with(|| Entry::new());
 ```
 
+Safety notes:
+- Do not hold `DashMap` guards across `.await` points.
+- Avoid nested access patterns that can re-enter the same shard lock.
+
 ## Sync Locks
 
-Use `parking_lot` for sync locks (no poisoning):
+Prefer `std::sync::{Mutex, RwLock}` for sync locks.
+Lock poisoning is useful as a signal after panic-related corruption.
+Use `parking_lot` only with explicit justification (for example, measured hot
+paths where std locks are a bottleneck).
 
 ```rust
-use parking_lot::RwLock;
+use std::sync::RwLock;
 
 // For non-async contexts
-let guard = self.cache.read();
+let guard = self.cache.read().expect("lock poisoned");
 ```
 
 ## Stream Processing
