@@ -4,7 +4,10 @@
 
 ### Internal Code
 
-Use `anyhow::Result` for most internal functions:
+Use `anyhow::Result` for internal flows where callers do not need to branch on
+specific error variants (the primary goal is propagation + logging context).
+If callers must distinguish scenarios (for example, `NotFound` vs
+`RateLimited`), prefer a typed error enum and convert at the boundary.
 
 ```rust
 pub async fn process(&self) -> anyhow::Result<()> {
@@ -18,6 +21,9 @@ pub async fn process(&self) -> anyhow::Result<()> {
 ### Public APIs
 
 Use `thiserror` for structured error types at API boundaries:
+
+If you introduce a new custom error type (enum/struct), derive it with the
+`thiserror` crate instead of hand-writing `Display`/`Error` impls.
 
 ```rust
 #[derive(Error, Debug)]

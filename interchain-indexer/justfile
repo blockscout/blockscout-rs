@@ -103,3 +103,9 @@ check-envs:
 
 generate-envs:
     cargo run --bin check-envs
+
+start-db-migrate-up-generate-entities *args:
+    -just stop-postgres
+    just start-postgres
+    just migrate-up
+    just generate-entities {{args}}
