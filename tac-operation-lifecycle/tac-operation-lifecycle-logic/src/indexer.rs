@@ -54,12 +54,15 @@ impl OperationType {
             OperationType::TonTac => 4,
             OperationType::Rollback => 5,
             OperationType::Unknown => 6,
+            OperationType::InsufficientFee => 7,
             OperationType::ErrorType => 0,
         }
     }
 
     pub fn is_finalized(&self) -> bool {
-        self != &OperationType::Pending && self != &OperationType::Unknown
+        self != &OperationType::Pending
+            && self != &OperationType::Unknown
+            && self != &OperationType::InsufficientFee
     }
 }
 
@@ -524,10 +527,14 @@ impl Indexer {
                                 // The case when operation has a finalized status
                                 // otherwise they will be catched by operation stream
                                 StatusEnum::Completed
-                            } else if operation_data.operation_type == OperationType::Pending
+                            } else if (operation_data.operation_type == OperationType::Pending
+                                || operation_data.operation_type == OperationType::InsufficientFee)
                                 && job.operation.timestamp.and_utc().timestamp()
                                     < forever_pending_operation_cap
                             {
+                                // NOTE: The API returns INSUFFICIENT-FEE operations as PENDING,
+                                // so the comparison above is a bit redundant.
+                                // It is included to avoid ambiguity and to support possible API changes.
                                 tracing::warn!(
                                     op_id =? job.operation.id,
                                     op_timestamp =? job.operation.timestamp,
