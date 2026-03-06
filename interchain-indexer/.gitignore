@@ -1,3 +1,5 @@
 *.env
 database
-.claude
+.claude/settings.local.json
+CLAUDE.local.md
+tmp
