@@ -62,6 +62,12 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
 
+      - name: DB tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace -- --nocapture --ignored
+        if: success() || failure()
+        env:
+          DATABASE_URL: postgres://postgres:admin@localhost:5432/
+
   lint:
     name: Linting
     uses: ./.github/workflows/_linting.yml

@@ -1,6 +1,7 @@
 use sea_orm_migration::prelude::*;
+use see_migration_test_helpers::EmptyStruct;
 
-#[derive(DeriveMigrationName)]
+#[derive(DeriveMigrationName, EmptyStruct)]
 pub struct Migration;
 
 #[async_trait::async_trait]
@@ -49,25 +50,23 @@ mod tests {
     use super::*;
     use blockscout_service_launcher::test_database::TestDbGuard;
     use sea_orm_migration::sea_orm::{ConnectionTrait, Statement};
+    use see_migration_test_helpers::{MigratorBeforeTested, MigratorWithTested};
 
-    use crate::Migrator;
+    type MigratorBefore = MigratorBeforeTested<crate::Migrator, super::Migration>;
+    type MigratorAfter = MigratorWithTested<crate::Migrator, super::Migration>;
 
     #[async_std::test]
     #[ignore = "needs database to run"]
     async fn migration_marks_and_reverts_insufficient_fee_operations() {
-        let db = TestDbGuard::new::<Migrator>("migration_insufficient_fee").await;
+        let db = TestDbGuard::new::<MigratorBefore>("migration_insufficient_fee").await;
         let conn = db.client();
-
-        Migrator::down(conn.as_ref(), Some(1))
-            .await
-            .expect("failed to roll back target migration");
 
         // op1: should be changed to INSUFFICIENT-FEE
         // op2: should be left as PENDING (op stage is successful)
         // op3: should be left as PENDING (error message doesn't match pattern)
         // op4: should be left as ROLLBACK (op_type is not PENDING)
         // op5: should be left as PENDING (op stage doesn't contain note)
-        conn.execute_unprepared(
+        db.execute_unprepared(
             r#"
             INSERT INTO "stage_type" ("id", "name") VALUES (1, 'mock-stage');
 
@@ -93,7 +92,7 @@ mod tests {
         .await
         .expect("failed to prepare test data");
 
-        Migrator::up(conn.as_ref(), Some(1))
+        MigratorAfter::up(conn.as_ref(), None)
             .await
             .expect("failed to apply target migration");
 
@@ -118,7 +117,7 @@ mod tests {
             Some("PENDING".to_string())
         );
 
-        Migrator::down(conn.as_ref(), Some(1))
+        MigratorAfter::down(conn.as_ref(), Some(1))
             .await
             .expect("failed to roll back target migration");
 

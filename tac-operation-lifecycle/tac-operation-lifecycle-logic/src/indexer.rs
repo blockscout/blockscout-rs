@@ -60,9 +60,16 @@ impl OperationType {
     }
 
     pub fn is_finalized(&self) -> bool {
-        self != &OperationType::Pending
-            && self != &OperationType::Unknown
-            && self != &OperationType::InsufficientFee
+        match self {
+            OperationType::Pending | OperationType::Unknown | OperationType::InsufficientFee => {
+                false
+            }
+            OperationType::TonTacTon
+            | OperationType::TacTon
+            | OperationType::TonTac
+            | OperationType::Rollback
+            | OperationType::ErrorType => true,
+        }
     }
 }
 
