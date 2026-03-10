@@ -84,7 +84,7 @@ impl OperationsService {
                     r#type: s.stage_type_id as i32 - 1,
                     is_exist: true,
                     is_success: Some(s.success),
-                    timestamp: Some(db_datetime_to_string(s.timestamp)),
+                    timestamp: (!txs.is_empty()).then(|| db_datetime_to_string(s.timestamp)),
                     transactions: txs
                         .iter()
                         .map(|tx| {

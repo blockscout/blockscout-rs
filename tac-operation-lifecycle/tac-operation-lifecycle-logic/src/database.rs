@@ -1374,11 +1374,18 @@ impl TacDatabase {
         let mut result = vec![];
         for (op_model, stages_map) in operations_map.into_values() {
             let mut stages: Vec<_> = stages_map.into_values().collect();
+            let has_zero_timestamp = stages
+                .iter()
+                .any(|(s, _)| s.timestamp.and_utc().timestamp() == 0);
             stages.sort_by(|(a, _), (b, _)| {
-                let key = |stage: &operation_stage::Model| {
-                    (stage.timestamp, stage.stage_type_id, stage.id)
-                };
-                key(a).cmp(&key(b))
+                if has_zero_timestamp {
+                    // NOTE: This is a workaround for a temporary inconsistency in the remote API.
+                    // Sometimes it returns a zero timestamp for stages.
+                    // In that case, we should use strict sorting without timestamps.
+                    (a.stage_type_id, a.id).cmp(&(b.stage_type_id, b.id))
+                } else {
+                    (a.timestamp, a.stage_type_id, a.id).cmp(&(b.timestamp, b.stage_type_id, b.id))
+                }
             });
             result.push((op_model, stages));
         }
