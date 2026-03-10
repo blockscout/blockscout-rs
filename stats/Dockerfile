@@ -32,12 +32,9 @@ COPY --from=build /app/target/release/stats-server /app/stats-server
 RUN chown -R $APP_USER:$APP_USER /app
 USER app
 
-COPY ./config/blockscout_instance/charts.json ./config/blockscout_instance/charts.json
-COPY ./config/blockscout_instance/layout.json ./config/blockscout_instance/layout.json
-COPY ./config/blockscout_instance/update_groups.json ./config/blockscout_instance/update_groups.json
-COPY ./config/multichain/charts.json ./config/multichain/charts.json
-COPY ./config/multichain/layout.json ./config/multichain/layout.json
-COPY ./config/multichain/update_groups.json ./config/multichain/update_groups.json
+COPY ./config/blockscout_instance ./config/blockscout_instance
+COPY ./config/multichain ./config/multichain
+COPY ./config/interchain ./config/interchain
 
 ENV STATS__SWAGGER_PATH=/app/static/stats.swagger.yaml
 COPY ./stats-proto/swagger/stats.swagger.yaml $STATS__SWAGGER_PATH

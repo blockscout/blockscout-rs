@@ -750,12 +750,13 @@ impl StatsService for ReadService {
                 if update_from <= current_date {
                     Ok(update_from)
                 } else {
-                    Err(Status::invalid_argument(format!(
+                    Err(Box::new(Status::invalid_argument(format!(
                         "`from` should not be from a future; current date: {current_date}"
-                    )))
+                    ))))
                 }
             })
-            .transpose()?;
+            .transpose()
+            .map_err(|e| *e)?;
         let update_later = request.update_later.unwrap_or(false);
         let result = self
             .update_service
