@@ -4032,6 +4032,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "see-migration-test-helpers"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a952e529d7323bcc8963ebf6e4b0233660beacac8343223fe501adc1ef5d74e5"
+dependencies = [
+ "async-trait",
+ "sea-orm-migration",
+ "see-migration-test-helpers-derive",
+]
+
+[[package]]
+name = "see-migration-test-helpers-derive"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0102079546b9d0f15a3e5f1d78015f6a14fc2542ddaf0b0fde7a1a5045ddb7e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4605,7 +4627,9 @@ name = "tac-operation-lifecycle-migration"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "blockscout-service-launcher",
  "sea-orm-migration",
+ "see-migration-test-helpers",
  "tac-operation-lifecycle-entity",
 ]
 

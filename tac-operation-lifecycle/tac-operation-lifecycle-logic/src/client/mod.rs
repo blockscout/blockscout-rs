@@ -168,7 +168,7 @@ impl Client {
                         .map_err(|e| anyhow::anyhow!("HTTP request error: {}", e));
                 }
                 Err(_) => {
-                    tracing::warn!(
+                    tracing::info!(
                         attempt,
                         MAX_RETRIES =? self.rpc.num_of_retries,
                         "Rate limiter wait timed out, retrying..."

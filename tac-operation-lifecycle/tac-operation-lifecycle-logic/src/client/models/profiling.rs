@@ -27,6 +27,11 @@ pub enum OperationType {
     #[serde(rename = "TON-TAC")]
     TonTac,
     Rollback,
+    // This is an artificial operation type.
+    // It cannot be returned by API
+    // but it can be derived during parsing operation stages data
+    #[serde(rename = "INSUFFICIENT-FEE")]
+    InsufficientFee,
     Unknown,
     #[serde(other)]
     ErrorType,
@@ -72,7 +77,8 @@ pub struct Stage {
 pub struct StageData {
     pub success: bool,
     pub timestamp: u64,
-    pub transactions: Vec<Transaction>,
+    #[serde(default)]
+    pub transactions: Option<Vec<Transaction>>,
     #[serde(default, deserialize_with = "deserialize_note_to_string")]
     pub note: Option<String>,
 }

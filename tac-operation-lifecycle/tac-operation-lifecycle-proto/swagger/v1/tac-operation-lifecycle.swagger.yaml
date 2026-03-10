@@ -346,6 +346,7 @@ definitions:
       - TON_TAC
       - ROLLBACK
       - UNKNOWN
+      - INSUFFICIENT_FEE
     default: ERROR
   v1OperationsFullResponse:
     type: object
