@@ -29,6 +29,7 @@ pub struct Model {
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub recipient_address: Option<Vec<u8>>,
     pub token_ids: Option<Vec<Decimal>>,
+    pub stats_asset_id: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -57,11 +58,25 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     CrosschainMessages,
+    #[sea_orm(
+        belongs_to = "super::stats_assets::Entity",
+        from = "Column::StatsAssetId",
+        to = "super::stats_assets::Column::Id",
+        on_update = "NoAction",
+        on_delete = "SetNull"
+    )]
+    StatsAssets,
 }
 
 impl Related<super::crosschain_messages::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::CrosschainMessages.def()
+    }
+}
+
+impl Related<super::stats_assets::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::StatsAssets.def()
     }
 }
 

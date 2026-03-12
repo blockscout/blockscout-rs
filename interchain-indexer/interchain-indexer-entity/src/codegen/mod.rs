@@ -12,4 +12,8 @@ pub mod indexer_checkpoints;
 pub mod indexer_failures;
 pub mod pending_messages;
 pub mod sea_orm_active_enums;
+pub mod stats_asset_edges;
+pub mod stats_asset_tokens;
+pub mod stats_assets;
+pub mod stats_chains;
 pub mod tokens;

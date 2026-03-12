@@ -2,8 +2,8 @@ use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, pending_messages,
-    sea_orm_active_enums::{MessageStatus, TransferType},
-    tokens,
+    sea_orm_active_enums::{EdgeDecimalsSide, MessageStatus, TransferType},
+    stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, tokens,
 };
 use parking_lot::RwLock;
 use sea_orm::{
@@ -404,6 +404,276 @@ impl InterchainDatabase {
                 Err(e.into())
             }
         }
+    }
+
+    // STATS ASSETS: canonical asset mapping and aggregated edges
+    pub async fn create_stats_asset(
+        &self,
+        name: Option<String>,
+        symbol: Option<String>,
+        icon_url: Option<String>,
+    ) -> anyhow::Result<stats_assets::Model> {
+        let model = stats_assets::ActiveModel {
+            name: ActiveValue::Set(name),
+            symbol: ActiveValue::Set(symbol),
+            icon_url: ActiveValue::Set(icon_url),
+            ..Default::default()
+        };
+        match stats_assets::Entity::insert(model)
+            .exec_with_returning(self.db.as_ref())
+            .await
+        {
+            Ok(m) => Ok(m),
+            Err(e) => {
+                tracing::error!(err = ?e, "Failed to create stats asset");
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Links a token (chain_id, token_address) to a stats asset. Does not require a row in `tokens`.
+    /// Fails if (chain_id, token_address) is already linked to another stats asset, or if
+    /// this stats asset already has a different token on the same chain.
+    pub async fn link_token_to_stats_asset(
+        &self,
+        stats_asset_id: i64,
+        chain_id: i64,
+        token_address: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let model = stats_asset_tokens::ActiveModel {
+            stats_asset_id: ActiveValue::Set(stats_asset_id),
+            chain_id: ActiveValue::Set(chain_id),
+            token_address: ActiveValue::Set(token_address),
+            ..Default::default()
+        };
+        match stats_asset_tokens::Entity::insert(model)
+            .exec(self.db.as_ref())
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                tracing::error!(
+                    err = ?e,
+                    stats_asset_id,
+                    chain_id,
+                    "Failed to link token to stats asset"
+                );
+                Err(e.into())
+            }
+        }
+    }
+
+    pub async fn get_stats_asset_by_id(
+        &self,
+        id: i64,
+    ) -> anyhow::Result<Option<stats_assets::Model>> {
+        match stats_assets::Entity::find_by_id(id)
+            .one(self.db.as_ref())
+            .await
+        {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                tracing::error!(err = ?e, id, "Failed to fetch stats asset by id");
+                Err(e.into())
+            }
+        }
+    }
+
+    pub async fn get_stats_asset_by_token(
+        &self,
+        chain_id: i64,
+        token_address: &[u8],
+    ) -> anyhow::Result<Option<stats_assets::Model>> {
+        let token_row = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::ChainId.eq(chain_id))
+            .filter(stats_asset_tokens::Column::TokenAddress.eq(token_address.to_vec()))
+            .one(self.db.as_ref())
+            .await?;
+        let Some(t) = token_row else {
+            return Ok(None);
+        };
+        stats_assets::Entity::find_by_id(t.stats_asset_id)
+            .one(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    err = ?e,
+                    stats_asset_id = t.stats_asset_id,
+                    "Failed to fetch stats asset by token"
+                );
+                e.into()
+            })
+    }
+
+    /// Creates or updates a stats asset edge: on insert sets transfers_count=1 and cumulative_amount;
+    /// on conflict increments transfers_count and adds to cumulative_amount. Preserves decimals_side.
+    pub async fn create_or_update_stats_asset_edge(
+        &self,
+        stats_asset_id: i64,
+        src_chain_id: i64,
+        dst_chain_id: i64,
+        amount: sea_orm::prelude::BigDecimal,
+        decimals_side: EdgeDecimalsSide,
+        decimals: Option<i16>,
+    ) -> anyhow::Result<()> {
+        let existing =
+            stats_asset_edges::Entity::find_by_id((stats_asset_id, src_chain_id, dst_chain_id))
+                .one(self.db.as_ref())
+                .await?;
+
+        if existing.is_some() {
+            stats_asset_edges::Entity::update_many()
+                .col_expr(
+                    stats_asset_edges::Column::TransfersCount,
+                    Expr::col(stats_asset_edges::Column::TransfersCount).add(1),
+                )
+                .col_expr(
+                    stats_asset_edges::Column::CumulativeAmount,
+                    Expr::col(stats_asset_edges::Column::CumulativeAmount).add(amount),
+                )
+                .col_expr(
+                    stats_asset_edges::Column::UpdatedAt,
+                    Expr::current_timestamp().into(),
+                )
+                .filter(stats_asset_edges::Column::StatsAssetId.eq(stats_asset_id))
+                .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
+                .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id))
+                .exec(self.db.as_ref())
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        err = ?e,
+                        stats_asset_id,
+                        src_chain_id,
+                        dst_chain_id,
+                        "Failed to update stats asset edge"
+                    );
+                    e
+                })?;
+        } else {
+            let model = stats_asset_edges::ActiveModel {
+                stats_asset_id: ActiveValue::Set(stats_asset_id),
+                src_chain_id: ActiveValue::Set(src_chain_id),
+                dst_chain_id: ActiveValue::Set(dst_chain_id),
+                transfers_count: ActiveValue::Set(1),
+                cumulative_amount: ActiveValue::Set(amount),
+                decimals: ActiveValue::Set(decimals),
+                decimals_side: ActiveValue::Set(decimals_side),
+                ..Default::default()
+            };
+            stats_asset_edges::Entity::insert(model)
+                .exec(self.db.as_ref())
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        err = ?e,
+                        stats_asset_id,
+                        src_chain_id,
+                        dst_chain_id,
+                        "Failed to insert stats asset edge"
+                    );
+                    e
+                })?;
+        }
+        Ok(())
+    }
+
+    /// Updates decimals for an existing edge. Does not change decimals_side.
+    pub async fn update_edge_decimals(
+        &self,
+        stats_asset_id: i64,
+        src_chain_id: i64,
+        dst_chain_id: i64,
+        decimals: i16,
+    ) -> anyhow::Result<()> {
+        let res = stats_asset_edges::Entity::update_many()
+            .col_expr(stats_asset_edges::Column::Decimals, Expr::value(decimals))
+            .col_expr(
+                stats_asset_edges::Column::UpdatedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(stats_asset_edges::Column::StatsAssetId.eq(stats_asset_id))
+            .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
+            .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id))
+            .exec(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    err = ?e,
+                    stats_asset_id,
+                    src_chain_id,
+                    dst_chain_id,
+                    "Failed to update edge decimals"
+                );
+                e
+            })?;
+        if res.rows_affected == 0 {
+            tracing::warn!(
+                stats_asset_id,
+                src_chain_id,
+                dst_chain_id,
+                "update_edge_decimals: no row updated"
+            );
+        }
+        Ok(())
+    }
+
+    pub async fn upsert_stats_chains(
+        &self,
+        chain_id: i64,
+        unique_transfer_users_count: i64,
+        unique_message_users_count: i64,
+    ) -> anyhow::Result<()> {
+        let model = stats_chains::ActiveModel {
+            chain_id: ActiveValue::Set(chain_id),
+            unique_transfer_users_count: ActiveValue::Set(unique_transfer_users_count),
+            unique_message_users_count: ActiveValue::Set(unique_message_users_count),
+            ..Default::default()
+        };
+        match stats_chains::Entity::insert(model)
+            .on_conflict(
+                OnConflict::column(stats_chains::Column::ChainId)
+                    .update_columns([
+                        stats_chains::Column::UniqueTransferUsersCount,
+                        stats_chains::Column::UniqueMessageUsersCount,
+                    ])
+                    .value(stats_chains::Column::UpdatedAt, Expr::current_timestamp())
+                    .to_owned(),
+            )
+            .exec(self.db.as_ref())
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                tracing::error!(err = ?e, chain_id, "Failed to upsert stats_chains");
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Assigns a stats asset to a transfer. Transfer may keep stats_asset_id = NULL.
+    pub async fn assign_transfer_stats_asset(
+        &self,
+        transfer_id: i64,
+        stats_asset_id: Option<i64>,
+    ) -> anyhow::Result<()> {
+        let transfer = match crosschain_transfers::Entity::find_by_id(transfer_id)
+            .one(self.db.as_ref())
+            .await?
+        {
+            Some(t) => t,
+            None => {
+                tracing::error!(transfer_id, "Transfer not found for stats_asset_id assign");
+                return Err(anyhow::anyhow!("Transfer {} not found", transfer_id));
+            }
+        };
+        let mut am: crosschain_transfers::ActiveModel = transfer.into();
+        am.stats_asset_id = ActiveValue::Set(stats_asset_id);
+        am.update(self.db.as_ref()).await.map_err(|e| {
+            tracing::error!(err = ?e, transfer_id, "Failed to assign transfer stats_asset_id");
+            e
+        })?;
+        Ok(())
     }
 
     // CONFIGURATION TABLE: bridge_contracts
@@ -1317,9 +1587,11 @@ fn build_pagination_from_transfers(
 mod tests {
     use chrono::Utc;
     use interchain_indexer_entity::{
-        chains, crosschain_messages, sea_orm_active_enums::MessageStatus,
+        chains, crosschain_messages, crosschain_transfers,
+        sea_orm_active_enums::{EdgeDecimalsSide, MessageStatus},
+        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains,
     };
-    use sea_orm::{ActiveValue::Set, EntityTrait};
+    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, prelude::BigDecimal};
 
     use crate::{
         InterchainDatabase,
@@ -1532,5 +1804,384 @@ mod tests {
             .unwrap();
         assert_eq!(dst_filtered.daily_messages, 2);
         assert_eq!(dst_filtered.daily_transfers, 3);
+    }
+
+    // --- Stats assets migration and persistence tests ---
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_migration_applies() {
+        let _db = init_db("stats_migration_applies").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        let asset = interchain_db
+            .create_stats_asset(Some("Test".to_string()), Some("T".to_string()), None)
+            .await
+            .unwrap();
+        assert!(asset.id > 0);
+        assert_eq!(asset.name.as_deref(), Some("Test"));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_asset_insert_and_get() {
+        let _db = init_db("stats_asset_insert_and_get").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![chains::ActiveModel {
+                id: Set(1),
+                name: Set("Chain1".to_string()),
+                ..Default::default()
+            }])
+            .await
+            .unwrap();
+
+        let asset = interchain_db
+            .create_stats_asset(Some("A".to_string()), Some("A".to_string()), None)
+            .await
+            .unwrap();
+        let got = interchain_db
+            .get_stats_asset_by_id(asset.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.id, asset.id);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_link_token_without_tokens_row() {
+        let _db = init_db("stats_link_token_without_tokens_row").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![chains::ActiveModel {
+                id: Set(1),
+                name: Set("C1".to_string()),
+                ..Default::default()
+            }])
+            .await
+            .unwrap();
+        let asset = interchain_db
+            .create_stats_asset(Some("X".to_string()), Some("X".to_string()), None)
+            .await
+            .unwrap();
+        let addr = vec![0xaa; 20];
+        interchain_db
+            .link_token_to_stats_asset(asset.id, 1, addr.clone())
+            .await
+            .unwrap();
+        let found = interchain_db
+            .get_stats_asset_by_token(1, &addr)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.id, asset.id);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_reject_same_token_two_assets() {
+        let _db = init_db("stats_reject_same_token_two_assets").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![chains::ActiveModel {
+                id: Set(1),
+                name: Set("C1".to_string()),
+                ..Default::default()
+            }])
+            .await
+            .unwrap();
+        let a1 = interchain_db
+            .create_stats_asset(Some("A1".to_string()), None, None)
+            .await
+            .unwrap();
+        let a2 = interchain_db
+            .create_stats_asset(Some("A2".to_string()), None, None)
+            .await
+            .unwrap();
+        let addr = vec![0xbb; 20];
+        interchain_db
+            .link_token_to_stats_asset(a1.id, 1, addr.clone())
+            .await
+            .unwrap();
+        let res = interchain_db
+            .link_token_to_stats_asset(a2.id, 1, addr)
+            .await;
+        assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_reject_two_tokens_same_chain_one_asset() {
+        let _db = init_db("stats_reject_two_tokens_same_chain_one_asset").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![chains::ActiveModel {
+                id: Set(1),
+                name: Set("C1".to_string()),
+                ..Default::default()
+            }])
+            .await
+            .unwrap();
+        let asset = interchain_db
+            .create_stats_asset(Some("A".to_string()), None, None)
+            .await
+            .unwrap();
+        interchain_db
+            .link_token_to_stats_asset(asset.id, 1, vec![1u8; 20])
+            .await
+            .unwrap();
+        let res = interchain_db
+            .link_token_to_stats_asset(asset.id, 1, vec![2u8; 20])
+            .await;
+        assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_edge_insert_and_upsert() {
+        let _db = init_db("stats_edge_insert_and_upsert").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("C1".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("C2".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        let asset = interchain_db
+            .create_stats_asset(Some("E".to_string()), None, None)
+            .await
+            .unwrap();
+        let amount = BigDecimal::from(1000u64);
+        interchain_db
+            .create_or_update_stats_asset_edge(
+                asset.id,
+                1,
+                2,
+                amount.clone(),
+                EdgeDecimalsSide::Source,
+                Some(18),
+            )
+            .await
+            .unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.transfers_count, 1);
+        assert_eq!(edge.cumulative_amount, amount);
+        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Source);
+        assert_eq!(edge.decimals, Some(18));
+
+        interchain_db
+            .create_or_update_stats_asset_edge(
+                asset.id,
+                1,
+                2,
+                BigDecimal::from(500u64),
+                EdgeDecimalsSide::Source,
+                None,
+            )
+            .await
+            .unwrap();
+        let edge2 = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge2.transfers_count, 2);
+        assert_eq!(edge2.cumulative_amount, BigDecimal::from(1500u64));
+        assert_eq!(edge2.decimals_side, EdgeDecimalsSide::Source);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_edge_decimals_null_and_update() {
+        let _db = init_db("stats_edge_decimals_null_and_update").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("C1".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("C2".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        let asset = interchain_db
+            .create_stats_asset(Some("D".to_string()), None, None)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_asset_edge(
+                asset.id,
+                1,
+                2,
+                BigDecimal::from(1u64),
+                EdgeDecimalsSide::Destination,
+                None,
+            )
+            .await
+            .unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.decimals, None);
+        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
+
+        interchain_db
+            .update_edge_decimals(asset.id, 1, 2, 6)
+            .await
+            .unwrap();
+        let edge2 = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge2.decimals, Some(6));
+        assert_eq!(edge2.decimals_side, EdgeDecimalsSide::Destination);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_chains_upsert() {
+        let _db = init_db("stats_chains_upsert").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![chains::ActiveModel {
+                id: Set(1),
+                name: Set("C1".to_string()),
+                ..Default::default()
+            }])
+            .await
+            .unwrap();
+        interchain_db.upsert_stats_chains(1, 10, 20).await.unwrap();
+        let row = stats_chains::Entity::find_by_id(1i64)
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.unique_transfer_users_count, 10);
+        assert_eq!(row.unique_message_users_count, 20);
+
+        interchain_db.upsert_stats_chains(1, 30, 40).await.unwrap();
+        let row2 = stats_chains::Entity::find_by_id(1i64)
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row2.unique_transfer_users_count, 30);
+        assert_eq!(row2.unique_message_users_count, 40);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn transfer_stats_asset_id_null_and_set() {
+        let _db = init_db("transfer_stats_asset_id_null_and_set").await;
+        fill_mock_interchain_database(&_db).await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        let (transfers_list, _) = interchain_db
+            .get_crosschain_transfers(None, None, 10, false, None)
+            .await
+            .unwrap();
+        let transfer_id = transfers_list[0].id;
+        let transfer_row = crosschain_transfers::Entity::find_by_id(transfer_id)
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(transfer_row.stats_asset_id, None);
+
+        let asset = interchain_db
+            .create_stats_asset(Some("T".to_string()), None, None)
+            .await
+            .unwrap();
+        interchain_db
+            .assign_transfer_stats_asset(transfer_id, Some(asset.id))
+            .await
+            .unwrap();
+        let row2 = crosschain_transfers::Entity::find_by_id(transfer_id)
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row2.stats_asset_id, Some(asset.id));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_asset_delete_cascades() {
+        let _db = init_db("stats_asset_delete_cascades").await;
+        fill_mock_interchain_database(&_db).await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        // mock has chains 1 (Ethereum) and 100 (Gnosis)
+        let asset = interchain_db
+            .create_stats_asset(Some("Del".to_string()), None, None)
+            .await
+            .unwrap();
+        interchain_db
+            .link_token_to_stats_asset(asset.id, 1, vec![0xdd; 20])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_asset_edge(
+                asset.id,
+                1,
+                100,
+                BigDecimal::from(1u64),
+                EdgeDecimalsSide::Source,
+                None,
+            )
+            .await
+            .unwrap();
+        let transfer_id = 1i64;
+        interchain_db
+            .assign_transfer_stats_asset(transfer_id, Some(asset.id))
+            .await
+            .unwrap();
+
+        stats_assets::Entity::delete_by_id(asset.id)
+            .exec(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+
+        assert!(
+            stats_asset_tokens::Entity::find()
+                .filter(stats_asset_tokens::Column::StatsAssetId.eq(asset.id))
+                .one(interchain_db.db.as_ref())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 100i64))
+                .one(interchain_db.db.as_ref())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let t = crosschain_transfers::Entity::find_by_id(transfer_id)
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_asset_id, None);
     }
 }
