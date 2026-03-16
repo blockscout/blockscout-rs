@@ -3,7 +3,7 @@ use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, pending_messages,
     sea_orm_active_enums::{EdgeDecimalsSide, MessageStatus, TransferType},
-    stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, tokens,
+    stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
 };
 use parking_lot::RwLock;
 use sea_orm::{
@@ -646,6 +646,76 @@ impl InterchainDatabase {
             Ok(_) => Ok(()),
             Err(e) => {
                 tracing::error!(err = ?e, chain_id, "Failed to upsert stats_chains");
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Creates or increments the directional message count from src_chain_id to dst_chain_id.
+    /// Insert with messages_count=1; on conflict increment messages_count and update updated_at.
+    pub async fn create_or_update_stats_messages(
+        &self,
+        src_chain_id: i64,
+        dst_chain_id: i64,
+        messages_delta: i64,
+    ) -> anyhow::Result<()> {
+        let model = stats_messages::ActiveModel {
+            src_chain_id: ActiveValue::Set(src_chain_id),
+            dst_chain_id: ActiveValue::Set(dst_chain_id),
+            messages_count: ActiveValue::Set(messages_delta),
+            ..Default::default()
+        };
+        match stats_messages::Entity::insert(model)
+            .on_conflict(
+                OnConflict::columns([
+                    stats_messages::Column::SrcChainId,
+                    stats_messages::Column::DstChainId,
+                ])
+                .value(
+                    stats_messages::Column::MessagesCount,
+                    Expr::col((
+                        stats_messages::Entity,
+                        stats_messages::Column::MessagesCount,
+                    ))
+                    .add(messages_delta),
+                )
+                .value(stats_messages::Column::UpdatedAt, Expr::current_timestamp())
+                .to_owned(),
+            )
+            .exec(self.db.as_ref())
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                tracing::error!(
+                    err = ?e,
+                    src_chain_id,
+                    dst_chain_id,
+                    "Failed to create or update stats_messages"
+                );
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Returns the stats_messages row for the given (src_chain_id, dst_chain_id), if any.
+    pub async fn get_stats_messages_row(
+        &self,
+        src_chain_id: i64,
+        dst_chain_id: i64,
+    ) -> anyhow::Result<Option<stats_messages::Model>> {
+        match stats_messages::Entity::find_by_id((src_chain_id, dst_chain_id))
+            .one(self.db.as_ref())
+            .await
+        {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                tracing::error!(
+                    err = ?e,
+                    src_chain_id,
+                    dst_chain_id,
+                    "Failed to fetch stats_messages row"
+                );
                 Err(e.into())
             }
         }
@@ -1589,7 +1659,7 @@ mod tests {
     use interchain_indexer_entity::{
         chains, crosschain_messages, crosschain_transfers,
         sea_orm_active_enums::{EdgeDecimalsSide, MessageStatus},
-        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains,
+        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages,
     };
     use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, prelude::BigDecimal};
 
@@ -2183,5 +2253,245 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_asset_id, None);
+    }
+
+    // --- stats_messages: directional chain-to-chain message counts ---
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_messages_insert_first_row() {
+        let _db = init_db("stats_messages_insert_first_row").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("C1".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("C2".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        interchain_db
+            .create_or_update_stats_messages(1, 2, 1)
+            .await
+            .unwrap();
+
+        let row = interchain_db
+            .get_stats_messages_row(1, 2)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.src_chain_id, 1);
+        assert_eq!(row.dst_chain_id, 2);
+        assert_eq!(row.messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_messages_upsert_increments_count() {
+        let _db = init_db("stats_messages_upsert_increments_count").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(10),
+                    name: Set("A".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(20),
+                    name: Set("B".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        interchain_db
+            .create_or_update_stats_messages(10, 20, 1)
+            .await
+            .unwrap();
+        let r1 = interchain_db
+            .get_stats_messages_row(10, 20)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(r1.messages_count, 1);
+
+        interchain_db
+            .create_or_update_stats_messages(10, 20, 1)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(10, 20, 1)
+            .await
+            .unwrap();
+        let r2 = interchain_db
+            .get_stats_messages_row(10, 20)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(r2.messages_count, 3);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_messages_reversed_direction_separate_row() {
+        let _db = init_db("stats_messages_reversed_direction_separate_row").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(100),
+                    name: Set("X".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(200),
+                    name: Set("Y".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        interchain_db
+            .create_or_update_stats_messages(100, 200, 1)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(200, 100, 1)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(200, 100, 1)
+            .await
+            .unwrap();
+
+        let ab = interchain_db
+            .get_stats_messages_row(100, 200)
+            .await
+            .unwrap()
+            .unwrap();
+        let ba = interchain_db
+            .get_stats_messages_row(200, 100)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(ab.messages_count, 1);
+        assert_eq!(ba.messages_count, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_messages_chain_delete_cascades() {
+        let _db = init_db("stats_messages_chain_delete_cascades").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("C1".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("C2".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C3".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        interchain_db
+            .create_or_update_stats_messages(1, 2, 1)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(2, 1, 1)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 3, 1)
+            .await
+            .unwrap();
+
+        chains::Entity::delete_by_id(2)
+            .exec(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+
+        assert!(
+            interchain_db
+                .get_stats_messages_row(1, 2)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            interchain_db
+                .get_stats_messages_row(2, 1)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let row_1_3 = interchain_db
+            .get_stats_messages_row(1, 3)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row_1_3.messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_messages_migration_and_db_layer() {
+        let _db = init_db("stats_messages_migration_and_db_layer").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("Chain1".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("Chain2".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        interchain_db
+            .create_or_update_stats_messages(1, 2, 1)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 2, 1)
+            .await
+            .unwrap();
+
+        let row = stats_messages::Entity::find_by_id((1i64, 2i64))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.src_chain_id, 1);
+        assert_eq!(row.dst_chain_id, 2);
+        assert_eq!(row.messages_count, 2);
     }
 }

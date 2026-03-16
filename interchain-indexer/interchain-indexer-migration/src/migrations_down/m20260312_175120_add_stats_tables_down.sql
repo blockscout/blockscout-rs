@@ -1,3 +1,7 @@
+DROP INDEX IF EXISTS stats_messages_dst_chain_idx;
+DROP INDEX IF EXISTS stats_messages_src_chain_idx;
+DROP TABLE IF EXISTS stats_messages;
+
 DROP TABLE IF EXISTS stats_chains;
 
 DROP INDEX IF EXISTS stats_asset_edges_dst_chain_idx;

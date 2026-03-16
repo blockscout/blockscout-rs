@@ -83,3 +83,27 @@ CREATE TABLE stats_chains (
   created_at                   TIMESTAMP NOT NULL DEFAULT now(),
   updated_at                   TIMESTAMP NOT NULL DEFAULT now()
 );
+
+-- stats_messages: directional chain-to-chain message counts for diagrams (sent/received paths)
+CREATE TABLE stats_messages (
+  src_chain_id   BIGINT NOT NULL
+    REFERENCES chains(id)
+    ON DELETE CASCADE,
+
+  dst_chain_id   BIGINT NOT NULL
+    REFERENCES chains(id)
+    ON DELETE CASCADE,
+
+  messages_count BIGINT NOT NULL DEFAULT 0,
+
+  created_at     TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMP NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (src_chain_id, dst_chain_id)
+);
+
+CREATE INDEX stats_messages_src_chain_idx
+  ON stats_messages (src_chain_id);
+
+CREATE INDEX stats_messages_dst_chain_idx
+  ON stats_messages (dst_chain_id);
