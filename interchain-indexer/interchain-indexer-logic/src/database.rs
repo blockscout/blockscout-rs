@@ -746,6 +746,81 @@ impl InterchainDatabase {
         Ok(())
     }
 
+    /// Increments `stats_processed` by 1 for the given message and sets `updated_at`. Fails if the row does not exist.
+    pub async fn increment_message_stats_processed(
+        &self,
+        message_id: i64,
+        bridge_id: i32,
+    ) -> anyhow::Result<()> {
+        let res = crosschain_messages::Entity::update_many()
+            .col_expr(
+                crosschain_messages::Column::StatsProcessed,
+                Expr::col(crosschain_messages::Column::StatsProcessed).add(1),
+            )
+            .col_expr(
+                crosschain_messages::Column::UpdatedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(crosschain_messages::Column::Id.eq(message_id))
+            .filter(crosschain_messages::Column::BridgeId.eq(bridge_id))
+            .exec(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    err = ?e,
+                    message_id,
+                    bridge_id,
+                    "Failed to increment message stats_processed"
+                );
+                e
+            })?;
+        if res.rows_affected == 0 {
+            tracing::error!(
+                message_id,
+                bridge_id,
+                "Message not found for stats_processed increment"
+            );
+            return Err(anyhow::anyhow!(
+                "Message ({}, {}) not found",
+                message_id,
+                bridge_id
+            ));
+        }
+        Ok(())
+    }
+
+    /// Increments `stats_processed` by 1 for the given transfer and sets `updated_at`. Fails if the row does not exist.
+    pub async fn increment_transfer_stats_processed(&self, transfer_id: i64) -> anyhow::Result<()> {
+        let res = crosschain_transfers::Entity::update_many()
+            .col_expr(
+                crosschain_transfers::Column::StatsProcessed,
+                Expr::col(crosschain_transfers::Column::StatsProcessed).add(1),
+            )
+            .col_expr(
+                crosschain_transfers::Column::UpdatedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(crosschain_transfers::Column::Id.eq(transfer_id))
+            .exec(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    err = ?e,
+                    transfer_id,
+                    "Failed to increment transfer stats_processed"
+                );
+                e
+            })?;
+        if res.rows_affected == 0 {
+            tracing::error!(
+                transfer_id,
+                "Transfer not found for stats_processed increment"
+            );
+            return Err(anyhow::anyhow!("Transfer {} not found", transfer_id));
+        }
+        Ok(())
+    }
+
     // CONFIGURATION TABLE: bridge_contracts
     pub async fn upsert_bridge_contracts(
         &self,
@@ -2193,6 +2268,139 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(row2.stats_asset_id, Some(asset.id));
+    }
+
+    // --- stats_processed (incremental markers) ---
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_processed_seeded_messages_default_zero() {
+        let _db = init_db("stats_processed_seeded_messages_default_zero").await;
+        fill_mock_interchain_database(&_db).await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        let messages = crosschain_messages::Entity::find()
+            .all(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        assert!(!messages.is_empty());
+        for msg in &messages {
+            assert_eq!(
+                msg.stats_processed, 0,
+                "message id={} bridge_id={}",
+                msg.id, msg.bridge_id
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_processed_seeded_transfers_default_zero() {
+        let _db = init_db("stats_processed_seeded_transfers_default_zero").await;
+        fill_mock_interchain_database(&_db).await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        let transfers = crosschain_transfers::Entity::find()
+            .all(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        assert!(!transfers.is_empty());
+        for t in &transfers {
+            assert_eq!(t.stats_processed, 0, "transfer id={}", t.id);
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_processed_increment_message_works() {
+        let _db = init_db("stats_processed_increment_message_works").await;
+        fill_mock_interchain_database(&_db).await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        let message_id = 1001i64;
+        let bridge_id = 1i32;
+
+        let before = crosschain_messages::Entity::find_by_id((message_id, bridge_id))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(before.stats_processed, 0);
+
+        interchain_db
+            .increment_message_stats_processed(message_id, bridge_id)
+            .await
+            .unwrap();
+
+        let after = crosschain_messages::Entity::find_by_id((message_id, bridge_id))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after.stats_processed, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_processed_increment_transfer_works() {
+        let _db = init_db("stats_processed_increment_transfer_works").await;
+        fill_mock_interchain_database(&_db).await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        let transfer_id = 1i64;
+
+        let before = crosschain_transfers::Entity::find_by_id(transfer_id)
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(before.stats_processed, 0);
+
+        interchain_db
+            .increment_transfer_stats_processed(transfer_id)
+            .await
+            .unwrap();
+
+        let after = crosschain_transfers::Entity::find_by_id(transfer_id)
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after.stats_processed, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_processed_repeated_increments_increase_value() {
+        let _db = init_db("stats_processed_repeated_increments_increase_value").await;
+        fill_mock_interchain_database(&_db).await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        let message_id = 1002i64;
+        let bridge_id = 1i32;
+        let transfer_id = 2i64;
+
+        for _ in 0..3 {
+            interchain_db
+                .increment_message_stats_processed(message_id, bridge_id)
+                .await
+                .unwrap();
+        }
+        for _ in 0..5 {
+            interchain_db
+                .increment_transfer_stats_processed(transfer_id)
+                .await
+                .unwrap();
+        }
+
+        let msg = crosschain_messages::Entity::find_by_id((message_id, bridge_id))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(msg.stats_processed, 3);
+
+        let t = crosschain_transfers::Entity::find_by_id(transfer_id)
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 5);
     }
 
     #[tokio::test]

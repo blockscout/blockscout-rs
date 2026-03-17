@@ -163,6 +163,7 @@ mod tests {
                     id: ActiveValue::Set(key.message_id),
                     bridge_id: ActiveValue::Set(key.bridge_id as i32),
                     status: ActiveValue::Set(MessageStatus::Initiated),
+                    stats_processed: ActiveValue::Set(0),
                     ..Default::default()
                 },
                 transfers: vec![],

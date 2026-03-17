@@ -29,6 +29,7 @@ pub struct Model {
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub recipient_address: Option<Vec<u8>>,
     pub token_ids: Option<Vec<Decimal>>,
+    pub stats_processed: i16,
     pub stats_asset_id: Option<i64>,
 }
 

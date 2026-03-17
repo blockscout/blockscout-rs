@@ -62,8 +62,16 @@ CREATE INDEX stats_asset_edges_src_chain_idx
 CREATE INDEX stats_asset_edges_dst_chain_idx
   ON stats_asset_edges (dst_chain_id);
 
--- crosschain_transfers: optional link to stats asset
+
+-- crosschain_messages.stats_processed: counters for incremental stats processing
+-- it reflects how many times the row was processed for stats calculations
+-- (to support future stats re-processing)
+ALTER TABLE crosschain_messages
+  ADD COLUMN stats_processed SMALLINT NOT NULL DEFAULT 0;
+
+-- crosschain_transfers: stats processing counter and optional link to stats asset
 ALTER TABLE crosschain_transfers
+ADD COLUMN stats_processed SMALLINT NOT NULL DEFAULT 0,
 ADD COLUMN stats_asset_id BIGINT
   REFERENCES stats_assets(id)
   ON DELETE SET NULL;
