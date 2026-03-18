@@ -102,6 +102,7 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 | `INTERCHAIN_INDEXER__CHAIN_INFO__COOLDOWN_INTERVAL`                     |                          | If the chain name is unknown, do not retry DB query during this interval. Unit: `seconds`                                        | `60`          |
 | `INTERCHAIN_INDEXER__BUFFER_SETTINGS__HOT_TTL`                          |                          |                                                                                                                                  | `10`          |
 | `INTERCHAIN_INDEXER__BUFFER_SETTINGS__MAINTENANCE_INTERVAL`             |                          |                                                                                                                                  | `500`         |
+| `INTERCHAIN_INDEXER__STATS_BACKFILL_ON_START`                           |                          | Recalculate the statistics tables for messages and transfers (`stats_messages`, `stats_asset*`) on service startup. This is needed only after the first application of the `m20260312_175120_add_stats_tables` migration, and only if there are existing DB records before it. This option should normally be disabled after the migration to reduce service startup time. | `false`       |
 
 [anchor]: <> (anchors.envs.end.service)
 

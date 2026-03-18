@@ -6,6 +6,7 @@ mod error;
 mod message_buffer;
 mod provider_layers;
 pub mod settings;
+mod stats_projection;
 
 // pub mod event_handler;
 pub mod indexer;

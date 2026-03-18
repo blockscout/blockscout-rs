@@ -117,6 +117,7 @@ impl Drop for IndexerCleanupGuard {
 }
 
 impl AvalancheIndexer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         db: Arc<InterchainDatabase>,
         bridge_id: i32,
@@ -125,6 +126,7 @@ impl AvalancheIndexer {
         process_unknown_chains: bool,
         settings: &AvalancheIndexerSettings,
         buffer_settings: &crate::MessageBufferSettings,
+        token_info: Option<Arc<crate::TokenInfoService>>,
     ) -> Result<Self> {
         ensure!(
             !chains.is_empty(),
@@ -148,7 +150,8 @@ impl AvalancheIndexer {
             })
             .transpose()?;
 
-        let buffer = MessageBuffer::new((*db).clone(), buffer_settings.clone());
+        let buffer =
+            MessageBuffer::new_with_token_info((*db).clone(), buffer_settings.clone(), token_info);
 
         Ok(Self {
             db,

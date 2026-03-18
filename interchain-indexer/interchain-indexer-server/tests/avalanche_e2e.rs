@@ -211,6 +211,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         bridge_config.process_unknown_chains,
         &Default::default(),
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 
@@ -486,6 +487,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 
@@ -677,6 +679,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 
@@ -825,6 +828,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 
@@ -987,6 +991,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 
@@ -1159,6 +1164,7 @@ async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> R
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 
@@ -1301,6 +1307,7 @@ async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()>
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 
@@ -1495,6 +1502,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 
@@ -1641,6 +1649,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
+        None,
     )?;
     indexer.start().await?;
 

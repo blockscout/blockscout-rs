@@ -48,6 +48,11 @@ pub struct Settings {
 
     #[serde(default)]
     pub api: ApiSettings,
+
+    /// When true, project all rows with `stats_processed = 0` into stats tables at startup
+    /// (after migrations), before indexers start. Env: `INTERCHAIN_INDEXER__STATS_BACKFILL_ON_START`.
+    #[serde(default)]
+    pub stats_backfill_on_start: bool,
 }
 
 impl ConfigSettings for Settings {
@@ -80,7 +85,39 @@ impl Settings {
             },
             api: Default::default(),
             buffer_settings: Default::default(),
+            stats_backfill_on_start: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config::Config;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct StatsBackfillFlag {
+        #[serde(default)]
+        stats_backfill_on_start: bool,
+    }
+
+    #[test]
+    fn stats_backfill_on_start_defaults_false() {
+        let s = Settings::default("postgres://localhost/db".into());
+        assert!(!s.stats_backfill_on_start);
+    }
+
+    #[test]
+    fn stats_backfill_on_start_deserializes_true() {
+        let cfg = Config::builder()
+            .set_override("stats_backfill_on_start", true)
+            .expect("set_override")
+            .build()
+            .expect("config");
+        let v: StatsBackfillFlag = cfg.try_deserialize().expect("deserialize");
+        assert!(v.stats_backfill_on_start);
+        // Production: `INTERCHAIN_INDEXER__STATS_BACKFILL_ON_START=true` (same key via env layer).
     }
 }
 

@@ -3,7 +3,7 @@ use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};
 use interchain_indexer_entity::sea_orm_active_enums::BridgeType;
 use interchain_indexer_logic::{
-    CrosschainIndexer, InterchainDatabase,
+    CrosschainIndexer, InterchainDatabase, TokenInfoService,
     indexer::avalanche::{AvalancheChainConfig, AvalancheIndexer},
 };
 use std::{collections::HashMap, sync::Arc};
@@ -14,6 +14,7 @@ pub async fn spawn_configured_indexers(
     chains: &[ChainConfig],
     chain_providers: &HashMap<i64, DynProvider<Ethereum>>,
     settings: &Settings,
+    token_info: Option<Arc<TokenInfoService>>,
 ) -> Result<Vec<Arc<dyn CrosschainIndexer>>> {
     let chain_lookup: HashMap<i64, ChainConfig> = chains
         .iter()
@@ -51,6 +52,7 @@ pub async fn spawn_configured_indexers(
                             bridge.process_unknown_chains,
                             &settings.avalanche_indexer,
                             &settings.buffer_settings,
+                            token_info.clone(),
                         )
                         .with_context(|| {
                             format!(

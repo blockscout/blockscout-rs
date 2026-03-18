@@ -80,8 +80,23 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let interchain_db = InterchainDatabase::new(db_connection);
     let db = Arc::new(interchain_db.clone());
 
-    // Reading chains and bridges from json config files
     let chains = load_chains_from_file(&settings.chains_config)?;
+    let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
+    let token_info_service = Arc::new(TokenInfoService::new(
+        db.clone(),
+        chains_providers,
+        settings.token_info.clone(),
+    ));
+
+    if settings.stats_backfill_on_start {
+        tracing::info!(
+            "stats_backfill_on_start enabled: running statistics projection; async token enrichment will run after each batch outside DB transactions"
+        );
+        interchain_db
+            .backfill_stats_until_idle_with_token_enrichment(Some(token_info_service.clone()))
+            .await?;
+    }
+
     let bridges = load_bridges_from_file(&settings.bridges_config)?;
 
     // Populate database with the chains, bridges and bridge contracts
@@ -132,25 +147,21 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridge_contracts.len(),
     );
 
-    let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
-
-    let token_info_service = Arc::new(TokenInfoService::new(
-        db.clone(),
-        chains_providers.clone(),
-        settings.token_info.clone(),
-    ));
-
     let chain_info_service = Arc::new(ChainInfoService::new(
         db.clone(),
         settings.chain_info.clone(),
     ));
 
+    // Separate provider pool for indexers (`TokenInfoService` owns the first pool).
+    let chain_providers_for_indexers = create_provider_pools_from_chains(chains.clone()).await?;
+
     let indexers = spawn_configured_indexers(
         interchain_db.clone(),
         &bridges,
         &chains,
-        &chains_providers,
+        &chain_providers_for_indexers,
         &settings,
+        Some(token_info_service.clone()),
     )
     .await?;
 

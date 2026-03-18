@@ -29,6 +29,9 @@ acquire_timeout = 10
 create_database = true
 run_migrations = true
 
+# Project pending stats rows at startup (after migrations), before indexers run.
+# stats_backfill_on_start = false
+
 [api]
 default_page_size = 50
 max_page_size = 100

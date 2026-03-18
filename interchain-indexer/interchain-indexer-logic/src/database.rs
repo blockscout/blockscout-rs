@@ -16,8 +16,11 @@ use sea_orm::{
 };
 use std::{collections::HashMap, sync::Arc};
 
-use crate::pagination::{
-    MessagesPaginationLogic, OutputPagination, PaginationDirection, TransfersPaginationLogic,
+use crate::{
+    TokenInfoService,
+    pagination::{
+        MessagesPaginationLogic, OutputPagination, PaginationDirection, TransfersPaginationLogic,
+    },
 };
 
 pub struct InterchainTotalCounters {
@@ -57,6 +60,17 @@ pub struct JoinedTransfer {
     pub native_id: Option<Vec<u8>>,
     pub src_tx_hash: Option<Vec<u8>>,
     pub dst_tx_hash: Option<Vec<u8>>,
+}
+
+/// Batch size for startup stats backfill (per message pass and per transfer pass each round).
+pub const STATS_BACKFILL_BATCH: u64 = 50;
+
+#[derive(Debug, Default, Clone)]
+pub struct BackfillStatsReport {
+    pub messages_processed: usize,
+    pub transfers_processed: usize,
+    /// Src/dst token keys from transfers projected this round (kickoff enrichment **after** tx).
+    pub token_keys_for_enrichment: Vec<(i64, Vec<u8>)>,
 }
 
 #[derive(Clone)]
@@ -821,6 +835,142 @@ impl InterchainDatabase {
         Ok(())
     }
 
+    /// One backfill pass: process up to `message_limit` completed messages and
+    /// `transfer_limit` transfers with `stats_processed = 0`. Uses the same projection
+    /// as inline processing; each batch is one transaction.
+    pub async fn backfill_stats_projection_round(
+        &self,
+        message_limit: u64,
+        transfer_limit: u64,
+    ) -> anyhow::Result<BackfillStatsReport> {
+        let mut report = BackfillStatsReport::default();
+
+        let msg_rows = crosschain_messages::Entity::find()
+            .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
+            .filter(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+            .filter(crosschain_messages::Column::DstChainId.is_not_null())
+            .order_by_asc(crosschain_messages::Column::Id)
+            .limit(message_limit)
+            .all(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                tracing::error!(err = ?e, "backfill_stats: list messages");
+                e
+            })?;
+
+        if !msg_rows.is_empty() {
+            let pks: Vec<(i64, i32)> = msg_rows.iter().map(|m| (m.id, m.bridge_id)).collect();
+            let n = msg_rows.len();
+            self.db
+                .as_ref()
+                .transaction(|tx| {
+                    let pks = pks.clone();
+                    Box::pin(async move {
+                        crate::stats_projection::project_messages_batch(tx, &pks)
+                            .await
+                            .map(|_| ())
+                    })
+                })
+                .await
+                .map_err(|e| {
+                    tracing::error!(err = ?e, "backfill_stats: message transaction");
+                    anyhow::anyhow!("{}", e)
+                })?;
+            report.messages_processed = n;
+        }
+
+        let xfer_rows = crosschain_transfers::Entity::find()
+            .join(
+                JoinType::InnerJoin,
+                crosschain_transfers::Relation::CrosschainMessages.def(),
+            )
+            .filter(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+            .filter(crosschain_messages::Column::StatsProcessed.gt(0i16))
+            .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
+            .order_by_asc(crosschain_transfers::Column::Id)
+            .limit(transfer_limit)
+            .all(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                tracing::error!(err = ?e, "backfill_stats: list transfers");
+                e
+            })?;
+
+        if !xfer_rows.is_empty() {
+            let ids: Vec<i64> = xfer_rows.iter().map(|t| t.id).collect();
+            let n = xfer_rows.len();
+            self.db
+                .as_ref()
+                .transaction(|tx| {
+                    let ids = ids.clone();
+                    Box::pin(async move {
+                        crate::stats_projection::project_transfers_batch(tx, &ids)
+                            .await
+                            .map(|_| ())
+                    })
+                })
+                .await
+                .map_err(|e| {
+                    tracing::error!(err = ?e, "backfill_stats: transfer transaction");
+                    anyhow::anyhow!("{}", e)
+                })?;
+            report.transfers_processed = n;
+            report.token_keys_for_enrichment =
+                crate::stats_projection::token_keys_for_stats_enrichment_from_transfer_models(
+                    &xfer_rows,
+                );
+        }
+
+        Ok(report)
+    }
+
+    /// Runs [`Self::backfill_stats_projection_round`] until no eligible rows remain.
+    /// Uses a fixed batch size per round (see [`STATS_BACKFILL_BATCH`]).
+    pub async fn backfill_stats_until_idle(&self) -> anyhow::Result<()> {
+        self.backfill_stats_until_idle_with_token_enrichment(None)
+            .await
+    }
+
+    /// Like [`Self::backfill_stats_until_idle`], but after each successful transfer-projection
+    /// batch (outside the DB transaction), kicks off non-blocking token fetches for missing
+    /// metadata — same path as inline buffer flush.
+    pub async fn backfill_stats_until_idle_with_token_enrichment(
+        &self,
+        token_info: Option<Arc<TokenInfoService>>,
+    ) -> anyhow::Result<()> {
+        let mut total_messages = 0usize;
+        let mut total_transfers = 0usize;
+        loop {
+            let r = self
+                .backfill_stats_projection_round(STATS_BACKFILL_BATCH, STATS_BACKFILL_BATCH)
+                .await?;
+            if r.messages_processed == 0 && r.transfers_processed == 0 {
+                break;
+            }
+            total_messages += r.messages_processed;
+            total_transfers += r.transfers_processed;
+            tracing::info!(
+                messages_this_round = r.messages_processed,
+                transfers_this_round = r.transfers_processed,
+                total_messages_so_far = total_messages,
+                total_transfers_so_far = total_transfers,
+                "stats backfill progress"
+            );
+            if let (Some(svc), keys) = (token_info.as_ref(), &r.token_keys_for_enrichment)
+                && !keys.is_empty()
+            {
+                svc.clone()
+                    .kickoff_token_fetch_for_stats_enrichment(keys.clone());
+            }
+        }
+        tracing::info!(
+            total_messages = total_messages,
+            total_transfers = total_transfers,
+            "stats backfill on start finished"
+        );
+        Ok(())
+    }
+
     // CONFIGURATION TABLE: bridge_contracts
     pub async fn upsert_bridge_contracts(
         &self,
@@ -1405,6 +1555,118 @@ impl InterchainDatabase {
         Ok(())
     }
 
+    /// Push token metadata/decimals into `stats_assets` / `stats_asset_edges` for rows linked via
+    /// `stats_asset_tokens`. Only fills empty stats fields; edge `decimals` only when NULL and
+    /// `decimals_side` matches this token's chain role; logs and skips on conflicting decimals.
+    pub async fn propagate_token_info_to_stats_tables(
+        &self,
+        chain_id: i64,
+        address: &[u8],
+        token: &tokens::Model,
+    ) -> anyhow::Result<()> {
+        fn empty_opt(s: &Option<String>) -> bool {
+            s.as_ref().is_none_or(|t| t.trim().is_empty())
+        }
+        fn nonempty_opt(s: &Option<String>) -> bool {
+            s.as_ref().is_some_and(|t| !t.trim().is_empty())
+        }
+
+        let addr = address.to_vec();
+        let links = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::ChainId.eq(chain_id))
+            .filter(stats_asset_tokens::Column::TokenAddress.eq(addr))
+            .all(self.db.as_ref())
+            .await?;
+
+        let now = chrono::Utc::now().naive_utc();
+
+        for link in links {
+            let aid = link.stats_asset_id;
+            let Some(asset) = stats_assets::Entity::find_by_id(aid)
+                .one(self.db.as_ref())
+                .await?
+            else {
+                continue;
+            };
+
+            let mut name = asset.name.clone();
+            let mut symbol = asset.symbol.clone();
+            let mut icon = asset.icon_url.clone();
+            let mut meta_changed = false;
+
+            if empty_opt(&name) && nonempty_opt(&token.name) {
+                name = token.name.clone();
+                meta_changed = true;
+            }
+            if empty_opt(&symbol) && nonempty_opt(&token.symbol) {
+                symbol = token.symbol.clone();
+                meta_changed = true;
+            }
+            if empty_opt(&icon) && nonempty_opt(&token.token_icon) {
+                icon = token.token_icon.clone();
+                meta_changed = true;
+            }
+
+            if meta_changed {
+                stats_assets::Entity::update(stats_assets::ActiveModel {
+                    id: ActiveValue::Unchanged(aid),
+                    name: ActiveValue::Set(name),
+                    symbol: ActiveValue::Set(symbol),
+                    icon_url: ActiveValue::Set(icon),
+                    created_at: ActiveValue::Unchanged(asset.created_at),
+                    updated_at: ActiveValue::Set(now),
+                })
+                .exec(self.db.as_ref())
+                .await?;
+            }
+
+            let edges = stats_asset_edges::Entity::find()
+                .filter(stats_asset_edges::Column::StatsAssetId.eq(aid))
+                .all(self.db.as_ref())
+                .await?;
+
+            for edge in edges {
+                let side_matches = match edge.decimals_side {
+                    EdgeDecimalsSide::Source => edge.src_chain_id == chain_id,
+                    EdgeDecimalsSide::Destination => edge.dst_chain_id == chain_id,
+                };
+                if !side_matches {
+                    continue;
+                }
+                let Some(td) = token.decimals else {
+                    continue;
+                };
+                match edge.decimals {
+                    None => {
+                        stats_asset_edges::Entity::update_many()
+                            .col_expr(stats_asset_edges::Column::Decimals, Expr::value(td))
+                            .col_expr(
+                                stats_asset_edges::Column::UpdatedAt,
+                                Expr::current_timestamp().into(),
+                            )
+                            .filter(stats_asset_edges::Column::StatsAssetId.eq(edge.stats_asset_id))
+                            .filter(stats_asset_edges::Column::SrcChainId.eq(edge.src_chain_id))
+                            .filter(stats_asset_edges::Column::DstChainId.eq(edge.dst_chain_id))
+                            .exec(self.db.as_ref())
+                            .await?;
+                    }
+                    Some(existing) if existing != td => {
+                        tracing::warn!(
+                            stats_asset_id = edge.stats_asset_id,
+                            src_chain_id = edge.src_chain_id,
+                            dst_chain_id = edge.dst_chain_id,
+                            existing,
+                            incoming = td,
+                            "stats enrichment: not overwriting edge decimals (conflict)"
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Updates the token icon URL for a specific token.
     pub async fn update_token_icon(
         &self,
@@ -1734,9 +1996,12 @@ mod tests {
     use interchain_indexer_entity::{
         chains, crosschain_messages, crosschain_transfers,
         sea_orm_active_enums::{EdgeDecimalsSide, MessageStatus},
-        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages,
+        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
     };
-    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, prelude::BigDecimal};
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait,
+        prelude::BigDecimal,
+    };
 
     use crate::{
         InterchainDatabase,
@@ -2401,6 +2666,1288 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_processed, 5);
+    }
+
+    // --- stats projection (inline + backfill shared path) ---
+
+    async fn seed_minimal_bridge(db: &sea_orm::DatabaseConnection) {
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(1),
+                name: Set("A".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(100),
+                name: Set("B".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+        interchain_indexer_entity::bridges::Entity::insert(
+            interchain_indexer_entity::bridges::ActiveModel {
+                id: Set(1),
+                name: Set("Br".into()),
+                ..Default::default()
+            },
+        )
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
+    fn completed_message(id: i64, src: i64, dst: i64) -> crosschain_messages::ActiveModel {
+        crosschain_messages::ActiveModel {
+            id: Set(id),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Completed),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(src),
+            dst_chain_id: Set(Some(dst)),
+            stats_processed: Set(0),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_message_updates_stats_messages() {
+        let _db = init_db("stats_projection_message_updates_stats_messages").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(92001, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92001i64, 1i32)])
+                    .await
+                    .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.messages_count, 1);
+        let m = crosschain_messages::Entity::find_by_id((92001i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.stats_processed, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_message_idempotent() {
+        let _db = init_db("stats_projection_message_idempotent").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(92002, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+
+        for _ in 0..2 {
+            db.transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats_projection::project_messages_batch(tx, &[(92002i64, 1i32)])
+                        .await
+                        .map(|_| ())
+                })
+            })
+            .await
+            .unwrap();
+        }
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_transfer_updates_asset_stats() {
+        let _db = init_db("stats_projection_transfer_updates_asset_stats").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(92003, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        let addr_a = [0x11u8; 20].to_vec();
+        let addr_b = [0x22u8; 20].to_vec();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92003),
+            message_id: Set(92003),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(5_000u64)),
+            dst_amount: Set(BigDecimal::from(5_000u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92003i64, 1i32)]).await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92003i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92003i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 1);
+        assert!(t.stats_asset_id.is_some());
+        let aid = t.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.transfers_count, 1);
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(5_000u64));
+        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_edge_uses_destination_when_source_decimals_unknown() {
+        let _db =
+            init_db("stats_projection_edge_uses_destination_when_source_decimals_unknown").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let addr_a = [0xa1u8; 20].to_vec();
+        let addr_b = [0xb1u8; 20].to_vec();
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(100),
+            address: Set(addr_b.clone()),
+            decimals: Set(Some(8)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message(92020, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92020),
+            message_id: Set(92020),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(100u64)),
+            dst_amount: Set(BigDecimal::from(50u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92020i64, 1i32)]).await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92020i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92020i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let aid = t.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
+        assert_eq!(edge.decimals, Some(8));
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(50u64));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_edge_uses_source_when_source_decimals_known() {
+        let _db = init_db("stats_projection_edge_uses_source_when_source_decimals_known").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let addr_a = [0xa2u8; 20].to_vec();
+        let addr_b = [0xb2u8; 20].to_vec();
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(addr_a.clone()),
+            decimals: Set(Some(6)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message(92019, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92019),
+            message_id: Set(92019),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(100u64)),
+            dst_amount: Set(BigDecimal::from(200u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92019i64, 1i32)]).await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92019i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92019i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let aid = t.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Source);
+        assert_eq!(edge.decimals, Some(6));
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(100u64));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_edge_decimals_side_sticky_uses_destination_amounts() {
+        let _db = init_db("stats_projection_edge_decimals_side_sticky").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let addr_a = [0xc1u8; 20].to_vec();
+        let addr_b = [0xc2u8; 20].to_vec();
+
+        crosschain_messages::Entity::insert(completed_message(92021, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92021),
+            message_id: Set(92021),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(999u64)),
+            dst_amount: Set(BigDecimal::from(10u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92021i64, 1i32)]).await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92021i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(addr_a.clone()),
+            decimals: Set(Some(18)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message(92022, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92022),
+            message_id: Set(92022),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(888u64)),
+            dst_amount: Set(BigDecimal::from(7u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92022i64, 1i32)]).await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92022i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92021i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let aid = t.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(17u64));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_batch_two_transfers_same_edge_one_call() {
+        let _db = init_db("stats_projection_batch_two_transfers_same_edge").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let addr_a = [0xf1u8; 20].to_vec();
+        let addr_b = [0xf2u8; 20].to_vec();
+
+        for (mid, tid, src_amt, dst_amt) in [
+            (92030i64, 92030i64, 999u64, 10u64),
+            (92031i64, 92031i64, 888u64, 7u64),
+        ] {
+            crosschain_messages::Entity::insert(completed_message(mid, 1, 100))
+                .exec(db)
+                .await
+                .unwrap();
+            crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+                id: Set(tid),
+                message_id: Set(mid),
+                bridge_id: Set(1),
+                index: Set(0),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(100),
+                src_amount: Set(BigDecimal::from(src_amt)),
+                dst_amount: Set(BigDecimal::from(dst_amt)),
+                token_src_address: Set(addr_a.clone()),
+                token_dst_address: Set(addr_b.clone()),
+                ..Default::default()
+            })
+            .exec(db)
+            .await
+            .unwrap();
+        }
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(
+                    tx,
+                    &[(92030i64, 1i32), (92031i64, 1i32)],
+                )
+                .await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92030i64, 92031i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t1 = crosschain_transfers::Entity::find_by_id(92030i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let t2 = crosschain_transfers::Entity::find_by_id(92031i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t1.stats_processed, 1);
+        assert_eq!(t2.stats_processed, 1);
+        let aid = t1.stats_asset_id.unwrap();
+        assert_eq!(t2.stats_asset_id, Some(aid));
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
+        assert_eq!(edge.transfers_count, 2);
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(17u64));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_rejects_conflicting_edge_decimals() {
+        let _db = init_db("stats_projection_rejects_conflicting_edge_decimals").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let addr_a = [0xd1u8; 20].to_vec();
+        let addr_b = [0xd2u8; 20].to_vec();
+
+        let aid = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(1),
+            token_address: Set(addr_a.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(100),
+            token_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(addr_a.clone()),
+            decimals: Set(Some(18)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            stats_asset_id: Set(aid),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(100),
+            transfers_count: Set(0),
+            cumulative_amount: Set(BigDecimal::from(0u64)),
+            decimals: Set(Some(17)),
+            decimals_side: Set(EdgeDecimalsSide::Source),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message(92023, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92023),
+            message_id: Set(92023),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(1u64)),
+            dst_amount: Set(BigDecimal::from(1u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let res = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats_projection::project_messages_batch(tx, &[(92023i64, 1i32)])
+                        .await?;
+                    crate::stats_projection::project_transfers_batch(tx, &[92023i64]).await?;
+                    Ok::<(), sea_orm::DbErr>(())
+                })
+            })
+            .await;
+        assert!(res.is_err(), "expected decimals conflict");
+        let t = crosschain_transfers::Entity::find_by_id(92023i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_rejects_conflicting_asset_mappings() {
+        let _db = init_db("stats_projection_rejects_conflicting_asset_mappings").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let addr_a = [0xe1u8; 20].to_vec();
+        let addr_b = [0xe2u8; 20].to_vec();
+
+        let aid_a = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        let aid_b = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid_a),
+            chain_id: Set(1),
+            token_address: Set(addr_a.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid_b),
+            chain_id: Set(100),
+            token_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message(92024, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92024),
+            message_id: Set(92024),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(1u64)),
+            dst_amount: Set(BigDecimal::from(1u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let res = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats_projection::project_messages_batch(tx, &[(92024i64, 1i32)])
+                        .await?;
+                    crate::stats_projection::project_transfers_batch(tx, &[92024i64]).await?;
+                    Ok::<(), sea_orm::DbErr>(())
+                })
+            })
+            .await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("different stats assets") || msg.contains("92024"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_enrichment_projection_fills_stats_asset_metadata_from_tokens() {
+        let _db = init_db("stats_enrichment_projection_metadata").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let addr_a = [0x71u8; 20].to_vec();
+        let addr_b = [0x72u8; 20].to_vec();
+
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(addr_a.clone()),
+            name: Set(Some("SrcGold".to_string())),
+            symbol: Set(Some("SGOLD".to_string())),
+            token_icon: Set(Some("https://src/icon.png".to_string())),
+            decimals: Set(Some(9)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(100),
+            address: Set(addr_b.clone()),
+            name: Set(Some("OnlyDst".to_string())),
+            symbol: Set(Some("ODST".to_string())),
+            decimals: Set(Some(8)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message(92050, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92050),
+            message_id: Set(92050),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(1u64)),
+            dst_amount: Set(BigDecimal::from(1u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92050i64, 1i32)]).await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92050i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92050i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 1);
+        let aid = t.stats_asset_id.unwrap();
+        let asset = stats_assets::Entity::find_by_id(aid)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(asset.name.as_deref(), Some("SrcGold"));
+        assert_eq!(asset.symbol.as_deref(), Some("SGOLD"));
+        assert_eq!(asset.icon_url.as_deref(), Some("https://src/icon.png"));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_enrichment_projection_succeeds_without_token_rows() {
+        let _db = init_db("stats_enrichment_no_tokens").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(92051, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92051),
+            message_id: Set(92051),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(3u64)),
+            dst_amount: Set(BigDecimal::from(3u64)),
+            token_src_address: Set([0x81u8; 20].to_vec()),
+            token_dst_address: Set([0x82u8; 20].to_vec()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92051i64, 1i32)]).await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92051i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92051i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 1);
+        let asset = stats_assets::Entity::find_by_id(t.stats_asset_id.unwrap())
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(asset.name.as_ref().is_none_or(|s| s.is_empty()));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_enrichment_propagate_upsert_fills_asset_and_edge_decimals() {
+        let _db = init_db("stats_enrichment_propagate_edge").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        let ic = InterchainDatabase::new(_db.client());
+        let addr_b = [0x91u8; 20].to_vec();
+
+        let aid = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(100),
+            token_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            stats_asset_id: Set(aid),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(100),
+            transfers_count: Set(0),
+            cumulative_amount: Set(BigDecimal::from(0u64)),
+            decimals: Set(None),
+            decimals_side: Set(EdgeDecimalsSide::Destination),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        ic.upsert_token_info(tokens::ActiveModel {
+            chain_id: Set(100),
+            address: Set(addr_b.clone()),
+            name: Set(Some("Bridged".to_string())),
+            symbol: Set(Some("BRG".to_string())),
+            decimals: Set(Some(12)),
+            token_icon: Set(None),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+        let token = tokens::Entity::find()
+            .filter(tokens::Column::ChainId.eq(100i64))
+            .filter(tokens::Column::Address.eq(addr_b.clone()))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        ic.propagate_token_info_to_stats_tables(100, &addr_b, &token)
+            .await
+            .unwrap();
+
+        let asset = stats_assets::Entity::find_by_id(aid)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(asset.name.as_deref(), Some("Bridged"));
+        assert_eq!(asset.symbol.as_deref(), Some("BRG"));
+
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.decimals, Some(12));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_enrichment_propagate_skips_unrelated_destination_edge() {
+        let _db = init_db("stats_enrichment_unrelated_edge").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        let ic = InterchainDatabase::new(_db.client());
+        let addr_b = [0xa1u8; 20].to_vec();
+
+        let aid = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(100),
+            token_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            stats_asset_id: Set(aid),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(200i64),
+            transfers_count: Set(0),
+            cumulative_amount: Set(BigDecimal::from(0u64)),
+            decimals: Set(None),
+            decimals_side: Set(EdgeDecimalsSide::Destination),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        ic.upsert_token_info(tokens::ActiveModel {
+            chain_id: Set(100),
+            address: Set(addr_b.clone()),
+            name: Set(Some("T".to_string())),
+            symbol: Set(Some("T".to_string())),
+            decimals: Set(Some(7)),
+            token_icon: Set(None),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+        let token = tokens::Entity::find()
+            .filter(tokens::Column::ChainId.eq(100i64))
+            .filter(tokens::Column::Address.eq(addr_b.clone()))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        ic.propagate_token_info_to_stats_tables(100, &addr_b, &token)
+            .await
+            .unwrap();
+
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 200i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            edge.decimals.is_none(),
+            "dst chain 200 should not take decimals from token on chain 100"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_enrichment_propagate_does_not_overwrite_conflicting_decimals() {
+        let _db = init_db("stats_enrichment_decimal_conflict").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        let ic = InterchainDatabase::new(_db.client());
+        let addr_b = [0xb1u8; 20].to_vec();
+
+        let aid = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(100),
+            token_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            stats_asset_id: Set(aid),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(100),
+            transfers_count: Set(0),
+            cumulative_amount: Set(BigDecimal::from(0u64)),
+            decimals: Set(Some(5)),
+            decimals_side: Set(EdgeDecimalsSide::Destination),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        ic.upsert_token_info(tokens::ActiveModel {
+            chain_id: Set(100),
+            address: Set(addr_b.clone()),
+            name: Set(None),
+            symbol: Set(None),
+            decimals: Set(Some(11)),
+            token_icon: Set(None),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+        let token = tokens::Entity::find()
+            .filter(tokens::Column::ChainId.eq(100i64))
+            .filter(tokens::Column::Address.eq(addr_b.clone()))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        ic.propagate_token_info_to_stats_tables(100, &addr_b, &token)
+            .await
+            .unwrap();
+
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.decimals, Some(5));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_enrichment_propagate_preserves_non_empty_asset_metadata() {
+        let _db = init_db("stats_enrichment_keep_metadata").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        let ic = InterchainDatabase::new(_db.client());
+        let addr_b = [0xc1u8; 20].to_vec();
+
+        let aid = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            name: Set(Some("ManualName".to_string())),
+            symbol: Set(Some("MN".to_string())),
+            icon_url: Set(Some("https://keep.ico".to_string())),
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(100),
+            token_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        ic.upsert_token_info(tokens::ActiveModel {
+            chain_id: Set(100),
+            address: Set(addr_b.clone()),
+            name: Set(Some("TokenOther".to_string())),
+            symbol: Set(Some("TO".to_string())),
+            decimals: Set(Some(6)),
+            token_icon: Set(Some("https://other.ico".to_string())),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+        let token = tokens::Entity::find()
+            .filter(tokens::Column::ChainId.eq(100i64))
+            .filter(tokens::Column::Address.eq(addr_b.clone()))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        ic.propagate_token_info_to_stats_tables(100, &addr_b, &token)
+            .await
+            .unwrap();
+
+        let asset = stats_assets::Entity::find_by_id(aid)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(asset.name.as_deref(), Some("ManualName"));
+        assert_eq!(asset.symbol.as_deref(), Some("MN"));
+        assert_eq!(asset.icon_url.as_deref(), Some("https://keep.ico"));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_transfer_idempotent() {
+        let _db = init_db("stats_projection_transfer_idempotent").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(92004, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92004),
+            message_id: Set(92004),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(100u64)),
+            dst_amount: Set(BigDecimal::from(100u64)),
+            token_src_address: Set([0x33u8; 20].to_vec()),
+            token_dst_address: Set([0x44u8; 20].to_vec()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        for _ in 0..2 {
+            db.transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats_projection::project_messages_batch(tx, &[(92004i64, 1i32)])
+                        .await?;
+                    crate::stats_projection::project_transfers_batch(tx, &[92004i64]).await?;
+                    Ok::<(), sea_orm::DbErr>(())
+                })
+            })
+            .await
+            .unwrap();
+        }
+        let t = crosschain_transfers::Entity::find_by_id(92004i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let aid = t.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.transfers_count, 1);
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(100u64));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_backfill_matches_inline_projection() {
+        let _db = init_db("stats_backfill_matches_inline_projection").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(92005, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92005),
+            message_id: Set(92005),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(42u64)),
+            dst_amount: Set(BigDecimal::from(42u64)),
+            token_src_address: Set([0x55u8; 20].to_vec()),
+            token_dst_address: Set([0x66u8; 20].to_vec()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let ic = InterchainDatabase::new(_db.client());
+        let r = ic.backfill_stats_projection_round(50, 50).await.unwrap();
+        assert!(r.messages_processed >= 1);
+        assert!(r.transfers_processed >= 1);
+
+        let m = crosschain_messages::Entity::find_by_id((92005i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.stats_processed, 1);
+        let t = crosschain_transfers::Entity::find_by_id(92005i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 1);
+        assert!(t.stats_asset_id.is_some());
+
+        let r2 = ic.backfill_stats_projection_round(50, 50).await.unwrap();
+        assert_eq!(r2.messages_processed, 0);
+        assert_eq!(r2.transfers_processed, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_backfill_until_idle_empty_succeeds() {
+        let _db = init_db("stats_backfill_until_idle_empty_succeeds").await;
+        let ic = InterchainDatabase::new(_db.client());
+        ic.backfill_stats_until_idle().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_backfill_until_idle_drains_pending() {
+        let _db = init_db("stats_backfill_until_idle_drains_pending").await;
+        let ic = InterchainDatabase::new(_db.client());
+        let db = ic.db.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(92008, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92008),
+            message_id: Set(92008),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(7u64)),
+            dst_amount: Set(BigDecimal::from(7u64)),
+            token_src_address: Set([0x77u8; 20].to_vec()),
+            token_dst_address: Set([0x88u8; 20].to_vec()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        ic.backfill_stats_until_idle().await.unwrap();
+
+        let m = crosschain_messages::Entity::find_by_id((92008i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.stats_processed, 1);
+        let t = crosschain_transfers::Entity::find_by_id(92008i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 1);
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_rollback_does_not_increment_marker() {
+        let _db = init_db("stats_projection_rollback_does_not_increment_marker").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(92006, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+
+        let res = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats_projection::project_messages_batch(tx, &[(92006i64, 1i32)])
+                        .await?;
+                    Err::<(), sea_orm::DbErr>(sea_orm::DbErr::Custom("forced abort".into()))
+                })
+            })
+            .await;
+        assert!(res.is_err());
+
+        let m = crosschain_messages::Entity::find_by_id((92006i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.stats_processed, 0);
+        assert!(
+            stats_messages::Entity::find_by_id((1i64, 100i64))
+                .one(db)
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[tokio::test]

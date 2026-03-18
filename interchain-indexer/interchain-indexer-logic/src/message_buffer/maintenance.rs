@@ -288,6 +288,13 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
         let finalized_keys = plan.finalized_keys.clone();
         let cursor_builder = plan.cursor_builder.clone();
 
+        let finalized_entries: Vec<ConsolidatedMessage> = consolidated_entries
+            .iter()
+            .filter(|c| c.is_final)
+            .cloned()
+            .collect();
+
+        let finalized_for_stats = finalized_entries.clone();
         let new = self
             .db
             .db
@@ -295,6 +302,7 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
                 Box::pin(async move {
                     persistence::offload_stale_to_pending(tx, &stale_entries).await?;
                     persistence::flush_to_final_storage(tx, consolidated_entries).await?;
+                    persistence::apply_stats_for_finalized_batch(tx, &finalized_for_stats).await?;
                     persistence::remove_finalized_from_pending(tx, &finalized_keys).await?;
 
                     let old = persistence::fetch_cursors(&cursor_builder, tx).await?;
@@ -306,6 +314,11 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
             .await
             .map_err(anyhow::Error::from)
             .context("maintenance transaction failed")?;
+
+        if let Some(ref svc) = self.token_info {
+            let keys = persistence::token_keys_from_finalized_for_enrichment(&finalized_entries);
+            svc.clone().kickoff_token_fetch_for_stats_enrichment(keys);
+        }
 
         for ((bridge_id, chain_id), cursor) in &new {
             let bridge_label = bridge_id.to_string();

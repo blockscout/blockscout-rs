@@ -13,7 +13,7 @@ use super::{
     metrics,
     types::{Consolidate, Key},
 };
-use crate::{InterchainDatabase, settings::MessageBufferSettings};
+use crate::{InterchainDatabase, TokenInfoService, settings::MessageBufferSettings};
 
 /// Tiered message buffer with hot (memory) and cold (Postgres) storage.
 ///
@@ -26,6 +26,8 @@ pub struct MessageBuffer<T: Consolidate + Default> {
     pub(super) config: MessageBufferSettings,
     /// Database connection for cold tier operations
     pub(super) db: InterchainDatabase,
+    /// Optional: async token-info fetch after finalized stats projection (non-blocking).
+    pub(super) token_info: Option<Arc<TokenInfoService>>,
     /// Lock for maintenance operations (offload/flush)
     pub(super) maintenance_lock: RwLock<()>,
 }
@@ -35,11 +37,21 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
     ///
     /// Note: no data is eagerly loaded from cold storage. Entries are restored
     /// on-demand via `get_mut_or_default` / `alter`.
+    #[allow(dead_code)] // embedders/tests; production indexer uses [`Self::new_with_token_info`]
     pub fn new(db: InterchainDatabase, config: MessageBufferSettings) -> Arc<Self> {
+        Self::new_with_token_info(db, config, None)
+    }
+
+    pub fn new_with_token_info(
+        db: InterchainDatabase,
+        config: MessageBufferSettings,
+        token_info: Option<Arc<TokenInfoService>>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             inner: DashMap::new(),
             config,
             db,
+            token_info,
             maintenance_lock: RwLock::new(()),
         })
     }
