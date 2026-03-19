@@ -6,7 +6,7 @@ mod error;
 mod message_buffer;
 mod provider_layers;
 pub mod settings;
-mod stats_projection;
+pub mod stats;
 
 // pub mod event_handler;
 pub mod indexer;
@@ -23,4 +23,5 @@ pub use error::ApiError;
 pub use indexer::*;
 pub use provider_layers::*;
 pub use settings::MessageBufferSettings;
+pub use stats::StatsService;
 pub use token_info::{TokenInfoService, TokenInfoServiceSettings};

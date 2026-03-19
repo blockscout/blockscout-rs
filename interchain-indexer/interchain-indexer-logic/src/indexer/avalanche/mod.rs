@@ -40,6 +40,7 @@ use tonic::async_trait;
 
 use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
+    StatsService,
     avalanche::settings::AvalancheIndexerSettings,
     log_stream::LogStream,
     message_buffer::{Key, MessageBuffer},
@@ -119,14 +120,13 @@ impl Drop for IndexerCleanupGuard {
 impl AvalancheIndexer {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        db: Arc<InterchainDatabase>,
+        stats: Arc<StatsService>,
         bridge_id: i32,
         chains: Vec<AvalancheChainConfig>,
         home_chain: Option<ChainId>,
         process_unknown_chains: bool,
         settings: &AvalancheIndexerSettings,
         buffer_settings: &crate::MessageBufferSettings,
-        token_info: Option<Arc<crate::TokenInfoService>>,
     ) -> Result<Self> {
         ensure!(
             !chains.is_empty(),
@@ -150,8 +150,8 @@ impl AvalancheIndexer {
             })
             .transpose()?;
 
-        let buffer =
-            MessageBuffer::new_with_token_info((*db).clone(), buffer_settings.clone(), token_info);
+        let db = stats.interchain_db_arc();
+        let buffer = MessageBuffer::new_with_stats(stats, buffer_settings.clone());
 
         Ok(Self {
             db,

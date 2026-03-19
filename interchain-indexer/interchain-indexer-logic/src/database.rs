@@ -1022,7 +1022,7 @@ impl InterchainDatabase {
                 .transaction(|tx| {
                     let pks = pks.clone();
                     Box::pin(async move {
-                        crate::stats_projection::project_messages_batch(tx, &pks)
+                        crate::stats::projection::project_messages_batch(tx, &pks)
                             .await
                             .map(|_| ())
                     })
@@ -1060,7 +1060,7 @@ impl InterchainDatabase {
                 .transaction(|tx| {
                     let ids = ids.clone();
                     Box::pin(async move {
-                        crate::stats_projection::project_transfers_batch(tx, &ids)
+                        crate::stats::projection::project_transfers_batch(tx, &ids)
                             .await
                             .map(|_| ())
                     })
@@ -1072,7 +1072,7 @@ impl InterchainDatabase {
                 })?;
             report.transfers_processed = n;
             report.token_keys_for_enrichment =
-                crate::stats_projection::token_keys_for_stats_enrichment_from_transfer_models(
+                crate::stats::projection::token_keys_for_stats_enrichment_from_transfer_models(
                     &xfer_rows,
                 );
         }
@@ -3208,7 +3208,7 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92001i64, 1i32)])
+                crate::stats::projection::project_messages_batch(tx, &[(92001i64, 1i32)])
                     .await
                     .map(|_| ())
             })
@@ -3245,7 +3245,7 @@ mod tests {
         for _ in 0..2 {
             db.transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats_projection::project_messages_batch(tx, &[(92002i64, 1i32)])
+                    crate::stats::projection::project_messages_batch(tx, &[(92002i64, 1i32)])
                         .await
                         .map(|_| ())
                 })
@@ -3293,8 +3293,8 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92003i64, 1i32)]).await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92003i64]).await?;
+                crate::stats::projection::project_messages_batch(tx, &[(92003i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92003i64]).await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -3364,8 +3364,8 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92020i64, 1i32)]).await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92020i64]).await?;
+                crate::stats::projection::project_messages_batch(tx, &[(92020i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92020i64]).await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -3430,8 +3430,8 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92019i64, 1i32)]).await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92019i64]).await?;
+                crate::stats::projection::project_messages_batch(tx, &[(92019i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92019i64]).await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -3487,8 +3487,8 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92021i64, 1i32)]).await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92021i64]).await?;
+                crate::stats::projection::project_messages_batch(tx, &[(92021i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92021i64]).await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -3528,8 +3528,8 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92022i64, 1i32)]).await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92022i64]).await?;
+                crate::stats::projection::project_messages_batch(tx, &[(92022i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92022i64]).await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -3597,8 +3597,8 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92032i64, 1i32)]).await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92032i64]).await?;
+                crate::stats::projection::project_messages_batch(tx, &[(92032i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92032i64]).await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -3659,12 +3659,13 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(
+                crate::stats::projection::project_messages_batch(
                     tx,
                     &[(92030i64, 1i32), (92031i64, 1i32)],
                 )
                 .await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92030i64, 92031i64]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92030i64, 92031i64])
+                    .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -3779,9 +3780,9 @@ mod tests {
         let res = db
             .transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats_projection::project_messages_batch(tx, &[(92023i64, 1i32)])
+                    crate::stats::projection::project_messages_batch(tx, &[(92023i64, 1i32)])
                         .await?;
-                    crate::stats_projection::project_transfers_batch(tx, &[92023i64]).await?;
+                    crate::stats::projection::project_transfers_batch(tx, &[92023i64]).await?;
                     Ok::<(), sea_orm::DbErr>(())
                 })
             })
@@ -3862,9 +3863,9 @@ mod tests {
         let res = db
             .transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats_projection::project_messages_batch(tx, &[(92024i64, 1i32)])
+                    crate::stats::projection::project_messages_batch(tx, &[(92024i64, 1i32)])
                         .await?;
-                    crate::stats_projection::project_transfers_batch(tx, &[92024i64]).await?;
+                    crate::stats::projection::project_transfers_batch(tx, &[92024i64]).await?;
                     Ok::<(), sea_orm::DbErr>(())
                 })
             })
@@ -3935,8 +3936,8 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92050i64, 1i32)]).await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92050i64]).await?;
+                crate::stats::projection::project_messages_batch(tx, &[(92050i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92050i64]).await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -3990,8 +3991,8 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats_projection::project_messages_batch(tx, &[(92051i64, 1i32)]).await?;
-                crate::stats_projection::project_transfers_batch(tx, &[92051i64]).await?;
+                crate::stats::projection::project_messages_batch(tx, &[(92051i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92051i64]).await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -4345,9 +4346,9 @@ mod tests {
         for _ in 0..2 {
             db.transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats_projection::project_messages_batch(tx, &[(92004i64, 1i32)])
+                    crate::stats::projection::project_messages_batch(tx, &[(92004i64, 1i32)])
                         .await?;
-                    crate::stats_projection::project_transfers_batch(tx, &[92004i64]).await?;
+                    crate::stats::projection::project_transfers_batch(tx, &[92004i64]).await?;
                     Ok::<(), sea_orm::DbErr>(())
                 })
             })
@@ -4494,7 +4495,7 @@ mod tests {
         let res = db
             .transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats_projection::project_messages_batch(tx, &[(92006i64, 1i32)])
+                    crate::stats::projection::project_messages_batch(tx, &[(92006i64, 1i32)])
                         .await?;
                     Err::<(), sea_orm::DbErr>(sea_orm::DbErr::Custom("forced abort".into()))
                 })

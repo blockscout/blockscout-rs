@@ -63,7 +63,7 @@ fn parse_message_id_from_native_id(native_id: &str) -> i64 {
 
 use interchain_indexer_entity::sea_orm_active_enums::BridgeType;
 use interchain_indexer_logic::{
-    CrosschainIndexer, InterchainDatabase,
+    CrosschainIndexer, InterchainDatabase, StatsService,
     indexer::avalanche::{
         AvalancheChainConfig, AvalancheIndexer, settings::AvalancheIndexerSettings,
     },
@@ -203,15 +203,18 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         },
     ];
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &Default::default(),
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 
@@ -479,15 +482,18 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         ..Default::default()
     };
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 
@@ -671,15 +677,18 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         ..Default::default()
     };
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 
@@ -820,15 +829,18 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         ..Default::default()
     };
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 
@@ -983,15 +995,18 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         ..Default::default()
     };
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 
@@ -1156,15 +1171,18 @@ async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> R
         ..Default::default()
     };
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 
@@ -1299,15 +1317,18 @@ async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()>
         ..Default::default()
     };
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 
@@ -1494,15 +1515,18 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         ..Default::default()
     };
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 
@@ -1641,15 +1665,18 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         ..Default::default()
     };
 
-    let indexer = AvalancheIndexer::new(
+    let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
+        None,
+    ));
+    let indexer = AvalancheIndexer::new(
+        stats,
         bridge_config.bridge_id,
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
         &settings,
         &Default::default(),
-        None,
     )?;
     indexer.start().await?;
 

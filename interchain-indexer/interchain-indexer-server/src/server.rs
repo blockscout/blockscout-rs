@@ -18,7 +18,9 @@ use blockscout_service_launcher::{
     database, launcher, launcher::LaunchSettings, tracing as bs_tracing,
 };
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
-use interchain_indexer_logic::{ChainInfoService, InterchainDatabase, TokenInfoService};
+use interchain_indexer_logic::{
+    ChainInfoService, InterchainDatabase, StatsService, TokenInfoService,
+};
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     interchain_statistics_service_actix::route_interchain_statistics_service,
     status_service_actix::route_status_service,
@@ -32,7 +34,7 @@ const SERVICE_NAME: &str = "interchain_indexer";
 /// The **first** recomputation runs immediately after startup wiring (before the first sleep),
 /// so fresh stats are available without waiting a full period. Subsequent runs wait
 /// `period_secs` after each attempt (success or failure). If `period_secs` is `0`, does nothing.
-fn spawn_stats_chains_recalculation_worker(db: InterchainDatabase, period_secs: u64) {
+fn spawn_stats_chains_recalculation_worker(stats: Arc<StatsService>, period_secs: u64) {
     if period_secs == 0 {
         tracing::info!("stats_chains_recalculation_period_secs is 0: periodic refresh disabled");
         return;
@@ -41,7 +43,7 @@ fn spawn_stats_chains_recalculation_worker(db: InterchainDatabase, period_secs: 
     tokio::spawn(async move {
         loop {
             tracing::info!("stats_chains recomputation started");
-            match db.recompute_stats_chains().await {
+            match stats.recompute_stats_chains().await {
                 Ok(()) => tracing::info!("stats_chains recomputation succeeded"),
                 Err(err) => tracing::error!(
                     err = ?err,
@@ -113,13 +115,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         chains_providers,
         settings.token_info.clone(),
     ));
+    let stats = Arc::new(StatsService::new(
+        db.clone(),
+        Some(token_info_service.clone()),
+    ));
 
     if settings.stats_backfill_on_start {
         tracing::info!(
             "stats_backfill_on_start enabled: running statistics projection; async token enrichment will run after each batch outside DB transactions"
         );
-        interchain_db
-            .backfill_stats_until_idle_with_token_enrichment(Some(token_info_service.clone()))
+        stats
+            .backfill_stats_until_idle_with_token_enrichment()
             .await?;
     }
 
@@ -182,12 +188,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let chain_providers_for_indexers = create_provider_pools_from_chains(chains.clone()).await?;
 
     let indexers = spawn_configured_indexers(
-        interchain_db.clone(),
+        stats.clone(),
         &bridges,
         &chains,
         &chain_providers_for_indexers,
         &settings,
-        Some(token_info_service.clone()),
     )
     .await?;
 
@@ -221,7 +226,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let http_router = router;
 
     let stats_chains_period_secs = settings.stats_chains_recalculation_period_secs;
-    spawn_stats_chains_recalculation_worker(interchain_db.clone(), stats_chains_period_secs);
+    spawn_stats_chains_recalculation_worker(stats.clone(), stats_chains_period_secs);
 
     let launch_settings = LaunchSettings {
         service_name: SERVICE_NAME.to_string(),

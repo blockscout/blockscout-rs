@@ -6,7 +6,7 @@ use interchain_indexer_entity::{
 };
 use itertools::Itertools;
 use sea_orm::{
-    ActiveValue, ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, Iterable, QueryFilter,
+    ActiveValue, DatabaseTransaction, DbErr, EntityTrait, Iterable, QueryFilter,
     sea_query::{Expr, OnConflict},
 };
 use std::collections::HashSet;
@@ -97,49 +97,6 @@ pub(super) async fn flush_to_final_storage(
     batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
     batched_upsert(tx, &transfers, crosschain_transfers_on_conflict()).await?;
 
-    Ok(())
-}
-
-/// Stats for rows that just became final (`is_final`). Must run in the same transaction as
-/// `flush_to_final_storage`, after upserts.
-pub(super) async fn apply_stats_for_finalized_batch(
-    tx: &DatabaseTransaction,
-    finalized: &[ConsolidatedMessage],
-) -> Result<(), DbErr> {
-    if finalized.is_empty() {
-        return Ok(());
-    }
-    let mut msg_pks = Vec::with_capacity(finalized.len());
-    for c in finalized {
-        let (mid, brid) = match (&c.message.id, &c.message.bridge_id) {
-            (ActiveValue::Set(mid), ActiveValue::Set(brid)) => (*mid, *brid),
-            _ => {
-                return Err(DbErr::Custom(
-                    "finalized consolidated message must have id and bridge_id set".into(),
-                ));
-            }
-        };
-        msg_pks.push((mid, brid));
-    }
-
-    crate::stats_projection::project_messages_batch(tx, &msg_pks).await?;
-
-    let transfer_ids: Vec<i64> = crosschain_transfers::Entity::find()
-        .filter(
-            Expr::tuple([
-                Expr::col(crosschain_transfers::Column::MessageId).into(),
-                Expr::col(crosschain_transfers::Column::BridgeId).into(),
-            ])
-            .in_tuples(msg_pks.iter().copied()),
-        )
-        .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
-        .all(tx)
-        .await?
-        .into_iter()
-        .map(|t| t.id)
-        .collect();
-
-    crate::stats_projection::project_transfers_batch(tx, &transfer_ids).await?;
     Ok(())
 }
 

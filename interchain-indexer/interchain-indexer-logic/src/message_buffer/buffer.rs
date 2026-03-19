@@ -13,7 +13,7 @@ use super::{
     metrics,
     types::{Consolidate, Key},
 };
-use crate::{InterchainDatabase, TokenInfoService, settings::MessageBufferSettings};
+use crate::{InterchainDatabase, StatsService, TokenInfoService, settings::MessageBufferSettings};
 
 /// Tiered message buffer with hot (memory) and cold (Postgres) storage.
 ///
@@ -24,10 +24,8 @@ pub struct MessageBuffer<T: Consolidate + Default> {
     pub(super) inner: DashMap<Key, BufferItem<T>>,
     /// Configuration
     pub(super) config: MessageBufferSettings,
-    /// Database connection for cold tier operations
-    pub(super) db: InterchainDatabase,
-    /// Optional: async token-info fetch after finalized stats projection (non-blocking).
-    pub(super) token_info: Option<Arc<TokenInfoService>>,
+    /// Statistics orchestration (projection, enrichment kickoff) and DB access for cold tier.
+    pub(super) stats: Arc<StatsService>,
     /// Lock for maintenance operations (offload/flush)
     pub(super) maintenance_lock: RwLock<()>,
 }
@@ -37,28 +35,37 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
     ///
     /// Note: no data is eagerly loaded from cold storage. Entries are restored
     /// on-demand via `get_mut_or_default` / `alter`.
-    #[allow(dead_code)] // embedders/tests; production indexer uses [`Self::new_with_token_info`]
+    #[allow(dead_code)] // embedders/tests; production indexer uses [`Self::new_with_stats`]
     pub fn new(db: InterchainDatabase, config: MessageBufferSettings) -> Arc<Self> {
-        Self::new_with_token_info(db, config, None)
+        Self::new_with_stats(Arc::new(StatsService::new(Arc::new(db), None)), config)
     }
 
+    pub fn new_with_stats(stats: Arc<StatsService>, config: MessageBufferSettings) -> Arc<Self> {
+        Arc::new(Self {
+            inner: DashMap::new(),
+            config,
+            stats,
+            maintenance_lock: RwLock::new(()),
+        })
+    }
+
+    /// Convenience constructor for embedders that do not share an [`Arc<StatsService>`].
+    #[allow(dead_code)]
     pub fn new_with_token_info(
         db: InterchainDatabase,
         config: MessageBufferSettings,
         token_info: Option<Arc<TokenInfoService>>,
     ) -> Arc<Self> {
-        Arc::new(Self {
-            inner: DashMap::new(),
+        Self::new_with_stats(
+            Arc::new(StatsService::new(Arc::new(db), token_info)),
             config,
-            db,
-            token_info,
-            maintenance_lock: RwLock::new(()),
-        })
+        )
     }
 
     async fn restore(&self, key: Key) -> Result<Option<BufferItem<T>>> {
         let row = self
-            .db
+            .stats
+            .interchain_db()
             .get_pending_message(key.message_id, key.bridge_id as i32)
             .await?;
 
