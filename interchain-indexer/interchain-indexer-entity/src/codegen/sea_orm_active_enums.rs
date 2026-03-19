@@ -11,8 +11,8 @@ pub enum BridgeType {
     AvalancheNative,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "edge_decimals_side")]
-pub enum EdgeDecimalsSide {
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "edge_amount_side")]
+pub enum EdgeAmountSide {
     #[sea_orm(string_value = "source")]
     Source,
     #[sea_orm(string_value = "destination")]

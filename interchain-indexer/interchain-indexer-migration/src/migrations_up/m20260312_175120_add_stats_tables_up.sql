@@ -29,7 +29,7 @@ CREATE TABLE stats_asset_tokens (
     UNIQUE (chain_id, token_address)
 );
 
-CREATE TYPE edge_decimals_side AS ENUM ('source', 'destination');
+CREATE TYPE edge_amount_side AS ENUM ('source', 'destination');
 
 -- stats_asset_edges: aggregated movement counters per asset per (src_chain, dst_chain)
 CREATE TABLE stats_asset_edges (
@@ -48,7 +48,7 @@ CREATE TABLE stats_asset_edges (
   transfers_count     BIGINT NOT NULL DEFAULT 0,
   cumulative_amount   NUMERIC(78,0) NOT NULL DEFAULT 0,
   decimals            SMALLINT,
-  decimals_side       edge_decimals_side NOT NULL, -- shouldn't be changed after edge creation
+  amount_side         edge_amount_side NOT NULL, -- which side's amounts are summed into cumulative_amount; immutable after edge creation
 
   created_at          TIMESTAMP NOT NULL DEFAULT now(),
   updated_at          TIMESTAMP NOT NULL DEFAULT now(),

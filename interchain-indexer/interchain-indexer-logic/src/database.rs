@@ -2,7 +2,7 @@ use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, pending_messages,
-    sea_orm_active_enums::{EdgeDecimalsSide, MessageStatus, TransferType},
+    sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
 };
 use parking_lot::RwLock;
@@ -520,14 +520,14 @@ impl InterchainDatabase {
     }
 
     /// Creates or updates a stats asset edge: on insert sets transfers_count=1 and cumulative_amount;
-    /// on conflict increments transfers_count and adds to cumulative_amount. Preserves decimals_side.
+    /// on conflict increments transfers_count and adds to cumulative_amount. Preserves `amount_side`.
     pub async fn create_or_update_stats_asset_edge(
         &self,
         stats_asset_id: i64,
         src_chain_id: i64,
         dst_chain_id: i64,
         amount: sea_orm::prelude::BigDecimal,
-        decimals_side: EdgeDecimalsSide,
+        amount_side: EdgeAmountSide,
         decimals: Option<i16>,
     ) -> anyhow::Result<()> {
         let existing =
@@ -572,7 +572,7 @@ impl InterchainDatabase {
                 transfers_count: ActiveValue::Set(1),
                 cumulative_amount: ActiveValue::Set(amount),
                 decimals: ActiveValue::Set(decimals),
-                decimals_side: ActiveValue::Set(decimals_side),
+                amount_side: ActiveValue::Set(amount_side),
                 ..Default::default()
             };
             stats_asset_edges::Entity::insert(model)
@@ -592,7 +592,7 @@ impl InterchainDatabase {
         Ok(())
     }
 
-    /// Updates decimals for an existing edge. Does not change decimals_side.
+    /// Updates decimals for an existing edge. Does not change `amount_side`.
     pub async fn update_edge_decimals(
         &self,
         stats_asset_id: i64,
@@ -1557,7 +1557,8 @@ impl InterchainDatabase {
 
     /// Push token metadata/decimals into `stats_assets` / `stats_asset_edges` for rows linked via
     /// `stats_asset_tokens`. Only fills empty stats fields; edge `decimals` only when NULL and
-    /// `decimals_side` matches this token's chain role; logs and skips on conflicting decimals.
+    /// `amount_side` matches this token's chain (source vs destination for aggregated amounts);
+    /// logs and skips on conflicting decimals.
     pub async fn propagate_token_info_to_stats_tables(
         &self,
         chain_id: i64,
@@ -1626,11 +1627,11 @@ impl InterchainDatabase {
                 .await?;
 
             for edge in edges {
-                let side_matches = match edge.decimals_side {
-                    EdgeDecimalsSide::Source => edge.src_chain_id == chain_id,
-                    EdgeDecimalsSide::Destination => edge.dst_chain_id == chain_id,
+                let amount_side_matches_chain = match edge.amount_side {
+                    EdgeAmountSide::Source => edge.src_chain_id == chain_id,
+                    EdgeAmountSide::Destination => edge.dst_chain_id == chain_id,
                 };
-                if !side_matches {
+                if !amount_side_matches_chain {
                     continue;
                 }
                 let Some(td) = token.decimals else {
@@ -1995,7 +1996,7 @@ mod tests {
     use chrono::Utc;
     use interchain_indexer_entity::{
         chains, crosschain_messages, crosschain_transfers,
-        sea_orm_active_enums::{EdgeDecimalsSide, MessageStatus},
+        sea_orm_active_enums::{EdgeAmountSide, MessageStatus},
         stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
     };
     use sea_orm::{
@@ -2377,7 +2378,7 @@ mod tests {
                 1,
                 2,
                 amount.clone(),
-                EdgeDecimalsSide::Source,
+                EdgeAmountSide::Source,
                 Some(18),
             )
             .await
@@ -2389,7 +2390,7 @@ mod tests {
             .unwrap();
         assert_eq!(edge.transfers_count, 1);
         assert_eq!(edge.cumulative_amount, amount);
-        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Source);
+        assert_eq!(edge.amount_side, EdgeAmountSide::Source);
         assert_eq!(edge.decimals, Some(18));
 
         interchain_db
@@ -2398,7 +2399,7 @@ mod tests {
                 1,
                 2,
                 BigDecimal::from(500u64),
-                EdgeDecimalsSide::Source,
+                EdgeAmountSide::Source,
                 None,
             )
             .await
@@ -2410,7 +2411,7 @@ mod tests {
             .unwrap();
         assert_eq!(edge2.transfers_count, 2);
         assert_eq!(edge2.cumulative_amount, BigDecimal::from(1500u64));
-        assert_eq!(edge2.decimals_side, EdgeDecimalsSide::Source);
+        assert_eq!(edge2.amount_side, EdgeAmountSide::Source);
     }
 
     #[tokio::test]
@@ -2443,7 +2444,7 @@ mod tests {
                 1,
                 2,
                 BigDecimal::from(1u64),
-                EdgeDecimalsSide::Destination,
+                EdgeAmountSide::Destination,
                 None,
             )
             .await
@@ -2454,7 +2455,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(edge.decimals, None);
-        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
+        assert_eq!(edge.amount_side, EdgeAmountSide::Destination);
 
         interchain_db
             .update_edge_decimals(asset.id, 1, 2, 6)
@@ -2466,7 +2467,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(edge2.decimals, Some(6));
-        assert_eq!(edge2.decimals_side, EdgeDecimalsSide::Destination);
+        assert_eq!(edge2.amount_side, EdgeAmountSide::Destination);
     }
 
     #[tokio::test]
@@ -2706,8 +2707,20 @@ mod tests {
             init_timestamp: Set(Utc::now().naive_utc()),
             src_chain_id: Set(src),
             dst_chain_id: Set(Some(dst)),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
             stats_processed: Set(0),
             ..Default::default()
+        }
+    }
+
+    fn completed_message_without_indexed_source(
+        id: i64,
+        src: i64,
+        dst: i64,
+    ) -> crosschain_messages::ActiveModel {
+        crosschain_messages::ActiveModel {
+            src_tx_hash: Set(None),
+            ..completed_message(id, src, dst)
         }
     }
 
@@ -2833,14 +2846,16 @@ mod tests {
             .unwrap();
         assert_eq!(edge.transfers_count, 1);
         assert_eq!(edge.cumulative_amount, BigDecimal::from(5_000u64));
-        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
+        assert_eq!(edge.amount_side, EdgeAmountSide::Source);
     }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn stats_projection_edge_uses_destination_when_source_decimals_unknown() {
-        let _db =
-            init_db("stats_projection_edge_uses_destination_when_source_decimals_unknown").await;
+    async fn stats_projection_edge_uses_source_when_source_indexed_even_without_source_decimals() {
+        let _db = init_db(
+            "stats_projection_edge_uses_source_when_source_indexed_even_without_source_decimals",
+        )
+        .await;
         let conn = _db.client();
         let db = conn.as_ref();
         seed_minimal_bridge(db).await;
@@ -2898,9 +2913,9 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
-        assert_eq!(edge.decimals, Some(8));
-        assert_eq!(edge.cumulative_amount, BigDecimal::from(50u64));
+        assert_eq!(edge.amount_side, EdgeAmountSide::Source);
+        assert_eq!(edge.decimals, None);
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(100u64));
     }
 
     #[tokio::test]
@@ -2964,15 +2979,15 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Source);
+        assert_eq!(edge.amount_side, EdgeAmountSide::Source);
         assert_eq!(edge.decimals, Some(6));
         assert_eq!(edge.cumulative_amount, BigDecimal::from(100u64));
     }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn stats_projection_edge_decimals_side_sticky_uses_destination_amounts() {
-        let _db = init_db("stats_projection_edge_decimals_side_sticky").await;
+    async fn stats_projection_edge_amount_side_sticky_uses_source_amounts_when_source_indexed() {
+        let _db = init_db("stats_projection_edge_amount_side_sticky_uses_source_amounts").await;
         let conn = _db.client();
         let db = conn.as_ref();
         seed_minimal_bridge(db).await;
@@ -3062,8 +3077,78 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
-        assert_eq!(edge.cumulative_amount, BigDecimal::from(17u64));
+        assert_eq!(edge.amount_side, EdgeAmountSide::Source);
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(1887u64));
+        assert_eq!(edge.decimals, Some(18));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_edge_uses_destination_when_source_chain_not_indexed() {
+        let _db =
+            init_db("stats_projection_edge_uses_destination_when_source_chain_not_indexed").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let addr_a = [0xd1u8; 20].to_vec();
+        let addr_b = [0xd2u8; 20].to_vec();
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(100),
+            address: Set(addr_b.clone()),
+            decimals: Set(Some(8)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message_without_indexed_source(
+            92032, 1, 100,
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92032),
+            message_id: Set(92032),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(100u64)),
+            dst_amount: Set(BigDecimal::from(50u64)),
+            token_src_address: Set(addr_a.clone()),
+            token_dst_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats_projection::project_messages_batch(tx, &[(92032i64, 1i32)]).await?;
+                crate::stats_projection::project_transfers_batch(tx, &[92032i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92032i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let aid = t.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.amount_side, EdgeAmountSide::Destination);
+        assert_eq!(edge.decimals, Some(8));
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(50u64));
     }
 
     #[tokio::test]
@@ -3135,9 +3220,9 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(edge.decimals_side, EdgeDecimalsSide::Destination);
+        assert_eq!(edge.amount_side, EdgeAmountSide::Source);
         assert_eq!(edge.transfers_count, 2);
-        assert_eq!(edge.cumulative_amount, BigDecimal::from(17u64));
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(1887u64));
     }
 
     #[tokio::test]
@@ -3193,7 +3278,7 @@ mod tests {
             transfers_count: Set(0),
             cumulative_amount: Set(BigDecimal::from(0u64)),
             decimals: Set(Some(17)),
-            decimals_side: Set(EdgeDecimalsSide::Source),
+            amount_side: Set(EdgeAmountSide::Source),
             ..Default::default()
         })
         .exec(db)
@@ -3490,7 +3575,7 @@ mod tests {
             transfers_count: Set(0),
             cumulative_amount: Set(BigDecimal::from(0u64)),
             decimals: Set(None),
-            decimals_side: Set(EdgeDecimalsSide::Destination),
+            amount_side: Set(EdgeAmountSide::Destination),
             ..Default::default()
         })
         .exec(db)
@@ -3570,7 +3655,7 @@ mod tests {
             transfers_count: Set(0),
             cumulative_amount: Set(BigDecimal::from(0u64)),
             decimals: Set(None),
-            decimals_side: Set(EdgeDecimalsSide::Destination),
+            amount_side: Set(EdgeAmountSide::Destination),
             ..Default::default()
         })
         .exec(db)
@@ -3645,7 +3730,7 @@ mod tests {
             transfers_count: Set(0),
             cumulative_amount: Set(BigDecimal::from(0u64)),
             decimals: Set(Some(5)),
-            decimals_side: Set(EdgeDecimalsSide::Destination),
+            amount_side: Set(EdgeAmountSide::Destination),
             ..Default::default()
         })
         .exec(db)
@@ -3971,7 +4056,7 @@ mod tests {
                 1,
                 100,
                 BigDecimal::from(1u64),
-                EdgeDecimalsSide::Source,
+                EdgeAmountSide::Source,
                 None,
             )
             .await

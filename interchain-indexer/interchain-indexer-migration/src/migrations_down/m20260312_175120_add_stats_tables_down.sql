@@ -15,7 +15,7 @@ ALTER TABLE crosschain_transfers
   DROP COLUMN IF EXISTS stats_processed;
 
 DROP TABLE IF EXISTS stats_asset_edges;
-DROP TYPE IF EXISTS edge_decimals_side;
+DROP TYPE IF EXISTS edge_amount_side;
 
 DROP TABLE IF EXISTS stats_asset_tokens;
 DROP TABLE IF EXISTS stats_assets;

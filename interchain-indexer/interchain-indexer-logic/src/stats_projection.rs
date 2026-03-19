@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use chrono::Utc;
 use interchain_indexer_entity::{
     crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{EdgeDecimalsSide, MessageStatus},
+    sea_orm_active_enums::{EdgeAmountSide, MessageStatus},
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_messages, tokens,
 };
 use sea_orm::{
@@ -36,7 +36,7 @@ pub fn token_keys_for_stats_enrichment_from_transfer_models(
 /// Returns how many message rows were updated.
 pub async fn project_messages_batch(
     tx: &DatabaseTransaction,
-    message_pks: &[(i64, i32)],
+    message_pks: &[(i64, i32)], // [(message_id, bridge_id)]
 ) -> Result<usize, DbErr> {
     if message_pks.is_empty() {
         return Ok(0);
@@ -124,8 +124,13 @@ pub async fn project_messages_batch(
     Ok(rows.len())
 }
 
+// `(chain_id, token_address)`
 type TokenKey = (i64, Vec<u8>);
 
+// `(message_id, bridge_id)`
+type MessageKey = (i64, i32);
+
+// Returns a map of `TokenKey` to `stats_asset_id`.
 async fn load_token_asset_map(
     tx: &DatabaseTransaction,
     pairs: &HashSet<TokenKey>,
@@ -178,6 +183,34 @@ async fn load_token_rows_map(
             .await?;
         for r in rows {
             map.insert((r.chain_id, r.address.clone()), r);
+        }
+    }
+    Ok(map)
+}
+
+async fn load_message_rows_map(
+    tx: &DatabaseTransaction,
+    pairs: &HashSet<MessageKey>,
+) -> Result<HashMap<MessageKey, crosschain_messages::Model>, DbErr> {
+    if pairs.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let list: Vec<MessageKey> = pairs.iter().copied().collect();
+    let batch_size = crate::bulk::PG_BIND_PARAM_LIMIT / 2;
+    let mut map = HashMap::new();
+    for batch in list.chunks(batch_size.max(1)) {
+        let rows = crosschain_messages::Entity::find()
+            .filter(
+                Expr::tuple([
+                    Expr::col(crosschain_messages::Column::Id).into(),
+                    Expr::col(crosschain_messages::Column::BridgeId).into(),
+                ])
+                .in_tuples(batch.iter().copied()),
+            )
+            .all(tx)
+            .await?;
+        for r in rows {
+            map.insert((r.id, r.bridge_id), r);
         }
     }
     Ok(map)
@@ -448,17 +481,53 @@ fn reject_edge_decimals_mismatch(
     ))
 }
 
-/// Per-edge accumulator: mirrors sequential edge updates (sticky `decimals_side`, decimals fill).
+/// Resolves the transfer amount for this edge, updates `working_decimals`, and rejects on mismatch.
+fn edge_transfer_amount_for_side(
+    amount_side: &EdgeAmountSide,
+    working_decimals: &mut Option<i16>,
+    transfer: &crosschain_transfers::Model,
+    src_decimals: Option<i16>,
+    dst_decimals: Option<i16>,
+    stats_asset_id: i64,
+) -> Result<BigDecimal, DbErr> {
+    let amount = match amount_side {
+        EdgeAmountSide::Source => transfer.src_amount.clone(),
+        EdgeAmountSide::Destination => transfer.dst_amount.clone(),
+    };
+    let incoming_dec = match amount_side {
+        EdgeAmountSide::Source => src_decimals,
+        EdgeAmountSide::Destination => dst_decimals,
+    };
+    if let (Some(stored), Some(inc)) = (*working_decimals, incoming_dec)
+        && stored != inc
+    {
+        return Err(reject_edge_decimals_mismatch(
+            stats_asset_id,
+            transfer.token_src_chain_id,
+            transfer.token_dst_chain_id,
+            stored,
+            inc,
+        ));
+    }
+    if working_decimals.is_none()
+        && let Some(d) = incoming_dec
+    {
+        *working_decimals = Some(d);
+    }
+    Ok(amount)
+}
+
+/// Per-edge accumulator: mirrors sequential edge updates (sticky `amount_side`, decimals fill).
 enum EdgeAccum {
     FromDb {
         db_decimals: Option<i16>,
         working_decimals: Option<i16>,
-        side: EdgeDecimalsSide,
+        amount_side: EdgeAmountSide,
         delta_count: i64,
         delta_amount: BigDecimal,
     },
     NewInBatch {
-        side: EdgeDecimalsSide,
+        amount_side: EdgeAmountSide,
         working_decimals: Option<i16>,
         count: i64,
         cumulative: BigDecimal,
@@ -466,14 +535,10 @@ enum EdgeAccum {
 }
 
 impl EdgeAccum {
-    #[allow(clippy::too_many_arguments)]
     fn apply_transfer(
         &mut self,
         stats_asset_id: i64,
-        src_chain_id: i64,
-        dst_chain_id: i64,
-        src_amount: &BigDecimal,
-        dst_amount: &BigDecimal,
+        transfer: &crosschain_transfers::Model,
         src_decimals: Option<i16>,
         dst_decimals: Option<i16>,
     ) -> Result<(), DbErr> {
@@ -481,68 +546,36 @@ impl EdgeAccum {
             EdgeAccum::FromDb {
                 db_decimals: _,
                 working_decimals,
-                side,
+                amount_side,
                 delta_count,
                 delta_amount,
             } => {
-                let amount = match side {
-                    EdgeDecimalsSide::Source => src_amount.clone(),
-                    EdgeDecimalsSide::Destination => dst_amount.clone(),
-                };
-                let incoming_dec = match side {
-                    EdgeDecimalsSide::Source => src_decimals,
-                    EdgeDecimalsSide::Destination => dst_decimals,
-                };
-                if let (Some(stored), Some(inc)) = (*working_decimals, incoming_dec)
-                    && stored != inc
-                {
-                    return Err(reject_edge_decimals_mismatch(
-                        stats_asset_id,
-                        src_chain_id,
-                        dst_chain_id,
-                        stored,
-                        inc,
-                    ));
-                }
-                if working_decimals.is_none()
-                    && let Some(d) = incoming_dec
-                {
-                    *working_decimals = Some(d);
-                }
+                let amount = edge_transfer_amount_for_side(
+                    amount_side,
+                    working_decimals,
+                    transfer,
+                    src_decimals,
+                    dst_decimals,
+                    stats_asset_id,
+                )?;
                 *delta_count += 1;
                 *delta_amount += amount;
                 Ok(())
             }
             EdgeAccum::NewInBatch {
-                side,
+                amount_side,
                 working_decimals,
                 count,
                 cumulative,
             } => {
-                let amount = match side {
-                    EdgeDecimalsSide::Source => src_amount.clone(),
-                    EdgeDecimalsSide::Destination => dst_amount.clone(),
-                };
-                let incoming_dec = match side {
-                    EdgeDecimalsSide::Source => src_decimals,
-                    EdgeDecimalsSide::Destination => dst_decimals,
-                };
-                if let (Some(stored), Some(inc)) = (*working_decimals, incoming_dec)
-                    && stored != inc
-                {
-                    return Err(reject_edge_decimals_mismatch(
-                        stats_asset_id,
-                        src_chain_id,
-                        dst_chain_id,
-                        stored,
-                        inc,
-                    ));
-                }
-                if working_decimals.is_none()
-                    && let Some(d) = incoming_dec
-                {
-                    *working_decimals = Some(d);
-                }
+                let amount = edge_transfer_amount_for_side(
+                    amount_side,
+                    working_decimals,
+                    transfer,
+                    src_decimals,
+                    dst_decimals,
+                    stats_asset_id,
+                )?;
                 *count += 1;
                 *cumulative += amount;
                 Ok(())
@@ -553,6 +586,7 @@ impl EdgeAccum {
 
 /// Project eligible transfers into stats asset tables and mark them processed.
 /// Eligible: `stats_processed = 0` and parent message `completed`.
+/// Returns how many transfer rows were counted.
 pub async fn project_transfers_batch(
     tx: &DatabaseTransaction,
     transfer_ids: &[i64],
@@ -570,7 +604,6 @@ pub async fn project_transfers_batch(
             crosschain_transfers::Relation::CrosschainMessages.def(),
         )
         .filter(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
-        .filter(crosschain_messages::Column::StatsProcessed.gt(0i16))
         .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
         .filter(crosschain_transfers::Column::Id.is_in(ids.clone()))
         .all(tx)
@@ -584,12 +617,15 @@ pub async fn project_transfers_batch(
     transfers.sort_by_key(|t| t.id);
 
     let mut pairs: HashSet<TokenKey> = HashSet::new();
+    let mut message_keys: HashSet<MessageKey> = HashSet::new();
     for t in &transfers {
         pairs.insert((t.token_src_chain_id, t.token_src_address.clone()));
         pairs.insert((t.token_dst_chain_id, t.token_dst_address.clone()));
+        message_keys.insert((t.message_id, t.bridge_id));
     }
     let mut token_to_asset = load_token_asset_map(tx, &pairs).await?;
     let token_rows = load_token_rows_map(tx, &pairs).await?;
+    let message_rows = load_message_rows_map(tx, &message_keys).await?;
 
     use std::collections::hash_map::Entry;
 
@@ -605,40 +641,36 @@ pub async fn project_transfers_batch(
     let mut edge_acc: HashMap<EdgeKey, EdgeAccum> = HashMap::new();
 
     for (t, &asset_id) in transfers.iter().zip(&asset_ids) {
-        let key = (asset_id, t.token_src_chain_id, t.token_dst_chain_id);
+        let edge_key: EdgeKey = (asset_id, t.token_src_chain_id, t.token_dst_chain_id);
         let k_src = (t.token_src_chain_id, t.token_src_address.clone());
         let k_dst = (t.token_dst_chain_id, t.token_dst_address.clone());
         let src_dec = token_decimals(&token_rows, &k_src);
         let dst_dec = token_decimals(&token_rows, &k_dst);
+        let source_chain_indexed = message_rows
+            .get(&(t.message_id, t.bridge_id))
+            .is_some_and(|message| message.src_tx_hash.is_some());
 
-        match edge_acc.entry(key) {
+        match edge_acc.entry(edge_key) {
             Entry::Vacant(v) => {
-                if let Some(edge) = existing_edges.get(&key) {
+                if let Some(edge) = existing_edges.get(&edge_key) {
                     let mut acc = EdgeAccum::FromDb {
                         db_decimals: edge.decimals,
                         working_decimals: edge.decimals,
-                        side: edge.decimals_side.clone(),
+                        amount_side: edge.amount_side.clone(),
                         delta_count: 0,
                         delta_amount: BigDecimal::from(0u64),
                     };
-                    acc.apply_transfer(
-                        asset_id,
-                        t.token_src_chain_id,
-                        t.token_dst_chain_id,
-                        &t.src_amount,
-                        &t.dst_amount,
-                        src_dec,
-                        dst_dec,
-                    )?;
+                    acc.apply_transfer(asset_id, t, src_dec, dst_dec)?;
                     v.insert(acc);
                 } else {
-                    let (side, cumulative, decimals) = if src_dec.is_some() {
-                        (EdgeDecimalsSide::Source, t.src_amount.clone(), src_dec)
+                    let (amount_side, cumulative, decimals) =
+                        if source_chain_indexed || src_dec.is_some() {
+                        (EdgeAmountSide::Source, t.src_amount.clone(), src_dec)
                     } else {
-                        (EdgeDecimalsSide::Destination, t.dst_amount.clone(), dst_dec)
+                        (EdgeAmountSide::Destination, t.dst_amount.clone(), dst_dec)
                     };
                     v.insert(EdgeAccum::NewInBatch {
-                        side,
+                        amount_side,
                         working_decimals: decimals,
                         count: 1,
                         cumulative,
@@ -646,15 +678,7 @@ pub async fn project_transfers_batch(
                 }
             }
             Entry::Occupied(mut o) => {
-                o.get_mut().apply_transfer(
-                    asset_id,
-                    t.token_src_chain_id,
-                    t.token_dst_chain_id,
-                    &t.src_amount,
-                    &t.dst_amount,
-                    src_dec,
-                    dst_dec,
-                )?;
+                o.get_mut().apply_transfer(asset_id, t, src_dec, dst_dec)?;
             }
         }
     }
@@ -693,7 +717,7 @@ pub async fn project_transfers_batch(
                 ub.exec(tx).await?;
             }
             EdgeAccum::NewInBatch {
-                side,
+                amount_side,
                 working_decimals,
                 count,
                 cumulative,
@@ -706,7 +730,7 @@ pub async fn project_transfers_batch(
                     transfers_count: Set(count),
                     cumulative_amount: Set(cumulative),
                     decimals: Set(working_decimals),
-                    decimals_side: Set(side),
+                    amount_side: Set(amount_side),
                     ..Default::default()
                 })
                 .exec(tx)
