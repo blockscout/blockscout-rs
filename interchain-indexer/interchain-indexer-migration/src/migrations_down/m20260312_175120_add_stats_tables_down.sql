@@ -4,6 +4,11 @@ DROP TABLE IF EXISTS stats_messages;
 
 DROP TABLE IF EXISTS stats_chains;
 
+DROP INDEX IF EXISTS crosschain_transfers_dst_user_by_chain_idx;
+DROP INDEX IF EXISTS crosschain_transfers_src_user_by_chain_idx;
+DROP INDEX IF EXISTS crosschain_messages_dst_user_by_chain_idx;
+DROP INDEX IF EXISTS crosschain_messages_src_user_by_chain_idx;
+
 DROP INDEX IF EXISTS stats_asset_edges_dst_chain_idx;
 DROP INDEX IF EXISTS stats_asset_edges_src_chain_idx;
 

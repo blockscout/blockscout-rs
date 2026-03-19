@@ -53,6 +53,12 @@ pub struct Settings {
     /// (after migrations), before indexers start. Env: `INTERCHAIN_INDEXER__STATS_BACKFILL_ON_START`.
     #[serde(default)]
     pub stats_backfill_on_start: bool,
+
+    /// Interval between full `stats_chains` recomputations (distinct message/transfer users per chain).
+    /// Set to `0` to disable the background task. Unit: seconds.
+    /// Env: `INTERCHAIN_INDEXER__STATS_CHAINS_RECALCULATION_PERIOD_SECS`.
+    #[serde(default = "default_stats_chains_recalculation_period_secs")]
+    pub stats_chains_recalculation_period_secs: u64,
 }
 
 impl ConfigSettings for Settings {
@@ -61,6 +67,10 @@ impl ConfigSettings for Settings {
 
 fn default_swagger_path() -> PathBuf {
     blockscout_endpoint_swagger::default_swagger_path_from_service_name("interchain-indexer")
+}
+
+fn default_stats_chains_recalculation_period_secs() -> u64 {
+    3600
 }
 
 impl Settings {
@@ -86,6 +96,8 @@ impl Settings {
             api: Default::default(),
             buffer_settings: Default::default(),
             stats_backfill_on_start: false,
+            stats_chains_recalculation_period_secs: default_stats_chains_recalculation_period_secs(
+            ),
         }
     }
 }
@@ -118,6 +130,40 @@ mod tests {
         let v: StatsBackfillFlag = cfg.try_deserialize().expect("deserialize");
         assert!(v.stats_backfill_on_start);
         // Production: `INTERCHAIN_INDEXER__STATS_BACKFILL_ON_START=true` (same key via env layer).
+    }
+
+    fn stats_chains_period_default_for_test() -> u64 {
+        3600
+    }
+
+    #[derive(Deserialize)]
+    struct StatsChainsPeriod {
+        #[serde(default = "stats_chains_period_default_for_test")]
+        stats_chains_recalculation_period_secs: u64,
+    }
+
+    #[test]
+    fn stats_chains_recalculation_period_defaults_to_one_hour() {
+        let s = Settings::default("postgres://localhost/db".into());
+        assert_eq!(s.stats_chains_recalculation_period_secs, 3600);
+    }
+
+    #[test]
+    fn stats_chains_recalculation_period_deserializes_from_config() {
+        let cfg = Config::builder()
+            .set_override("stats_chains_recalculation_period_secs", 120u64)
+            .expect("set_override")
+            .build()
+            .expect("config");
+        let v: StatsChainsPeriod = cfg.try_deserialize().expect("deserialize");
+        assert_eq!(v.stats_chains_recalculation_period_secs, 120);
+    }
+
+    #[test]
+    fn stats_chains_recalculation_period_empty_config_uses_default_fn() {
+        let cfg = Config::builder().build().expect("config");
+        let v: StatsChainsPeriod = cfg.try_deserialize().expect("deserialize");
+        assert_eq!(v.stats_chains_recalculation_period_secs, 3600);
     }
 }
 

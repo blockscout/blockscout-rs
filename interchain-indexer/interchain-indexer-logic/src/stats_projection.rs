@@ -665,10 +665,10 @@ pub async fn project_transfers_batch(
                 } else {
                     let (amount_side, cumulative, decimals) =
                         if source_chain_indexed || src_dec.is_some() {
-                        (EdgeAmountSide::Source, t.src_amount.clone(), src_dec)
-                    } else {
-                        (EdgeAmountSide::Destination, t.dst_amount.clone(), dst_dec)
-                    };
+                            (EdgeAmountSide::Source, t.src_amount.clone(), src_dec)
+                        } else {
+                            (EdgeAmountSide::Destination, t.dst_amount.clone(), dst_dec)
+                        };
                     v.insert(EdgeAccum::NewInBatch {
                         amount_side,
                         working_decimals: decimals,

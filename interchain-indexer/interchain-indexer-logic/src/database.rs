@@ -9,12 +9,15 @@ use parking_lot::RwLock;
 use sea_orm::{
     ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
     JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
-    TransactionTrait,
+    StatementBuilder, TransactionTrait,
     entity::prelude::*,
     prelude::Expr,
-    sea_query::{Func, OnConflict},
+    sea_query::{Alias, Asterisk, Func, OnConflict, Query, SelectStatement, UnionType},
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use crate::{
     TokenInfoService,
@@ -78,6 +81,83 @@ pub struct InterchainDatabase {
     pub db: Arc<DatabaseConnection>,
 
     bridges_names: Arc<RwLock<HashMap<i32, String>>>, // Lazy loaded bridge names
+}
+
+/// Per-chain count of distinct `(chain_id, user_address)` from `crosschain_messages` (sender ∪ recipient).
+fn select_stats_chains_message_user_counts() -> SelectStatement {
+    let pairs = Query::select()
+        .expr_as(
+            Expr::col(crosschain_messages::Column::SrcChainId),
+            Alias::new("chain_id"),
+        )
+        .expr_as(
+            Expr::col(crosschain_messages::Column::SenderAddress),
+            Alias::new("addr"),
+        )
+        .from(crosschain_messages::Entity)
+        .and_where(Expr::col(crosschain_messages::Column::SenderAddress).is_not_null())
+        .union(
+            UnionType::Distinct,
+            Query::select()
+                .expr_as(
+                    Expr::col(crosschain_messages::Column::DstChainId),
+                    Alias::new("chain_id"),
+                )
+                .expr_as(
+                    Expr::col(crosschain_messages::Column::RecipientAddress),
+                    Alias::new("addr"),
+                )
+                .from(crosschain_messages::Entity)
+                .and_where(Expr::col(crosschain_messages::Column::DstChainId).is_not_null())
+                .and_where(Expr::col(crosschain_messages::Column::RecipientAddress).is_not_null())
+                .take(),
+        )
+        .take();
+
+    Query::select()
+        .column(Alias::new("chain_id"))
+        .expr_as(Func::count(Expr::col(Asterisk)), Alias::new("user_count"))
+        .from_subquery(pairs, Alias::new("u"))
+        .group_by_col(Alias::new("chain_id"))
+        .take()
+}
+
+/// Per-chain count of distinct `(chain_id, user_address)` from `crosschain_transfers` (sender ∪ recipient).
+fn select_stats_chains_transfer_user_counts() -> SelectStatement {
+    let pairs = Query::select()
+        .expr_as(
+            Expr::col(crosschain_transfers::Column::TokenSrcChainId),
+            Alias::new("chain_id"),
+        )
+        .expr_as(
+            Expr::col(crosschain_transfers::Column::SenderAddress),
+            Alias::new("addr"),
+        )
+        .from(crosschain_transfers::Entity)
+        .and_where(Expr::col(crosschain_transfers::Column::SenderAddress).is_not_null())
+        .union(
+            UnionType::Distinct,
+            Query::select()
+                .expr_as(
+                    Expr::col(crosschain_transfers::Column::TokenDstChainId),
+                    Alias::new("chain_id"),
+                )
+                .expr_as(
+                    Expr::col(crosschain_transfers::Column::RecipientAddress),
+                    Alias::new("addr"),
+                )
+                .from(crosschain_transfers::Entity)
+                .and_where(Expr::col(crosschain_transfers::Column::RecipientAddress).is_not_null())
+                .take(),
+        )
+        .take();
+
+    Query::select()
+        .column(Alias::new("chain_id"))
+        .expr_as(Func::count(Expr::col(Asterisk)), Alias::new("user_count"))
+        .from_subquery(pairs, Alias::new("u"))
+        .group_by_col(Alias::new("chain_id"))
+        .take()
 }
 
 impl InterchainDatabase {
@@ -663,6 +743,82 @@ impl InterchainDatabase {
                 Err(e.into())
             }
         }
+    }
+
+    /// Full refresh of `stats_chains` from `crosschain_messages` and `crosschain_transfers`.
+    ///
+    /// Counts distinct `(chain_id, address)` with **UNION** semantics between sender and recipient
+    /// roles (no status filter, no transfer–message join). Runs in a single transaction.
+    ///
+    /// Implementation: `DELETE` all `stats_chains` rows in this transaction, then batch-insert
+    /// the recomputed snapshot (`ON CONFLICT` matches insert-only after the delete).
+    pub async fn recompute_stats_chains(&self) -> anyhow::Result<()> {
+        #[derive(Debug, FromQueryResult)]
+        struct ChainUserCountRow {
+            chain_id: i64,
+            user_count: i64,
+        }
+
+        let txn = self.db.begin().await?;
+        let backend = txn.get_database_backend();
+
+        let message_rows = ChainUserCountRow::find_by_statement(StatementBuilder::build(
+            &select_stats_chains_message_user_counts(),
+            &backend,
+        ))
+        .all(&txn)
+        .await?;
+
+        let transfer_rows = ChainUserCountRow::find_by_statement(StatementBuilder::build(
+            &select_stats_chains_transfer_user_counts(),
+            &backend,
+        ))
+        .all(&txn)
+        .await?;
+
+        let mut message_by_chain: HashMap<i64, i64> = HashMap::new();
+        for r in message_rows {
+            message_by_chain.insert(r.chain_id, r.user_count);
+        }
+        let mut transfer_by_chain: HashMap<i64, i64> = HashMap::new();
+        for r in transfer_rows {
+            transfer_by_chain.insert(r.chain_id, r.user_count);
+        }
+
+        let mut chain_ids_set: BTreeSet<i64> = BTreeSet::new();
+        chain_ids_set.extend(message_by_chain.keys().copied());
+        chain_ids_set.extend(transfer_by_chain.keys().copied());
+        let chain_ids: Vec<i64> = chain_ids_set.into_iter().collect();
+
+        stats_chains::Entity::delete_many().exec(&txn).await?;
+
+        let models: Vec<stats_chains::ActiveModel> = chain_ids
+            .iter()
+            .map(|chain_id| stats_chains::ActiveModel {
+                chain_id: ActiveValue::Set(*chain_id),
+                unique_transfer_users_count: ActiveValue::Set(
+                    *transfer_by_chain.get(chain_id).unwrap_or(&0),
+                ),
+                unique_message_users_count: ActiveValue::Set(
+                    *message_by_chain.get(chain_id).unwrap_or(&0),
+                ),
+                ..Default::default()
+            })
+            .collect();
+
+        if !models.is_empty() {
+            let on_conflict = OnConflict::column(stats_chains::Column::ChainId)
+                .update_columns([
+                    stats_chains::Column::UniqueTransferUsersCount,
+                    stats_chains::Column::UniqueMessageUsersCount,
+                ])
+                .value(stats_chains::Column::UpdatedAt, Expr::current_timestamp())
+                .to_owned();
+            crate::bulk::batched_upsert(&txn, &models, on_conflict).await?;
+        }
+
+        txn.commit().await?;
+        Ok(())
     }
 
     /// Creates or increments the directional message count from src_chain_id to dst_chain_id.
@@ -1996,7 +2152,7 @@ mod tests {
     use chrono::Utc;
     use interchain_indexer_entity::{
         chains, crosschain_messages, crosschain_transfers,
-        sea_orm_active_enums::{EdgeAmountSide, MessageStatus},
+        sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
         stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
     };
     use sea_orm::{
@@ -2500,6 +2656,320 @@ mod tests {
             .unwrap();
         assert_eq!(row2.unique_transfer_users_count, 30);
         assert_eq!(row2.unique_message_users_count, 40);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn recompute_stats_chains_distinct_users_and_merges_message_transfer_sides() {
+        use alloy::primitives::address;
+        use interchain_indexer_entity::{bridge_contracts, bridges};
+
+        let _db = init_db("recompute_stats_chains_distinct").await;
+        let conn = _db.client();
+        let interchain_db = InterchainDatabase::new(conn.clone());
+
+        let c1 = 90_001i64;
+        let c2 = 90_002i64;
+        let c3 = 90_003i64;
+        let c4 = 90_004i64;
+        let c5 = 90_005i64;
+        let c6 = 90_006i64;
+        let c7 = 90_007i64;
+        let c_idle = 90_008i64;
+
+        let addr_a = address!("0x0000000000000000000000000000000000000a01")
+            .as_slice()
+            .to_vec();
+        let addr_b = address!("0x0000000000000000000000000000000000000b02")
+            .as_slice()
+            .to_vec();
+        let addr_c = address!("0x0000000000000000000000000000000000000c03")
+            .as_slice()
+            .to_vec();
+        let addr_same = address!("0x000000000000000000000000000000000000d00d")
+            .as_slice()
+            .to_vec();
+        let addr_x = address!("0x0000000000000000000000000000000000000e04")
+            .as_slice()
+            .to_vec();
+        let addr_y = address!("0x0000000000000000000000000000000000000f05")
+            .as_slice()
+            .to_vec();
+        let addr_t1 = address!("0x0000000000000000000000000000000000000111")
+            .as_slice()
+            .to_vec();
+        let addr_t2 = address!("0x0000000000000000000000000000000000000222")
+            .as_slice()
+            .to_vec();
+        let token = address!("0x1111111111111111111111111111111111111111")
+            .as_slice()
+            .to_vec();
+
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(c1),
+                name: Set("re_sc_c90001".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c2),
+                name: Set("re_sc_c90002".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c3),
+                name: Set("re_sc_c90003".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c4),
+                name: Set("re_sc_c90004".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c5),
+                name: Set("re_sc_c90005".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c6),
+                name: Set("re_sc_c90006".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c7),
+                name: Set("re_sc_c90007".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c_idle),
+                name: Set("re_sc_idle_no_stats".to_string()),
+                ..Default::default()
+            },
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        bridges::Entity::insert(bridges::ActiveModel {
+            id: Set(1),
+            name: Set("recompute_stats_chains_bridge".to_string()),
+            enabled: Set(true),
+            ..Default::default()
+        })
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        bridge_contracts::Entity::insert_many([
+            bridge_contracts::ActiveModel {
+                bridge_id: Set(1),
+                chain_id: Set(c1),
+                address: Set(vec![0x11; 20]),
+                ..Default::default()
+            },
+            bridge_contracts::ActiveModel {
+                bridge_id: Set(1),
+                chain_id: Set(c2),
+                address: Set(vec![0x22; 20]),
+                ..Default::default()
+            },
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        // Duplicate (c1, addr_a) as sender — counts once. (c2, addr_b) twice as recipient — once.
+        crosschain_messages::Entity::insert_many([
+            crosschain_messages::ActiveModel {
+                id: Set(50_001),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c1),
+                dst_chain_id: Set(Some(c2)),
+                sender_address: Set(Some(addr_a.clone())),
+                recipient_address: Set(Some(addr_b.clone())),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(50_002),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Completed),
+                src_chain_id: Set(c1),
+                dst_chain_id: Set(Some(c2)),
+                sender_address: Set(Some(addr_a.clone())),
+                recipient_address: Set(Some(addr_b.clone())),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            // c2 as src (addr_a), c3 as dst (addr_c) — message users on c2 include prior dst addr_b plus addr_a.
+            crosschain_messages::ActiveModel {
+                id: Set(50_003),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c2),
+                dst_chain_id: Set(Some(c3)),
+                sender_address: Set(Some(addr_a.clone())),
+                recipient_address: Set(Some(addr_c.clone())),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            // Same raw address on c4 (src) and c4 (dst from another hop) — one user on c4.
+            crosschain_messages::ActiveModel {
+                id: Set(50_004),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c4),
+                dst_chain_id: Set(Some(c5)),
+                sender_address: Set(Some(addr_same.clone())),
+                recipient_address: Set(Some(addr_x.clone())),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(50_005),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c5),
+                dst_chain_id: Set(Some(c4)),
+                sender_address: Set(Some(addr_y.clone())),
+                recipient_address: Set(Some(addr_same.clone())),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            // Failed status still counts toward stats_chains.
+            crosschain_messages::ActiveModel {
+                id: Set(50_006),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Failed),
+                src_chain_id: Set(c1),
+                dst_chain_id: Set(Some(c2)),
+                sender_address: Set(Some(addr_a.clone())),
+                recipient_address: Set(Some(addr_b.clone())),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            // Carrier message for transfer-only user paths (null message addresses).
+            crosschain_messages::ActiveModel {
+                id: Set(50_007),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c6),
+                dst_chain_id: Set(Some(c7)),
+                sender_address: Set(None),
+                recipient_address: Set(None),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(90_001),
+            message_id: Set(50_007),
+            bridge_id: Set(1),
+            index: Set(0),
+            r#type: Set(Some(TransferType::Erc20)),
+            token_src_chain_id: Set(c6),
+            token_dst_chain_id: Set(c7),
+            src_amount: Set(BigDecimal::from(1u64)),
+            dst_amount: Set(BigDecimal::from(1u64)),
+            token_src_address: Set(token.clone()),
+            token_dst_address: Set(token.clone()),
+            sender_address: Set(Some(addr_t1.clone())),
+            recipient_address: Set(Some(addr_t2.clone())),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        interchain_db
+            .upsert_stats_chains(c1, 999, 888)
+            .await
+            .unwrap();
+
+        interchain_db.recompute_stats_chains().await.unwrap();
+
+        let r1 = stats_chains::Entity::find_by_id(c1)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(r1.unique_message_users_count, 1, "c1: only addr_a");
+        assert_eq!(r1.unique_transfer_users_count, 0);
+
+        let r2 = stats_chains::Entity::find_by_id(c2)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            r2.unique_message_users_count, 2,
+            "c2: addr_b as dst, addr_a as src"
+        );
+        assert_eq!(r2.unique_transfer_users_count, 0);
+
+        let r3 = stats_chains::Entity::find_by_id(c3)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(r3.unique_message_users_count, 1);
+        assert_eq!(r3.unique_transfer_users_count, 0);
+
+        let r4 = stats_chains::Entity::find_by_id(c4)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            r4.unique_message_users_count, 1,
+            "c4: union of same address on src and dst"
+        );
+        assert_eq!(r4.unique_transfer_users_count, 0);
+
+        let r5 = stats_chains::Entity::find_by_id(c5)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(r5.unique_message_users_count, 2);
+        assert_eq!(r5.unique_transfer_users_count, 0);
+
+        let r6 = stats_chains::Entity::find_by_id(c6)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(r6.unique_message_users_count, 0);
+        assert_eq!(r6.unique_transfer_users_count, 1);
+
+        let r7 = stats_chains::Entity::find_by_id(c7)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(r7.unique_message_users_count, 0);
+        assert_eq!(r7.unique_transfer_users_count, 1);
+
+        assert_ne!(
+            r1.unique_message_users_count, 888,
+            "stale upsert should be replaced"
+        );
+
+        assert!(
+            stats_chains::Entity::find_by_id(c_idle)
+                .one(conn.as_ref())
+                .await
+                .unwrap()
+                .is_none(),
+            "configured chain with no message/transfer users must not get a stats_chains row"
+        );
     }
 
     #[tokio::test]
@@ -3548,6 +4018,7 @@ mod tests {
         let _db = init_db("stats_enrichment_propagate_edge").await;
         let conn = _db.client();
         let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
         let ic = InterchainDatabase::new(_db.client());
         let addr_b = [0x91u8; 20].to_vec();
 
@@ -3628,6 +4099,15 @@ mod tests {
         let _db = init_db("stats_enrichment_unrelated_edge").await;
         let conn = _db.client();
         let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert(chains::ActiveModel {
+            id: Set(200),
+            name: Set("C".into()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
         let ic = InterchainDatabase::new(_db.client());
         let addr_b = [0xa1u8; 20].to_vec();
 
@@ -3703,6 +4183,7 @@ mod tests {
         let _db = init_db("stats_enrichment_decimal_conflict").await;
         let conn = _db.client();
         let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
         let ic = InterchainDatabase::new(_db.client());
         let addr_b = [0xb1u8; 20].to_vec();
 
@@ -3775,6 +4256,7 @@ mod tests {
         let _db = init_db("stats_enrichment_keep_metadata").await;
         let conn = _db.client();
         let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
         let ic = InterchainDatabase::new(_db.client());
         let addr_b = [0xc1u8; 20].to_vec();
 
