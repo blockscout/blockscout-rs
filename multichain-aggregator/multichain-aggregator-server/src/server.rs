@@ -289,7 +289,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             settings.service.quick_search_chains.clone(),
             dapp_client.clone(),
             bens_client.clone(),
-            Default::default(),
+            settings.service.multichain_bens_priority_protocols.clone(),
             caches.clone(),
         ),
     );

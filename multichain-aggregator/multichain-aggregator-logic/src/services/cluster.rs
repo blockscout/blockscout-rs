@@ -904,9 +904,9 @@ impl Cluster {
     }
 
     pub async fn get_protocols_cached(&self) -> Result<Vec<ProtocolInfo>, ServiceError> {
+        let chain_ids = self.active_chain_ids().await?;
         let key = format!("{}:domain_protocols", self.name);
         let bens_client = self.bens_client.clone();
-        let chain_ids = self.chain_ids.clone();
         let priority_protocols = self.bens_priority_protocols.clone();
         let get = || get_protocols(bens_client, chain_ids, priority_protocols);
         let protocols = maybe_cache_lookup!(self.caches.domain_protocols.as_ref(), key, get)?;
