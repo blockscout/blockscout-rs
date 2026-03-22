@@ -205,14 +205,18 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     // example.start_indexing().await?;
 
+    let api_settings = settings.api.clone();
     let interchain_service = Arc::new(InterchainServiceImpl::new(
         db.clone(),
         token_info_service.clone(),
         chain_info_service.clone(),
         bridges,
-        settings.api,
+        api_settings.clone(),
     ));
-    let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(db.clone()));
+    let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(
+        stats.clone(),
+        api_settings,
+    ));
     let status_service = Arc::new(StatusServiceImpl::new(indexers.clone()));
     let router = Router {
         health,

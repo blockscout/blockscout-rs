@@ -4,26 +4,93 @@ package blockscout.interchainIndexer.v1;
 
 option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
 
+// Pagination for bridged-t/token stats only (`page_token` or explicit cursor fields).
+// Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
+message BridgedTokensListPagination {
+  optional string page_token = 1;
+  optional string direction = 2;
+  optional int64 asset_id = 3;
+  optional string name = 4;
+  optional bool name_blank = 5;
+  optional uint64 count = 6;
+}
+
 service InterchainStatisticsService {
-    rpc GetCommonStatistics(GetCommonStatisticsRequest) returns (GetCommonStatisticsResponse) {}
-    rpc GetDailyStatistics(GetDailyStatisticsRequest) returns (GetDailyStatisticsResponse) {}
+  rpc GetCommonStatistics(GetCommonStatisticsRequest) returns (GetCommonStatisticsResponse) {}
+  rpc GetDailyStatistics(GetDailyStatisticsRequest) returns (GetDailyStatisticsResponse) {}
+  rpc GetBridgedTokens(GetBridgedTokensRequest) returns (GetBridgedTokensResponse) {}
+}
+
+// First value must be 0 in protobuf; use TOTAL_TRANSFERS_COUNT/DESC as defaults (not separate *_UNSPECIFIED variants).
+enum BridgedTokensSort {
+  TOTAL_TRANSFERS_COUNT = 0;
+  OUTPUT_TRANSFERS_COUNT = 1;
+  INPUT_TRANSFERS_COUNT = 2;
+  NAME = 3;
+}
+
+enum BridgedTokensOrder {
+  DESC = 0;
+  ASC = 1;
+}
+
+message GetBridgedTokensRequest {
+  int64 chain_id = 1;
+  optional uint32 page_size = 2;
+  optional bool last_page = 3;
+  optional string page_token = 4;
+  // Enum fields: default 0 = TOTAL_TRANSFERS_COUNT / DESC when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost's TryFromInto deserializer).
+  BridgedTokensSort sort = 5;
+  BridgedTokensOrder order = 6;
+  // Flat keys matching `BridgedTokensListPagination` / `next_page_params` / `prev_page_params` (for `api.use_pagination_token=false`, pass that dict fields here).
+  optional string direction = 7;
+  optional int64 asset_id = 8;
+  optional string name = 9;
+  optional bool name_blank = 10;
+  optional uint64 count = 11;
+}
+
+message StatsBridgedTokenItem {
+  int64 chain_id = 1;
+  bytes token_address = 2;
+  optional string name = 3;
+  optional string symbol = 4;
+  optional string icon_url = 5;
+  optional uint32 decimals = 6;
+}
+
+message StatsBridgedTokenRow {
+  int64 stats_asset_id = 1;
+  optional string name = 2;
+  optional string symbol = 3;
+  optional string icon_url = 4;
+  uint64 input_transfers_count = 5;
+  uint64 output_transfers_count = 6;
+  uint64 total_transfers_count = 7;
+  repeated StatsBridgedTokenItem tokens = 8;
+}
+
+message GetBridgedTokensResponse {
+  repeated StatsBridgedTokenRow items = 1;
+  optional BridgedTokensListPagination next_page_params = 2;
+  optional BridgedTokensListPagination prev_page_params = 3;
 }
 
 message GetCommonStatisticsRequest {
-    optional uint64 timestamp = 1;
+  optional uint64 timestamp = 1;
 }
 message GetDailyStatisticsRequest {
-    optional uint64 timestamp = 1;
+  optional uint64 timestamp = 1;
 }
 
 message GetCommonStatisticsResponse {
-    string timestamp = 1;
-    uint64 total_messages = 2;
-    uint64 total_transfers = 3;
+  string timestamp = 1;
+  uint64 total_messages = 2;
+  uint64 total_transfers = 3;
 }
 
 message GetDailyStatisticsResponse {
-    string date = 1;
-    uint64 daily_messages = 2;
-    uint64 daily_transfers = 3;
+  string date = 1;
+  uint64 daily_messages = 2;
+  uint64 daily_transfers = 3;
 }

@@ -2063,6 +2063,46 @@ impl InterchainDatabase {
             .map(|_| ())
             .map_err(|e| e.into())
     }
+
+    /// Paginated bridged-token statistics for `chain_id` (aggregated per `stats_asset`).
+    pub async fn list_bridged_token_stats_for_chain(
+        &self,
+        chain_id: i64,
+        sort: crate::pagination::BridgedTokensSortField,
+        order: crate::pagination::BridgedTokensSortOrder,
+        page_size: usize,
+        last_page: bool,
+        input_pagination: Option<crate::pagination::BridgedTokensPaginationLogic>,
+    ) -> anyhow::Result<(
+        Vec<crate::bridged_tokens_query::BridgedTokenAggDbRow>,
+        OutputPagination<crate::pagination::BridgedTokensPaginationLogic>,
+    )> {
+        crate::bridged_tokens_query::list_bridged_token_stats_for_chain(
+            self.db.as_ref(),
+            chain_id,
+            sort,
+            order,
+            page_size,
+            last_page,
+            input_pagination,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!(e.to_string()))
+    }
+
+    pub async fn fetch_bridged_token_items_for_assets(
+        &self,
+        asset_ids: &[i64],
+    ) -> anyhow::Result<
+        std::collections::HashMap<i64, Vec<crate::bridged_tokens_query::BridgedTokenLinkEnriched>>,
+    > {
+        crate::bridged_tokens_query::fetch_bridged_token_items_for_assets(
+            self.db.as_ref(),
+            asset_ids,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!(e.to_string()))
+    }
 }
 
 /// Build OutputPagination from a page of messages.

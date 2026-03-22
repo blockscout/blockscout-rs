@@ -34,6 +34,9 @@ http:
 
     - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetDailyStatistics
       get: /api/v1/stats/daily
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetBridgedTokens
+      get: /api/v1/stats/bridged-tokens
     
     #################### Health ####################
 

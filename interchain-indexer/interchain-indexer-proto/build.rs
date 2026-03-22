@@ -37,6 +37,12 @@ fn compile(
         .field_attribute("Pagination.bridge_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.index", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("Pagination.direction", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("BridgedTokensListPagination.page_token", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("BridgedTokensListPagination.direction", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("BridgedTokensListPagination.asset_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("BridgedTokensListPagination.name", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("BridgedTokensListPagination.name_blank", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("BridgedTokensListPagination.count", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("IndexerStatus.extra_info", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("ChainInfo.icon", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("ChainInfo.explorer", "#[serde(skip_serializing_if = \"Option::is_none\")]")
@@ -44,13 +50,12 @@ fn compile(
         .field_attribute("ChainInfo.custom_address_route", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("ChainInfo.custom_token_route", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         ;
-    let default_fields: &[&str] = &[];
-    for default_field in default_fields {
-        config.field_attribute(
-            format!(".blockscout.interchain-indexer.v1.{default_field}"),
-            "#[serde(default)]",
-        );
-    }
+    // Enum fields that should default to 0 (first variant) when omitted from HTTP query params.
+    // Cannot use `optional` in proto3 for these: that changes the generated type to Option<i32>,
+    // which conflicts with actix-prost's TryFromInto<Enum> custom deserializer.
+    config
+        .field_attribute("GetBridgedTokensRequest.sort", "#[serde(default)]")
+        .field_attribute("GetBridgedTokensRequest.order", "#[serde(default)]");
     config.compile_protos(protos, includes)?;
     let descriptor_bytes = fs::read(descriptor_file).unwrap();
     let descriptor = FileDescriptorSet::decode(&descriptor_bytes[..]).unwrap();

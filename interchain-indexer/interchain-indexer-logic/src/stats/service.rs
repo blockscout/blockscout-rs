@@ -8,9 +8,20 @@ use sea_orm::{
 };
 
 use crate::{
-    InterchainDatabase, TokenInfoService,
+    BridgedTokenAggDbRow, BridgedTokenLinkEnriched, InterchainDatabase, TokenInfoService,
     message_buffer::{ConsolidatedMessage, token_keys_from_finalized_for_enrichment},
+    pagination::{
+        BridgedTokensPaginationLogic, BridgedTokensSortField, BridgedTokensSortOrder,
+        OutputPagination,
+    },
 };
+
+/// One row of `/stats/bridged-tokens` after joining `stats_asset_tokens` + `tokens`.
+#[derive(Debug, Clone)]
+pub struct BridgedTokenListRow {
+    pub aggregate: BridgedTokenAggDbRow,
+    pub tokens: Vec<BridgedTokenLinkEnriched>,
+}
 
 /// Coordinates stats-related workflows on top of [`InterchainDatabase`].
 ///
@@ -111,6 +122,51 @@ impl StatsService {
     pub fn kickoff_token_enrichment_for_finalized(&self, finalized: &[ConsolidatedMessage]) {
         let keys = token_keys_from_finalized_for_enrichment(finalized);
         self.kickoff_token_enrichment_for_keys(keys);
+    }
+
+    /// Bridged-token stats table for a chain: aggregated edges + full token list per asset.
+    pub async fn get_bridged_tokens_for_chain(
+        &self,
+        chain_id: i64,
+        sort: BridgedTokensSortField,
+        order: BridgedTokensSortOrder,
+        page_size: usize,
+        last_page: bool,
+        input_pagination: Option<BridgedTokensPaginationLogic>,
+    ) -> anyhow::Result<(
+        Vec<BridgedTokenListRow>,
+        OutputPagination<BridgedTokensPaginationLogic>,
+    )> {
+        let (rows, pagination) = self
+            .db
+            .list_bridged_token_stats_for_chain(
+                chain_id,
+                sort,
+                order,
+                page_size,
+                last_page,
+                input_pagination,
+            )
+            .await?;
+
+        let ids: Vec<i64> = rows.iter().map(|r| r.stats_asset_id).collect();
+        let by_asset = self.db.fetch_bridged_token_items_for_assets(&ids).await?;
+
+        let out = rows
+            .into_iter()
+            .map(|agg| {
+                let tokens = by_asset
+                    .get(&agg.stats_asset_id)
+                    .cloned()
+                    .unwrap_or_default();
+                BridgedTokenListRow {
+                    aggregate: agg,
+                    tokens,
+                }
+            })
+            .collect();
+
+        Ok((out, pagination))
     }
 }
 

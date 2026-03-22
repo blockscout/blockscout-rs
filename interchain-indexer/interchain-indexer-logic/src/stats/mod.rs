@@ -3,4 +3,4 @@
 pub(crate) mod projection;
 mod service;
 
-pub use service::StatsService;
+pub use service::{BridgedTokenListRow, StatsService};

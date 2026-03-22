@@ -3,7 +3,9 @@ use std::fmt;
 use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
-use interchain_indexer_proto::blockscout::interchain_indexer::v1::Pagination;
+use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
+    BridgedTokensListPagination, Pagination,
+};
 
 use crate::utils::{
     bytes_to_naive_datetime, naive_datetime_to_bytes, naive_datetime_to_nanos,
@@ -19,12 +21,12 @@ pub trait ListMarker: Sized {
     //fn from_proto(p: ) -> anyhow::Result<Self>;
 }
 
-pub struct OutputPagination<P: ListMarker> {
+pub struct OutputPagination<P> {
     pub prev_marker: Option<P>,
     pub next_marker: Option<P>,
 }
 
-impl<P: ListMarker> Default for OutputPagination<P> {
+impl<P> Default for OutputPagination<P> {
     fn default() -> Self {
         Self {
             prev_marker: None,
@@ -33,7 +35,7 @@ impl<P: ListMarker> Default for OutputPagination<P> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaginationDirection {
     Next,
     Prev,
@@ -284,5 +286,329 @@ impl ListMarker for TransfersPaginationLogic {
                 ..Default::default()
             }
         }
+    }
+}
+
+/// Pagination-token bytes use 1..=4 (distinct from `stats.proto` enum wire 0..=3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum BridgedTokensSortField {
+    #[default]
+    Name = 1,
+    InputTransfers = 2,
+    OutputTransfers = 3,
+    TotalTransfers = 4,
+}
+
+impl BridgedTokensSortField {
+    /// Maps `stats.proto` `BridgedTokensSort` wire values (NAME=0 … TOTAL_TRANSFERS_COUNT=3).
+    pub fn from_proto_sort(v: i32) -> Self {
+        match v {
+            0 => Self::Name,
+            1 => Self::InputTransfers,
+            2 => Self::OutputTransfers,
+            3 => Self::TotalTransfers,
+            _ => Self::Name,
+        }
+    }
+
+    fn from_pagination_token_sort_byte(b: u8) -> Self {
+        match b {
+            1 => Self::Name,
+            2 => Self::InputTransfers,
+            3 => Self::OutputTransfers,
+            4 => Self::TotalTransfers,
+            _ => Self::Name,
+        }
+    }
+
+    pub fn to_wire(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Pagination-token bytes use 1=asc, 2=desc (`stats.proto` `BridgedTokensOrder` uses 0=ASC, 1=DESC).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum BridgedTokensSortOrder {
+    #[default]
+    Asc = 1,
+    Desc = 2,
+}
+
+impl BridgedTokensSortOrder {
+    /// Maps `stats.proto` `BridgedTokensOrder` (ASC=0, DESC=1).
+    pub fn from_proto_order(v: i32) -> Self {
+        match v {
+            1 => Self::Desc,
+            _ => Self::Asc,
+        }
+    }
+
+    fn from_pagination_token_order_byte(b: u8) -> Self {
+        match b {
+            2 => Self::Desc,
+            _ => Self::Asc,
+        }
+    }
+
+    pub fn to_wire(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Keyset cursor for `/stats/bridged-tokens` (packed into `page_token` or raw `BridgedTokensListPagination`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BridgedTokensPaginationLogic {
+    pub chain_id: i64,
+    pub sort: BridgedTokensSortField,
+    pub order: BridgedTokensSortOrder,
+    pub direction: PaginationDirection,
+    pub stats_asset_id: i64,
+    /// `true` when `stats_assets.name` is NULL or empty/whitespace — sorts after all non-blank names.
+    pub name_blank: bool,
+    /// Sort key for name (ignored when `name_blank`); empty string when blank.
+    pub name_sort: String,
+    /// Value of the sorted count column when sorting by input/output/total; otherwise `0`.
+    pub count: i64,
+}
+
+const BT_PAGE_TOKEN_VERSION: u8 = 1;
+const BT_MAX_NAME_CURSOR_BYTES: usize = 512;
+
+impl BridgedTokensPaginationLogic {
+    pub fn from_token(token: &str) -> anyhow::Result<Self> {
+        let decoded = URL_SAFE_NO_PAD
+            .decode(token)
+            .map_err(|e| anyhow::anyhow!("Invalid base64 token: {e}"))?;
+        let d = decoded.as_slice();
+        if d.is_empty() || d[0] != BT_PAGE_TOKEN_VERSION {
+            return Err(anyhow::anyhow!("Invalid bridged-tokens page token version"));
+        }
+        let mut i = 1usize;
+        if d.len() < i + 8 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let chain_id = i64::from_be_bytes(d[i..i + 8].try_into().unwrap());
+        i += 8;
+        if d.len() < i + 3 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let sort = BridgedTokensSortField::from_pagination_token_sort_byte(d[i]);
+        i += 1;
+        let order = BridgedTokensSortOrder::from_pagination_token_order_byte(d[i]);
+        i += 1;
+        let direction = PaginationDirection::from_u8(d[i])?;
+        i += 1;
+        if d.len() < i + 8 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let stats_asset_id = i64::from_be_bytes(d[i..i + 8].try_into().unwrap());
+        i += 8;
+        if d.len() < i + 1 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let name_blank = d[i] != 0;
+        i += 1;
+        if d.len() < i + 2 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let name_len = u16::from_be_bytes(d[i..i + 2].try_into().unwrap()) as usize;
+        i += 2;
+        if name_len > BT_MAX_NAME_CURSOR_BYTES {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (name too long)"
+            ));
+        }
+        if d.len() < i + name_len {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let name_sort = std::str::from_utf8(&d[i..i + name_len])
+            .map_err(|_| anyhow::anyhow!("Invalid bridged-tokens page token (name utf-8)"))?
+            .to_string();
+        i += name_len;
+        if d.len() < i + 8 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let count = i64::from_be_bytes(d[i..i + 8].try_into().unwrap());
+        if i + 8 != d.len() {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (trailing data)"
+            ));
+        }
+        Ok(Self {
+            chain_id,
+            sort,
+            order,
+            direction,
+            stats_asset_id,
+            name_blank,
+            name_sort,
+            count,
+        })
+    }
+
+    pub fn token(&self) -> anyhow::Result<String> {
+        let name_bytes = self.name_sort.as_bytes();
+        if name_bytes.len() > BT_MAX_NAME_CURSOR_BYTES {
+            return Err(anyhow::anyhow!("name cursor exceeds max length"));
+        }
+        let mut out = Vec::with_capacity(1 + 8 + 3 + 8 + 1 + 2 + name_bytes.len() + 8);
+        out.push(BT_PAGE_TOKEN_VERSION);
+        out.extend_from_slice(&self.chain_id.to_be_bytes());
+        out.push(self.sort.to_wire());
+        out.push(self.order.to_wire());
+        out.push(self.direction.to_u8());
+        out.extend_from_slice(&self.stats_asset_id.to_be_bytes());
+        out.push(u8::from(self.name_blank));
+        out.extend_from_slice(&(name_bytes.len() as u16).to_be_bytes());
+        out.extend_from_slice(name_bytes);
+        out.extend_from_slice(&self.count.to_be_bytes());
+        Ok(URL_SAFE_NO_PAD.encode(out))
+    }
+
+    /// Token mode: only `page_token` is set. Raw mode: `direction` + bridged-tokens cursor fields (see `stats.proto`).
+    pub fn to_list_pagination_proto(
+        &self,
+        use_pagination_token: bool,
+    ) -> BridgedTokensListPagination {
+        if use_pagination_token {
+            BridgedTokensListPagination {
+                page_token: Some(self.token().unwrap_or_default()),
+                ..Default::default()
+            }
+        } else {
+            BridgedTokensListPagination {
+                direction: Some(self.direction.to_string()),
+                asset_id: Some(self.stats_asset_id),
+                name_blank: Some(self.name_blank),
+                name: if self.name_blank {
+                    None
+                } else {
+                    Some(self.name_sort.clone())
+                },
+                count: Some(self.count as u64),
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Build cursor from an aggregated DB row for the active `sort` / `order`.
+    pub fn marker_from_row(
+        chain_id: i64,
+        sort: BridgedTokensSortField,
+        order: BridgedTokensSortOrder,
+        direction: PaginationDirection,
+        stats_asset_id: i64,
+        name_blank: i32,
+        name_sort: &str,
+        input_transfers_count: i64,
+        output_transfers_count: i64,
+        total_transfers_count: i64,
+    ) -> Self {
+        let name_blank = name_blank != 0;
+        let count = match sort {
+            BridgedTokensSortField::Name => 0,
+            BridgedTokensSortField::InputTransfers => input_transfers_count,
+            BridgedTokensSortField::OutputTransfers => output_transfers_count,
+            BridgedTokensSortField::TotalTransfers => total_transfers_count,
+        };
+        Self {
+            chain_id,
+            sort,
+            order,
+            direction,
+            stats_asset_id,
+            name_blank,
+            name_sort: if name_blank {
+                String::new()
+            } else {
+                name_sort.to_string()
+            },
+            count,
+        }
+    }
+
+    pub fn ensure_matches_request(
+        &self,
+        chain_id: i64,
+        sort: BridgedTokensSortField,
+        order: BridgedTokensSortOrder,
+    ) -> anyhow::Result<()> {
+        if self.chain_id != chain_id {
+            return Err(anyhow::anyhow!(
+                "page_token chain_id does not match request chain_id"
+            ));
+        }
+        if self.sort != sort || self.order != order {
+            return Err(anyhow::anyhow!(
+                "page_token sort/order does not match request"
+            ));
+        }
+        Ok(())
+    }
+
+    /// Raw continuation: same keys as [`BridgedTokensListPagination`] (request uses the same flattened names as that message).
+    pub fn try_from_list_pagination_proto(
+        chain_id: i64,
+        sort: BridgedTokensSortField,
+        order: BridgedTokensSortOrder,
+        lp: &BridgedTokensListPagination,
+    ) -> anyhow::Result<Option<Self>> {
+        let has_cursor = lp.asset_id.is_some()
+            || lp.name_blank.is_some()
+            || lp.count.is_some()
+            || lp
+                .name
+                .as_ref()
+                .is_some_and(|s| !s.is_empty());
+        if lp.direction.is_none() && !has_cursor {
+            return Ok(None);
+        }
+        let dir_str = lp.direction.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("direction is required when continuing a page (raw mode)")
+        })?;
+        let direction = PaginationDirection::from_string(dir_str)?;
+        let stats_asset_id = lp.asset_id.ok_or_else(|| {
+            anyhow::anyhow!("asset_id is required when paginating (raw mode)")
+        })?;
+        let name_blank = lp.name_blank.ok_or_else(|| {
+            anyhow::anyhow!(
+                "name_blank is required when paginating (raw mode)"
+            )
+        })?;
+        let count = lp
+            .count
+            .map(|c| c as i64)
+            .unwrap_or(0);
+        let name_sort = if name_blank {
+            String::new()
+        } else {
+            lp.name.clone().unwrap_or_default()
+        };
+        Ok(Some(Self {
+            chain_id,
+            sort,
+            order,
+            direction,
+            stats_asset_id,
+            name_blank,
+            name_sort,
+            count,
+        }))
     }
 }
