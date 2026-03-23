@@ -52,7 +52,7 @@ message GetBridgedTokensRequest {
 
 message StatsBridgedTokenItem {
   int64 chain_id = 1;
-  bytes token_address = 2;
+  string token_address = 2;
   optional string name = 3;
   optional string symbol = 4;
   optional string icon_url = 5;

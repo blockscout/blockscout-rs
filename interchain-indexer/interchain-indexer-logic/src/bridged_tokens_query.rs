@@ -20,6 +20,34 @@ pub struct BridgedTokenAggDbRow {
     pub name_sort: String,
 }
 
+impl BridgedTokenAggDbRow {
+    pub fn marker(
+        &self,
+        direction: PaginationDirection,
+        sort: BridgedTokensSortField,
+    ) -> BridgedTokensPaginationLogic {
+        let name_blank = self.name_blank != 0;
+        let count = match sort {
+            BridgedTokensSortField::Name => 0,
+            BridgedTokensSortField::InputTransfers => self.input_transfers_count,
+            BridgedTokensSortField::OutputTransfers => self.output_transfers_count,
+            BridgedTokensSortField::TotalTransfers => self.total_transfers_count,
+        };
+
+        BridgedTokensPaginationLogic {
+            direction,
+            stats_asset_id: self.stats_asset_id,
+            name_blank,
+            name_sort: if name_blank {
+                String::new()
+            } else {
+                self.name_sort.clone()
+            },
+            count,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BridgedTokenLinkEnriched {
     pub chain_id: i64,
@@ -227,43 +255,18 @@ fn cursor_where_prev(
 
 fn build_pagination_from_bridged_tokens(
     rows: &[BridgedTokenAggDbRow],
-    chain_id: i64,
     sort: BridgedTokensSortField,
-    order: BridgedTokensSortOrder,
     query_direction: PaginationDirection,
     has_more: bool,
     last_page: bool,
 ) -> OutputPagination<BridgedTokensPaginationLogic> {
-    let prev_marker = rows.first().map(|r| {
-        BridgedTokensPaginationLogic::marker_from_row(
-            chain_id,
-            sort,
-            order,
-            PaginationDirection::Prev,
-            r.stats_asset_id,
-            r.name_blank,
-            &r.name_sort,
-            r.input_transfers_count,
-            r.output_transfers_count,
-            r.total_transfers_count,
-        )
-    });
+    let prev_marker = rows
+        .first()
+        .map(|r| r.marker(PaginationDirection::Prev, sort));
 
     let next_marker = if !last_page && (query_direction == PaginationDirection::Prev || has_more) {
-        rows.last().map(|r| {
-            BridgedTokensPaginationLogic::marker_from_row(
-                chain_id,
-                sort,
-                order,
-                PaginationDirection::Next,
-                r.stats_asset_id,
-                r.name_blank,
-                &r.name_sort,
-                r.input_transfers_count,
-                r.output_transfers_count,
-                r.total_transfers_count,
-            )
-        })
+        rows.last()
+            .map(|r| r.marker(PaginationDirection::Next, sort))
     } else {
         None
     };
@@ -289,11 +292,6 @@ pub async fn list_bridged_token_stats_for_chain(
     ),
     DbErr,
 > {
-    if let Some(p) = input_pagination.as_ref() {
-        p.ensure_matches_request(chain_id, sort, order)
-            .map_err(|e| DbErr::Custom(e.to_string()))?;
-    }
-
     let limit = page_size.max(1) as i64;
     let fetch = limit.saturating_add(1);
 
@@ -397,15 +395,8 @@ LIMIT ${limit_ph}
         rows.reverse();
     }
 
-    let pagination = build_pagination_from_bridged_tokens(
-        &rows,
-        chain_id,
-        sort,
-        order,
-        query_direction,
-        has_more,
-        last_page,
-    );
+    let pagination =
+        build_pagination_from_bridged_tokens(&rows, sort, query_direction, has_more, last_page);
 
     Ok((rows, pagination))
 }

@@ -289,7 +289,7 @@ impl ListMarker for TransfersPaginationLogic {
     }
 }
 
-/// Pagination-token bytes use 1..=4 (distinct from `stats.proto` enum wire 0..=3).
+/// Request sort for bridged-token stats (distinct from `stats.proto` enum wire 0..=3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum BridgedTokensSortField {
@@ -311,58 +311,32 @@ impl BridgedTokensSortField {
             _ => Self::Name,
         }
     }
-
-    fn from_pagination_token_sort_byte(b: u8) -> Self {
-        match b {
-            1 => Self::Name,
-            2 => Self::InputTransfers,
-            3 => Self::OutputTransfers,
-            4 => Self::TotalTransfers,
-            _ => Self::Name,
-        }
-    }
-
-    pub fn to_wire(self) -> u8 {
-        self as u8
-    }
 }
 
-/// Pagination-token bytes use 1=asc, 2=desc (`stats.proto` `BridgedTokensOrder` uses 0=ASC, 1=DESC).
+/// Request order for bridged-token stats (`stats.proto`: 0=DESC, 1=ASC).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum BridgedTokensSortOrder {
     #[default]
-    Asc = 1,
-    Desc = 2,
+    Desc = 1,
+    Asc = 2,
 }
 
 impl BridgedTokensSortOrder {
-    /// Maps `stats.proto` `BridgedTokensOrder` (ASC=0, DESC=1).
-    pub fn from_proto_order(v: i32) -> Self {
+    /// Maps `stats.proto` `BridgedTokensOrder` (DESC=0, ASC=1).
+    pub fn from_proto_order(v: i32) -> anyhow::Result<Self> {
         match v {
-            1 => Self::Desc,
-            _ => Self::Asc,
+            0 => Ok(Self::Desc),
+            1 => Ok(Self::Asc),
+            _ => Err(anyhow::anyhow!("Invalid value for order")),
         }
-    }
-
-    fn from_pagination_token_order_byte(b: u8) -> Self {
-        match b {
-            2 => Self::Desc,
-            _ => Self::Asc,
-        }
-    }
-
-    pub fn to_wire(self) -> u8 {
-        self as u8
     }
 }
 
 /// Keyset cursor for `/stats/bridged-tokens` (packed into `page_token` or raw `BridgedTokensListPagination`).
+/// Does not embed chain, sort, or order — callers must keep request parameters aligned with the query.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BridgedTokensPaginationLogic {
-    pub chain_id: i64,
-    pub sort: BridgedTokensSortField,
-    pub order: BridgedTokensSortOrder,
     pub direction: PaginationDirection,
     pub stats_asset_id: i64,
     /// `true` when `stats_assets.name` is NULL or empty/whitespace — sorts after all non-blank names.
@@ -386,22 +360,11 @@ impl BridgedTokensPaginationLogic {
             return Err(anyhow::anyhow!("Invalid bridged-tokens page token version"));
         }
         let mut i = 1usize;
-        if d.len() < i + 8 {
+        if d.len() < i + 1 {
             return Err(anyhow::anyhow!(
                 "Invalid bridged-tokens page token (truncated)"
             ));
         }
-        let chain_id = i64::from_be_bytes(d[i..i + 8].try_into().unwrap());
-        i += 8;
-        if d.len() < i + 3 {
-            return Err(anyhow::anyhow!(
-                "Invalid bridged-tokens page token (truncated)"
-            ));
-        }
-        let sort = BridgedTokensSortField::from_pagination_token_sort_byte(d[i]);
-        i += 1;
-        let order = BridgedTokensSortOrder::from_pagination_token_order_byte(d[i]);
-        i += 1;
         let direction = PaginationDirection::from_u8(d[i])?;
         i += 1;
         if d.len() < i + 8 {
@@ -451,9 +414,6 @@ impl BridgedTokensPaginationLogic {
             ));
         }
         Ok(Self {
-            chain_id,
-            sort,
-            order,
             direction,
             stats_asset_id,
             name_blank,
@@ -467,11 +427,8 @@ impl BridgedTokensPaginationLogic {
         if name_bytes.len() > BT_MAX_NAME_CURSOR_BYTES {
             return Err(anyhow::anyhow!("name cursor exceeds max length"));
         }
-        let mut out = Vec::with_capacity(1 + 8 + 3 + 8 + 1 + 2 + name_bytes.len() + 8);
+        let mut out = Vec::with_capacity(1 + 1 + 8 + 1 + 2 + name_bytes.len() + 8);
         out.push(BT_PAGE_TOKEN_VERSION);
-        out.extend_from_slice(&self.chain_id.to_be_bytes());
-        out.push(self.sort.to_wire());
-        out.push(self.order.to_wire());
         out.push(self.direction.to_u8());
         out.extend_from_slice(&self.stats_asset_id.to_be_bytes());
         out.push(u8::from(self.name_blank));
@@ -507,75 +464,14 @@ impl BridgedTokensPaginationLogic {
         }
     }
 
-    /// Build cursor from an aggregated DB row for the active `sort` / `order`.
-    pub fn marker_from_row(
-        chain_id: i64,
-        sort: BridgedTokensSortField,
-        order: BridgedTokensSortOrder,
-        direction: PaginationDirection,
-        stats_asset_id: i64,
-        name_blank: i32,
-        name_sort: &str,
-        input_transfers_count: i64,
-        output_transfers_count: i64,
-        total_transfers_count: i64,
-    ) -> Self {
-        let name_blank = name_blank != 0;
-        let count = match sort {
-            BridgedTokensSortField::Name => 0,
-            BridgedTokensSortField::InputTransfers => input_transfers_count,
-            BridgedTokensSortField::OutputTransfers => output_transfers_count,
-            BridgedTokensSortField::TotalTransfers => total_transfers_count,
-        };
-        Self {
-            chain_id,
-            sort,
-            order,
-            direction,
-            stats_asset_id,
-            name_blank,
-            name_sort: if name_blank {
-                String::new()
-            } else {
-                name_sort.to_string()
-            },
-            count,
-        }
-    }
-
-    pub fn ensure_matches_request(
-        &self,
-        chain_id: i64,
-        sort: BridgedTokensSortField,
-        order: BridgedTokensSortOrder,
-    ) -> anyhow::Result<()> {
-        if self.chain_id != chain_id {
-            return Err(anyhow::anyhow!(
-                "page_token chain_id does not match request chain_id"
-            ));
-        }
-        if self.sort != sort || self.order != order {
-            return Err(anyhow::anyhow!(
-                "page_token sort/order does not match request"
-            ));
-        }
-        Ok(())
-    }
-
     /// Raw continuation: same keys as [`BridgedTokensListPagination`] (request uses the same flattened names as that message).
     pub fn try_from_list_pagination_proto(
-        chain_id: i64,
-        sort: BridgedTokensSortField,
-        order: BridgedTokensSortOrder,
         lp: &BridgedTokensListPagination,
     ) -> anyhow::Result<Option<Self>> {
         let has_cursor = lp.asset_id.is_some()
             || lp.name_blank.is_some()
             || lp.count.is_some()
-            || lp
-                .name
-                .as_ref()
-                .is_some_and(|s| !s.is_empty());
+            || lp.name.as_ref().is_some_and(|s| !s.is_empty());
         if lp.direction.is_none() && !has_cursor {
             return Ok(None);
         }
@@ -583,27 +479,19 @@ impl BridgedTokensPaginationLogic {
             anyhow::anyhow!("direction is required when continuing a page (raw mode)")
         })?;
         let direction = PaginationDirection::from_string(dir_str)?;
-        let stats_asset_id = lp.asset_id.ok_or_else(|| {
-            anyhow::anyhow!("asset_id is required when paginating (raw mode)")
-        })?;
-        let name_blank = lp.name_blank.ok_or_else(|| {
-            anyhow::anyhow!(
-                "name_blank is required when paginating (raw mode)"
-            )
-        })?;
-        let count = lp
-            .count
-            .map(|c| c as i64)
-            .unwrap_or(0);
+        let stats_asset_id = lp
+            .asset_id
+            .ok_or_else(|| anyhow::anyhow!("asset_id is required when paginating (raw mode)"))?;
+        let name_blank = lp
+            .name_blank
+            .ok_or_else(|| anyhow::anyhow!("name_blank is required when paginating (raw mode)"))?;
+        let count = lp.count.map(|c| c as i64).unwrap_or(0);
         let name_sort = if name_blank {
             String::new()
         } else {
             lp.name.clone().unwrap_or_default()
         };
         Ok(Some(Self {
-            chain_id,
-            sort,
-            order,
             direction,
             stats_asset_id,
             name_blank,

@@ -5,7 +5,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField,
-    BridgedTokensSortOrder, StatsService,
+    BridgedTokensSortOrder, StatsService, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -82,13 +82,12 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
     ) -> Result<Response<GetBridgedTokensResponse>, Status> {
         let inner = request.into_inner();
         let sort = BridgedTokensSortField::from_proto_sort(inner.sort);
-        let order = BridgedTokensSortOrder::from_proto_order(inner.order);
+        let order = BridgedTokensSortOrder::from_proto_order(inner.order)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let input_pagination = if self.api_settings.use_pagination_token {
             if let Some(t) = inner.page_token.as_deref() {
                 let m = BridgedTokensPaginationLogic::from_token(t)
-                    .map_err(|e| Status::invalid_argument(e.to_string()))?;
-                m.ensure_matches_request(inner.chain_id, sort, order)
                     .map_err(|e| Status::invalid_argument(e.to_string()))?;
                 Some(m)
             } else {
@@ -103,13 +102,8 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
                 name_blank: inner.name_blank,
                 count: inner.count,
             };
-            BridgedTokensPaginationLogic::try_from_list_pagination_proto(
-                inner.chain_id,
-                sort,
-                order,
-                &lp,
-            )
-            .map_err(|e| Status::invalid_argument(e.to_string()))?
+            BridgedTokensPaginationLogic::try_from_list_pagination_proto(&lp)
+                .map_err(|e| Status::invalid_argument(e.to_string()))?
         };
 
         let page_size = inner
@@ -160,7 +154,7 @@ fn bridged_row_to_proto(row: BridgedTokenListRow) -> StatsBridgedTokenRow {
             .into_iter()
             .map(|t| StatsBridgedTokenItem {
                 chain_id: t.chain_id,
-                token_address: t.token_address.into(),
+                token_address: to_hex_prefixed(t.token_address.as_slice()),
                 name: t.name,
                 symbol: t.symbol,
                 icon_url: t.icon_url,

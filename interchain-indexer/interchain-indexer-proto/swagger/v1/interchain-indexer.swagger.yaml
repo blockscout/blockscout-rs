@@ -902,7 +902,6 @@ definitions:
         format: int64
       token_address:
         type: string
-        format: byte
       name:
         type: string
       symbol:
