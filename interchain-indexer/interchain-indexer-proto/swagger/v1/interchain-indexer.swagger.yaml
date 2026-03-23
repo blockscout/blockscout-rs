@@ -477,10 +477,6 @@ paths:
           in: query
           required: false
           type: boolean
-        - name: page_token
-          in: query
-          required: false
-          type: string
         - name: sort
           description: 'Enum fields: default 0 = TOTAL_TRANSFERS_COUNT / DESC when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost''s TryFromInto deserializer).'
           in: query
@@ -500,6 +496,11 @@ paths:
             - DESC
             - ASC
           default: DESC
+        - name: page_token
+          description: Token-based pagination
+          in: query
+          required: false
+          type: string
         - name: direction
           description: Flat keys matching `BridgedTokensListPagination` / `next_page_params` / `prev_page_params` (for `api.use_pagination_token=false`, pass that dict fields here).
           in: query
@@ -523,6 +524,65 @@ paths:
           required: false
           type: string
           format: uint64
+      tags:
+        - InterchainStatisticsService
+  /api/v1/stats/chains:
+    get:
+      operationId: InterchainStatisticsService_GetChainsStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetChainsStatsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          in: query
+          required: false
+          type: boolean
+        - name: chain_ids
+          description: |-
+            Optional comma-separated chain ids filter, for example `123,456`.
+            When absent or empty, statistics are returned for all known chains.
+          in: query
+          required: false
+          type: string
+        - name: order
+          in: query
+          required: false
+          type: string
+          enum:
+            - DESC
+            - ASC
+          default: DESC
+        - name: page_token
+          description: token-based pagination
+          in: query
+          required: false
+          type: string
+        - name: direction
+          description: raw pagination fields
+          in: query
+          required: false
+          type: string
+        - name: count
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+          format: int64
       tags:
         - InterchainStatisticsService
   /api/v1/stats/common:
@@ -697,12 +757,6 @@ definitions:
     description: |-
       Pagination for bridged-t/token stats only (`page_token` or explicit cursor fields).
       Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
-  v1BridgedTokensOrder:
-    type: string
-    enum:
-      - DESC
-      - ASC
-    default: DESC
   v1BridgedTokensSort:
     type: string
     enum:
@@ -757,6 +811,18 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1ChainInfo'
+  v1GetChainsStatsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1StatsChainRow'
+      next_page_params:
+        $ref: '#/definitions/v1StatsChainsListPagination'
+      prev_page_params:
+        $ref: '#/definitions/v1StatsChainsListPagination'
   v1GetCommonStatisticsResponse:
     type: object
     properties:
@@ -916,6 +982,13 @@ definitions:
         format: uint64
       direction:
         type: string
+  v1SortOrder:
+    type: string
+    enum:
+      - DESC
+      - ASC
+    default: DESC
+    description: Shared ascending/descending order for statistics list endpoints (0=DESC, 1=ASC).
   v1StatsBridgedTokenItem:
     type: object
     properties:
@@ -959,6 +1032,35 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1StatsBridgedTokenItem'
+  v1StatsChainRow:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      name:
+        type: string
+      icon_url:
+        type: string
+      explorer_url:
+        type: string
+      unique_transfer_users_count:
+        type: string
+        format: uint64
+  v1StatsChainsListPagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+      direction:
+        type: string
+      count:
+        type: string
+        format: uint64
+      chain_id:
+        type: string
+        format: int64
+    description: 'Pagination for `/stats/chains` (composite cursor: direction, count, chain_id).'
   v1TokenInfo:
     type: object
     properties:

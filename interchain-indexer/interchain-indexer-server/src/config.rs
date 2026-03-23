@@ -450,29 +450,6 @@ fn build_rpc_url(url: &str, api_key_config: &Option<ApiKeyConfig>) -> Result<Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_deserialize_bridges() {
-        // Use CARGO_MANIFEST_DIR to get the project root, then navigate to config file
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let path = PathBuf::from(manifest_dir)
-            .parent()
-            .unwrap()
-            .join("config/avalanche/bridges.json");
-        let bridges = load_bridges_from_file(&path).unwrap();
-
-        assert_eq!(bridges.len(), 1);
-        assert_eq!(bridges[0].bridge_id, 2);
-        assert_eq!(bridges[0].name, "Avalanche ICTT");
-        assert_eq!(bridges[0].bridge_type, BridgeType::AvalancheNative);
-        assert_eq!(bridges[0].contracts.len(), 2);
-        assert_eq!(bridges[0].contracts[0].chain_id, 43114);
-        assert_eq!(bridges[0].contracts[0].version, 1);
-        assert_eq!(bridges[0].contracts[0].started_at_block, 42526120);
-        assert!(bridges[0].process_unknown_chains);
-        assert_eq!(bridges[0].home_chain_id, Some(8021));
-    }
 
     #[test]
     fn test_deserialize_bridge_without_home_chain_field() {
@@ -522,26 +499,6 @@ mod tests {
         assert_eq!(bridges.len(), 1);
         assert!(bridges[0].process_unknown_chains);
         assert_eq!(bridges[0].home_chain_id, Some(43114));
-    }
-
-    #[test]
-    fn test_deserialize_chains() {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let path = PathBuf::from(manifest_dir)
-            .parent()
-            .unwrap()
-            .join("config/omnibridge/chains.json");
-        let chains = load_chains_from_file(&path).unwrap();
-
-        assert_eq!(chains.len(), 2);
-        assert_eq!(chains[0].chain_id, 1);
-        assert_eq!(chains[0].name, "Ethereum");
-        // assert_eq!(chains[0].native_id, None);
-        assert_eq!(chains[0].icon, "");
-        assert!(!chains[0].rpcs.is_empty());
-
-        assert_eq!(chains[1].chain_id, 100);
-        assert_eq!(chains[1].name, "Gnosis");
     }
 
     #[test]

@@ -2073,7 +2073,7 @@ impl InterchainDatabase {
         &self,
         chain_id: i64,
         sort: crate::pagination::BridgedTokensSortField,
-        order: crate::pagination::BridgedTokensSortOrder,
+        order: crate::pagination::StatsSortOrder,
         page_size: usize,
         last_page: bool,
         input_pagination: Option<crate::pagination::BridgedTokensPaginationLogic>,
@@ -2085,6 +2085,29 @@ impl InterchainDatabase {
             self.db.as_ref(),
             chain_id,
             sort,
+            order,
+            page_size,
+            last_page,
+            input_pagination,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!(e.to_string()))
+    }
+
+    pub async fn list_stats_chains(
+        &self,
+        chain_ids: &[i64],
+        order: crate::pagination::StatsSortOrder,
+        page_size: usize,
+        last_page: bool,
+        input_pagination: Option<crate::pagination::StatsChainsPaginationLogic>,
+    ) -> anyhow::Result<(
+        Vec<crate::stats_chains_query::StatsChainListRow>,
+        OutputPagination<crate::pagination::StatsChainsPaginationLogic>,
+    )> {
+        crate::stats_chains_query::list_stats_chains(
+            self.db.as_ref(),
+            chain_ids,
             order,
             page_size,
             last_page,

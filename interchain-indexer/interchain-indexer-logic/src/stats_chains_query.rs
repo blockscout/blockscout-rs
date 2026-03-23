@@ -1,0 +1,388 @@
+//! Paginated chain list with `stats_chains.unique_transfer_users_count` (`/stats/chains`).
+
+use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};
+
+use crate::pagination::{
+    OutputPagination, PaginationDirection, StatsChainsPaginationLogic, StatsSortOrder,
+};
+
+#[derive(Debug, Clone, FromQueryResult)]
+pub struct StatsChainListRow {
+    pub chain_id: i64,
+    pub name: String,
+    pub icon_url: Option<String>,
+    pub explorer_url: Option<String>,
+    pub unique_transfer_users_count: i64,
+}
+
+impl StatsChainListRow {
+    pub fn marker(&self, direction: PaginationDirection) -> StatsChainsPaginationLogic {
+        StatsChainsPaginationLogic {
+            direction,
+            count: self.unique_transfer_users_count,
+            chain_id: self.chain_id,
+        }
+    }
+}
+
+fn forward_order_clause(order: StatsSortOrder) -> &'static str {
+    match order {
+        StatsSortOrder::Desc => "t.cnt DESC, t.chain_id ASC",
+        StatsSortOrder::Asc => "t.cnt ASC, t.chain_id ASC",
+    }
+}
+
+fn inverse_order_clause(order: StatsSortOrder) -> &'static str {
+    match order {
+        StatsSortOrder::Desc => "t.cnt ASC, t.chain_id DESC",
+        StatsSortOrder::Asc => "t.cnt DESC, t.chain_id DESC",
+    }
+}
+
+fn cursor_where_next(
+    order: StatsSortOrder,
+    m: &StatsChainsPaginationLogic,
+    p0: usize,
+) -> (String, Vec<Value>) {
+    let mut vals = Vec::new();
+    let c = m.count;
+    let id = m.chain_id;
+    vals.push(Value::BigInt(Some(c)));
+    vals.push(Value::BigInt(Some(id)));
+    let p1 = p0 + 1;
+    let sql = match order {
+        StatsSortOrder::Desc => format!(
+            " AND ((t.cnt < ${p0}) OR (t.cnt = ${p0} AND t.chain_id > ${p1}))",
+            p0 = p0,
+            p1 = p1,
+        ),
+        StatsSortOrder::Asc => format!(
+            " AND ((t.cnt > ${p0}) OR (t.cnt = ${p0} AND t.chain_id > ${p1}))",
+            p0 = p0,
+            p1 = p1,
+        ),
+    };
+    (sql, vals)
+}
+
+fn cursor_where_prev(
+    order: StatsSortOrder,
+    m: &StatsChainsPaginationLogic,
+    p0: usize,
+) -> (String, Vec<Value>) {
+    let mut vals = Vec::new();
+    let c = m.count;
+    let id = m.chain_id;
+    vals.push(Value::BigInt(Some(c)));
+    vals.push(Value::BigInt(Some(id)));
+    let p1 = p0 + 1;
+    let sql = match order {
+        StatsSortOrder::Desc => format!(
+            " AND ((t.cnt > ${p0}) OR (t.cnt = ${p0} AND t.chain_id < ${p1}))",
+            p0 = p0,
+            p1 = p1,
+        ),
+        StatsSortOrder::Asc => format!(
+            " AND ((t.cnt < ${p0}) OR (t.cnt = ${p0} AND t.chain_id < ${p1}))",
+            p0 = p0,
+            p1 = p1,
+        ),
+    };
+    (sql, vals)
+}
+
+fn build_pagination(
+    rows: &[StatsChainListRow],
+    query_direction: PaginationDirection,
+    has_more: bool,
+    last_page: bool,
+) -> OutputPagination<StatsChainsPaginationLogic> {
+    let prev_marker = rows.first().map(|r| r.marker(PaginationDirection::Prev));
+
+    let next_marker = if !last_page && (query_direction == PaginationDirection::Prev || has_more) {
+        rows.last().map(|r| r.marker(PaginationDirection::Next))
+    } else {
+        None
+    };
+
+    OutputPagination {
+        prev_marker,
+        next_marker,
+    }
+}
+
+pub async fn list_stats_chains(
+    db: &impl ConnectionTrait,
+    chain_ids: &[i64],
+    order: StatsSortOrder,
+    page_size: usize,
+    last_page: bool,
+    input_pagination: Option<StatsChainsPaginationLogic>,
+) -> Result<
+    (
+        Vec<StatsChainListRow>,
+        OutputPagination<StatsChainsPaginationLogic>,
+    ),
+    DbErr,
+> {
+    let limit = page_size.max(1) as i64;
+    let fetch = limit.saturating_add(1);
+
+    let query_direction = if last_page {
+        PaginationDirection::Prev
+    } else {
+        input_pagination
+            .as_ref()
+            .map(|p| p.direction)
+            .unwrap_or(PaginationDirection::Next)
+    };
+
+    let reverse_results = matches!(query_direction, PaginationDirection::Prev);
+
+    let mut values: Vec<Value> = Vec::new();
+    let where_in = if chain_ids.is_empty() {
+        String::new()
+    } else {
+        let ph: Vec<String> = (0..chain_ids.len())
+            .map(|i| format!("${}", i + 1))
+            .collect();
+        for id in chain_ids {
+            values.push(Value::BigInt(Some(*id)));
+        }
+        format!("WHERE c.id IN ({})", ph.join(", "))
+    };
+
+    let (where_extra, order_clause, cursor_vals) = if last_page {
+        (String::new(), inverse_order_clause(order), Vec::new())
+    } else {
+        match query_direction {
+            PaginationDirection::Next => {
+                let ord = forward_order_clause(order);
+                if let Some(m) = input_pagination.as_ref() {
+                    let p0 = values.len() + 1;
+                    let (w, v) = cursor_where_next(order, m, p0);
+                    (w, ord, v)
+                } else {
+                    (String::new(), ord, Vec::new())
+                }
+            }
+            PaginationDirection::Prev => {
+                let ord = inverse_order_clause(order);
+                if let Some(m) = input_pagination.as_ref() {
+                    let p0 = values.len() + 1;
+                    let (w, v) = cursor_where_prev(order, m, p0);
+                    (w, ord, v)
+                } else {
+                    (String::new(), ord, Vec::new())
+                }
+            }
+        }
+    };
+
+    values.extend(cursor_vals);
+    let limit_placeholder = values.len() + 1;
+    values.push(Value::BigInt(Some(fetch)));
+
+    let sql = format!(
+        r#"
+SELECT t.chain_id,
+       t.name,
+       t.icon_url,
+       t.explorer_url,
+       t.cnt AS unique_transfer_users_count
+FROM (
+    SELECT c.id AS chain_id,
+           c.name,
+           c.icon AS icon_url,
+           c.explorer AS explorer_url,
+           COALESCE(sc.unique_transfer_users_count, 0)::bigint AS cnt
+    FROM chains c
+    LEFT JOIN stats_chains sc ON sc.chain_id = c.id
+    {where_in}
+) t
+WHERE TRUE
+{where_extra}
+ORDER BY {order_clause}
+LIMIT ${limit_ph}
+"#,
+        where_in = where_in,
+        where_extra = where_extra,
+        order_clause = order_clause,
+        limit_ph = limit_placeholder,
+    );
+
+    let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, values);
+
+    let raw = db.query_all(stmt).await?;
+    let mut rows: Vec<StatsChainListRow> = Vec::with_capacity(raw.len());
+    for r in raw {
+        rows.push(StatsChainListRow::from_query_result(&r, "")?);
+    }
+
+    let has_more = rows.len() as i64 > limit;
+    if has_more {
+        rows.truncate(limit as usize);
+    }
+
+    if reverse_results {
+        rows.reverse();
+    }
+
+    let pagination = build_pagination(&rows, query_direction, has_more, last_page);
+
+    Ok((rows, pagination))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use interchain_indexer_entity::chains;
+    use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait};
+
+    use crate::{pagination::PaginationDirection, test_utils::init_db};
+
+    async fn seed_chains(db: &DatabaseConnection, ids: &[i64]) {
+        if ids.is_empty() {
+            return;
+        }
+        let models: Vec<chains::ActiveModel> = ids
+            .iter()
+            .map(|&id| chains::ActiveModel {
+                id: Set(id),
+                name: Set(format!("chain-{id}")),
+                ..Default::default()
+            })
+            .collect();
+        chains::Entity::insert_many(models).exec(db).await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_left_join_missing_stats_is_zero() {
+        let g = init_db("stats_chains_left_join").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        crate::InterchainDatabase::new(db.clone())
+            .upsert_stats_chains(1, 5, 0)
+            .await
+            .unwrap();
+
+        let (rows, _) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 2);
+        let r1 = rows.iter().find(|r| r.chain_id == 1).unwrap();
+        let r2 = rows.iter().find(|r| r.chain_id == 2).unwrap();
+        assert_eq!(r1.unique_transfer_users_count, 5);
+        assert_eq!(r2.unique_transfer_users_count, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_default_desc_by_count() {
+        let g = init_db("stats_chains_desc").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[10, 20, 30]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(10, 1, 0).await.unwrap();
+        idb.upsert_stats_chains(20, 99, 0).await.unwrap();
+        idb.upsert_stats_chains(30, 50, 0).await.unwrap();
+
+        let (rows, _) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
+            vec![20, 30, 10]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_asc_order() {
+        let g = init_db("stats_chains_asc").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(1, 100, 0).await.unwrap();
+        idb.upsert_stats_chains(2, 200, 0).await.unwrap();
+
+        let (rows, _) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Asc, 50, false, None)
+            .await
+            .unwrap();
+
+        assert_eq!(rows[0].chain_id, 1);
+        assert_eq!(rows[1].chain_id, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_tie_breaker_chain_id_asc() {
+        let g = init_db("stats_chains_tie").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[5, 3, 7]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(5, 42, 0).await.unwrap();
+        idb.upsert_stats_chains(3, 42, 0).await.unwrap();
+        idb.upsert_stats_chains(7, 42, 0).await.unwrap();
+
+        let (rows, _) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
+            vec![3, 5, 7]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_pagination_across_ties() {
+        let g = init_db("stats_chains_page_ties").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[100, 101, 102]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(100, 10, 0).await.unwrap();
+        idb.upsert_stats_chains(101, 10, 0).await.unwrap();
+        idb.upsert_stats_chains(102, 99, 0).await.unwrap();
+
+        let (p1, pag1) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 1, false, None)
+            .await
+            .unwrap();
+        assert_eq!(p1.len(), 1);
+        assert_eq!(p1[0].chain_id, 102);
+        let next = pag1.next_marker.expect("next page");
+        assert_eq!(next.direction, PaginationDirection::Next);
+
+        let (p2, _) =
+            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 1, false, Some(next))
+                .await
+                .unwrap();
+        assert_eq!(p2.len(), 1);
+        assert_eq!(p2[0].chain_id, 100);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_filter_by_chain_ids() {
+        let g = init_db("stats_chains_filter").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2, 3]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(1, 1, 0).await.unwrap();
+        idb.upsert_stats_chains(2, 2, 0).await.unwrap();
+        idb.upsert_stats_chains(3, 3, 0).await.unwrap();
+
+        let (rows, _) =
+            list_stats_chains(db.as_ref(), &[3, 1], StatsSortOrder::Desc, 50, false, None)
+                .await
+                .unwrap();
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].chain_id, 3);
+        assert_eq!(rows[1].chain_id, 1);
+    }
+}

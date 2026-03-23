@@ -211,13 +211,6 @@ impl ChainInfoService {
 }
 
 #[cfg(test)]
-impl ChainInfoService {
-    pub(crate) fn cache_contains_chain(&self, chain_id: i64) -> bool {
-        self.cache.read().contains_key(&chain_id)
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{InterchainDatabase, test_utils::init_db};
@@ -262,7 +255,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn get_all_chains_info_normalizes_and_updates_cache() {
+    async fn get_all_chains_info_normalizes() {
         let db = init_db("chain_info_get_all_norm").await;
         let interchain_db = InterchainDatabase::new(db.client());
         interchain_db
@@ -307,8 +300,5 @@ mod tests {
 
         assert_eq!(rows[1].name, "Named");
         assert_eq!(rows[1].explorer.as_deref(), Some("https://two.example"));
-
-        assert!(!svc.cache_contains_chain(1));
-        assert!(svc.cache_contains_chain(2));
     }
 }

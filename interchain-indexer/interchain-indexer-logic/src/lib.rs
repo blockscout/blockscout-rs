@@ -8,13 +8,15 @@ mod message_buffer;
 mod provider_layers;
 pub mod settings;
 pub mod stats;
+mod stats_chains_query;
 
 // pub mod event_handler;
 pub mod indexer;
 pub mod log_stream;
 pub mod pagination;
 pub use pagination::{
-    BridgedTokensPaginationLogic, BridgedTokensSortField, BridgedTokensSortOrder,
+    BridgedTokensPaginationLogic, BridgedTokensSortField, StatsChainsPaginationLogic,
+    StatsSortOrder,
 };
 #[cfg(test)]
 pub mod test_utils;
@@ -28,5 +30,5 @@ pub use error::ApiError;
 pub use indexer::*;
 pub use provider_layers::*;
 pub use settings::MessageBufferSettings;
-pub use stats::{BridgedTokenListRow, StatsService};
+pub use stats::{BridgedTokenListRow, StatsChainListRow, StatsService};
 pub use token_info::{TokenInfoService, TokenInfoServiceSettings};

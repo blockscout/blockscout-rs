@@ -4,7 +4,7 @@ use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
-    BridgedTokensListPagination, Pagination,
+    BridgedTokensListPagination, Pagination, StatsChainsListPagination,
 };
 
 use crate::utils::{
@@ -313,17 +313,17 @@ impl BridgedTokensSortField {
     }
 }
 
-/// Request order for bridged-token stats (`stats.proto`: 0=DESC, 1=ASC).
+/// Shared request order for statistics list endpoints (`stats.proto` `SortOrder`: 0=DESC, 1=ASC).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
-pub enum BridgedTokensSortOrder {
+pub enum StatsSortOrder {
     #[default]
     Desc = 1,
     Asc = 2,
 }
 
-impl BridgedTokensSortOrder {
-    /// Maps `stats.proto` `BridgedTokensOrder` (DESC=0, ASC=1).
+impl StatsSortOrder {
+    /// Maps `stats.proto` `SortOrder` (DESC=0, ASC=1).
     pub fn from_proto_order(v: i32) -> anyhow::Result<Self> {
         match v {
             0 => Ok(Self::Desc),
@@ -498,5 +498,107 @@ impl BridgedTokensPaginationLogic {
             name_sort,
             count,
         }))
+    }
+}
+
+const SC_PAGE_TOKEN_VERSION: u8 = 1;
+
+/// Keyset cursor for `/stats/chains` (packed into `page_token` or raw `StatsChainsListPagination`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct StatsChainsPaginationLogic {
+    pub direction: PaginationDirection,
+    pub count: i64,
+    pub chain_id: i64,
+}
+
+impl StatsChainsPaginationLogic {
+    pub fn from_token(token: &str) -> anyhow::Result<Self> {
+        let decoded = URL_SAFE_NO_PAD
+            .decode(token)
+            .map_err(|e| anyhow::anyhow!("Invalid base64 token: {e}"))?;
+        let d = decoded.as_slice();
+        if d.len() != 18 || d[0] != SC_PAGE_TOKEN_VERSION {
+            return Err(anyhow::anyhow!("Invalid stats-chains page token"));
+        }
+        let direction = PaginationDirection::from_u8(d[1])?;
+        let count = i64::from_be_bytes(d[2..10].try_into().unwrap());
+        let chain_id = i64::from_be_bytes(d[10..18].try_into().unwrap());
+        Ok(Self {
+            direction,
+            count,
+            chain_id,
+        })
+    }
+
+    pub fn token(&self) -> anyhow::Result<String> {
+        let mut out = [0u8; 18];
+        out[0] = SC_PAGE_TOKEN_VERSION;
+        out[1] = self.direction.to_u8();
+        out[2..10].copy_from_slice(&self.count.to_be_bytes());
+        out[10..18].copy_from_slice(&self.chain_id.to_be_bytes());
+        Ok(URL_SAFE_NO_PAD.encode(out))
+    }
+
+    pub fn to_list_pagination_proto(
+        &self,
+        use_pagination_token: bool,
+    ) -> StatsChainsListPagination {
+        if use_pagination_token {
+            StatsChainsListPagination {
+                page_token: Some(self.token().unwrap_or_default()),
+                ..Default::default()
+            }
+        } else {
+            StatsChainsListPagination {
+                direction: Some(self.direction.to_string()),
+                count: Some(self.count.max(0) as u64),
+                chain_id: Some(self.chain_id),
+                ..Default::default()
+            }
+        }
+    }
+
+    pub fn try_from_list_pagination_proto(
+        lp: &StatsChainsListPagination,
+    ) -> anyhow::Result<Option<Self>> {
+        let has_cursor = lp.count.is_some() || lp.chain_id.is_some();
+        if lp.direction.is_none() && !has_cursor {
+            return Ok(None);
+        }
+        let dir_str = lp.direction.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("direction is required when continuing a page (raw mode)")
+        })?;
+        let direction = PaginationDirection::from_string(dir_str)?;
+        let count = lp
+            .count
+            .ok_or_else(|| anyhow::anyhow!("count is required when paginating (raw mode)"))?
+            as i64;
+        let chain_id = lp
+            .chain_id
+            .ok_or_else(|| anyhow::anyhow!("chain_id is required when paginating (raw mode)"))?;
+        Ok(Some(Self {
+            direction,
+            count,
+            chain_id,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stats_chains_raw_pagination_requires_count() {
+        let err = StatsChainsPaginationLogic::try_from_list_pagination_proto(
+            &StatsChainsListPagination {
+                direction: Some("next".to_string()),
+                chain_id: Some(42),
+                ..Default::default()
+            },
+        )
+        .expect_err("missing count must be rejected");
+
+        assert!(err.to_string().contains("count is required"));
     }
 }

@@ -11,9 +11,10 @@ use crate::{
     BridgedTokenAggDbRow, BridgedTokenLinkEnriched, InterchainDatabase, TokenInfoService,
     message_buffer::{ConsolidatedMessage, token_keys_from_finalized_for_enrichment},
     pagination::{
-        BridgedTokensPaginationLogic, BridgedTokensSortField, BridgedTokensSortOrder,
-        OutputPagination,
+        BridgedTokensPaginationLogic, BridgedTokensSortField, OutputPagination,
+        StatsChainsPaginationLogic, StatsSortOrder,
     },
+    stats_chains_query::StatsChainListRow,
 };
 
 /// One row of `/stats/bridged-tokens` after joining `stats_asset_tokens` + `tokens`.
@@ -129,7 +130,7 @@ impl StatsService {
         &self,
         chain_id: i64,
         sort: BridgedTokensSortField,
-        order: BridgedTokensSortOrder,
+        order: StatsSortOrder,
         page_size: usize,
         last_page: bool,
         input_pagination: Option<BridgedTokensPaginationLogic>,
@@ -167,6 +168,29 @@ impl StatsService {
             .collect();
 
         Ok((out, pagination))
+    }
+
+    /// Known chains with `unique_transfer_users_count` from `stats_chains` (0 when missing).
+    pub async fn get_stats_chains(
+        &self,
+        chain_ids: Vec<i64>,
+        order: StatsSortOrder,
+        page_size: usize,
+        last_page: bool,
+        input_pagination: Option<StatsChainsPaginationLogic>,
+    ) -> anyhow::Result<(
+        Vec<StatsChainListRow>,
+        OutputPagination<StatsChainsPaginationLogic>,
+    )> {
+        self.db
+            .list_stats_chains(
+                chain_ids.as_slice(),
+                order,
+                page_size,
+                last_page,
+                input_pagination,
+            )
+            .await
     }
 }
 

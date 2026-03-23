@@ -43,6 +43,15 @@ fn compile(
         .field_attribute("BridgedTokensListPagination.name", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("BridgedTokensListPagination.name_blank", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("BridgedTokensListPagination.count", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("StatsChainsListPagination.page_token", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("StatsChainsListPagination.direction", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("StatsChainsListPagination.count", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("StatsChainsListPagination.chain_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetChainsStatsRequest.page_token", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetChainsStatsRequest.direction", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetChainsStatsRequest.count", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetChainsStatsRequest.chain_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetChainsStatsRequest.chain_ids", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("IndexerStatus.extra_info", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("ChainInfo.icon", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("ChainInfo.explorer", "#[serde(skip_serializing_if = \"Option::is_none\")]")
@@ -55,7 +64,8 @@ fn compile(
     // which conflicts with actix-prost's TryFromInto<Enum> custom deserializer.
     config
         .field_attribute("GetBridgedTokensRequest.sort", "#[serde(default)]")
-        .field_attribute("GetBridgedTokensRequest.order", "#[serde(default)]");
+        .field_attribute("GetBridgedTokensRequest.order", "#[serde(default)]")
+        .field_attribute("GetChainsStatsRequest.order", "#[serde(default)]");
     config.compile_protos(protos, includes)?;
     let descriptor_bytes = fs::read(descriptor_file).unwrap();
     let descriptor = FileDescriptorSet::decode(&descriptor_bytes[..]).unwrap();

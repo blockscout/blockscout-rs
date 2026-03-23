@@ -3,8 +3,8 @@
 use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};
 
 use crate::pagination::{
-    BridgedTokensPaginationLogic, BridgedTokensSortField, BridgedTokensSortOrder, OutputPagination,
-    PaginationDirection,
+    BridgedTokensPaginationLogic, BridgedTokensSortField, OutputPagination, PaginationDirection,
+    StatsSortOrder,
 };
 
 #[derive(Debug, Clone, FromQueryResult)]
@@ -58,65 +58,59 @@ pub struct BridgedTokenLinkEnriched {
     pub decimals: Option<i16>,
 }
 
-fn forward_order_clause(
-    sort: BridgedTokensSortField,
-    order: BridgedTokensSortOrder,
-) -> &'static str {
+fn forward_order_clause(sort: BridgedTokensSortField, order: StatsSortOrder) -> &'static str {
     match (sort, order) {
-        (BridgedTokensSortField::Name, BridgedTokensSortOrder::Asc) => {
+        (BridgedTokensSortField::Name, StatsSortOrder::Asc) => {
             "a.name_blank ASC, a.name_sort ASC, a.stats_asset_id ASC"
         }
-        (BridgedTokensSortField::Name, BridgedTokensSortOrder::Desc) => {
+        (BridgedTokensSortField::Name, StatsSortOrder::Desc) => {
             "a.name_blank ASC, a.name_sort DESC, a.stats_asset_id DESC"
         }
-        (BridgedTokensSortField::InputTransfers, BridgedTokensSortOrder::Asc) => {
+        (BridgedTokensSortField::InputTransfers, StatsSortOrder::Asc) => {
             "a.input_transfers_count ASC, a.stats_asset_id ASC"
         }
-        (BridgedTokensSortField::InputTransfers, BridgedTokensSortOrder::Desc) => {
+        (BridgedTokensSortField::InputTransfers, StatsSortOrder::Desc) => {
             "a.input_transfers_count DESC, a.stats_asset_id DESC"
         }
-        (BridgedTokensSortField::OutputTransfers, BridgedTokensSortOrder::Asc) => {
+        (BridgedTokensSortField::OutputTransfers, StatsSortOrder::Asc) => {
             "a.output_transfers_count ASC, a.stats_asset_id ASC"
         }
-        (BridgedTokensSortField::OutputTransfers, BridgedTokensSortOrder::Desc) => {
+        (BridgedTokensSortField::OutputTransfers, StatsSortOrder::Desc) => {
             "a.output_transfers_count DESC, a.stats_asset_id DESC"
         }
-        (BridgedTokensSortField::TotalTransfers, BridgedTokensSortOrder::Asc) => {
+        (BridgedTokensSortField::TotalTransfers, StatsSortOrder::Asc) => {
             "a.total_transfers_count ASC, a.stats_asset_id ASC"
         }
-        (BridgedTokensSortField::TotalTransfers, BridgedTokensSortOrder::Desc) => {
+        (BridgedTokensSortField::TotalTransfers, StatsSortOrder::Desc) => {
             "a.total_transfers_count DESC, a.stats_asset_id DESC"
         }
     }
 }
 
-fn inverse_order_clause(
-    sort: BridgedTokensSortField,
-    order: BridgedTokensSortOrder,
-) -> &'static str {
+fn inverse_order_clause(sort: BridgedTokensSortField, order: StatsSortOrder) -> &'static str {
     match (sort, order) {
-        (BridgedTokensSortField::Name, BridgedTokensSortOrder::Asc) => {
+        (BridgedTokensSortField::Name, StatsSortOrder::Asc) => {
             "a.name_blank DESC, a.name_sort DESC, a.stats_asset_id DESC"
         }
-        (BridgedTokensSortField::Name, BridgedTokensSortOrder::Desc) => {
+        (BridgedTokensSortField::Name, StatsSortOrder::Desc) => {
             "a.name_blank DESC, a.name_sort ASC, a.stats_asset_id ASC"
         }
-        (BridgedTokensSortField::InputTransfers, BridgedTokensSortOrder::Asc) => {
+        (BridgedTokensSortField::InputTransfers, StatsSortOrder::Asc) => {
             "a.input_transfers_count DESC, a.stats_asset_id DESC"
         }
-        (BridgedTokensSortField::InputTransfers, BridgedTokensSortOrder::Desc) => {
+        (BridgedTokensSortField::InputTransfers, StatsSortOrder::Desc) => {
             "a.input_transfers_count ASC, a.stats_asset_id ASC"
         }
-        (BridgedTokensSortField::OutputTransfers, BridgedTokensSortOrder::Asc) => {
+        (BridgedTokensSortField::OutputTransfers, StatsSortOrder::Asc) => {
             "a.output_transfers_count DESC, a.stats_asset_id DESC"
         }
-        (BridgedTokensSortField::OutputTransfers, BridgedTokensSortOrder::Desc) => {
+        (BridgedTokensSortField::OutputTransfers, StatsSortOrder::Desc) => {
             "a.output_transfers_count ASC, a.stats_asset_id ASC"
         }
-        (BridgedTokensSortField::TotalTransfers, BridgedTokensSortOrder::Asc) => {
+        (BridgedTokensSortField::TotalTransfers, StatsSortOrder::Asc) => {
             "a.total_transfers_count DESC, a.stats_asset_id DESC"
         }
-        (BridgedTokensSortField::TotalTransfers, BridgedTokensSortOrder::Desc) => {
+        (BridgedTokensSortField::TotalTransfers, StatsSortOrder::Desc) => {
             "a.total_transfers_count ASC, a.stats_asset_id ASC"
         }
     }
@@ -134,7 +128,7 @@ fn count_column(sort: BridgedTokensSortField) -> &'static str {
 /// `Next` cursor: rows strictly after `m` in forward display order.
 fn cursor_where_next(
     sort: BridgedTokensSortField,
-    order: BridgedTokensSortOrder,
+    order: StatsSortOrder,
     m: &BridgedTokensPaginationLogic,
     p0: usize,
 ) -> (String, Vec<Value>) {
@@ -150,13 +144,13 @@ fn cursor_where_next(
             let p1 = p0 + 1;
             let p2 = p0 + 2;
             match order {
-                BridgedTokensSortOrder::Asc => format!(
+                StatsSortOrder::Asc => format!(
                     " AND ((a.name_blank > ${p0}) OR (a.name_blank = ${p0} AND (a.name_sort > ${p1} OR (a.name_sort = ${p1} AND a.stats_asset_id > ${p2}))))",
                     p0 = p0,
                     p1 = p1,
                     p2 = p2,
                 ),
-                BridgedTokensSortOrder::Desc => format!(
+                StatsSortOrder::Desc => format!(
                     " AND ((a.name_blank > ${p0}) OR (a.name_blank = ${p0} AND (a.name_sort < ${p1} OR (a.name_sort = ${p1} AND a.stats_asset_id < ${p2}))))",
                     p0 = p0,
                     p1 = p1,
@@ -174,13 +168,13 @@ fn cursor_where_next(
             vals.push(Value::BigInt(Some(id)));
             let p1 = p0 + 1;
             match order {
-                BridgedTokensSortOrder::Asc => format!(
+                StatsSortOrder::Asc => format!(
                     " AND (({col} > ${p0}) OR ({col} = ${p0} AND a.stats_asset_id > ${p1}))",
                     col = col,
                     p0 = p0,
                     p1 = p1,
                 ),
-                BridgedTokensSortOrder::Desc => format!(
+                StatsSortOrder::Desc => format!(
                     " AND (({col} < ${p0}) OR ({col} = ${p0} AND a.stats_asset_id < ${p1}))",
                     col = col,
                     p0 = p0,
@@ -195,7 +189,7 @@ fn cursor_where_next(
 /// `Prev` cursor: rows strictly before `m` (first row of the client's current page) in display order.
 fn cursor_where_prev(
     sort: BridgedTokensSortField,
-    order: BridgedTokensSortOrder,
+    order: StatsSortOrder,
     m: &BridgedTokensPaginationLogic,
     p0: usize,
 ) -> (String, Vec<Value>) {
@@ -211,13 +205,13 @@ fn cursor_where_prev(
             let p1 = p0 + 1;
             let p2 = p0 + 2;
             match order {
-                BridgedTokensSortOrder::Asc => format!(
+                StatsSortOrder::Asc => format!(
                     " AND ((a.name_blank < ${p0}) OR (a.name_blank = ${p0} AND (a.name_sort < ${p1} OR (a.name_sort = ${p1} AND a.stats_asset_id < ${p2}))))",
                     p0 = p0,
                     p1 = p1,
                     p2 = p2,
                 ),
-                BridgedTokensSortOrder::Desc => format!(
+                StatsSortOrder::Desc => format!(
                     " AND ((a.name_blank < ${p0}) OR (a.name_blank = ${p0} AND (a.name_sort > ${p1} OR (a.name_sort = ${p1} AND a.stats_asset_id > ${p2}))))",
                     p0 = p0,
                     p1 = p1,
@@ -235,13 +229,13 @@ fn cursor_where_prev(
             vals.push(Value::BigInt(Some(id)));
             let p1 = p0 + 1;
             match order {
-                BridgedTokensSortOrder::Asc => format!(
+                StatsSortOrder::Asc => format!(
                     " AND (({col} < ${p0}) OR ({col} = ${p0} AND a.stats_asset_id < ${p1}))",
                     col = col,
                     p0 = p0,
                     p1 = p1,
                 ),
-                BridgedTokensSortOrder::Desc => format!(
+                StatsSortOrder::Desc => format!(
                     " AND (({col} > ${p0}) OR ({col} = ${p0} AND a.stats_asset_id > ${p1}))",
                     col = col,
                     p0 = p0,
@@ -281,7 +275,7 @@ pub async fn list_bridged_token_stats_for_chain(
     db: &impl ConnectionTrait,
     chain_id: i64,
     sort: BridgedTokensSortField,
-    order: BridgedTokensSortOrder,
+    order: StatsSortOrder,
     page_size: usize,
     last_page: bool,
     input_pagination: Option<BridgedTokensPaginationLogic>,
@@ -535,7 +529,7 @@ mod tests {
             db.as_ref(),
             1,
             BridgedTokensSortField::Name,
-            BridgedTokensSortOrder::Asc,
+            StatsSortOrder::Asc,
             50,
             false,
             None,
@@ -574,7 +568,7 @@ mod tests {
             db.as_ref(),
             1,
             BridgedTokensSortField::OutputTransfers,
-            BridgedTokensSortOrder::Desc,
+            StatsSortOrder::Desc,
             50,
             false,
             None,
@@ -601,7 +595,7 @@ mod tests {
             db.as_ref(),
             1,
             BridgedTokensSortField::Name,
-            BridgedTokensSortOrder::Asc,
+            StatsSortOrder::Asc,
             50,
             false,
             None,
@@ -630,7 +624,7 @@ mod tests {
             db.as_ref(),
             1,
             BridgedTokensSortField::Name,
-            BridgedTokensSortOrder::Asc,
+            StatsSortOrder::Asc,
             1,
             false,
             None,
@@ -646,7 +640,7 @@ mod tests {
             db.as_ref(),
             1,
             BridgedTokensSortField::Name,
-            BridgedTokensSortOrder::Asc,
+            StatsSortOrder::Asc,
             1,
             false,
             Some(next_tok),
@@ -661,7 +655,7 @@ mod tests {
             db.as_ref(),
             1,
             BridgedTokensSortField::Name,
-            BridgedTokensSortOrder::Asc,
+            StatsSortOrder::Asc,
             1,
             false,
             Some(prev_tok),
@@ -685,7 +679,7 @@ mod tests {
             db.as_ref(),
             1,
             BridgedTokensSortField::Name,
-            BridgedTokensSortOrder::Asc,
+            StatsSortOrder::Asc,
             2,
             true,
             None,
@@ -766,7 +760,7 @@ mod tests {
             .get_bridged_tokens_for_chain(
                 1,
                 BridgedTokensSortField::Name,
-                BridgedTokensSortOrder::Asc,
+                StatsSortOrder::Asc,
                 10,
                 false,
                 None,

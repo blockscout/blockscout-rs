@@ -4,8 +4,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use interchain_indexer_logic::{
-    BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField,
-    BridgedTokensSortOrder, StatsService, utils::to_hex_prefixed,
+    BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, StatsChainListRow,
+    StatsChainsPaginationLogic, StatsService, StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -82,7 +82,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
     ) -> Result<Response<GetBridgedTokensResponse>, Status> {
         let inner = request.into_inner();
         let sort = BridgedTokensSortField::from_proto_sort(inner.sort);
-        let order = BridgedTokensSortOrder::from_proto_order(inner.order)
+        let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let input_pagination = if self.api_settings.use_pagination_token {
@@ -137,6 +137,106 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         };
         Ok(Response::new(response))
     }
+
+    async fn get_chains_stats(
+        &self,
+        request: Request<GetChainsStatsRequest>,
+    ) -> Result<Response<GetChainsStatsResponse>, Status> {
+        let inner = request.into_inner();
+        let chain_ids = parse_chain_ids_csv(inner.chain_ids.as_deref())?;
+        let order = StatsSortOrder::from_proto_order(inner.order)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        let input_pagination = if self.api_settings.use_pagination_token {
+            if let Some(t) = inner.page_token.as_deref() {
+                let m = StatsChainsPaginationLogic::from_token(t)
+                    .map_err(|e| Status::invalid_argument(e.to_string()))?;
+                Some(m)
+            } else {
+                None
+            }
+        } else {
+            let lp = StatsChainsListPagination {
+                page_token: inner.page_token.clone(),
+                direction: inner.direction.clone(),
+                count: inner.count,
+                chain_id: inner.chain_id,
+            };
+            StatsChainsPaginationLogic::try_from_list_pagination_proto(&lp)
+                .map_err(|e| Status::invalid_argument(e.to_string()))?
+        };
+
+        let page_size = inner
+            .page_size
+            .unwrap_or(self.api_settings.default_page_size)
+            .clamp(1, self.api_settings.max_page_size) as usize;
+        let last_page = inner.last_page.unwrap_or(false);
+
+        let (rows, pagination) = self
+            .stats
+            .get_stats_chains(
+                chain_ids,
+                order,
+                page_size,
+                last_page,
+                input_pagination,
+            )
+            .await
+            .map_err(map_stats_error)?;
+
+        let use_tok = self.api_settings.use_pagination_token;
+        let response = GetChainsStatsResponse {
+            items: rows.into_iter().map(stats_chain_row_to_proto).collect(),
+            next_page_params: pagination
+                .next_marker
+                .map(|m| m.to_list_pagination_proto(use_tok)),
+            prev_page_params: pagination
+                .prev_marker
+                .map(|m| m.to_list_pagination_proto(use_tok)),
+        };
+        Ok(Response::new(response))
+    }
+}
+
+fn parse_chain_ids_csv(input: Option<&str>) -> Result<Vec<i64>, Status> {
+    let Some(input) = input.map(str::trim) else {
+        return Ok(Vec::new());
+    };
+    if input.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    input
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            part.parse::<i64>().map_err(|_| {
+                Status::invalid_argument(format!(
+                    "invalid chain_ids value `{part}`: expected comma-separated int64 ids"
+                ))
+            })
+        })
+        .collect()
+}
+
+fn stats_chain_row_to_proto(row: StatsChainListRow) -> StatsChainRow {
+    const UNKNOWN: &str = "Unknown";
+    let name = if row.name.is_empty() {
+        UNKNOWN.to_string()
+    } else {
+        row.name
+    };
+    let explorer_url = row
+        .explorer_url
+        .map(|url| url.trim_end_matches('/').to_string());
+    StatsChainRow {
+        chain_id: row.chain_id,
+        name,
+        icon_url: row.icon_url,
+        explorer_url,
+        unique_transfer_users_count: i64_to_u64_nonneg(row.unique_transfer_users_count),
+    }
 }
 
 fn bridged_row_to_proto(row: BridgedTokenListRow) -> StatsBridgedTokenRow {
@@ -170,4 +270,31 @@ fn i64_to_u64_nonneg(v: i64) -> u64 {
 
 fn map_stats_error(err: anyhow::Error) -> Status {
     Status::internal(err.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_chain_ids_csv;
+
+    #[test]
+    fn parse_chain_ids_csv_accepts_missing_and_empty() {
+        assert_eq!(parse_chain_ids_csv(None).unwrap(), Vec::<i64>::new());
+        assert_eq!(parse_chain_ids_csv(Some("")).unwrap(), Vec::<i64>::new());
+        assert_eq!(parse_chain_ids_csv(Some("   ")).unwrap(), Vec::<i64>::new());
+    }
+
+    #[test]
+    fn parse_chain_ids_csv_parses_comma_separated_ids() {
+        assert_eq!(
+            parse_chain_ids_csv(Some("123,456, 789")).unwrap(),
+            vec![123, 456, 789]
+        );
+    }
+
+    #[test]
+    fn parse_chain_ids_csv_rejects_invalid_values() {
+        let err = parse_chain_ids_csv(Some("123,abc")).expect_err("must reject invalid id");
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("invalid chain_ids value `abc`"));
+    }
 }

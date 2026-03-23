@@ -3,4 +3,5 @@
 pub(crate) mod projection;
 mod service;
 
+pub use crate::stats_chains_query::StatsChainListRow;
 pub use service::{BridgedTokenListRow, StatsService};
