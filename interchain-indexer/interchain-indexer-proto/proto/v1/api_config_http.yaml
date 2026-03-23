@@ -5,6 +5,9 @@ http:
   rules:
     #################### Messages & Transfers ####################
 
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetChains
+      get: /api/v1/interchain/chains
+
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessages
       get: /api/v1/interchain/messages
 

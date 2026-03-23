@@ -576,6 +576,19 @@ impl InterchainService for InterchainServiceImpl {
         };
         Ok(Response::new(response))
     }
+
+    async fn get_chains(
+        &self,
+        _request: Request<GetChainsRequest>,
+    ) -> Result<Response<GetChainsResponse>, Status> {
+        let models = self
+            .chain_info_service
+            .get_all_chains_info()
+            .await
+            .map_err(map_db_error)?;
+        let items = models.into_iter().map(chain_info_logic_to_proto).collect();
+        Ok(Response::new(GetChainsResponse { items }))
+    }
 }
 
 fn message_status_to_proto(status: &DbMessageStatus) -> MessageStatus {

@@ -832,7 +832,10 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         .context("failed to parse message key")?;
 
     let dst_chain_hex = event.destinationBlockchainID.as_slice();
-    let dst_chain_id = ctx.blockchain_id_resolver.resolve(dst_chain_hex).await?;
+    let dst_chain_id = ctx
+        .blockchain_id_resolver
+        .resolve(dst_chain_hex, ctx.process_unknown_chains)
+        .await?;
 
     let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
 
@@ -976,7 +979,10 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
         .context("failed to parse message key")?;
 
     let source_chain_id = event.sourceBlockchainID.as_slice();
-    let source_chain_id = ctx.blockchain_id_resolver.resolve(source_chain_id).await?;
+    let source_chain_id = ctx
+        .blockchain_id_resolver
+        .resolve(source_chain_id, ctx.process_unknown_chains)
+        .await?;
 
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
@@ -1090,7 +1096,10 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
         .context("failed to parse message key")?;
 
     let src_chain_id = event.sourceBlockchainID.as_slice();
-    let src_chain_id = ctx.blockchain_id_resolver.resolve(src_chain_id).await?;
+    let src_chain_id = ctx
+        .blockchain_id_resolver
+        .resolve(src_chain_id, ctx.process_unknown_chains)
+        .await?;
 
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
@@ -1181,7 +1190,10 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
         .context("failed to parse message key")?;
 
     let src_chain_id = event.sourceBlockchainID.as_slice();
-    let src_chain_id = ctx.blockchain_id_resolver.resolve(src_chain_id).await?;
+    let src_chain_id = ctx
+        .blockchain_id_resolver
+        .resolve(src_chain_id, ctx.process_unknown_chains)
+        .await?;
 
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 

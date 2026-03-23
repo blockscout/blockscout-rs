@@ -198,7 +198,11 @@ impl InterchainDatabase {
     }
 
     pub async fn get_all_chains(&self) -> anyhow::Result<Vec<chains::Model>> {
-        match chains::Entity::find().all(self.db.as_ref()).await {
+        match chains::Entity::find()
+            .order_by_asc(chains::Column::Id)
+            .all(self.db.as_ref())
+            .await
+        {
             Ok(result) => Ok(result),
 
             Err(e) => {

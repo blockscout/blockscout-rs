@@ -19,6 +19,20 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/interchain/chains:
+    get:
+      operationId: InterchainService_GetChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - InterchainService
   /api/v1/interchain/messages:
     get:
       operationId: InterchainService_GetMessages
@@ -735,6 +749,14 @@ definitions:
         $ref: '#/definitions/v1BridgedTokensListPagination'
       prev_page_params:
         $ref: '#/definitions/v1BridgedTokensListPagination'
+  v1GetChainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainInfo'
   v1GetCommonStatisticsResponse:
     type: object
     properties:

@@ -26,7 +26,17 @@ impl BlockchainIdResolver {
         }
     }
 
-    pub async fn resolve(&self, blockchain_id: &[u8]) -> Result<i64> {
+    /// Resolve an Avalanche `blockchain_id` (32 bytes) to an EVM `chain_id`.
+    ///
+    /// Fast paths: in-memory cache, then `avalanche_icm_blockchain_ids` — unchanged by
+    /// `force_add_chain`.
+    ///
+    /// When the Data API is consulted successfully:
+    /// - `force_add_chain == true`: ensure a `chains` row exists, upsert
+    ///   `avalanche_icm_blockchain_ids`, return `chain_id`.
+    /// - `force_add_chain == false`: if `chains` already contains `evm_chain_id`, same
+    ///   persistence as above; otherwise skip DB writes but still return and cache `chain_id`.
+    pub async fn resolve(&self, blockchain_id: &[u8], force_add_chain: bool) -> Result<i64> {
         let key: CacheKey = blockchain_id.try_into().map_err(|_| {
             anyhow!(
                 "expected 32-byte blockchain_id, got {}",
@@ -55,33 +65,46 @@ impl BlockchainIdResolver {
                 let chain_id = resp.evm_chain_id.context("missing evm_chain_id")?;
                 let chain_name = resp.blockchain_name.clone();
 
-                // Ensure FK target exists.
-                if let Err(err) = this
-                    .db
-                    .ensure_chain_exists(chain_id, Some(chain_name), None)
-                    .await
-                {
-                    tracing::warn!(
-                        err = ?err,
-                        chain_id,
-                        blockchain_id = %resp.blockchain_id,
-                        blockchain_name = ?resp.blockchain_name,
-                        "failed to ensure chains row for discovered evmChainId"
-                    );
-                }
+                let persist = force_add_chain
+                    || this
+                        .db
+                        .get_chain_by_id(
+                            u64::try_from(chain_id)
+                                .map_err(|_| anyhow!("evm_chain_id does not fit u64"))?,
+                        )
+                        .await
+                        .context("failed to query chains")?
+                        .is_some();
 
-                if let Err(err) = this
-                    .db
-                    .upsert_avalanche_icm_blockchain_id(key.to_vec(), chain_id)
-                    .await
-                {
-                    tracing::warn!(
-                        err = ?err,
-                        chain_id,
-                        blockchain_id = %resp.blockchain_id,
-                        blockchain_name = ?resp.blockchain_name,
-                        "failed to upsert avalanche_icm_blockchain_ids row"
-                    );
+                if persist {
+                    // Ensure FK target exists when we persist the mapping.
+                    if let Err(err) = this
+                        .db
+                        .ensure_chain_exists(chain_id, Some(chain_name.clone()), None)
+                        .await
+                    {
+                        tracing::warn!(
+                            err = ?err,
+                            chain_id,
+                            blockchain_id = %resp.blockchain_id,
+                            blockchain_name = ?resp.blockchain_name,
+                            "failed to ensure chains row for discovered evmChainId"
+                        );
+                    }
+
+                    if let Err(err) = this
+                        .db
+                        .upsert_avalanche_icm_blockchain_id(key.to_vec(), chain_id)
+                        .await
+                    {
+                        tracing::warn!(
+                            err = ?err,
+                            chain_id,
+                            blockchain_id = %resp.blockchain_id,
+                            blockchain_name = ?resp.blockchain_name,
+                            "failed to upsert avalanche_icm_blockchain_ids row"
+                        );
+                    }
                 }
 
                 Ok::<CacheValue, anyhow::Error>(chain_id)
@@ -134,7 +157,7 @@ mod tests {
 
         let resolver = BlockchainIdResolver::new(settings, interchain_db.clone());
 
-        let resolved = resolver.resolve(&bytes).await?;
+        let resolved = resolver.resolve(&bytes, true).await?;
         anyhow::ensure!(resolved == 8021, "expected 8021, got {:?}", resolved);
 
         let persisted = interchain_db
