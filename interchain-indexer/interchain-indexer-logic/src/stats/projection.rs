@@ -7,7 +7,8 @@ use chrono::Utc;
 use interchain_indexer_entity::{
     crosschain_messages, crosschain_transfers,
     sea_orm_active_enums::{EdgeAmountSide, MessageStatus},
-    stats_asset_edges, stats_asset_tokens, stats_assets, stats_messages, tokens,
+    stats_asset_edges, stats_asset_tokens, stats_assets, stats_messages, stats_messages_days,
+    tokens,
 };
 use sea_orm::{
     ActiveValue::{Set, Unchanged},
@@ -31,7 +32,8 @@ pub fn token_keys_for_stats_enrichment_from_transfer_models(
     s.into_iter().collect()
 }
 
-/// Project eligible finalized messages into `stats_messages` and mark them processed.
+/// Project eligible finalized messages into `stats_messages`, `stats_messages_days`,
+/// and mark them processed.
 /// Eligible: `stats_processed = 0`, `status = completed`, `dst_chain_id` set.
 /// Returns how many message rows were updated.
 pub async fn project_messages_batch(
@@ -63,9 +65,13 @@ pub async fn project_messages_batch(
     }
 
     let mut by_edge: HashMap<(i64, i64), i64> = HashMap::new();
+    let mut by_edge_day: HashMap<(chrono::NaiveDate, i64, i64), i64> = HashMap::new();
     for m in &rows {
         let dst = m.dst_chain_id.expect("filtered is_not_null");
         *by_edge.entry((m.src_chain_id, dst)).or_insert(0) += 1;
+        *by_edge_day
+            .entry((m.init_timestamp.date(), m.src_chain_id, dst))
+            .or_insert(0) += 1;
     }
 
     for ((src_chain_id, dst_chain_id), messages_delta) in by_edge {
@@ -90,6 +96,39 @@ pub async fn project_messages_batch(
                     .add(messages_delta),
                 )
                 .value(stats_messages::Column::UpdatedAt, Expr::current_timestamp())
+                .to_owned(),
+            )
+            .exec(tx)
+            .await?;
+    }
+
+    for ((date, src_chain_id, dst_chain_id), messages_delta) in by_edge_day {
+        let model = stats_messages_days::ActiveModel {
+            date: Set(date),
+            src_chain_id: Set(src_chain_id),
+            dst_chain_id: Set(dst_chain_id),
+            messages_count: Set(messages_delta),
+            ..Default::default()
+        };
+        stats_messages_days::Entity::insert(model)
+            .on_conflict(
+                OnConflict::columns([
+                    stats_messages_days::Column::Date,
+                    stats_messages_days::Column::SrcChainId,
+                    stats_messages_days::Column::DstChainId,
+                ])
+                .value(
+                    stats_messages_days::Column::MessagesCount,
+                    Expr::col((
+                        stats_messages_days::Entity,
+                        stats_messages_days::Column::MessagesCount,
+                    ))
+                    .add(messages_delta),
+                )
+                .value(
+                    stats_messages_days::Column::UpdatedAt,
+                    Expr::current_timestamp(),
+                )
                 .to_owned(),
             )
             .exec(tx)

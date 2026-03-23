@@ -1,3 +1,8 @@
+DROP INDEX IF EXISTS stats_messages_days_dst_chain_date_idx;
+DROP INDEX IF EXISTS stats_messages_days_src_chain_date_idx;
+DROP INDEX IF EXISTS stats_messages_days_date_idx;
+DROP TABLE IF EXISTS stats_messages_days;
+
 DROP INDEX IF EXISTS stats_messages_dst_chain_idx;
 DROP INDEX IF EXISTS stats_messages_src_chain_idx;
 DROP TABLE IF EXISTS stats_messages;

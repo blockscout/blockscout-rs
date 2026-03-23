@@ -7,9 +7,9 @@ use interchain_indexer_entity::{
 };
 use parking_lot::RwLock;
 use sea_orm::{
-    ActiveValue, ColumnTrait, Condition, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
-    JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
-    StatementBuilder, TransactionTrait,
+    ActiveValue, ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, RelationTrait, Statement, StatementBuilder, TransactionTrait, Value,
     entity::prelude::*,
     prelude::Expr,
     sea_query::{Alias, Asterisk, Func, OnConflict, Query, SelectStatement, UnionType},
@@ -36,6 +36,13 @@ pub struct InterchainDailyCounters {
     pub date: NaiveDate,
     pub daily_messages: u64,
     pub daily_transfers: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, FromQueryResult)]
+pub struct MessagePathStatsRow {
+    pub src_chain_id: i64,
+    pub dst_chain_id: i64,
+    pub messages_count: i64,
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -158,6 +165,77 @@ fn select_stats_chains_transfer_user_counts() -> SelectStatement {
         .from_subquery(pairs, Alias::new("u"))
         .group_by_col(Alias::new("chain_id"))
         .take()
+}
+
+#[derive(Copy, Clone)]
+enum MessagePathDirection {
+    Outgoing,
+    Incoming,
+}
+
+fn build_all_time_message_paths_query(
+    chain_id: i64,
+    direction: MessagePathDirection,
+) -> (String, Vec<Value>) {
+    let filter_column = match direction {
+        MessagePathDirection::Outgoing => "src_chain_id",
+        MessagePathDirection::Incoming => "dst_chain_id",
+    };
+
+    (
+        format!(
+            r#"
+SELECT src_chain_id, dst_chain_id, messages_count
+FROM stats_messages
+WHERE {filter_column} = $1
+ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
+"#
+        ),
+        vec![Value::BigInt(Some(chain_id))],
+    )
+}
+
+fn build_bounded_message_paths_query(
+    chain_id: i64,
+    from_date: Option<NaiveDate>,
+    to_date: Option<NaiveDate>,
+    direction: MessagePathDirection,
+) -> (String, Vec<Value>) {
+    let filter_column = match direction {
+        MessagePathDirection::Outgoing => "src_chain_id",
+        MessagePathDirection::Incoming => "dst_chain_id",
+    };
+
+    let mut where_parts = vec![format!("{filter_column} = $1")];
+    let mut values = vec![Value::BigInt(Some(chain_id))];
+    let mut placeholder = 2;
+
+    if let Some(from_date) = from_date {
+        where_parts.push(format!("date >= ${placeholder}"));
+        values.push(Value::ChronoDate(Some(Box::new(from_date))));
+        placeholder += 1;
+    }
+
+    if let Some(to_date) = to_date {
+        where_parts.push(format!("date < ${placeholder}"));
+        values.push(Value::ChronoDate(Some(Box::new(to_date))));
+    }
+
+    (
+        format!(
+            r#"
+SELECT src_chain_id,
+       dst_chain_id,
+       SUM(messages_count)::bigint AS messages_count
+FROM stats_messages_days
+WHERE {}
+GROUP BY src_chain_id, dst_chain_id
+ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
+"#,
+            where_parts.join(" AND ")
+        ),
+        values,
+    )
 }
 
 impl InterchainDatabase {
@@ -893,6 +971,54 @@ impl InterchainDatabase {
                 Err(e.into())
             }
         }
+    }
+
+    pub async fn get_outgoing_message_paths(
+        &self,
+        chain_id: i64,
+        from_date: Option<NaiveDate>,
+        to_date: Option<NaiveDate>,
+    ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
+        self.get_message_paths(chain_id, from_date, to_date, MessagePathDirection::Outgoing)
+            .await
+    }
+
+    pub async fn get_incoming_message_paths(
+        &self,
+        chain_id: i64,
+        from_date: Option<NaiveDate>,
+        to_date: Option<NaiveDate>,
+    ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
+        self.get_message_paths(chain_id, from_date, to_date, MessagePathDirection::Incoming)
+            .await
+    }
+
+    async fn get_message_paths(
+        &self,
+        chain_id: i64,
+        from_date: Option<NaiveDate>,
+        to_date: Option<NaiveDate>,
+        direction: MessagePathDirection,
+    ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
+        if let (Some(from_date), Some(to_date)) = (from_date, to_date)
+            && from_date >= to_date
+        {
+            return Ok(Vec::new());
+        }
+
+        let (sql, values) = match (from_date, to_date) {
+            (None, None) => build_all_time_message_paths_query(chain_id, direction),
+            _ => build_bounded_message_paths_query(chain_id, from_date, to_date, direction),
+        };
+        let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, values);
+
+        let raw = self.db.query_all(stmt).await?;
+        let mut rows = Vec::with_capacity(raw.len());
+        for row in raw {
+            rows.push(MessagePathStatsRow::from_query_result(&row, "")?);
+        }
+
+        Ok(rows)
     }
 
     /// Assigns a stats asset to a transfer. Transfer may keep stats_asset_id = NULL.
@@ -2216,19 +2342,20 @@ fn build_pagination_from_transfers(
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
+    use chrono::{NaiveDate, Utc};
     use interchain_indexer_entity::{
         chains, crosschain_messages, crosschain_transfers,
         sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
-        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
+        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages,
+        stats_messages_days, tokens,
     };
     use sea_orm::{
-        ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait,
-        prelude::BigDecimal,
+        ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+        TransactionTrait, prelude::BigDecimal,
     };
 
     use crate::{
-        InterchainDatabase,
+        InterchainDatabase, MessagePathStatsRow,
         test_utils::{init_db, mock_db::fill_mock_interchain_database},
     };
 
@@ -3250,6 +3377,18 @@ mod tests {
         }
     }
 
+    fn completed_message_at(
+        id: i64,
+        src: i64,
+        dst: i64,
+        init_timestamp: chrono::NaiveDateTime,
+    ) -> crosschain_messages::ActiveModel {
+        crosschain_messages::ActiveModel {
+            init_timestamp: Set(init_timestamp),
+            ..completed_message(id, src, dst)
+        }
+    }
+
     fn completed_message_without_indexed_source(
         id: i64,
         src: i64,
@@ -3299,6 +3438,49 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
+    async fn stats_projection_message_updates_stats_messages_days() {
+        let _db = init_db("stats_projection_message_updates_stats_messages_days").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let day = NaiveDate::from_ymd_opt(2026, 3, 1).unwrap();
+        crosschain_messages::Entity::insert(completed_message_at(
+            92060,
+            1,
+            100,
+            day.and_hms_opt(12, 34, 56).unwrap(),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(tx, &[(92060i64, 1i32)])
+                    .await
+                    .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        let all_time = stats_messages::Entity::find_by_id((1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(all_time.messages_count, 1);
+
+        let daily = stats_messages_days::Entity::find_by_id((day, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(daily.messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
     async fn stats_projection_message_idempotent() {
         let _db = init_db("stats_projection_message_idempotent").await;
         let conn = _db.client();
@@ -3326,6 +3508,291 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(row.messages_count, 1);
+        let daily_rows = stats_messages_days::Entity::find().all(db).await.unwrap();
+        assert_eq!(daily_rows.len(), 1);
+        assert_eq!(daily_rows[0].messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_same_edge_same_day_increments_single_daily_row() {
+        let _db = init_db("stats_projection_same_edge_same_day").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let day = NaiveDate::from_ymd_opt(2026, 3, 2).unwrap();
+
+        for (id, hour) in [(92061i64, 1u32), (92062i64, 23u32)] {
+            crosschain_messages::Entity::insert(completed_message_at(
+                id,
+                1,
+                100,
+                day.and_hms_opt(hour, 0, 0).unwrap(),
+            ))
+            .exec(db)
+            .await
+            .unwrap();
+        }
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92061i64, 1i32), (92062i64, 1i32)],
+                )
+                .await
+                .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        let daily = stats_messages_days::Entity::find()
+            .filter(stats_messages_days::Column::Date.eq(day))
+            .filter(stats_messages_days::Column::SrcChainId.eq(1i64))
+            .filter(stats_messages_days::Column::DstChainId.eq(100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(daily.messages_count, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_same_edge_different_days_create_separate_daily_rows() {
+        let _db = init_db("stats_projection_same_edge_different_days").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let day1 = NaiveDate::from_ymd_opt(2026, 3, 3).unwrap();
+        let day2 = NaiveDate::from_ymd_opt(2026, 3, 4).unwrap();
+
+        crosschain_messages::Entity::insert_many([
+            completed_message_at(92063, 1, 100, day1.and_hms_opt(1, 0, 0).unwrap()),
+            completed_message_at(92064, 1, 100, day2.and_hms_opt(1, 0, 0).unwrap()),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92063i64, 1i32), (92064i64, 1i32)],
+                )
+                .await
+                .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        let rows = stats_messages_days::Entity::find()
+            .filter(stats_messages_days::Column::SrcChainId.eq(1i64))
+            .filter(stats_messages_days::Column::DstChainId.eq(100i64))
+            .order_by_asc(stats_messages_days::Column::Date)
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].date, day1);
+        assert_eq!(rows[0].messages_count, 1);
+        assert_eq!(rows[1].date, day2);
+        assert_eq!(rows[1].messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_reversed_direction_separate_daily_rows() {
+        let _db = init_db("stats_projection_reversed_direction_daily").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let day = NaiveDate::from_ymd_opt(2026, 3, 5).unwrap();
+
+        crosschain_messages::Entity::insert_many([
+            completed_message_at(92065, 1, 100, day.and_hms_opt(8, 0, 0).unwrap()),
+            completed_message_at(92066, 100, 1, day.and_hms_opt(9, 0, 0).unwrap()),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92065i64, 1i32), (92066i64, 1i32)],
+                )
+                .await
+                .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        let forward = stats_messages_days::Entity::find_by_id((day, 1i64, 100i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let reverse = stats_messages_days::Entity::find_by_id((day, 100i64, 1i64))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(forward.messages_count, 1);
+        assert_eq!(reverse.messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_excluded_rows_still_excluded_from_daily_and_all_time() {
+        let _db = init_db("stats_projection_excluded_rows").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        crosschain_messages::Entity::insert_many([
+            crosschain_messages::ActiveModel {
+                id: Set(92067),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Completed),
+                init_timestamp: Set(Utc::now().naive_utc()),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(None),
+                src_tx_hash: Set(Some(vec![0xabu8; 32])),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(92068),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Failed),
+                init_timestamp: Set(Utc::now().naive_utc()),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                src_tx_hash: Set(Some(vec![0xabu8; 32])),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(92069),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Completed),
+                init_timestamp: Set(Utc::now().naive_utc()),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                src_tx_hash: Set(Some(vec![0xabu8; 32])),
+                stats_processed: Set(1),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92067i64, 1i32), (92068i64, 1i32), (92069i64, 1i32)],
+                )
+                .await
+                .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(stats_messages::Entity::find().count(db).await.unwrap(), 0);
+        assert_eq!(
+            stats_messages_days::Entity::find().count(db).await.unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_messages_days_chain_delete_cascades() {
+        let _db = init_db("stats_messages_days_chain_delete_cascades").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("C1".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("C2".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C3".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        let day = NaiveDate::from_ymd_opt(2026, 3, 6).unwrap();
+
+        stats_messages_days::Entity::insert_many([
+            stats_messages_days::ActiveModel {
+                date: Set(day),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(2),
+                messages_count: Set(1),
+                ..Default::default()
+            },
+            stats_messages_days::ActiveModel {
+                date: Set(day),
+                src_chain_id: Set(2),
+                dst_chain_id: Set(1),
+                messages_count: Set(1),
+                ..Default::default()
+            },
+            stats_messages_days::ActiveModel {
+                date: Set(day),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(3),
+                messages_count: Set(1),
+                ..Default::default()
+            },
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        chains::Entity::delete_by_id(2)
+            .exec(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+
+        assert!(
+            stats_messages_days::Entity::find_by_id((day, 1i64, 2i64))
+                .one(interchain_db.db.as_ref())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            stats_messages_days::Entity::find_by_id((day, 2i64, 1i64))
+                .one(interchain_db.db.as_ref())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let survivor = stats_messages_days::Entity::find_by_id((day, 1i64, 3i64))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(survivor.messages_count, 1);
     }
 
     #[tokio::test]
@@ -4883,5 +5350,355 @@ mod tests {
         assert_eq!(row.src_chain_id, 1);
         assert_eq!(row.dst_chain_id, 2);
         assert_eq!(row.messages_count, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_outgoing_all_time_reads_stats_messages() {
+        let _db = init_db("message_paths_outgoing_all_time").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 2, 5)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 3, 2)
+            .await
+            .unwrap();
+        stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+            date: Set(NaiveDate::from_ymd_opt(2026, 3, 7).unwrap()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(2),
+            messages_count: Set(999),
+            ..Default::default()
+        })
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let rows = interchain_db
+            .get_outgoing_message_paths(1, None, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 2,
+                    messages_count: 5
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 3,
+                    messages_count: 2
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_incoming_all_time_reads_stats_messages() {
+        let _db = init_db("message_paths_incoming_all_time").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 3, 4)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(2, 3, 6)
+            .await
+            .unwrap();
+
+        let rows = interchain_db
+            .get_incoming_message_paths(3, None, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                MessagePathStatsRow {
+                    src_chain_id: 2,
+                    dst_chain_id: 3,
+                    messages_count: 6
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 3,
+                    messages_count: 4
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_bounded_queries_sum_daily_rows_and_order_deterministically() {
+        let _db = init_db("message_paths_bounded_queries").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(4),
+                    name: Set("D".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        for (date, src, dst, count) in [
+            (NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(), 1, 2, 2),
+            (NaiveDate::from_ymd_opt(2026, 3, 9).unwrap(), 1, 2, 3),
+            (NaiveDate::from_ymd_opt(2026, 3, 9).unwrap(), 1, 3, 5),
+            (NaiveDate::from_ymd_opt(2026, 3, 10).unwrap(), 1, 4, 5),
+            (NaiveDate::from_ymd_opt(2026, 3, 11).unwrap(), 2, 1, 4),
+            (NaiveDate::from_ymd_opt(2026, 3, 12).unwrap(), 3, 1, 1),
+        ] {
+            stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+                date: Set(date),
+                src_chain_id: Set(src),
+                dst_chain_id: Set(dst),
+                messages_count: Set(count),
+                ..Default::default()
+            })
+            .exec(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        }
+
+        let outgoing = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                Some(NaiveDate::from_ymd_opt(2026, 3, 8).unwrap()),
+                Some(NaiveDate::from_ymd_opt(2026, 3, 11).unwrap()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            outgoing,
+            vec![
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 2,
+                    messages_count: 5
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 3,
+                    messages_count: 5
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 4,
+                    messages_count: 5
+                },
+            ]
+        );
+
+        let incoming = interchain_db
+            .get_incoming_message_paths(
+                1,
+                Some(NaiveDate::from_ymd_opt(2026, 3, 11).unwrap()),
+                Some(NaiveDate::from_ymd_opt(2026, 3, 13).unwrap()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            incoming,
+            vec![
+                MessagePathStatsRow {
+                    src_chain_id: 2,
+                    dst_chain_id: 1,
+                    messages_count: 4
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 3,
+                    dst_chain_id: 1,
+                    messages_count: 1
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_bounded_queries_apply_open_and_half_open_ranges() {
+        let _db = init_db("message_paths_bounded_ranges").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        for (date, src, dst, count) in [
+            (NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(), 1, 2, 1),
+            (NaiveDate::from_ymd_opt(2026, 3, 2).unwrap(), 1, 2, 2),
+            (NaiveDate::from_ymd_opt(2026, 3, 3).unwrap(), 1, 3, 3),
+            (NaiveDate::from_ymd_opt(2026, 3, 4).unwrap(), 2, 1, 4),
+        ] {
+            stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+                date: Set(date),
+                src_chain_id: Set(src),
+                dst_chain_id: Set(dst),
+                messages_count: Set(count),
+                ..Default::default()
+            })
+            .exec(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        }
+
+        let from_only = interchain_db
+            .get_outgoing_message_paths(1, Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            from_only,
+            vec![
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 3,
+                    messages_count: 3
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 2,
+                    messages_count: 2
+                },
+            ]
+        );
+
+        let to_only = interchain_db
+            .get_outgoing_message_paths(1, None, Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()))
+            .await
+            .unwrap();
+        assert_eq!(
+            to_only,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 2,
+                messages_count: 3
+            }]
+        );
+
+        let half_open = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            half_open,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 2,
+                messages_count: 2
+            }]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_invalid_or_empty_range_returns_empty() {
+        let _db = init_db("message_paths_invalid_range").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+
+        assert!(
+            interchain_db
+                .get_outgoing_message_paths(
+                    1,
+                    Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                    Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                )
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            interchain_db
+                .get_incoming_message_paths(
+                    1,
+                    Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()),
+                    Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                )
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 }

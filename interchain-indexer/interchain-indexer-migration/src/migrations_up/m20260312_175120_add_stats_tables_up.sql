@@ -131,3 +131,32 @@ CREATE INDEX stats_messages_src_chain_idx
 
 CREATE INDEX stats_messages_dst_chain_idx
   ON stats_messages (dst_chain_id);
+
+-- stats_messages_days: daily directional chain-to-chain message counts for bounded path stats
+CREATE TABLE stats_messages_days (
+  date           DATE NOT NULL,
+
+  src_chain_id   BIGINT NOT NULL
+    REFERENCES chains(id)
+    ON DELETE CASCADE,
+
+  dst_chain_id   BIGINT NOT NULL
+    REFERENCES chains(id)
+    ON DELETE CASCADE,
+
+  messages_count BIGINT NOT NULL DEFAULT 0,
+
+  created_at     TIMESTAMP NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMP NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (date, src_chain_id, dst_chain_id)
+);
+
+CREATE INDEX stats_messages_days_date_idx
+  ON stats_messages_days (date);
+
+CREATE INDEX stats_messages_days_src_chain_date_idx
+  ON stats_messages_days (src_chain_id, date);
+
+CREATE INDEX stats_messages_days_dst_chain_date_idx
+  ON stats_messages_days (dst_chain_id, date);

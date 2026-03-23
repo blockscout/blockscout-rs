@@ -9,5 +9,5 @@ pub use super::{
     pending_messages::Entity as PendingMessages, stats_asset_edges::Entity as StatsAssetEdges,
     stats_asset_tokens::Entity as StatsAssetTokens, stats_assets::Entity as StatsAssets,
     stats_chains::Entity as StatsChains, stats_messages::Entity as StatsMessages,
-    tokens::Entity as Tokens,
+    stats_messages_days::Entity as StatsMessagesDays, tokens::Entity as Tokens,
 };

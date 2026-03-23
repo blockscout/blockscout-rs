@@ -174,13 +174,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
 
         let (rows, pagination) = self
             .stats
-            .get_stats_chains(
-                chain_ids,
-                order,
-                page_size,
-                last_page,
-                input_pagination,
-            )
+            .get_stats_chains(chain_ids, order, page_size, last_page, input_pagination)
             .await
             .map_err(map_stats_error)?;
 
