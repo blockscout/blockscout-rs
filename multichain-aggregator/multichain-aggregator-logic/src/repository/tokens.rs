@@ -20,9 +20,12 @@ use entity::tokens::{Column, Entity};
 use rust_decimal::Decimal;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel, IntoSimpleExpr,
-    JoinType, PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, Select, TransactionError,
-    TransactionTrait, prelude::Expr, sea_query::OnConflict,
+    JoinType, PartialModelTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Select,
+    TransactionError, TransactionTrait,
+    prelude::Expr,
+    sea_query::{ExprTrait, OnConflict, SimpleExpr},
 };
+use std::collections::HashSet;
 
 pub async fn upsert_many<C>(db: &C, tokens: Vec<TokenUpdate>) -> Result<(), DbErr>
 where
@@ -33,9 +36,11 @@ where
     let mut price_updates = Vec::new();
     let mut counter_updates = Vec::new();
     let mut type_updates = Vec::new();
+    let mut all_keys = HashSet::new();
 
     for token in tokens {
         if let Some(metadata) = token.metadata {
+            all_keys.insert((metadata.address_hash.clone(), metadata.chain_id));
             // Models with present NOT NULL columns are upserted.
             // Other models are optionally updated.
             if metadata.token_type.is_some() {
@@ -45,21 +50,33 @@ where
             }
         }
         if let Some(price_data) = token.price_data {
+            all_keys.insert((price_data.address_hash.clone(), price_data.chain_id));
             price_updates.push(price_data);
         }
         if let Some(counters) = token.counters {
+            all_keys.insert((counters.address_hash.clone(), counters.chain_id));
             counter_updates.push(counters);
         }
         if let Some(r#type) = token.r#type {
+            all_keys.insert((r#type.address_hash.clone(), r#type.chain_id));
             type_updates.push(r#type);
         }
     }
 
-    // Process all updates in a single transaction.
-    // Only metadata updates can create new tokens,
-    // while price and counter updates can only update existing ones.
+    // Lock all affected existing token rows upfront in consistent (address_hash, chain_id)
+    // order to prevent deadlocks between concurrent transactions.
+    // Without this, concurrent transactions processing different token subsets across
+    // different update categories (metadata, price, counters, type) can acquire row locks
+    // in conflicting orders, leading to circular waits.
+    //
+    // All updates are wrapped in a transaction to ensure atomicity.
+    // When called within an existing transaction, this creates a savepoint.
     db.transaction(|tx| {
         Box::pin(async move {
+            lock_tokens_for_update(tx, all_keys).await?;
+
+            // Only metadata upserts can create new tokens,
+            // while other updates can only modify existing ones.
             if !metadata_upserts.is_empty() {
                 upsert_token_metadata(tx, metadata_upserts).await?;
             }
@@ -88,6 +105,35 @@ where
         TransactionError::Connection(e) => e,
         TransactionError::Transaction(e) => e,
     })
+}
+
+/// Acquires row-level locks on existing token rows in deterministic order.
+/// This prevents deadlocks when concurrent transactions modify overlapping sets of tokens
+/// through different update operations.
+async fn lock_tokens_for_update<C>(db: &C, keys: HashSet<(Vec<u8>, i64)>) -> Result<(), DbErr>
+where
+    C: ConnectionTrait,
+{
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let condition = SimpleExpr::Tuple(vec![
+        Column::AddressHash.into_simple_expr(),
+        Column::ChainId.into_simple_expr(),
+    ])
+    .is_in(keys.iter().map(|(hash, chain_id)| {
+        SimpleExpr::Tuple(vec![Expr::value(hash.as_slice()), Expr::value(*chain_id)])
+    }));
+    let query = Entity::find()
+        .select_only()
+        .filter(condition)
+        .order_by_asc(Column::AddressHash)
+        .order_by_asc(Column::ChainId)
+        .lock_exclusive()
+        .build(db.get_database_backend());
+    db.execute(query).await?;
+
+    Ok(())
 }
 
 async fn upsert_token_metadata<C>(

@@ -81,6 +81,10 @@ pub struct ServiceSettings {
     #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
     #[serde(default = "default_quick_search_chains")]
     pub quick_search_chains: Vec<i64>,
+    /// BENS protocol IDs prioritized for the synthetic multichain cluster (empty `cluster_id` / multichain aggregator APIs).
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
+    #[serde(default = "default_bens_priority_protocols")]
+    pub multichain_bens_priority_protocols: Vec<String>,
     #[serde(default)]
     pub fetch_chains: bool,
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
@@ -174,6 +178,7 @@ impl Settings {
                     max_page_size: default_max_page_size(),
                 },
                 quick_search_chains: default_quick_search_chains(),
+                multichain_bens_priority_protocols: default_bens_priority_protocols(),
                 fetch_chains: false,
                 marketplace_enabled_cache_update_interval:
                     default_marketplace_enabled_cache_update_interval(),
