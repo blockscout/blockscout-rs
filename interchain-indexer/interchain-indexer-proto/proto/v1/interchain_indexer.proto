@@ -145,23 +145,6 @@ message GetChainsResponse {
   repeated ChainInfo items = 1;
 }
 
-message GetMessagePathsRequest {
-  int64 chain_id = 1;
-  optional string from_date = 2; // YYYY-MM-DD
-  optional string to_date = 3;   // YYYY-MM-DD
-  optional string counterparty_chain_ids = 4;
-}
-
-message MessagePathRow {
-  ChainInfo source_chain = 1;
-  ChainInfo destination_chain = 2;
-  uint64 messages_count = 3;
-}
-
-message GetMessagePathsResponse {
-  repeated MessagePathRow items = 1;
-}
-
 enum MessageStatus {
   MESSAGE_STATUS_INITIATED = 0;
   MESSAGE_STATUS_COMPLETED = 1;
