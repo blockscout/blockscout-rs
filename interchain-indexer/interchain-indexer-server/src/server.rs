@@ -216,6 +216,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(
         stats.clone(),
         api_settings,
+        chain_info_service.clone(),
     ));
     let status_service = Arc::new(StatusServiceImpl::new(indexers.clone()));
     let router = Router {

@@ -450,7 +450,7 @@ paths:
           type: string
       tags:
         - InterchainService
-  /api/v1/stats/bridged-tokens:
+  /api/v1/stats/chain/{chain_id}/bridged-tokens:
     get:
       operationId: InterchainStatisticsService_GetBridgedTokens
       responses:
@@ -464,8 +464,8 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: chain_id
-          in: query
-          required: false
+          in: path
+          required: true
           type: string
           format: int64
         - name: page_size
@@ -524,6 +524,74 @@ paths:
           required: false
           type: string
           format: uint64
+      tags:
+        - InterchainStatisticsService
+  /api/v1/stats/chain/{chain_id}/messages-paths/received:
+    get:
+      operationId: InterchainStatisticsService_GetReceivedMessagePaths
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagePathsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: from_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: to_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: counterparty_chain_ids
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainStatisticsService
+  /api/v1/stats/chain/{chain_id}/messages-paths/sent:
+    get:
+      operationId: InterchainStatisticsService_GetSentMessagePaths
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagePathsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: from_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: to_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: counterparty_chain_ids
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainStatisticsService
   /api/v1/stats/chains:
@@ -845,6 +913,14 @@ definitions:
       daily_transfers:
         type: string
         format: uint64
+  v1GetMessagePathsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MessagePathRow'
   v1GetMessagesResponse:
     type: object
     properties:
@@ -957,6 +1033,16 @@ definitions:
         $ref: '#/definitions/v1AddressInfo'
       receive_timestamp:
         type: string
+  v1MessagePathRow:
+    type: object
+    properties:
+      source_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      destination_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      messages_count:
+        type: string
+        format: uint64
   v1MessageStatus:
     type: string
     enum:

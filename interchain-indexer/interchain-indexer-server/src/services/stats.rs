@@ -1,11 +1,13 @@
+use super::chain_info_proto::chain_model_to_proto;
 use crate::{
     proto::{interchain_statistics_service_server::*, *},
     settings::ApiSettings,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
-    BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, StatsChainListRow,
-    StatsChainsPaginationLogic, StatsService, StatsSortOrder, utils::to_hex_prefixed,
+    BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
+    StatsChainListRow, StatsChainsPaginationLogic, StatsService, StatsSortOrder,
+    utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -13,13 +15,19 @@ use tonic::{Request, Response, Status};
 pub struct InterchainStatisticsServiceImpl {
     pub stats: Arc<StatsService>,
     pub api_settings: ApiSettings,
+    pub chain_info: Arc<ChainInfoService>,
 }
 
 impl InterchainStatisticsServiceImpl {
-    pub fn new(stats: Arc<StatsService>, api_settings: ApiSettings) -> Self {
+    pub fn new(
+        stats: Arc<StatsService>,
+        api_settings: ApiSettings,
+        chain_info: Arc<ChainInfoService>,
+    ) -> Self {
         Self {
             stats,
             api_settings,
+            chain_info,
         }
     }
 }
@@ -190,6 +198,79 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         };
         Ok(Response::new(response))
     }
+
+    async fn get_sent_message_paths(
+        &self,
+        request: Request<GetMessagePathsRequest>,
+    ) -> Result<Response<GetMessagePathsResponse>, Status> {
+        self.message_paths_response(request.into_inner(), true)
+            .await
+    }
+
+    async fn get_received_message_paths(
+        &self,
+        request: Request<GetMessagePathsRequest>,
+    ) -> Result<Response<GetMessagePathsResponse>, Status> {
+        self.message_paths_response(request.into_inner(), false)
+            .await
+    }
+}
+
+impl InterchainStatisticsServiceImpl {
+    async fn message_paths_response(
+        &self,
+        inner: GetMessagePathsRequest,
+        outgoing: bool,
+    ) -> Result<Response<GetMessagePathsResponse>, Status> {
+        let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
+        let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
+        let counterparty_ids = parse_chain_ids_csv(inner.counterparty_chain_ids.as_deref())?;
+        let counterparty = (!counterparty_ids.is_empty()).then_some(counterparty_ids.as_slice());
+
+        let rows = if outgoing {
+            self.stats
+                .interchain_db()
+                .get_outgoing_message_paths(inner.chain_id, from_date, to_date, counterparty)
+                .await
+        } else {
+            self.stats
+                .interchain_db()
+                .get_incoming_message_paths(inner.chain_id, from_date, to_date, counterparty)
+                .await
+        }
+        .map_err(map_stats_error)?;
+
+        let mut items = Vec::with_capacity(rows.len());
+        for row in rows {
+            let source =
+                chain_model_to_proto(self.chain_info.get_chain_info(row.src_chain_id).await);
+            let destination =
+                chain_model_to_proto(self.chain_info.get_chain_info(row.dst_chain_id).await);
+            items.push(MessagePathRow {
+                source_chain: Some(source),
+                destination_chain: Some(destination),
+                messages_count: i64_to_u64_nonneg(row.messages_count),
+            });
+        }
+
+        Ok(Response::new(GetMessagePathsResponse { items }))
+    }
+}
+
+fn parse_optional_utc_date(s: Option<&str>) -> Result<Option<NaiveDate>, Status> {
+    let Some(s) = s.map(str::trim) else {
+        return Ok(None);
+    };
+    if s.is_empty() {
+        return Ok(None);
+    }
+    NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .map(Some)
+        .map_err(|_| {
+            Status::invalid_argument(format!(
+                "invalid date `{s}`: expected YYYY-MM-DD (UTC calendar date)"
+            ))
+        })
 }
 
 fn parse_chain_ids_csv(input: Option<&str>) -> Result<Vec<i64>, Status> {
@@ -268,7 +349,7 @@ fn map_stats_error(err: anyhow::Error) -> Status {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_chain_ids_csv;
+    use super::{parse_chain_ids_csv, parse_optional_utc_date};
 
     #[test]
     fn parse_chain_ids_csv_accepts_missing_and_empty() {
@@ -290,5 +371,27 @@ mod tests {
         let err = parse_chain_ids_csv(Some("123,abc")).expect_err("must reject invalid id");
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
         assert!(err.message().contains("invalid chain_ids value `abc`"));
+    }
+
+    #[test]
+    fn parse_optional_utc_date_accepts_valid_yyyy_mm_dd() {
+        assert_eq!(
+            parse_optional_utc_date(Some("2026-03-24")).unwrap(),
+            Some(chrono::NaiveDate::from_ymd_opt(2026, 3, 24).expect("valid date"))
+        );
+    }
+
+    #[test]
+    fn parse_optional_utc_date_accepts_none_and_blank() {
+        assert_eq!(parse_optional_utc_date(None).unwrap(), None);
+        assert_eq!(parse_optional_utc_date(Some("")).unwrap(), None);
+        assert_eq!(parse_optional_utc_date(Some("   ")).unwrap(), None);
+    }
+
+    #[test]
+    fn parse_optional_utc_date_rejects_malformed() {
+        let err = parse_optional_utc_date(Some("24-03-2026")).expect_err("wrong format must fail");
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("invalid date"));
     }
 }

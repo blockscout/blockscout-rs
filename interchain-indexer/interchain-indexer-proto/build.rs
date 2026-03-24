@@ -52,6 +52,9 @@ fn compile(
         .field_attribute("GetChainsStatsRequest.count", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("GetChainsStatsRequest.chain_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("GetChainsStatsRequest.chain_ids", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetMessagePathsRequest.from_date", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetMessagePathsRequest.to_date", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetMessagePathsRequest.counterparty_chain_ids", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("IndexerStatus.extra_info", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("ChainInfo.icon", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("ChainInfo.explorer", "#[serde(skip_serializing_if = \"Option::is_none\")]")
@@ -69,14 +72,51 @@ fn compile(
     config.compile_protos(protos, includes)?;
     let descriptor_bytes = fs::read(descriptor_file).unwrap();
     let descriptor = FileDescriptorSet::decode(&descriptor_bytes[..]).unwrap();
-    prost_wkt_build::add_serde(out, descriptor);
+    prost_wkt_build::add_serde(out.clone(), descriptor);
+    dedupe_actix_duplicate_chain_info_internal(&out)?;
     Ok(())
+}
+
+/// actix-prost generates a fresh `ChainInfoInternal` for every message tree that nests
+/// `ChainInfo`, which duplicates the struct and `TryConvert` impl in the same module.
+/// Keep the first definition and drop later identical blocks (before `MessagePathRowInternal`).
+fn dedupe_actix_duplicate_chain_info_internal(
+    out_dir: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let path = out_dir.join("blockscout.interchain_indexer.v1.rs");
+    let content = fs::read_to_string(&path)?;
+    let patched = strip_second_chain_info_internal_block(&content);
+    if patched != content {
+        fs::write(&path, patched)?;
+    }
+    Ok(())
+}
+
+fn strip_second_chain_info_internal_block(content: &str) -> String {
+    const NEEDLE: &str = "#[derive(Clone, Debug)]\npub struct ChainInfoInternal";
+    const END_BEFORE: &str = "#[derive(Clone, Debug)]\npub struct MessagePathRowInternal";
+    let Some(first) = content.find(NEEDLE) else {
+        return content.to_string();
+    };
+    let search_after = first + NEEDLE.len();
+    let Some(rel_second) = content[search_after..].find(NEEDLE) else {
+        return content.to_string();
+    };
+    let second = search_after + rel_second;
+    let Some(rel_end) = content[second..].find(END_BEFORE) else {
+        return content.to_string();
+    };
+    let mut out = String::with_capacity(content.len().saturating_sub(rel_end));
+    out.push_str(&content[..second]);
+    out.push_str(&content[second + rel_end..]);
+    out
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // We need to rebuild proto lib only if any of proto definitions
     // (or corresponding http mapping) has been changed.
     println!("cargo:rerun-if-changed=proto/");
+    println!("cargo:rerun-if-changed=build.rs");
 
     std::fs::create_dir_all("./swagger/v1").unwrap();
     let gens = Box::new(GeneratorList::new(vec![

@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use interchain_indexer_entity::{
-    chains::Model as ChainModel, crosschain_messages::Model as CrosschainMessageModel,
+    crosschain_messages::Model as CrosschainMessageModel,
     crosschain_transfers::Model as CrosschainTransferModel,
     sea_orm_active_enums::MessageStatus as DbMessageStatus, tokens::Model as TokenInfoModel,
 };
@@ -22,7 +22,10 @@ use std::{
 };
 use tonic::{Request, Response, Status};
 
-use super::utils::{db_datetime_to_string, map_db_error};
+use super::{
+    chain_info_proto::chain_model_to_proto,
+    utils::{db_datetime_to_string, map_db_error},
+};
 
 macro_rules! messages_pagination_params {
     ($service:expr, $request:expr) => {{
@@ -356,7 +359,7 @@ impl InterchainServiceImpl {
     }
 
     async fn get_chain_info(&self, chain_id: i64) -> ChainInfo {
-        chain_info_logic_to_proto(self.chain_info_service.get_chain_info(chain_id).await)
+        chain_model_to_proto(self.chain_info_service.get_chain_info(chain_id).await)
     }
 }
 
@@ -586,7 +589,7 @@ impl InterchainService for InterchainServiceImpl {
             .get_all_chains_info()
             .await
             .map_err(map_db_error)?;
-        let items = models.into_iter().map(chain_info_logic_to_proto).collect();
+        let items = models.into_iter().map(chain_model_to_proto).collect();
         Ok(Response::new(GetChainsResponse { items }))
     }
 }
@@ -606,30 +609,5 @@ fn token_info_logic_to_proto(model: TokenInfoModel) -> TokenInfo {
         symbol: model.symbol,
         decimals: model.decimals.map(|d| d.to_string()),
         icon_url: model.token_icon,
-    }
-}
-
-fn chain_info_logic_to_proto(model: ChainModel) -> ChainInfo {
-    ChainInfo {
-        id: model.id.to_string(),
-        name: model.name,
-        logo: model.icon,
-        explorer_url: model.explorer,
-        custom_tx_route: model
-            .custom_routes
-            .clone()
-            .and_then(|routes| routes.get("tx").and_then(|v| v.as_str()).map(String::from)),
-        custom_address_route: model.custom_routes.clone().and_then(|routes| {
-            routes
-                .get("address")
-                .and_then(|v| v.as_str())
-                .map(String::from)
-        }),
-        custom_token_route: model.custom_routes.and_then(|routes| {
-            routes
-                .get("token")
-                .and_then(|v| v.as_str())
-                .map(String::from)
-        }),
     }
 }

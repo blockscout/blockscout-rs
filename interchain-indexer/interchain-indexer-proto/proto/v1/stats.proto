@@ -4,6 +4,8 @@ package blockscout.interchainIndexer.v1;
 
 option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
 
+import "v1/interchain_indexer.proto";
+
 // Shared ascending/descending order for statistics list endpoints (0=DESC, 1=ASC).
 enum SortOrder {
   DESC = 0;
@@ -34,6 +36,8 @@ service InterchainStatisticsService {
   rpc GetDailyStatistics(GetDailyStatisticsRequest) returns (GetDailyStatisticsResponse) {}
   rpc GetBridgedTokens(GetBridgedTokensRequest) returns (GetBridgedTokensResponse) {}
   rpc GetChainsStats(GetChainsStatsRequest) returns (GetChainsStatsResponse) {}
+  rpc GetSentMessagePaths(GetMessagePathsRequest) returns (GetMessagePathsResponse) {}
+  rpc GetReceivedMessagePaths(GetMessagePathsRequest) returns (GetMessagePathsResponse) {}
 }
 
 // First value must be 0 in protobuf; use TOTAL_TRANSFERS_COUNT/DESC as defaults (not separate *_UNSPECIFIED variants).

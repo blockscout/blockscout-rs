@@ -176,23 +176,39 @@ enum MessagePathDirection {
 fn build_all_time_message_paths_query(
     chain_id: i64,
     direction: MessagePathDirection,
+    counterparty_chain_ids: Option<&[i64]>,
 ) -> (String, Vec<Value>) {
     let filter_column = match direction {
         MessagePathDirection::Outgoing => "src_chain_id",
         MessagePathDirection::Incoming => "dst_chain_id",
     };
+    let counterparty_column = match direction {
+        MessagePathDirection::Outgoing => "dst_chain_id",
+        MessagePathDirection::Incoming => "src_chain_id",
+    };
 
-    (
-        format!(
-            r#"
+    let mut values = vec![Value::BigInt(Some(chain_id))];
+    let mut sql = format!(
+        r#"
 SELECT src_chain_id, dst_chain_id, messages_count
 FROM stats_messages
-WHERE {filter_column} = $1
-ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
-"#
-        ),
-        vec![Value::BigInt(Some(chain_id))],
-    )
+WHERE {filter_column} = $1"#
+    );
+
+    if let Some(ids) = counterparty_chain_ids.filter(|c| !c.is_empty()) {
+        let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("${}", i + 2)).collect();
+        sql.push_str(&format!(
+            " AND {counterparty_column} IN ({})",
+            placeholders.join(", ")
+        ));
+        for &id in ids {
+            values.push(Value::BigInt(Some(id)));
+        }
+    }
+
+    sql.push_str("\nORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC\n");
+
+    (sql, values)
 }
 
 fn build_bounded_message_paths_query(
@@ -200,10 +216,15 @@ fn build_bounded_message_paths_query(
     from_date: Option<NaiveDate>,
     to_date: Option<NaiveDate>,
     direction: MessagePathDirection,
+    counterparty_chain_ids: Option<&[i64]>,
 ) -> (String, Vec<Value>) {
     let filter_column = match direction {
         MessagePathDirection::Outgoing => "src_chain_id",
         MessagePathDirection::Incoming => "dst_chain_id",
+    };
+    let counterparty_column = match direction {
+        MessagePathDirection::Outgoing => "dst_chain_id",
+        MessagePathDirection::Incoming => "src_chain_id",
     };
 
     let mut where_parts = vec![format!("{filter_column} = $1")];
@@ -219,6 +240,20 @@ fn build_bounded_message_paths_query(
     if let Some(to_date) = to_date {
         where_parts.push(format!("date < ${placeholder}"));
         values.push(Value::ChronoDate(Some(Box::new(to_date))));
+        placeholder += 1;
+    }
+
+    if let Some(ids) = counterparty_chain_ids.filter(|c| !c.is_empty()) {
+        let placeholders: Vec<String> = (0..ids.len())
+            .map(|i| format!("${}", placeholder + i))
+            .collect();
+        where_parts.push(format!(
+            "{counterparty_column} IN ({})",
+            placeholders.join(", ")
+        ));
+        for &id in ids {
+            values.push(Value::BigInt(Some(id)));
+        }
     }
 
     (
@@ -978,9 +1013,16 @@ impl InterchainDatabase {
         chain_id: i64,
         from_date: Option<NaiveDate>,
         to_date: Option<NaiveDate>,
+        counterparty_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
-        self.get_message_paths(chain_id, from_date, to_date, MessagePathDirection::Outgoing)
-            .await
+        self.get_message_paths(
+            chain_id,
+            from_date,
+            to_date,
+            MessagePathDirection::Outgoing,
+            counterparty_chain_ids,
+        )
+        .await
     }
 
     pub async fn get_incoming_message_paths(
@@ -988,9 +1030,16 @@ impl InterchainDatabase {
         chain_id: i64,
         from_date: Option<NaiveDate>,
         to_date: Option<NaiveDate>,
+        counterparty_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
-        self.get_message_paths(chain_id, from_date, to_date, MessagePathDirection::Incoming)
-            .await
+        self.get_message_paths(
+            chain_id,
+            from_date,
+            to_date,
+            MessagePathDirection::Incoming,
+            counterparty_chain_ids,
+        )
+        .await
     }
 
     async fn get_message_paths(
@@ -999,6 +1048,7 @@ impl InterchainDatabase {
         from_date: Option<NaiveDate>,
         to_date: Option<NaiveDate>,
         direction: MessagePathDirection,
+        counterparty_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
         if let (Some(from_date), Some(to_date)) = (from_date, to_date)
             && from_date >= to_date
@@ -1007,8 +1057,16 @@ impl InterchainDatabase {
         }
 
         let (sql, values) = match (from_date, to_date) {
-            (None, None) => build_all_time_message_paths_query(chain_id, direction),
-            _ => build_bounded_message_paths_query(chain_id, from_date, to_date, direction),
+            (None, None) => {
+                build_all_time_message_paths_query(chain_id, direction, counterparty_chain_ids)
+            }
+            _ => build_bounded_message_paths_query(
+                chain_id,
+                from_date,
+                to_date,
+                direction,
+                counterparty_chain_ids,
+            ),
         };
         let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, values);
 
@@ -5397,7 +5455,7 @@ mod tests {
         .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None)
+            .get_outgoing_message_paths(1, None, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -5452,7 +5510,7 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(3, None, None)
+            .get_incoming_message_paths(3, None, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -5528,6 +5586,7 @@ mod tests {
                 1,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 8).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 11).unwrap()),
+                None,
             )
             .await
             .unwrap();
@@ -5557,6 +5616,7 @@ mod tests {
                 1,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 11).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 13).unwrap()),
+                None,
             )
             .await
             .unwrap();
@@ -5622,7 +5682,12 @@ mod tests {
         }
 
         let from_only = interchain_db
-            .get_outgoing_message_paths(1, Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()), None)
+            .get_outgoing_message_paths(
+                1,
+                Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -5642,7 +5707,12 @@ mod tests {
         );
 
         let to_only = interchain_db
-            .get_outgoing_message_paths(1, None, Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()))
+            .get_outgoing_message_paths(
+                1,
+                None,
+                Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()),
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -5659,6 +5729,7 @@ mod tests {
                 1,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()),
+                None,
             )
             .await
             .unwrap();
@@ -5684,6 +5755,7 @@ mod tests {
                     1,
                     Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
                     Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                    None,
                 )
                 .await
                 .unwrap()
@@ -5695,10 +5767,168 @@ mod tests {
                     1,
                     Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()),
                     Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                    None,
                 )
                 .await
                 .unwrap()
                 .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_outgoing_counterparty_filters_destinations() {
+        let _db = init_db("message_paths_outgoing_counterparty").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 2, 5)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 3, 2)
+            .await
+            .unwrap();
+
+        let rows = interchain_db
+            .get_outgoing_message_paths(1, None, None, Some(&[3]))
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 3,
+                messages_count: 2
+            }]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_incoming_counterparty_filters_sources() {
+        let _db = init_db("message_paths_incoming_counterparty").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 3, 4)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(2, 3, 6)
+            .await
+            .unwrap();
+
+        let rows = interchain_db
+            .get_incoming_message_paths(3, None, None, Some(&[1]))
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 3,
+                messages_count: 4
+            }]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_bounded_counterparty_filter_applies_in_sql() {
+        let _db = init_db("message_paths_bounded_counterparty").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        for (date, src, dst, count) in [
+            (NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(), 1, 2, 2),
+            (NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(), 1, 3, 7),
+        ] {
+            stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+                date: Set(date),
+                src_chain_id: Set(src),
+                dst_chain_id: Set(dst),
+                messages_count: Set(count),
+                ..Default::default()
+            })
+            .exec(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        }
+
+        let rows = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                Some(NaiveDate::from_ymd_opt(2026, 3, 8).unwrap()),
+                Some(NaiveDate::from_ymd_opt(2026, 3, 9).unwrap()),
+                Some(&[2]),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 2,
+                messages_count: 2
+            }]
         );
     }
 }

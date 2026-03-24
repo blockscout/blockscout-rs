@@ -39,10 +39,16 @@ http:
       get: /api/v1/stats/daily
 
     - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetBridgedTokens
-      get: /api/v1/stats/bridged-tokens
+      get: /api/v1/stats/chain/{chain_id}/bridged-tokens
 
     - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetChainsStats
       get: /api/v1/stats/chains
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetSentMessagePaths
+      get: /api/v1/stats/chain/{chain_id}/messages-paths/sent
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetReceivedMessagePaths
+      get: /api/v1/stats/chain/{chain_id}/messages-paths/received
     
     #################### Health ####################
 
