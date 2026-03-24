@@ -294,21 +294,22 @@ impl ListMarker for TransfersPaginationLogic {
 #[repr(u8)]
 pub enum BridgedTokensSortField {
     #[default]
-    Name = 1,
+    TotalTransfers = 0,
+    OutputTransfers = 1,
     InputTransfers = 2,
-    OutputTransfers = 3,
-    TotalTransfers = 4,
+    Name = 3,
 }
 
 impl BridgedTokensSortField {
-    /// Maps `stats.proto` `BridgedTokensSort` wire values (NAME=0 … TOTAL_TRANSFERS_COUNT=3).
+    /// Maps `stats.proto` `BridgedTokensSort` wire values
+    /// (TOTAL_TRANSFERS_COUNT=0, OUTPUT_TRANSFERS_COUNT=1, INPUT_TRANSFERS_COUNT=2, NAME=3).
     pub fn from_proto_sort(v: i32) -> Self {
         match v {
-            0 => Self::Name,
-            1 => Self::InputTransfers,
-            2 => Self::OutputTransfers,
-            3 => Self::TotalTransfers,
-            _ => Self::Name,
+            0 => Self::TotalTransfers,
+            1 => Self::OutputTransfers,
+            2 => Self::InputTransfers,
+            3 => Self::Name,
+            _ => Self::TotalTransfers,
         }
     }
 }
@@ -587,6 +588,30 @@ impl StatsChainsPaginationLogic {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bridged_tokens_sort_wire_values_match_proto() {
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(0),
+            BridgedTokensSortField::TotalTransfers
+        );
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(1),
+            BridgedTokensSortField::OutputTransfers
+        );
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(2),
+            BridgedTokensSortField::InputTransfers
+        );
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(3),
+            BridgedTokensSortField::Name
+        );
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(99),
+            BridgedTokensSortField::TotalTransfers
+        );
+    }
 
     #[test]
     fn stats_chains_raw_pagination_requires_count() {
