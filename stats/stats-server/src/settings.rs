@@ -28,6 +28,7 @@ use std::{
     net::SocketAddr,
     path::PathBuf,
     str::FromStr,
+    time::Duration,
 };
 use tracing::warn;
 
@@ -101,12 +102,39 @@ pub struct Settings {
     pub update_groups_config: PathBuf,
     /// Location of swagger file to serve
     pub swagger_path: PathBuf,
+    /// Optional linked secondary stats service used to fill gaps in read responses.
+    ///
+    /// Chaining linked services is technically allowed, but should be avoided unless
+    /// there is a strong operational reason for it.
+    pub linked_stats: Option<LinkedStatsSettings>,
     pub api_keys: HashMap<String, String>,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub tracing: TracingSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct LinkedStatsSettings {
+    pub base_url: url::Url,
+    pub timeout: u64,
+}
+
+impl LinkedStatsSettings {
+    pub fn timeout(&self) -> Duration {
+        Duration::from_millis(self.timeout)
+    }
+}
+
+impl Default for LinkedStatsSettings {
+    fn default() -> Self {
+        Self {
+            base_url: url::Url::parse("http://localhost:8050").expect("valid default URL"),
+            timeout: 1_500,
+        }
+    }
 }
 
 fn default_swagger_path() -> PathBuf {
@@ -144,6 +172,7 @@ impl Default for Settings {
             )
             .unwrap(),
             swagger_path: default_swagger_path(),
+            linked_stats: None,
             blockscout_db_url: Default::default(),
             indexer_db_url: Default::default(),
             second_indexer_db_url: Default::default(),

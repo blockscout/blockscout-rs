@@ -7,6 +7,12 @@ use crate::{
         layout::placed_items_according_to_layout,
         types::{self, EnabledChartSettings},
     },
+    linked_stats::{LinkedStatsClient, LinkedStatsError},
+    linked_stats_merge::{
+        merge_contracts_page_stats, merge_counters, merge_line_chart_sections,
+        merge_main_page_interchain_stats, merge_main_page_multichain_stats, merge_main_page_stats,
+        merge_transactions_page_stats, merge_update_statuses,
+    },
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
     settings::{LimitsSettings, Mode},
     update_service::OnDemandReupdateError,
@@ -57,6 +63,7 @@ pub struct ReadService {
     authorization: Arc<AuthorizationProvider>,
     update_service: Arc<UpdateService>,
     limits: ReadLimits,
+    linked_stats: Option<LinkedStatsClient>,
 }
 
 impl ReadService {
@@ -70,6 +77,7 @@ impl ReadService {
         update_service: Arc<UpdateService>,
         authorization: Arc<AuthorizationProvider>,
         limits: ReadLimits,
+        linked_stats: Option<LinkedStatsClient>,
     ) -> Result<Self, DbErr> {
         Ok(Self {
             db,
@@ -80,6 +88,7 @@ impl ReadService {
             update_service,
             authorization,
             limits,
+            linked_stats,
         })
     }
 }
@@ -165,6 +174,23 @@ fn get_counter_query_handle(name: &str, counter: &EnabledChartEntry) -> Option<C
 }
 
 impl ReadService {
+    async fn linked_or_log<T, Fut>(&self, request_name: &'static str, request: Fut) -> Option<T>
+    where
+        Fut: std::future::Future<Output = Result<T, LinkedStatsError>>,
+    {
+        match request.await {
+            Ok(response) => Some(response),
+            Err(err) => {
+                tracing::warn!(request = request_name, err = %err, "linked stats request failed");
+                None
+            }
+        }
+    }
+
+    fn is_not_found_status(status: &Status) -> bool {
+        status.code() == tonic::Code::NotFound
+    }
+
     pub fn main_page_charts() -> Vec<String> {
         // ensure that changes to api are reflected here;
         // add new fields to the vec below
@@ -507,6 +533,16 @@ impl StatsService for ReadService {
         let counters = proto_v1::Counters {
             counters: counters_sorted,
         };
+        let counters = if let Some(linked_stats) = &self.linked_stats {
+            let linked = self
+                .linked_or_log("get_counters", linked_stats.get_counters())
+                .await;
+            linked.map_or(counters.clone(), |secondary| {
+                merge_counters(counters, secondary)
+            })
+        } else {
+            counters
+        };
         Ok(Response::new(counters))
     }
 
@@ -516,27 +552,47 @@ impl StatsService for ReadService {
     ) -> Result<Response<proto_v1::LineChart>, Status> {
         let request = request.into_inner();
         let resolution = convert_resolution(request.resolution());
-        let chart_name = request.name;
+        let chart_name = request.name.clone();
 
         let request_range = inclusive_date_range_to_query_range(
             request
                 .from
-                .and_then(|date| NaiveDate::from_str(&date).ok()),
-            request.to.and_then(|date| NaiveDate::from_str(&date).ok()),
+                .as_deref()
+                .and_then(|date| NaiveDate::from_str(date).ok()),
+            request
+                .to
+                .as_deref()
+                .and_then(|date| NaiveDate::from_str(date).ok()),
         );
         let points_limit = Some(self.limits.requested_points_limit);
 
-        let chart_data = self
+        let primary_result = self
             .query_line_chart(
-                chart_name,
+                chart_name.clone(),
                 resolution,
                 request_range,
                 points_limit,
                 Utc::now(),
             )
-            .await?;
+            .await;
 
-        Ok(Response::new(chart_data))
+        match primary_result {
+            Ok(chart_data) => Ok(Response::new(chart_data)),
+            Err(primary_err) if Self::is_not_found_status(&primary_err) => {
+                let Some(linked_stats) = &self.linked_stats else {
+                    return Err(primary_err);
+                };
+                match linked_stats.get_line_chart(&request).await {
+                    Ok(chart_data) => Ok(Response::new(chart_data)),
+                    Err(LinkedStatsError::NotFound) => Err(primary_err),
+                    Err(err) => {
+                        tracing::warn!(chart = chart_name, err = %err, "linked stats line chart request failed");
+                        Err(primary_err)
+                    }
+                }
+            }
+            Err(err) => Err(err),
+        }
     }
 
     async fn get_line_charts(
@@ -549,7 +605,19 @@ impl StatsService for ReadService {
             .await;
         let sections = add_chart_info_to_layout(layout, &filtered_charts_info);
 
-        Ok(Response::new(proto_v1::LineCharts { sections }))
+        let line_charts = proto_v1::LineCharts { sections };
+        let line_charts = if let Some(linked_stats) = &self.linked_stats {
+            let linked = self
+                .linked_or_log("get_line_charts", linked_stats.get_line_charts())
+                .await;
+            linked.map_or(line_charts.clone(), |secondary| proto_v1::LineCharts {
+                sections: merge_line_chart_sections(line_charts.sections, secondary.sections),
+            })
+        } else {
+            line_charts
+        };
+
+        Ok(Response::new(line_charts))
     }
 
     async fn get_main_page_stats(
@@ -594,7 +662,7 @@ impl StatsService for ReadService {
             ),
         );
 
-        Ok(Response::new(proto_v1::MainPageStats {
+        let stats = proto_v1::MainPageStats {
             average_block_time,
             total_addresses,
             total_blocks,
@@ -607,7 +675,18 @@ impl StatsService for ReadService {
             daily_new_transactions,
             daily_new_operational_transactions,
             op_stack_daily_new_operational_transactions,
-        }))
+        };
+        let stats = if let Some(linked_stats) = &self.linked_stats {
+            let linked = self
+                .linked_or_log("get_main_page_stats", linked_stats.get_main_page_stats())
+                .await;
+            linked.map_or(stats.clone(), |secondary| {
+                merge_main_page_stats(stats, secondary)
+            })
+        } else {
+            stats
+        };
+        Ok(Response::new(stats))
     }
 
     async fn get_transactions_page_stats(
@@ -636,7 +715,7 @@ impl StatsService for ReadService {
             self.query_counter(NewZetachainCrossChainTxns24h::name(), now),
             self.query_counter(PendingZetachainCrossChainTxns::name(), now),
         );
-        Ok(Response::new(proto_v1::TransactionsPageStats {
+        let stats = proto_v1::TransactionsPageStats {
             pending_transactions_30m,
             transactions_fee_24h,
             average_transactions_fee_24h,
@@ -646,7 +725,21 @@ impl StatsService for ReadService {
             total_zetachain_cross_chain_txns,
             new_zetachain_cross_chain_txns_24h,
             pending_zetachain_cross_chain_txns,
-        }))
+        };
+        let stats = if let Some(linked_stats) = &self.linked_stats {
+            let linked = self
+                .linked_or_log(
+                    "get_transactions_page_stats",
+                    linked_stats.get_transactions_page_stats(),
+                )
+                .await;
+            linked.map_or(stats.clone(), |secondary| {
+                merge_transactions_page_stats(stats, secondary)
+            })
+        } else {
+            stats
+        };
+        Ok(Response::new(stats))
     }
 
     async fn get_contracts_page_stats(
@@ -665,12 +758,26 @@ impl StatsService for ReadService {
             self.query_counter(TotalVerifiedContracts::name(), now),
             self.query_counter(NewVerifiedContracts24h::name(), now),
         );
-        Ok(Response::new(proto_v1::ContractsPageStats {
+        let stats = proto_v1::ContractsPageStats {
             total_contracts,
             new_contracts_24h,
             total_verified_contracts,
             new_verified_contracts_24h,
-        }))
+        };
+        let stats = if let Some(linked_stats) = &self.linked_stats {
+            let linked = self
+                .linked_or_log(
+                    "get_contracts_page_stats",
+                    linked_stats.get_contracts_page_stats(),
+                )
+                .await;
+            linked.map_or(stats.clone(), |secondary| {
+                merge_contracts_page_stats(stats, secondary)
+            })
+        } else {
+            stats
+        };
+        Ok(Response::new(stats))
     }
 
     async fn get_main_page_multichain_stats(
@@ -691,12 +798,26 @@ impl StatsService for ReadService {
             self.query_window_chart(NewTxnsMultichainWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
         );
 
-        Ok(Response::new(proto_v1::MainPageMultichainStats {
+        let stats = proto_v1::MainPageMultichainStats {
             total_multichain_txns,
             total_multichain_addresses,
             yesterday_txns_multichain,
             new_txns_multichain_window,
-        }))
+        };
+        let stats = if let Some(linked_stats) = &self.linked_stats {
+            let linked = self
+                .linked_or_log(
+                    "get_main_page_multichain_stats",
+                    linked_stats.get_main_page_multichain_stats(),
+                )
+                .await;
+            linked.map_or(stats.clone(), |secondary| {
+                merge_main_page_multichain_stats(stats, secondary)
+            })
+        } else {
+            stats
+        };
+        Ok(Response::new(stats))
     }
 
     async fn get_main_page_interchain_stats(
@@ -715,20 +836,41 @@ impl StatsService for ReadService {
             self.query_counter(TotalInterchainMessagesReceived::name(), now),
         );
 
-        Ok(Response::new(proto_v1::MainPageInterchainStats {
+        let stats = proto_v1::MainPageInterchainStats {
             total_interchain_messages,
             total_interchain_messages_sent,
             total_interchain_messages_received,
-        }))
+        };
+        let stats = if let Some(linked_stats) = &self.linked_stats {
+            let linked = self
+                .linked_or_log(
+                    "get_main_page_interchain_stats",
+                    linked_stats.get_main_page_interchain_stats(),
+                )
+                .await;
+            linked.map_or(stats.clone(), |secondary| {
+                merge_main_page_interchain_stats(stats, secondary)
+            })
+        } else {
+            stats
+        };
+        Ok(Response::new(stats))
     }
 
     async fn get_update_status(
         &self,
         _request: Request<proto_v1::GetUpdateStatusRequest>,
     ) -> Result<Response<proto_v1::UpdateStatus>, Status> {
-        Ok(Response::new(
-            self.update_service.get_initial_update_status().await,
-        ))
+        let status = self.update_service.get_initial_update_status().await;
+        let status = if let Some(linked_stats) = &self.linked_stats {
+            let linked = self
+                .linked_or_log("get_update_status", linked_stats.get_update_status())
+                .await;
+            linked.map_or(status, |secondary| merge_update_statuses(status, secondary))
+        } else {
+            status
+        };
+        Ok(Response::new(status))
     }
 
     async fn batch_update_charts(

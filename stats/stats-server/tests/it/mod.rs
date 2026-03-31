@@ -3,5 +3,6 @@
 //! or stats service
 
 pub mod common;
+mod linked_stats;
 mod mock_blockscout_reindex;
 mod mock_blockscout_simple;
