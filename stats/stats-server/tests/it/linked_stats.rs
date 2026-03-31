@@ -13,10 +13,10 @@ use stats::tests::{
     mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data},
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
-use stats_server::{LinkedStatsSettings, stats};
+use stats_server::{stats, LinkedStatsSettings};
 use wiremock::{
-    Mock, MockServer, ResponseTemplate,
     matchers::{method, path, query_param},
+    Mock, MockServer, ResponseTemplate,
 };
 
 use crate::common::{get_test_stats_settings, wait_until};
@@ -235,7 +235,7 @@ async fn linked_stats_merges_line_sections() {
                 id: "transactions".to_string(),
                 title: "Secondary Transactions".to_string(),
                 charts: vec![
-                    line_info("new_txns", "Secondary New Txns"),
+                    line_info("newTxns", "Secondary New Txns"),
                     line_info("linked_only_line", "Linked Only Line"),
                 ],
             },
@@ -297,23 +297,140 @@ async fn linked_stats_merges_line_sections() {
         .find(|section| section.id == "transactions")
         .expect("transactions section should exist");
     assert_eq!(transactions.title, "Transactions");
-    assert!(
+    assert!(transactions
+        .charts
+        .iter()
+        .any(|chart| chart.id == "newTxns" && chart.title != "Secondary New Txns"));
+    assert_eq!(
         transactions
             .charts
             .iter()
-            .any(|chart| chart.id == "newTxns" && chart.title != "Secondary New Txns")
+            .filter(|chart| chart.id == "newTxns")
+            .count(),
+        1
     );
-    assert!(
-        transactions
-            .charts
-            .iter()
-            .any(|chart| chart.id == "linked_only_line")
-    );
+    assert!(transactions
+        .charts
+        .iter()
+        .any(|chart| chart.id == "linked_only_line"));
     assert_eq!(line_charts.sections.last().unwrap().id, "linked-only");
 
     let interchain_page: proto_v1::MainPageInterchainStats =
         send_get_request(&base, "/api/v1/pages/interchain/main").await;
     assert_eq!(interchain_page, linked_interchain);
+
+    stats_db.close_all_unwrap().await;
+    blockscout_db.close_all_unwrap().await;
+    shutdown.cancel_wait_timeout(None).await.unwrap();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+#[ignore = "needs database"]
+async fn linked_stats_falls_back_to_primary_when_secondary_fails_or_times_out() {
+    let test_name = "linked_stats_falls_back_to_primary_when_secondary_fails_or_times_out";
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let stats_db = init_db(test_name).await;
+    let blockscout_db = init_populated_blockscout_db(test_name).await;
+    let blockscout_api = default_mock_blockscout_api().await;
+    let linked_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v1/counters"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&linked_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v1/pages/interchain/main"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(Duration::from_millis(200))
+                .set_body_json(proto_v1::MainPageInterchainStats {
+                    total_interchain_messages: Some(counter("totalInterchainMessages", "7")),
+                    total_interchain_messages_sent: Some(counter(
+                        "totalInterchainMessagesSent",
+                        "8",
+                    )),
+                    total_interchain_messages_received: Some(counter(
+                        "totalInterchainMessagesReceived",
+                        "9",
+                    )),
+                }),
+        )
+        .mount(&linked_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v1/lines/linkedMissingChart"))
+        .and(query_param("resolution", "DAY"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(Duration::from_millis(200))
+                .set_body_json(proto_v1::LineChart {
+                    chart: vec![proto_v1::Point {
+                        date: "2024-01-01".to_string(),
+                        date_to: "2024-01-01".to_string(),
+                        value: "7".to_string(),
+                        is_approximate: false,
+                    }],
+                    info: Some(line_info("linkedMissingChart", "Linked Missing Chart")),
+                }),
+        )
+        .mount(&linked_server)
+        .await;
+
+    let (mut settings, base) =
+        get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
+    settings.linked_stats = Some(LinkedStatsSettings {
+        base_url: url::Url::from_str(&linked_server.uri()).unwrap(),
+        timeout: 50,
+        max_hops: 1,
+    });
+
+    let shutdown = GracefulShutdownHandler::new();
+    let shutdown_cloned = shutdown.clone();
+    init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
+
+    wait_until(Duration::from_secs(30), || {
+        let base = base.clone();
+        async move {
+            reqwest::Client::new()
+                .get(base.join("/api/v1/counters").unwrap())
+                .send()
+                .await
+                .map(|response| response.status().is_success())
+                .unwrap_or(false)
+        }
+    })
+    .await
+    .expect("server did not become ready in time");
+
+    let counters: proto_v1::Counters = send_get_request(&base, "/api/v1/counters").await;
+    assert!(counters
+        .counters
+        .iter()
+        .all(|counter| counter.id != "linkedOnlyCounter"));
+
+    let interchain_page: proto_v1::MainPageInterchainStats =
+        send_get_request(&base, "/api/v1/pages/interchain/main").await;
+    assert_eq!(
+        interchain_page,
+        proto_v1::MainPageInterchainStats {
+            total_interchain_messages: None,
+            total_interchain_messages_sent: None,
+            total_interchain_messages_received: None,
+        }
+    );
+
+    let timed_out_line_response = reqwest::Client::new().get(
+        base.join("/api/v1/lines/linkedMissingChart?resolution=DAY")
+            .unwrap(),
+    );
+    let timed_out_line_response =
+        send_arbitrary_request_allowing_failure(timed_out_line_response).await;
+    assert_eq!(timed_out_line_response.status(), StatusCode::NOT_FOUND);
 
     stats_db.close_all_unwrap().await;
     blockscout_db.close_all_unwrap().await;
@@ -388,12 +505,10 @@ async fn linked_stats_stops_forwarding_when_hop_limit_is_reached() {
         .expect("request should complete");
     assert!(response.status().is_success());
     let counters: proto_v1::Counters = response.json().await.expect("response should be JSON");
-    assert!(
-        counters
-            .counters
-            .iter()
-            .all(|counter| counter.id != "linkedOnlyCounter")
-    );
+    assert!(counters
+        .counters
+        .iter()
+        .all(|counter| counter.id != "linkedOnlyCounter"));
     let after = linked_server
         .received_requests()
         .await

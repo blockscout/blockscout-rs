@@ -101,6 +101,8 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__ENABLE_ALL_EIP_7702`                                         |                          | Enable EIP-7702-specific charts. Variable for convenience only, the same charts can be enabled one-by-one.                                                                                                                                                                                   | `false`                                         |
 | `STATS__API_KEYS__<KEY_NAME>`                                        |                          | E.g. `very_secure_key_value`. Allows access to key-protected functinoality                                                                                                                                                                                                                   | `null`                                          |
 
+When `linked_stats` is configured, the intended topology is one primary stats service with at most one linked secondary service. Chaining is technically possible because a secondary service can also be configured with its own `linked_stats`, but this should be avoided unless there is a clear operational reason: it increases latency and complexity, and careless configuration can still create cycles.
+
 [anchor]: <> (anchors.envs.end.service)
 
 ##### Conditional start
