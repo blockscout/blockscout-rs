@@ -6,6 +6,8 @@ use url::Url;
 
 use crate::settings::LinkedStatsSettings;
 
+pub const LINK_HOP_HEADER: &str = "x-stats-link-hop";
+
 #[derive(Debug, Clone)]
 pub struct LinkedStatsClient {
     client: reqwest::Client,
@@ -33,17 +35,21 @@ impl LinkedStatsClient {
         })
     }
 
-    pub async fn get_counters(&self) -> Result<proto_v1::Counters, LinkedStatsError> {
-        self.get_json("api/v1/counters").await
+    pub async fn get_counters(&self, hop: u32) -> Result<proto_v1::Counters, LinkedStatsError> {
+        self.get_json("api/v1/counters", hop).await
     }
 
-    pub async fn get_line_charts(&self) -> Result<proto_v1::LineCharts, LinkedStatsError> {
-        self.get_json("api/v1/lines").await
+    pub async fn get_line_charts(
+        &self,
+        hop: u32,
+    ) -> Result<proto_v1::LineCharts, LinkedStatsError> {
+        self.get_json("api/v1/lines", hop).await
     }
 
     pub async fn get_line_chart(
         &self,
         request: &proto_v1::GetLineChartRequest,
+        hop: u32,
     ) -> Result<proto_v1::LineChart, LinkedStatsError> {
         let mut url = self.endpoint(&format!("api/v1/lines/{}", request.name))?;
         {
@@ -59,39 +65,49 @@ impl LinkedStatsClient {
                 query.append_pair("resolution", resolution.as_str_name());
             }
         }
-        self.get_json_by_url(url, true).await
+        self.get_json_by_url(url, hop, true).await
     }
 
-    pub async fn get_main_page_stats(&self) -> Result<proto_v1::MainPageStats, LinkedStatsError> {
-        self.get_json("api/v1/pages/main").await
+    pub async fn get_main_page_stats(
+        &self,
+        hop: u32,
+    ) -> Result<proto_v1::MainPageStats, LinkedStatsError> {
+        self.get_json("api/v1/pages/main", hop).await
     }
 
     pub async fn get_transactions_page_stats(
         &self,
+        hop: u32,
     ) -> Result<proto_v1::TransactionsPageStats, LinkedStatsError> {
-        self.get_json("api/v1/pages/transactions").await
+        self.get_json("api/v1/pages/transactions", hop).await
     }
 
     pub async fn get_contracts_page_stats(
         &self,
+        hop: u32,
     ) -> Result<proto_v1::ContractsPageStats, LinkedStatsError> {
-        self.get_json("api/v1/pages/contracts").await
+        self.get_json("api/v1/pages/contracts", hop).await
     }
 
     pub async fn get_main_page_multichain_stats(
         &self,
+        hop: u32,
     ) -> Result<proto_v1::MainPageMultichainStats, LinkedStatsError> {
-        self.get_json("api/v1/pages/multichain/main").await
+        self.get_json("api/v1/pages/multichain/main", hop).await
     }
 
     pub async fn get_main_page_interchain_stats(
         &self,
+        hop: u32,
     ) -> Result<proto_v1::MainPageInterchainStats, LinkedStatsError> {
-        self.get_json("api/v1/pages/interchain/main").await
+        self.get_json("api/v1/pages/interchain/main", hop).await
     }
 
-    pub async fn get_update_status(&self) -> Result<proto_v1::UpdateStatus, LinkedStatsError> {
-        self.get_json("api/v1/update-status").await
+    pub async fn get_update_status(
+        &self,
+        hop: u32,
+    ) -> Result<proto_v1::UpdateStatus, LinkedStatsError> {
+        self.get_json("api/v1/update-status", hop).await
     }
 
     fn endpoint(&self, path: &str) -> Result<Url, LinkedStatsError> {
@@ -100,17 +116,27 @@ impl LinkedStatsClient {
             .map_err(|_| LinkedStatsError::UnexpectedStatus(StatusCode::BAD_REQUEST))
     }
 
-    async fn get_json<T: DeserializeOwned>(&self, path: &str) -> Result<T, LinkedStatsError> {
+    async fn get_json<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        hop: u32,
+    ) -> Result<T, LinkedStatsError> {
         let url = self.endpoint(path)?;
-        self.get_json_by_url(url, false).await
+        self.get_json_by_url(url, hop, false).await
     }
 
     async fn get_json_by_url<T: DeserializeOwned>(
         &self,
         url: Url,
+        hop: u32,
         allow_not_found: bool,
     ) -> Result<T, LinkedStatsError> {
-        let response = self.client.get(url).send().await?;
+        let response = self
+            .client
+            .get(url)
+            .header(LINK_HOP_HEADER, hop.to_string())
+            .send()
+            .await?;
         let status = response.status();
         if status.is_success() {
             return Ok(response.json().await?);

@@ -301,6 +301,68 @@ mod tests {
     }
 
     #[test]
+    fn merge_main_page_stats_keeps_primary_values_and_fills_missing_fields() {
+        let primary = proto_v1::MainPageStats {
+            average_block_time: Some(counter("averageBlockTime", "1")),
+            total_addresses: Some(counter("totalAddresses", "10")),
+            ..Default::default()
+        };
+
+        let secondary = proto_v1::MainPageStats {
+            average_block_time: Some(counter("averageBlockTime", "999")),
+            total_addresses: Some(counter("totalAddresses", "20")),
+            total_blocks: Some(counter("totalBlocks", "30")),
+            ..Default::default()
+        };
+
+        let merged = merge_main_page_stats(primary, secondary);
+
+        assert_eq!(merged.average_block_time.as_ref().unwrap().value, "1");
+        assert_eq!(merged.total_addresses.as_ref().unwrap().value, "10");
+        assert_eq!(merged.total_blocks.as_ref().unwrap().value, "30");
+    }
+
+    #[test]
+    fn merge_main_page_interchain_stats_keeps_primary_values_and_fills_missing_fields() {
+        let primary = proto_v1::MainPageInterchainStats {
+            total_interchain_messages: Some(counter("totalInterchainMessages", "1")),
+            ..Default::default()
+        };
+
+        let secondary = proto_v1::MainPageInterchainStats {
+            total_interchain_messages: Some(counter("totalInterchainMessages", "999")),
+            total_interchain_messages_sent: Some(counter("totalInterchainMessagesSent", "2")),
+            total_interchain_messages_received: Some(counter(
+                "totalInterchainMessagesReceived",
+                "3",
+            )),
+        };
+
+        let merged = merge_main_page_interchain_stats(primary, secondary);
+
+        assert_eq!(
+            merged.total_interchain_messages.as_ref().unwrap().value,
+            "1"
+        );
+        assert_eq!(
+            merged
+                .total_interchain_messages_sent
+                .as_ref()
+                .unwrap()
+                .value,
+            "2"
+        );
+        assert_eq!(
+            merged
+                .total_interchain_messages_received
+                .as_ref()
+                .unwrap()
+                .value,
+            "3"
+        );
+    }
+
+    #[test]
     fn merge_update_statuses_uses_explicit_status_order() {
         let merged = merge_update_statuses(
             proto_v1::UpdateStatus {

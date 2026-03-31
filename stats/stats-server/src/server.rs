@@ -124,6 +124,10 @@ pub async fn stats(
             authorization,
             settings.limits.into(),
             linked_stats,
+            settings
+                .linked_stats
+                .as_ref()
+                .map_or(0, |settings| settings.max_hops()),
         )
         .await?,
     );

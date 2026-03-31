@@ -1,4 +1,6 @@
-use std::{clone::Clone, collections::BTreeMap, fmt::Debug, str::FromStr, sync::Arc};
+use std::{
+    clone::Clone, collections::BTreeMap, fmt::Debug, future::Future, str::FromStr, sync::Arc,
+};
 
 use crate::{
     UpdateService,
@@ -7,14 +9,14 @@ use crate::{
         layout::placed_items_according_to_layout,
         types::{self, EnabledChartSettings},
     },
-    linked_stats::{LinkedStatsClient, LinkedStatsError},
+    linked_stats::{LINK_HOP_HEADER, LinkedStatsClient, LinkedStatsError},
     linked_stats_merge::{
         merge_contracts_page_stats, merge_counters, merge_line_chart_sections,
         merge_main_page_interchain_stats, merge_main_page_multichain_stats, merge_main_page_stats,
         merge_transactions_page_stats, merge_update_statuses,
     },
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
-    settings::{LimitsSettings, Mode},
+    settings::{LINKED_STATS_MAX_HOPS_HARD_CAP, LimitsSettings, Mode},
     update_service::OnDemandReupdateError,
 };
 
@@ -64,6 +66,7 @@ pub struct ReadService {
     update_service: Arc<UpdateService>,
     limits: ReadLimits,
     linked_stats: Option<LinkedStatsClient>,
+    linked_stats_max_hops: u32,
 }
 
 impl ReadService {
@@ -78,6 +81,7 @@ impl ReadService {
         authorization: Arc<AuthorizationProvider>,
         limits: ReadLimits,
         linked_stats: Option<LinkedStatsClient>,
+        linked_stats_max_hops: u32,
     ) -> Result<Self, DbErr> {
         Ok(Self {
             db,
@@ -89,6 +93,7 @@ impl ReadService {
             authorization,
             limits,
             linked_stats,
+            linked_stats_max_hops,
         })
     }
 }
@@ -174,9 +179,26 @@ fn get_counter_query_handle(name: &str, counter: &EnabledChartEntry) -> Option<C
 }
 
 impl ReadService {
+    fn request_link_hop<T>(&self, request: &Request<T>) -> u32 {
+        let hop_limit = self
+            .linked_stats_max_hops
+            .min(LINKED_STATS_MAX_HOPS_HARD_CAP);
+        request
+            .metadata()
+            .get(LINK_HOP_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u32>().ok())
+            .map(|hop| hop.min(hop_limit))
+            .unwrap_or(hop_limit)
+    }
+
+    fn next_link_hop(&self, current_hop: u32) -> Option<u32> {
+        current_hop.checked_sub(1)
+    }
+
     async fn linked_or_log<T, Fut>(&self, request_name: &'static str, request: Fut) -> Option<T>
     where
-        Fut: std::future::Future<Output = Result<T, LinkedStatsError>>,
+        Fut: Future<Output = Result<T, LinkedStatsError>>,
     {
         match request.await {
             Ok(response) => Some(response),
@@ -515,8 +537,9 @@ impl ReadService {
 impl StatsService for ReadService {
     async fn get_counters(
         &self,
-        _request: Request<proto_v1::GetCountersRequest>,
+        request: Request<proto_v1::GetCountersRequest>,
     ) -> Result<Response<proto_v1::Counters>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let now = Utc::now();
         let counters_futures: FuturesOrdered<_> = self
             .charts
@@ -533,15 +556,16 @@ impl StatsService for ReadService {
         let counters = proto_v1::Counters {
             counters: counters_sorted,
         };
-        let counters = if let Some(linked_stats) = &self.linked_stats {
-            let linked = self
-                .linked_or_log("get_counters", linked_stats.get_counters())
-                .await;
-            linked.map_or(counters.clone(), |secondary| {
-                merge_counters(counters, secondary)
-            })
-        } else {
-            counters
+        let counters = match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+            (Some(linked_stats), Some(next_hop)) => {
+                let linked = self
+                    .linked_or_log("get_counters", linked_stats.get_counters(next_hop))
+                    .await;
+                linked.map_or(counters.clone(), |secondary| {
+                    merge_counters(counters, secondary)
+                })
+            }
+            _ => counters,
         };
         Ok(Response::new(counters))
     }
@@ -550,6 +574,7 @@ impl StatsService for ReadService {
         &self,
         request: Request<proto_v1::GetLineChartRequest>,
     ) -> Result<Response<proto_v1::LineChart>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let request = request.into_inner();
         let resolution = convert_resolution(request.resolution());
         let chart_name = request.name.clone();
@@ -579,16 +604,18 @@ impl StatsService for ReadService {
         match primary_result {
             Ok(chart_data) => Ok(Response::new(chart_data)),
             Err(primary_err) if Self::is_not_found_status(&primary_err) => {
-                let Some(linked_stats) = &self.linked_stats else {
-                    return Err(primary_err);
-                };
-                match linked_stats.get_line_chart(&request).await {
-                    Ok(chart_data) => Ok(Response::new(chart_data)),
-                    Err(LinkedStatsError::NotFound) => Err(primary_err),
-                    Err(err) => {
-                        tracing::warn!(chart = chart_name, err = %err, "linked stats line chart request failed");
-                        Err(primary_err)
+                match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+                    (Some(linked_stats), Some(next_hop)) => {
+                        match linked_stats.get_line_chart(&request, next_hop).await {
+                            Ok(chart_data) => Ok(Response::new(chart_data)),
+                            Err(LinkedStatsError::NotFound) => Err(primary_err),
+                            Err(err) => {
+                                tracing::warn!(chart = chart_name, err = %err, "linked stats line chart request failed");
+                                Err(primary_err)
+                            }
+                        }
                     }
+                    _ => Err(primary_err),
                 }
             }
             Err(err) => Err(err),
@@ -597,8 +624,9 @@ impl StatsService for ReadService {
 
     async fn get_line_charts(
         &self,
-        _request: Request<proto_v1::GetLineChartsRequest>,
+        request: Request<proto_v1::GetLineChartsRequest>,
     ) -> Result<Response<proto_v1::LineCharts>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let layout = self.charts.lines_layout.clone();
         let filtered_charts_info = self
             .enabled_and_not_waiting_for_starting_condition_charts_info()
@@ -606,15 +634,16 @@ impl StatsService for ReadService {
         let sections = add_chart_info_to_layout(layout, &filtered_charts_info);
 
         let line_charts = proto_v1::LineCharts { sections };
-        let line_charts = if let Some(linked_stats) = &self.linked_stats {
-            let linked = self
-                .linked_or_log("get_line_charts", linked_stats.get_line_charts())
-                .await;
-            linked.map_or(line_charts.clone(), |secondary| proto_v1::LineCharts {
-                sections: merge_line_chart_sections(line_charts.sections, secondary.sections),
-            })
-        } else {
-            line_charts
+        let line_charts = match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+            (Some(linked_stats), Some(next_hop)) => {
+                let linked = self
+                    .linked_or_log("get_line_charts", linked_stats.get_line_charts(next_hop))
+                    .await;
+                linked.map_or(line_charts.clone(), |secondary| proto_v1::LineCharts {
+                    sections: merge_line_chart_sections(line_charts.sections, secondary.sections),
+                })
+            }
+            _ => line_charts,
         };
 
         Ok(Response::new(line_charts))
@@ -622,8 +651,9 @@ impl StatsService for ReadService {
 
     async fn get_main_page_stats(
         &self,
-        _request: Request<proto_v1::GetMainPageStatsRequest>,
+        request: Request<proto_v1::GetMainPageStatsRequest>,
     ) -> Result<Response<proto_v1::MainPageStats>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let now = Utc::now();
 
         let (
@@ -676,23 +706,28 @@ impl StatsService for ReadService {
             daily_new_operational_transactions,
             op_stack_daily_new_operational_transactions,
         };
-        let stats = if let Some(linked_stats) = &self.linked_stats {
-            let linked = self
-                .linked_or_log("get_main_page_stats", linked_stats.get_main_page_stats())
-                .await;
-            linked.map_or(stats.clone(), |secondary| {
-                merge_main_page_stats(stats, secondary)
-            })
-        } else {
-            stats
+        let stats = match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+            (Some(linked_stats), Some(next_hop)) => {
+                let linked = self
+                    .linked_or_log(
+                        "get_main_page_stats",
+                        linked_stats.get_main_page_stats(next_hop),
+                    )
+                    .await;
+                linked.map_or(stats.clone(), |secondary| {
+                    merge_main_page_stats(stats, secondary)
+                })
+            }
+            _ => stats,
         };
         Ok(Response::new(stats))
     }
 
     async fn get_transactions_page_stats(
         &self,
-        _request: Request<proto_v1::GetTransactionsPageStatsRequest>,
+        request: Request<proto_v1::GetTransactionsPageStatsRequest>,
     ) -> Result<Response<proto_v1::TransactionsPageStats>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let now = Utc::now();
         let (
             pending_transactions_30m,
@@ -726,26 +761,28 @@ impl StatsService for ReadService {
             new_zetachain_cross_chain_txns_24h,
             pending_zetachain_cross_chain_txns,
         };
-        let stats = if let Some(linked_stats) = &self.linked_stats {
-            let linked = self
-                .linked_or_log(
-                    "get_transactions_page_stats",
-                    linked_stats.get_transactions_page_stats(),
-                )
-                .await;
-            linked.map_or(stats.clone(), |secondary| {
-                merge_transactions_page_stats(stats, secondary)
-            })
-        } else {
-            stats
+        let stats = match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+            (Some(linked_stats), Some(next_hop)) => {
+                let linked = self
+                    .linked_or_log(
+                        "get_transactions_page_stats",
+                        linked_stats.get_transactions_page_stats(next_hop),
+                    )
+                    .await;
+                linked.map_or(stats.clone(), |secondary| {
+                    merge_transactions_page_stats(stats, secondary)
+                })
+            }
+            _ => stats,
         };
         Ok(Response::new(stats))
     }
 
     async fn get_contracts_page_stats(
         &self,
-        _request: Request<proto_v1::GetContractsPageStatsRequest>,
+        request: Request<proto_v1::GetContractsPageStatsRequest>,
     ) -> Result<Response<proto_v1::ContractsPageStats>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let now = Utc::now();
         let (
             total_contracts,
@@ -764,26 +801,28 @@ impl StatsService for ReadService {
             total_verified_contracts,
             new_verified_contracts_24h,
         };
-        let stats = if let Some(linked_stats) = &self.linked_stats {
-            let linked = self
-                .linked_or_log(
-                    "get_contracts_page_stats",
-                    linked_stats.get_contracts_page_stats(),
-                )
-                .await;
-            linked.map_or(stats.clone(), |secondary| {
-                merge_contracts_page_stats(stats, secondary)
-            })
-        } else {
-            stats
+        let stats = match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+            (Some(linked_stats), Some(next_hop)) => {
+                let linked = self
+                    .linked_or_log(
+                        "get_contracts_page_stats",
+                        linked_stats.get_contracts_page_stats(next_hop),
+                    )
+                    .await;
+                linked.map_or(stats.clone(), |secondary| {
+                    merge_contracts_page_stats(stats, secondary)
+                })
+            }
+            _ => stats,
         };
         Ok(Response::new(stats))
     }
 
     async fn get_main_page_multichain_stats(
         &self,
-        _request: Request<proto_v1::GetMainPageStatsRequest>,
+        request: Request<proto_v1::GetMainPageStatsRequest>,
     ) -> Result<Response<proto_v1::MainPageMultichainStats>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let now = Utc::now();
 
         let (
@@ -804,26 +843,28 @@ impl StatsService for ReadService {
             yesterday_txns_multichain,
             new_txns_multichain_window,
         };
-        let stats = if let Some(linked_stats) = &self.linked_stats {
-            let linked = self
-                .linked_or_log(
-                    "get_main_page_multichain_stats",
-                    linked_stats.get_main_page_multichain_stats(),
-                )
-                .await;
-            linked.map_or(stats.clone(), |secondary| {
-                merge_main_page_multichain_stats(stats, secondary)
-            })
-        } else {
-            stats
+        let stats = match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+            (Some(linked_stats), Some(next_hop)) => {
+                let linked = self
+                    .linked_or_log(
+                        "get_main_page_multichain_stats",
+                        linked_stats.get_main_page_multichain_stats(next_hop),
+                    )
+                    .await;
+                linked.map_or(stats.clone(), |secondary| {
+                    merge_main_page_multichain_stats(stats, secondary)
+                })
+            }
+            _ => stats,
         };
         Ok(Response::new(stats))
     }
 
     async fn get_main_page_interchain_stats(
         &self,
-        _request: Request<proto_v1::GetMainPageStatsRequest>,
+        request: Request<proto_v1::GetMainPageStatsRequest>,
     ) -> Result<Response<proto_v1::MainPageInterchainStats>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let now = Utc::now();
 
         let (
@@ -841,34 +882,40 @@ impl StatsService for ReadService {
             total_interchain_messages_sent,
             total_interchain_messages_received,
         };
-        let stats = if let Some(linked_stats) = &self.linked_stats {
-            let linked = self
-                .linked_or_log(
-                    "get_main_page_interchain_stats",
-                    linked_stats.get_main_page_interchain_stats(),
-                )
-                .await;
-            linked.map_or(stats.clone(), |secondary| {
-                merge_main_page_interchain_stats(stats, secondary)
-            })
-        } else {
-            stats
+        let stats = match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+            (Some(linked_stats), Some(next_hop)) => {
+                let linked = self
+                    .linked_or_log(
+                        "get_main_page_interchain_stats",
+                        linked_stats.get_main_page_interchain_stats(next_hop),
+                    )
+                    .await;
+                linked.map_or(stats.clone(), |secondary| {
+                    merge_main_page_interchain_stats(stats, secondary)
+                })
+            }
+            _ => stats,
         };
         Ok(Response::new(stats))
     }
 
     async fn get_update_status(
         &self,
-        _request: Request<proto_v1::GetUpdateStatusRequest>,
+        request: Request<proto_v1::GetUpdateStatusRequest>,
     ) -> Result<Response<proto_v1::UpdateStatus>, Status> {
+        let current_hop = self.request_link_hop(&request);
         let status = self.update_service.get_initial_update_status().await;
-        let status = if let Some(linked_stats) = &self.linked_stats {
-            let linked = self
-                .linked_or_log("get_update_status", linked_stats.get_update_status())
-                .await;
-            linked.map_or(status, |secondary| merge_update_statuses(status, secondary))
-        } else {
-            status
+        let status = match (self.linked_stats.as_ref(), self.next_link_hop(current_hop)) {
+            (Some(linked_stats), Some(next_hop)) => {
+                let linked = self
+                    .linked_or_log(
+                        "get_update_status",
+                        linked_stats.get_update_status(next_hop),
+                    )
+                    .await;
+                linked.map_or(status, |secondary| merge_update_statuses(status, secondary))
+            }
+            _ => status,
         };
         Ok(Response::new(status))
     }

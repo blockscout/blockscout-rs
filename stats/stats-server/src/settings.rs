@@ -116,24 +116,33 @@ pub struct Settings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default, deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct LinkedStatsSettings {
     pub base_url: url::Url,
+    #[serde(default = "default_linked_stats_timeout")]
     pub timeout: u64,
+    /// Requested hop budget for linked requests. Values above the hard cap are truncated.
+    #[serde(default = "default_linked_stats_max_hops")]
+    pub max_hops: u32,
+}
+
+pub const LINKED_STATS_MAX_HOPS_HARD_CAP: u32 = 4;
+
+fn default_linked_stats_timeout() -> u64 {
+    1_500
+}
+
+fn default_linked_stats_max_hops() -> u32 {
+    1
 }
 
 impl LinkedStatsSettings {
     pub fn timeout(&self) -> Duration {
         Duration::from_millis(self.timeout)
     }
-}
 
-impl Default for LinkedStatsSettings {
-    fn default() -> Self {
-        Self {
-            base_url: url::Url::parse("http://localhost:8050").expect("valid default URL"),
-            timeout: 1_500,
-        }
+    pub fn max_hops(&self) -> u32 {
+        self.max_hops.min(LINKED_STATS_MAX_HOPS_HARD_CAP)
     }
 }
 
@@ -592,5 +601,47 @@ mod tests {
                 .enabled,
             true
         );
+    }
+
+    #[test]
+    fn linked_stats_requires_base_url() {
+        let err = serde_json::from_str::<LinkedStatsSettings>(r#"{"timeout": 10}"#)
+            .expect_err("base_url should be required");
+        assert!(
+            err.to_string().contains("base_url"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn linked_stats_empty_object_is_rejected() {
+        let err = serde_json::from_str::<LinkedStatsSettings>(r#"{}"#)
+            .expect_err("empty linked_stats object should not be valid");
+        assert!(
+            err.to_string().contains("base_url"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn linked_stats_defaults_timeout_and_max_hops_when_base_url_is_set() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"base_url":"http://example.com"}"#)
+                .expect("valid linked_stats config should deserialize");
+
+        assert_eq!(settings.base_url.as_str(), "http://example.com/");
+        assert_eq!(settings.timeout, 1_500);
+        assert_eq!(settings.max_hops, 1);
+        assert_eq!(settings.max_hops(), 1);
+    }
+
+    #[test]
+    fn linked_stats_max_hops_is_capped_to_hard_limit() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"base_url":"http://example.com","max_hops":100}"#)
+                .expect("valid linked_stats config should deserialize");
+
+        assert_eq!(settings.max_hops, 100);
+        assert_eq!(settings.max_hops(), LINKED_STATS_MAX_HOPS_HARD_CAP);
     }
 }
