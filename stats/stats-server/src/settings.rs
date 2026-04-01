@@ -628,7 +628,7 @@ mod tests {
         let settings: LinkedStatsSettings =
             serde_json::from_str(r#"{}"#).expect("empty linked_stats should deserialize");
         assert!(settings.base_url.is_none());
-        assert_eq!(settings.timeout, 1_500);
+        assert_eq!(settings.timeout, 3_000);
         assert_eq!(settings.max_hops, 1);
     }
 
@@ -642,7 +642,7 @@ mod tests {
             settings.base_url.as_ref().unwrap().as_str(),
             "http://example.com/"
         );
-        assert_eq!(settings.timeout, 1_500);
+        assert_eq!(settings.timeout, 3_000);
         assert_eq!(settings.max_hops, 1);
         assert_eq!(settings.max_hops(), 1);
     }
