@@ -13,10 +13,10 @@ use stats::tests::{
     mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data},
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
-use stats_server::{stats, LinkedStatsSettings};
+use stats_server::{LinkedStatsSettings, stats};
 use wiremock::{
-    matchers::{method, path, query_param},
     Mock, MockServer, ResponseTemplate,
+    matchers::{method, path, query_param},
 };
 
 use crate::common::{get_test_stats_settings, wait_until};
@@ -101,11 +101,11 @@ async fn linked_stats_merge_and_line_fallback_work() {
 
     let (mut settings, base) =
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
-    settings.linked_stats = Some(LinkedStatsSettings {
-        base_url: url::Url::from_str(&linked_server.uri()).unwrap(),
+    settings.linked_stats = LinkedStatsSettings {
+        base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
         timeout: 1_500,
         max_hops: 1,
-    });
+    };
 
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
@@ -265,11 +265,11 @@ async fn linked_stats_merges_line_sections() {
 
     let (mut settings, base) =
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
-    settings.linked_stats = Some(LinkedStatsSettings {
-        base_url: url::Url::from_str(&linked_server.uri()).unwrap(),
+    settings.linked_stats = LinkedStatsSettings {
+        base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
         timeout: 1_500,
         max_hops: 1,
-    });
+    };
 
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
@@ -297,10 +297,12 @@ async fn linked_stats_merges_line_sections() {
         .find(|section| section.id == "transactions")
         .expect("transactions section should exist");
     assert_eq!(transactions.title, "Transactions");
-    assert!(transactions
-        .charts
-        .iter()
-        .any(|chart| chart.id == "newTxns" && chart.title != "Secondary New Txns"));
+    assert!(
+        transactions
+            .charts
+            .iter()
+            .any(|chart| chart.id == "newTxns" && chart.title != "Secondary New Txns")
+    );
     assert_eq!(
         transactions
             .charts
@@ -309,10 +311,12 @@ async fn linked_stats_merges_line_sections() {
             .count(),
         1
     );
-    assert!(transactions
-        .charts
-        .iter()
-        .any(|chart| chart.id == "linked_only_line"));
+    assert!(
+        transactions
+            .charts
+            .iter()
+            .any(|chart| chart.id == "linked_only_line")
+    );
     assert_eq!(line_charts.sections.last().unwrap().id, "linked-only");
 
     let interchain_page: proto_v1::MainPageInterchainStats =
@@ -383,11 +387,11 @@ async fn linked_stats_falls_back_to_primary_when_secondary_fails_or_times_out() 
 
     let (mut settings, base) =
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
-    settings.linked_stats = Some(LinkedStatsSettings {
-        base_url: url::Url::from_str(&linked_server.uri()).unwrap(),
+    settings.linked_stats = LinkedStatsSettings {
+        base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
         timeout: 50,
         max_hops: 1,
-    });
+    };
 
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
@@ -408,10 +412,12 @@ async fn linked_stats_falls_back_to_primary_when_secondary_fails_or_times_out() 
     .expect("server did not become ready in time");
 
     let counters: proto_v1::Counters = send_get_request(&base, "/api/v1/counters").await;
-    assert!(counters
-        .counters
-        .iter()
-        .all(|counter| counter.id != "linkedOnlyCounter"));
+    assert!(
+        counters
+            .counters
+            .iter()
+            .all(|counter| counter.id != "linkedOnlyCounter")
+    );
 
     let interchain_page: proto_v1::MainPageInterchainStats =
         send_get_request(&base, "/api/v1/pages/interchain/main").await;
@@ -467,11 +473,11 @@ async fn linked_stats_stops_forwarding_when_hop_limit_is_reached() {
 
     let (mut settings, base) =
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
-    settings.linked_stats = Some(LinkedStatsSettings {
-        base_url: url::Url::from_str(&linked_server.uri()).unwrap(),
+    settings.linked_stats = LinkedStatsSettings {
+        base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
         timeout: 1_500,
         max_hops: 1,
-    });
+    };
 
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
@@ -505,10 +511,12 @@ async fn linked_stats_stops_forwarding_when_hop_limit_is_reached() {
         .expect("request should complete");
     assert!(response.status().is_success());
     let counters: proto_v1::Counters = response.json().await.expect("response should be JSON");
-    assert!(counters
-        .counters
-        .iter()
-        .all(|counter| counter.id != "linkedOnlyCounter"));
+    assert!(
+        counters
+            .counters
+            .iter()
+            .all(|counter| counter.id != "linkedOnlyCounter")
+    );
     let after = linked_server
         .received_requests()
         .await
@@ -551,11 +559,11 @@ async fn linked_stats_caps_incoming_hop_header_to_hard_limit() {
 
     let (mut settings, base) =
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
-    settings.linked_stats = Some(LinkedStatsSettings {
-        base_url: url::Url::from_str(&linked_server.uri()).unwrap(),
+    settings.linked_stats = LinkedStatsSettings {
+        base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
         timeout: 1_500,
         max_hops: 100,
-    });
+    };
 
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();

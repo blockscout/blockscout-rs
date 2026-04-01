@@ -108,11 +108,11 @@ pub async fn stats(
         Ok(())
     });
     let authorization = init_authorization(settings.api_keys);
-    let linked_stats = settings
-        .linked_stats
-        .clone()
-        .map(LinkedStatsClient::new)
-        .transpose()?;
+    let linked_stats = LinkedStatsClient::try_new(&settings.linked_stats)?;
+    let linked_stats_max_hops = linked_stats
+        .as_ref()
+        .map(|_| settings.linked_stats.max_hops())
+        .unwrap_or(0);
     let read_service = Arc::new(
         ReadService::new(
             db.clone(),
@@ -124,10 +124,7 @@ pub async fn stats(
             authorization,
             settings.limits.into(),
             linked_stats,
-            settings
-                .linked_stats
-                .as_ref()
-                .map_or(0, |settings| settings.max_hops()),
+            linked_stats_max_hops,
         )
         .await?,
     );

@@ -25,14 +25,15 @@ pub enum LinkedStatsError {
 }
 
 impl LinkedStatsClient {
-    pub fn new(settings: LinkedStatsSettings) -> Result<Self, reqwest::Error> {
+    /// Returns `None` when [`LinkedStatsSettings::base_url`] is not set.
+    pub fn try_new(settings: &LinkedStatsSettings) -> Result<Option<Self>, reqwest::Error> {
+        let Some(base_url) = settings.base_url.clone() else {
+            return Ok(None);
+        };
         let client = reqwest::Client::builder()
             .timeout(settings.timeout())
             .build()?;
-        Ok(Self {
-            client,
-            base_url: settings.base_url,
-        })
+        Ok(Some(Self { client, base_url }))
     }
 
     pub async fn get_counters(&self, hop: u32) -> Result<proto_v1::Counters, LinkedStatsError> {

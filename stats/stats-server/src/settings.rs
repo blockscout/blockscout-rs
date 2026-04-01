@@ -102,11 +102,12 @@ pub struct Settings {
     pub update_groups_config: PathBuf,
     /// Location of swagger file to serve
     pub swagger_path: PathBuf,
-    /// Optional linked secondary stats service used to fill gaps in read responses.
+    /// Linked secondary stats settings. A client is created only when [`LinkedStatsSettings::base_url`]
+    /// is set; otherwise linked forwarding is disabled.
     ///
     /// Chaining linked services is technically allowed, but should be avoided unless
     /// there is a strong operational reason for it.
-    pub linked_stats: Option<LinkedStatsSettings>,
+    pub linked_stats: LinkedStatsSettings,
     pub api_keys: HashMap<String, String>,
 
     pub server: ServerSettings,
@@ -118,7 +119,8 @@ pub struct Settings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct LinkedStatsSettings {
-    pub base_url: url::Url,
+    #[serde(default)]
+    pub base_url: Option<url::Url>,
     #[serde(default = "default_linked_stats_timeout")]
     pub timeout: u64,
     /// Requested hop budget for linked requests. Values above the hard cap are truncated.
@@ -129,11 +131,21 @@ pub struct LinkedStatsSettings {
 pub const LINKED_STATS_MAX_HOPS_HARD_CAP: u32 = 4;
 
 fn default_linked_stats_timeout() -> u64 {
-    1_500
+    3_000
 }
 
 fn default_linked_stats_max_hops() -> u32 {
     1
+}
+
+impl Default for LinkedStatsSettings {
+    fn default() -> Self {
+        Self {
+            base_url: None,
+            timeout: default_linked_stats_timeout(),
+            max_hops: default_linked_stats_max_hops(),
+        }
+    }
 }
 
 impl LinkedStatsSettings {
@@ -181,7 +193,7 @@ impl Default for Settings {
             )
             .unwrap(),
             swagger_path: default_swagger_path(),
-            linked_stats: None,
+            linked_stats: LinkedStatsSettings::default(),
             blockscout_db_url: Default::default(),
             indexer_db_url: Default::default(),
             second_indexer_db_url: Default::default(),
@@ -604,23 +616,20 @@ mod tests {
     }
 
     #[test]
-    fn linked_stats_requires_base_url() {
-        let err = serde_json::from_str::<LinkedStatsSettings>(r#"{"timeout": 10}"#)
-            .expect_err("base_url should be required");
-        assert!(
-            err.to_string().contains("base_url"),
-            "unexpected error: {err}"
-        );
+    fn linked_stats_without_base_url_deserializes() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"timeout": 10}"#).expect("valid config should deserialize");
+        assert!(settings.base_url.is_none());
+        assert_eq!(settings.timeout, 10);
     }
 
     #[test]
-    fn linked_stats_empty_object_is_rejected() {
-        let err = serde_json::from_str::<LinkedStatsSettings>(r#"{}"#)
-            .expect_err("empty linked_stats object should not be valid");
-        assert!(
-            err.to_string().contains("base_url"),
-            "unexpected error: {err}"
-        );
+    fn linked_stats_empty_object_deserializes_to_defaults() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{}"#).expect("empty linked_stats should deserialize");
+        assert!(settings.base_url.is_none());
+        assert_eq!(settings.timeout, 1_500);
+        assert_eq!(settings.max_hops, 1);
     }
 
     #[test]
@@ -629,7 +638,10 @@ mod tests {
             serde_json::from_str(r#"{"base_url":"http://example.com"}"#)
                 .expect("valid linked_stats config should deserialize");
 
-        assert_eq!(settings.base_url.as_str(), "http://example.com/");
+        assert_eq!(
+            settings.base_url.as_ref().unwrap().as_str(),
+            "http://example.com/"
+        );
         assert_eq!(settings.timeout, 1_500);
         assert_eq!(settings.max_hops, 1);
         assert_eq!(settings.max_hops(), 1);
