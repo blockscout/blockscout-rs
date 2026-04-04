@@ -561,9 +561,10 @@ impl StatsService for ReadService {
                 let linked = self
                     .linked_or_log("get_counters", linked_stats.get_counters(next_hop))
                     .await;
-                linked.map_or(counters.clone(), |secondary| {
-                    merge_counters(counters, secondary)
-                })
+                match linked {
+                    Some(secondary) => merge_counters(counters, secondary),
+                    None => counters,
+                }
             }
             _ => counters,
         };
@@ -639,9 +640,15 @@ impl StatsService for ReadService {
                 let linked = self
                     .linked_or_log("get_line_charts", linked_stats.get_line_charts(next_hop))
                     .await;
-                linked.map_or(line_charts.clone(), |secondary| proto_v1::LineCharts {
-                    sections: merge_line_chart_sections(line_charts.sections, secondary.sections),
-                })
+                match linked {
+                    Some(secondary) => proto_v1::LineCharts {
+                        sections: merge_line_chart_sections(
+                            line_charts.sections,
+                            secondary.sections,
+                        ),
+                    },
+                    None => line_charts,
+                }
             }
             _ => line_charts,
         };

@@ -103,8 +103,7 @@ async fn linked_stats_merge_and_line_fallback_work() {
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
     settings.linked_stats = LinkedStatsSettings {
         base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
-        timeout: 1_500,
-        max_hops: 1,
+        ..Default::default()
     };
 
     let shutdown = GracefulShutdownHandler::new();
@@ -267,8 +266,7 @@ async fn linked_stats_merges_line_sections() {
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
     settings.linked_stats = LinkedStatsSettings {
         base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
-        timeout: 1_500,
-        max_hops: 1,
+        ..Default::default()
     };
 
     let shutdown = GracefulShutdownHandler::new();
@@ -475,8 +473,7 @@ async fn linked_stats_stops_forwarding_when_hop_limit_is_reached() {
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
     settings.linked_stats = LinkedStatsSettings {
         base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
-        timeout: 1_500,
-        max_hops: 1,
+        ..Default::default()
     };
 
     let shutdown = GracefulShutdownHandler::new();
@@ -561,8 +558,8 @@ async fn linked_stats_caps_incoming_hop_header_to_hard_limit() {
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
     settings.linked_stats = LinkedStatsSettings {
         base_url: Some(url::Url::from_str(&linked_server.uri()).unwrap()),
-        timeout: 1_500,
-        max_hops: 100,
+        max_hops: 4,
+        ..Default::default()
     };
 
     let shutdown = GracefulShutdownHandler::new();

@@ -2,7 +2,7 @@ use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use thiserror::Error;
-use url::Url;
+use url::{ParseError, Url};
 
 use crate::settings::LinkedStatsSettings;
 
@@ -22,6 +22,8 @@ pub enum LinkedStatsError {
     Request(#[from] reqwest::Error),
     #[error("linked stats returned unexpected status {0}")]
     UnexpectedStatus(StatusCode),
+    #[error("failed to construct linked stats URL: {0}")]
+    InvalidUrl(#[from] ParseError),
 }
 
 impl LinkedStatsClient {
@@ -113,7 +115,7 @@ impl LinkedStatsClient {
     }
 
     fn endpoint(&self, path: &str) -> Result<Url, LinkedStatsError> {
-        endpoint_url(&self.base_url, path)
+        Ok(self.base_url.join(path)?)
     }
 
     async fn get_json<T: DeserializeOwned>(
@@ -157,10 +159,4 @@ fn normalize_base_url(mut base_url: Url) -> Url {
     };
     base_url.set_path(&normalized_path);
     base_url
-}
-
-fn endpoint_url(base_url: &Url, path: &str) -> Result<Url, LinkedStatsError> {
-    base_url
-        .join(path)
-        .map_err(|_| LinkedStatsError::UnexpectedStatus(StatusCode::BAD_REQUEST))
 }
