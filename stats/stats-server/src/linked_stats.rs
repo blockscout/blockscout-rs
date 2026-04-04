@@ -30,6 +30,7 @@ impl LinkedStatsClient {
         let Some(base_url) = settings.base_url.clone() else {
             return Ok(None);
         };
+        let base_url = normalize_base_url(base_url);
         let client = reqwest::Client::builder()
             .timeout(settings.timeout())
             .build()?;
@@ -112,9 +113,7 @@ impl LinkedStatsClient {
     }
 
     fn endpoint(&self, path: &str) -> Result<Url, LinkedStatsError> {
-        self.base_url
-            .join(path)
-            .map_err(|_| LinkedStatsError::UnexpectedStatus(StatusCode::BAD_REQUEST))
+        endpoint_url(&self.base_url, path)
     }
 
     async fn get_json<T: DeserializeOwned>(
@@ -147,4 +146,21 @@ impl LinkedStatsClient {
         }
         Err(LinkedStatsError::UnexpectedStatus(status))
     }
+}
+
+fn normalize_base_url(mut base_url: Url) -> Url {
+    let trimmed_path = base_url.path().trim_end_matches('/');
+    let normalized_path = if trimmed_path.is_empty() {
+        "/".to_string()
+    } else {
+        format!("{trimmed_path}/")
+    };
+    base_url.set_path(&normalized_path);
+    base_url
+}
+
+fn endpoint_url(base_url: &Url, path: &str) -> Result<Url, LinkedStatsError> {
+    base_url
+        .join(path)
+        .map_err(|_| LinkedStatsError::UnexpectedStatus(StatusCode::BAD_REQUEST))
 }
