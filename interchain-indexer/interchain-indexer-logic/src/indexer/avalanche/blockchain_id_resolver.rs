@@ -29,20 +29,21 @@ impl BlockchainIdResolver {
     /// Resolve an Avalanche `blockchain_id` (32 bytes) to an EVM `chain_id`.
     ///
     /// Fast paths: in-memory cache, then `avalanche_icm_blockchain_ids` — unchanged by
-    /// `force_add_chain`.
+    /// `process_unknown_chains`.
     ///
     /// When the Data API is consulted successfully:
-    /// - `force_add_chain == true`: ensure a `chains` row exists, upsert
+    /// - `process_unknown_chains == true`: ensure a `chains` row exists, upsert
     ///   `avalanche_icm_blockchain_ids`, return `chain_id`.
-    /// - `force_add_chain == false`: if `chains` already contains `evm_chain_id`, same
+    /// - `process_unknown_chains == false`: if `chains` already contains `evm_chain_id`, same
     ///   persistence as above; otherwise skip DB writes but still return and cache `chain_id`.
-    pub async fn resolve(&self, blockchain_id: &[u8], force_add_chain: bool) -> Result<i64> {
+    pub async fn resolve(&self, blockchain_id: &[u8], process_unknown_chains: bool) -> Result<i64> {
         let key: CacheKey = blockchain_id.try_into().map_err(|_| {
             anyhow!(
                 "expected 32-byte blockchain_id, got {}",
                 blockchain_id.len()
             )
         })?;
+        let force_add_chain = process_unknown_chains;
 
         let this = self.clone();
         self.cache

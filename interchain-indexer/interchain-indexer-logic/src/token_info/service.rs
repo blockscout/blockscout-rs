@@ -234,7 +234,7 @@ impl TokenInfoService {
                 } else {
                     {
                         let mut cache = self.token_info_cache.write();
-                        cache.entry(key.clone()).or_insert_with(|| model.clone());
+                        cache.insert(key.clone(), model.clone());
                     }
                     if let Err(e) = self
                         .db

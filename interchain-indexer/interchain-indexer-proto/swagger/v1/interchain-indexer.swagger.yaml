@@ -823,7 +823,7 @@ definitions:
         type: string
         format: uint64
     description: |-
-      Pagination for bridged-t/token stats only (`page_token` or explicit cursor fields).
+      Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
       Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
   v1BridgedTokensSort:
     type: string
