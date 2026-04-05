@@ -55,7 +55,7 @@ impl LinkedStatsClient {
         request: &proto_v1::GetLineChartRequest,
         hop: u32,
     ) -> Result<proto_v1::LineChart, LinkedStatsError> {
-        let mut url = self.endpoint(&format!("api/v1/lines/{}", request.name))?;
+        let mut url = self.endpoint_with_path_segments(["api", "v1", "lines", &request.name])?;
         {
             let mut query = url.query_pairs_mut();
             if let Some(from) = request.from.as_deref() {
@@ -118,6 +118,13 @@ impl LinkedStatsClient {
         Ok(self.base_url.join(path)?)
     }
 
+    fn endpoint_with_path_segments<'a>(
+        &self,
+        segments: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Url, LinkedStatsError> {
+        build_url_with_path_segments(self.base_url.clone(), segments)
+    }
+
     async fn get_json<T: DeserializeOwned>(
         &self,
         path: &str,
@@ -159,4 +166,17 @@ fn normalize_base_url(mut base_url: Url) -> Url {
     };
     base_url.set_path(&normalized_path);
     base_url
+}
+
+fn build_url_with_path_segments<'a>(
+    mut base_url: Url,
+    segments: impl IntoIterator<Item = &'a str>,
+) -> Result<Url, LinkedStatsError> {
+    let mut path_segments = base_url
+        .path_segments_mut()
+        .map_err(|_| ParseError::RelativeUrlWithoutBase)?;
+    path_segments.pop_if_empty();
+    path_segments.extend(segments);
+    drop(path_segments);
+    Ok(base_url)
 }
