@@ -26,7 +26,7 @@ impl Default for HttpApiClientConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HttpApiClient {
     base_url: url::Url,
     http_client: reqwest_middleware::ClientWithMiddleware,
