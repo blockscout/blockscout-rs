@@ -59,6 +59,16 @@ Events are skipped when they fail either filter:
 
 ---
 
+## Stats Edge Amount Side Must Follow Indexed Source Presence
+
+**Symptom:** `stats_asset_edges.amount_side` flips to destination for a source-indexed transfer just because source token info was not fetched yet.
+
+**Root cause:** Edge side selection is sticky, so choosing it from token metadata availability couples aggregation semantics to an async enrichment race. The stable provenance signal is `crosschain_messages.src_tx_hash`: when it is present, the source chain was indexed and source amounts should be used even if source token decimals are still missing.
+
+**Fix:** For new stats edges, prefer `EdgeAmountSide::Source` whenever the parent message has `src_tx_hash`; only fall back to destination when the source chain truly was not indexed. Keep decimals enrichment separate from side selection.
+
+---
+
 ## Bridge Name Cache Has No Negative Caching
 
 **Symptom:** Repeated DB queries for non-existent bridge IDs.

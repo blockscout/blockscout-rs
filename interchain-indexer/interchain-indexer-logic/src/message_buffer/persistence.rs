@@ -9,6 +9,7 @@ use sea_orm::{
     ActiveValue, DatabaseTransaction, DbErr, EntityTrait, Iterable, QueryFilter,
     sea_query::{Expr, OnConflict},
 };
+use std::collections::HashSet;
 
 use super::{BufferItem, Consolidate, ConsolidatedMessage, Key};
 use crate::{
@@ -97,6 +98,31 @@ pub(super) async fn flush_to_final_storage(
     batched_upsert(tx, &transfers, crosschain_transfers_on_conflict()).await?;
 
     Ok(())
+}
+
+/// Distinct `(chain_id, token_address)` from finalized transfers for async token enrichment.
+pub(super) fn token_keys_from_finalized_for_enrichment(
+    finalized: &[ConsolidatedMessage],
+) -> Vec<(i64, Vec<u8>)> {
+    let mut out = HashSet::new();
+    for c in finalized {
+        if !c.is_final {
+            continue;
+        }
+        for t in &c.transfers {
+            if let (ActiveValue::Set(sc), ActiveValue::Set(sa)) =
+                (&t.token_src_chain_id, &t.token_src_address)
+            {
+                out.insert((*sc, sa.clone()));
+            }
+            if let (ActiveValue::Set(dc), ActiveValue::Set(da)) =
+                (&t.token_dst_chain_id, &t.token_dst_address)
+            {
+                out.insert((*dc, da.clone()));
+            }
+        }
+    }
+    out.into_iter().collect()
 }
 
 pub(super) async fn remove_finalized_from_pending(

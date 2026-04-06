@@ -19,6 +19,20 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/interchain/chains:
+    get:
+      operationId: InterchainService_GetChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - InterchainService
   /api/v1/interchain/messages:
     get:
       operationId: InterchainService_GetMessages
@@ -436,6 +450,209 @@ paths:
           type: string
       tags:
         - InterchainService
+  /api/v1/stats/chain/{chain_id}/bridged-tokens:
+    get:
+      operationId: InterchainStatisticsService_GetBridgedTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetBridgedTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: 'Enum fields: default 0 = TOTAL_TRANSFERS_COUNT / DESC when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost''s TryFromInto deserializer).'
+          in: query
+          required: false
+          type: string
+          enum:
+            - TOTAL_TRANSFERS_COUNT
+            - OUTPUT_TRANSFERS_COUNT
+            - INPUT_TRANSFERS_COUNT
+            - NAME
+          default: TOTAL_TRANSFERS_COUNT
+        - name: order
+          in: query
+          required: false
+          type: string
+          enum:
+            - DESC
+            - ASC
+          default: DESC
+        - name: page_token
+          description: Token-based pagination
+          in: query
+          required: false
+          type: string
+        - name: direction
+          description: Flat keys matching `BridgedTokensListPagination` / `next_page_params` / `prev_page_params` (for `api.use_pagination_token=false`, pass that dict fields here).
+          in: query
+          required: false
+          type: string
+        - name: asset_id
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: name
+          in: query
+          required: false
+          type: string
+        - name: name_blank
+          in: query
+          required: false
+          type: boolean
+        - name: count
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - InterchainStatisticsService
+  /api/v1/stats/chain/{chain_id}/messages-paths/received:
+    get:
+      operationId: InterchainStatisticsService_GetReceivedMessagePaths
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagePathsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: from_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: to_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: counterparty_chain_ids
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainStatisticsService
+  /api/v1/stats/chain/{chain_id}/messages-paths/sent:
+    get:
+      operationId: InterchainStatisticsService_GetSentMessagePaths
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagePathsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: from_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: to_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: counterparty_chain_ids
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainStatisticsService
+  /api/v1/stats/chains:
+    get:
+      operationId: InterchainStatisticsService_GetChainsStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetChainsStatsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          in: query
+          required: false
+          type: boolean
+        - name: chain_ids
+          description: |-
+            Optional comma-separated chain ids filter, for example `123,456`.
+            When absent or empty, statistics are returned for all known chains.
+          in: query
+          required: false
+          type: string
+        - name: order
+          in: query
+          required: false
+          type: string
+          enum:
+            - DESC
+            - ASC
+          default: DESC
+        - name: page_token
+          description: token-based pagination
+          in: query
+          required: false
+          type: string
+        - name: direction
+          description: raw pagination fields
+          in: query
+          required: false
+          type: string
+        - name: count
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+          format: int64
+      tags:
+        - InterchainStatisticsService
   /api/v1/stats/common:
     get:
       operationId: InterchainStatisticsService_GetCommonStatistics
@@ -588,6 +805,35 @@ definitions:
         type: string
       docs_url:
         type: string
+  v1BridgedTokensListPagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+      direction:
+        type: string
+      asset_id:
+        type: string
+        format: int64
+      name:
+        type: string
+      name_blank:
+        type: boolean
+      count:
+        type: string
+        format: uint64
+    description: |-
+      Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
+      Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
+  v1BridgedTokensSort:
+    type: string
+    enum:
+      - TOTAL_TRANSFERS_COUNT
+      - OUTPUT_TRANSFERS_COUNT
+      - INPUT_TRANSFERS_COUNT
+      - NAME
+    default: TOTAL_TRANSFERS_COUNT
+    description: First value must be 0 in protobuf; use TOTAL_TRANSFERS_COUNT/DESC as defaults (not separate *_UNSPECIFIED variants).
   v1ChainInfo:
     type: object
     properties:
@@ -613,6 +859,38 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1IndexerStatus'
+  v1GetBridgedTokensResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1StatsBridgedTokenRow'
+      next_page_params:
+        $ref: '#/definitions/v1BridgedTokensListPagination'
+      prev_page_params:
+        $ref: '#/definitions/v1BridgedTokensListPagination'
+  v1GetChainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainInfo'
+  v1GetChainsStatsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1StatsChainRow'
+      next_page_params:
+        $ref: '#/definitions/v1StatsChainsListPagination'
+      prev_page_params:
+        $ref: '#/definitions/v1StatsChainsListPagination'
   v1GetCommonStatisticsResponse:
     type: object
     properties:
@@ -635,6 +913,14 @@ definitions:
       daily_transfers:
         type: string
         format: uint64
+  v1GetMessagePathsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MessagePathRow'
   v1GetMessagesResponse:
     type: object
     properties:
@@ -747,6 +1033,16 @@ definitions:
         $ref: '#/definitions/v1AddressInfo'
       receive_timestamp:
         type: string
+  v1MessagePathRow:
+    type: object
+    properties:
+      source_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      destination_chain:
+        $ref: '#/definitions/v1ChainInfo'
+      messages_count:
+        type: string
+        format: uint64
   v1MessageStatus:
     type: string
     enum:
@@ -772,6 +1068,85 @@ definitions:
         format: uint64
       direction:
         type: string
+  v1SortOrder:
+    type: string
+    enum:
+      - DESC
+      - ASC
+    default: DESC
+    description: Shared ascending/descending order for statistics list endpoints (0=DESC, 1=ASC).
+  v1StatsBridgedTokenItem:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      token_address:
+        type: string
+      name:
+        type: string
+      symbol:
+        type: string
+      icon_url:
+        type: string
+      decimals:
+        type: integer
+        format: int64
+  v1StatsBridgedTokenRow:
+    type: object
+    properties:
+      stats_asset_id:
+        type: string
+        format: int64
+      name:
+        type: string
+      symbol:
+        type: string
+      icon_url:
+        type: string
+      input_transfers_count:
+        type: string
+        format: uint64
+      output_transfers_count:
+        type: string
+        format: uint64
+      total_transfers_count:
+        type: string
+        format: uint64
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1StatsBridgedTokenItem'
+  v1StatsChainRow:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      name:
+        type: string
+      icon_url:
+        type: string
+      explorer_url:
+        type: string
+      unique_transfer_users_count:
+        type: string
+        format: uint64
+  v1StatsChainsListPagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+      direction:
+        type: string
+      count:
+        type: string
+        format: uint64
+      chain_id:
+        type: string
+        format: int64
+    description: 'Pagination for `/stats/chains` (composite cursor: direction, count, chain_id).'
   v1TokenInfo:
     type: object
     properties:

@@ -29,6 +29,7 @@ pub struct Model {
     pub recipient_address: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub payload: Option<Vec<u8>>,
+    pub stats_processed: i16,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

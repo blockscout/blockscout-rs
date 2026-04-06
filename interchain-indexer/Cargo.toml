@@ -23,6 +23,7 @@ base64 = { version = "0.22", features = ["std"] }
 blockscout-display-bytes = { version = "1.1.0" }
 blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }
 blockscout-service-launcher = { version = "0.21.0" }
+bon = { version = "3.8.1" }
 bs58 = { version = "0.5", features = ["cb58"] }
 chrono = { version = "0.4" }
 config = { version = "0.15" }
@@ -53,7 +54,6 @@ rand = { version = "0.9" }
 reqwest = { version = "0.12.5", features = ["json"] }
 reqwest-middleware = { version = "0.3.3" }
 reqwest-retry = { version = "0.6.1" }
-bon = { version = "3.8.1" }
 rstest = { version = "0.26.1" }
 
 sea-orm = { version = "1.1.14", features = [

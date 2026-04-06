@@ -3,7 +3,9 @@ use std::fmt;
 use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
-use interchain_indexer_proto::blockscout::interchain_indexer::v1::Pagination;
+use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
+    BridgedTokensListPagination, Pagination, StatsChainsListPagination,
+};
 
 use crate::utils::{
     bytes_to_naive_datetime, naive_datetime_to_bytes, naive_datetime_to_nanos,
@@ -19,12 +21,12 @@ pub trait ListMarker: Sized {
     //fn from_proto(p: ) -> anyhow::Result<Self>;
 }
 
-pub struct OutputPagination<P: ListMarker> {
+pub struct OutputPagination<P> {
     pub prev_marker: Option<P>,
     pub next_marker: Option<P>,
 }
 
-impl<P: ListMarker> Default for OutputPagination<P> {
+impl<P> Default for OutputPagination<P> {
     fn default() -> Self {
         Self {
             prev_marker: None,
@@ -33,7 +35,7 @@ impl<P: ListMarker> Default for OutputPagination<P> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaginationDirection {
     Next,
     Prev,
@@ -284,5 +286,344 @@ impl ListMarker for TransfersPaginationLogic {
                 ..Default::default()
             }
         }
+    }
+}
+
+/// Request sort for bridged-token stats (distinct from `stats.proto` enum wire 0..=3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum BridgedTokensSortField {
+    #[default]
+    TotalTransfers = 0,
+    OutputTransfers = 1,
+    InputTransfers = 2,
+    Name = 3,
+}
+
+impl BridgedTokensSortField {
+    /// Maps `stats.proto` `BridgedTokensSort` wire values
+    /// (TOTAL_TRANSFERS_COUNT=0, OUTPUT_TRANSFERS_COUNT=1, INPUT_TRANSFERS_COUNT=2, NAME=3).
+    pub fn from_proto_sort(v: i32) -> Self {
+        match v {
+            0 => Self::TotalTransfers,
+            1 => Self::OutputTransfers,
+            2 => Self::InputTransfers,
+            3 => Self::Name,
+            _ => Self::TotalTransfers,
+        }
+    }
+}
+
+/// Shared request order for statistics list endpoints (`stats.proto` `SortOrder`: 0=DESC, 1=ASC).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum StatsSortOrder {
+    #[default]
+    Desc = 1,
+    Asc = 2,
+}
+
+impl StatsSortOrder {
+    /// Maps `stats.proto` `SortOrder` (DESC=0, ASC=1).
+    pub fn from_proto_order(v: i32) -> anyhow::Result<Self> {
+        match v {
+            0 => Ok(Self::Desc),
+            1 => Ok(Self::Asc),
+            _ => Err(anyhow::anyhow!("Invalid value for order")),
+        }
+    }
+}
+
+/// Keyset cursor for `/stats/bridged-tokens` (packed into `page_token` or raw `BridgedTokensListPagination`).
+/// Does not embed chain, sort, or order — callers must keep request parameters aligned with the query.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BridgedTokensPaginationLogic {
+    pub direction: PaginationDirection,
+    pub stats_asset_id: i64,
+    /// `true` when `stats_assets.name` is NULL or empty/whitespace — sorts after all non-blank names.
+    pub name_blank: bool,
+    /// Sort key for name (ignored when `name_blank`); empty string when blank.
+    pub name_sort: String,
+    /// Value of the sorted count column when sorting by input/output/total; otherwise `0`.
+    pub count: i64,
+}
+
+const BT_PAGE_TOKEN_VERSION: u8 = 1;
+const BT_MAX_NAME_CURSOR_BYTES: usize = 512;
+
+impl BridgedTokensPaginationLogic {
+    pub fn from_token(token: &str) -> anyhow::Result<Self> {
+        let decoded = URL_SAFE_NO_PAD
+            .decode(token)
+            .map_err(|e| anyhow::anyhow!("Invalid base64 token: {e}"))?;
+        let d = decoded.as_slice();
+        if d.is_empty() || d[0] != BT_PAGE_TOKEN_VERSION {
+            return Err(anyhow::anyhow!("Invalid bridged-tokens page token version"));
+        }
+        let mut i = 1usize;
+        if d.len() < i + 1 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let direction = PaginationDirection::from_u8(d[i])?;
+        i += 1;
+        if d.len() < i + 8 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let stats_asset_id = i64::from_be_bytes(d[i..i + 8].try_into().unwrap());
+        i += 8;
+        if d.len() < i + 1 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let name_blank = d[i] != 0;
+        i += 1;
+        if d.len() < i + 2 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let name_len = u16::from_be_bytes(d[i..i + 2].try_into().unwrap()) as usize;
+        i += 2;
+        if name_len > BT_MAX_NAME_CURSOR_BYTES {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (name too long)"
+            ));
+        }
+        if d.len() < i + name_len {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let name_sort = std::str::from_utf8(&d[i..i + name_len])
+            .map_err(|_| anyhow::anyhow!("Invalid bridged-tokens page token (name utf-8)"))?
+            .to_string();
+        i += name_len;
+        if d.len() < i + 8 {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (truncated)"
+            ));
+        }
+        let count = i64::from_be_bytes(d[i..i + 8].try_into().unwrap());
+        if i + 8 != d.len() {
+            return Err(anyhow::anyhow!(
+                "Invalid bridged-tokens page token (trailing data)"
+            ));
+        }
+        Ok(Self {
+            direction,
+            stats_asset_id,
+            name_blank,
+            name_sort,
+            count,
+        })
+    }
+
+    pub fn token(&self) -> anyhow::Result<String> {
+        let name_bytes = self.name_sort.as_bytes();
+        if name_bytes.len() > BT_MAX_NAME_CURSOR_BYTES {
+            return Err(anyhow::anyhow!("name cursor exceeds max length"));
+        }
+        let mut out = Vec::with_capacity(1 + 1 + 8 + 1 + 2 + name_bytes.len() + 8);
+        out.push(BT_PAGE_TOKEN_VERSION);
+        out.push(self.direction.to_u8());
+        out.extend_from_slice(&self.stats_asset_id.to_be_bytes());
+        out.push(u8::from(self.name_blank));
+        out.extend_from_slice(&(name_bytes.len() as u16).to_be_bytes());
+        out.extend_from_slice(name_bytes);
+        out.extend_from_slice(&self.count.to_be_bytes());
+        Ok(URL_SAFE_NO_PAD.encode(out))
+    }
+
+    /// Token mode: only `page_token` is set. Raw mode: `direction` + bridged-tokens cursor fields (see `stats.proto`).
+    pub fn to_list_pagination_proto(
+        &self,
+        use_pagination_token: bool,
+    ) -> BridgedTokensListPagination {
+        if use_pagination_token {
+            BridgedTokensListPagination {
+                page_token: Some(self.token().unwrap_or_default()),
+                ..Default::default()
+            }
+        } else {
+            BridgedTokensListPagination {
+                direction: Some(self.direction.to_string()),
+                asset_id: Some(self.stats_asset_id),
+                name_blank: Some(self.name_blank),
+                name: if self.name_blank {
+                    None
+                } else {
+                    Some(self.name_sort.clone())
+                },
+                count: Some(self.count as u64),
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Raw continuation: same keys as [`BridgedTokensListPagination`] (request uses the same flattened names as that message).
+    pub fn try_from_list_pagination_proto(
+        lp: &BridgedTokensListPagination,
+    ) -> anyhow::Result<Option<Self>> {
+        let has_cursor = lp.asset_id.is_some()
+            || lp.name_blank.is_some()
+            || lp.count.is_some()
+            || lp.name.as_ref().is_some_and(|s| !s.is_empty());
+        if lp.direction.is_none() && !has_cursor {
+            return Ok(None);
+        }
+        let dir_str = lp.direction.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("direction is required when continuing a page (raw mode)")
+        })?;
+        let direction = PaginationDirection::from_string(dir_str)?;
+        let stats_asset_id = lp
+            .asset_id
+            .ok_or_else(|| anyhow::anyhow!("asset_id is required when paginating (raw mode)"))?;
+        let name_blank = lp
+            .name_blank
+            .ok_or_else(|| anyhow::anyhow!("name_blank is required when paginating (raw mode)"))?;
+        let count = lp.count.map(|c| c as i64).unwrap_or(0);
+        let name_sort = if name_blank {
+            String::new()
+        } else {
+            lp.name.clone().unwrap_or_default()
+        };
+        Ok(Some(Self {
+            direction,
+            stats_asset_id,
+            name_blank,
+            name_sort,
+            count,
+        }))
+    }
+}
+
+const SC_PAGE_TOKEN_VERSION: u8 = 1;
+
+/// Keyset cursor for `/stats/chains` (packed into `page_token` or raw `StatsChainsListPagination`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct StatsChainsPaginationLogic {
+    pub direction: PaginationDirection,
+    pub count: i64,
+    pub chain_id: i64,
+}
+
+impl StatsChainsPaginationLogic {
+    pub fn from_token(token: &str) -> anyhow::Result<Self> {
+        let decoded = URL_SAFE_NO_PAD
+            .decode(token)
+            .map_err(|e| anyhow::anyhow!("Invalid base64 token: {e}"))?;
+        let d = decoded.as_slice();
+        if d.len() != 18 || d[0] != SC_PAGE_TOKEN_VERSION {
+            return Err(anyhow::anyhow!("Invalid stats-chains page token"));
+        }
+        let direction = PaginationDirection::from_u8(d[1])?;
+        let count = i64::from_be_bytes(d[2..10].try_into().unwrap());
+        let chain_id = i64::from_be_bytes(d[10..18].try_into().unwrap());
+        Ok(Self {
+            direction,
+            count,
+            chain_id,
+        })
+    }
+
+    pub fn token(&self) -> anyhow::Result<String> {
+        let mut out = [0u8; 18];
+        out[0] = SC_PAGE_TOKEN_VERSION;
+        out[1] = self.direction.to_u8();
+        out[2..10].copy_from_slice(&self.count.to_be_bytes());
+        out[10..18].copy_from_slice(&self.chain_id.to_be_bytes());
+        Ok(URL_SAFE_NO_PAD.encode(out))
+    }
+
+    pub fn to_list_pagination_proto(
+        &self,
+        use_pagination_token: bool,
+    ) -> StatsChainsListPagination {
+        if use_pagination_token {
+            StatsChainsListPagination {
+                page_token: Some(self.token().unwrap_or_default()),
+                ..Default::default()
+            }
+        } else {
+            StatsChainsListPagination {
+                direction: Some(self.direction.to_string()),
+                count: Some(self.count.max(0) as u64),
+                chain_id: Some(self.chain_id),
+                ..Default::default()
+            }
+        }
+    }
+
+    pub fn try_from_list_pagination_proto(
+        lp: &StatsChainsListPagination,
+    ) -> anyhow::Result<Option<Self>> {
+        let has_cursor = lp.count.is_some() || lp.chain_id.is_some();
+        if lp.direction.is_none() && !has_cursor {
+            return Ok(None);
+        }
+        let dir_str = lp.direction.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("direction is required when continuing a page (raw mode)")
+        })?;
+        let direction = PaginationDirection::from_string(dir_str)?;
+        let count = lp
+            .count
+            .ok_or_else(|| anyhow::anyhow!("count is required when paginating (raw mode)"))?
+            as i64;
+        let chain_id = lp
+            .chain_id
+            .ok_or_else(|| anyhow::anyhow!("chain_id is required when paginating (raw mode)"))?;
+        Ok(Some(Self {
+            direction,
+            count,
+            chain_id,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bridged_tokens_sort_wire_values_match_proto() {
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(0),
+            BridgedTokensSortField::TotalTransfers
+        );
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(1),
+            BridgedTokensSortField::OutputTransfers
+        );
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(2),
+            BridgedTokensSortField::InputTransfers
+        );
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(3),
+            BridgedTokensSortField::Name
+        );
+        assert_eq!(
+            BridgedTokensSortField::from_proto_sort(99),
+            BridgedTokensSortField::TotalTransfers
+        );
+    }
+
+    #[test]
+    fn stats_chains_raw_pagination_requires_count() {
+        let err = StatsChainsPaginationLogic::try_from_list_pagination_proto(
+            &StatsChainsListPagination {
+                direction: Some("next".to_string()),
+                chain_id: Some(42),
+                ..Default::default()
+            },
+        )
+        .expect_err("missing count must be rejected");
+
+        assert!(err.to_string().contains("count is required"));
     }
 }

@@ -179,6 +179,7 @@ impl Consolidate for Message {
                 source_data.recipient_address.map(|a| a.as_slice().to_vec()),
             ),
             payload: ActiveValue::Set(source_data.payload.map(|p| p.to_vec())),
+            stats_processed: ActiveValue::Set(0),
             created_at: ActiveValue::NotSet,
             updated_at: ActiveValue::NotSet,
         };

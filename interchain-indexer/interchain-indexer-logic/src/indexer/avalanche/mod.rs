@@ -40,6 +40,7 @@ use tonic::async_trait;
 
 use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
+    StatsService,
     avalanche::settings::AvalancheIndexerSettings,
     log_stream::LogStream,
     message_buffer::{Key, MessageBuffer},
@@ -117,8 +118,9 @@ impl Drop for IndexerCleanupGuard {
 }
 
 impl AvalancheIndexer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        db: Arc<InterchainDatabase>,
+        stats: Arc<StatsService>,
         bridge_id: i32,
         chains: Vec<AvalancheChainConfig>,
         home_chain: Option<ChainId>,
@@ -148,7 +150,8 @@ impl AvalancheIndexer {
             })
             .transpose()?;
 
-        let buffer = MessageBuffer::new((*db).clone(), buffer_settings.clone());
+        let db = stats.interchain_db_arc();
+        let buffer = MessageBuffer::new_with_stats(stats, buffer_settings.clone());
 
         Ok(Self {
             db,
@@ -829,7 +832,10 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         .context("failed to parse message key")?;
 
     let dst_chain_hex = event.destinationBlockchainID.as_slice();
-    let dst_chain_id = ctx.blockchain_id_resolver.resolve(dst_chain_hex).await?;
+    let dst_chain_id = ctx
+        .blockchain_id_resolver
+        .resolve(dst_chain_hex, ctx.process_unknown_chains)
+        .await?;
 
     let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
 
@@ -973,7 +979,10 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
         .context("failed to parse message key")?;
 
     let source_chain_id = event.sourceBlockchainID.as_slice();
-    let source_chain_id = ctx.blockchain_id_resolver.resolve(source_chain_id).await?;
+    let source_chain_id = ctx
+        .blockchain_id_resolver
+        .resolve(source_chain_id, ctx.process_unknown_chains)
+        .await?;
 
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
@@ -1087,7 +1096,10 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
         .context("failed to parse message key")?;
 
     let src_chain_id = event.sourceBlockchainID.as_slice();
-    let src_chain_id = ctx.blockchain_id_resolver.resolve(src_chain_id).await?;
+    let src_chain_id = ctx
+        .blockchain_id_resolver
+        .resolve(src_chain_id, ctx.process_unknown_chains)
+        .await?;
 
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 
@@ -1178,7 +1190,10 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
         .context("failed to parse message key")?;
 
     let src_chain_id = event.sourceBlockchainID.as_slice();
-    let src_chain_id = ctx.blockchain_id_resolver.resolve(src_chain_id).await?;
+    let src_chain_id = ctx
+        .blockchain_id_resolver
+        .resolve(src_chain_id, ctx.process_unknown_chains)
+        .await?;
 
     let source_hex = hex::encode_prefixed(event.sourceBlockchainID.as_slice());
 

@@ -154,6 +154,21 @@ impl ChainInfoService {
         }
     }
 
+    /// Returns all chains from the database, ordered by `chains.id` ascending.
+    ///
+    /// Each row is normalized the same way as [`Self::get_chain_info`]: empty names become
+    /// `"Unknown"`, default explorer routes are removed, and trailing slashes are stripped
+    /// from explorer URLs.
+    pub async fn get_all_chains_info(&self) -> anyhow::Result<Vec<chains::Model>> {
+        let chains = self.db.get_all_chains().await?;
+        let mut out = Vec::with_capacity(chains.len());
+        for chain in chains {
+            let normalized = normalize_chain(chain);
+            out.push(normalized);
+        }
+        Ok(out)
+    }
+
     /// Preloads all chains from database into cache.
     /// Only chains with valid names are cached.
     /// Useful for warming up the cache at service startup.
@@ -192,5 +207,98 @@ impl ChainInfoService {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{InterchainDatabase, test_utils::init_db};
+    use interchain_indexer_entity::chains;
+    use sea_orm::ActiveValue::Set;
+    use serde_json::json;
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_all_chains_info_returns_all_rows_ordered_by_chain_id() {
+        let db = init_db("chain_info_get_all_ordered").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(300),
+                    name: Set("Third".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(10),
+                    name: Set("First".to_string()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(200),
+                    name: Set("Second".to_string()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        let svc =
+            ChainInfoService::new(Arc::new(interchain_db), ChainInfoServiceSettings::default());
+        let rows = svc.get_all_chains_info().await.unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].id, 10);
+        assert_eq!(rows[1].id, 200);
+        assert_eq!(rows[2].id, 300);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_all_chains_info_normalizes() {
+        let db = init_db("chain_info_get_all_norm").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("".to_string()),
+                    explorer: Set(Some("https://one.example/".to_string())),
+                    custom_routes: Set(Some(json!({
+                        "tx": "/tx/{hash}",
+                        "address": "/custom/addr",
+                        "token": "/token/{hash}"
+                    }))),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("Named".to_string()),
+                    explorer: Set(Some("https://two.example".to_string())),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        let svc =
+            ChainInfoService::new(Arc::new(interchain_db), ChainInfoServiceSettings::default());
+        svc.invalidate_cache();
+
+        let rows = svc.get_all_chains_info().await.unwrap();
+        assert_eq!(rows.len(), 2);
+
+        assert_eq!(rows[0].name, super::UNKNOWN_CHAIN_NAME);
+        assert_eq!(rows[0].explorer.as_deref(), Some("https://one.example"));
+        let routes = rows[0].custom_routes.as_ref().unwrap().as_object().unwrap();
+        assert!(!routes.contains_key("tx"));
+        assert!(!routes.contains_key("token"));
+        assert_eq!(
+            routes.get("address").and_then(|v| v.as_str()),
+            Some("/custom/addr")
+        );
+
+        assert_eq!(rows[1].name, "Named");
+        assert_eq!(rows[1].explorer.as_deref(), Some("https://two.example"));
     }
 }

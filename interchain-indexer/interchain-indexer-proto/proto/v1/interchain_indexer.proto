@@ -39,6 +39,7 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 
 
 service InterchainService {
+  rpc GetChains(GetChainsRequest) returns (GetChainsResponse) {}
   rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse) {}
   rpc GetMessageDetails(GetMessageDetailsRequest) returns (InterchainMessage) {}
   rpc GetMessagesByTransaction(GetMessagesByTransactionRequest) returns (GetMessagesResponse) {}
@@ -136,6 +137,12 @@ message ChainInfo {
   optional string custom_tx_route = 5;
   optional string custom_address_route = 6;
   optional string custom_token_route = 7;
+}
+
+message GetChainsRequest {}
+
+message GetChainsResponse {
+  repeated ChainInfo items = 1;
 }
 
 enum MessageStatus {

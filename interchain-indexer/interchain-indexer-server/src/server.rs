@@ -18,14 +18,42 @@ use blockscout_service_launcher::{
     database, launcher, launcher::LaunchSettings, tracing as bs_tracing,
 };
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
-use interchain_indexer_logic::{ChainInfoService, InterchainDatabase, TokenInfoService};
+use interchain_indexer_logic::{
+    ChainInfoService, InterchainDatabase, StatsService, TokenInfoService,
+};
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     interchain_statistics_service_actix::route_interchain_statistics_service,
     status_service_actix::route_status_service,
 };
 use migration::Migrator;
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 const SERVICE_NAME: &str = "interchain_indexer";
+
+/// Spawns a Tokio task that recomputes `stats_chains` on a fixed interval.
+///
+/// The **first** recomputation runs immediately after startup wiring (before the first sleep),
+/// so fresh stats are available without waiting a full period. Subsequent runs wait
+/// `period_secs` after each attempt (success or failure). If `period_secs` is `0`, does nothing.
+fn spawn_stats_chains_recalculation_worker(stats: Arc<StatsService>, period_secs: u64) {
+    if period_secs == 0 {
+        tracing::info!("stats_chains_recalculation_period_secs is 0: periodic refresh disabled");
+        return;
+    }
+
+    tokio::spawn(async move {
+        loop {
+            tracing::info!("stats_chains recomputation started");
+            match stats.recompute_stats_chains().await {
+                Ok(()) => tracing::info!("stats_chains recomputation succeeded"),
+                Err(err) => tracing::error!(
+                    err = ?err,
+                    "stats_chains recomputation failed; keeping previous rows, retrying after interval"
+                ),
+            }
+            tokio::time::sleep(Duration::from_secs(period_secs)).await;
+        }
+    });
+}
 
 #[derive(Clone)]
 struct Router {
@@ -80,8 +108,27 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let interchain_db = InterchainDatabase::new(db_connection);
     let db = Arc::new(interchain_db.clone());
 
-    // Reading chains and bridges from json config files
     let chains = load_chains_from_file(&settings.chains_config)?;
+    let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
+    let token_info_service = Arc::new(TokenInfoService::new(
+        db.clone(),
+        chains_providers,
+        settings.token_info.clone(),
+    ));
+    let stats = Arc::new(StatsService::new(
+        db.clone(),
+        Some(token_info_service.clone()),
+    ));
+
+    if settings.stats_backfill_on_start {
+        tracing::info!(
+            "stats_backfill_on_start enabled: running statistics projection; async token enrichment will run after each batch outside DB transactions"
+        );
+        stats
+            .backfill_stats_until_idle_with_token_enrichment()
+            .await?;
+    }
+
     let bridges = load_bridges_from_file(&settings.bridges_config)?;
 
     // Populate database with the chains, bridges and bridge contracts
@@ -132,24 +179,19 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridge_contracts.len(),
     );
 
-    let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
-
-    let token_info_service = Arc::new(TokenInfoService::new(
-        db.clone(),
-        chains_providers.clone(),
-        settings.token_info.clone(),
-    ));
-
     let chain_info_service = Arc::new(ChainInfoService::new(
         db.clone(),
         settings.chain_info.clone(),
     ));
 
+    // Separate provider pool for indexers (`TokenInfoService` owns the first pool).
+    let chain_providers_for_indexers = create_provider_pools_from_chains(chains.clone()).await?;
+
     let indexers = spawn_configured_indexers(
-        interchain_db.clone(),
+        stats.clone(),
         &bridges,
         &chains,
-        &chains_providers,
+        &chain_providers_for_indexers,
         &settings,
     )
     .await?;
@@ -163,14 +205,19 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     // example.start_indexing().await?;
 
+    let api_settings = settings.api.clone();
     let interchain_service = Arc::new(InterchainServiceImpl::new(
         db.clone(),
         token_info_service.clone(),
         chain_info_service.clone(),
         bridges,
-        settings.api,
+        api_settings.clone(),
     ));
-    let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(db.clone()));
+    let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(
+        stats.clone(),
+        api_settings,
+        chain_info_service.clone(),
+    ));
     let status_service = Arc::new(StatusServiceImpl::new(indexers.clone()));
     let router = Router {
         health,
@@ -182,6 +229,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let grpc_router = router.grpc_router();
     let http_router = router;
+
+    let stats_chains_period_secs = settings.stats_chains_recalculation_period_secs;
+    spawn_stats_chains_recalculation_worker(stats.clone(), stats_chains_period_secs);
 
     let launch_settings = LaunchSettings {
         service_name: SERVICE_NAME.to_string(),

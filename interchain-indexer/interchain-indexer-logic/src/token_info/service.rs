@@ -232,8 +232,22 @@ impl TokenInfoService {
                         "Failed to upsert token info in background"
                     );
                 } else {
-                    let mut cache = self.token_info_cache.write();
-                    cache.entry(key.clone()).or_insert_with(|| model.clone());
+                    {
+                        let mut cache = self.token_info_cache.write();
+                        cache.insert(key.clone(), model.clone());
+                    }
+                    if let Err(e) = self
+                        .db
+                        .propagate_token_info_to_stats_tables(chain_id, &model.address, &model)
+                        .await
+                    {
+                        tracing::warn!(
+                            chain_id = chain_id,
+                            address = hex::encode(&model.address),
+                            error = ?e,
+                            "Failed to propagate token info into stats tables"
+                        );
+                    }
                 }
 
                 let mut error_cache = self.error_cache.write();
@@ -251,6 +265,51 @@ impl TokenInfoService {
             }
         }
         self.remove_from_in_flight(&key);
+    }
+
+    /// Non-blocking: schedule on-chain token fetches for keys that still lack usable metadata.
+    /// Called after stats projection commits so indexing never waits on RPC.
+    pub fn kickoff_token_fetch_for_stats_enrichment(self: Arc<Self>, keys: Vec<TokenKey>) {
+        if keys.is_empty() {
+            return;
+        }
+        let svc = self.clone();
+        tokio::spawn(async move {
+            let uniq: HashSet<TokenKey> = keys.into_iter().collect();
+            for (chain_id, address) in uniq {
+                if !svc.providers.contains_key(&chain_id) {
+                    continue;
+                }
+                let need = match svc
+                    .db
+                    .get_token_info(chain_id as u64, address.clone())
+                    .await
+                {
+                    Ok(None) => true,
+                    Ok(Some(m)) => {
+                        m.decimals.is_none()
+                            || (m.name.as_ref().is_none_or(|s| s.is_empty())
+                                && m.symbol.as_ref().is_none_or(|s| s.is_empty()))
+                    }
+                    Err(_) => false,
+                };
+                if !need {
+                    continue;
+                }
+                let key = (chain_id, address.clone());
+                let spawn_fetch = {
+                    let mut w = svc.in_flight_fetches.write();
+                    w.insert(key.clone())
+                };
+                if spawn_fetch {
+                    let s2 = svc.clone();
+                    tokio::spawn(async move {
+                        s2.fetch_token_info_from_chain_and_persist(chain_id, address, key)
+                            .await;
+                    });
+                }
+            }
+        });
     }
 
     /// Checks if an existing token (from cache or DB) needs an icon update.
@@ -330,6 +389,17 @@ impl TokenInfoService {
                 "Failed to update token icon in database"
             );
             return;
+        }
+
+        if let Ok(Some(model)) = self
+            .db
+            .get_token_info(chain_id as u64, address.clone())
+            .await
+        {
+            let _ = self
+                .db
+                .propagate_token_info_to_stats_tables(chain_id, &address, &model)
+                .await;
         }
 
         // Update the cache
