@@ -5,6 +5,7 @@ use crate::{
     blockscout_waiter::{self, IndexingStatusListener, init_blockscout_api_client},
     config::{self, read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
+    linked_stats::LinkedStatsClient,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
     settings::{
@@ -107,6 +108,11 @@ pub async fn stats(
         Ok(())
     });
     let authorization = init_authorization(settings.api_keys);
+    let linked_stats = LinkedStatsClient::try_new(&settings.linked_stats)?;
+    let linked_stats_max_hops = linked_stats
+        .as_ref()
+        .map(|_| settings.linked_stats.max_hops())
+        .unwrap_or(0);
     let read_service = Arc::new(
         ReadService::new(
             db.clone(),
@@ -117,6 +123,8 @@ pub async fn stats(
             update_service,
             authorization,
             settings.limits.into(),
+            linked_stats,
+            linked_stats_max_hops,
         )
         .await?,
     );

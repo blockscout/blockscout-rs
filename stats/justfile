@@ -52,6 +52,21 @@ start-postgres-and-build-tests:
     wait
     echo "finished postgres wait"
 
+# apply the basic formatting 
+format:
+    if cargo sort --version >/dev/null 2>&1; then cargo sort --workspace; else echo "cargo-sort is not installed, skipping cargo sort"; fi
+    cargo fmt --all -- --config imports_granularity=Crate
+
+# check and lint the code
+check:
+    cargo check
+    cargo clippy --all --all-targets --all-features -- -D warnings
+
+# run formatting and checks together
+format-check:
+    just format
+    just check
+
 check-envs:
     cargo run --bin env-docs-generation -- --validate-only
 

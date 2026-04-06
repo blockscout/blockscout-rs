@@ -28,6 +28,7 @@ use std::{
     net::SocketAddr,
     path::PathBuf,
     str::FromStr,
+    time::Duration,
 };
 use tracing::warn;
 
@@ -101,12 +102,60 @@ pub struct Settings {
     pub update_groups_config: PathBuf,
     /// Location of swagger file to serve
     pub swagger_path: PathBuf,
+    /// Linked secondary stats settings. A client is created only when [`LinkedStatsSettings::base_url`]
+    /// is set; otherwise linked forwarding is disabled.
+    ///
+    /// Chaining linked services is technically allowed, but should be avoided unless
+    /// there is a strong operational reason for it.
+    pub linked_stats: LinkedStatsSettings,
     pub api_keys: HashMap<String, String>,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub tracing: TracingSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LinkedStatsSettings {
+    #[serde(default)]
+    pub base_url: Option<url::Url>,
+    #[serde(default = "default_linked_stats_timeout")]
+    pub timeout: u64,
+    /// Requested hop budget for linked requests. Values above the hard cap are truncated.
+    #[serde(default = "default_linked_stats_max_hops")]
+    pub max_hops: u32,
+}
+
+pub const LINKED_STATS_MAX_HOPS_HARD_CAP: u32 = 4;
+
+fn default_linked_stats_timeout() -> u64 {
+    3_000
+}
+
+fn default_linked_stats_max_hops() -> u32 {
+    1
+}
+
+impl Default for LinkedStatsSettings {
+    fn default() -> Self {
+        Self {
+            base_url: None,
+            timeout: default_linked_stats_timeout(),
+            max_hops: default_linked_stats_max_hops(),
+        }
+    }
+}
+
+impl LinkedStatsSettings {
+    pub fn timeout(&self) -> Duration {
+        Duration::from_millis(self.timeout)
+    }
+
+    pub fn max_hops(&self) -> u32 {
+        self.max_hops.min(LINKED_STATS_MAX_HOPS_HARD_CAP)
+    }
 }
 
 fn default_swagger_path() -> PathBuf {
@@ -144,6 +193,7 @@ impl Default for Settings {
             )
             .unwrap(),
             swagger_path: default_swagger_path(),
+            linked_stats: LinkedStatsSettings::default(),
             blockscout_db_url: Default::default(),
             indexer_db_url: Default::default(),
             second_indexer_db_url: Default::default(),
@@ -563,5 +613,47 @@ mod tests {
                 .enabled,
             true
         );
+    }
+
+    #[test]
+    fn linked_stats_without_base_url_deserializes() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"timeout": 10}"#).expect("valid config should deserialize");
+        assert!(settings.base_url.is_none());
+        assert_eq!(settings.timeout, 10);
+    }
+
+    #[test]
+    fn linked_stats_empty_object_deserializes_to_defaults() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{}"#).expect("empty linked_stats should deserialize");
+        assert!(settings.base_url.is_none());
+        assert_eq!(settings.timeout, 3_000);
+        assert_eq!(settings.max_hops, 1);
+    }
+
+    #[test]
+    fn linked_stats_defaults_timeout_and_max_hops_when_base_url_is_set() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"base_url":"http://example.com"}"#)
+                .expect("valid linked_stats config should deserialize");
+
+        assert_eq!(
+            settings.base_url.as_ref().unwrap().as_str(),
+            "http://example.com/"
+        );
+        assert_eq!(settings.timeout, 3_000);
+        assert_eq!(settings.max_hops, 1);
+        assert_eq!(settings.max_hops(), 1);
+    }
+
+    #[test]
+    fn linked_stats_max_hops_is_capped_to_hard_limit() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"base_url":"http://example.com","max_hops":100}"#)
+                .expect("valid linked_stats config should deserialize");
+
+        assert_eq!(settings.max_hops, 100);
+        assert_eq!(settings.max_hops(), LINKED_STATS_MAX_HOPS_HARD_CAP);
     }
 }
