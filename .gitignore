@@ -13,7 +13,6 @@ Session.vim
 .project
 .favorites.json
 .settings/
-.cursor/
 
 ## Build
 **/target
