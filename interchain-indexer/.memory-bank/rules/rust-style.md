@@ -7,6 +7,10 @@ Project-specific Rust style rules. For general conventions, see `../../RUST_CODE
 - Run `just format` before committing (applies `cargo sort` + `cargo fmt`)
 - Import granularity is `Crate` level—group imports by crate
 
+## Checking & Linting
+
+- Run `just check` before committing (applies `cargo check` + `cargo clippy`)
+
 ## Config Structs
 
 Always use `#[serde(deny_unknown_fields)]` for config structs to catch typos:
@@ -26,11 +30,13 @@ Use `tracing` with field-style syntax (static messages, dynamic fields):
 ```rust
 // Good: static message, dynamic fields
 tracing::info!(bridge_id, chain_id, count = logs.len(), "fetched logs");
-tracing::error!(err = ?e, "processing failed");
+tracing::error!(err = ?e, chain_id = ?chain_id, tx_hash = ?tx_hash, "processing failed");
 
 // Bad: dynamic message string
 tracing::info!("fetched {} logs for bridge {}", count, bridge_id);
 ```
+
+Include relevant metadata in log messages (while avoiding any security-sensitive data) to help identify the source of the log and make it reproducible. For example, for errors related to processing a specific transaction, include the transaction hash as well as the chain ID.
 
 ## Project-Specific Naming
 

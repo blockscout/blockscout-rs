@@ -52,7 +52,7 @@ Use `TestDbGuard` for isolated database tests:
 use blockscout_service_launcher::test_database::TestDbGuard;
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs database"]
 async fn test_with_database() {
     let db = TestDbGuard::new::<Migrator>("test_name").await;
     // Test code using db.client()
@@ -79,15 +79,15 @@ fill_mock_interchain_database(&db).await;
 ## Running Tests
 
 ```bash
-# Runs all tests, including `#[ignore]`
-just test
-
 # Runs all tests with a temporary Postgres instance
 just test-with-db
 
 # Specific test
 just test test_name
 ```
+
+Do not use `just test` since most likely it will failed without connected database.
+
 
 ## Test Naming
 

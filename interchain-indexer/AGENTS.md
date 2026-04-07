@@ -14,34 +14,40 @@ Rust microservice indexing cross-chain messages and token transfers. Currently s
 
 Run `just` to see the available commands, or check the @justfile.
 
+## Navigation
+
+Start with these files:
+
+- `.memory-bank/project-context.md` — service purpose, scope, crates, runtime components, local workflow
+- `.memory-bank/codebase-review.md` — strengths, risks, and documentation priorities
+- `.memory-bank/architecture.md` — high-level data flow and core abstractions
+- `.memory-bank/exploration-map.md` — where to start for specific codebase questions
+- `.memory-bank/glossary.md` — repo-specific terminology
+- `.memory-bank/gotchas.md` — non-obvious traps and operational edge cases
+- `.memory-bank/research/README.md` — durable deep-dive investigations
+- `.memory-bank/rules/` — coding conventions
+- `.memory-bank/workflows/` — reusable task procedures
+- `.memory-bank/adr/README.md` — architectural decision records
+
 ## Architecture
 
-**Crates:**
-- `interchain-indexer-server` — HTTP/gRPC server, config, service init
-- `interchain-indexer-logic` — Core indexing, message buffer, log streaming
-- `interchain-indexer-entity` — SeaORM entities (codegen/ is auto-generated)
-- `interchain-indexer-migration` — Database migrations
-- `interchain-indexer-proto` — Protobuf definitions
+Start with:
 
-**Core abstractions:**
-- `CrosschainIndexer` trait — Plugin interface for bridge indexers
-- `MessageBuffer` — Tiered storage (memory + DB) for assembling messages
-- `LogStream` — Bidirectional blockchain log streaming with checkpointing
-- `Consolidate` trait — Determines message finality
-
-For details see: .memory-bank/architecture.md
+- `.memory-bank/project-context.md` for crate responsibilities and runtime components
+- `.memory-bank/architecture.md` for system flow and core abstractions
+- `.memory-bank/exploration-map.md` for code entrypoints by question
 
 ## Conventions
 
-1. **Imports:** Use crate-level grouping (`imports_granularity=Crate`)
-2. **Errors:** `anyhow::Result` internally, `thiserror` at API boundaries
-3. **Logging:** `tracing` with field syntax: `tracing::info!(field = value, "message")`
-4. **Async:** `#[async_trait]` for trait methods, `Arc<RwLock<T>>` for shared state
-5. **Database:** Always use `on_conflict()` for upserts, batch large inserts
-6. **Config:** `#[serde(deny_unknown_fields)]` — typos fail, not silently ignored
-7. **Tests:** `#[ignore]` for DB tests, use `TestDbGuard` for isolation
+Use `.memory-bank/rules/` as the canonical source for coding conventions.
 
-For details see: .memory-bank/rules/
+Start with:
+
+- `rust-style.md`
+- `error-handling.md`
+- `async-patterns.md`
+- `database.md`
+- `testing.md`
 
 ## Configuration
 
@@ -50,7 +56,7 @@ For details see: .memory-bank/rules/
 
 ## Key Decisions
 
-See .memory-bank/adr/README.md for architectural decision records.
+See `.memory-bank/adr/README.md` for architectural decision records.
 
 ## Known Gotchas
 
@@ -60,14 +66,15 @@ See .memory-bank/adr/README.md for architectural decision records.
 4. **Entity regeneration overwrites codegen/** — Put customizations in manual/
 5. **PostgreSQL bind limit** — Use batched operations for large inserts
 
-For details see: .memory-bank/gotchas.md
+For details see: `.memory-bank/gotchas.md`
 
 ## Memory Protocol
 
-When you discover a non-obvious pattern or gotcha, update .memory-bank/gotchas.md
-When making an architectural decision, add an ADR to .memory-bank/adr/
-When corrected about a convention, update the relevant file in .memory-bank/rules/
-When a new coding rule emerges, update the relevant file in .memory-bank/rules/ or create a new one if needed.
+When you discover a non-obvious pattern or gotcha, update `.memory-bank/gotchas.md`.
+When finishing a reusable investigation, add or update a note in `.memory-bank/research/`.
+When making an architectural decision, add an ADR to `.memory-bank/adr/`.
+When corrected about a convention, update the relevant file in `.memory-bank/rules/`.
+When a new coding rule emerges, update the relevant file in `.memory-bank/rules/` or create a new one if needed.
 
 ## Workflows
 

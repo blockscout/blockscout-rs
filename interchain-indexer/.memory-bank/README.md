@@ -1,6 +1,6 @@
 # Memory Bank
 
-This directory is a shared knowledge base for AI coding assistants. It provides consistent context across tools:
+This directory is a shared knowledge base for AI coding assistants. In this checkout, it provides consistent context through the integrations that are actually present:
 
 - **Claude Code** (via `.claude/rules/` symlink)
 - **GitHub Copilot** (via `AGENTS.md` + `.claude/rules/` fallback)
@@ -12,9 +12,15 @@ This directory is a shared knowledge base for AI coding assistants. It provides 
 ```
 .memory-bank/
 ├── README.md            # This file
-├── project-context.md   # Project purpose, stack, key modules
+├── project-context.md   # Project purpose, current scope, crates, runtime components
+├── codebase-review.md   # High-level review of strengths, risks, and complexity hotspots
 ├── architecture.md      # Module map, data flow, key abstractions
+├── exploration-map.md   # "If you need X, start here" navigation guide
+├── glossary.md          # Repo-specific terminology
 ├── gotchas.md           # Non-obvious traps: Symptom → Root cause → Fix
+├── research/            # Durable multi-file investigations
+│   ├── README.md
+│   └── stats-projection.md
 ├── rules/               # Coding conventions (symlinked to tool dirs)
 │   ├── rust-style.md
 │   ├── error-handling.md
@@ -34,11 +40,35 @@ This directory is a shared knowledge base for AI coding assistants. It provides 
 
 ## How It Works
 
-1. **AGENTS.md** (project root) is the canonical entry point, read by all tools
-2. **rules/** files use frontmatter with both `paths:` and `globs:` for cross-tool compatibility
-3. **workflows/** holds reusable task procedures — tool-specific integrations (e.g.,
-   `.claude/skills/`) are thin wrappers that reference these files
-4. Symlinks connect tool-specific directories to this shared source
+1. **AGENTS.md** (project root) is the canonical entry point and router
+2. **.memory-bank/** holds the canonical shared repo knowledge
+3. **rules/** files use frontmatter with both `paths:` and `globs:` for cross-tool compatibility
+4. **workflows/** holds reusable task procedures; tool-specific integrations
+   (for example `.claude/skills/`) should stay thin and reference these files
+5. When present, symlinks or adapters connect tool-specific directories to this shared source
+
+## Knowledge Categories
+
+- `project-context.md`
+  - what the service is, what it currently supports, and how it is organized
+- `codebase-review.md`
+  - overall assessment of architecture strengths, complexity hotspots, and risks
+- `architecture.md`
+  - structural view of the runtime system and core abstractions
+- `exploration-map.md`
+  - navigation guide for common codebase questions
+- `glossary.md`
+  - repo-specific terminology
+- `research/`
+  - focused investigations into multi-file behaviors and invariants
+- `gotchas.md`
+  - non-obvious traps and their fixes
+- `rules/`
+  - coding conventions and stable patterns
+- `workflows/`
+  - reusable task procedures
+- `adr/`
+  - architectural decisions and their rationale
 
 ## Memory Protocol
 
@@ -47,6 +77,9 @@ When working on this codebase:
 - **Discover a non-obvious pattern or gotcha?** → Update `gotchas.md`
 - **Make an architectural decision?** → Add an ADR to `adr/`
 - **Get corrected about a convention?** → Update the relevant file in `rules/`
-- **Learn something project-specific?** → Update relevant file
+- **Finish a reusable multi-file investigation?** → Add or update a note in `research/`
+- **Learn something project-specific?** → Update the relevant canonical file
+- **Create a temporary note in `tmp/` during investigation?** → Promote durable findings into
+  `.memory-bank/` and avoid leaving long-term knowledge only in `tmp/`
 
 This keeps the knowledge base current and useful for future sessions.
