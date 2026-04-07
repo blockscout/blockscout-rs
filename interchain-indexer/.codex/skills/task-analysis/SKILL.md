@@ -1,6 +1,6 @@
 ---
 name: task-analysis
-description: Analyze an input task, issue, or feature request against the existing codebase, propose one or more implementation approaches, align evaluation criteria with a human when tradeoffs exist, and recommend a path with explicit reasoning.
+description: Analyze an input task, issue, or feature request against the existing codebase, persist the task framing under `tmp/tasks/<task-name>/task.md`, write one or more `solution_N.md` option files, align evaluation criteria with a human when tradeoffs exist, and recommend a path with explicit reasoning.
 ---
 
 # Task Analysis Skill
@@ -15,6 +15,7 @@ Follow the canonical workflow in `../../../.memory-bank/workflows/task-analysis.
 
 - Read the relevant `.memory-bank/` context and source-of-truth code paths before proposing solutions.
 - Ground every option in the actual repo structure and current abstractions.
+- Persist each analysis under `tmp/tasks/<task-name>/` using `task.md`, `solution_N.md`, and `solutions.md` when multiple options exist.
 - If multiple viable options exist, explicitly align on evaluation criteria with the human before selecting a recommendation.
 - If only one realistic option exists, say so and explain why.
 - Separate facts, assumptions, and recommendations.

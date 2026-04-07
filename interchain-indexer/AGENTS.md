@@ -79,8 +79,10 @@ When a new coding rule emerges, update the relevant file in `.memory-bank/rules/
 ## Workflows
 
 Reusable task procedures are in `.memory-bank/workflows/`. These are tool-agnostic —
-tool-specific integrations (e.g., Claude Code `/skills`) are thin wrappers.
+tool-specific integrations (Cursor `.cursor/skills/`, Claude Code `/skills`, Codex `.codex/skills/`) are thin wrappers.
 
 - `gh-issue-bug.md` — draft a GitHub bug report
 - `gh-issue-improvement.md` — draft a GitHub enhancement proposal
 - `gh-issue-publish.md` — publish a drafted issue via the `gh` CLI
+- `task-analysis.md` — pre-implementation task review and options
+- `research-scope.md` — scope a research note before writing `.memory-bank/research/`

@@ -44,7 +44,7 @@ This directory is a shared knowledge base for AI coding assistants. In this chec
 2. **.memory-bank/** holds the canonical shared repo knowledge
 3. **rules/** files use frontmatter with both `paths:` and `globs:` for cross-tool compatibility
 4. **workflows/** holds reusable task procedures; tool-specific integrations
-   (for example `.claude/skills/` and `.codex/skills/`) should stay thin and
+   (for example `.cursor/skills/`, `.claude/skills/`, and `.codex/skills/`) should stay thin and
    reference these files
 5. When present, symlinks or adapters connect tool-specific directories to this shared source
 
