@@ -187,14 +187,6 @@
           "ens-sepolia"
         ]
       },
-      "7777777": {
-        "blockscout": {
-          "url": "https://explorer.zora.energy/"
-        },
-        "use_protocols": [
-          "ens"
-        ]
-      },
       "81457": {
         "blockscout": {
           "url": "https://blast.blockscout.com/"
@@ -245,6 +237,22 @@
       "239": {
         "blockscout": {
           "url": "https://tac.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "2288": {
+        "blockscout": {
+          "url": "https://mocachain.blockscout.com/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "222888": {
+        "blockscout": {
+          "url": "https://mocachain-testnet.blockscout.com/"
         },
         "use_protocols": [
           "ens"
