@@ -95,3 +95,6 @@ Small topics may keep some sections brief.
 
 - `stats-projection.md` — how finalized messages are projected into
   `stats_messages` and related stats tables
+- `db-schema-and-layer.md` - overview of the service database subsystem
+- `token-info-service.md` - `TokenInfoService` usage sites, request-time
+  lookups, async enrichment, cache semantics, and downstream stats enrichment

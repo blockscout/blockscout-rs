@@ -59,6 +59,22 @@ Events are skipped when they fail either filter:
 
 ---
 
+## Token Info Is Eventually Consistent and Reads Can Write Back
+
+**Symptom:** API returns only token address with empty metadata on the first
+request, or a token icon appears later without any re-indexing run.
+
+**Root cause:** `TokenInfoService` returns a placeholder model immediately on
+cache / DB miss and fetches metadata in the background. Separately, request-time
+reads for an existing token can fetch a missing icon and persist it back into
+`tokens`.
+
+**Fix:** Treat token metadata as async enrichment, not as canonical indexed
+state. Check provider config, `onchain_retry_interval`, and
+`token_info/service.rs` when debugging token metadata gaps.
+
+---
+
 ## Stats Edge Amount Side Must Follow Indexed Source Presence
 
 **Symptom:** `stats_asset_edges.amount_side` flips to destination for a source-indexed transfer just because source token info was not fetched yet.
