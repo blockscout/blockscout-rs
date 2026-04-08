@@ -86,4 +86,7 @@ tool-specific integrations (Cursor `.cursor/skills/`, Claude Code `/skills`, Cod
 - `gh-issue-publish.md` — publish a drafted issue via the `gh` CLI
 - `task-analysis.md` — pre-implementation task review and options
 - `implementation-plan.md` — convert an approved analysis into a technical design and coding handoff
+- `pr-description.md` — prepare a reviewer-facing PR description from a task folder and current implementation
+- `solution-review.md` — review applied changes against the original task and handoff
+- `task-to-code.md` — implement an approved coding task from an existing task folder handoff
 - `research-scope.md` — scope a research note before writing `.memory-bank/research/`

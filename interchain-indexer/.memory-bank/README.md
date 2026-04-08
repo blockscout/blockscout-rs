@@ -32,8 +32,11 @@ This directory is a shared knowledge base for AI coding assistants. In this chec
 │   ├── gh-issue-improvement.md
 │   ├── gh-issue-publish.md
 │   ├── implementation-plan.md
+│   ├── pr-description.md
 │   ├── research-scope.md
+│   ├── solution-review.md
 │   ├── task-analysis.md
+│   ├── task-to-code.md
 │   └── scripts/
 │       └── gh-issue-publish.sh
 └── adr/                 # Architectural Decision Records

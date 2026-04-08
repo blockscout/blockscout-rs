@@ -18,7 +18,7 @@ Turn an approved task analysis into a coding-ready implementation design and han
 
 ## Required Inputs
 
-- an existing task folder `tmp/tasks/<task-name>/`
+- a task name with an existing task folder `tmp/tasks/<task-name>/`
 - `task.md` from `task-analysis`
 - the selected solution by number (`solution_1.md`, `solution_2.md`, etc)
 - relevant `.memory-bank/` research, ADRs, rules, and gotchas
