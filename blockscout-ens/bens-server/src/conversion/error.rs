@@ -1,7 +1,8 @@
 use crate::conversion::ConversionError;
 use bens_logic::{protocols::ProtocolError, subgraph::SubgraphReadError};
 
-pub fn map_subgraph_error(err: SubgraphReadError) -> tonic::Status {
+pub fn map_subgraph_error(err: SubgraphReadError, pool: Option<&sqlx::PgPool>) -> tonic::Status {
+    err.log_database_diagnostics(pool);
     match err {
         SubgraphReadError::Protocol(err) => map_protocol_error(err),
         SubgraphReadError::DbErr(_) | SubgraphReadError::Internal(_) => {

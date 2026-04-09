@@ -90,14 +90,27 @@ impl SubgraphReader {
         }
     }
 
+    /// PostgreSQL pool handle (for diagnostics from `bens-server`).
+    pub fn pg_pool(&self) -> &PgPool {
+        self.pool.as_ref()
+    }
+
+    #[instrument(skip(self), err, level = "info")]
     pub async fn refresh_cache(&self) -> Result<(), anyhow::Error> {
+        let job_started = std::time::Instant::now();
+        let mut protocols_refreshed: u32 = 0;
         for protocol in self.iter_protocols() {
             let schema = &protocol.subgraph_schema;
+            let slug = protocol.info.slug.as_str();
             let address_resolve_technique = &protocol.info.address_resolve_technique;
             tracing::info!(
-                address_resolve_technique =? address_resolve_technique,
-                "refreshing cache table for schema {schema}"
+                target: "bens.refresh_cache",
+                protocol_slug = slug,
+                subgraph_schema = schema,
+                ?address_resolve_technique,
+                "refresh_cache: starting protocol"
             );
+            let step_started = std::time::Instant::now();
             match address_resolve_technique {
                 AddressResolveTechnique::ReverseRegistry => {
                     sql::AddrReverseNamesView::refresh_view(self.pool.as_ref(), schema)
@@ -105,6 +118,7 @@ impl SubgraphReader {
                         .context(format!(
                             "failed to update AddrReverseNamesView for schema {schema}"
                         ))?;
+                    protocols_refreshed += 1;
                 }
                 AddressResolveTechnique::AllDomains => {
                     sql::AddressNamesView::refresh_view(self.pool.as_ref(), schema)
@@ -112,15 +126,39 @@ impl SubgraphReader {
                         .context(format!(
                             "failed to update AddressNamesView for schema {schema}"
                         ))?;
+                    protocols_refreshed += 1;
                 }
                 AddressResolveTechnique::Addr2Name => {
-                    // addr2name doesnt have view
+                    tracing::debug!(
+                        target: "bens.refresh_cache",
+                        protocol_slug = slug,
+                        subgraph_schema = schema,
+                        "refresh_cache: skipped (addr2name has no materialized view)"
+                    );
                 }
                 AddressResolveTechnique::PrimaryNameRecord => {
-                    // primary_name_record doesnt have view
+                    tracing::debug!(
+                        target: "bens.refresh_cache",
+                        protocol_slug = slug,
+                        subgraph_schema = schema,
+                        "refresh_cache: skipped (primary_name_record)"
+                    );
                 }
             }
+            tracing::info!(
+                target: "bens.refresh_cache",
+                protocol_slug = slug,
+                subgraph_schema = schema,
+                elapsed_ms = step_started.elapsed().as_millis() as u64,
+                "refresh_cache: finished protocol step"
+            );
         }
+        tracing::info!(
+            target: "bens.refresh_cache",
+            protocols_refreshed,
+            elapsed_ms = job_started.elapsed().as_millis() as u64,
+            "refresh_cache: job completed"
+        );
         Ok(())
     }
 

@@ -10,17 +10,33 @@ pub fn refresh_cache_job(
     let job = Job::new_async(schedule, move |_uuid, mut _l| {
         let reader = subgraph_reader.clone();
         Box::pin(async move {
-            tracing::info!("refresh subgraph cache");
+            let pool = reader.pg_pool();
+            tracing::info!(
+                target: "bens.refresh_cache",
+                pool_size = pool.size(),
+                pool_num_idle = pool.num_idle(),
+                pool_max_connections = pool.options().get_max_connections(),
+                "refresh subgraph cache: starting (sqlx pool snapshot)"
+            );
             let now = std::time::Instant::now();
             match reader.as_ref().refresh_cache().await {
                 Ok(_) => {
                     tracing::info!(
+                        target: "bens.refresh_cache",
                         elapsed_secs = now.elapsed().as_secs_f32(),
+                        pool_size = pool.size(),
+                        pool_num_idle = pool.num_idle(),
                         "updated subgraph successfully"
                     );
                 }
                 Err(err) => {
-                    tracing::error!(err = ?err, "error during refreshing subgraph");
+                    tracing::error!(
+                        target: "bens.refresh_cache",
+                        err = ?err,
+                        pool_size = pool.size(),
+                        pool_num_idle = pool.num_idle(),
+                        "error during refreshing subgraph"
+                    );
                 }
             };
         })

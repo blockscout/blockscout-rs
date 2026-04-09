@@ -31,7 +31,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .get_domain(input)
             .await
-            .map_err(map_subgraph_error)?
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
             .map(|d| conversion::detailed_domain_from_logic(d, Some(chain_id)))
             .transpose()
             .map_err(map_convertion_error)?
@@ -51,7 +51,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .get_domain_history(input)
             .await
-            .map_err(map_subgraph_error)?
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
             .into_iter()
             .map(|e| conversion::event_from_logic(e, Some(chain_id)))
             .collect::<Result<_, _>>()
@@ -73,7 +73,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .lookup_domain_name(input)
             .await
-            .map_err(map_subgraph_error)?;
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?;
         let domains = from_resolved_domains_result(result.items, Some(chain_id))?;
         let response = LookupDomainNameResponse {
             items: domains,
@@ -94,7 +94,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .lookup_address(input)
             .await
-            .map_err(map_subgraph_error)?;
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?;
         let items = from_resolved_domains_result(result.items, Some(chain_id))?;
         let response = LookupAddressResponse {
             items,
@@ -115,7 +115,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .get_address(input.clone())
             .await
-            .map_err(map_subgraph_error)?
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
             .map(|d| conversion::detailed_domain_from_logic(d, Some(chain_id)))
             .transpose()
             .map_err(map_convertion_error)?;
@@ -124,7 +124,8 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .count_domains_by_address(input.address, true, false, Some(chain_id), input.protocols)
             .await
-            .map_err(map_subgraph_error)? as i32;
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
+            as i32;
         Ok(tonic::Response::new(GetAddressResponse {
             domain,
             resolved_domains_count,
@@ -142,7 +143,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .batch_resolve_address_names(input)
             .await
-            .map_err(map_subgraph_error)?;
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?;
         let response =
             batch_resolve_from_logic(names, Some(chain_id)).map_err(map_convertion_error)?;
         Ok(tonic::Response::new(response))
