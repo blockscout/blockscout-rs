@@ -95,6 +95,12 @@ Small topics may keep some sections brief.
 
 - `stats-projection.md` — how finalized messages are projected into
   `stats_messages` and related stats tables
+- `stats-subsystem.md` - stats API surface, datasource split, calculation
+  approaches, refresh models, and backfill behavior for the embedded stats
+  subsystem
 - `db-schema-and-layer.md` - overview of the service database subsystem
 - `token-info-service.md` - `TokenInfoService` usage sites, request-time
   lookups, async enrichment, cache semantics, and downstream stats enrichment
+- `avalanche-blockchain-id-resolution.md` - Avalanche-native blockchain ID to
+  EVM chain ID resolution, runtime call sites, cache/persistence behavior, and
+  current mismatches with intended semantics

@@ -6,6 +6,9 @@ This note covers how finalized `crosschain_messages` are projected into
 `stats_messages` and related aggregate tables, how the incremental
 `stats_processed` marker works, and where the startup backfill path fits.
 
+For the broader stats API surface, datasource split, and refresh models across
+the whole embedded stats subsystem, see `stats-subsystem.md`.
+
 ## Short Answer
 
 `stats_messages` is not written directly by protocol indexers. Indexers and
@@ -13,6 +16,13 @@ buffer maintenance first persist canonical rows into `crosschain_messages` and
 `crosschain_transfers`. Stats projection then reads eligible canonical rows,
 groups them into aggregate deltas, upserts those deltas into stats tables, and
 increments `stats_processed` so the same canonical rows are not counted twice.
+
+## Why This Matters
+
+Projection is the bridge between canonical interchain storage and the
+precomputed directional message stats used by higher-level APIs. If its
+eligibility rules, processed markers, or transaction boundaries are wrong, the
+system can silently miss counts or double count historical rows.
 
 ## Source-of-Truth Files
 
@@ -23,6 +33,16 @@ increments `stats_processed` so the same canonical rows are not counted twice.
 - `interchain-indexer-logic/src/indexer/avalanche/consolidation.rs`
 - `interchain-indexer-server/src/server.rs`
 - `interchain-indexer-migration/src/migrations_up/m20260312_175120_add_stats_tables_up.sql`
+
+## Key Types / Tables / Contracts
+
+- `StatsService`
+- `project_messages_batch(...)`
+- `crosschain_messages`
+- `stats_messages`
+- `stats_messages_days`
+- `crosschain_messages.stats_processed`
+- `MessageStatus::Completed`
 
 ## Step-by-Step Flow
 
@@ -132,6 +152,25 @@ Those require either canonical-table queries or additional stats tables.
 - the startup backfill path applies the same eligibility and aggregation rules
   as the maintenance-triggered projection path
 
+## Failure Modes / Observability
+
+- canonical messages can exist without corresponding `stats_messages*` rows yet
+  if maintenance or backfill has not projected them
+- incorrect `stats_processed` handling can lead to missed counts or double
+  counting
+- startup backfill can leave historical directional stats incomplete if it is
+  not run after introducing stats tables on a populated database
+- because projection runs after canonical persistence, directional message
+  stats are near-realtime rather than immediate on raw event ingestion
+
+Primary places to inspect:
+
+- startup logs for backfill activity
+- buffer maintenance logs, since live projection runs inside maintenance
+- `crosschain_messages.stats_processed` when checking whether rows were
+  projected
+- `stats_messages` and `stats_messages_days` contents for directional totals
+
 ## Edge Cases / Gotchas
 
 - a message can exist canonically without being counted yet if maintenance or
@@ -145,6 +184,16 @@ Those require either canonical-table queries or additional stats tables.
 - `interchain-indexer-logic/src/database.rs` contains lower-level stats helper
   methods, but the authoritative production semantics for message counts are in
   `interchain-indexer-logic/src/stats/projection.rs`
+
+## Change Triggers
+
+Update this note when:
+
+- message eligibility rules for projection change
+- `stats_processed` semantics change
+- `stats_messages` or `stats_messages_days` schema changes
+- startup backfill behavior changes
+- directional message-path APIs stop reading these projected tables
 
 ## Open Questions
 
