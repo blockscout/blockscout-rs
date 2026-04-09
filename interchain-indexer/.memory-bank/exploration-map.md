@@ -70,6 +70,12 @@
 
 ## If You Need to Understand Message Lifecycle
 
+- `.memory-bank/research/message-lifecycle.md`
+  - **start here** — end-to-end lifecycle research covering the generic
+    pipeline (LogStream, buffer, maintenance, checkpoints, persistence) and
+    Avalanche as the reference realization. Two-layer structure: Layer 1 is
+    reusable for any future indexer; Layer 2 is Avalanche-specific. Future
+    indexers get separate research notes referencing the generic layer.
 - `interchain-indexer-logic/src/indexer/avalanche/mod.rs`
   - raw logs to typed event handling and buffer mutation
 - `interchain-indexer-logic/src/indexer/avalanche/consolidation.rs`
