@@ -20,6 +20,72 @@ pub enum SubgraphReadError {
     Internal(#[from] anyhow::Error),
 }
 
+impl SubgraphReadError {
+    /// Logs sqlx pool occupancy and Postgres details when a request fails on the DB path.
+    /// Pass the same pool the service uses so `PoolTimedOut` can be correlated with saturation.
+    pub fn log_database_diagnostics(&self, pool: Option<&sqlx::PgPool>) {
+        let Some(pool) = pool else {
+            return;
+        };
+        let pool_size = pool.size();
+        let pool_num_idle = pool.num_idle();
+        let pool_max_connections = pool.options().get_max_connections();
+        let pool_acquire_timeout_secs = pool.options().get_acquire_timeout().as_secs_f64();
+
+        match self {
+            SubgraphReadError::DbErr(DbErr::Sqlx(e)) => {
+                if matches!(e, sqlx::Error::PoolTimedOut) {
+                    tracing::error!(
+                        target: "bens.database",
+                        event = "pool_timed_out",
+                        pool_size,
+                        pool_num_idle,
+                        pool_max_connections,
+                        pool_acquire_timeout_secs,
+                        "sqlx pool acquire timed out (all connections busy or waiting on Postgres); check overlap with refresh_cache, graph-node writers, and DB max_connections"
+                    );
+                } else if let Some(db) = e.as_database_error() {
+                    tracing::error!(
+                        target: "bens.database",
+                        event = "postgres_error",
+                        pool_size,
+                        pool_num_idle,
+                        pool_max_connections,
+                        pg_code = db.code().map(|c| c.to_string()),
+                        pg_message = %db.message(),
+                        error = %e,
+                        error_debug = ?e,
+                        "postgres returned an error to sqlx"
+                    );
+                } else {
+                    tracing::error!(
+                        target: "bens.database",
+                        event = "sqlx_error",
+                        pool_size,
+                        pool_num_idle,
+                        pool_max_connections,
+                        error = %e,
+                        error_debug = ?e,
+                        "sqlx error"
+                    );
+                }
+            }
+            SubgraphReadError::DbErr(DbErr::Internal(source)) => {
+                tracing::error!(
+                    target: "bens.database",
+                    event = "db_internal",
+                    pool_size,
+                    pool_num_idle,
+                    pool_max_connections,
+                    error = %source,
+                    "internal error surfaced as DbErr"
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GetDomainInput {
     pub name: String,

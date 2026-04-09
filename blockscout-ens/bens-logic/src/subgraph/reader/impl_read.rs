@@ -252,6 +252,16 @@ impl SubgraphReader {
         Ok(count)
     }
 
+    #[instrument(
+        name = "SubgraphReader::batch_resolve_address_names",
+        skip(self, input),
+        fields(
+            network_id = ?input.network_id,
+            addresses_requested = input.addresses.len(),
+        ),
+        err,
+        level = "info",
+    )]
     pub async fn batch_resolve_address_names(
         &self,
         input: BatchResolveAddressNamesInput,

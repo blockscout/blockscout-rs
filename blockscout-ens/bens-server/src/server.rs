@@ -21,7 +21,7 @@ use bens_proto::blockscout::bens::v1::{
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 use sqlx::{postgres::PgPoolOptions, Executor};
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use tokio_cron_scheduler::JobScheduler;
 
 const SERVICE_NAME: &str = "bens";
@@ -90,6 +90,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     .min_connections
                     .unwrap_or(1),
             )
+            // Log via tracing target `sqlx::pool::acquire` when checkout exceeds this threshold.
+            .acquire_slow_threshold(Duration::from_secs(1))
             .idle_timeout(settings.database.connect_options.idle_timeout)
             .max_lifetime(settings.database.connect_options.max_lifetime)
             .after_connect(|conn, _meta| {
