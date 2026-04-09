@@ -20,11 +20,10 @@ Create a note when a topic:
 
 Examples in this repo:
 
-- message lifecycle
-- Avalanche bridge filtering
-- blockchain ID resolution
-- buffer persistence and checkpoints
-- stats projection
+- stats projection and stats API surface
+- database schema and persistence layer
+- token metadata enrichment
+- Avalanche blockchain ID resolution
 
 ## Standard Template
 

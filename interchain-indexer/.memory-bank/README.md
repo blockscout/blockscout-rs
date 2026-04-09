@@ -3,7 +3,7 @@
 This directory is a shared knowledge base for AI coding assistants. In this checkout, it provides consistent context through the integrations that are actually present:
 
 - **Claude Code** (via `.claude/rules/` symlink)
-- **GitHub Copilot** (via `AGENTS.md` + `.claude/rules/` fallback)
+- **GitHub Copilot** (via `AGENTS.md` — no dedicated config; relies on tool reading the file)
 - **Cursor** (via `.cursor/rules/` symlink)
 - **OpenAI Codex** (via `AGENTS.md` traversal)
 
@@ -20,7 +20,11 @@ This directory is a shared knowledge base for AI coding assistants. In this chec
 ├── gotchas.md           # Non-obvious traps: Symptom → Root cause → Fix
 ├── research/            # Durable multi-file investigations
 │   ├── README.md
-│   └── stats-projection.md
+│   ├── avalanche-blockchain-id-resolution.md
+│   ├── db-schema-and-layer.md
+│   ├── stats-projection.md
+│   ├── stats-subsystem.md
+│   └── token-info-service.md
 ├── rules/               # Coding conventions (symlinked to tool dirs)
 │   ├── rust-style.md
 │   ├── error-handling.md
@@ -41,18 +45,23 @@ This directory is a shared knowledge base for AI coding assistants. In this chec
 │       └── gh-issue-publish.sh
 └── adr/                 # Architectural Decision Records
     ├── README.md
-    └── template.md
+    ├── template.md
+    ├── 001-message-buffer-tiered-storage.md
+    └── 002-primary-chain-filtering.md
 ```
 
 ## How It Works
 
 1. **AGENTS.md** (project root) is the canonical entry point and router
+   (`CLAUDE.md` is a symlink to it; Claude-specific overrides live in `.claude/CLAUDE.md`)
 2. **.memory-bank/** holds the canonical shared repo knowledge
 3. **rules/** files use frontmatter with both `paths:` and `globs:` for cross-tool compatibility
 4. **workflows/** holds reusable task procedures; tool-specific integrations
    (for example `.cursor/skills/`, `.claude/skills/`, and `.codex/skills/`) should stay thin and
    reference these files
 5. When present, symlinks or adapters connect tool-specific directories to this shared source
+6. **Hooks** (`.claude/hooks/`) auto-approve tmp/ writes for Claude Code skills;
+   Cursor and Codex lack equivalent hook support, so those tools prompt for permission instead
 
 ## Knowledge Categories
 
