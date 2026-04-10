@@ -20,10 +20,13 @@ Create a note when a topic:
 
 Examples in this repo:
 
+- end-to-end message lifecycle
 - stats projection and stats API surface
 - database schema and persistence layer
 - token metadata enrichment
 - Avalanche blockchain ID resolution
+- Avalanche bridge filtering
+- configuration loading and validation
 
 ## Standard Template
 

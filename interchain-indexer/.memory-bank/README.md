@@ -21,7 +21,10 @@ This directory is a shared knowledge base for AI coding assistants. In this chec
 ├── research/            # Durable multi-file investigations
 │   ├── README.md
 │   ├── avalanche-blockchain-id-resolution.md
+│   ├── avalanche-bridge-filtering.md
+│   ├── config-loading-and-validation.md
 │   ├── db-schema-and-layer.md
+│   ├── message-lifecycle.md
 │   ├── stats-projection.md
 │   ├── stats-subsystem.md
 │   └── token-info-service.md
@@ -32,15 +35,15 @@ This directory is a shared knowledge base for AI coding assistants. In this chec
 │   ├── database.md
 │   └── testing.md
 ├── workflows/           # Tool-agnostic task workflows (shared across all AIDEs)
-│   ├── gh-issue-bug.md
-│   ├── gh-issue-improvement.md
-│   ├── gh-issue-publish.md
-│   ├── implementation-plan.md
-│   ├── pr-description.md
-│   ├── research-scope.md
-│   ├── solution-review.md
-│   ├── task-analysis.md
-│   ├── task-to-code.md
+│   ├── gh-issue-bug.md         # Draft a GitHub bug report
+│   ├── gh-issue-improvement.md # Draft a GitHub enhancement proposal
+│   ├── gh-issue-publish.md     # Publish a drafted issue via gh CLI
+│   ├── implementation-plan.md  # Turn approved analysis into coding-ready design
+│   ├── pr-description.md       # Prepare reviewer-facing PR description
+│   ├── research-scope.md       # Scope and write a .memory-bank/research/ note
+│   ├── solution-review.md      # Post-implementation review against task
+│   ├── task-analysis.md        # Pre-implementation task review and options
+│   ├── task-to-code.md         # Execute a prepared coding task handoff
 │   └── scripts/
 │       └── gh-issue-publish.sh
 └── adr/                 # Architectural Decision Records

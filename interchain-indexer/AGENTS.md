@@ -85,4 +85,8 @@ tool-specific integrations (Cursor `.cursor/skills/`, Claude Code `.claude/skill
 - `gh-issue-improvement.md` — draft a GitHub enhancement proposal
 - `gh-issue-publish.md` — publish a drafted issue via the `gh` CLI
 - `task-analysis.md` — pre-implementation task review and options
+- `implementation-plan.md` — turn approved analysis into a coding-ready design
+- `task-to-code.md` — execute a prepared coding task handoff
+- `solution-review.md` — post-implementation review against the original task
+- `pr-description.md` — prepare a reviewer-facing PR description
 - `research-scope.md` — scope a research note before writing `.memory-bank/research/`

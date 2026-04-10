@@ -199,3 +199,5 @@ state. Check provider config, `onchain_retry_interval`, and
 ```
 
 **Key insight:** Don't try to incrementally upgrade partial messages. Clean delete + fresh re-index is simpler and safer.
+
+---
