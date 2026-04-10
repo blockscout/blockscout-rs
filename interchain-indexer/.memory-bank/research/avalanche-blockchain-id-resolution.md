@@ -270,6 +270,12 @@ discoveries at all.
 - Avalanche Data API request failures bubble up from event handling
 - missing `evm_chain_id` in the API response is treated as an error
 - persistence failures are warn-logged but do not block successful resolution
+- **resolution failure acts as an implicit filter**: because bridge filtering
+  requires a numeric EVM `chain_id`, a resolver failure (Data API down, network
+  error, missing `evmChainId` in response) prevents the filter from being
+  evaluated at all. The error propagates from the event handler, and the event
+  is effectively skipped — not because it was filtered by policy, but because
+  the policy input could not be produced
 
 Useful places to inspect:
 

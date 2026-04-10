@@ -107,3 +107,12 @@ Small topics may keep some sections brief.
   (LogStream, buffer, maintenance, checkpoints, persistence) + Avalanche as
   reference realization. Two-layer structure; future indexers get separate notes
   referencing the generic layer here.
+- `avalanche-bridge-filtering.md` — how `process_unknown_chains`,
+  `home_chain_id`, configured-chain checks, and blockchain ID resolution
+  interact to gate which Teleporter events are stored; two-set model (indexed
+  vs exposed), truth table, and degradation semantics for unknown-source
+  messages
+- `config-loading-and-validation.md` — two-channel config system (env-based
+  Settings vs file-only JSON), `deny_unknown_fields` coverage, DB seeding
+  upsert semantics, late validation pattern, and stats-style env-patching
+  cross-reference
