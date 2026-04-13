@@ -35,11 +35,11 @@ Review the conversation to identify:
 ### 2. Generate Filename
 
 ```text
-tmp/gh-issues/YYMMDD-<short-issue-name-with-dashes>.md
+tmp/gh-issues/YYMMDD-<short-issue-name>.md
 ```
 
 - `YYMMDD`: current date (e.g., `260224` for February 24, 2026)
-- `<short-issue-name-with-dashes>`: lowercase with dashes (e.g.,
+- `<short-issue-name>`: lowercase with dashes (e.g.,
   `optimize-batch-processing`, `add-ictt-multi-hop-support`,
   `consolidate-rpc-retry-logic`)
 

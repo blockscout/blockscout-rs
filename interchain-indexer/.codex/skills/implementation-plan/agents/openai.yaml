@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implementation Plan"
+  short_description: "Turn analysis into build-ready design"
+  default_prompt: "Use $implementation-plan to turn the existing task analysis into a concrete implementation handoff."

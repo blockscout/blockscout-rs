@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Description"
+  short_description: "Draft PR descriptions from task artifacts"
+  default_prompt: "Use $pr-description to prepare a PR description from tmp/tasks/<task-name>/ and save it as Markdown."

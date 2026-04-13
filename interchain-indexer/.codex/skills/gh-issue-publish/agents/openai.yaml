@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Issue Publish"
+  short_description: "Publish a drafted GitHub issue markdown file"
+  default_prompt: "Use $gh-issue-publish to publish a drafted GitHub issue from tmp/gh-issues/ with the repository workflow script."

@@ -31,11 +31,11 @@ Review the conversation to identify:
 ### 2. Generate Filename
 
 ```text
-tmp/gh-issues/YYMMDD-<short-issue-name-with-dashes>.md
+tmp/gh-issues/YYMMDD-<short-issue-name>.md
 ```
 
 - `YYMMDD`: current date (e.g., `260224` for February 24, 2026)
-- `<short-issue-name-with-dashes>`: lowercase with dashes (e.g.,
+- `<short-issue-name>`: lowercase with dashes (e.g.,
   `message-correlation-panic`, `reorg-detection-deadlock`)
 
 ### 3. Create Issue Document

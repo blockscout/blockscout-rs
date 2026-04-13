@@ -1,0 +1,4 @@
+interface:
+  display_name: "Solution Review"
+  short_description: "Review applied changes against the original task"
+  default_prompt: "Use $solution-review to compare the implemented changes with the original task artifacts and report gaps, regressions, and verification needs."

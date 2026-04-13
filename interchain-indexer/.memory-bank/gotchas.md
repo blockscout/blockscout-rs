@@ -49,6 +49,20 @@ Events are skipped when they fail either filter:
 
 ---
 
+## Checkpoint Stall When All Events Are Perpetually Filtered
+
+**Symptom:** After a service restart, a chain/bridge pair re-processes blocks it already saw, wasting RPC calls until it catches back up.
+
+**Root cause:** Checkpoint advancement depends on `touched_blocks` recorded during `buffer.alter()` calls. If bridge filtering rejects every event for a chain/bridge pair, no `alter()` happens, no `touched_blocks` are recorded, and the checkpoint for that pair never advances. During normal runtime the `LogStream` progresses in memory, so there is no livelock. But on restart, the indexer resumes from the stale checkpoint and replays already-filtered blocks.
+
+**When this happens:** A chain/bridge pair where **all** messages are perpetually filtered — e.g., a chain that only communicates with unconfigured chains under `process_unknown_chains: false`, or a chain whose messages never touch `home_chain_id`.
+
+**Impact:** No data loss or correctness issue. The cost is wasted RPC calls on restart proportional to how far the LogStream progressed beyond the stale checkpoint. Self-correcting once any event passes filtering and triggers a `buffer.alter()`.
+
+**Mitigation:** If a chain/bridge pair is known to produce only filtered events, consider removing it from the bridge's contract config rather than relying on runtime filtering to discard everything.
+
+---
+
 ## Token Info Caches Errors
 
 **Symptom:** Token metadata fetch fails once, then never retries.
@@ -56,6 +70,22 @@ Events are skipped when they fail either filter:
 **Root cause:** `TokenInfoService` caches fetch errors with a TTL to avoid hammering failed endpoints.
 
 **Fix:** Wait for error cache TTL to expire, or restart service. Check `token_info/service.rs` for cache settings.
+
+---
+
+## Token Info Is Eventually Consistent and Reads Can Write Back
+
+**Symptom:** API returns only token address with empty metadata on the first
+request, or a token icon appears later without any re-indexing run.
+
+**Root cause:** `TokenInfoService` returns a placeholder model immediately on
+cache / DB miss and fetches metadata in the background. Separately, request-time
+reads for an existing token can fetch a missing icon and persist it back into
+`tokens`.
+
+**Fix:** Treat token metadata as async enrichment, not as canonical indexed
+state. Check provider config, `onchain_retry_interval`, and
+`token_info/service.rs` when debugging token metadata gaps.
 
 ---
 
@@ -119,6 +149,18 @@ Events are skipped when they fail either filter:
 
 ---
 
+## Cross-Bridge Resolver Persistence Leaks
+
+**Symptom:** Bridge B (with `process_unknown_chains: false`) resolves a previously unknown blockchain ID on the first lookup without hitting the Avalanche Data API.
+
+**Root cause:** `BlockchainIdResolver` writes to the shared `chains` table and `avalanche_icm_blockchain_ids`. If bridge A has `process_unknown_chains: true` and discovers chain C, bridge B benefits from the cached resolution on subsequent lookups. The resolver cache and persistence layer are global, but the filtering decision (`should_process_message`) is per-bridge.
+
+**Impact:** This is benign for filtering — bridge B still applies its own `chain_ids` set and rejects the message. The only effect is that bridge B avoids a Data API call. The `chains` table may contain entries created by one bridge's discovery policy that wouldn't exist under another bridge's stricter policy.
+
+**Fix:** No fix needed. This is expected behavior. Be aware that the `chains` table reflects the union of all bridges' discovery activity, not any single bridge's configured set.
+
+---
+
 ## Upgrading Unknown Chains to Proper Bridges
 
 **Symptom:** You have partial messages (unknown source chain) and want to properly index that chain pair.
@@ -157,3 +199,5 @@ Events are skipped when they fail either filter:
 ```
 
 **Key insight:** Don't try to incrementally upgrade partial messages. Clean delete + fresh re-index is simpler and safer.
+
+---

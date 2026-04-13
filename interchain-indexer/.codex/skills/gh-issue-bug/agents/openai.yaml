@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Issue Bug"
+  short_description: "Draft a bug report issue from repo context"
+  default_prompt: "Use $gh-issue-bug to draft a GitHub bug report from the current conversation and save it under tmp/gh-issues/."
