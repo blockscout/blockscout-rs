@@ -1,6 +1,6 @@
 ---
 name: implementation-plan
-description: Turn an approved task-analysis result into a shared technical design and coding-ready implementation handoff. Use when Codex has an existing task folder under `tmp/tasks/`, plus a selected solution and related codebase research, and needs to produce `implementation-plan.md` and `coding-task.md` before writing code.
+description: Turn an approved task-analysis result into a shared technical design and coding-ready implementation handoff. Use when Codex has an existing task folder under `tmp/tasks/`, plus a selected solution and related codebase research, and needs to produce `implementation-plan-X.md` and `coding-task-X.md` before writing code.
 ---
 
 # Implementation Plan
@@ -17,7 +17,9 @@ Follow the canonical workflow in `../../../.memory-bank/workflows/implementation
 - Re-check the current code, tests, configs, and schema paths instead of trusting earlier analysis blindly.
 - Treat this as a handoff-preparation step, not a fresh solution-comparison step.
 - If the chosen direction is ambiguous or stale enough to change the recommendation, stop and route the task back to analysis.
-- Write the outputs into the existing `tmp/tasks/<task-name>/` folder as `implementation-plan.md` and `coding-task.md`.
+- Write the outputs into the existing `tmp/tasks/<task-name>/` folder as `implementation-plan-X.md` and `coding-task-X.md`.
+- After drafting `implementation-plan-X.md`, stop for user review and do not write `coding-task-X.md` until the user confirms the plan.
+- If the user requests changes to the plan, update `implementation-plan-X.md` and repeat the review loop.
 - Keep the implementation plan focused on shared technical design; keep the coding task focused on actionable execution details.
 
 ## Minimal Starting Reads

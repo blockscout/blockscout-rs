@@ -160,6 +160,7 @@ Common commands from `justfile`:
 
 - `just test`
   - runs test suites including ignored tests
+  - also runs ignored DB-backed tests, so it may fail unless Postgres is available; prefer `just test-with-db` for a self-contained full run
 - `just test-with-db`
   - starts a temporary Postgres instance and runs tests against it
 - server integration tests

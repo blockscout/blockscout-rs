@@ -36,8 +36,10 @@ tmp/tasks/<task-name>/
 
 Required files:
 
-- `implementation-plan.md` — shared technical design for the approved approach
-- `coding-task.md` — concrete coding handoff for the implementation agent
+- `implementation-plan-X.md` — shared technical design for the approved approach
+- `coding-task-X.md` — concrete coding handoff for the implementation agent
+
+where X is the input solution number
 
 ## Default Sources to Read First
 
@@ -92,7 +94,17 @@ Produce `implementation-plan-X.md` (X - source solution number) describing:
 
 This file should explain *what* will be built and *why this design fits the current system*.
 
-### 4. Translate the Design Into Concrete Work
+### 4. Wait For User Confirmation
+
+After writing `implementation-plan-X.md`, stop and ask the user to review it before continuing.
+
+Requirements:
+
+- do not proceed to the coding handoff until the user explicitly confirms the implementation plan
+- if the user requests changes, update `implementation-plan-X.md` to reflect the feedback
+- repeat the review-confirmation loop until the user approves the plan or blocks the task
+
+### 5. Translate the Approved Design Into Concrete Work
 
 Prepare the implementation breakdown:
 
@@ -104,7 +116,9 @@ Prepare the implementation breakdown:
 
 Prefer actionable statements over abstract intentions.
 
-### 5. Write the Coding Handoff
+Only do this after the user has confirmed `implementation-plan-X.md`.
+
+### 6. Write the Coding Handoff
 
 Produce `coding-task-X.md` (X - source solution number) for the next agent. It should be specific enough that the coding agent can start without repeating the full design investigation.
 
@@ -119,7 +133,7 @@ Include:
 - known risks and watch-outs
 - any remaining blockers or questions
 
-### 6. Decide the Outcome Status
+### 7. Decide the Outcome Status
 
 End with one of these statuses inside both artifacts when relevant:
 
@@ -132,7 +146,7 @@ If the workflow exposes reusable multi-file behavior that future agents would li
 
 ## Output Contract
 
-The workflow output on disk should contain:
+Once the workflow is complete, the output on disk should contain:
 
 - `implementation-plan-X.md` with:
   - concise summary of the chosen approach
@@ -150,9 +164,11 @@ The workflow output on disk should contain:
   - acceptance criteria
   - blockers or open questions
 
+`coding-task-X.md` must only be written after the user confirms `implementation-plan-X.md`.
+
 Use this structure:
 
-### `implementation-plan.md`
+### `implementation-plan-X.md`
 
 ```markdown
 # <Task Title> Implementation Plan
@@ -206,7 +222,7 @@ Use this structure:
 [ready for coding | blocked on clarification | blocked on additional codebase research | blocked on product or architectural decision]
 ```
 
-### `coding-task.md`
+### `coding-task-X.md`
 
 ```markdown
 # <Task Title> Coding Task
