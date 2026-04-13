@@ -240,7 +240,7 @@ Then return to discussion mode if the human wants to continue.
 
 Before any explicit write or update instruction, the output is conversational only. It may include:
 
-- a short scoped summary
+- a short, scoped summary
 - key takeaways
 - current uncertainties
 - source-of-truth references

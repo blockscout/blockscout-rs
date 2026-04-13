@@ -120,6 +120,12 @@ Primary code paths:
 - service orchestration:
   `interchain-indexer-logic/src/stats/service.rs`
 
+Ordering note:
+
+- startup backfill is intentionally executed before `upsert_chains`,
+  `upsert_bridges`, and `upsert_bridge_contracts` so historical rows are
+  projected against the same reference data they were indexed with.
+
 ### 6. Queries read the aggregate tables, with clear limits
 
 `stats_messages` is well-suited for:

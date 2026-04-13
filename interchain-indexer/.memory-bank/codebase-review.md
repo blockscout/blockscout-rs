@@ -39,7 +39,7 @@ also the highest-value targets for durable research notes.
 - Buffer maintenance in
   `interchain-indexer-logic/src/message_buffer/maintenance.rs`
   - correctness depends on transaction boundaries, cursor advancement, and
-    compare-and-swap style hot-tier cleanup
+    compare-and-swap-style hot-tier cleanup
 - Stats projection in
   `interchain-indexer-logic/src/stats/projection.rs`
   - subtle eligibility rules and incremental `stats_processed` semantics
@@ -65,7 +65,7 @@ also the highest-value targets for durable research notes.
 - Config parsing is covered by focused tests in server config code
 - Runtime-critical areas have some coverage, but are still knowledge-dense and
   require source tracing to understand
-- DB and network dependent tests are intentionally opt-in, which is pragmatic
+- DB and network-dependent tests are intentionally opt-in, which is pragmatic
   but raises the value of accurate documentation for non-trivial flows
 
 ## Onboarding Friction

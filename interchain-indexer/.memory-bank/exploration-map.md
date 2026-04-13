@@ -30,7 +30,7 @@
 - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
   - shared maintenance flow that offloads pending state, flushes finalized entries, and advances checkpoints
 - `interchain-indexer-logic/src/log_stream.rs`
-  - reusable catchup/realtime log streaming primitive that indexers can build on
+  - reusable catchup/real-time log streaming primitive that indexers can build on
 
 ## If You Need to Understand Avalanche Indexing
 

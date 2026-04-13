@@ -83,7 +83,7 @@ Review:
 - the current diff
 - touched modules and boundaries
 - tests and fixtures
-- schema, config, API, or ENV related changes
+- schema, config, API, or ENV-related changes
 
 ### 3. Extract Reviewer-Facing Impacts
 
