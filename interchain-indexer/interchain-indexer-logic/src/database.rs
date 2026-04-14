@@ -2284,6 +2284,7 @@ impl InterchainDatabase {
     pub async fn list_stats_chains(
         &self,
         chain_ids: &[i64],
+        sort: crate::pagination::StatsChainsSortField,
         order: crate::pagination::StatsSortOrder,
         page_size: usize,
         last_page: bool,
@@ -2296,6 +2297,7 @@ impl InterchainDatabase {
         crate::stats_chains_query::list_stats_chains(
             self.db.as_ref(),
             chain_ids,
+            sort,
             order,
             page_size,
             last_page,

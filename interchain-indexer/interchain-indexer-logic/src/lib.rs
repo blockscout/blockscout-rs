@@ -16,7 +16,7 @@ pub mod log_stream;
 pub mod pagination;
 pub use pagination::{
     BridgedTokensPaginationLogic, BridgedTokensSortField, StatsChainsPaginationLogic,
-    StatsSortOrder,
+    StatsChainsSortField, StatsSortOrder,
 };
 #[cfg(test)]
 pub mod test_utils;

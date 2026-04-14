@@ -6,8 +6,8 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
-    StatsChainListRow, StatsChainsPaginationLogic, StatsService, StatsSortOrder,
-    utils::to_hex_prefixed,
+    StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField, StatsService,
+    StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -154,6 +154,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
     ) -> Result<Response<GetChainsStatsResponse>, Status> {
         let inner = request.into_inner();
         let chain_ids = parse_chain_ids_csv(inner.chain_ids.as_deref())?;
+        let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -187,6 +188,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .stats
             .get_stats_chains(
                 chain_ids,
+                sort,
                 order,
                 page_size,
                 last_page,

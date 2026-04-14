@@ -661,6 +661,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: sort
+          description: 'Enum fields: default 0 = UNIQUE_TRANSFER_USERS_COUNT when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost''s TryFromInto deserializer).'
+          in: query
+          required: false
+          type: string
+          enum:
+            - UNIQUE_TRANSFER_USERS_COUNT
+          default: UNIQUE_TRANSFER_USERS_COUNT
       tags:
         - InterchainStatisticsService
   /api/v1/stats/common:
@@ -1157,6 +1165,11 @@ definitions:
         type: string
         format: int64
     description: 'Pagination for `/stats/chains` (composite cursor: direction, count, chain_id).'
+  v1StatsChainsSort:
+    type: string
+    enum:
+      - UNIQUE_TRANSFER_USERS_COUNT
+    default: UNIQUE_TRANSFER_USERS_COUNT
   v1TokenInfo:
     type: object
     properties:

@@ -12,7 +12,7 @@ use crate::{
     message_buffer::{ConsolidatedMessage, token_keys_from_finalized_for_enrichment},
     pagination::{
         BridgedTokensPaginationLogic, BridgedTokensSortField, OutputPagination,
-        StatsChainsPaginationLogic, StatsSortOrder,
+        StatsChainsPaginationLogic, StatsChainsSortField, StatsSortOrder,
     },
     stats_chains_query::StatsChainListRow,
 };
@@ -177,6 +177,7 @@ impl StatsService {
     pub async fn get_stats_chains(
         &self,
         chain_ids: Vec<i64>,
+        sort: StatsChainsSortField,
         order: StatsSortOrder,
         page_size: usize,
         last_page: bool,
@@ -189,6 +190,7 @@ impl StatsService {
         self.db
             .list_stats_chains(
                 chain_ids.as_slice(),
+                sort,
                 order,
                 page_size,
                 last_page,

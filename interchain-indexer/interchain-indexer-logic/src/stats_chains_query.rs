@@ -3,7 +3,8 @@
 use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};
 
 use crate::pagination::{
-    OutputPagination, PaginationDirection, StatsChainsPaginationLogic, StatsSortOrder,
+    OutputPagination, PaginationDirection, StatsChainsPaginationLogic, StatsChainsSortField,
+    StatsSortOrder,
 };
 
 #[derive(Debug, Clone, FromQueryResult)]
@@ -114,6 +115,7 @@ fn build_pagination(
 pub async fn list_stats_chains(
     db: &impl ConnectionTrait,
     chain_ids: &[i64],
+    sort: StatsChainsSortField,
     order: StatsSortOrder,
     page_size: usize,
     last_page: bool,
@@ -126,6 +128,10 @@ pub async fn list_stats_chains(
     ),
     DbErr,
 > {
+    match sort {
+        StatsChainsSortField::UniqueTransferUsersCount => {}
+    }
+
     let limit = page_size.max(1) as i64;
     let fetch = limit.saturating_add(1);
 
@@ -263,7 +269,10 @@ mod tests {
     use interchain_indexer_entity::chains;
     use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait};
 
-    use crate::{pagination::PaginationDirection, test_utils::init_db};
+    use crate::{
+        pagination::{PaginationDirection, StatsChainsSortField},
+        test_utils::init_db,
+    };
 
     async fn seed_chains(db: &DatabaseConnection, ids: &[i64]) {
         if ids.is_empty() {
@@ -291,10 +300,18 @@ mod tests {
             .await
             .unwrap();
 
-        let (rows, _) =
-            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None, None)
-                .await
-                .unwrap();
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsChainsSortField::default(),
+            StatsSortOrder::Desc,
+            50,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(rows.len(), 2);
         let r1 = rows.iter().find(|r| r.chain_id == 1).unwrap();
@@ -314,10 +331,18 @@ mod tests {
         idb.upsert_stats_chains(20, 99, 0).await.unwrap();
         idb.upsert_stats_chains(30, 50, 0).await.unwrap();
 
-        let (rows, _) =
-            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None, None)
-                .await
-                .unwrap();
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsChainsSortField::default(),
+            StatsSortOrder::Desc,
+            50,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
             rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
@@ -335,10 +360,18 @@ mod tests {
         idb.upsert_stats_chains(1, 100, 0).await.unwrap();
         idb.upsert_stats_chains(2, 200, 0).await.unwrap();
 
-        let (rows, _) =
-            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Asc, 50, false, None, None)
-                .await
-                .unwrap();
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsChainsSortField::default(),
+            StatsSortOrder::Asc,
+            50,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(rows[0].chain_id, 1);
         assert_eq!(rows[1].chain_id, 2);
@@ -355,10 +388,18 @@ mod tests {
         idb.upsert_stats_chains(3, 42, 0).await.unwrap();
         idb.upsert_stats_chains(7, 42, 0).await.unwrap();
 
-        let (rows, _) =
-            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None, None)
-                .await
-                .unwrap();
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsChainsSortField::default(),
+            StatsSortOrder::Desc,
+            50,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
             rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
@@ -377,10 +418,18 @@ mod tests {
         idb.upsert_stats_chains(101, 10, 0).await.unwrap();
         idb.upsert_stats_chains(102, 99, 0).await.unwrap();
 
-        let (p1, pag1) =
-            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 1, false, None, None)
-                .await
-                .unwrap();
+        let (p1, pag1) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsChainsSortField::default(),
+            StatsSortOrder::Desc,
+            1,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(p1.len(), 1);
         assert_eq!(p1[0].chain_id, 102);
         let next = pag1.next_marker.expect("next page");
@@ -389,6 +438,7 @@ mod tests {
         let (p2, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            StatsChainsSortField::default(),
             StatsSortOrder::Desc,
             1,
             false,
@@ -415,6 +465,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[3, 1],
+            StatsChainsSortField::default(),
             StatsSortOrder::Desc,
             50,
             false,
@@ -451,6 +502,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            StatsChainsSortField::default(),
             StatsSortOrder::Desc,
             50,
             false,
@@ -475,6 +527,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            StatsChainsSortField::default(),
             StatsSortOrder::Desc,
             50,
             false,
@@ -498,6 +551,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            StatsChainsSortField::default(),
             StatsSortOrder::Desc,
             50,
             false,
@@ -526,6 +580,7 @@ mod tests {
         let (p1, pag1) = list_stats_chains(
             db.as_ref(),
             &[],
+            StatsChainsSortField::default(),
             StatsSortOrder::Desc,
             1,
             false,
@@ -541,6 +596,7 @@ mod tests {
         let (p2, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            StatsChainsSortField::default(),
             StatsSortOrder::Desc,
             1,
             false,
@@ -551,5 +607,35 @@ mod tests {
         .unwrap();
         assert_eq!(p2.len(), 1);
         assert_eq!(p2[0].chain_id, 101);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_explicit_unique_transfer_users_sort_matches_desc_by_count() {
+        let g = init_db("stats_chains_explicit_sort").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[10, 20, 30]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(10, 1, 0).await.unwrap();
+        idb.upsert_stats_chains(20, 99, 0).await.unwrap();
+        idb.upsert_stats_chains(30, 50, 0).await.unwrap();
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsChainsSortField::UniqueTransferUsersCount,
+            StatsSortOrder::Desc,
+            50,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
+            vec![20, 30, 10]
+        );
     }
 }

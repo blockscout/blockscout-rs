@@ -314,6 +314,24 @@ impl BridgedTokensSortField {
     }
 }
 
+/// Request sort for `/stats/chains` (`stats.proto` `StatsChainsSort`; wire0 = unique transfer users).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum StatsChainsSortField {
+    #[default]
+    UniqueTransferUsersCount = 0,
+}
+
+impl StatsChainsSortField {
+    /// Maps `stats.proto` `StatsChainsSort` wire values (UNIQUE_TRANSFER_USERS_COUNT=0).
+    pub fn from_proto_sort(v: i32) -> Self {
+        match v {
+            0 => Self::UniqueTransferUsersCount,
+            _ => Self::UniqueTransferUsersCount,
+        }
+    }
+}
+
 /// Shared request order for statistics list endpoints (`stats.proto` `SortOrder`: 0=DESC, 1=ASC).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
@@ -588,6 +606,18 @@ impl StatsChainsPaginationLogic {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stats_chains_sort_wire_values_match_proto() {
+        assert_eq!(
+            StatsChainsSortField::from_proto_sort(0),
+            StatsChainsSortField::UniqueTransferUsersCount
+        );
+        assert_eq!(
+            StatsChainsSortField::from_proto_sort(99),
+            StatsChainsSortField::UniqueTransferUsersCount
+        );
+    }
 
     #[test]
     fn bridged_tokens_sort_wire_values_match_proto() {

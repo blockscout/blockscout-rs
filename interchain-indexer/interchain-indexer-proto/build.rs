@@ -70,6 +70,7 @@ fn compile(
     config
         .field_attribute("GetBridgedTokensRequest.sort", "#[serde(default)]")
         .field_attribute("GetBridgedTokensRequest.order", "#[serde(default)]")
+        .field_attribute("GetChainsStatsRequest.sort", "#[serde(default)]")
         .field_attribute("GetChainsStatsRequest.order", "#[serde(default)]");
     config.compile_protos(protos, includes)?;
     let descriptor_bytes = fs::read(descriptor_file).unwrap();

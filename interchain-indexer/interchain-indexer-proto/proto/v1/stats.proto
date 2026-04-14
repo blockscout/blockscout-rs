@@ -65,6 +65,10 @@ enum BridgedTokensSort {
   NAME = 3;
 }
 
+enum StatsChainsSort {
+  UNIQUE_TRANSFER_USERS_COUNT = 0;
+}
+
 message GetBridgedTokensRequest {
   int64 chain_id = 1;
   optional uint32 page_size = 2;
@@ -102,6 +106,8 @@ message GetChainsStatsRequest {
   optional int64 chain_id = 8;
   // Case-insensitive substring filter on chain name or textual chain id.
   optional string q = 9;
+  // Enum fields: default 0 = UNIQUE_TRANSFER_USERS_COUNT when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost's TryFromInto deserializer).
+  StatsChainsSort sort = 10;
 }
 
 message StatsBridgedTokenItem {
