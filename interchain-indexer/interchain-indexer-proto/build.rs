@@ -52,6 +52,8 @@ fn compile(
         .field_attribute("GetChainsStatsRequest.count", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("GetChainsStatsRequest.chain_id", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("GetChainsStatsRequest.chain_ids", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetBridgedTokensRequest.q", "#[serde(skip_serializing_if = \"Option::is_none\")]")
+        .field_attribute("GetChainsStatsRequest.q", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("GetMessagePathsRequest.from_date", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("GetMessagePathsRequest.to_date", "#[serde(skip_serializing_if = \"Option::is_none\")]")
         .field_attribute("GetMessagePathsRequest.counterparty_chain_ids", "#[serde(skip_serializing_if = \"Option::is_none\")]")

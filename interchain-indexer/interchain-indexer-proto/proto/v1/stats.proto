@@ -81,6 +81,8 @@ message GetBridgedTokensRequest {
   optional string name = 9;
   optional bool name_blank = 10;
   optional uint64 count = 11;
+  // Case-insensitive substring filter on the row display name (`stats_assets.name`).
+  optional string q = 12;
 }
 
 message GetChainsStatsRequest {
@@ -98,6 +100,8 @@ message GetChainsStatsRequest {
   optional string direction = 6;
   optional uint64 count = 7;
   optional int64 chain_id = 8;
+  // Case-insensitive substring filter on chain name or textual chain id.
+  optional string q = 9;
 }
 
 message StatsBridgedTokenItem {

@@ -118,6 +118,7 @@ pub async fn list_stats_chains(
     page_size: usize,
     last_page: bool,
     input_pagination: Option<StatsChainsPaginationLogic>,
+    q: Option<&str>,
 ) -> Result<
     (
         Vec<StatsChainListRow>,
@@ -139,6 +140,8 @@ pub async fn list_stats_chains(
 
     let reverse_results = matches!(query_direction, PaginationDirection::Prev);
 
+    let q_pattern = q.map(|s| format!("%{s}%"));
+
     let mut values: Vec<Value> = Vec::new();
     let where_in = if chain_ids.is_empty() {
         String::new()
@@ -151,6 +154,27 @@ pub async fn list_stats_chains(
         }
         format!("WHERE c.id IN ({})", ph.join(", "))
     };
+
+    let q_filter = if let Some(pat) = q_pattern {
+        let ph = values.len() + 1;
+        let clause = if where_in.is_empty() {
+            format!(
+                "WHERE (c.name ILIKE ${ph} OR CAST(c.id AS TEXT) ILIKE ${ph})",
+                ph = ph
+            )
+        } else {
+            format!(
+                " AND (c.name ILIKE ${ph} OR CAST(c.id AS TEXT) ILIKE ${ph})",
+                ph = ph
+            )
+        };
+        values.push(Value::String(Some(Box::new(pat))));
+        clause
+    } else {
+        String::new()
+    };
+
+    let inner_where = format!("{where_in}{q_filter}");
 
     let (where_extra, order_clause, cursor_vals) = if last_page {
         (String::new(), inverse_order_clause(order), Vec::new())
@@ -198,14 +222,14 @@ FROM (
            COALESCE(sc.unique_transfer_users_count, 0)::bigint AS cnt
     FROM chains c
     LEFT JOIN stats_chains sc ON sc.chain_id = c.id
-    {where_in}
+    {inner_where}
 ) t
 WHERE TRUE
 {where_extra}
 ORDER BY {order_clause}
 LIMIT ${limit_ph}
 "#,
-        where_in = where_in,
+        inner_where = inner_where,
         where_extra = where_extra,
         order_clause = order_clause,
         limit_ph = limit_placeholder,
@@ -267,9 +291,10 @@ mod tests {
             .await
             .unwrap();
 
-        let (rows, _) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None)
-            .await
-            .unwrap();
+        let (rows, _) =
+            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None, None)
+                .await
+                .unwrap();
 
         assert_eq!(rows.len(), 2);
         let r1 = rows.iter().find(|r| r.chain_id == 1).unwrap();
@@ -289,9 +314,10 @@ mod tests {
         idb.upsert_stats_chains(20, 99, 0).await.unwrap();
         idb.upsert_stats_chains(30, 50, 0).await.unwrap();
 
-        let (rows, _) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None)
-            .await
-            .unwrap();
+        let (rows, _) =
+            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None, None)
+                .await
+                .unwrap();
 
         assert_eq!(
             rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
@@ -309,9 +335,10 @@ mod tests {
         idb.upsert_stats_chains(1, 100, 0).await.unwrap();
         idb.upsert_stats_chains(2, 200, 0).await.unwrap();
 
-        let (rows, _) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Asc, 50, false, None)
-            .await
-            .unwrap();
+        let (rows, _) =
+            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Asc, 50, false, None, None)
+                .await
+                .unwrap();
 
         assert_eq!(rows[0].chain_id, 1);
         assert_eq!(rows[1].chain_id, 2);
@@ -328,9 +355,10 @@ mod tests {
         idb.upsert_stats_chains(3, 42, 0).await.unwrap();
         idb.upsert_stats_chains(7, 42, 0).await.unwrap();
 
-        let (rows, _) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None)
-            .await
-            .unwrap();
+        let (rows, _) =
+            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 50, false, None, None)
+                .await
+                .unwrap();
 
         assert_eq!(
             rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
@@ -349,18 +377,26 @@ mod tests {
         idb.upsert_stats_chains(101, 10, 0).await.unwrap();
         idb.upsert_stats_chains(102, 99, 0).await.unwrap();
 
-        let (p1, pag1) = list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 1, false, None)
-            .await
-            .unwrap();
+        let (p1, pag1) =
+            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 1, false, None, None)
+                .await
+                .unwrap();
         assert_eq!(p1.len(), 1);
         assert_eq!(p1[0].chain_id, 102);
         let next = pag1.next_marker.expect("next page");
         assert_eq!(next.direction, PaginationDirection::Next);
 
-        let (p2, _) =
-            list_stats_chains(db.as_ref(), &[], StatsSortOrder::Desc, 1, false, Some(next))
-                .await
-                .unwrap();
+        let (p2, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsSortOrder::Desc,
+            1,
+            false,
+            Some(next),
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(p2.len(), 1);
         assert_eq!(p2[0].chain_id, 100);
     }
@@ -376,13 +412,144 @@ mod tests {
         idb.upsert_stats_chains(2, 2, 0).await.unwrap();
         idb.upsert_stats_chains(3, 3, 0).await.unwrap();
 
-        let (rows, _) =
-            list_stats_chains(db.as_ref(), &[3, 1], StatsSortOrder::Desc, 50, false, None)
-                .await
-                .unwrap();
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[3, 1],
+            StatsSortOrder::Desc,
+            50,
+            false,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].chain_id, 3);
         assert_eq!(rows[1].chain_id, 1);
+    }
+
+    async fn seed_chain_named(db: &DatabaseConnection, id: i64, name: &str) {
+        chains::Entity::insert(chains::ActiveModel {
+            id: Set(id),
+            name: Set(name.to_string()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_q_filters_by_chain_name() {
+        let g = init_db("stats_chains_q_name").await;
+        let db = g.client();
+        seed_chain_named(db.as_ref(), 1, "FooUniqueBar").await;
+        seed_chain_named(db.as_ref(), 2, "Other").await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsSortOrder::Desc,
+            50,
+            false,
+            None,
+            Some("unique"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].chain_id, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_q_filters_by_textual_chain_id() {
+        let g = init_db("stats_chains_q_id").await;
+        let db = g.client();
+        seed_chain_named(db.as_ref(), 43114, "Somewhere").await;
+        seed_chain_named(db.as_ref(), 9, "Nine").await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsSortOrder::Desc,
+            50,
+            false,
+            None,
+            Some("4311"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].chain_id, 43114);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_q_malicious_string_is_literal_substring() {
+        let g = init_db("stats_chains_q_inj").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2, 3]).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsSortOrder::Desc,
+            50,
+            false,
+            None,
+            Some("' OR 1=1 --"),
+        )
+        .await
+        .unwrap();
+
+        assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_q_pagination_preserves_order() {
+        let g = init_db("stats_chains_q_page").await;
+        let db = g.client();
+        seed_chain_named(db.as_ref(), 100, "match-a").await;
+        seed_chain_named(db.as_ref(), 101, "match-b").await;
+        seed_chain_named(db.as_ref(), 102, "other").await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(100, 10, 0).await.unwrap();
+        idb.upsert_stats_chains(101, 10, 0).await.unwrap();
+        idb.upsert_stats_chains(102, 99, 0).await.unwrap();
+
+        let (p1, pag1) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsSortOrder::Desc,
+            1,
+            false,
+            None,
+            Some("match"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(p1.len(), 1);
+        assert_eq!(p1[0].chain_id, 100);
+        let next = pag1.next_marker.expect("next");
+
+        let (p2, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            StatsSortOrder::Desc,
+            1,
+            false,
+            Some(next),
+            Some("match"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(p2.len(), 1);
+        assert_eq!(p2[0].chain_id, 101);
     }
 }

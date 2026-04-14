@@ -126,6 +126,7 @@ impl StatsService {
     }
 
     /// Bridged-token stats table for a chain: aggregated edges + full token list per asset.
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_bridged_tokens_for_chain(
         &self,
         chain_id: i64,
@@ -134,6 +135,7 @@ impl StatsService {
         page_size: usize,
         last_page: bool,
         input_pagination: Option<BridgedTokensPaginationLogic>,
+        q: Option<&str>,
     ) -> anyhow::Result<(
         Vec<BridgedTokenListRow>,
         OutputPagination<BridgedTokensPaginationLogic>,
@@ -147,6 +149,7 @@ impl StatsService {
                 page_size,
                 last_page,
                 input_pagination,
+                q,
             )
             .await?;
 
@@ -178,6 +181,7 @@ impl StatsService {
         page_size: usize,
         last_page: bool,
         input_pagination: Option<StatsChainsPaginationLogic>,
+        q: Option<&str>,
     ) -> anyhow::Result<(
         Vec<StatsChainListRow>,
         OutputPagination<StatsChainsPaginationLogic>,
@@ -189,6 +193,7 @@ impl StatsService {
                 page_size,
                 last_page,
                 input_pagination,
+                q,
             )
             .await
     }

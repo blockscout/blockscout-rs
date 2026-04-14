@@ -524,6 +524,11 @@ paths:
           required: false
           type: string
           format: uint64
+        - name: q
+          description: Case-insensitive substring filter on the row display name (`stats_assets.name`).
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainStatisticsService
   /api/v1/stats/chain/{chain_id}/messages-paths/received:
@@ -651,6 +656,11 @@ paths:
           required: false
           type: string
           format: int64
+        - name: q
+          description: Case-insensitive substring filter on chain name or textual chain id.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainStatisticsService
   /api/v1/stats/common:

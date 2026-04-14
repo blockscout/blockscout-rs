@@ -2253,6 +2253,7 @@ impl InterchainDatabase {
     }
 
     /// Paginated bridged-token statistics for `chain_id` (aggregated per `stats_asset`).
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_bridged_token_stats_for_chain(
         &self,
         chain_id: i64,
@@ -2261,6 +2262,7 @@ impl InterchainDatabase {
         page_size: usize,
         last_page: bool,
         input_pagination: Option<crate::pagination::BridgedTokensPaginationLogic>,
+        q: Option<&str>,
     ) -> anyhow::Result<(
         Vec<crate::bridged_tokens_query::BridgedTokenAggDbRow>,
         OutputPagination<crate::pagination::BridgedTokensPaginationLogic>,
@@ -2273,6 +2275,7 @@ impl InterchainDatabase {
             page_size,
             last_page,
             input_pagination,
+            q,
         )
         .await
         .map_err(|e| anyhow::anyhow!(e.to_string()))
@@ -2285,6 +2288,7 @@ impl InterchainDatabase {
         page_size: usize,
         last_page: bool,
         input_pagination: Option<crate::pagination::StatsChainsPaginationLogic>,
+        q: Option<&str>,
     ) -> anyhow::Result<(
         Vec<crate::stats_chains_query::StatsChainListRow>,
         OutputPagination<crate::pagination::StatsChainsPaginationLogic>,
@@ -2296,6 +2300,7 @@ impl InterchainDatabase {
             page_size,
             last_page,
             input_pagination,
+            q,
         )
         .await
         .map_err(|e| anyhow::anyhow!(e.to_string()))
