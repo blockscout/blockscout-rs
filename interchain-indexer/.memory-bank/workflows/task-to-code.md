@@ -52,6 +52,7 @@ Then read only the current code and tests needed to implement the specified work
 - Re-check the current code before editing, but do not expand the task beyond what the handoff requires.
 - Reuse existing abstractions and patterns unless the coding task explicitly says otherwise.
 - Do not silently fix adjacent issues, clean up unrelated code, or add speculative improvements.
+- After the latest code edit, run `just format` before final validation and reporting. If it cannot be run, say exactly why.
 - If a required implementation detail is unclear, conflicting, or missing, stop and ask the human.
 - If the current code has drifted enough that the handoff no longer fits, explain the mismatch and ask whether to update the task artifacts first.
 
@@ -77,17 +78,24 @@ Make the code, test, config, schema, migration, or documentation changes require
 
 If the task says to update generated artifacts, migrations, or protobuf outputs, perform that work as part of the implementation.
 
-### 4. Validate Against The Task
+### 4. Run Final Formatting
+
+After the latest code edit, invoke `just format`. Treat this as the required final post-edit step before validation and reporting.
+
+If `just format` cannot be run in the current environment, stop and report the exact reason.
+
+### 5. Validate Against The Task
 
 Run the verification commands named in the coding task when feasible. If a required check cannot be run, say exactly why.
 
 Confirm the result against the stated acceptance criteria instead of broad subjective judgment.
 
-### 5. Report Outcome Precisely
+### 6. Report Outcome Precisely
 
 Summarize:
 
 - what was implemented
+- whether `just format` ran and its outcome
 - which verification steps ran and their outcomes
 - whether the acceptance criteria appear satisfied
 - any unresolved blockers, ambiguity, or drift that still needs human input
@@ -97,6 +105,7 @@ Summarize:
 The task is complete only when:
 
 - the requested code changes are implemented
+- `just format` has run after the latest code edit, or the exact blocker is reported
 - required verification has run or any gap is explicitly explained
 - the result matches the acceptance criteria in `coding-task-X.md`
 
