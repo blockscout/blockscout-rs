@@ -749,6 +749,18 @@ mod tests {
                 "",
             ),
             var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__POSTGRES_APPLICATION_NAME",
+                Some("`null`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__POSTGRES_STATEMENT_TIMEOUT",
+                Some("`null`"),
+                false,
+                "",
+            ),
+            var(
                 "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING",
                 Some("`true`"),
                 false,
@@ -801,6 +813,8 @@ mod tests {
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_CONNECTIONS` | | | `null` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_LIFETIME` | | | `null` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MIN_CONNECTIONS` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__POSTGRES_APPLICATION_NAME` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__POSTGRES_STATEMENT_TIMEOUT` | | | `null` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING` | | | `true` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING_LEVEL` | | | `debug` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_LEVEL` | | | `off` |
@@ -919,6 +933,8 @@ mod tests {
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_CONNECTIONS`                        |                          |                                                                                                      | `null`           |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_LIFETIME`                           |                          |                                                                                                      | `null`           |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MIN_CONNECTIONS`                        |                          |                                                                                                      | `null`           |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__POSTGRES_APPLICATION_NAME`              |                          |                                                                                                      | `null`           |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__POSTGRES_STATEMENT_TIMEOUT`             |                          |                                                                                                      | `null`           |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING`                           |                          |                                                                                                      | `true`           |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING_LEVEL`                     |                          |                                                                                                      | `debug`          |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_LEVEL`     |                          |                                                                                                      | `off`            |
