@@ -478,7 +478,7 @@ paths:
           required: false
           type: boolean
         - name: sort
-          description: 'Enum fields: default 0 = TOTAL_TRANSFERS_COUNT / DESC when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost''s TryFromInto deserializer).'
+          description: 'Sort field: TOTAL_TRANSFERS_COUNT[default] / OUTPUT_TRANSFERS_COUNT / INPUT_TRANSFERS_COUNT / NAME'
           in: query
           required: false
           type: string
@@ -489,6 +489,7 @@ paths:
             - NAME
           default: TOTAL_TRANSFERS_COUNT
         - name: order
+          description: 'Sort order: (0=DESC[default], 1=ASC)'
           in: query
           required: false
           type: string
@@ -629,6 +630,7 @@ paths:
           required: false
           type: string
         - name: order
+          description: 'Sort order: (0=DESC[default], 1=ASC)'
           in: query
           required: false
           type: string
@@ -662,7 +664,7 @@ paths:
           required: false
           type: string
         - name: sort
-          description: 'Enum fields: default 0 = UNIQUE_TRANSFER_USERS_COUNT when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost''s TryFromInto deserializer).'
+          description: 'Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]'
           in: query
           required: false
           type: string
@@ -1098,7 +1100,6 @@ definitions:
     properties:
       chain_id:
         type: string
-        format: int64
       token_address:
         type: string
       name:
@@ -1115,7 +1116,6 @@ definitions:
     properties:
       stats_asset_id:
         type: string
-        format: int64
       name:
         type: string
       symbol:
@@ -1139,12 +1139,11 @@ definitions:
   v1StatsChainRow:
     type: object
     properties:
-      chain_id:
+      id:
         type: string
-        format: int64
       name:
         type: string
-      icon_url:
+      logo:
         type: string
       explorer_url:
         type: string

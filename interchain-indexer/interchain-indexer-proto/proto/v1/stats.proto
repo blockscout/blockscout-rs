@@ -73,8 +73,9 @@ message GetBridgedTokensRequest {
   int64 chain_id = 1;
   optional uint32 page_size = 2;
   optional bool last_page = 3;
-  // Enum fields: default 0 = TOTAL_TRANSFERS_COUNT / DESC when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost's TryFromInto deserializer).
+  // Sort field: TOTAL_TRANSFERS_COUNT[default] / OUTPUT_TRANSFERS_COUNT / INPUT_TRANSFERS_COUNT / NAME
   BridgedTokensSort sort = 4;
+  // Sort order: (0=DESC[default], 1=ASC)
   SortOrder order = 5;
   
   // Token-based pagination
@@ -95,6 +96,7 @@ message GetChainsStatsRequest {
   // Optional comma-separated chain ids filter, for example `123,456`.
   // When absent or empty, statistics are returned for all known chains.
   optional string chain_ids = 3;
+  // Sort order: (0=DESC[default], 1=ASC)
   SortOrder order = 4;
 
   // token-based pagination
@@ -106,12 +108,12 @@ message GetChainsStatsRequest {
   optional int64 chain_id = 8;
   // Case-insensitive substring filter on chain name or textual chain id.
   optional string q = 9;
-  // Enum fields: default 0 = UNIQUE_TRANSFER_USERS_COUNT when omitted. Uses #[serde(default)] in build.rs (not `optional`, which breaks actix-prost's TryFromInto deserializer).
+  // Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]
   StatsChainsSort sort = 10;
 }
 
 message StatsBridgedTokenItem {
-  int64 chain_id = 1;
+  string chain_id = 1;
   string token_address = 2;
   optional string name = 3;
   optional string symbol = 4;
@@ -120,7 +122,7 @@ message StatsBridgedTokenItem {
 }
 
 message StatsBridgedTokenRow {
-  int64 stats_asset_id = 1;
+  string stats_asset_id = 1;
   optional string name = 2;
   optional string symbol = 3;
   optional string icon_url = 4;
@@ -137,9 +139,9 @@ message GetBridgedTokensResponse {
 }
 
 message StatsChainRow {
-  int64 chain_id = 1;
+  string id = 1;
   string name = 2;
-  optional string icon_url = 3;
+  optional string logo = 3;
   optional string explorer_url = 4;
   uint64 unique_transfer_users_count = 5;
 }

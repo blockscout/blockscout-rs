@@ -328,9 +328,9 @@ fn stats_chain_row_to_proto(row: StatsChainListRow) -> StatsChainRow {
         .explorer_url
         .map(|url| url.trim_end_matches('/').to_string());
     StatsChainRow {
-        chain_id: row.chain_id,
+        id: row.chain_id.to_string(),
         name,
-        icon_url: row.icon_url,
+        logo: row.icon_url,
         explorer_url,
         unique_transfer_users_count: i64_to_u64_nonneg(row.unique_transfer_users_count),
     }
@@ -339,7 +339,7 @@ fn stats_chain_row_to_proto(row: StatsChainListRow) -> StatsChainRow {
 fn bridged_row_to_proto(row: BridgedTokenListRow) -> StatsBridgedTokenRow {
     let a = row.aggregate;
     StatsBridgedTokenRow {
-        stats_asset_id: a.stats_asset_id,
+        stats_asset_id: a.stats_asset_id.to_string(),
         name: a.name,
         symbol: a.symbol,
         icon_url: a.icon_url,
@@ -350,7 +350,7 @@ fn bridged_row_to_proto(row: BridgedTokenListRow) -> StatsBridgedTokenRow {
             .tokens
             .into_iter()
             .map(|t| StatsBridgedTokenItem {
-                chain_id: t.chain_id,
+                chain_id: t.chain_id.to_string(),
                 token_address: to_hex_prefixed(t.token_address.as_slice()),
                 name: t.name,
                 symbol: t.symbol,
