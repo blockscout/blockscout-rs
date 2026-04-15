@@ -3,12 +3,12 @@ use crate::{
     protocols::{EnsLikeProtocol, Network, ProtocolInfo, ProtocolSpecific, Tld},
     subgraph::SubgraphReader,
 };
-use blockscout_service_launcher::database::{
-    DatabaseConnectSettings, DatabaseSettings, ReadWriteRepo,
-};
 use alloy::{
     hex,
     primitives::{TxHash, B256},
+};
+use blockscout_service_launcher::database::{
+    DatabaseConnectSettings, DatabaseSettings, ReadWriteRepo,
 };
 use nonempty::nonempty;
 use sqlx::PgPool;

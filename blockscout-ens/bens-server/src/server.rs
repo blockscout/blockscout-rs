@@ -19,11 +19,7 @@ use bens_proto::blockscout::bens::v1::{
     multichain_domains_server::MultichainDomainsServer,
 };
 use blockscout_endpoint_swagger::route_swagger;
-use blockscout_service_launcher::{
-    database::ReadWriteRepo,
-    launcher,
-    launcher::LaunchSettings,
-};
+use blockscout_service_launcher::{database::ReadWriteRepo, launcher, launcher::LaunchSettings};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio_cron_scheduler::JobScheduler;
 
@@ -77,21 +73,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
 
     let db_repo = Arc::new(
-        ReadWriteRepo::new_no_migrations(
-            &settings.database,
-            settings.replica_database.as_ref(),
-        )
-        .await
-        .context("database read/write repo")?,
+        ReadWriteRepo::new_no_migrations(&settings.database, settings.replica_database.as_ref())
+            .await
+            .context("database read/write repo")?,
     );
     if settings.database.run_migrations {
         tracing::info!("running migrations");
-        bens_logic::migrations::run(
-            db_repo
-                .main_db()
-                .get_postgres_connection_pool(),
-        )
-        .await?;
+        bens_logic::migrations::run(db_repo.main_db().get_postgres_connection_pool()).await?;
     }
     let networks = settings
         .subgraphs_reader

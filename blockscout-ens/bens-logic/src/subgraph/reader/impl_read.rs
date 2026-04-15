@@ -65,9 +65,11 @@ impl SubgraphReader {
         let maybe_domain: Option<DetailedDomain> =
             sql::get_domain(self.pg_pool(), &name, input.only_active).await?;
         if let Some(domain) = maybe_domain {
-            let domain = self
-                .patcher
-                .patched_detailed_domain(Arc::new(self.pg_pool_write().clone()), domain, &name);
+            let domain = self.patcher.patched_detailed_domain(
+                Arc::new(self.pg_pool_write().clone()),
+                domain,
+                &name,
+            );
             let tokens = extract_tokens_from_domain(&domain, &name)
                 .map_err(|e| anyhow!("failed to extract domain tokens: {e}"))?;
             Ok(Some(GetDomainOutput {
@@ -153,9 +155,11 @@ impl SubgraphReader {
                     name.inner.id() == domain.id
                         && name.deployed_protocol.protocol.info.slug == domain.protocol_slug
                 }) {
-                    return self
-                        .patcher
-                        .patched_domain(Arc::new(self.pg_pool_write().clone()), domain, from_user);
+                    return self.patcher.patched_domain(
+                        Arc::new(self.pg_pool_write().clone()),
+                        domain,
+                        from_user,
+                    );
                 }
             };
             domain
@@ -178,8 +182,7 @@ impl SubgraphReader {
         let protocols = self
             .protocoler
             .protocols_from_user_input(input.network_id, input.protocols.clone())?;
-        let domains =
-            sql::find_resolved_addresses(self.pg_pool(), protocols, &input).await?;
+        let domains = sql::find_resolved_addresses(self.pg_pool(), protocols, &input).await?;
         let output = lookup_output_from_domains(domains, &self.protocoler)?;
         let paginated = input
             .pagination
@@ -198,11 +201,10 @@ impl SubgraphReader {
         let protocols = self
             .protocoler
             .protocols_from_user_input(input.network_id, input.protocols.clone())?;
-        let maybe_domain_name =
-            resolve_addresses(self.pg_pool(), protocols, vec![input.address])
-                .await?
-                .into_iter()
-                .next();
+        let maybe_domain_name = resolve_addresses(self.pg_pool(), protocols, vec![input.address])
+            .await?
+            .into_iter()
+            .next();
         if let Some(domain) = maybe_domain_name {
             let result = self
                 .get_domain(GetDomainInput {
