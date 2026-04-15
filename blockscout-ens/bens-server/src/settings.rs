@@ -1,6 +1,6 @@
 use bens_logic::protocols::{AddressResolveTechnique, ProtocolMeta, ProtocolSpecific, Tld};
 use blockscout_service_launcher::{
-    database::{DatabaseConnectSettings, DatabaseSettings},
+    database::{DatabaseConnectSettings, DatabaseSettings, ReplicaDatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -23,6 +23,8 @@ pub struct Settings {
     #[serde(default)]
     pub subgraphs_reader: SubgraphsReaderSettings,
     pub database: DatabaseSettings,
+    #[serde(default)]
+    pub replica_database: Option<ReplicaDatabaseSettings>,
     #[serde(default = "default_swagger_path")]
     pub swagger_path: PathBuf,
 }
@@ -141,6 +143,7 @@ impl Settings {
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             },
+            replica_database: Default::default(),
             swagger_path: default_swagger_path(),
         }
     }

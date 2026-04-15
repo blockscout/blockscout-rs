@@ -7,6 +7,7 @@ fn main() {
         "BENS__SERVER__HTTP__BASE_PATH",
         "BENS__SERVER__GRPC",
         "BENS__DATABASE__CONNECT_OPTIONS",
+        "BENS__REPLICA_DATABASE__CONNECT_OPTIONS",
         "BENS__METRICS",
         "BENS__JAEGER",
         "BENS__SWAGGER_PATH",
