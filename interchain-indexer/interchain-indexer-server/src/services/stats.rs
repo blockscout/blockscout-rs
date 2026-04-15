@@ -6,8 +6,8 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
-    StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField, StatsService,
-    StatsSortOrder, utils::to_hex_prefixed,
+    StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField, StatsListQuery,
+    StatsService, StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -125,12 +125,14 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .stats
             .get_bridged_tokens_for_chain(
                 inner.chain_id,
-                sort,
-                order,
-                page_size,
-                last_page,
-                input_pagination,
-                q,
+                StatsListQuery {
+                    sort,
+                    order,
+                    page_size,
+                    last_page,
+                    input_pagination,
+                    q,
+                },
             )
             .await
             .map_err(map_stats_error)?;
@@ -188,12 +190,14 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .stats
             .get_stats_chains(
                 chain_ids,
-                sort,
-                order,
-                page_size,
-                last_page,
-                input_pagination,
-                q,
+                StatsListQuery {
+                    sort,
+                    order,
+                    page_size,
+                    last_page,
+                    input_pagination,
+                    q,
+                },
             )
             .await
             .map_err(map_stats_error)?;
@@ -288,11 +292,7 @@ fn parse_optional_utc_date(s: Option<&str>) -> Result<Option<NaiveDate>, Status>
 /// Trims stats list search `q`; returns `None` when missing or blank after trim.
 fn normalize_stats_q(input: Option<&str>) -> Option<&str> {
     let s = input?.trim();
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    if s.is_empty() { None } else { Some(s) }
 }
 
 fn parse_chain_ids_csv(input: Option<&str>) -> Result<Vec<i64>, Status> {

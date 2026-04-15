@@ -2,9 +2,12 @@
 
 use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};
 
-use crate::pagination::{
-    OutputPagination, PaginationDirection, StatsChainsPaginationLogic, StatsChainsSortField,
-    StatsSortOrder,
+use crate::{
+    pagination::{
+        OutputPagination, PaginationDirection, StatsChainsPaginationLogic, StatsChainsSortField,
+        StatsSortOrder,
+    },
+    stats::StatsListQuery,
 };
 
 #[derive(Debug, Clone, FromQueryResult)]
@@ -115,12 +118,7 @@ fn build_pagination(
 pub async fn list_stats_chains(
     db: &impl ConnectionTrait,
     chain_ids: &[i64],
-    sort: StatsChainsSortField,
-    order: StatsSortOrder,
-    page_size: usize,
-    last_page: bool,
-    input_pagination: Option<StatsChainsPaginationLogic>,
-    q: Option<&str>,
+    params: StatsListQuery<'_, StatsChainsSortField, StatsChainsPaginationLogic>,
 ) -> Result<
     (
         Vec<StatsChainListRow>,
@@ -128,6 +126,15 @@ pub async fn list_stats_chains(
     ),
     DbErr,
 > {
+    let StatsListQuery {
+        sort,
+        order,
+        page_size,
+        last_page,
+        input_pagination,
+        q,
+    } = params;
+
     match sort {
         StatsChainsSortField::UniqueTransferUsersCount => {}
     }
@@ -303,12 +310,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
-            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -334,12 +343,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
-            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -363,12 +374,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Asc,
-            50,
-            false,
-            None,
-            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Asc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -391,12 +404,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
-            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -421,12 +436,14 @@ mod tests {
         let (p1, pag1) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            1,
-            false,
-            None,
-            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -438,12 +455,14 @@ mod tests {
         let (p2, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            1,
-            false,
-            Some(next),
-            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: Some(next),
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -465,12 +484,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[3, 1],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
-            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -502,12 +523,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
-            Some("unique"),
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: Some("unique"),
+            },
         )
         .await
         .unwrap();
@@ -527,12 +550,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
-            Some("4311"),
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: Some("4311"),
+            },
         )
         .await
         .unwrap();
@@ -551,12 +576,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
-            Some("' OR 1=1 --"),
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: Some("' OR 1=1 --"),
+            },
         )
         .await
         .unwrap();
@@ -580,12 +607,14 @@ mod tests {
         let (p1, pag1) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            1,
-            false,
-            None,
-            Some("match"),
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: None,
+                q: Some("match"),
+            },
         )
         .await
         .unwrap();
@@ -596,12 +625,14 @@ mod tests {
         let (p2, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::default(),
-            StatsSortOrder::Desc,
-            1,
-            false,
-            Some(next),
-            Some("match"),
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: Some(next),
+                q: Some("match"),
+            },
         )
         .await
         .unwrap();
@@ -623,12 +654,14 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
-            StatsChainsSortField::UniqueTransferUsersCount,
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
-            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::UniqueTransferUsersCount,
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();

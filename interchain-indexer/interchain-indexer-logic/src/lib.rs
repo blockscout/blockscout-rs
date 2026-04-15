@@ -30,5 +30,5 @@ pub use error::ApiError;
 pub use indexer::*;
 pub use provider_layers::*;
 pub use settings::MessageBufferSettings;
-pub use stats::{BridgedTokenListRow, StatsChainListRow, StatsService};
+pub use stats::{BridgedTokenListRow, StatsChainListRow, StatsListQuery, StatsService};
 pub use token_info::{TokenInfoService, TokenInfoServiceSettings};
