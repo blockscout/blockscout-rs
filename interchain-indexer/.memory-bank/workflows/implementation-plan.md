@@ -122,6 +122,12 @@ Only do this after the user has confirmed `implementation-plan-X.md`.
 
 Produce `coding-task-X.md` (X - source solution number) for the next agent. It should be specific enough that the coding agent can start without repeating the full design investigation.
 
+The coding task must be self-sufficient:
+
+- do not require the reader to open `implementation-plan-X.md` or `task-analysis` artifacts to understand the work
+- include enough current-codebase context, constraints, and file targets that a strong junior Rust engineer can execute it directly
+- the agent may inspect additional files if needed, but the coding task should not depend on that extra reading to be understandable
+
 Include:
 
 - the implementation goal
@@ -165,6 +171,14 @@ Once the workflow is complete, the output on disk should contain:
   - blockers or open questions
 
 `coding-task-X.md` must only be written after the user confirms `implementation-plan-X.md`.
+
+Verification guidance in both artifacts must follow the repo testing rules:
+
+- prefer repo-native commands such as `just test` and `just test-with-db`
+- use `just test-with-db` for ignored database-backed tests
+- use `just test` for non-DB tests that do not require a database
+- do not default to raw `cargo test` commands when a repo-native wrapper exists
+- only mention bare `cargo test` when no wrapper applies or when the command is specifically needed for a non-default case
 
 Use this structure:
 

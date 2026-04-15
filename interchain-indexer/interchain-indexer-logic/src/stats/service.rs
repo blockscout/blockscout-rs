@@ -7,12 +7,13 @@ use sea_orm::{
     ActiveValue, ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, sea_query::Expr,
 };
 
+use super::StatsListQuery;
 use crate::{
     BridgedTokenAggDbRow, BridgedTokenLinkEnriched, InterchainDatabase, TokenInfoService,
     message_buffer::{ConsolidatedMessage, token_keys_from_finalized_for_enrichment},
     pagination::{
         BridgedTokensPaginationLogic, BridgedTokensSortField, OutputPagination,
-        StatsChainsPaginationLogic, StatsSortOrder,
+        StatsChainsPaginationLogic, StatsChainsSortField,
     },
     stats_chains_query::StatsChainListRow,
 };
@@ -129,25 +130,14 @@ impl StatsService {
     pub async fn get_bridged_tokens_for_chain(
         &self,
         chain_id: i64,
-        sort: BridgedTokensSortField,
-        order: StatsSortOrder,
-        page_size: usize,
-        last_page: bool,
-        input_pagination: Option<BridgedTokensPaginationLogic>,
+        params: StatsListQuery<'_, BridgedTokensSortField, BridgedTokensPaginationLogic>,
     ) -> anyhow::Result<(
         Vec<BridgedTokenListRow>,
         OutputPagination<BridgedTokensPaginationLogic>,
     )> {
         let (rows, pagination) = self
             .db
-            .list_bridged_token_stats_for_chain(
-                chain_id,
-                sort,
-                order,
-                page_size,
-                last_page,
-                input_pagination,
-            )
+            .list_bridged_token_stats_for_chain(chain_id, params)
             .await?;
 
         let ids: Vec<i64> = rows.iter().map(|r| r.stats_asset_id).collect();
@@ -174,22 +164,13 @@ impl StatsService {
     pub async fn get_stats_chains(
         &self,
         chain_ids: Vec<i64>,
-        order: StatsSortOrder,
-        page_size: usize,
-        last_page: bool,
-        input_pagination: Option<StatsChainsPaginationLogic>,
+        params: StatsListQuery<'_, StatsChainsSortField, StatsChainsPaginationLogic>,
     ) -> anyhow::Result<(
         Vec<StatsChainListRow>,
         OutputPagination<StatsChainsPaginationLogic>,
     )> {
         self.db
-            .list_stats_chains(
-                chain_ids.as_slice(),
-                order,
-                page_size,
-                last_page,
-                input_pagination,
-            )
+            .list_stats_chains(chain_ids.as_slice(), params)
             .await
     }
 }

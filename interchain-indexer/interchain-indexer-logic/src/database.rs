@@ -2256,11 +2256,11 @@ impl InterchainDatabase {
     pub async fn list_bridged_token_stats_for_chain(
         &self,
         chain_id: i64,
-        sort: crate::pagination::BridgedTokensSortField,
-        order: crate::pagination::StatsSortOrder,
-        page_size: usize,
-        last_page: bool,
-        input_pagination: Option<crate::pagination::BridgedTokensPaginationLogic>,
+        params: crate::stats::StatsListQuery<
+            '_,
+            crate::pagination::BridgedTokensSortField,
+            crate::pagination::BridgedTokensPaginationLogic,
+        >,
     ) -> anyhow::Result<(
         Vec<crate::bridged_tokens_query::BridgedTokenAggDbRow>,
         OutputPagination<crate::pagination::BridgedTokensPaginationLogic>,
@@ -2268,11 +2268,7 @@ impl InterchainDatabase {
         crate::bridged_tokens_query::list_bridged_token_stats_for_chain(
             self.db.as_ref(),
             chain_id,
-            sort,
-            order,
-            page_size,
-            last_page,
-            input_pagination,
+            params,
         )
         .await
         .map_err(|e| anyhow::anyhow!(e.to_string()))
@@ -2281,24 +2277,18 @@ impl InterchainDatabase {
     pub async fn list_stats_chains(
         &self,
         chain_ids: &[i64],
-        order: crate::pagination::StatsSortOrder,
-        page_size: usize,
-        last_page: bool,
-        input_pagination: Option<crate::pagination::StatsChainsPaginationLogic>,
+        params: crate::stats::StatsListQuery<
+            '_,
+            crate::pagination::StatsChainsSortField,
+            crate::pagination::StatsChainsPaginationLogic,
+        >,
     ) -> anyhow::Result<(
         Vec<crate::stats_chains_query::StatsChainListRow>,
         OutputPagination<crate::pagination::StatsChainsPaginationLogic>,
     )> {
-        crate::stats_chains_query::list_stats_chains(
-            self.db.as_ref(),
-            chain_ids,
-            order,
-            page_size,
-            last_page,
-            input_pagination,
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!(e.to_string()))
+        crate::stats_chains_query::list_stats_chains(self.db.as_ref(), chain_ids, params)
+            .await
+            .map_err(|e| anyhow::anyhow!(e.to_string()))
     }
 
     pub async fn fetch_bridged_token_items_for_assets(

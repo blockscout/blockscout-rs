@@ -6,8 +6,8 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
-    StatsChainListRow, StatsChainsPaginationLogic, StatsService, StatsSortOrder,
-    utils::to_hex_prefixed,
+    StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField, StatsListQuery,
+    StatsService, StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -119,16 +119,20 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .unwrap_or(self.api_settings.default_page_size)
             .clamp(1, self.api_settings.max_page_size) as usize;
         let last_page = inner.last_page.unwrap_or(false);
+        let q = normalize_stats_q(inner.q.as_deref());
 
         let (rows, pagination) = self
             .stats
             .get_bridged_tokens_for_chain(
                 inner.chain_id,
-                sort,
-                order,
-                page_size,
-                last_page,
-                input_pagination,
+                StatsListQuery {
+                    sort,
+                    order,
+                    page_size,
+                    last_page,
+                    input_pagination,
+                    q,
+                },
             )
             .await
             .map_err(map_stats_error)?;
@@ -152,6 +156,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
     ) -> Result<Response<GetChainsStatsResponse>, Status> {
         let inner = request.into_inner();
         let chain_ids = parse_chain_ids_csv(inner.chain_ids.as_deref())?;
+        let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
@@ -179,10 +184,21 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .unwrap_or(self.api_settings.default_page_size)
             .clamp(1, self.api_settings.max_page_size) as usize;
         let last_page = inner.last_page.unwrap_or(false);
+        let q = normalize_stats_q(inner.q.as_deref());
 
         let (rows, pagination) = self
             .stats
-            .get_stats_chains(chain_ids, order, page_size, last_page, input_pagination)
+            .get_stats_chains(
+                chain_ids,
+                StatsListQuery {
+                    sort,
+                    order,
+                    page_size,
+                    last_page,
+                    input_pagination,
+                    q,
+                },
+            )
             .await
             .map_err(map_stats_error)?;
 
@@ -273,6 +289,12 @@ fn parse_optional_utc_date(s: Option<&str>) -> Result<Option<NaiveDate>, Status>
         })
 }
 
+/// Trims stats list search `q`; returns `None` when missing or blank after trim.
+fn normalize_stats_q(input: Option<&str>) -> Option<&str> {
+    let s = input?.trim();
+    if s.is_empty() { None } else { Some(s) }
+}
+
 fn parse_chain_ids_csv(input: Option<&str>) -> Result<Vec<i64>, Status> {
     let Some(input) = input.map(str::trim) else {
         return Ok(Vec::new());
@@ -306,9 +328,9 @@ fn stats_chain_row_to_proto(row: StatsChainListRow) -> StatsChainRow {
         .explorer_url
         .map(|url| url.trim_end_matches('/').to_string());
     StatsChainRow {
-        chain_id: row.chain_id,
+        id: row.chain_id.to_string(),
         name,
-        icon_url: row.icon_url,
+        logo: row.icon_url,
         explorer_url,
         unique_transfer_users_count: i64_to_u64_nonneg(row.unique_transfer_users_count),
     }
@@ -317,7 +339,7 @@ fn stats_chain_row_to_proto(row: StatsChainListRow) -> StatsChainRow {
 fn bridged_row_to_proto(row: BridgedTokenListRow) -> StatsBridgedTokenRow {
     let a = row.aggregate;
     StatsBridgedTokenRow {
-        stats_asset_id: a.stats_asset_id,
+        stats_asset_id: a.stats_asset_id.to_string(),
         name: a.name,
         symbol: a.symbol,
         icon_url: a.icon_url,
@@ -328,7 +350,7 @@ fn bridged_row_to_proto(row: BridgedTokenListRow) -> StatsBridgedTokenRow {
             .tokens
             .into_iter()
             .map(|t| StatsBridgedTokenItem {
-                chain_id: t.chain_id,
+                chain_id: t.chain_id.to_string(),
                 token_address: to_hex_prefixed(t.token_address.as_slice()),
                 name: t.name,
                 symbol: t.symbol,
@@ -349,7 +371,7 @@ fn map_stats_error(err: anyhow::Error) -> Status {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_chain_ids_csv, parse_optional_utc_date};
+    use super::{normalize_stats_q, parse_chain_ids_csv, parse_optional_utc_date};
 
     #[test]
     fn parse_chain_ids_csv_accepts_missing_and_empty() {
@@ -393,5 +415,17 @@ mod tests {
         let err = parse_optional_utc_date(Some("24-03-2026")).expect_err("wrong format must fail");
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
         assert!(err.message().contains("invalid date"));
+    }
+
+    #[test]
+    fn normalize_stats_q_none_and_blank() {
+        assert_eq!(normalize_stats_q(None), None);
+        assert_eq!(normalize_stats_q(Some("")), None);
+        assert_eq!(normalize_stats_q(Some("   ")), None);
+    }
+
+    #[test]
+    fn normalize_stats_q_trims_non_empty() {
+        assert_eq!(normalize_stats_q(Some(" foo  ")), Some("foo"));
     }
 }

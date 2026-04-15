@@ -23,6 +23,16 @@ pub struct IndexerSettings {
 }
 ```
 
+## Proto Build Serde Attributes
+
+In `interchain-indexer-proto/build.rs`, treat serde field attributes as behavior, not decoration.
+
+- Do not add `#[serde(skip_serializing_if = "Option::is_none")]` to proto request fields just because they are optional.
+- For HTTP/query input handling, omitted proto3 `optional` fields already deserialize as `None`; `skip_serializing_if` does not make an input optional and does not affect request validation.
+- Use `skip_serializing_if` when serialized output shape matters, for example response messages or other structs intentionally serialized back to clients where omitting `null` fields is part of the API contract.
+- When a request field truly needs deserialization behavior on omission, prefer the attribute that matches that behavior. Example: non-optional enum query fields may need `#[serde(default)]`; `skip_serializing_if` is not a substitute.
+- Before adding any new serde field attribute in `build.rs`, check whether the message is used as input, output, or both, and document the reason in the surrounding task artifacts or code comment when it is not obvious.
+
 ## Logging
 
 Use `tracing` with field-style syntax (static messages, dynamic fields):

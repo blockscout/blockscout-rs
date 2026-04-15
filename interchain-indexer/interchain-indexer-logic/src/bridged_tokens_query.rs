@@ -2,9 +2,12 @@
 
 use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};
 
-use crate::pagination::{
-    BridgedTokensPaginationLogic, BridgedTokensSortField, OutputPagination, PaginationDirection,
-    StatsSortOrder,
+use crate::{
+    pagination::{
+        BridgedTokensPaginationLogic, BridgedTokensSortField, OutputPagination,
+        PaginationDirection, StatsSortOrder,
+    },
+    stats::StatsListQuery,
 };
 
 #[derive(Debug, Clone, FromQueryResult)]
@@ -274,11 +277,7 @@ fn build_pagination_from_bridged_tokens(
 pub async fn list_bridged_token_stats_for_chain(
     db: &impl ConnectionTrait,
     chain_id: i64,
-    sort: BridgedTokensSortField,
-    order: StatsSortOrder,
-    page_size: usize,
-    last_page: bool,
-    input_pagination: Option<BridgedTokensPaginationLogic>,
+    params: StatsListQuery<'_, BridgedTokensSortField, BridgedTokensPaginationLogic>,
 ) -> Result<
     (
         Vec<BridgedTokenAggDbRow>,
@@ -286,6 +285,15 @@ pub async fn list_bridged_token_stats_for_chain(
     ),
     DbErr,
 > {
+    let StatsListQuery {
+        sort,
+        order,
+        page_size,
+        last_page,
+        input_pagination,
+        q,
+    } = params;
+
     let limit = page_size.max(1) as i64;
     let fetch = limit.saturating_add(1);
 
@@ -300,7 +308,16 @@ pub async fn list_bridged_token_stats_for_chain(
 
     let reverse_results = matches!(query_direction, PaginationDirection::Prev);
 
-    let (where_extra, order_clause, values) = if last_page {
+    let q_pattern = q.map(|s| {
+        let escaped = s
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        format!("%{escaped}%")
+    });
+    let q_offset: usize = if q_pattern.is_some() { 1 } else { 0 };
+
+    let (where_extra, order_clause, cursor_vals) = if last_page {
         let inv = inverse_order_clause(sort, order);
         (String::new(), inv, Vec::new())
     } else {
@@ -308,7 +325,8 @@ pub async fn list_bridged_token_stats_for_chain(
             PaginationDirection::Next => {
                 let ord = forward_order_clause(sort, order);
                 if let Some(m) = input_pagination.as_ref() {
-                    let (w, v) = cursor_where_next(sort, order, m, 2);
+                    let p0 = 2 + q_offset;
+                    let (w, v) = cursor_where_next(sort, order, m, p0);
                     (w, ord, v)
                 } else {
                     (String::new(), ord, Vec::new())
@@ -317,7 +335,8 @@ pub async fn list_bridged_token_stats_for_chain(
             PaginationDirection::Prev => {
                 let ord = inverse_order_clause(sort, order);
                 if let Some(m) = input_pagination.as_ref() {
-                    let (w, v) = cursor_where_prev(sort, order, m, 2);
+                    let p0 = 2 + q_offset;
+                    let (w, v) = cursor_where_prev(sort, order, m, p0);
                     (w, ord, v)
                 } else {
                     (String::new(), ord, Vec::new())
@@ -327,7 +346,13 @@ pub async fn list_bridged_token_stats_for_chain(
     };
 
     let mut all_values = vec![Value::BigInt(Some(chain_id))];
-    all_values.extend(values);
+    let mut name_filter_sql = String::new();
+    if let Some(pat) = q_pattern {
+        let ph = all_values.len() + 1;
+        name_filter_sql = format!(" AND a.name ILIKE ${ph} ESCAPE '\\'");
+        all_values.push(Value::String(Some(Box::new(pat))));
+    }
+    all_values.extend(cursor_vals);
     let limit_placeholder = all_values.len() + 1;
     all_values.push(Value::BigInt(Some(fetch)));
 
@@ -363,10 +388,11 @@ FROM (
     INNER JOIN stats_assets s ON s.id = agg.stats_asset_id
 ) a
 WHERE TRUE
-{where_extra}
+{name_filter}{where_extra}
 ORDER BY {order_clause}
 LIMIT ${limit_ph}
 "#,
+        name_filter = name_filter_sql,
         where_extra = where_extra,
         order_clause = order_clause,
         limit_ph = limit_placeholder,
@@ -528,11 +554,14 @@ mod tests {
         let (rows, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
-            BridgedTokensSortField::Name,
-            StatsSortOrder::Asc,
-            50,
-            false,
-            None,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -567,11 +596,14 @@ mod tests {
         let (rows, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
-            BridgedTokensSortField::OutputTransfers,
-            StatsSortOrder::Desc,
-            50,
-            false,
-            None,
+            StatsListQuery {
+                sort: BridgedTokensSortField::OutputTransfers,
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -594,11 +626,14 @@ mod tests {
         let (rows, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
-            BridgedTokensSortField::Name,
-            StatsSortOrder::Asc,
-            50,
-            false,
-            None,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -623,11 +658,14 @@ mod tests {
         let (p1, pag1) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
-            BridgedTokensSortField::Name,
-            StatsSortOrder::Asc,
-            1,
-            false,
-            None,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -639,11 +677,14 @@ mod tests {
         let (p2, pag2) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
-            BridgedTokensSortField::Name,
-            StatsSortOrder::Asc,
-            1,
-            false,
-            Some(next_tok),
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: Some(next_tok),
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -654,11 +695,14 @@ mod tests {
         let (p1b, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
-            BridgedTokensSortField::Name,
-            StatsSortOrder::Asc,
-            1,
-            false,
-            Some(prev_tok),
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: Some(prev_tok),
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -678,11 +722,14 @@ mod tests {
         let (rows, pag) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
-            BridgedTokensSortField::Name,
-            StatsSortOrder::Asc,
-            2,
-            true,
-            None,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 2,
+                last_page: true,
+                input_pagination: None,
+                q: None,
+            },
         )
         .await
         .unwrap();
@@ -759,11 +806,14 @@ mod tests {
         let (rows, p) = stats
             .get_bridged_tokens_for_chain(
                 1,
-                BridgedTokensSortField::Name,
-                StatsSortOrder::Asc,
-                10,
-                false,
-                None,
+                StatsListQuery {
+                    sort: BridgedTokensSortField::Name,
+                    order: StatsSortOrder::Asc,
+                    page_size: 10,
+                    last_page: false,
+                    input_pagination: None,
+                    q: None,
+                },
             )
             .await
             .unwrap();
@@ -771,5 +821,184 @@ mod tests {
         assert!(rows[0].tokens.is_empty());
         assert!(p.prev_marker.is_some());
         assert!(p.next_marker.is_none());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_q_case_insensitive_on_asset_name() {
+        let g = init_db("bridged_tokens_q_case").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        let _ = seed_asset_edges(db.as_ref(), Some("CamelCaseToken".into()), vec![(1, 2, 1)]).await;
+
+        let (rows, _) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: Some("camel"),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name.as_deref(), Some("CamelCaseToken"));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_q_ignores_linked_token_name_only() {
+        let g = init_db("bridged_tokens_q_not_token").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        let aid = seed_asset_edges(db.as_ref(), Some("RowName".into()), vec![(1, 2, 1)]).await;
+        let addr = vec![0x11u8; 20];
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(1),
+            token_address: Set(addr.clone()),
+            ..Default::default()
+        })
+        .exec(db.as_ref())
+        .await
+        .unwrap();
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(addr),
+            name: Set(Some("OnlyInTokensTable".into())),
+            ..Default::default()
+        })
+        .exec(db.as_ref())
+        .await
+        .unwrap();
+
+        let (rows, _) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: Some("OnlyInTokens"),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(rows.is_empty());
+
+        let (rows, _) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: Some("RowName"),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_q_malicious_string_is_literal_substring() {
+        let g = init_db("bridged_tokens_q_inj").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        let _ = seed_asset_edges(db.as_ref(), Some("Alpha".into()), vec![(1, 2, 1)]).await;
+        let _ = seed_asset_edges(db.as_ref(), Some("Beta".into()), vec![(1, 2, 1)]).await;
+
+        let needle = "' OR 1=1 --";
+        let (rows, _) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: Some(needle),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_q_pagination_stable_with_same_q() {
+        let g = init_db("bridged_tokens_q_page").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        for nm in ["GrpA", "GrpB", "Zed"] {
+            seed_asset_edges(db.as_ref(), Some(nm.into()), vec![(1, 2, 1)]).await;
+        }
+
+        let (p1, pag1) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: None,
+                q: Some("Grp"),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(p1.len(), 1);
+        assert_eq!(p1[0].name.as_deref(), Some("GrpA"));
+        let next_tok = pag1.next_marker.expect("next");
+
+        let (p2, pag2) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: Some(next_tok),
+                q: Some("Grp"),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(p2[0].name.as_deref(), Some("GrpB"));
+        let prev_tok = pag2.prev_marker.expect("prev");
+
+        let (p1b, _) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: Some(prev_tok),
+                q: Some("Grp"),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(p1b[0].name.as_deref(), Some("GrpA"));
     }
 }
