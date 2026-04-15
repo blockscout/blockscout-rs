@@ -31,7 +31,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .get_domain(input)
             .await
-            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool_write())))?
             .map(|d| conversion::detailed_domain_from_logic(d, Some(chain_id)))
             .transpose()
             .map_err(map_convertion_error)?
@@ -73,7 +73,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .lookup_domain_name(input)
             .await
-            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?;
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool_write())))?;
         let domains = from_resolved_domains_result(result.items, Some(chain_id))?;
         let response = LookupDomainNameResponse {
             items: domains,
@@ -115,7 +115,7 @@ impl DomainsExtractor for DomainsExtractorService {
             .subgraph_reader
             .get_address(input.clone())
             .await
-            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
+            .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool_write())))?
             .map(|d| conversion::detailed_domain_from_logic(d, Some(chain_id)))
             .transpose()
             .map_err(map_convertion_error)?;

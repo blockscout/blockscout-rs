@@ -9,13 +9,14 @@ use crate::{
     },
 };
 use anyhow::Context;
+use blockscout_service_launcher::database::ReadWriteRepo;
 use nonempty::NonEmpty;
 use sqlx::postgres::PgPool;
 use std::{collections::HashMap, sync::Arc};
 use tracing::instrument;
 
 pub struct SubgraphReader {
-    pub(super) pool: Arc<PgPool>,
+    pub(super) db: Arc<ReadWriteRepo>,
     pub(super) protocoler: Protocoler,
     pub(super) patcher: SubgraphPatcher,
 }
@@ -23,11 +24,11 @@ pub struct SubgraphReader {
 impl SubgraphReader {
     #[instrument(name = "SubgraphReader::initialize", skip_all, err, level = "info")]
     pub async fn initialize(
-        pool: Arc<PgPool>,
+        db: Arc<ReadWriteRepo>,
         networks: HashMap<i64, Network>,
         protocol_infos: HashMap<String, ProtocolInfo>,
     ) -> Result<Self, anyhow::Error> {
-        let deployments = sql::get_deployments(&pool)
+        let deployments = sql::get_deployments(db.read_db().get_postgres_connection_pool())
             .await?
             .into_iter()
             .map(|deployment| (deployment.subgraph_name.clone(), deployment))
@@ -77,22 +78,27 @@ impl SubgraphReader {
         tracing::info!(networks =? networks.keys().collect::<Vec<_>>(), "initialized subgraph reader");
         let protocoler = Protocoler::initialize(networks, protocols)?;
         let patcher = SubgraphPatcher::new();
-        let this = Self::new(pool, protocoler, patcher);
+        let this = Self::new(db, protocoler, patcher);
         this.init_cache().await.context("init cache tables")?;
         Ok(this)
     }
 
-    pub fn new(pool: Arc<PgPool>, protocoler: Protocoler, patcher: SubgraphPatcher) -> Self {
+    pub fn new(db: Arc<ReadWriteRepo>, protocoler: Protocoler, patcher: SubgraphPatcher) -> Self {
         Self {
-            pool,
+            db,
             protocoler,
             patcher,
         }
     }
 
-    /// PostgreSQL pool handle (for diagnostics from `bens-server`).
+    /// Current read pool (`read_db()` each call — replica health / fallback).
     pub fn pg_pool(&self) -> &PgPool {
-        self.pool.as_ref()
+        self.db.read_db().get_postgres_connection_pool()
+    }
+
+    /// Primary pool for DDL, cache refresh, patcher, and reads that must follow writes.
+    pub fn pg_pool_write(&self) -> &PgPool {
+        self.db.main_db().get_postgres_connection_pool()
     }
 
     #[instrument(skip(self), err, level = "info")]
@@ -113,7 +119,7 @@ impl SubgraphReader {
             let step_started = std::time::Instant::now();
             match address_resolve_technique {
                 AddressResolveTechnique::ReverseRegistry => {
-                    sql::AddrReverseNamesView::refresh_view(self.pool.as_ref(), schema)
+                    sql::AddrReverseNamesView::refresh_view(self.pg_pool_write(), schema)
                         .await
                         .context(format!(
                             "failed to update AddrReverseNamesView for schema {schema}"
@@ -121,7 +127,7 @@ impl SubgraphReader {
                     protocols_refreshed += 1;
                 }
                 AddressResolveTechnique::AllDomains => {
-                    sql::AddressNamesView::refresh_view(self.pool.as_ref(), schema)
+                    sql::AddressNamesView::refresh_view(self.pg_pool_write(), schema)
                         .await
                         .context(format!(
                             "failed to update AddressNamesView for schema {schema}"
@@ -170,21 +176,21 @@ impl SubgraphReader {
             tracing::info!("start initializing cache table for schema {schema}");
             match address_resolve_technique {
                 AddressResolveTechnique::ReverseRegistry => {
-                    sql::AddrReverseNamesView::create_view(self.pool.as_ref(), schema)
+                    sql::AddrReverseNamesView::create_view(self.pg_pool_write(), schema)
                         .await
                         .context(format!(
                             "failed to create AddrReverseNamesView for schema {schema}"
                         ))?;
                 }
                 AddressResolveTechnique::AllDomains => {
-                    sql::AddressNamesView::create_view(self.pool.as_ref(), schema)
+                    sql::AddressNamesView::create_view(self.pg_pool_write(), schema)
                         .await
                         .context(format!(
                             "failed to create AddressNamesView for schema {schema}"
                         ))?;
                 }
                 AddressResolveTechnique::Addr2Name => {
-                    sql::Addr2NameTable::create_table(self.pool.as_ref(), schema)
+                    sql::Addr2NameTable::create_table(self.pg_pool_write(), schema)
                         .await
                         .context(format!(
                             "failed to create Addr2NameTable for schema {schema}"

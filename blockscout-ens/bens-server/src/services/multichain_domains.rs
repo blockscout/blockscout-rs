@@ -23,7 +23,9 @@ impl MultichainDomains for MultichainDomainsService {
             .subgraph_reader
             .get_domain(input)
             .await
-            .map_err(|e| conversion::map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
+            .map_err(|e| {
+                conversion::map_subgraph_error(e, Some(self.subgraph_reader.pg_pool_write()))
+            })?
             .map(|d| conversion::detailed_domain_from_logic(d, chain_id))
             .transpose()
             .map_err(conversion::map_convertion_error)?
@@ -65,7 +67,9 @@ impl MultichainDomains for MultichainDomainsService {
             .subgraph_reader
             .lookup_domain_name(input)
             .await
-            .map_err(|e| conversion::map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?;
+            .map_err(|e| {
+                conversion::map_subgraph_error(e, Some(self.subgraph_reader.pg_pool_write()))
+            })?;
         let domains = conversion::from_resolved_domains_result(result.items, chain_id)?;
         let response = LookupDomainNameResponse {
             items: domains,
@@ -109,7 +113,9 @@ impl MultichainDomains for MultichainDomainsService {
             .subgraph_reader
             .get_address(input.clone())
             .await
-            .map_err(|e| conversion::map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
+            .map_err(|e| {
+                conversion::map_subgraph_error(e, Some(self.subgraph_reader.pg_pool_write()))
+            })?
             .map(|d| conversion::detailed_domain_from_logic(d, chain_id))
             .transpose()
             .map_err(conversion::map_convertion_error)?;

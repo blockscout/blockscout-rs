@@ -1,6 +1,8 @@
 use crate::conversion::ConversionError;
 use bens_logic::{protocols::ProtocolError, subgraph::SubgraphReadError};
 
+/// `pool` should match the sqlx pool that served the failing path (read replica vs primary) so
+/// pool occupancy logs correlate with the right saturation.
 pub fn map_subgraph_error(err: SubgraphReadError, pool: Option<&sqlx::PgPool>) -> tonic::Status {
     err.log_database_diagnostics(pool);
     match err {

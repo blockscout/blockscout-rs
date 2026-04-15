@@ -36,58 +36,84 @@ pub use sea_orm::{
 
 const DEFAULT_DB: &str = "postgres";
 
+/// When `settings.create_database` is true, connect to the server database and create the
+/// target database if it does not already exist.
+pub async fn ensure_database_exists_if_configured(
+    settings: &DatabaseSettings,
+) -> anyhow::Result<()> {
+    if !settings.create_database {
+        return Ok(());
+    }
+
+    let db_url = settings.connect.clone().url();
+    let (db_base_url, db_name) = {
+        let mut db_url: url::Url = db_url.parse().context("invalid database url")?;
+        let db_name = db_url
+            .path_segments()
+            .and_then(|mut segments| segments.next())
+            .ok_or(anyhow::anyhow!("missing database name"))?
+            .to_string();
+        db_url.set_path("");
+        if db_name.is_empty() {
+            Err(anyhow::anyhow!("database name is empty"))?
+        }
+        (db_url, db_name)
+    };
+    tracing::info!("creating database '{db_name}'");
+    let db_base_url = format!("{db_base_url}/{DEFAULT_DB}");
+
+    let create_database_options = settings.connect_options.apply_to(db_base_url.into());
+    let db = Database::connect(create_database_options).await?;
+
+    let result = db
+        .execute(Statement::from_string(
+            DatabaseBackend::Postgres,
+            format!(r#"CREATE DATABASE "{db_name}""#),
+        ))
+        .await;
+    match result {
+        Ok(_) => {
+            tracing::info!("database '{db_name}' created");
+        }
+        Err(e) => {
+            if e.to_string().contains("already exists") {
+                tracing::info!("database '{db_name}' already exists");
+            } else {
+                return Err(anyhow::anyhow!(e));
+            }
+        }
+    };
+
+    Ok(())
+}
+
+/// Connect to Postgres using `settings` (including optional create-database), without running
+/// SeaORM migrations.
+pub async fn connect_postgres(settings: &DatabaseSettings) -> anyhow::Result<DatabaseConnection> {
+    ensure_database_exists_if_configured(settings).await?;
+    let db_url = settings.connect.clone().url();
+    let connect_options = settings.connect_options.apply_to(db_url.into());
+    Database::connect(connect_options)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// Run SeaORM migrations when `settings.run_migrations` is true.
+pub async fn run_sea_orm_migrations<Migrator: MigratorTrait>(
+    db: &DatabaseConnection,
+    settings: &DatabaseSettings,
+) -> anyhow::Result<()> {
+    if settings.run_migrations {
+        Migrator::up(db, None).await?;
+    }
+    Ok(())
+}
+
 pub async fn initialize_postgres<Migrator: MigratorTrait>(
     settings: &DatabaseSettings,
 ) -> anyhow::Result<DatabaseConnection> {
-    let db_url = settings.connect.clone().url();
-
-    // Create database if not exists
-    if settings.create_database {
-        let (db_base_url, db_name) = {
-            let mut db_url: url::Url = db_url.parse().context("invalid database url")?;
-            let db_name = db_url
-                .path_segments()
-                .and_then(|mut segments| segments.next())
-                .ok_or(anyhow::anyhow!("missing database name"))?
-                .to_string();
-            db_url.set_path("");
-            if db_name.is_empty() {
-                Err(anyhow::anyhow!("database name is empty"))?
-            }
-            (db_url, db_name)
-        };
-        tracing::info!("creating database '{db_name}'");
-        let db_base_url = format!("{db_base_url}/{DEFAULT_DB}");
-
-        let create_database_options = settings.connect_options.apply_to(db_base_url.into());
-        let db = Database::connect(create_database_options).await?;
-
-        let result = db
-            .execute(Statement::from_string(
-                DatabaseBackend::Postgres,
-                format!(r#"CREATE DATABASE "{db_name}""#),
-            ))
-            .await;
-        match result {
-            Ok(_) => {
-                tracing::info!("database '{db_name}' created");
-            }
-            Err(e) => {
-                if e.to_string().contains("already exists") {
-                    tracing::info!("database '{db_name}' already exists");
-                } else {
-                    return Err(anyhow::anyhow!(e));
-                }
-            }
-        };
-    }
-
-    let connect_options = settings.connect_options.apply_to(db_url.into());
-    let db = Database::connect(connect_options).await?;
-    if settings.run_migrations {
-        Migrator::up(&db, None).await?;
-    }
-
+    let db = connect_postgres(settings).await?;
+    run_sea_orm_migrations::<Migrator>(&db, settings).await?;
     Ok(db)
 }
 
@@ -96,32 +122,51 @@ pub struct ReadWriteRepo {
     replica_db: Option<ReplicaRepo>,
 }
 
+async fn connect_replica_repo(settings: &ReplicaDatabaseSettings) -> anyhow::Result<ReplicaRepo> {
+    let db_url = settings.connect.clone().url();
+    let connect_options = settings.connect_options.apply_to(db_url.into());
+    let db = Database::connect(connect_options)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let replica_db = ReplicaRepo::new(db, settings.max_lag, settings.health_check_interval);
+    replica_db.spawn_health_check();
+    Ok(replica_db)
+}
+
+async fn maybe_connect_replica_repo(
+    settings: Option<&ReplicaDatabaseSettings>,
+) -> anyhow::Result<Option<ReplicaRepo>> {
+    let Some(settings) = settings else {
+        return Ok(None);
+    };
+    let repo = connect_replica_repo(settings)
+        .await
+        .context("failed to connect to read replica")?;
+    Ok(Some(repo))
+}
+
 impl ReadWriteRepo {
     pub async fn new<Migrator: MigratorTrait>(
         main_db_settings: &DatabaseSettings,
         replica_db_settings: Option<&ReplicaDatabaseSettings>,
     ) -> anyhow::Result<Self> {
         let main_db = initialize_postgres::<Migrator>(main_db_settings).await?;
-        let replica_db = if let Some(settings) = replica_db_settings {
-            let db_url = settings.connect.clone().url();
-            let connect_options = settings.connect_options.apply_to(db_url.into());
-            Database::connect(connect_options)
-                .await
-                .inspect_err(|err| {
-                    tracing::warn!(
-                        err = ?err,
-                        "failed to connect to read db, connection will not be retried; fallback to write db"
-                    )
-                })
-                .ok()
-                .map(|db| {
-                    let replica_db = ReplicaRepo::new(db, settings.max_lag, settings.health_check_interval);
-                    replica_db.spawn_health_check();
-                    replica_db
-                })
-        } else {
-            None
-        };
+        let replica_db = maybe_connect_replica_repo(replica_db_settings).await?;
+        Ok(Self {
+            main_db,
+            replica_db,
+        })
+    }
+
+    /// Primary plus optional read replica, same as [`Self::new`], but **no** SeaORM migrations on
+    /// the primary (only [`connect_postgres`]). Use when the service runs migrations elsewhere
+    /// (for example `sqlx` against the primary pool).
+    pub async fn new_no_migrations(
+        main_db_settings: &DatabaseSettings,
+        replica_db_settings: Option<&ReplicaDatabaseSettings>,
+    ) -> anyhow::Result<Self> {
+        let main_db = connect_postgres(main_db_settings).await?;
+        let replica_db = maybe_connect_replica_repo(replica_db_settings).await?;
         Ok(Self {
             main_db,
             replica_db,
@@ -342,6 +387,16 @@ pub struct DatabaseConnectOptionsSettings {
     /// be created using SQLx's [connect_lazy](https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#method.connect_lazy)
     /// method.
     pub connect_lazy: bool,
+    #[cfg(feature = "database-1")]
+    /// PostgreSQL [`application_name`](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-APPLICATION-NAME)
+    /// for connections in this pool (via `PgConnectOptions`).
+    #[serde(default)]
+    pub postgres_application_name: Option<String>,
+    #[cfg(feature = "database-1")]
+    /// PostgreSQL `statement_timeout` startup option (e.g. `"60s"`, `"60000"` ms). See
+    /// [`PgConnectOptions::options`](https://docs.rs/sqlx/latest/sqlx/postgres/struct.PgConnectOptions.html#method.options).
+    #[serde(default)]
+    pub postgres_statement_timeout: Option<String>,
 }
 
 impl Default for DatabaseConnectOptionsSettings {
@@ -361,6 +416,10 @@ impl Default for DatabaseConnectOptionsSettings {
             sqlx_slow_statements_logging_threshold: Duration::from_secs(1),
             #[cfg(feature = "database-1")]
             connect_lazy: false,
+            #[cfg(feature = "database-1")]
+            postgres_application_name: None,
+            #[cfg(feature = "database-1")]
+            postgres_statement_timeout: None,
         }
     }
 }
@@ -394,6 +453,22 @@ impl DatabaseConnectOptionsSettings {
         );
         #[cfg(feature = "database-1")]
         options.connect_lazy(self.connect_lazy);
+        #[cfg(feature = "database-1")]
+        {
+            let app = self.postgres_application_name.clone();
+            let st = self.postgres_statement_timeout.clone();
+            if app.is_some() || st.is_some() {
+                options.map_sqlx_postgres_opts(move |mut pg| {
+                    if let Some(ref name) = app {
+                        pg = pg.application_name(name.as_str());
+                    }
+                    if let Some(ref timeout) = st {
+                        pg = pg.options([("statement_timeout", timeout.as_str())]);
+                    }
+                    pg
+                });
+            }
+        }
         options
     }
 }
@@ -411,4 +486,19 @@ where
     S: Serializer,
 {
     s.serialize_str(x.as_str().to_lowercase().as_str())
+}
+
+#[cfg(all(test, feature = "database-1"))]
+mod postgres_connect_options_tests {
+    use super::{ConnectOptions, DatabaseConnectOptionsSettings};
+
+    #[test]
+    fn apply_to_accepts_postgres_session_options() {
+        let settings = DatabaseConnectOptionsSettings {
+            postgres_application_name: Some("launcher_test".into()),
+            postgres_statement_timeout: Some("45s".into()),
+            ..Default::default()
+        };
+        let _opts = settings.apply_to(ConnectOptions::new("postgres://localhost:5432/postgres"));
+    }
 }
