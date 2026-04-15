@@ -122,32 +122,51 @@ pub struct ReadWriteRepo {
     replica_db: Option<ReplicaRepo>,
 }
 
+async fn connect_replica_repo(settings: &ReplicaDatabaseSettings) -> anyhow::Result<ReplicaRepo> {
+    let db_url = settings.connect.clone().url();
+    let connect_options = settings.connect_options.apply_to(db_url.into());
+    let db = Database::connect(connect_options)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let replica_db = ReplicaRepo::new(db, settings.max_lag, settings.health_check_interval);
+    replica_db.spawn_health_check();
+    Ok(replica_db)
+}
+
+async fn maybe_connect_replica_repo(
+    settings: Option<&ReplicaDatabaseSettings>,
+) -> anyhow::Result<Option<ReplicaRepo>> {
+    let Some(settings) = settings else {
+        return Ok(None);
+    };
+    let repo = connect_replica_repo(settings)
+        .await
+        .context("failed to connect to read replica")?;
+    Ok(Some(repo))
+}
+
 impl ReadWriteRepo {
     pub async fn new<Migrator: MigratorTrait>(
         main_db_settings: &DatabaseSettings,
         replica_db_settings: Option<&ReplicaDatabaseSettings>,
     ) -> anyhow::Result<Self> {
         let main_db = initialize_postgres::<Migrator>(main_db_settings).await?;
-        let replica_db = if let Some(settings) = replica_db_settings {
-            let db_url = settings.connect.clone().url();
-            let connect_options = settings.connect_options.apply_to(db_url.into());
-            Database::connect(connect_options)
-                .await
-                .inspect_err(|err| {
-                    tracing::warn!(
-                        err = ?err,
-                        "failed to connect to read db, connection will not be retried; fallback to write db"
-                    )
-                })
-                .ok()
-                .map(|db| {
-                    let replica_db = ReplicaRepo::new(db, settings.max_lag, settings.health_check_interval);
-                    replica_db.spawn_health_check();
-                    replica_db
-                })
-        } else {
-            None
-        };
+        let replica_db = maybe_connect_replica_repo(replica_db_settings).await?;
+        Ok(Self {
+            main_db,
+            replica_db,
+        })
+    }
+
+    /// Primary plus optional read replica, same as [`Self::new`], but **no** SeaORM migrations on
+    /// the primary (only [`connect_postgres`]). Use when the service runs migrations elsewhere
+    /// (for example `sqlx` against the primary pool).
+    pub async fn new_no_migrations(
+        main_db_settings: &DatabaseSettings,
+        replica_db_settings: Option<&ReplicaDatabaseSettings>,
+    ) -> anyhow::Result<Self> {
+        let main_db = connect_postgres(main_db_settings).await?;
+        let replica_db = maybe_connect_replica_repo(replica_db_settings).await?;
         Ok(Self {
             main_db,
             replica_db,
