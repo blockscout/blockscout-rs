@@ -53,6 +53,7 @@ ens-normalize-rs = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+wiremock = { workspace = true }
 
 [[example]]
 name = "resolve_benchmark"

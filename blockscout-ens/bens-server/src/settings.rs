@@ -1,6 +1,9 @@
 use bens_logic::protocols::{AddressResolveTechnique, ProtocolMeta, ProtocolSpecific, Tld};
 use blockscout_service_launcher::{
-    database::{DatabaseConnectSettings, DatabaseSettings, ReplicaDatabaseSettings},
+    database::{
+        DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings,
+        ReplicaDatabaseSettings,
+    },
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -139,7 +142,11 @@ impl Settings {
             subgraphs_reader: Default::default(),
             database: DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
-                connect_options: Default::default(),
+                connect_options: DatabaseConnectOptionsSettings {
+                    postgres_application_name: Some("BENS".into()),
+                    postgres_statement_timeout: Some("60s".into()),
+                    ..Default::default()
+                },
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             },

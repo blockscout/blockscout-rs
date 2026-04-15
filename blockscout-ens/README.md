@@ -40,6 +40,9 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 | `BENS__TRACING__ENABLED`                         |                          |                                                               | `true`         |
 | `BENS__TRACING__FORMAT`                          |                          |                                                               | `default`      |
 | `BENS__SUBGRAPHS_READER__REFRESH_CACHE_DISABLED` |                          |                                                               | `false`        |
+| `BENS__REPLICA_DATABASE__CONNECT__URL`           | true                     | e.g. `postgresql://postgres:postgres@localhost:5433/postgres` |                |
+| `BENS__REPLICA_DATABASE__HEALTH_CHECK_INTERVAL`  |                          |                                                               | `10`           |
+| `BENS__REPLICA_DATABASE__MAX_LAG`                |                          |                                                               | `300`          |
 
 [anchor]: <> (anchors.envs.end.envs_main)
 

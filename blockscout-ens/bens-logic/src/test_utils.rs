@@ -167,9 +167,13 @@ pub async fn mocked_networks_and_protocols(
 }
 
 pub async fn mocked_reader(pool: PgPool) -> SubgraphReader {
-    let _ = pool;
-    let database_url =
+    let options = pool.connect_options();
+    let database = options
+        .get_database()
+        .expect("sqlx test pool must have a database");
+    let database_url_no_database =
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for sqlx tests");
+    let database_url = format!("{database_url_no_database}/{}", database);
     let settings = DatabaseSettings {
         connect: DatabaseConnectSettings::Url(database_url),
         connect_options: Default::default(),

@@ -3,5 +3,10 @@
         "connect": {
             "url": "postgresql://postgres:postgres@localhost:5432/postgres"
         }
+    },
+    "replica_database": {
+        "connect": {
+            "url": "postgresql://postgres:postgres@localhost:5433/postgres"
+        }
     }
 }

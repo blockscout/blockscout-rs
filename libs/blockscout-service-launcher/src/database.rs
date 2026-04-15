@@ -387,6 +387,16 @@ pub struct DatabaseConnectOptionsSettings {
     /// be created using SQLx's [connect_lazy](https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#method.connect_lazy)
     /// method.
     pub connect_lazy: bool,
+    #[cfg(feature = "database-1")]
+    /// PostgreSQL [`application_name`](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-APPLICATION-NAME)
+    /// for connections in this pool (via `PgConnectOptions`).
+    #[serde(default)]
+    pub postgres_application_name: Option<String>,
+    #[cfg(feature = "database-1")]
+    /// PostgreSQL `statement_timeout` startup option (e.g. `"60s"`, `"60000"` ms). See
+    /// [`PgConnectOptions::options`](https://docs.rs/sqlx/latest/sqlx/postgres/struct.PgConnectOptions.html#method.options).
+    #[serde(default)]
+    pub postgres_statement_timeout: Option<String>,
 }
 
 impl Default for DatabaseConnectOptionsSettings {
@@ -406,6 +416,10 @@ impl Default for DatabaseConnectOptionsSettings {
             sqlx_slow_statements_logging_threshold: Duration::from_secs(1),
             #[cfg(feature = "database-1")]
             connect_lazy: false,
+            #[cfg(feature = "database-1")]
+            postgres_application_name: None,
+            #[cfg(feature = "database-1")]
+            postgres_statement_timeout: None,
         }
     }
 }
@@ -439,6 +453,22 @@ impl DatabaseConnectOptionsSettings {
         );
         #[cfg(feature = "database-1")]
         options.connect_lazy(self.connect_lazy);
+        #[cfg(feature = "database-1")]
+        {
+            let app = self.postgres_application_name.clone();
+            let st = self.postgres_statement_timeout.clone();
+            if app.is_some() || st.is_some() {
+                options.map_sqlx_postgres_opts(move |mut pg| {
+                    if let Some(ref name) = app {
+                        pg = pg.application_name(name.as_str());
+                    }
+                    if let Some(ref timeout) = st {
+                        pg = pg.options([("statement_timeout", timeout.as_str())]);
+                    }
+                    pg
+                });
+            }
+        }
         options
     }
 }
@@ -456,4 +486,19 @@ where
     S: Serializer,
 {
     s.serialize_str(x.as_str().to_lowercase().as_str())
+}
+
+#[cfg(all(test, feature = "database-1"))]
+mod postgres_connect_options_tests {
+    use super::{ConnectOptions, DatabaseConnectOptionsSettings};
+
+    #[test]
+    fn apply_to_accepts_postgres_session_options() {
+        let settings = DatabaseConnectOptionsSettings {
+            postgres_application_name: Some("launcher_test".into()),
+            postgres_statement_timeout: Some("45s".into()),
+            ..Default::default()
+        };
+        let _opts = settings.apply_to(ConnectOptions::new("postgres://localhost:5432/postgres"));
+    }
 }
