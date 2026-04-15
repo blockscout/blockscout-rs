@@ -153,7 +153,13 @@ pub async fn list_stats_chains(
 
     let reverse_results = matches!(query_direction, PaginationDirection::Prev);
 
-    let q_pattern = q.map(|s| format!("%{s}%"));
+    let q_pattern = q.map(|s| {
+        let escaped = s
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        format!("%{escaped}%")
+    });
 
     let mut values: Vec<Value> = Vec::new();
     let where_in = if chain_ids.is_empty() {
@@ -172,12 +178,12 @@ pub async fn list_stats_chains(
         let ph = values.len() + 1;
         let clause = if where_in.is_empty() {
             format!(
-                "WHERE (c.name ILIKE ${ph} OR CAST(c.id AS TEXT) ILIKE ${ph})",
+                "WHERE (c.name ILIKE ${ph} ESCAPE '\\' OR CAST(c.id AS TEXT) ILIKE ${ph} ESCAPE '\\')",
                 ph = ph
             )
         } else {
             format!(
-                " AND (c.name ILIKE ${ph} OR CAST(c.id AS TEXT) ILIKE ${ph})",
+                " AND (c.name ILIKE ${ph} ESCAPE '\\' OR CAST(c.id AS TEXT) ILIKE ${ph} ESCAPE '\\')",
                 ph = ph
             )
         };

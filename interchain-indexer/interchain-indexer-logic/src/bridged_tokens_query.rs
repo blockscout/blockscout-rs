@@ -308,7 +308,13 @@ pub async fn list_bridged_token_stats_for_chain(
 
     let reverse_results = matches!(query_direction, PaginationDirection::Prev);
 
-    let q_pattern = q.map(|s| format!("%{s}%"));
+    let q_pattern = q.map(|s| {
+        let escaped = s
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        format!("%{escaped}%")
+    });
     let q_offset: usize = if q_pattern.is_some() { 1 } else { 0 };
 
     let (where_extra, order_clause, cursor_vals) = if last_page {
@@ -343,7 +349,7 @@ pub async fn list_bridged_token_stats_for_chain(
     let mut name_filter_sql = String::new();
     if let Some(pat) = q_pattern {
         let ph = all_values.len() + 1;
-        name_filter_sql = format!(" AND a.name ILIKE ${ph}");
+        name_filter_sql = format!(" AND a.name ILIKE ${ph} ESCAPE '\\'");
         all_values.push(Value::String(Some(Box::new(pat))));
     }
     all_values.extend(cursor_vals);
