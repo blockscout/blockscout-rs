@@ -36,58 +36,84 @@ pub use sea_orm::{
 
 const DEFAULT_DB: &str = "postgres";
 
+/// When `settings.create_database` is true, connect to the server database and create the
+/// target database if it does not already exist.
+pub async fn ensure_database_exists_if_configured(
+    settings: &DatabaseSettings,
+) -> anyhow::Result<()> {
+    if !settings.create_database {
+        return Ok(());
+    }
+
+    let db_url = settings.connect.clone().url();
+    let (db_base_url, db_name) = {
+        let mut db_url: url::Url = db_url.parse().context("invalid database url")?;
+        let db_name = db_url
+            .path_segments()
+            .and_then(|mut segments| segments.next())
+            .ok_or(anyhow::anyhow!("missing database name"))?
+            .to_string();
+        db_url.set_path("");
+        if db_name.is_empty() {
+            Err(anyhow::anyhow!("database name is empty"))?
+        }
+        (db_url, db_name)
+    };
+    tracing::info!("creating database '{db_name}'");
+    let db_base_url = format!("{db_base_url}/{DEFAULT_DB}");
+
+    let create_database_options = settings.connect_options.apply_to(db_base_url.into());
+    let db = Database::connect(create_database_options).await?;
+
+    let result = db
+        .execute(Statement::from_string(
+            DatabaseBackend::Postgres,
+            format!(r#"CREATE DATABASE "{db_name}""#),
+        ))
+        .await;
+    match result {
+        Ok(_) => {
+            tracing::info!("database '{db_name}' created");
+        }
+        Err(e) => {
+            if e.to_string().contains("already exists") {
+                tracing::info!("database '{db_name}' already exists");
+            } else {
+                return Err(anyhow::anyhow!(e));
+            }
+        }
+    };
+
+    Ok(())
+}
+
+/// Connect to Postgres using `settings` (including optional create-database), without running
+/// SeaORM migrations.
+pub async fn connect_postgres(settings: &DatabaseSettings) -> anyhow::Result<DatabaseConnection> {
+    ensure_database_exists_if_configured(settings).await?;
+    let db_url = settings.connect.clone().url();
+    let connect_options = settings.connect_options.apply_to(db_url.into());
+    Database::connect(connect_options)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// Run SeaORM migrations when `settings.run_migrations` is true.
+pub async fn run_sea_orm_migrations<Migrator: MigratorTrait>(
+    db: &DatabaseConnection,
+    settings: &DatabaseSettings,
+) -> anyhow::Result<()> {
+    if settings.run_migrations {
+        Migrator::up(db, None).await?;
+    }
+    Ok(())
+}
+
 pub async fn initialize_postgres<Migrator: MigratorTrait>(
     settings: &DatabaseSettings,
 ) -> anyhow::Result<DatabaseConnection> {
-    let db_url = settings.connect.clone().url();
-
-    // Create database if not exists
-    if settings.create_database {
-        let (db_base_url, db_name) = {
-            let mut db_url: url::Url = db_url.parse().context("invalid database url")?;
-            let db_name = db_url
-                .path_segments()
-                .and_then(|mut segments| segments.next())
-                .ok_or(anyhow::anyhow!("missing database name"))?
-                .to_string();
-            db_url.set_path("");
-            if db_name.is_empty() {
-                Err(anyhow::anyhow!("database name is empty"))?
-            }
-            (db_url, db_name)
-        };
-        tracing::info!("creating database '{db_name}'");
-        let db_base_url = format!("{db_base_url}/{DEFAULT_DB}");
-
-        let create_database_options = settings.connect_options.apply_to(db_base_url.into());
-        let db = Database::connect(create_database_options).await?;
-
-        let result = db
-            .execute(Statement::from_string(
-                DatabaseBackend::Postgres,
-                format!(r#"CREATE DATABASE "{db_name}""#),
-            ))
-            .await;
-        match result {
-            Ok(_) => {
-                tracing::info!("database '{db_name}' created");
-            }
-            Err(e) => {
-                if e.to_string().contains("already exists") {
-                    tracing::info!("database '{db_name}' already exists");
-                } else {
-                    return Err(anyhow::anyhow!(e));
-                }
-            }
-        };
-    }
-
-    let connect_options = settings.connect_options.apply_to(db_url.into());
-    let db = Database::connect(connect_options).await?;
-    if settings.run_migrations {
-        Migrator::up(&db, None).await?;
-    }
-
+    let db = connect_postgres(settings).await?;
+    run_sea_orm_migrations::<Migrator>(&db, settings).await?;
     Ok(db)
 }
 
