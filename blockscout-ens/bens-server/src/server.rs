@@ -19,9 +19,12 @@ use bens_proto::blockscout::bens::v1::{
     multichain_domains_server::MultichainDomainsServer,
 };
 use blockscout_endpoint_swagger::route_swagger;
-use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
-use sqlx::{postgres::PgPoolOptions, Executor};
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use blockscout_service_launcher::{
+    database::ReadWriteRepo,
+    launcher,
+    launcher::LaunchSettings,
+};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio_cron_scheduler::JobScheduler;
 
 const SERVICE_NAME: &str = "bens";
@@ -73,43 +76,22 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let database_url = settings.database.connect.url();
-    let pool = Arc::new(
-        PgPoolOptions::new()
-            .max_connections(
-                settings
-                    .database
-                    .connect_options
-                    .max_connections
-                    .unwrap_or(40),
-            )
-            .min_connections(
-                settings
-                    .database
-                    .connect_options
-                    .min_connections
-                    .unwrap_or(1),
-            )
-            // Log via tracing target `sqlx::pool::acquire` when checkout exceeds this threshold.
-            .acquire_slow_threshold(Duration::from_secs(1))
-            .idle_timeout(settings.database.connect_options.idle_timeout)
-            .max_lifetime(settings.database.connect_options.max_lifetime)
-            .after_connect(|conn, _meta| {
-                Box::pin(async move {
-                    conn.execute(format!("SET application_name = '{SERVICE_NAME}';").as_str())
-                        .await?;
-                    conn.execute("SET statement_timeout = '60s';").await?;
-                    Ok(())
-                })
-            })
-            .connect(&database_url)
-            .await
-            .context("database connect")?,
+    let db_repo = Arc::new(
+        ReadWriteRepo::new_no_migrations(
+            &settings.database,
+            settings.replica_database.as_ref(),
+        )
+        .await
+        .context("database read/write repo")?,
     );
-
     if settings.database.run_migrations {
         tracing::info!("running migrations");
-        bens_logic::migrations::run(&pool).await?;
+        bens_logic::migrations::run(
+            db_repo
+                .main_db()
+                .get_postgres_connection_pool(),
+        )
+        .await?;
     }
     let networks = settings
         .subgraphs_reader
@@ -165,7 +147,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         protocols.keys().collect::<Vec<_>>()
     );
 
-    let subgraph_reader = SubgraphReader::initialize(pool, networks, protocols)
+    let subgraph_reader = SubgraphReader::initialize(db_repo.clone(), networks, protocols)
         .await
         .context("failed to initialize subgraph-reader")?;
     let subgraph_reader = Arc::new(subgraph_reader);

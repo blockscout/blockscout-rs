@@ -10,7 +10,7 @@ pub fn refresh_cache_job(
     let job = Job::new_async(schedule, move |_uuid, mut _l| {
         let reader = subgraph_reader.clone();
         Box::pin(async move {
-            let pool = reader.pg_pool();
+            let pool = reader.pg_pool_write();
             tracing::info!(
                 target: "bens.refresh_cache",
                 pool_size = pool.size(),

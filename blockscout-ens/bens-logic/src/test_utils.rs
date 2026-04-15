@@ -3,6 +3,9 @@ use crate::{
     protocols::{EnsLikeProtocol, Network, ProtocolInfo, ProtocolSpecific, Tld},
     subgraph::SubgraphReader,
 };
+use blockscout_service_launcher::database::{
+    DatabaseConnectSettings, DatabaseSettings, ReadWriteRepo,
+};
 use alloy::{
     hex,
     primitives::{TxHash, B256},
@@ -164,9 +167,22 @@ pub async fn mocked_networks_and_protocols(
 }
 
 pub async fn mocked_reader(pool: PgPool) -> SubgraphReader {
-    let pool = Arc::new(pool);
+    let _ = pool;
+    let database_url =
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for sqlx tests");
+    let settings = DatabaseSettings {
+        connect: DatabaseConnectSettings::Url(database_url),
+        connect_options: Default::default(),
+        create_database: false,
+        run_migrations: false,
+    };
+    let db = Arc::new(
+        ReadWriteRepo::new_no_migrations(&settings, None)
+            .await
+            .expect("ReadWriteRepo for tests"),
+    );
     let (networks, protocols) = mocked_networks_and_protocols().await;
-    SubgraphReader::initialize(pool.clone(), networks, protocols)
+    SubgraphReader::initialize(db, networks, protocols)
         .await
         .expect("failed to init reader")
 }

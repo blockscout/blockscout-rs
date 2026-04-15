@@ -11,6 +11,7 @@ alloy-ccip-read = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bigdecimal = { workspace = true }
+blockscout-service-launcher = { workspace = true, features = ["database-1"] }
 cached = { workspace = true, features = [
   "proc_macro",
   "tokio",

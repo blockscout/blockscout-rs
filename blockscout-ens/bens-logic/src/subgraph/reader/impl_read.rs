@@ -60,14 +60,14 @@ impl SubgraphReader {
         let name = DomainNameOnProtocol::from_str(&input.name, protocol)?;
 
         self.patcher
-            .handle_user_domain_names(self.pool.as_ref(), &name)
+            .handle_user_domain_names(self.pg_pool_write(), &name)
             .await?;
         let maybe_domain: Option<DetailedDomain> =
-            sql::get_domain(self.pool.as_ref(), &name, input.only_active).await?;
+            sql::get_domain(self.pg_pool(), &name, input.only_active).await?;
         if let Some(domain) = maybe_domain {
             let domain = self
                 .patcher
-                .patched_detailed_domain(self.pool.clone(), domain, &name);
+                .patched_detailed_domain(Arc::new(self.pg_pool_write().clone()), domain, &name);
             let tokens = extract_tokens_from_domain(&domain, &name)
                 .map_err(|e| anyhow!("failed to extract domain tokens: {e}"))?;
             Ok(Some(GetDomainOutput {
@@ -90,7 +90,7 @@ impl SubgraphReader {
             .deployed_protocol_from_user_input(input.network_id, input.protocol_id.clone())?;
         let name = DomainNameOnProtocol::from_str(&input.name, protocol)?;
         let domain_txns: Vec<DomainEventTransaction> = sql::find_transaction_events(
-            self.pool.as_ref(),
+            self.pg_pool(),
             name.deployed_protocol.protocol,
             &name.inner,
             &input,
@@ -134,12 +134,12 @@ impl SubgraphReader {
         if let sql::FindDomainsInput::Names(names) = &find_domains_input {
             for name in names {
                 self.patcher
-                    .handle_user_domain_names(self.pool.as_ref(), name)
+                    .handle_user_domain_names(self.pg_pool_write(), name)
                     .await?;
             }
         }
         let domains = sql::find_domains(
-            self.pool.as_ref(),
+            self.pg_pool(),
             find_domains_input.clone(),
             input.only_active,
             Some(&input.pagination),
@@ -155,7 +155,7 @@ impl SubgraphReader {
                 }) {
                     return self
                         .patcher
-                        .patched_domain(self.pool.clone(), domain, from_user);
+                        .patched_domain(Arc::new(self.pg_pool_write().clone()), domain, from_user);
                 }
             };
             domain
@@ -178,7 +178,8 @@ impl SubgraphReader {
         let protocols = self
             .protocoler
             .protocols_from_user_input(input.network_id, input.protocols.clone())?;
-        let domains = sql::find_resolved_addresses(self.pool.as_ref(), protocols, &input).await?;
+        let domains =
+            sql::find_resolved_addresses(self.pg_pool(), protocols, &input).await?;
         let output = lookup_output_from_domains(domains, &self.protocoler)?;
         let paginated = input
             .pagination
@@ -198,7 +199,7 @@ impl SubgraphReader {
             .protocoler
             .protocols_from_user_input(input.network_id, input.protocols.clone())?;
         let maybe_domain_name =
-            resolve_addresses(self.pool.as_ref(), protocols, vec![input.address])
+            resolve_addresses(self.pg_pool(), protocols, vec![input.address])
                 .await?
                 .into_iter()
                 .next();
@@ -241,7 +242,7 @@ impl SubgraphReader {
             .protocols_from_user_input(network_id, protocols)?;
         let only_active = true;
         let count = sql::count_domains_by_address(
-            self.pool.as_ref(),
+            self.pg_pool(),
             protocols,
             address,
             only_active,
@@ -272,7 +273,7 @@ impl SubgraphReader {
         // remove duplicates
         let addresses = remove_addresses_from_batch(input.addresses);
         let addresses_len = addresses.len();
-        let result = resolve_addresses(self.pool.as_ref(), protocols, addresses).await?;
+        let result = resolve_addresses(self.pg_pool(), protocols, addresses).await?;
 
         let address_to_name: BTreeMap<Address, String> =
             iter_to_map(result.into_iter().filter_map(|d| {
@@ -881,7 +882,7 @@ mod tests {
 
         // Make sure that database contains unresolved domain
         let domain = sql::get_domain(
-            reader.pool.as_ref(),
+            reader.pg_pool(),
             &DomainNameOnProtocol::from_str(unresolved, protocol)
                 .expect("unresolved name is valid"),
             false,
@@ -913,7 +914,7 @@ mod tests {
         // Make sure that unresolved name in database became resolved
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         let domain = sql::get_domain(
-            reader.pool.as_ref(),
+            reader.pg_pool_write(),
             &DomainNameOnProtocol::from_str(unresolved, protocol)
                 .expect("unresolved name is valid"),
             false,

@@ -45,8 +45,14 @@ sea-orm-migration-0_10 = { package = "sea-orm-migration", version = "0.10", opti
 sea-orm-0_11 = { package = "sea-orm", version = "0.11", optional = true }
 sea-orm-migration-0_11 = { package = "sea-orm-migration", version = "0.11", optional = true }
 
-sea-orm-1 = { package = "sea-orm", version = "1", optional = true }
-sea-orm-migration-1 = { package = "sea-orm-migration", version = "1", optional = true }
+sea-orm-1 = { package = "sea-orm", version = "1", optional = true, features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+] }
+sea-orm-migration-1 = { package = "sea-orm-migration", version = "1", optional = true, features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+] }
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
