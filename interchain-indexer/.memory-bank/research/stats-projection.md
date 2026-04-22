@@ -108,8 +108,9 @@ increments `crosschain_messages.stats_processed` for the counted rows.
 
 There is also a startup backfill path for historical rows:
 
-- when `stats_backfill_on_start = true`, server startup triggers a stats
-  backfill pass
+- when `stats.backfill_on_start = true` (env:
+  `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START=true`), server startup triggers
+  a stats backfill pass
 - the backfill scans canonical rows with `stats_processed = 0`
 - it applies the same projection logic in batches until no eligible rows remain
 

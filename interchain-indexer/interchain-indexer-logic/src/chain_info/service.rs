@@ -180,7 +180,7 @@ impl ChainInfoService {
             let has_name = has_valid_name(&chain);
             let normalized = normalize_chain(chain);
             if has_name {
-                cache.insert(normalized.id as i64, normalized);
+                cache.insert(normalized.id, normalized);
             }
         }
 

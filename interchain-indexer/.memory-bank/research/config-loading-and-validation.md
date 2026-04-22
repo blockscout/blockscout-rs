@@ -71,8 +71,10 @@ Settings                              (deny_unknown_fields)
   ├─ jaeger: JaegerSettings
   ├─ database: DatabaseSettings
   ├─ api: ApiSettings                         (deny_unknown_fields)
-  ├─ stats_backfill_on_start: bool
-  └─ stats_chains_recalculation_period_secs: u64
+  └─ stats: StatsSettings                     (deny_unknown_fields)
+       ├─ backfill_on_start: bool
+       ├─ chains_recalculation_period_secs: u64
+       └─ include_zero_chains: bool
 ```
 
 ### JSON Config Structs

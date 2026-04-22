@@ -19,7 +19,7 @@ use blockscout_service_launcher::{
 };
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
 use interchain_indexer_logic::{
-    ChainInfoService, InterchainDatabase, StatsService, TokenInfoService,
+    ChainInfoService, InterchainDatabase, StatsReadSettings, StatsService, TokenInfoService,
 };
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     interchain_statistics_service_actix::route_interchain_statistics_service,
@@ -118,11 +118,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let stats = Arc::new(StatsService::new(
         db.clone(),
         Some(token_info_service.clone()),
+        StatsReadSettings {
+            include_zero_chains: settings.stats.include_zero_chains,
+        },
     ));
 
-    if settings.stats_backfill_on_start {
+    if settings.stats.backfill_on_start {
         tracing::info!(
-            "stats_backfill_on_start enabled: running statistics projection; async token enrichment will run after each batch outside DB transactions"
+            "stats.backfill_on_start enabled: running statistics projection; async token enrichment will run after each batch outside DB transactions"
         );
         stats
             .backfill_stats_until_idle_with_token_enrichment()
@@ -230,7 +233,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let grpc_router = router.grpc_router();
     let http_router = router;
 
-    let stats_chains_period_secs = settings.stats_chains_recalculation_period_secs;
+    let stats_chains_period_secs = settings.stats.chains_recalculation_period_secs;
     spawn_stats_chains_recalculation_worker(stats.clone(), stats_chains_period_secs);
 
     let launch_settings = LaunchSettings {

@@ -245,12 +245,10 @@ impl InterchainStatisticsServiceImpl {
 
         let rows = if outgoing {
             self.stats
-                .interchain_db()
                 .get_outgoing_message_paths(inner.chain_id, from_date, to_date, counterparty)
                 .await
         } else {
             self.stats
-                .interchain_db()
                 .get_incoming_message_paths(inner.chain_id, from_date, to_date, counterparty)
                 .await
         }

@@ -88,6 +88,7 @@ Produce `implementation-plan-X.md` (X - source solution number) describing:
 - affected layers and their responsibilities
 - end-to-end data flow and control flow changes
 - persistence, API, config, and runtime implications
+- README / generated env documentation implications when ENV or config keys change
 - invariants that must remain true
 - main risks, edge cases, and failure handling expectations
 - validation strategy
@@ -109,6 +110,7 @@ Requirements:
 Prepare the implementation breakdown:
 
 - exact files, modules, schemas, tests, and configs likely to change
+- `README.md` and generated env documentation impact when ENV or config surface changes
 - required migrations, backfills, or rollout ordering
 - dependencies between subtasks
 - validation commands and artifacts to update
@@ -138,6 +140,15 @@ Include:
 - acceptance criteria
 - known risks and watch-outs
 - any remaining blockers or questions
+
+If the approved design adds, removes, renames, or changes ENVs or config keys, the coding handoff
+must explicitly require the implementation agent to:
+
+- run `just check-envs`
+- if `just check-envs` fails, run `just generate-envs`
+- review any generated changes, especially in `README.md`
+- add or refine `README.md` descriptions for new or changed env fields when the generated output is
+  missing or insufficiently descriptive
 
 ### 7. Decide the Outcome Status
 
@@ -179,6 +190,14 @@ Verification guidance in both artifacts must follow the repo testing rules:
 - use `just test` for non-DB tests that do not require a database
 - do not default to raw `cargo test` commands when a repo-native wrapper exists
 - only mention bare `cargo test` when no wrapper applies or when the command is specifically needed for a non-default case
+
+When the planned change affects ENVs or config keys, verification guidance in `coding-task-X.md`
+must also include:
+
+- `just check-envs`
+- `just generate-envs` as the required follow-up when `just check-envs` fails because generated env
+  docs are out of sync
+- a final `README.md` review to ensure new or changed env fields are described clearly when needed
 
 Use this structure:
 
@@ -279,3 +298,12 @@ Use this structure:
 
 [ready for coding | blocked on clarification | blocked on additional codebase research | blocked on product or architectural decision]
 ```
+
+When ENV or config surface changes are in scope, extend the generated `coding-task-X.md` with:
+
+- `README.md` in `Files And Components`
+- an ordered work item to run `just check-envs`, fall back to `just generate-envs` on failure, and
+  review the resulting `README.md` diff
+- a verification entry for `just check-envs`
+- an acceptance criterion that the main `README.md` env documentation is updated for any new or
+  changed fields when needed
