@@ -213,7 +213,8 @@ For detailed message-projection semantics, see `stats-projection.md`.
 
 ### 3. Startup backfill reuses the same projection rules
 
-When `stats_backfill_on_start = true`, startup calls
+When `stats.backfill_on_start = true` (env:
+`INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START=true`), startup calls
 `backfill_stats_until_idle_with_token_enrichment()`.
 
 That method repeatedly runs `backfill_stats_projection_round(...)` until no
@@ -402,6 +403,22 @@ Then:
 - left join from `chains` ensures known chains without a stats row can still be
   returned as `0`
 
+Zero-chain visibility is service-wide and configurable:
+
+- `stats.include_zero_chains` (env:
+  `INTERCHAIN_INDEXER__STATS__INCLUDE_ZERO_CHAINS`), default `true`
+- when `true`: `/stats/chains` and message-path endpoints include known chains
+  from `chains` even when the aggregated stats row is missing or zero
+  - `/stats/chains` keeps its `chains LEFT JOIN stats_chains` shape
+  - message-path endpoints drive the query from `chains` (excluding the
+    selected chain) and left-join `stats_messages` / aggregated
+    `stats_messages_days`
+  - explicit `counterparty_chain_ids` still suppresses synthesized zero rows
+- when `false`: both families return only rows with positive aggregated stats
+  - `/stats/chains` filters `COALESCE(sc.unique_transfer_users_count, 0) > 0`
+    inside the ranked SQL, preserving keyset pagination
+  - message-path endpoints keep their current stats-table-driven behavior
+
 ## Refresh and Recalculation Model
 
 ### Live request-time queries
@@ -456,7 +473,8 @@ Behavior:
 
 Main knob:
 
-- `INTERCHAIN_INDEXER__STATS_CHAINS_RECALCULATION_PERIOD_SECS`
+- `INTERCHAIN_INDEXER__STATS__CHAINS_RECALCULATION_PERIOD_SECS`
+  (`stats.chains_recalculation_period_secs`)
 - default: `3600`
 - `0` disables periodic refresh
 
@@ -464,8 +482,9 @@ Main knob:
 
 ### What startup backfill does
 
-`INTERCHAIN_INDEXER__STATS_BACKFILL_ON_START=true` triggers a startup catch-up
-pass that projects historical canonical rows whose stats were not yet built.
+`INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START=true`
+(`stats.backfill_on_start = true`) triggers a startup catch-up pass that
+projects historical canonical rows whose stats were not yet built.
 
 It is useful when:
 
