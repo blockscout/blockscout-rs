@@ -206,6 +206,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -485,6 +486,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -680,6 +682,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -832,6 +835,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -998,6 +1002,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1174,6 +1179,7 @@ async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> R
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1320,6 +1326,7 @@ async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()>
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1518,6 +1525,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1668,6 +1676,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
     let stats = std::sync::Arc::new(StatsService::new(
         std::sync::Arc::new(interchain_db.clone()),
         None,
+        Default::default(),
     ));
     let indexer = AvalancheIndexer::new(
         stats,

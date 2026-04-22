@@ -118,6 +118,7 @@ fn build_pagination(
 pub async fn list_stats_chains(
     db: &impl ConnectionTrait,
     chain_ids: &[i64],
+    include_zero_chains: bool,
     params: StatsListQuery<'_, StatsChainsSortField, StatsChainsPaginationLogic>,
 ) -> Result<
     (
@@ -162,38 +163,35 @@ pub async fn list_stats_chains(
     });
 
     let mut values: Vec<Value> = Vec::new();
-    let where_in = if chain_ids.is_empty() {
-        String::new()
-    } else {
-        let ph: Vec<String> = (0..chain_ids.len())
+    let mut inner_conditions = Vec::new();
+
+    if !chain_ids.is_empty() {
+        let placeholders: Vec<String> = (0..chain_ids.len())
             .map(|i| format!("${}", i + 1))
             .collect();
         for id in chain_ids {
             values.push(Value::BigInt(Some(*id)));
         }
-        format!("WHERE c.id IN ({})", ph.join(", "))
-    };
+        inner_conditions.push(format!("c.id IN ({})", placeholders.join(", ")));
+    }
 
-    let q_filter = if let Some(pat) = q_pattern {
+    if let Some(pat) = q_pattern {
         let ph = values.len() + 1;
-        let clause = if where_in.is_empty() {
-            format!(
-                "WHERE (c.name ILIKE ${ph} ESCAPE '\\' OR CAST(c.id AS TEXT) ILIKE ${ph} ESCAPE '\\')",
-                ph = ph
-            )
-        } else {
-            format!(
-                " AND (c.name ILIKE ${ph} ESCAPE '\\' OR CAST(c.id AS TEXT) ILIKE ${ph} ESCAPE '\\')",
-                ph = ph
-            )
-        };
+        inner_conditions.push(format!(
+            "(c.name ILIKE ${ph} ESCAPE '\\' OR CAST(c.id AS TEXT) ILIKE ${ph} ESCAPE '\\')",
+        ));
         values.push(Value::String(Some(Box::new(pat))));
-        clause
-    } else {
-        String::new()
-    };
+    }
 
-    let inner_where = format!("{where_in}{q_filter}");
+    if !include_zero_chains {
+        inner_conditions.push("COALESCE(sc.unique_transfer_users_count, 0) > 0".to_string());
+    }
+
+    let inner_where = if inner_conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", inner_conditions.join(" AND "))
+    };
 
     let (where_extra, order_clause, cursor_vals) = if last_page {
         (String::new(), inverse_order_clause(order), Vec::new())
@@ -316,6 +314,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -337,6 +336,91 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database"]
+    async fn stats_chains_disabled_omits_missing_and_zero_rows() {
+        let g = init_db("stats_chains_disabled_zero_filter").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2, 3]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(1, 5, 0).await.unwrap();
+        idb.upsert_stats_chains(2, 0, 0).await.unwrap();
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            false,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            rows.iter().map(|row| row.chain_id).collect::<Vec<_>>(),
+            vec![1]
+        );
+        assert_eq!(rows[0].unique_transfer_users_count, 5);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_disabled_pagination_keeps_filtered_order() {
+        let g = init_db("stats_chains_disabled_pagination").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[10, 11, 12, 13]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(10, 10, 0).await.unwrap();
+        idb.upsert_stats_chains(11, 0, 0).await.unwrap();
+        idb.upsert_stats_chains(12, 10, 0).await.unwrap();
+
+        let (p1, pag1) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            false,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            p1.iter().map(|row| row.chain_id).collect::<Vec<_>>(),
+            vec![10]
+        );
+
+        let (p2, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            false,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: pag1.next_marker,
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            p2.iter().map(|row| row.chain_id).collect::<Vec<_>>(),
+            vec![12]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
     async fn stats_chains_default_desc_by_count() {
         let g = init_db("stats_chains_desc").await;
         let db = g.client();
@@ -349,6 +433,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -380,6 +465,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Asc,
@@ -410,6 +496,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -442,6 +529,7 @@ mod tests {
         let (p1, pag1) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -461,6 +549,7 @@ mod tests {
         let (p2, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -490,6 +579,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[3, 1],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -529,6 +619,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -556,6 +647,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -582,6 +674,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -613,6 +706,7 @@ mod tests {
         let (p1, pag1) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -631,6 +725,7 @@ mod tests {
         let (p2, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -660,6 +755,7 @@ mod tests {
         let (rows, _) = list_stats_chains(
             db.as_ref(),
             &[],
+            true,
             StatsListQuery {
                 sort: StatsChainsSortField::UniqueTransferUsersCount,
                 order: StatsSortOrder::Desc,

@@ -802,7 +802,7 @@ mod tests {
         seed_chains(db.as_ref(), &[1, 2]).await;
         let _ = seed_asset_edges(db.as_ref(), Some("S".into()), vec![(1, 2, 2)]).await;
         let db_arc = std::sync::Arc::new(crate::InterchainDatabase::new(db.clone()));
-        let stats = crate::StatsService::new(db_arc, None);
+        let stats = crate::StatsService::new(db_arc, None, Default::default());
         let (rows, p) = stats
             .get_bridged_tokens_for_chain(
                 1,

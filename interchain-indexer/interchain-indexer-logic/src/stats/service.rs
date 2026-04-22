@@ -25,6 +25,19 @@ pub struct BridgedTokenListRow {
     pub tokens: Vec<BridgedTokenLinkEnriched>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatsReadSettings {
+    pub include_zero_chains: bool,
+}
+
+impl Default for StatsReadSettings {
+    fn default() -> Self {
+        Self {
+            include_zero_chains: true,
+        }
+    }
+}
+
 /// Coordinates stats-related workflows on top of [`InterchainDatabase`].
 ///
 /// Token metadata enrichment is optional: when [`Self::token_info`] is absent, projection and
@@ -35,11 +48,20 @@ pub struct BridgedTokenListRow {
 pub struct StatsService {
     db: Arc<InterchainDatabase>,
     token_info: Option<Arc<TokenInfoService>>,
+    read_settings: StatsReadSettings,
 }
 
 impl StatsService {
-    pub fn new(db: Arc<InterchainDatabase>, token_info: Option<Arc<TokenInfoService>>) -> Self {
-        Self { db, token_info }
+    pub fn new(
+        db: Arc<InterchainDatabase>,
+        token_info: Option<Arc<TokenInfoService>>,
+        read_settings: StatsReadSettings,
+    ) -> Self {
+        Self {
+            db,
+            token_info,
+            read_settings,
+        }
     }
 
     pub fn interchain_db(&self) -> &InterchainDatabase {
@@ -52,6 +74,10 @@ impl StatsService {
 
     pub fn token_info(&self) -> Option<&Arc<TokenInfoService>> {
         self.token_info.as_ref()
+    }
+
+    pub fn read_settings(&self) -> StatsReadSettings {
+        self.read_settings
     }
 
     /// Inline stats projection for finalized batches (same DB transaction as flush).
@@ -170,7 +196,47 @@ impl StatsService {
         OutputPagination<StatsChainsPaginationLogic>,
     )> {
         self.db
-            .list_stats_chains(chain_ids.as_slice(), params)
+            .list_stats_chains(
+                chain_ids.as_slice(),
+                self.read_settings.include_zero_chains,
+                params,
+            )
+            .await
+    }
+
+    pub async fn get_outgoing_message_paths(
+        &self,
+        chain_id: i64,
+        from_date: Option<chrono::NaiveDate>,
+        to_date: Option<chrono::NaiveDate>,
+        counterparty_chain_ids: Option<&[i64]>,
+    ) -> anyhow::Result<Vec<crate::MessagePathStatsRow>> {
+        self.db
+            .get_outgoing_message_paths(
+                chain_id,
+                from_date,
+                to_date,
+                counterparty_chain_ids,
+                self.read_settings.include_zero_chains,
+            )
+            .await
+    }
+
+    pub async fn get_incoming_message_paths(
+        &self,
+        chain_id: i64,
+        from_date: Option<chrono::NaiveDate>,
+        to_date: Option<chrono::NaiveDate>,
+        counterparty_chain_ids: Option<&[i64]>,
+    ) -> anyhow::Result<Vec<crate::MessagePathStatsRow>> {
+        self.db
+            .get_incoming_message_paths(
+                chain_id,
+                from_date,
+                to_date,
+                counterparty_chain_ids,
+                self.read_settings.include_zero_chains,
+            )
             .await
     }
 }
@@ -185,7 +251,7 @@ mod tests {
     async fn kickoff_enrichment_no_token_service_is_noop() {
         let guard = init_db("stats_service_kickoff_no_token").await;
         let db = Arc::new(InterchainDatabase::new(guard.client()));
-        let stats = StatsService::new(db, None);
+        let stats = StatsService::new(db, None, StatsReadSettings::default());
         stats.kickoff_token_enrichment_for_keys(vec![(1, vec![0xab; 20])]);
     }
 }

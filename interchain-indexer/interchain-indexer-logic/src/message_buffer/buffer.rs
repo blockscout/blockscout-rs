@@ -37,7 +37,10 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
     /// on-demand via `get_mut_or_default` / `alter`.
     #[allow(dead_code)] // embedders/tests; production indexer uses [`Self::new_with_stats`]
     pub fn new(db: InterchainDatabase, config: MessageBufferSettings) -> Arc<Self> {
-        Self::new_with_stats(Arc::new(StatsService::new(Arc::new(db), None)), config)
+        Self::new_with_stats(
+            Arc::new(StatsService::new(Arc::new(db), None, Default::default())),
+            config,
+        )
     }
 
     pub fn new_with_stats(stats: Arc<StatsService>, config: MessageBufferSettings) -> Arc<Self> {
@@ -57,7 +60,11 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
         token_info: Option<Arc<TokenInfoService>>,
     ) -> Arc<Self> {
         Self::new_with_stats(
-            Arc::new(StatsService::new(Arc::new(db), token_info)),
+            Arc::new(StatsService::new(
+                Arc::new(db),
+                token_info,
+                Default::default(),
+            )),
             config,
         )
     }

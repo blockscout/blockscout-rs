@@ -29,11 +29,10 @@ acquire_timeout = 10
 create_database = true
 run_migrations = true
 
-# Project pending stats rows at startup (after migrations), before indexers run.
-# stats_backfill_on_start = false
-
-# Full `stats_chains` refresh interval (seconds). Use 0 to disable periodic recompute.
-# stats_chains_recalculation_period_secs = 3600
+[stats]
+# backfill_on_start = false
+# chains_recalculation_period_secs = 3600
+# include_zero_chains = true
 
 [api]
 default_page_size = 50

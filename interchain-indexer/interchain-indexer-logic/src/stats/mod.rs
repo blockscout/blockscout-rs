@@ -6,4 +6,4 @@ mod service;
 
 pub use crate::stats_chains_query::StatsChainListRow;
 pub use list_query::StatsListQuery;
-pub use service::{BridgedTokenListRow, StatsService};
+pub use service::{BridgedTokenListRow, StatsReadSettings, StatsService};
