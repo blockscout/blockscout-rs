@@ -125,7 +125,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     if settings.stats.backfill_on_start {
         tracing::info!(
-            "stats_backfill_on_start enabled: running statistics projection; async token enrichment will run after each batch outside DB transactions"
+            "stats.backfill_on_start enabled: running statistics projection; async token enrichment will run after each batch outside DB transactions"
         );
         stats
             .backfill_stats_until_idle_with_token_enrichment()

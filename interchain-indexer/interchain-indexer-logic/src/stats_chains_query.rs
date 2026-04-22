@@ -184,7 +184,10 @@ pub async fn list_stats_chains(
     }
 
     if !include_zero_chains {
-        inner_conditions.push("COALESCE(sc.unique_transfer_users_count, 0) > 0".to_string());
+        inner_conditions.push(
+            "(COALESCE(sc.unique_transfer_users_count, 0) > 0 OR COALESCE(sc.unique_message_users_count, 0) > 0)"
+                .to_string(),
+        );
     }
 
     let inner_where = if inner_conditions.is_empty() {
