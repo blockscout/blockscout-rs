@@ -415,7 +415,8 @@ Zero-chain visibility is service-wide and configurable:
     `stats_messages_days`
   - explicit `counterparty_chain_ids` still suppresses synthesized zero rows
 - when `false`: both families return only rows with positive aggregated stats
-  - `/stats/chains` filters `COALESCE(sc.unique_transfer_users_count, 0) > 0`
+  - `/stats/chains` filters
+    `COALESCE(sc.unique_transfer_users_count, 0) > 0 OR COALESCE(sc.unique_message_users_count, 0) > 0)`
     inside the ranked SQL, preserving keyset pagination
   - message-path endpoints keep their current stats-table-driven behavior
 

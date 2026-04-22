@@ -201,6 +201,7 @@ LEFT JOIN stats_messages sm
     ON sm.src_chain_id = $1
    AND sm.dst_chain_id = c.id
 WHERE c.id <> $1
+  AND EXISTS (SELECT 1 FROM chains WHERE id = $1)
 ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
 "#
             }
@@ -214,6 +215,7 @@ LEFT JOIN stats_messages sm
     ON sm.src_chain_id = c.id
    AND sm.dst_chain_id = $1
 WHERE c.id <> $1
+  AND EXISTS (SELECT 1 FROM chains WHERE id = $1)
 ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
 "#
             }
@@ -297,6 +299,7 @@ LEFT JOIN (
     GROUP BY dst_chain_id
 ) sm ON sm.dst_chain_id = c.id
 WHERE c.id <> $1
+  AND EXISTS (SELECT 1 FROM chains WHERE id = $1)
 ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
 "#,
                 aggregate_where_parts.join(" AND ")
@@ -315,6 +318,7 @@ LEFT JOIN (
     GROUP BY src_chain_id
 ) sm ON sm.src_chain_id = c.id
 WHERE c.id <> $1
+  AND EXISTS (SELECT 1 FROM chains WHERE id = $1)
 ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
 "#,
                 aggregate_where_parts.join(" AND ")
