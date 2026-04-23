@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    select\n        s.name as \"subgraph_name!\",\n        ds.name as \"schema_name!\",\n        c.net_version::BIGINT as \"net_version!\"\n    from subgraphs.subgraph s\n    left join subgraphs.subgraph_version sv on sv.subgraph = s.id\n    left join public.deployment_schemas ds on sv.deployment = ds.subgraph\n    left join public.chains c on ds.network = c.name\n    order by ds.created_at\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subgraph_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "schema_name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "net_version!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "246910ab70f336c0cc072be9361c66f060d2ee863ed68535df0eaad32ed539f0"
+}

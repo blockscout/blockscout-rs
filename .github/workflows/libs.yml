@@ -2,6 +2,10 @@ on:
   push:
     branches:
       - 'main'
+    paths:
+      - libs/**
+      - .github/workflows/libs.yml
+      - .github/actions/deps/**
   pull_request:
     paths:
       - libs/**
@@ -20,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install deps
         uses: ./.github/actions/deps
@@ -56,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install deps
         uses: ./.github/actions/deps

@@ -1,0 +1,64 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    #################### Messages & Transfers ####################
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetChains
+      get: /api/v1/interchain/chains
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessages
+      get: /api/v1/interchain/messages
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessageDetails
+      get: /api/v1/interchain/messages/{message_id}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessagesByTransaction
+      get: /api/v1/interchain/messages:byTx/{tx_hash}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessagesByAddress
+      get: /api/v1/interchain/messages:byAddress/{address}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfers
+      get: /api/v1/interchain/transfers
+
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfersByTransaction
+      get: /api/v1/interchain/transfers:byTx/{tx_hash}
+    
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetTransfersByAddress
+      get: /api/v1/interchain/transfers:byAddress/{address}
+
+
+    #################### Statistics ####################
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetCommonStatistics
+      get: /api/v1/stats/common
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetDailyStatistics
+      get: /api/v1/stats/daily
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetBridgedTokens
+      get: /api/v1/stats/chain/{chain_id}/bridged-tokens
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetChainsStats
+      get: /api/v1/stats/chains
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetSentMessagePaths
+      get: /api/v1/stats/chain/{chain_id}/messages-paths/sent
+
+    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetReceivedMessagePaths
+      get: /api/v1/stats/chain/{chain_id}/messages-paths/received
+    
+    #################### Health ####################
+
+    - selector: blockscout.interchainIndexer.v1.Health.Check
+      get: /health
+
+    #################### Indexers Status ####################
+
+    - selector: blockscout.interchainIndexer.v1.StatusService.GetFullStatus
+      get: /api/v1/status/indexers
+
+    - selector: blockscout.interchainIndexer.v1.StatusService.GetStatusByIndexerName
+      get: /api/v1/status/indexers/{indexer_name}

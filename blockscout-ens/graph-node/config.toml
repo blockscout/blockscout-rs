@@ -1,0 +1,121 @@
+[general]
+
+[store]
+[store.primary]
+connection = "postgresql://graph-node:let-me-in@postgres:5432/graph-node"
+weight = 1
+pool_size = 50
+
+[deployment]
+[[deployment.rule]]
+shard = "primary"
+indexers = ["default"]
+
+[chains]
+ingestor = "block_ingestor_node"
+
+[chains.mainnet]
+provider = [
+    { label = "mainnet", url = "https://ethereum-rpc.publicnode.com", features = [] }
+]
+shard = "primary"
+
+[chains.sepolia]
+provider = [
+    { label = "sepolia", url = "https://sepolia.gateway.tenderly.co", features = [] }
+]
+shard = "primary"
+
+[chains.gnosis-chiado]
+provider = [
+    { label = "gnosis-chiado", url = "https://rpc.eu-central-2.gateway.fm/v4/gnosis/archival/chiado", features = [] }
+]
+shard = "primary"
+
+[chains.mode-sepolia]
+provider = [
+    { label = "mode-sepolia", url = "https://sepolia.mode.network", features = [] }
+]
+shard = "primary"
+
+[chains.shibarium]
+provider = [
+    { label = "shibarium", url = "https://www.shibrpc.com", features = [] }
+]
+shard = "primary"
+
+[chains.shibarium-testnet]
+provider = [
+    { label = "shibarium-testnet", url = "https://puppynet.shibrpc.com", features = [] }
+]
+shard = "primary"
+
+[chains.ape-mainnet]
+provider = [
+    { label = "ape-mainnet", url = "https://rpc.apechain.com", features = [] }
+]
+shard = "primary"
+
+[chains.ape-testnet]
+provider = [
+    { label = "ape-testnet", url = "https://curtis.rpc.caldera.xyz/http", features = [] }
+]
+shard = "primary"
+
+[chains.story-mainnet]
+provider = [
+    { label = "story-mainnet", url = "https://frequent-hidden-telescope.story-mainnet.quiknode.pro/9934ef7bc4e5bcc89ef9768b5ca2f39fcb937c46", features = [] }
+]
+shard = "primary"
+
+[chains.zeta-mainnet]
+provider = [
+    { label = "zeta-mainnet", url = "https://zeta-chain.drpc.org", features = [] }
+]
+shard = "primary"
+
+[chains.gravity-mainnet]
+provider = [
+    { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
+]
+shard = "primary"
+
+[chains.mint-mainnet]
+provider = [
+    { label = "mint-mainnet", url = "https://rpc.mintchain.io", features = [] }
+]
+shard = "primary"
+[chains.morph-mainnet]
+provider = [
+    { label = "morph-mainnet", url = "https://rpc.morphl2.io", features = [] }
+]
+shard = "primary"
+[chains.manta-mainnet]
+provider = [
+    { label = "manta-mainnet", url = "https://manta-pacific.drpc.org", features = [] }
+]
+shard = "primary"
+[chains.arb-mainnet]
+provider = [
+    { label = "arb-mainnet", url = "https://1rpc.io/arb", features = [] }
+]
+shard = "primary"
+[chains.taiko-mainnet]
+provider = [
+    { label = "taiko-mainnet", url = "https://taiko.drpc.org", features = [] }
+]
+shard = "primary"
+
+
+[chains.unichain-mainnet]
+provider = [
+    { label = "unichain-mainnet", url = "https://rpc.poolz.finance/unichain", features = [] }
+]
+shard = "primary"
+
+[chains."base-mainnet"]
+shard = "primary"
+[[chains."base-mainnet".provider]]
+label    = "base-mainnet"
+url      = "https://base-mainnet-prod-2.node.blockscout.com"
+features = []

@@ -6,14 +6,12 @@ use eth_bytecode_db::verification::{
     VerificationMetadata,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifySourcifyRequest,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::{VerifyResponse, VerifySourcifyRequest},
+    http_client::mock::{MockSourcifyVerifierService, SmartContractVerifierServer},
 };
 use tonic::Response;
-use verification_test_helpers::{
-    smart_contract_veriifer_mock::{MockSourcifyVerifierService, SmartContractVerifierServer},
-    VerifierService,
-};
+use verification_test_helpers::VerifierService;
 
 const DB_PREFIX: &str = "sourcify";
 
@@ -63,4 +61,12 @@ fn service() -> MockSourcifyVerifierService {
 #[ignore = "Needs database to run"]
 async fn returns_valid_source(service: MockSourcifyVerifierService) {
     verification_test_helpers::test_returns_valid_source(DB_PREFIX, service).await
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_inserts_event_descriptions() {
+    verification_test_helpers::test_verification_inserts_event_descriptions(DB_PREFIX, service)
+        .await;
 }

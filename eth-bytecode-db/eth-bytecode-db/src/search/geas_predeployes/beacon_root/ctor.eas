@@ -1,0 +1,12 @@
+;; Copy and return code.
+push @.end - @.start
+dup1
+push @.start
+push0
+codecopy
+push0
+return
+
+.start:
+#assemble "main.eas"
+.end:

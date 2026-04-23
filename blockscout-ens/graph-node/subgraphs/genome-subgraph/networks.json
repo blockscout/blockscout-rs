@@ -1,0 +1,36 @@
+{
+  "gnosis-mainnet": {
+    "Registry": {
+      "address": "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17",
+      "startBlock": 31502166
+    },
+    "Resolver": {
+      "startBlock": 31502299
+    },
+    "RegistrarController": {
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 31502238
+    },
+    "Base": {
+      "address": "0x942fcaf68a0c264d5447b03a2011b395a899f2d3",
+      "startBlock": 31513654
+    }
+  },
+  "gnosis-chiado": {
+    "Registry": {
+      "address": "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17",
+      "startBlock": 7085080
+    },
+    "Resolver": {
+      "startBlock": 7085139
+    },
+    "RegistrarController": {
+      "address": "0xD7b837A0E388B4c25200983bdAa3EF3A83ca86b7",
+      "startBlock": 7085111
+    },
+    "Base": {
+      "address": "0xfd3d666db2557983f3f04d61f90e35cc696f6d60",
+      "startBlock": 7085981
+    }
+  }
+}

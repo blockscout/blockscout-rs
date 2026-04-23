@@ -1,0 +1,229 @@
+-- chains: supported chains list (e.g. Ethereum, Gnosis, Avalanche...)
+CREATE TABLE chains (
+  id            BIGINT PRIMARY KEY, -- the classic EVM chain_id, 8 bytes long
+                                  -- or arbitrary unique number if not applicable
+  name          TEXT NOT NULL UNIQUE,
+  icon          TEXT,
+  explorer      TEXT,
+  custom_routes JSON, -- explorer custom route templates [only when differs from defaults]:
+                      -- { tx: '/tx/{hash}', address: '/address/{hash}', token: '/token/{hash}' }
+
+  created_at  TIMESTAMP DEFAULT now(),
+  updated_at  TIMESTAMP DEFAULT now()
+);
+
+CREATE TYPE bridge_type AS ENUM ('lockmint', 'avalanche_native');
+
+-- bridges: supported bridges list (OmniBridge, LayerZero, Wormhole ...)
+CREATE TABLE bridges (
+  id          SERIAL PRIMARY KEY,
+  name        TEXT NOT NULL UNIQUE,
+  type        bridge_type,  -- lockmint (native, .... TBD)
+  enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+  api_url     TEXT,
+  ui_url      TEXT,
+  docs_url    TEXT,
+  
+  created_at  TIMESTAMP DEFAULT now(),
+  updated_at  TIMESTAMP DEFAULT now()
+);
+
+-- bridge_contracts: bridge contracts per chain (if available)
+CREATE TABLE bridge_contracts (
+  id                BIGSERIAL PRIMARY KEY,
+  bridge_id         INTEGER NOT NULL REFERENCES bridges(id),
+  chain_id          BIGINT NOT NULL REFERENCES chains(id),
+  address           BYTEA NOT NULL,
+  version           SMALLINT NOT NULL DEFAULT 1, -- supporting contract changes
+  abi               JSON, -- optional
+  started_at_block  BIGINT, -- optional, needed to select proper contract for the concrete block
+
+  created_at        TIMESTAMP DEFAULT now(),
+  updated_at        TIMESTAMP DEFAULT now(),
+
+  UNIQUE(bridge_id, chain_id, address, version)
+);
+
+-- tokens: token registry
+CREATE TABLE tokens (
+  chain_id      BIGINT NOT NULL REFERENCES chains(id),
+  address       BYTEA NOT NULL,
+  symbol        TEXT,
+  name          TEXT,
+  token_icon    TEXT,
+  decimals      SMALLINT,
+
+  created_at    TIMESTAMP DEFAULT now(),
+  updated_at    TIMESTAMP DEFAULT now(),
+
+  PRIMARY KEY (chain_id, address)
+);
+
+CREATE TYPE message_status AS ENUM ('initiated', 'completed', 'failed');
+
+-- crosschain_messages: canonical cross-chain messages, constructed by indexer workers during collecting bridge transactions
+-- [!] This table has a padding-optimized field order.
+CREATE TABLE crosschain_messages (
+  created_at            TIMESTAMP DEFAULT now(),
+  updated_at            TIMESTAMP DEFAULT now(),
+  
+  id                    BIGINT NOT NULL,
+  bridge_id             INTEGER NOT NULL REFERENCES bridges(id),
+  status                message_status NOT NULL DEFAULT 'initiated', -- initiated, completed, failed
+  init_timestamp        TIMESTAMP NOT NULL DEFAULT now(), -- when the message appeared in the real world
+                                                          -- (blockchain time), not when indexed.
+                                                          -- This is a sorting criteria so it SHOULD NOT be changed!
+                                                          -- If it's unable to index message originating event,
+                                                          -- the indexer should set the fake timestamp here
+                                                          -- (e.g. when it finalized on the destination blockchain)
+  last_update_timestamp TIMESTAMP DEFAULT now(), -- when the message got his final state in the real world
+                                                 -- (blockchain time), not when indexed.
+  src_chain_id          BIGINT NOT NULL REFERENCES chains(id),
+  dst_chain_id          BIGINT NULL REFERENCES chains(id),
+  native_id             BYTEA,  -- optional native ID
+  src_tx_hash           BYTEA,  -- can be NULL, because we may not index source chain
+  dst_tx_hash           BYTEA,  -- can be NULL, because we may not index destination chain
+  sender_address        BYTEA, -- source address (on src chain)
+  recipient_address     BYTEA, -- destination address (on dst chain)
+  payload               BYTEA, -- raw message payload, bridge-specific fields
+
+  PRIMARY KEY (id, bridge_id)
+);
+
+-- Pagination index: works in the both directions (ascending and descending)
+CREATE INDEX crosschain_messages_pagination_idx
+    ON crosschain_messages (init_timestamp, id, bridge_id);
+
+-- Transaction hash lookups (used for filtering by src_tx_hash OR dst_tx_hash)
+CREATE INDEX crosschain_messages_src_tx_hash_idx
+    ON crosschain_messages (src_tx_hash) 
+    WHERE src_tx_hash IS NOT NULL;
+
+CREATE INDEX crosschain_messages_dst_tx_hash_idx
+    ON crosschain_messages (dst_tx_hash) 
+    WHERE dst_tx_hash IS NOT NULL;
+
+-- Native ID lookup (for messages with IDs > 8 bytes, e.g. Avalanche Teleporter)
+CREATE INDEX crosschain_messages_native_id_idx
+    ON crosschain_messages (native_id) 
+    WHERE native_id IS NOT NULL;
+
+-- Statistics queries: filter by chain IDs with timestamp range
+CREATE INDEX crosschain_messages_src_chain_ts_idx
+    ON crosschain_messages (src_chain_id, init_timestamp);
+
+CREATE INDEX crosschain_messages_dst_chain_ts_idx
+    ON crosschain_messages (dst_chain_id, init_timestamp) 
+    WHERE dst_chain_id IS NOT NULL;
+
+-- Sender/recipient address indexes for multisearch filtering
+CREATE INDEX crosschain_messages_sender_idx
+    ON crosschain_messages (sender_address) 
+    WHERE sender_address IS NOT NULL;
+
+CREATE INDEX crosschain_messages_recipient_idx
+    ON crosschain_messages (recipient_address) 
+    WHERE recipient_address IS NOT NULL;
+
+CREATE TYPE transfer_type AS ENUM ('erc20', 'erc721', 'native', 'erc1155');
+
+-- transfers: semantic transfer records extracted from messages (token transfers)
+-- [!] This table has a padding-optimized field order.
+CREATE TABLE crosschain_transfers (
+  created_at          TIMESTAMP DEFAULT now(),
+  updated_at          TIMESTAMP DEFAULT now(),
+  
+  id                  BIGSERIAL PRIMARY KEY,
+  message_id          BIGINT NOT NULL,
+  bridge_id           INTEGER NOT NULL,
+  index               SMALLINT NOT NULL DEFAULT 0, -- index of the transfer in the message (for messages with multiple transfers)
+  type                transfer_type, -- erc20/erc721/native/erc1155
+  token_src_chain_id  BIGINT NOT NULL REFERENCES chains(id),
+  token_dst_chain_id  BIGINT NOT NULL REFERENCES chains(id),
+  src_amount          NUMERIC(78,0) NOT NULL, -- store raw integer amount
+  dst_amount          NUMERIC(78,0) NOT NULL, -- store raw integer amount
+  token_src_address   BYTEA NOT NULL, -- token contract on token_chain_id
+  token_dst_address   BYTEA NOT NULL, -- token contract on token_chain_id
+  sender_address      BYTEA, -- source address (on src chain)
+  recipient_address   BYTEA, -- destination address (on dst chain)
+  token_ids           NUMERIC(78,0)[], -- for NFTs
+
+  FOREIGN KEY (message_id, bridge_id)
+               REFERENCES crosschain_messages(id, bridge_id)
+               ON DELETE CASCADE,
+
+  UNIQUE (message_id, bridge_id, index)
+);
+
+-- Sender/recipient address indexes for multisearch filtering on transfers
+CREATE INDEX crosschain_transfers_sender_idx
+    ON crosschain_transfers (sender_address) 
+    WHERE sender_address IS NOT NULL;
+
+CREATE INDEX crosschain_transfers_recipient_idx
+    ON crosschain_transfers (recipient_address) 
+    WHERE recipient_address IS NOT NULL;
+
+-- Token address indexes for filtering by token contract
+CREATE INDEX crosschain_transfers_token_src_idx
+    ON crosschain_transfers (token_src_chain_id, token_src_address);
+
+CREATE INDEX crosschain_transfers_token_dst_idx
+    ON crosschain_transfers (token_dst_chain_id, token_dst_address);
+
+-- indexer_checkpoints: for progress tracking per chain/worker
+CREATE TABLE indexer_checkpoints (
+  bridge_id          INTEGER NOT NULL REFERENCES bridges(id),
+  chain_id           BIGINT NOT NULL REFERENCES chains(id),
+  
+  -- sync checkpoints
+  catchup_min_cursor BIGINT NOT NULL,
+  catchup_max_cursor BIGINT NOT NULL,
+  finality_cursor    BIGINT NOT NULL,
+  realtime_cursor    BIGINT NOT NULL,
+  
+  created_at         TIMESTAMP DEFAULT now(),
+  updated_at         TIMESTAMP DEFAULT now(),
+
+  PRIMARY KEY (bridge_id, chain_id)
+);
+
+-- indexer_failures: storing failed intervals for indexer
+CREATE TABLE indexer_failures (
+  id           BIGSERIAL PRIMARY KEY,
+  bridge_id    INTEGER NOT NULL REFERENCES bridges(id),
+  chain_id     BIGINT NOT NULL REFERENCES chains(id),
+  
+  from_block   BIGINT NOT NULL,
+  to_block     BIGINT NOT NULL,
+  attempts     INTEGER NOT NULL DEFAULT 1,
+  reason       TEXT,
+  
+  created_at   TIMESTAMP DEFAULT now(),
+  updated_at   TIMESTAMP DEFAULT now()
+);
+
+-- pending_messages: temporary storage for destination events that arrive before source events
+-- This prevents creating crosschain_messages rows with NULL init_timestamp
+CREATE TABLE pending_messages (
+  message_id   BIGINT NOT NULL,
+  bridge_id    INTEGER NOT NULL REFERENCES bridges(id),
+  payload      JSONB NOT NULL,  -- full event data from destination
+  created_at   TIMESTAMP DEFAULT now(),
+  
+  PRIMARY KEY (message_id, bridge_id)
+);
+
+CREATE INDEX idx_pending_stale ON pending_messages(created_at);
+
+CREATE TABLE avalanche_icm_blockchain_ids (
+  blockchain_id      BYTEA PRIMARY KEY,
+  chain_id           BIGINT NOT NULL REFERENCES chains(id) ON DELETE CASCADE,
+  created_at         TIMESTAMP DEFAULT now(),
+  updated_at         TIMESTAMP DEFAULT now(),
+
+  UNIQUE(chain_id)
+);
+
+COMMENT ON COLUMN avalanche_icm_blockchain_ids.blockchain_id IS
+  '32-byte Avalanche blockchain ID (stored as binary)';

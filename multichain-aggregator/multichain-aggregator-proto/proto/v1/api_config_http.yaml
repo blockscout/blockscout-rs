@@ -1,0 +1,126 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.BatchImport
+      post: /api/v1/import:batch
+      body: "*"
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ImportPoorReputationTokens
+      post: /api/v1/import:poor-reputation-tokens
+      body: "*"
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.QuickSearch
+      get: /api/v1/search:quick
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListAddresses
+      get: /api/v1/addresses
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListTokens
+      get: /api/v1/tokens
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListTransactions
+      get: /api/v1/transactions
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListNfts
+      get: /api/v1/nfts
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListChains
+      get: /api/v1/chains
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDapps
+      get: /api/v1/dapps
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDappChains
+      get: /api/v1/dapps/chains
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDappCategories
+      get: /api/v1/dapps/categories
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDomains
+      get: /api/v1/domains
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListBlockNumbers
+      get: /api/v1/block-numbers
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListBlocks
+      get: /api/v1/blocks
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListTokenUpdates
+      get: /api/v1/tokens/updates
+
+    #################### Cluster Explorer ####################
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListClusterChains
+      get: /api/v1/clusters/{cluster_id}/chains
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListChainMetrics
+      get: /api/v1/clusters/{cluster_id}/chain-metrics
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListInteropMessages
+      get: /api/v1/clusters/{cluster_id}/messages
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetInteropMessage
+      get: /api/v1/clusters/{cluster_id}/messages/{init_chain_id}/{nonce}
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.CountInteropMessages
+      get: /api/v1/clusters/{cluster_id}/messages/count
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetAddress
+      get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetAddressPortfolio
+      get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}/portfolio
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListAddressTokens
+      get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}/tokens
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.LookupAddressDomains
+      get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}/domains
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListClusterTokens
+      get: /api/v1/clusters/{cluster_id}/tokens
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetAggregatedToken
+      get: /api/v1/clusters/{cluster_id}/tokens/{address_hash}
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListTokenHolders
+      get: /api/v1/clusters/{cluster_id}/tokens/{address_hash}/holders
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListDomainProtocols
+      get: /api/v1/clusters/{cluster_id}/domain-protocols
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchAddresses
+      get: /api/v1/clusters/{cluster_id}/search/addresses
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchNfts
+      get: /api/v1/clusters/{cluster_id}/search/nfts
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchTransactions
+      get: /api/v1/clusters/{cluster_id}/search/transactions
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchBlocks
+      get: /api/v1/clusters/{cluster_id}/search/blocks
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchBlockNumbers
+      get: /api/v1/clusters/{cluster_id}/search/block-numbers
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchTokens
+      get: /api/v1/clusters/{cluster_id}/search/tokens
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchDomains
+      get: /api/v1/clusters/{cluster_id}/search/domains
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchDapps
+      get: /api/v1/clusters/{cluster_id}/search/dapps
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.QuickSearch
+      get: /api/v1/clusters/{cluster_id}/search:quick
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.CheckRedirect
+      get: /api/v1/clusters/{cluster_id}/search:check-redirect
+
+    #################### Health ####################
+
+    - selector: blockscout.multichainAggregator.v1.Health.Check
+      get: /health

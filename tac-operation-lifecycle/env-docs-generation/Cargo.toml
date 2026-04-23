@@ -1,0 +1,8 @@
+[package]
+name = "env-docs-generation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "26eed65" }
+tac-operation-lifecycle-server = { path = "../tac-operation-lifecycle-server" }

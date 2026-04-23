@@ -1,51 +1,57 @@
-use super::client::Client;
 use crate::{
-    compiler::Version,
-    verifier::{ContractVerifier, Error, Success},
+    compiler::DetailedVersion, verify, Error, EvmCompilersPool, OnChainContract, SolcCompiler,
+    SolcInput, VerificationResult,
 };
-use bytes::Bytes;
-use ethers_solc::{artifacts::output_selection::OutputSelection, CompilerInput};
-use std::sync::Arc;
+
+type Content = SolcInput;
 
 pub struct VerificationRequest {
-    pub deployed_bytecode: Bytes,
-    pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
-
-    pub content: StandardJsonContent,
+    pub contract: OnChainContract,
+    pub compiler_version: DetailedVersion,
+    pub content: Content,
 }
 
-pub struct StandardJsonContent {
-    pub input: CompilerInput,
-}
+pub async fn verify(
+    compilers: &EvmCompilersPool<SolcCompiler>,
+    request: VerificationRequest,
+) -> Result<VerificationResult, Error> {
+    let to_verify = vec![request.contract];
 
-impl From<StandardJsonContent> for CompilerInput {
-    fn from(content: StandardJsonContent) -> Self {
-        let mut input = content.input;
-
-        // always overwrite output selection as it customizes what compiler outputs and
-        // is not what is returned to the user, but only used internally by our service
-        let output_selection = OutputSelection::default_output_selection();
-        input.settings.output_selection = output_selection;
-
-        input
-    }
-}
-
-pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
-    let compiler_input = CompilerInput::from(request.content);
-    let verifier = ContractVerifier::new(
-        client.compilers(),
+    let results = verify::compile_and_verify(
+        to_verify,
+        compilers,
         &request.compiler_version,
-        request.creation_bytecode,
-        request.deployed_bytecode,
-    )?;
-    let result = verifier.verify(&compiler_input).await;
+        request.content,
+    )
+    .await?;
+    let result = results
+        .into_iter()
+        .next()
+        .expect("we sent exactly one contract to verify");
 
-    // If case of success, we allow middlewares to process success and only then return it to the caller
-    let success = result?;
-    if let Some(middleware) = client.middleware() {
-        middleware.call(&success).await;
-    }
-    Ok(success)
+    Ok(result)
+}
+
+#[derive(Clone, Debug)]
+pub struct BatchVerificationRequest {
+    pub contracts: Vec<OnChainContract>,
+    pub compiler_version: DetailedVersion,
+    pub content: Content,
+}
+
+pub async fn batch_verify(
+    compilers: &EvmCompilersPool<SolcCompiler>,
+    request: BatchVerificationRequest,
+) -> Result<Vec<VerificationResult>, Error> {
+    let to_verify = request.contracts;
+
+    let results = verify::compile_and_verify(
+        to_verify,
+        compilers,
+        &request.compiler_version,
+        request.content,
+    )
+    .await?;
+
+    Ok(results)
 }

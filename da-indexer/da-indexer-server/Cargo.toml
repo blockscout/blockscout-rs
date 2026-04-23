@@ -1,0 +1,26 @@
+[package]
+name = "da-indexer-server"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+actix-web = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+base64 = { workspace = true }
+blockscout-display-bytes = { workspace = true }
+blockscout-endpoint-swagger = { workspace = true }
+blockscout-service-launcher = { workspace = true }
+da-indexer-logic = { workspace = true }
+da-indexer-migration = { workspace = true }
+da-indexer-proto = { workspace = true }
+hex = { workspace = true }
+sea-orm = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = ["test-server", "test-database"] }

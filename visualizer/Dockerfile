@@ -1,18 +1,4 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.63.0 AS chef
-RUN apt-get update && apt-get install -y curl wget unzip
-WORKDIR /app
-
-# Install protoc
-RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip -O ./protoc.zip \
-    && unzip protoc.zip \
-    && mv ./include/* /usr/include/ \
-    && mv ./bin/protoc /usr/bin/protoc
-
-# Install protoc-gen-openapiv2
-RUN wget https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.15.0/protoc-gen-openapiv2-v2.15.0-linux-x86_64 -O ./protoc-gen-openapiv2 \
-        && chmod +x protoc-gen-openapiv2 \
-        && mv ./protoc-gen-openapiv2 /usr/bin/protoc-gen-openapiv2
-
+FROM ghcr.io/blockscout/services-base:latest as chef
 
 FROM chef AS plan
 COPY . .
@@ -22,15 +8,16 @@ FROM chef AS build
 COPY --from=plan /app/recipe.json recipe.json
 # Build dependencies - this is the caching Docker layer!
 RUN cargo chef cook --release --recipe-path recipe.json
+# Include proto common definitions (will be used in a `build-contexts` section)
+COPY --from=proto . /proto
 # Build application
 COPY . .
 RUN cargo build --release
 
 FROM node:16-bullseye-slim
 WORKDIR /usr/src/
-# sol2uml needed phantom which installation needed bzip2
-RUN apt-get update && apt-get install bzip2 \
-    && npm install phantom \
+
+RUN apt-get update && apt-get install -y chromium \
     && npm link sol2uml@2.1 --only=production
 
 COPY --from=build /app/target/release/visualizer-server ./

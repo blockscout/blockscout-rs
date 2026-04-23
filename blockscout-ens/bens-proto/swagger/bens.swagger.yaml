@@ -1,0 +1,900 @@
+swagger: "2.0"
+info:
+  title: Blockscout ENS
+  version: 1.5.0
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
+tags:
+  - name: DomainsExtractor
+  - name: MultichainDomains
+  - name: Health
+host: bens.services.blockscout.com
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/addresses/{address}:
+    get:
+      summary: Get detailed information about main address of requested name
+      operationId: MultichainDomains_GetAddressMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocols
+          description: comma separated list of protocol ids. Default is ENS protocol only
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainDomains
+  /api/v1/addresses:batch-resolve:
+    post:
+      summary: Perform batch resolving of list of addresses to names for blockscout backend requests
+      operationId: MultichainDomains_BatchResolveAddressesMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchResolveAddressNamesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1BatchResolveAddressesMultichainRequest'
+      tags:
+        - MultichainDomains
+  /api/v1/addresses:lookup:
+    get:
+      summary: Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+      operationId: MultichainDomains_LookupAddressMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: address
+          description: Address of EOA or contract
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocols
+          description: comma separated list of protocol ids. Default is ENS protocol only
+          in: query
+          required: false
+          type: string
+        - name: resolved_to
+          description: Include domains resolved to the address
+          in: query
+          required: false
+          type: boolean
+        - name: owned_by
+          description: Include domains owned by the address
+          in: query
+          required: false
+          type: boolean
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: Sorting field. Default is `registration_date`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Defaut is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: page_size
+          description: Optional. Max number of items in single response. Default is 50
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainDomains
+  /api/v1/domains/{name}:
+    get:
+      summary: Get detailed information about name for Detailed name page
+      operationId: MultichainDomains_GetDomainNameMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1DetailedDomain'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          description: Name of name, for example vitalik.eth
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocol_id
+          description: Protocol id of domain, default is first priority protocol on that chain
+          in: query
+          required: false
+          type: string
+        - name: only_active
+          description: Filtering field to remove expired names
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - MultichainDomains
+  /api/v1/domains/{name}/events:
+    get:
+      summary: Get list of events of domain for Detailed domain page
+      operationId: MultichainDomains_ListDomainEventsMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDomainEventsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          description: Name of name, for example vitalik.eth
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocol_id
+          description: Protocol id of domain, default is first priority protocol on that chain
+          in: query
+          required: false
+          type: string
+        - name: sort
+          description: Sorting field. Default is `timestamp`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+      tags:
+        - MultichainDomains
+  /api/v1/domains:lookup:
+    get:
+      summary: Get basic info about name for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+      operationId: MultichainDomains_LookupDomainNameMultichain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupDomainNameResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          description: Optional. Name of domain, for example vitalik.eth. None means lookup for any name
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: protocols
+          description: comma separated list of protocol ids. Default is ENS protocol only
+          in: query
+          required: false
+          type: string
+        - name: only_active
+          description: Filtering field to remove expired names
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: Sorting field. Default is `registration_date`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: page_size
+          description: Optional. Max number of items in single response. Default is 50
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainDomains
+  /api/v1/protocols:
+    get:
+      summary: Get list of supported protocols
+      operationId: MultichainDomains_GetMultichainProtocols
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetProtocolsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where to get protocols
+          in: query
+          required: false
+          type: string
+          format: int64
+      tags:
+        - MultichainDomains
+  /api/v1/{chain_id}/addresses/{address}:
+    get:
+      summary: Get detailed information about main domain of requested address
+      operationId: DomainsExtractor_GetAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: address
+          in: path
+          required: true
+          type: string
+        - name: protocol_id
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/addresses:batch-resolve-names:
+    post:
+      summary: Perform batch resolving of list of address for blockscout backend requests
+      operationId: DomainsExtractor_BatchResolveAddressNames
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchResolveAddressNamesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/DomainsExtractorBatchResolveAddressNamesBody'
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/addresses:lookup:
+    get:
+      summary: Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+      operationId: DomainsExtractor_LookupAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: address
+          description: Address of EOA or contract
+          in: query
+          required: false
+          type: string
+        - name: resolved_to
+          description: Include domains resolved to the address
+          in: query
+          required: false
+          type: boolean
+        - name: owned_by
+          description: Include domains owned by the address
+          in: query
+          required: false
+          type: boolean
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: Sorting field. Default is `registration_date`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Defaut is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: page_size
+          description: Optional. Max number of items in single response. Default is 50
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
+          in: query
+          required: false
+          type: string
+        - name: protocols
+          description: comma separated list of protocol ids to filter by
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/domains/{name}:
+    get:
+      summary: Get detailed information about domain for Detailed domain page
+      operationId: DomainsExtractor_GetDomain
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1DetailedDomain'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: name
+          description: Name of domain, for example vitalik.eth
+          in: path
+          required: true
+          type: string
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
+        - name: protocol_id
+          description: Protocol id of domain, default is first priority protocol on that chain
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/domains/{name}/events:
+    get:
+      summary: Get list of events of domain for Detailed domain page
+      operationId: DomainsExtractor_ListDomainEvents
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDomainEventsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: name
+          description: Name of domain, for example vitalik.eth
+          in: path
+          required: true
+          type: string
+        - name: sort
+          description: Sorting field. Default is `timestamp`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: protocol_id
+          description: Protocol id of domain, default is first priority protocol on that chain
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/domains:lookup:
+    get:
+      summary: Get basic info about domain for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+      operationId: DomainsExtractor_LookupDomainName
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1LookupDomainNameResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where domain search should be done
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: name
+          description: Optional. Name of domain, for example vitalik.eth. None means lookup for any name
+          in: query
+          required: false
+          type: string
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: Sorting field. Default is `registration_date`
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: Order direction. Default is DESC
+          in: query
+          required: false
+          type: string
+          enum:
+            - ORDER_UNSPECIFIED
+            - ASC
+            - DESC
+          default: ORDER_UNSPECIFIED
+        - name: page_size
+          description: Optional. Max number of items in single response. Default is 50
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          description: Optional. Value of `.pagination.page_token` from previous response
+          in: query
+          required: false
+          type: string
+        - name: protocols
+          description: comma separated list of protocol ids to filter by
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
+  /api/v1/{chain_id}/protocols:
+    get:
+      summary: Get list of supported protocols
+      operationId: DomainsExtractor_GetProtocols
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetProtocolsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          description: The chain (network) where to get protocols
+          in: path
+          required: true
+          type: string
+          format: int64
+      tags:
+        - DomainsExtractor
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  DomainsExtractorBatchResolveAddressNamesBody:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: string
+        title: List of requested addresses
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1Address:
+    type: object
+    properties:
+      hash:
+        type: string
+      ens_domain_name:
+        type: string
+        title: Optional. ENS name of the sender (resolved from hash)
+  v1BatchResolveAddressNamesResponse:
+    type: object
+    properties:
+      names:
+        type: object
+        additionalProperties:
+          type: string
+  v1BatchResolveAddressesMultichainRequest:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: string
+        title: List of requested addresses
+      chain_id:
+        type: string
+        format: int64
+        title: The chain (network) where domain search should be done
+      protocols:
+        type: string
+        title: comma separated list of protocol ids. Default is ENS protocol only
+  v1DetailedDomain:
+    type: object
+    properties:
+      id:
+        type: string
+        title: Unique id for the domain, also known as nodehash
+      name:
+        type: string
+        title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+        title: List of NFT tokens related to this domain
+      owner:
+        $ref: '#/definitions/v1Address'
+        title: The account that owns the domain
+      resolved_address:
+        $ref: '#/definitions/v1Address'
+        title: Optional. Resolved address of this domain
+      registrant:
+        $ref: '#/definitions/v1Address'
+        title: Optional. The account that owns the ERC721 NFT for the domain
+      wrapped_owner:
+        $ref: '#/definitions/v1Address'
+        title: Optional. Owner of NameWrapper NFT
+      registration_date:
+        type: string
+        description: Optional. RFC 3339 datetime  of expiry date.
+      expiry_date:
+        type: string
+        title: Optional. RFC 3339 datetime  of expiry date. None means never expires
+      other_addresses:
+        type: object
+        additionalProperties:
+          type: string
+        title: |-
+          Map chain -> resolved_address that contains other blockchain addresses.
+          This map will contain `current_chain_id` -> `resovled_address` if `resovled_address` is not None
+      protocol:
+        $ref: '#/definitions/v1ProtocolInfo'
+        title: Information about protocol that domain belongs to
+      stored_offchain:
+        type: boolean
+      resolved_with_wildcard:
+        type: boolean
+      resolver_address:
+        $ref: '#/definitions/v1Address'
+  v1Domain:
+    type: object
+    properties:
+      id:
+        type: string
+        title: Unique id for the domain, also known as nodehash
+      name:
+        type: string
+        title: The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)
+      resolved_address:
+        $ref: '#/definitions/v1Address'
+        title: Optional. Resolved address of this domain
+      owner:
+        $ref: '#/definitions/v1Address'
+        title: The account that owns the domain
+      wrapped_owner:
+        $ref: '#/definitions/v1Address'
+        title: Optional. Owner of NameWrapper NFT
+      registration_date:
+        type: string
+        description: Optional. RFC 3339 datetime of expiry date.
+      expiry_date:
+        type: string
+        title: Optional. RFC 3339 datetime  of expiry date. None means never expires
+      protocol:
+        $ref: '#/definitions/v1ProtocolInfo'
+        title: Protocol that domain belongs to
+  v1DomainEvent:
+    type: object
+    properties:
+      transaction_hash:
+        type: string
+        title: Transaction hash where action occured
+      timestamp:
+        type: string
+        title: Timestamp of this transaction
+      from_address:
+        $ref: '#/definitions/v1Address'
+        title: /Sender of transaction
+      action:
+        type: string
+        title: Optional. Action name
+  v1GetAddressResponse:
+    type: object
+    properties:
+      domain:
+        $ref: '#/definitions/v1DetailedDomain'
+      resolved_domains_count:
+        type: integer
+        format: int32
+  v1GetProtocolsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ProtocolInfo'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1ListDomainEventsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1DomainEvent'
+  v1LookupAddressResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
+        title: |-
+          List of domains that resolved to or owned by requested address
+          Sorted by relevance, so first address could be displayed as main resolved address
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1LookupDomainNameResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
+        title: |-
+          List of domains that resolved to or owned by requested address
+          Sorted by relevance, so first address could be displayed as main resolved address
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1Order:
+    type: string
+    enum:
+      - ORDER_UNSPECIFIED
+      - ASC
+      - DESC
+    default: ORDER_UNSPECIFIED
+  v1Pagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+      page_size:
+        type: integer
+        format: int64
+  v1ProtocolInfo:
+    type: object
+    properties:
+      id:
+        type: string
+      short_name:
+        type: string
+      title:
+        type: string
+      description:
+        type: string
+      deployment_blockscout_base_url:
+        type: string
+      tld_list:
+        type: array
+        items:
+          type: string
+      icon_url:
+        type: string
+      docs_url:
+        type: string
+  v1Token:
+    type: object
+    properties:
+      id:
+        type: string
+      contract_hash:
+        type: string
+      type:
+        $ref: '#/definitions/v1TokenType'
+  v1TokenType:
+    type: string
+    enum:
+      - NATIVE_DOMAIN_TOKEN
+      - WRAPPED_DOMAIN_TOKEN
+    default: NATIVE_DOMAIN_TOKEN
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs

@@ -1,0 +1,74 @@
+//! Active bundlers on each day.
+
+use std::{collections::HashSet, ops::Range};
+
+use crate::chart_prelude::*;
+
+use blockscout_db::entity::user_operations;
+
+use super::count_distinct_in_user_ops;
+
+pub struct ActiveBundlersStatement;
+impl_db_choice!(ActiveBundlersStatement, UsePrimaryDB);
+
+impl StatementFromRange for ActiveBundlersStatement {
+    fn get_statement(
+        range: Option<Range<DateTime<Utc>>>,
+        _completed_migrations: &IndexerMigrations,
+        _: &HashSet<ChartKey>,
+    ) -> Statement {
+        count_distinct_in_user_ops(user_operations::Column::Bundler.into_column_ref(), range)
+    }
+}
+
+pub type ActiveBundlersRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<ActiveBundlersStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
+>;
+
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "activeBundlers".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
+            .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed)
+    }
+}
+
+pub type ActiveBundlers =
+    DirectVecLocalDbChartSource<ActiveBundlersRemote, Batch30Days, Properties>;
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::simple_test::simple_test_chart;
+
+    use super::ActiveBundlers;
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_active_bundlers() {
+        simple_test_chart::<ActiveBundlers>(
+            "update_active_bundlers",
+            vec![
+                ("2022-11-09", "1"),
+                ("2022-11-10", "2"),
+                ("2022-11-11", "2"),
+                ("2022-11-12", "1"),
+                ("2022-12-01", "1"),
+                ("2023-02-01", "1"),
+            ],
+        )
+        .await;
+    }
+}

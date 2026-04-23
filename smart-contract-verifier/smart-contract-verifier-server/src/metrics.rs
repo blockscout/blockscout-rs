@@ -5,13 +5,13 @@ lazy_static! {
     pub static ref VERIFICATION: IntCounterVec = register_int_counter_vec!(
         "smart_contract_verifier_verify_contract",
         "number of contract verifications",
-        &["language", "endpoint", "status"],
+        &["chain_id", "language", "endpoint", "status"],
     )
     .unwrap();
 }
 
-pub fn count_verify_contract(language: &str, status: &str, method: &str) {
+pub fn count_verify_contract(chain_id: &str, language: &str, status: &str, method: &str) {
     VERIFICATION
-        .with_label_values(&[language, method, status])
+        .with_label_values(&[chain_id, language, method, status])
         .inc();
 }

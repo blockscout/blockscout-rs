@@ -1,58 +1,124 @@
-use migration::MigratorTrait;
-use sea_orm::{prelude::*, ConnectionTrait, Database, Statement};
-use std::{collections::HashSet, sync::Mutex};
-use url::Url;
+use blockscout_service_launcher::test_database::TestDbGuard;
 
-pub async fn init_db<M: MigratorTrait>(name: &str, db_url: Option<String>) -> DatabaseConnection {
-    lazy_static::lazy_static! {
-        static ref DB_NAMES: Mutex<HashSet<String>> = Default::default();
+// TODO: When interchain-indexer will be merged into the main branch, rework this approach.
+// The interchain indexer DB schema is not in the current branch, so we define a local migrator
+// here that creates only the crosschain_messages table for tests. Once the indexer crate is
+// available, use its Migrator (e.g. TestDbGuard::new::<interchain_indexer_migration::Migrator>)
+// and remove this module.
+
+mod interchain_migrator {
+    use sea_orm::Statement;
+    use sea_orm_migration::prelude::*;
+
+    #[derive(DeriveMigrationName)]
+    pub struct Migration;
+
+    #[async_trait::async_trait]
+    impl MigrationTrait for Migration {
+        async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    manager.get_database_backend(),
+                    r#"
+                    CREATE TABLE crosschain_messages (
+                        id BIGSERIAL PRIMARY KEY,
+                        init_timestamp TIMESTAMPTZ NOT NULL,
+                        src_chain_id BIGINT NOT NULL,
+                        dst_chain_id BIGINT NOT NULL,
+                        src_tx_hash BYTEA,
+                        dst_tx_hash BYTEA
+                    )
+                    "#
+                    .to_string(),
+                ))
+                .await?;
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    manager.get_database_backend(),
+                    r#"
+                    CREATE TABLE crosschain_transfers (
+                        id BIGSERIAL PRIMARY KEY,
+                        message_id BIGINT NOT NULL REFERENCES crosschain_messages(id),
+                        sender_address BYTEA,
+                        recipient_address BYTEA
+                    )
+                    "#
+                    .to_string(),
+                ))
+                .await?;
+            Ok(())
+        }
+
+        async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    manager.get_database_backend(),
+                    "DROP TABLE IF EXISTS crosschain_transfers".to_string(),
+                ))
+                .await?;
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    manager.get_database_backend(),
+                    "DROP TABLE IF EXISTS crosschain_messages".to_string(),
+                ))
+                .await?;
+            Ok(())
+        }
     }
 
-    let db_not_created = {
-        let mut guard = DB_NAMES.lock().unwrap();
-        guard.insert(name.to_owned())
-    };
-    assert!(db_not_created, "db with name {name} already was created",);
+    pub struct MigratorInterchain;
 
-    let db_url =
-        db_url.unwrap_or_else(|| std::env::var("DATABASE_URL").expect("no DATABASE_URL env"));
-    let url = Url::parse(&db_url).expect("unvalid database url");
-    let db_url = url.join("/").unwrap().to_string();
-    let raw_conn = Database::connect(db_url)
-        .await
-        .expect("failed to connect to postgres");
-
-    raw_conn
-        .execute(Statement::from_string(
-            sea_orm::DatabaseBackend::Postgres,
-            format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)",),
-        ))
-        .await
-        .expect("failed to drop test database");
-    raw_conn
-        .execute(Statement::from_string(
-            sea_orm::DatabaseBackend::Postgres,
-            format!("CREATE DATABASE {name}",),
-        ))
-        .await
-        .expect("failed to create test database");
-
-    let db_url = url.join(&format!("/{name}")).unwrap().to_string();
-    let conn = Database::connect(db_url.clone())
-        .await
-        .expect("failed to connect to test db");
-    M::up(&conn, None).await.expect("failed to run migrations");
-
-    conn
+    #[async_trait::async_trait]
+    impl MigratorTrait for MigratorInterchain {
+        fn migrations() -> Vec<Box<dyn MigrationTrait>> {
+            vec![Box::new(Migration)]
+        }
+    }
 }
 
-pub async fn init_db_all(
-    name: &str,
-    db_url: Option<String>,
-) -> (DatabaseConnection, DatabaseConnection) {
-    let db = init_db::<migration::Migrator>(name, db_url.clone()).await;
-    let blockscout =
-        init_db::<blockscout_db::migration::Migrator>(&(name.to_owned() + "_blockscout"), db_url)
-            .await;
+pub async fn init_db_all(name: &str) -> (TestDbGuard, TestDbGuard) {
+    let db = init_db(name).await;
+    let blockscout = init_db_blockscout(name).await;
     (db, blockscout)
+}
+
+pub async fn init_db_all_multichain(name: &str) -> (TestDbGuard, TestDbGuard) {
+    let db = init_db(name).await;
+    let multichain = init_db_multichain(name).await;
+    (db, multichain)
+}
+
+pub async fn init_db(name: &str) -> TestDbGuard {
+    TestDbGuard::new::<migration::Migrator>(name).await
+}
+
+pub async fn init_db_blockscout(name: &str) -> TestDbGuard {
+    TestDbGuard::new::<blockscout_db::migration::Migrator>(&(name.to_owned() + "_blockscout")).await
+}
+
+pub async fn init_db_multichain(name: &str) -> TestDbGuard {
+    TestDbGuard::new::<multichain_aggregator_migration::Migrator>(
+        &(name.to_owned() + "_multichain"),
+    )
+    .await
+}
+
+pub async fn init_db_zetachain_cctx(name: &str) -> TestDbGuard {
+    TestDbGuard::new::<zetachain_cctx_migration::Migrator>(&(name.to_owned() + "_zetachain_cctx"))
+        .await
+}
+
+pub async fn init_db_interchain(name: &str) -> TestDbGuard {
+    TestDbGuard::new::<interchain_migrator::MigratorInterchain>(&(name.to_owned() + "_interchain"))
+        .await
+}
+
+pub async fn init_db_all_interchain(name: &str) -> (TestDbGuard, TestDbGuard) {
+    let db = init_db(name).await;
+    let interchain = init_db_interchain(name).await;
+    (db, interchain)
 }

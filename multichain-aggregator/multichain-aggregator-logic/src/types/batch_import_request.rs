@@ -1,0 +1,456 @@
+use super::{
+    ChainId,
+    address_coin_balances::AddressCoinBalance,
+    address_token_balances::AddressTokenBalance,
+    addresses::{Address, proto_token_type_to_db_token_type},
+    block_ranges::BlockRange,
+    counters::{ChainCounters, Counters},
+    hashes::{Hash, proto_hash_type_to_db_hash_type},
+    interop_message_transfers::InteropMessageTransfer,
+    interop_messages::InteropMessage,
+};
+use crate::{
+    error::{ParseError, ServiceError},
+    metrics::IMPORT_ENTITIES_COUNT,
+    proto,
+    types::{
+        macros::opt_parse,
+        tokens::{TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData},
+    },
+};
+use chrono::NaiveDateTime;
+use sea_orm::prelude::BigDecimal;
+use std::{collections::HashMap, str::FromStr};
+
+#[derive(Debug, Clone)]
+pub struct BatchImportRequest {
+    pub block_ranges: Vec<BlockRange>,
+    pub hashes: Vec<Hash>,
+    pub addresses: Vec<Address>,
+    pub interop_messages: Vec<InteropMessage>,
+    pub address_coin_balances: Vec<AddressCoinBalance>,
+    pub address_token_balances: Vec<AddressTokenBalance>,
+    pub tokens: Vec<TokenUpdate>,
+    pub counters: Vec<Counters>,
+}
+
+impl BatchImportRequest {
+    pub fn record_metrics(&self) {
+        macro_rules! calculate_entity_metrics {
+            ($entities: expr, $get_chain_id: expr, $entity_name: expr) => {
+                let mut entity_metrics = HashMap::new();
+                for e in $entities {
+                    *entity_metrics.entry($get_chain_id(e)).or_insert(0) += 1;
+                }
+                for (chain_id, count) in entity_metrics {
+                    IMPORT_ENTITIES_COUNT
+                        .with_label_values(&[chain_id.to_string().as_str(), $entity_name])
+                        .inc_by(count);
+                }
+            };
+        }
+
+        calculate_entity_metrics!(
+            &self.block_ranges,
+            |br: &BlockRange| br.chain_id,
+            "block_ranges"
+        );
+        calculate_entity_metrics!(&self.hashes, |h: &Hash| h.chain_id, "hashes");
+        calculate_entity_metrics!(&self.addresses, |a: &Address| a.chain_id, "addresses");
+        calculate_entity_metrics!(
+            &self.interop_messages,
+            |m: &InteropMessage| {
+                if m.init_transaction_hash.is_some() {
+                    m.init_chain_id
+                } else {
+                    m.relay_chain_id
+                }
+            },
+            "interop_messages"
+        );
+        calculate_entity_metrics!(
+            &self.address_coin_balances,
+            |b: &AddressCoinBalance| b.chain_id,
+            "address_coin_balances"
+        );
+        calculate_entity_metrics!(
+            &self.address_token_balances,
+            |b: &AddressTokenBalance| b.chain_id,
+            "address_token_balances"
+        );
+
+        macro_rules! record_token_update {
+            ($metrics: expr, $token_update: expr, $entity_name: expr) => {
+                if let Some(update) = &$token_update {
+                    *$metrics
+                        .entry(update.chain_id)
+                        .or_insert(HashMap::new())
+                        .entry($entity_name)
+                        .or_insert(0) += 1;
+                }
+            };
+        }
+
+        let mut token_metrics: HashMap<ChainId, HashMap<&str, u64>> = HashMap::new();
+        for t in &self.tokens {
+            record_token_update!(token_metrics, t.metadata, "tokens_metadata");
+            record_token_update!(token_metrics, t.price_data, "tokens_price_data");
+            record_token_update!(token_metrics, t.counters, "tokens_counters");
+        }
+        for (chain_id, metrics) in token_metrics {
+            for (entity_name, count) in metrics {
+                IMPORT_ENTITIES_COUNT
+                    .with_label_values(&[chain_id.to_string().as_str(), entity_name])
+                    .inc_by(count);
+            }
+        }
+    }
+}
+
+impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
+    type Error = ServiceError;
+
+    fn try_from(value: proto::BatchImportRequest) -> Result<Self, Self::Error> {
+        let chain_id = value
+            .chain_id
+            .parse()
+            .map_err(ParseError::from)
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, "failed to parse chain id");
+            })?;
+
+        macro_rules! try_into_vec {
+            ($value: expr) => {
+                $value
+                    .into_iter()
+                    .map(|v| (chain_id, v.clone()).try_into().inspect_err(|e| {
+                        tracing::error!(error = ?e, "failed to parse {}: {:?}", stringify!($value), v);
+                    }))
+                    .collect::<Result<Vec<_>, _>>()?
+            };
+        }
+
+        Ok(Self {
+            block_ranges: value
+                .block_ranges
+                .into_iter()
+                .map(|br| (chain_id, br).into())
+                .collect(),
+            hashes: try_into_vec!(value.hashes),
+            addresses: try_into_vec!(value.addresses),
+            interop_messages: try_into_vec!(value.interop_messages),
+            address_coin_balances: try_into_vec!(value.address_coin_balances),
+            address_token_balances: try_into_vec!(value.address_token_balances),
+            tokens: try_into_vec!(value.tokens),
+            counters: try_into_vec!(value.counters),
+        })
+    }
+}
+
+impl
+    TryFrom<(
+        ChainId,
+        proto::batch_import_request::AddressCoinBalanceImport,
+    )> for AddressCoinBalance
+{
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, acb): (
+            ChainId,
+            proto::batch_import_request::AddressCoinBalanceImport,
+        ),
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id,
+            address_hash: acb.address_hash.parse()?,
+            value: acb.value.parse()?,
+        })
+    }
+}
+
+impl
+    TryFrom<(
+        ChainId,
+        proto::batch_import_request::AddressTokenBalanceImport,
+    )> for AddressTokenBalance
+{
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, atb): (
+            ChainId,
+            proto::batch_import_request::AddressTokenBalanceImport,
+        ),
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id,
+            address_hash: atb.address_hash.parse()?,
+            token_address_hash: atb.token_address_hash.parse()?,
+            value: opt_parse!(atb.value),
+            token_id: opt_parse!(atb.token_id),
+        })
+    }
+}
+
+impl From<(ChainId, proto::batch_import_request::BlockRangeImport)> for BlockRange {
+    fn from((chain_id, br): (ChainId, proto::batch_import_request::BlockRangeImport)) -> Self {
+        Self {
+            chain_id,
+            min_block_number: br.min_block_number,
+            max_block_number: br.max_block_number,
+        }
+    }
+}
+
+impl TryFrom<(ChainId, proto::batch_import_request::HashImport)> for Hash {
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, h): (ChainId, proto::batch_import_request::HashImport),
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id,
+            hash: h.hash.parse()?,
+            hash_type: proto_hash_type_to_db_hash_type(h.hash_type()),
+        })
+    }
+}
+
+impl TryFrom<(ChainId, proto::batch_import_request::AddressImport)> for Address {
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, a): (ChainId, proto::batch_import_request::AddressImport),
+    ) -> Result<Self, Self::Error> {
+        let hash = a.hash.parse()?;
+
+        Ok(Self {
+            chain_id,
+            hash,
+            domain_info: None,
+            contract_name: a.contract_name,
+            is_contract: a.is_contract.unwrap_or(false),
+            is_verified_contract: a.is_verified_contract.unwrap_or(false),
+        })
+    }
+}
+
+impl TryFrom<(ChainId, proto::batch_import_request::InteropMessageImport)> for InteropMessage {
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, m): (ChainId, proto::batch_import_request::InteropMessageImport),
+    ) -> Result<Self, Self::Error> {
+        let message = m.message.ok_or_else(|| {
+            ParseError::Custom("interop message is missing or invalid".to_string())
+        })?;
+        let msg = match message {
+            proto::batch_import_request::interop_message_import::Message::Init(init) => {
+                let msg: InteropMessage = init.try_into()?;
+                if msg.init_chain_id != chain_id {
+                    return Err(ParseError::ChainIdMismatch {
+                        expected: chain_id,
+                        actual: msg.init_chain_id,
+                    });
+                }
+                msg
+            }
+            proto::batch_import_request::interop_message_import::Message::Relay(relay) => {
+                let msg: InteropMessage = relay.try_into()?;
+                if msg.relay_chain_id != chain_id {
+                    return Err(ParseError::ChainIdMismatch {
+                        expected: chain_id,
+                        actual: msg.relay_chain_id,
+                    });
+                }
+                msg
+            }
+        };
+
+        Ok(msg)
+    }
+}
+
+impl TryFrom<proto::batch_import_request::interop_message_import::Init> for InteropMessage {
+    type Error = ParseError;
+
+    fn try_from(
+        m: proto::batch_import_request::interop_message_import::Init,
+    ) -> Result<Self, Self::Error> {
+        let sender_address_hash = Some(m.sender_address_hash.parse()?);
+        let target_address_hash = Some(m.target_address_hash.parse()?);
+        let init_transaction_hash = Some(m.init_transaction_hash.parse()?);
+        let timestamp = Some(parse_timestamp_secs(m.timestamp)?);
+        let payload = Some(m.payload.parse()?);
+
+        let transfer = match m {
+            proto::batch_import_request::interop_message_import::Init {
+                transfer_token_address_hash,
+                transfer_from_address_hash: Some(transfer_from_address_hash),
+                transfer_to_address_hash: Some(transfer_to_address_hash),
+                transfer_amount: Some(transfer_amount),
+                ..
+            } => {
+                let token_address_hash = opt_parse!(transfer_token_address_hash);
+                let from_address_hash = transfer_from_address_hash.parse()?;
+                let to_address_hash = transfer_to_address_hash.parse()?;
+                let amount = BigDecimal::from_str(&transfer_amount)?;
+
+                Some(InteropMessageTransfer {
+                    token_address_hash,
+                    from_address_hash,
+                    to_address_hash,
+                    amount,
+                })
+            }
+            proto::batch_import_request::interop_message_import::Init {
+                transfer_token_address_hash: None,
+                transfer_from_address_hash: None,
+                transfer_to_address_hash: None,
+                transfer_amount: None,
+                ..
+            } => None,
+            _ => {
+                return Err(ParseError::Custom(
+                    "invalid interop message: transfer fields are inconsistent".to_string(),
+                ));
+            }
+        };
+
+        let base_msg = {
+            let nonce = m.nonce;
+            let init_chain_id = m.init_chain_id.parse()?;
+            let relay_chain_id = m.relay_chain_id.parse()?;
+
+            InteropMessage::base(nonce, init_chain_id, relay_chain_id)
+        };
+
+        let msg = InteropMessage {
+            sender_address_hash,
+            target_address_hash,
+            init_transaction_hash,
+            timestamp,
+            payload,
+            transfer,
+            ..base_msg
+        };
+
+        Ok(msg)
+    }
+}
+
+impl TryFrom<proto::batch_import_request::interop_message_import::Relay> for InteropMessage {
+    type Error = ParseError;
+
+    fn try_from(
+        m: proto::batch_import_request::interop_message_import::Relay,
+    ) -> Result<Self, Self::Error> {
+        let base_msg = {
+            let nonce = m.nonce;
+            let init_chain_id = m.init_chain_id.parse()?;
+            let relay_chain_id = m.relay_chain_id.parse()?;
+
+            InteropMessage::base(nonce, init_chain_id, relay_chain_id)
+        };
+
+        let relay_transaction_hash = Some(m.relay_transaction_hash.parse()?);
+        let failed = Some(m.failed);
+
+        Ok(Self {
+            relay_transaction_hash,
+            failed,
+            ..base_msg
+        })
+    }
+}
+
+impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdate {
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, t): (ChainId, proto::batch_import_request::TokenImport),
+    ) -> Result<Self, Self::Error> {
+        let address_hash = t
+            .address_hash
+            .parse::<alloy_primitives::Address>()?
+            .to_vec();
+
+        let token_update = TokenUpdate {
+            metadata: t
+                .metadata
+                .map(|m| {
+                    let token_type = proto_token_type_to_db_token_type(m.token_type());
+                    Ok::<_, Self::Error>(UpdateTokenMetadata {
+                        address_hash: address_hash.clone(),
+                        chain_id,
+                        name: m.name,
+                        symbol: m.symbol,
+                        decimals: m.decimals.map(i16::try_from).transpose()?,
+                        token_type,
+                        icon_url: m.icon_url,
+                        total_supply: opt_parse!(m.total_supply),
+                    })
+                })
+                .transpose()?,
+            price_data: t
+                .price_data
+                .map(|m| {
+                    Ok::<_, Self::Error>(UpdateTokenPriceData {
+                        address_hash: address_hash.clone(),
+                        chain_id,
+                        fiat_value: opt_parse!(m.fiat_value),
+                        circulating_market_cap: opt_parse!(m.circulating_market_cap),
+                    })
+                })
+                .transpose()?,
+            counters: t
+                .counters
+                .map(|m| {
+                    Ok::<_, Self::Error>(UpdateTokenCounters {
+                        address_hash,
+                        chain_id,
+                        holders_count: opt_parse!(m.holders_count),
+                        transfers_count: opt_parse!(m.transfers_count),
+                    })
+                })
+                .transpose()?,
+            r#type: None,
+        };
+
+        Ok(token_update)
+    }
+}
+
+fn parse_timestamp_secs(timestamp: i64) -> Result<NaiveDateTime, ParseError> {
+    match chrono::DateTime::from_timestamp(timestamp, 0) {
+        Some(dt) => Ok(dt.naive_utc()),
+        None => Err(ParseError::Custom(format!(
+            "invalid timestamp: {timestamp}",
+        ))),
+    }
+}
+
+impl TryFrom<(ChainId, proto::batch_import_request::CountersImport)> for Counters {
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, proto): (ChainId, proto::batch_import_request::CountersImport),
+    ) -> Result<Self, Self::Error> {
+        let global = {
+            let g: Option<&proto::batch_import_request::counters_import::GlobalCounters> =
+                proto.global_counters.as_ref();
+            let timestamp = parse_timestamp_secs(proto.timestamp)?;
+
+            g.map(|g| ChainCounters {
+                chain_id,
+                timestamp,
+                daily_transactions_number: g.daily_transactions_number,
+                total_transactions_number: g.total_transactions_number,
+                total_addresses_number: g.total_addresses_number,
+            })
+        };
+
+        Ok(Self { global })
+    }
+}

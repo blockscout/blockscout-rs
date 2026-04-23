@@ -1,0 +1,151 @@
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'bens/v*'
+    paths:
+      - blockscout-ens/**
+      - .github/workflows/bens.yml
+      - .github/actions/deps/**
+  pull_request:
+    paths:
+      - blockscout-ens/**
+      - .github/workflows/bens.yml
+      - .github/actions/deps/**
+
+name: Test, lint and docker (bens)
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: blockscout/bens
+
+defaults:
+  run:
+    working-directory: blockscout-ens
+
+jobs:
+  test:
+    name: Unit, doc and integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: admin
+          POSTGRES_USER: graph-node
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        uses: ./.github/actions/deps
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: blockscout-ens -> target
+
+      - name: ENVs in doc tests
+        run: cargo run --bin check-envs
+        env:
+          VALIDATE_ONLY: true
+
+      - name: Unit tests
+        run:  cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        if: success() || failure()
+        env:
+          RUST_BACKTRACE: 1
+          RUST_LOG: info
+          DATABASE_URL: postgres://graph-node:admin@localhost:5432/
+          SQLX_OFFLINE: true
+
+      - name: Integration tests
+        run: cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
+        if: success() || failure()
+        env:
+          RUST_BACKTRACE: 1
+          RUST_LOG: info
+          DATABASE_URL: postgres://graph-node:admin@localhost:5432/
+          SQLX_OFFLINE: true
+
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        uses: ./.github/actions/deps
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          components: rustfmt, clippy
+          override: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: blockscout-ens -> target
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check --config imports_granularity=Crate
+
+      - name: cargo clippy
+        run: cargo clippy --all --all-targets --all-features -- -D warnings
+
+  push:
+    name: Docker build and docker push
+    needs:
+      - test
+      - lint
+    if: |
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    uses: ./.github/workflows/_docker-build-push.yml
+    with:
+      service-name: bens
+      docker-context-path: "blockscout-ens"
+      dockerfile-path: "blockscout-ens/Dockerfile"
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
+
+  publish_types_package:
+    name: Publish types package
+    uses: './.github/workflows/npm-publisher.yml'
+    needs: push
+    if: needs.push.outputs.tag-value != ''
+    secrets: inherit
+    with:
+      version: ${{ needs.push.outputs.tag-value }}
+      project_name: blockscout-ens
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: 'bens'
+      swagger_path: 'blockscout-ens/bens-proto/swagger/bens.swagger.yaml'
+    secrets:
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}

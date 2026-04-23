@@ -1,0 +1,89 @@
+default:
+    just --list --unsorted
+
+db-host := env_var_or_default('DB_HOST', "localhost")
+db-port := env_var_or_default('DB_PORT', "5432")
+db-user := env_var_or_default('DB_USER', "postgres")
+db-password := env_var_or_default('DB_PASSWORD', "admin")
+db-name := env_var_or_default('DB_NAME', "{{crate_name}}")
+export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+
+docker-name := env_var_or_default('DOCKER_NAME', "{{project-name}}-postgres")
+test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
+
+{% raw %}
+start-postgres:
+    # we run it in --rm mode, so all data will be deleted after stopping
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres -N 500
+    sleep 3
+    # wait for postgres to start, but only if db_name is not empty
+    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'
+
+stop-postgres:
+    docker kill {{docker-name}}
+
+test *args:
+    cargo test {{args}} -- --include-ignored
+
+test-with-db *args:
+    -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
+
+stop-test-postgres:
+    just docker-name="{{docker-name}}-test" stop-postgres
+{% endraw %}
+run:
+    {% if database -%}
+    {{CRATE_NAME}}__DATABASE__CONNECT__URL={% raw %}{{DATABASE_URL}}{% endraw %} \
+    {% endif -%}
+    cargo run --bin {{project-name}}-server
+
+run-dev:
+    dotenv -f .env run just run
+
+{% if entity -%}
+generate-entities *args:
+    sea-orm-cli generate entity -o {{project-name}}-entity/src/codegen {{args}}
+    cargo fmt --all -- --config imports_granularity=Crate
+{% endif %}
+{% if database -%}
+new-migration name:
+    ./scripts/update_migration.sh {% raw %}{{name}}{% endraw %}
+
+migrate-up:
+    sea-orm-cli migrate -d {{project-name}}-migration up
+
+migrate-down:
+    sea-orm-cli migrate -d {{project-name}}-migration down
+
+# rollback and reapply all migrations
+migrate-refresh:
+    sea-orm-cli migrate -d {{project-name}}-migration refresh
+
+# drop all tables and reapply all migrations
+migrate-fresh:
+    sea-orm-cli migrate -d {{project-name}}-migration fresh
+
+migrate-fresh-generate-entities *args:
+    just migrate-fresh
+    just generate-entities {% raw %}{{args}}{% endraw %}
+
+
+insert-test-data:
+    {% raw %} docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} {% endraw %}< {{project-name}}-migration/src/mock_data/test_data.sql
+    
+{% endif %}
+
+check-envs:
+    cargo run --bin check-envs -- --validate-only
+
+generate-envs:
+    cargo run --bin check-envs
+
+gen-swagger-v3:
+    python3 {{project-name}}-proto/convert-swagger-v2-to-v3.py --service-name {{project-name}} --swagger-dir={{project-name}}-proto/swagger/v1
+
+check-swagger-v3:
+    python3 {{project-name}}-proto/convert-swagger-v2-to-v3.py --service-name {{project-name}} --swagger-dir={{project-name}}-proto/swagger/v1 --validate-only
+
+    

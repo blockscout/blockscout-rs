@@ -1,0 +1,67 @@
+[
+    {
+        "chain_id": 1,
+        "name": "Ethereum",
+        "native_id": null,
+        "icon": "",
+        "rpcs": [
+            {
+                "tenderly": {
+                    "url": "https://gateway.tenderly.co/public/mainnet"
+                }
+            },
+            {
+                "rpcfast": {
+                    "url": "https://eth-mainnet.rpcfast.com",
+                    "enabled": false,
+                    "max_rps": 10,
+                    "error_threshold": 3,
+                    "api_key": {
+                        "location": "query",
+                        "name": "api_key"
+                    }
+                }
+            },
+            {
+                "infura": {
+                    "url": "https://mainnet.infura.io/v3/{{YOUR_INFURA_PROJECT_ID}}",
+                    "enabled": false,
+                    "max_rps": 100,
+                    "error_threshold": 5,
+                    "api_key": {
+                        "location": "url",
+                        "name": "YOUR_INFURA_PROJECT_ID"
+                    }
+                }
+            },
+            {
+                "myrpc-example": {
+                    "url": "https://example.myrpc.io/eth",
+                    "enabled": false,
+                    "max_rps": 20,
+                    "error_threshold": 10,
+                    "api_key": {
+                        "location": "Header",
+                        "name": "X-API-KEY"
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "chain_id": 100,
+        "name": "Gnosis",
+        "native_id": null,
+        "icon": "",
+        "rpcs": [
+            {
+                "gnosis": {
+                    "url": "https://rpc.gnosischain.com"
+                },
+                "gateway": {
+                    "url": "https://rpc.gnosis.gateway.fm"
+                }
+            }
+        ]
+    }
+]

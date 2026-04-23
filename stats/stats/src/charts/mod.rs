@@ -1,8 +1,11 @@
-pub mod cache;
 mod chart;
 pub mod counters;
-pub mod insert;
+pub mod db_interaction;
+pub mod indexing_status;
 pub mod lines;
-pub mod updater;
-
-pub use chart::{create_chart, find_chart, Chart, UpdateError};
+pub mod query_dispatch;
+pub mod types;
+pub use chart::{
+    ChartError, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject, MissingDatePolicy,
+    Named, ResolutionKind, chart_properties_portrait,
+};

@@ -1,0 +1,78 @@
+//! Cumulative total number of accounts in the network.
+
+use super::new_builder_accounts::NewBuilderAccountsInt;
+use crate::chart_prelude::*;
+
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "builderAccountsGrowth".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
+        ChartType::Line
+    }
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
+    }
+
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::InternalTransactionsIndexed)
+    }
+}
+
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type BuilderAccountsGrowth =
+    DailyCumulativeLocalDbChartSource<NewBuilderAccountsInt, Properties>;
+type BuilderAccountsGrowthS = StripExt<BuilderAccountsGrowth>;
+
+pub type BuilderAccountsGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<BuilderAccountsGrowthS, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type BuilderAccountsGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<BuilderAccountsGrowthS, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+type BuilderAccountsGrowthMonthlyS = StripExt<BuilderAccountsGrowthMonthly>;
+pub type BuilderAccountsGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<BuilderAccountsGrowthMonthlyS, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::simple_test::simple_test_chart;
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_builder_accounts_growth() {
+        simple_test_chart::<BuilderAccountsGrowth>(
+            "update_builder_accounts_growth",
+            vec![
+                ("2022-11-09", "1"),
+                ("2022-11-10", "4"),
+                ("2022-11-11", "8"),
+            ],
+        )
+        .await;
+    }
+}

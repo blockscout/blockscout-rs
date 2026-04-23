@@ -1,0 +1,150 @@
+swagger: "2.0"
+info:
+  title: health/v1/health.proto
+  version: version not set
+tags:
+  - name: Health
+  - name: SolidityVisualizer
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/solidity:visualize-contracts:
+    post:
+      operationId: SolidityVisualizer_VisualizeContracts
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VisualizeResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VisualizeContractsRequest'
+      tags:
+        - SolidityVisualizer
+  /api/v1/solidity:visualize-storage:
+    post:
+      operationId: SolidityVisualizer_VisualizeStorage
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VisualizeResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VisualizeStorageRequest'
+      tags:
+        - SolidityVisualizer
+  /health:
+    get:
+      summary: |-
+        Check gets the health of the specified service. If the requested service
+        is unknown, the call will fail with status NOT_FOUND. If the caller does
+        not specify a service name, the server should respond with its overall
+        health status.
+      description: |-
+        Clients should set a deadline when calling Check, and can declare the
+        server unhealthy if they do not receive a timely response.
+
+        Check implementations should be idempotent and side effect free.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1VisualizeContractsRequest:
+    type: object
+    properties:
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+      outputMask:
+        type: string
+  v1VisualizeResponse:
+    type: object
+    properties:
+      png:
+        type: string
+        format: byte
+      svg:
+        type: string
+        format: byte
+    description: |-
+      The client should decide on what type they are interested in
+      and specify it through `request.output_mask` field. If omitted,
+      all types would be calculated and returned to the client.
+  v1VisualizeStorageRequest:
+    type: object
+    properties:
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+      fileName:
+        type: string
+      contractName:
+        type: string
+      outputMask:
+        type: string

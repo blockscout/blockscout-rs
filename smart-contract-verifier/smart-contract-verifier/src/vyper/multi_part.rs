@@ -1,69 +1,72 @@
-use super::client::Client;
 use crate::{
-    compiler::Version,
-    verifier::{ContractVerifier, Error, Success},
+    compiler::DetailedVersion, verify, verify::vyper_compiler_input, Error, EvmCompilersPool,
+    OnChainContract, VerificationResult, VyperCompiler, VyperInput,
 };
-use bytes::Bytes;
-use ethers_solc::{
-    artifacts::{Settings, Source, Sources},
-    CompilerInput, EvmVersion,
-};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use foundry_compilers::{artifacts, artifacts::EvmVersion};
+use std::{collections::BTreeMap, path::PathBuf};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerificationRequest {
-    pub deployed_bytecode: Bytes,
-    pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
-
-    pub content: MultiFileContent,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MultiFileContent {
+#[derive(Clone, Debug)]
+pub struct Content {
     pub sources: BTreeMap<PathBuf, String>,
+    pub interfaces: BTreeMap<PathBuf, String>,
     pub evm_version: Option<EvmVersion>,
 }
 
-impl From<MultiFileContent> for CompilerInput {
-    fn from(content: MultiFileContent) -> Self {
-        let mut settings = Settings::default();
-        settings.optimizer.enabled = None;
-        settings.optimizer.runs = None;
-        if let Some(version) = content.evm_version {
-            settings.evm_version = Some(version);
-        } else {
-            // default evm version for vyper
-            settings.evm_version = Some(EvmVersion::Istanbul)
+impl TryFrom<Content> for VyperInput {
+    type Error = Error;
+
+    fn try_from(content: Content) -> Result<Self, Self::Error> {
+        let settings = vyper_compiler_input::Settings {
+            evm_version: content.evm_version,
+            ..Default::default()
         };
 
-        let sources: Sources = content
+        let sources: artifacts::Sources = content
             .sources
             .into_iter()
-            .map(|(name, content)| (name, Source::new(content)))
+            .map(|(path, content)| (path, artifacts::Source::new(content)))
             .collect();
-        CompilerInput {
+
+        let interfaces: vyper_compiler_input::Interfaces = content
+            .interfaces
+            .into_iter()
+            .map(|(path, content)| {
+                vyper_compiler_input::Interface::try_new(&path, content)
+                    .map(|interface| (path, interface))
+            })
+            .collect::<Result<_, _>>()
+            .map_err(|err| Error::Compilation(vec![format!("cannot parse inteface: {err}")]))?;
+
+        Ok(VyperInput {
             language: "Vyper".to_string(),
             sources,
+            interfaces,
             settings,
-        }
+        })
     }
 }
 
-pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
-    let compiler_input = CompilerInput::from(request.content);
-    let verifier = ContractVerifier::new(
-        client.compilers(),
-        &request.compiler_version,
-        request.creation_bytecode,
-        request.deployed_bytecode,
-    )?;
+#[derive(Clone, Debug)]
+pub struct VerificationRequest {
+    pub contract: OnChainContract,
+    pub compiler_version: DetailedVersion,
+    pub content: Content,
+}
 
-    // If case of success, we allow middlewares to process success and only then return it to the caller;
-    // Otherwise, we just return an error
-    let success = verifier.verify(&compiler_input).await?;
-    if let Some(middleware) = client.middleware() {
-        middleware.call(&success).await;
-    }
-    Ok(success)
+pub async fn verify(
+    compilers: &EvmCompilersPool<VyperCompiler>,
+    request: VerificationRequest,
+) -> Result<VerificationResult, Error> {
+    let to_verify = vec![request.contract];
+
+    let vyper_input = VyperInput::try_from(request.content)?;
+    let results =
+        verify::compile_and_verify(to_verify, compilers, &request.compiler_version, vyper_input)
+            .await?;
+    let result = results
+        .into_iter()
+        .next()
+        .expect("we sent exactly one contract to verify");
+
+    Ok(result)
 }

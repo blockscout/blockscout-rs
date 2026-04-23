@@ -1,49 +1,16 @@
 #![cfg(feature = "test-utils")]
 
+use blockscout_service_launcher::test_database::TestDbGuard;
 use entity::{sea_orm_active_enums::BytecodeType, sources};
 use eth_bytecode_db::{
-    search::{find_contract, BytecodeRemote},
+    search::eth_bytecode_db_find_contract,
     tests::verifier_mock::{
         generate_and_insert, BytecodePart, ContractInfo, ContractType, PartTy, VerificationResult,
     },
     verification::MatchType,
 };
-use migration::{Migrator, MigratorTrait};
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
+use sea_orm::DatabaseConnection;
 use std::{collections::HashMap, str::FromStr};
-use url::Url;
-
-async fn init_db<M: MigratorTrait>(name: &str) -> DatabaseConnection {
-    let db_url = std::env::var("DATABASE_URL").expect("no DATABASE_URL env");
-    let url = Url::parse(&db_url).expect("unvalid database url");
-    let db_url = url.join("/").unwrap().to_string();
-    let raw_conn = Database::connect(db_url)
-        .await
-        .expect("failed to connect to postgres");
-
-    raw_conn
-        .execute(Statement::from_string(
-            sea_orm::DatabaseBackend::Postgres,
-            format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"),
-        ))
-        .await
-        .expect("failed to drop test database");
-    raw_conn
-        .execute(Statement::from_string(
-            sea_orm::DatabaseBackend::Postgres,
-            format!("CREATE DATABASE {name}"),
-        ))
-        .await
-        .expect("failed to create test database");
-
-    let db_url = url.join(&format!("/{name}")).unwrap().to_string();
-    let conn = Database::connect(db_url.clone())
-        .await
-        .expect("failed to connect to test db");
-    M::up(&conn, None).await.expect("failed to run migrations");
-
-    conn
-}
 
 async fn prepare_db(
     db: &DatabaseConnection,
@@ -81,9 +48,8 @@ fn get_raw_creation_bytecode(verification_result: &VerificationResult, change: b
         .collect::<Vec<_>>()
         .join("");
 
-    match &verification_result.constructor_arguments {
-        Some(args) => raw_creation_input.push_str(args.trim_start_matches("0x")),
-        None => {}
+    if let Some(args) = &verification_result.constructor_arguments {
+        raw_creation_input.push_str(args.trim_start_matches("0x"))
     };
 
     raw_creation_input
@@ -96,10 +62,18 @@ fn change_part_for_search(part: &BytecodePart) -> String {
             let n = part.data.len();
             let metadata_length = &part.data[n - 4..];
             match metadata_length {
-                "0033" => "a2646970667358221220c424331e61ba143d01f757e1a3b6ddcfe99698f6c1862e2133c4d7d277854b9564736f6c63430008070033",
-                "0032" => "a265627a7a72315820a648f0e3107b949c9f7567adacfd4b276c9fc37dc06b172c7efbd1a0e58206ce64736f6c63430005110032",
-                "0029" => "a165627a7a72305820a61b515152276dcea013aa8566142e7d3f07992c7c9512373cc7ba9a33fc2eab0029",
-                _ => panic!("unknown metadata length '{metadata_length}', add this type of metadata to mock")
+                "0033" => {
+                    "a2646970667358221220c424331e61ba143d01f757e1a3b6ddcfe99698f6c1862e2133c4d7d277854b9564736f6c63430008070033"
+                }
+                "0032" => {
+                    "a265627a7a72315820a648f0e3107b949c9f7567adacfd4b276c9fc37dc06b172c7efbd1a0e58206ce64736f6c63430005110032"
+                }
+                "0029" => {
+                    "a165627a7a72305820a61b515152276dcea013aa8566142e7d3f07992c7c9512373cc7ba9a33fc2eab0029"
+                }
+                _ => panic!(
+                    "unknown metadata length '{metadata_length}', add this type of metadata to mock"
+                ),
             }
         }
     };
@@ -118,11 +92,7 @@ async fn check_bytecode_search(
     let data = blockscout_display_bytes::Bytes::from_str(raw_remote_bytecode)
         .unwrap()
         .0;
-    let search = BytecodeRemote {
-        data,
-        bytecode_type,
-    };
-    let partial_matches = find_contract(db, &search)
+    let partial_matches = eth_bytecode_db_find_contract(db, bytecode_type, data)
         .await
         .expect("error during contract search");
 
@@ -150,7 +120,9 @@ async fn check_bytecode_search(
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_full_match_search_bytecodes() {
-    let db = init_db::<Migrator>("test_full_match_search_bytecodes").await;
+    let db = TestDbGuard::new::<migration::Migrator>("test_full_match_search_bytecodes")
+        .await
+        .client();
     let max_id = 10;
     let change_bytecode = false;
     let all_sources = prepare_db(&db, max_id).await;
@@ -183,7 +155,9 @@ async fn test_full_match_search_bytecodes() {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_partial_search_bytecodes() {
-    let db = init_db::<Migrator>("test_partial_search_bytecodes").await;
+    let db = TestDbGuard::new::<migration::Migrator>("test_partial_search_bytecodes")
+        .await
+        .client();
     let max_id = 10;
     let repeated_amount = 10;
     let repeated_info = ContractInfo {
@@ -236,13 +210,10 @@ async fn test_partial_search_bytecodes() {
     let data = blockscout_display_bytes::Bytes::from_str(&raw_creation_input)
         .unwrap()
         .0;
-    let search = BytecodeRemote {
-        data,
-        bytecode_type: BytecodeType::CreationInput,
-    };
-    let partial_matches = find_contract(&db, &search)
-        .await
-        .expect("error during contract search");
+    let partial_matches =
+        eth_bytecode_db_find_contract(db.as_ref(), BytecodeType::CreationInput, data)
+            .await
+            .expect("error during contract search");
     assert_eq!(partial_matches.len(), repeated_amount);
     for contract in partial_matches {
         assert_eq!(&contract.contract_name, &expected_source.contract_name);
@@ -270,14 +241,11 @@ async fn test_partial_search_bytecodes() {
             let data = blockscout_display_bytes::Bytes::from_str(&raw_creation_input)
                 .unwrap()
                 .0;
-            let search = BytecodeRemote {
-                data,
-                bytecode_type: BytecodeType::CreationInput,
-            };
 
-            let partial_matches = find_contract(&db, &search)
-                .await
-                .expect("unkown contract should not give error");
+            let partial_matches =
+                eth_bytecode_db_find_contract(db.as_ref(), BytecodeType::CreationInput, data)
+                    .await
+                    .expect("unkown contract should not give error");
             assert!(
                 partial_matches.is_empty(),
                 "found some contact, but bytecode is unknow"
@@ -290,14 +258,11 @@ async fn test_partial_search_bytecodes() {
         let data = blockscout_display_bytes::Bytes::from_str(bytecode)
             .unwrap()
             .0;
-        let search = BytecodeRemote {
-            data,
-            bytecode_type: BytecodeType::CreationInput,
-        };
 
-        let partial_matches = find_contract(&db, &search)
-            .await
-            .expect("random string should not give error");
+        let partial_matches =
+            eth_bytecode_db_find_contract(db.as_ref(), BytecodeType::CreationInput, data)
+                .await
+                .expect("random string should not give error");
         assert!(
             partial_matches.is_empty(),
             "found some contact, but bytecode is random string"

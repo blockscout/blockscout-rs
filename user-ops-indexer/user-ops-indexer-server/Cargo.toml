@@ -1,0 +1,26 @@
+[package]
+name = "user-ops-indexer-server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+user-ops-indexer-logic = { path = "../user-ops-indexer-logic" }
+user-ops-indexer-migration = { path = "../user-ops-indexer-migration" }
+user-ops-indexer-proto = { path = "../user-ops-indexer-proto" }
+
+actix-web = "4.2"
+anyhow = "1.0"
+async-trait = "0.1"
+blockscout-service-launcher = { workspace = true, features = ["database-1"] }
+sea-orm = "1.0.1"
+serde = "1.0"
+tokio = { version = "1.23", features = ["rt-multi-thread", "macros"] }
+tonic = { workspace = true }
+tracing = "0.1"
+alloy = { workspace = true, features = ["provider-ws", "provider-http"] }
+blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }
+
+[dev-dependencies]
+sea-orm = { version = "1.0.1", features = ["sqlx-sqlite"] }

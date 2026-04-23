@@ -5,9 +5,10 @@ use super::{
         smart_contract_verifier::{BytecodeType, VerifySolidityMultiPartRequest},
         types::{Source, VerificationRequest, VerificationType},
     },
-    process_verify_response, ProcessResponseAction,
+    process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
+use smart_contract_verifier_proto::http_client::solidity_verifier_client;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -15,7 +16,6 @@ pub struct MultiPartFiles {
     pub source_files: BTreeMap<String, String>,
     pub evm_version: Option<String>,
     pub optimization_runs: Option<i32>,
-    pub libraries: BTreeMap<String, String>,
 }
 
 impl From<VerificationRequest<MultiPartFiles>> for VerifySolidityMultiPartRequest {
@@ -27,15 +27,17 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifySolidityMultiPartReques
             source_files: request.content.source_files,
             evm_version: request.content.evm_version,
             optimization_runs: request.content.optimization_runs,
-            libraries: request.content.libraries,
+            metadata: request.metadata.map(|metadata| metadata.into()),
+            post_actions: vec![],
         }
     }
 }
 
 pub async fn verify(
-    mut client: Client,
+    client: Client,
     request: VerificationRequest<MultiPartFiles>,
 ) -> Result<Source, Error> {
+    let is_authorized = request.is_authorized;
     let bytecode_type = request.bytecode_type;
     let raw_request_bytecode = hex::decode(request.bytecode.clone().trim_start_matches("0x"))
         .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {err}")))?;
@@ -43,30 +45,45 @@ pub async fn verify(
     let verification_metadata = request.metadata.clone();
 
     let request: VerifySolidityMultiPartRequest = request.into();
-    let response = client
-        .solidity_client
-        .verify_multi_part(request)
-        .await
-        .map_err(Error::from)?
-        .into_inner();
+    tracing::info!("sending request to the verifier");
+    let response =
+        solidity_verifier_client::verify_multi_part(&client.verifier_http_client, request).await?;
 
+    tracing::info!(
+        status = response.status,
+        response_message = response.message,
+        "response from the verifier"
+    );
+
+    let verifier_alliance_db_action = VerifierAllianceDbAction::from_db_client_and_metadata(
+        client
+            .alliance_db_client
+            .as_ref()
+            .map(|client| client.main_db()),
+        verification_metadata.clone(),
+        is_authorized,
+    );
     process_verify_response(
-        &client.db_client,
         response,
-        ProcessResponseAction::SaveData {
+        EthBytecodeDbAction::SaveData {
+            db_client: &client.db_client,
             bytecode_type,
             raw_request_bytecode,
             verification_settings,
             verification_type: VerificationType::MultiPartFiles,
             verification_metadata,
         },
+        verifier_alliance_db_action,
     )
     .await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{super::super::types, *};
+    use super::{
+        super::super::{smart_contract_verifier, types},
+        *,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -82,9 +99,13 @@ mod tests {
                 ]),
                 evm_version: Some("london".to_string()),
                 optimization_runs: Some(200),
-                libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
-            metadata: None,
+            metadata: Some(types::VerificationMetadata {
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
+                ..Default::default()
+            }),
+            is_authorized: false,
         };
         let expected = VerifySolidityMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -96,7 +117,11 @@ mod tests {
             ]),
             evm_version: Some("london".to_string()),
             optimization_runs: Some(200),
-            libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
+            metadata: Some(smart_contract_verifier::VerificationMetadata {
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
+            }),
+            post_actions: vec![],
         };
         assert_eq!(
             expected,
@@ -118,9 +143,13 @@ mod tests {
                 ]),
                 evm_version: Some("london".to_string()),
                 optimization_runs: Some(200),
-                libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
-            metadata: None,
+            metadata: Some(types::VerificationMetadata {
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
+                ..Default::default()
+            }),
+            is_authorized: false,
         };
         let expected = VerifySolidityMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -132,7 +161,11 @@ mod tests {
             ]),
             evm_version: Some("london".to_string()),
             optimization_runs: Some(200),
-            libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
+            metadata: Some(smart_contract_verifier::VerificationMetadata {
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
+            }),
+            post_actions: vec![],
         };
         assert_eq!(
             expected,

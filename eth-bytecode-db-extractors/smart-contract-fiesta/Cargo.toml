@@ -1,0 +1,32 @@
+[package]
+name = "smart-contract-fiesta"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+smart-contract-fiesta-entity = { path = "../smart-contract-fiesta-entity" }
+smart-contract-fiesta-migration = { path = "../smart-contract-fiesta-migration" }
+
+anyhow = "1.0.70"
+async-trait = "0.1"
+blockscout-display-bytes = "1.0.0"
+blockscout-service-launcher = { version = "0.9.0", features = ["database-0_12"] }
+config = "0.13.3"
+eth-bytecode-db-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "6977d09" }
+futures = "0.3"
+governor = "0.5.1"
+reqwest = "0.11"
+reqwest-middleware = "0.2"
+reqwest-rate-limiter = { git = "https://github.com/blockscout/blockscout-rs", rev = "edb610b" }
+reqwest-retry = "0.2"
+scraper = "0.16.0"
+sea-orm = "0.12.3"
+sea-orm-migration = "0.12.3"
+serde = "1.0.160"
+serde_json = "1.0.96"
+task-local-extensions = "0.1.4"
+tokio = { version = "1", features = [ "rt-multi-thread", "macros", "fs" ] }
+tracing = "0.1.37"
+url = "2.3.1"

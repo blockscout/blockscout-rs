@@ -1,0 +1,23 @@
+{
+  "name": "smart-guessr",
+  "version": "1.0.50",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts",
+    "start": "NODE_ENV=production bun src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@bogeychan/elysia-logger": "^0.0.20",
+    "@elysiajs/eden": "^1.0.7",
+    "@elysiajs/swagger": "^1.0.3",
+    "@shazow/whatsabi": "^0.11.0",
+    "elysia": "latest",
+    "ethers": "^6.11.1",
+    "import": "^0.0.6"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "module": "src/index.js"
+}

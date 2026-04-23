@@ -1,0 +1,146 @@
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - '{{project-name}}/v*'
+    paths:
+      - {{project-name}}/**
+      - .github/workflows/{{project-name}}.yml
+      - .github/workflows/_*.yml
+      - .github/actions/**
+  pull_request:
+    paths:
+      - {{project-name}}/**
+      - .github/workflows/{{project-name}}.yml
+      - .github/workflows/_*.yml
+      - .github/actions/**
+
+name: Test, lint and docker ({{project-name}})
+
+defaults:
+  run:
+    working-directory: {{project-name}}
+
+jobs:
+  test:
+    name: Unit, doc and integration tests
+    runs-on: ubuntu-latest
+    {%- if database %}
+    services:
+      postgres:
+        image: postgres:17.2
+        env:
+          POSTGRES_PASSWORD: admin
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    {%- endif %}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          working-directory: {{project-name}}
+
+      - name: Build
+        id: build
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
+      
+      - name: ENVs in documentation
+        run: cargo run --bin check-envs -- --validate-only
+
+      - name: Unit tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        if: steps.build.outcome == 'success'
+
+      - name: Doc tests
+        run: cargo test --locked --workspace --all-features --doc
+        if: steps.build.outcome == 'success'
+
+      - name: Integration tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
+        if: steps.build.outcome == 'success'
+
+      {%- if database %}
+      - name: DB tests
+        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored
+        if: steps.build.outcome == 'success'
+        env:
+          DATABASE_URL: postgres://postgres:admin@localhost:5432/
+      {%- endif %}
+
+  lint:
+    name: Linting
+    uses: ./.github/workflows/_linting.yml
+    with:
+      working-directory: {{project-name}}
+
+  docker:
+    name: Docker build and docker push
+    needs:
+      - test
+      - lint
+    if: |
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    uses: ./.github/workflows/_docker-build-push.yml
+    with:
+      service-name: {{project-name}}
+    secrets:
+      {% raw %}
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
+      {% endraw %}
+
+  check-swagger:
+    name: Verify that the swagger is relevant
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip' # caching pip dependencies
+
+      - name: Install pip dependencies
+        run: pip install -r {{project-name}}-proto/requirements.txt
+
+      - name: Swagger v3 check
+        run: python {{project-name}}-proto/convert-swagger-v2-to-v3.py --swagger-dir={{project-name}}-proto/swagger/v1 --service-name {{project-name}} --validate-only
+
+  {%- if types %}
+  publish_types_package:
+    name: Publish types package
+    uses: './.github/workflows/npm-publisher.yml'
+    needs: docker
+    if: needs.docker.outputs.tag-value != ''
+    secrets: inherit
+    with:
+      {% raw %}
+      version: ${{ needs.docker.outputs.tag-value }}
+      {% endraw %}
+      project_name: {{project-name}}
+  {%- endif %}
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: '{{project-name}}'
+      swagger_path: '{{project-name}}/{{project-name}}-proto/swagger/v1/{{project-name}}.swagger.yaml'
+    secrets:
+      {% raw %} 
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}
+      {% endraw %}

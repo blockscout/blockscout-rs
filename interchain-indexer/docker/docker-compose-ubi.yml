@@ -1,0 +1,49 @@
+version: "3"
+services:
+  database:
+    image: postgres:17
+    container_name: 'interchain-indexer-postgres'
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
+    ports:
+      - "9432:5432"
+    volumes:
+      - ./database:/var/lib/postgresql/data
+  
+  interchain-indexer:
+    build:
+      context: .
+      additional_contexts:
+        - proto=../proto
+      dockerfile: ./Dockerfile
+    container_name: 'interchain-indexer'
+    restart: always
+    depends_on:
+      - database
+    ports:
+      - "8050:8050"
+      - "8051:8051"
+      - "6060:6060"
+    env_file:
+      - .env
+    environment:
+      INTERCHAIN_INDEXER__DATABASE__CONNECT__URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/interchain_indexer
+      INTERCHAIN_INDEXER__DATABASE__CREATE_DATABASE: true
+      INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS: true
+      INTERCHAIN_INDEXER__CHAINS_CONFIG: config/avalanche/chains.json
+      INTERCHAIN_INDEXER__BRIDGES_CONFIG: config/avalanche/bridges_cut.json
+      INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN: true
+      INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL: https://contracts-info-test.k8s-dev.blockscout.com
+      INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS: 8021
+      INTERCHAIN_INDEXER__METRICS__ENABLED: true
+      INTERCHAIN_INDEXER__METRICS__ADDR: 0.0.0.0:6060
+    volumes:
+      # NOTE: the config folder is located in the root of the project
+      - ../config:/app/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

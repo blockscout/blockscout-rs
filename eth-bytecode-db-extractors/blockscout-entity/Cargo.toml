@@ -1,0 +1,11 @@
+[package]
+name = "blockscout-entity"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "entity"
+path = "src/lib.rs"
+
+[dependencies]
+sea-orm = { version = "^0" }

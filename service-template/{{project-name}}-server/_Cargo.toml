@@ -1,0 +1,47 @@
+[package]
+name = "{{project-name}}-server"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+{{project-name}}-proto = { workspace = true }
+{% if logic -%}
+{{project-name}}-logic = { workspace = true }
+{% endif -%}
+{% if database -%}
+{{project-name}}-migration = { workspace = true }
+{% endif -%}
+
+actix-web = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+blockscout-service-launcher = { workspace = true, features = [{% if database -%} "database-1" {% endif -%}] }
+config = { workspace = true }
+sea-orm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
+tonic = { workspace = true }
+tracing = { workspace = true }
+env-collector = { workspace = true }
+convert-trait = { workspace = true }
+
+# # Uncomment if needed
+# ethers = { workspace = true }
+# blockscout-display-bytes = { workspace = true }
+# serde_with = { workspace = true }
+
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = [ "test-server",{% if database -%} "test-database"{% endif -%} ] }
+pretty_assertions = { workspace = true }
+reqwest = { workspace = true, features = ["json"]}
+# # Uncomment if needed
+# mockall = { workspace = true }
+# bytes = { workspace = true }
+# hex = { workspace = true }
+# rand = { workspace = true }
+# rstest = { workspace = true }
+# sea-orm = { workspace = true }
+# tokio-stream = { workspace = true }

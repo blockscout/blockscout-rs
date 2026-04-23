@@ -1,0 +1,53 @@
+[package]
+name = "{{project-name}}-logic"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+{% if entity -%}
+{{project-name}}-entity = { workspace = true }
+{% endif -%}
+
+anyhow = { workspace = true }
+blockscout-display-bytes = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+tonic = { workspace = true }
+{% if database %}
+sea-orm = { workspace = true, features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "macros",
+    "postgres-array",
+] }
+{% endif %}
+
+## Uncomment this if needed
+#ethabi = { workspace = true }
+#ethers-core = { workspace = true }
+#futures = { workspace = true }
+#hex = { workspace = true }
+#keccak-hash = { workspace = true }
+#lazy_static = { workspace = true }
+#mismatch = { workspace = true }
+#prometheus = { workspace = true }
+#reqwest = { workspace = true }
+#semver = { workspace = true }
+#serde = { workspace = true }
+#serde_json = { workspace = true }
+#tokio = { workspace = true }
+#tonic = { workspace = true, features = ["tls-roots"] }
+#tracing-subscriber = { workspace = true, features = ["env-filter"]}
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = [ 
+    {% if database %}
+    "test-database", "database-1"
+    {% endif %}
+] }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+{% if database -%}
+{{project-name}}-migration = { workspace = true }
+{% endif -%}

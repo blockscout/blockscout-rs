@@ -1,0 +1,15 @@
+[package]
+name = "da-indexer-scripts"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+blockscout-service-launcher = { workspace = true }
+da-indexer-logic = { workspace = true }
+da-indexer-migration = { workspace = true }
+hex = { workspace = true }
+sea-orm = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true }
+tracing = { workspace = true }

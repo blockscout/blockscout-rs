@@ -15,20 +15,12 @@ async fn test_versions(uri: &str) {
     let settings = Settings::default();
     let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
 
-    let solidity_service = SolidityVerifierService::new(
-        settings.solidity,
-        compilers_lock.clone(),
-        settings.extensions.solidity,
-    )
-    .await
-    .expect("couldn't initialize solidity service");
-    let vyper_service = VyperVerifierService::new(
-        settings.vyper,
-        compilers_lock.clone(),
-        settings.extensions.vyper,
-    )
-    .await
-    .expect("couldn't initialize vyper service");
+    let solidity_service = SolidityVerifierService::new(settings.solidity, compilers_lock.clone())
+        .await
+        .expect("couldn't initialize solidity service");
+    let vyper_service = VyperVerifierService::new(settings.vyper, compilers_lock.clone())
+        .await
+        .expect("couldn't initialize vyper service");
 
     let app = test::init_service(
         App::new()

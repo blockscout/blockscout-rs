@@ -54,6 +54,9 @@ impl From<verification::SourceType> for SourceTypeWrapper {
             verification::SourceType::Yul => {
                 SourceTypeWrapper::from(proto::source::SourceType::Yul)
             }
+            verification::SourceType::Geas => {
+                SourceTypeWrapper::from(proto::source::SourceType::Geas)
+            }
         }
     }
 }
@@ -73,6 +76,17 @@ impl From<verification::MatchType> for MatchTypeWrapper {
                 MatchTypeWrapper::from(proto::source::MatchType::Partial)
             }
             verification::MatchType::Full => MatchTypeWrapper::from(proto::source::MatchType::Full),
+        }
+    }
+}
+
+impl From<sourcify::MatchType> for MatchTypeWrapper {
+    fn from(value: sourcify::MatchType) -> Self {
+        match value {
+            sourcify::MatchType::Full => MatchTypeWrapper::from(proto::source::MatchType::Full),
+            sourcify::MatchType::Partial => {
+                MatchTypeWrapper::from(proto::source::MatchType::Partial)
+            }
         }
     }
 }
@@ -134,6 +148,7 @@ mod source_type_tests {
     )]
     #[case(verification::SourceType::Vyper, proto::source::SourceType::Vyper)]
     #[case(verification::SourceType::Yul, proto::source::SourceType::Yul)]
+    #[case(verification::SourceType::Geas, proto::source::SourceType::Geas)]
     fn from_verification_to_proto(
         #[case] verification_type: verification::SourceType,
         #[case] proto_type: proto::source::SourceType,
@@ -158,6 +173,17 @@ mod match_type_tests {
     #[case(verification::MatchType::Full, proto::source::MatchType::Full)]
     fn from_verification_to_proto(
         #[case] verification_type: verification::MatchType,
+        #[case] proto_type: proto::source::MatchType,
+    ) {
+        let result = MatchTypeWrapper::from(verification_type).into_inner();
+        assert_eq!(proto_type, result);
+    }
+
+    #[rstest]
+    #[case(sourcify::MatchType::Partial, proto::source::MatchType::Partial)]
+    #[case(sourcify::MatchType::Full, proto::source::MatchType::Full)]
+    fn from_sourcify_to_proto(
+        #[case] verification_type: sourcify::MatchType,
         #[case] proto_type: proto::source::MatchType,
     ) {
         let result = MatchTypeWrapper::from(verification_type).into_inner();

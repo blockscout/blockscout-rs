@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = [
+    "proxy-verifier-logic",
+    "proxy-verifier-proto",
+    "proxy-verifier-server",
+]
+
+[workspace.dependencies]
+api-client-framework = { version = "0.1.0" }
+blockscout-service-launcher = "0.18.0"
+eth-bytecode-db-proto = { git = "https://github.com/blockscout/blockscout-rs/", rev = "be8422c" }

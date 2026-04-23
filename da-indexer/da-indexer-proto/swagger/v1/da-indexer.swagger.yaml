@@ -1,0 +1,234 @@
+swagger: "2.0"
+info:
+  title: v1/da-indexer.proto
+  version: version not set
+tags:
+  - name: CelestiaService
+  - name: EigenDaService
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/celestia/blob:
+    get:
+      operationId: CelestiaService_GetBlob
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CelestiaBlob'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: height
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: commitment
+          in: query
+          required: false
+          type: string
+        - name: skipData
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - CelestiaService
+  /api/v1/celestia/l2BatchMetadata:
+    get:
+      operationId: CelestiaService_GetL2BatchMetadata
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CelestiaL2BatchMetadata'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: height
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: namespace
+          in: query
+          required: false
+          type: string
+        - name: commitment
+          in: query
+          required: false
+          type: string
+      tags:
+        - CelestiaService
+  /api/v1/eigenda/blob:
+    get:
+      operationId: EigenDaService_GetBlob
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1EigenDaBlob'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: batchHeaderHash
+          in: query
+          required: false
+          type: string
+        - name: blobIndex
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: skipData
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - EigenDaService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1CelestiaBlob:
+    type: object
+    properties:
+      height:
+        type: string
+        format: uint64
+      namespace:
+        type: string
+      commitment:
+        type: string
+      timestamp:
+        type: string
+        format: uint64
+      size:
+        type: string
+        format: uint64
+      data:
+        type: string
+  v1CelestiaBlobId:
+    type: object
+    properties:
+      height:
+        type: string
+        format: uint64
+      namespace:
+        type: string
+      commitment:
+        type: string
+  v1CelestiaL2BatchMetadata:
+    type: object
+    properties:
+      l2ChainId:
+        type: integer
+        format: int64
+      l2BatchId:
+        type: string
+      l2StartBlock:
+        type: string
+        format: uint64
+      l2EndBlock:
+        type: string
+        format: uint64
+      l2BatchTxCount:
+        type: integer
+        format: int64
+      l2BlockscoutUrl:
+        type: string
+      l1TxHash:
+        type: string
+      l1TxTimestamp:
+        type: string
+        format: uint64
+      l1ChainId:
+        type: integer
+        format: int64
+      relatedBlobs:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1CelestiaBlobId'
+  v1EigenDaBlob:
+    type: object
+    properties:
+      batchHeaderHash:
+        type: string
+      batchId:
+        type: string
+        format: uint64
+      blobIndex:
+        type: integer
+        format: int64
+      l1ConfirmationBlock:
+        type: string
+        format: uint64
+      l1ConfirmationTxHash:
+        type: string
+      size:
+        type: string
+        format: uint64
+      data:
+        type: string
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'

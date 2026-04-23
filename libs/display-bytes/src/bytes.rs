@@ -148,13 +148,9 @@ impl FromStr for Bytes {
     type Err = ParseBytesError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        if let Some(value) = value.strip_prefix("0x") {
-            hex::decode(value)
-        } else {
-            hex::decode(value)
-        }
-        .map(Into::into)
-        .map_err(|e| ParseBytesError(format!("Invalid hex: {e}")))
+        super::decode_hex(value)
+            .map(Into::into)
+            .map_err(|e| ParseBytesError(format!("Invalid hex: {e}")))
     }
 }
 
@@ -171,13 +167,9 @@ where
     D: Deserializer<'de>,
 {
     let value = String::deserialize(d)?;
-    if let Some(value) = value.strip_prefix("0x") {
-        hex::decode(value)
-    } else {
-        hex::decode(&value)
-    }
-    .map(Into::into)
-    .map_err(|e| serde::de::Error::custom(e.to_string()))
+    super::decode_hex(&value)
+        .map(Into::into)
+        .map_err(|e| serde::de::Error::custom(e.to_string()))
 }
 
 #[cfg(test)]

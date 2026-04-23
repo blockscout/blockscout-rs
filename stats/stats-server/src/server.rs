@@ -1,34 +1,179 @@
+use std::{collections::HashMap, future::Future, path::PathBuf, sync::Arc, time::Duration};
+
 use crate::{
-    charts::Charts, charts_config, health::HealthService, read_service::ReadService,
-    settings::Settings, update_service::UpdateService,
+    auth::{ApiKey, AuthorizationProvider},
+    blockscout_waiter::{self, IndexingStatusListener, init_blockscout_api_client},
+    config::{self, read_charts_config, read_layout_config, read_update_groups_config},
+    health::HealthService,
+    linked_stats::LinkedStatsClient,
+    read_service::ReadService,
+    runtime_setup::RuntimeSetup,
+    settings::{
+        Mode, Settings, apply_interchain_mode_settings, apply_multichain_mode_settings,
+        apply_zetachain_cctx_mode_settings, handle_disable_internal_transactions,
+        handle_enable_all_arbitrum, handle_enable_all_eip_7702, handle_enable_all_op_stack,
+    },
+    update_service::{UpdateService, UpdateServiceConfig},
 };
-use actix_web::web::ServiceConfig;
-use blockscout_service_launcher::LaunchSettings;
-use sea_orm::{ConnectOptions, Database};
-use stats::migration::MigratorTrait;
+
+use anyhow::{Context, anyhow};
+use blockscout_endpoint_swagger::route_swagger;
+use blockscout_service_launcher::{
+    database::{DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings},
+    launcher::{self, GracefulShutdownHandler, LaunchSettings},
+};
+use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use stats::{Named, data_source::types::IndexerMigrations, lines::NewBuilderAccounts, metrics};
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
-use std::sync::Arc;
+use tokio::task::JoinSet;
+use tokio_util::task::TaskTracker;
 
-pub fn http_configure(config: &mut ServiceConfig, s: Arc<impl StatsService>) {
-    route_stats_service(config, s);
+const SERVICE_NAME: &str = "stats";
+
+pub async fn stats(
+    mut settings: Settings,
+    shutdown: Option<GracefulShutdownHandler>,
+) -> Result<(), anyhow::Error> {
+    blockscout_service_launcher::tracing::init_logs(
+        SERVICE_NAME,
+        &settings.tracing,
+        &settings.jaeger,
+    )?;
+    let mut charts_config = read_charts_config(&[settings.charts_config.clone()])?;
+    let layout_config = read_layout_config(&[settings.layout_config.clone()])?;
+    let update_groups_config = read_update_groups_config(&[settings.update_groups_config.clone()])?;
+    handle_enable_all_arbitrum(settings.enable_all_arbitrum, &mut charts_config);
+    handle_enable_all_op_stack(settings.enable_all_op_stack, &mut charts_config);
+    handle_enable_all_eip_7702(settings.enable_all_eip_7702, &mut charts_config);
+    handle_disable_internal_transactions(
+        settings.disable_internal_transactions,
+        &mut settings.conditional_start,
+        &mut charts_config,
+    );
+
+    match settings.mode {
+        Mode::MultichainAggregator => apply_multichain_mode_settings(&mut settings),
+        Mode::Interchain => apply_interchain_mode_settings(&mut settings),
+        Mode::Zetachain => apply_zetachain_cctx_mode_settings(&mut settings, &mut charts_config),
+        Mode::Blockscout => {}
+    }
+
+    let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
+    let db = init_stats_db(&settings).await?;
+    let indexer = connect_to_main_indexer_db(&settings).await?;
+    let cctx_indexer = connect_to_second_indexer_db(&settings).await?;
+
+    check_if_unsupported_charts_are_enabled(settings.mode, &charts, &indexer).await?;
+    create_charts_if_needed(&db, &charts).await?;
+
+    if settings.metrics.enabled {
+        metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
+    }
+
+    let shutdown = shutdown.unwrap_or_default();
+    let mut futures = JoinSet::new();
+
+    let (status_waiter_task, status_listener) = init_waiter(&settings, cctx_indexer.clone())?;
+    if let Some(status_waiter_task) = status_waiter_task {
+        spawn_and_track(&mut futures, &shutdown.task_tracker, status_waiter_task);
+    }
+
+    let update_service = Arc::new(
+        UpdateService::new(UpdateServiceConfig {
+            db: db.clone(),
+            indexer_db: indexer.clone(),
+            second_indexer_db: cctx_indexer.clone(),
+            charts: charts.clone(),
+            status_listener,
+            mode: settings.mode,
+            multichain_filter: settings.multichain_filter,
+            interchain_primary_id: settings.interchain_primary_id,
+        })
+        .await?,
+    );
+    let update_service_cloned = update_service.clone();
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
+        update_service_cloned
+            .run(
+                settings.concurrent_start_updates,
+                settings.default_schedule,
+                settings.force_update_on_start,
+            )
+            .await;
+        Ok(())
+    });
+    let authorization = init_authorization(settings.api_keys);
+    let linked_stats = LinkedStatsClient::try_new(&settings.linked_stats)?;
+    let linked_stats_max_hops = linked_stats
+        .as_ref()
+        .map(|_| settings.linked_stats.max_hops())
+        .unwrap_or(0);
+    let read_service = Arc::new(
+        ReadService::new(
+            db.clone(),
+            indexer.clone(),
+            settings.mode,
+            cctx_indexer.clone(),
+            charts,
+            update_service,
+            authorization,
+            settings.limits.into(),
+            linked_stats,
+            linked_stats_max_hops,
+        )
+        .await?,
+    );
+    let health = Arc::new(HealthService::default());
+    let grpc_router = grpc_router(read_service.clone(), health.clone());
+    let http_router = HttpRouter {
+        stats: read_service,
+        health: health.clone(),
+        swagger_path: settings.swagger_path,
+    };
+    let launch_settings = LaunchSettings {
+        service_name: SERVICE_NAME.to_string(),
+        server: settings.server,
+        metrics: settings.metrics,
+        graceful_shutdown: shutdown.clone(),
+    };
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
+        launcher::launch(launch_settings, http_router, grpc_router).await
+    });
+    let shutdown_cloned = shutdown.clone();
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
+        shutdown_cloned.shutdown_token.cancelled().await;
+        Ok(())
+    });
+
+    let res = futures.join_next().await;
+    on_termination(&db, &indexer, &cctx_indexer, &shutdown, &mut futures).await;
+    res.expect("task set is not empty")?
 }
 
 #[derive(Clone)]
 struct HttpRouter<S: StatsService> {
     stats: Arc<S>,
     health: Arc<HealthService>,
+    swagger_path: PathBuf,
 }
 
-impl<S: StatsService> blockscout_service_launcher::HttpRouter for HttpRouter<S> {
+impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config
             .configure(|config| route_health(config, self.health.clone()))
-            .configure(|config| http_configure(config, self.stats.clone()));
+            .configure(|config| route_stats_service(config, self.stats.clone()))
+            .configure(|config| {
+                route_swagger(
+                    config,
+                    self.swagger_path.clone(),
+                    "/api/v1/docs/swagger.yaml",
+                )
+            });
     }
 }
 
@@ -41,63 +186,190 @@ fn grpc_router<S: StatsService>(
         .add_service(StatsServiceServer::from_arc(stats))
 }
 
-pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
-    let launch_settings = LaunchSettings {
-        service_name: "stats".to_owned(),
-        server: settings.server,
-        metrics: settings.metrics,
-        tracing: settings.tracing,
-        jaeger: settings.jaeger,
+async fn sleep_indefinitely() {
+    tokio::time::sleep(Duration::from_secs(u64::MAX)).await;
+}
+
+fn spawn_and_track<F>(
+    futures: &mut JoinSet<F::Output>,
+    tracker: &TaskTracker,
+    future: F,
+) -> tokio::task::AbortHandle
+where
+    F: Future,
+    F: Send + 'static,
+    F::Output: Send,
+{
+    futures.spawn(tracker.track_future(future))
+}
+
+async fn init_stats_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
+    let database_settings = DatabaseSettings {
+        connect: DatabaseConnectSettings::Url(settings.db_url.clone()),
+        connect_options: DatabaseConnectOptionsSettings::default(),
+        create_database: settings.create_database,
+        run_migrations: settings.run_migrations,
     };
-    blockscout_service_launcher::init_logs(
-        &launch_settings.service_name,
-        &launch_settings.tracing,
-        &launch_settings.jaeger,
-    )?;
+    let db = Arc::new(
+        blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
+            &database_settings,
+        )
+        .await
+        .context("stats DB")?,
+    );
+    Ok(db)
+}
 
-    let charts_config = std::fs::read(settings.charts_config)?;
-    let charts_config: charts_config::Config = toml::from_slice(&charts_config)?;
-
-    let mut opt = ConnectOptions::new(settings.db_url.clone());
+async fn connect_to_indexer_db_common(url: String) -> anyhow::Result<Arc<DatabaseConnection>> {
+    let mut opt = ConnectOptions::new(url);
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    let db = Arc::new(Database::connect(opt).await?);
+    // we'd like to have each batch to resolve in under 1 hour
+    // as it seems to be the middleground between too many steps & occupying DB for too long
+    opt.sqlx_slow_statements_logging_settings(
+        tracing::log::LevelFilter::Warn,
+        Duration::from_secs(3600),
+    );
+    let conn = Arc::new(Database::connect(opt).await.context("indexer DB")?);
+    Ok(conn)
+}
 
-    let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
-    opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    let blockscout = Arc::new(Database::connect(opt).await?);
+async fn connect_to_main_indexer_db(
+    settings: &Settings,
+) -> anyhow::Result<Arc<DatabaseConnection>> {
+    connect_to_indexer_db_common(
+        settings
+            .indexer_db_url
+            .clone()
+            .or_else(|| settings.blockscout_db_url.clone())
+            .ok_or(anyhow!("Indexer DB URL is not set"))?,
+    )
+    .await
+}
 
-    if settings.run_migrations {
-        stats::migration::Migrator::up(&db, None).await?;
-    }
+/// Connection to the zetachain CCTX indexer DB (currently)
+///
+/// `None` if CCTX is not enabled
+async fn connect_to_second_indexer_db(
+    settings: &Settings,
+) -> anyhow::Result<Option<Arc<DatabaseConnection>>> {
+    let connection = if settings.mode == Mode::Zetachain {
+        Some(
+            connect_to_indexer_db_common(
+                settings
+                    .second_indexer_db_url
+                    .clone()
+                    .ok_or(anyhow!("Second indexer DB URL is not set"))?,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    Ok(connection)
+}
 
-    let charts = Arc::new(Charts::new(charts_config)?);
+fn init_runtime_setup(
+    charts_config: config::charts::Config<config::types::AllChartSettings>,
+    layout_config: config::layout::Config,
+    update_groups_config: config::update_groups::Config,
+) -> anyhow::Result<Arc<RuntimeSetup>> {
+    let setup = RuntimeSetup::new(charts_config, layout_config, update_groups_config)?;
+    Ok(Arc::new(setup))
+}
 
-    // TODO: may be run this with migrations or have special config
-    for chart in charts.charts.iter() {
-        chart.create(&db).await?;
-    }
-
-    let update_service =
-        Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);
-
-    tokio::spawn(async move {
-        if let Some(force_update) = settings.force_update_on_start {
-            update_service
-                .clone()
-                .force_update_all_in_series(force_update)
-                .await;
+async fn check_if_unsupported_charts_are_enabled(
+    mode: Mode,
+    setup: &RuntimeSetup,
+    indexer_db: &DatabaseConnection,
+) -> anyhow::Result<()> {
+    let migrations = IndexerMigrations::query_from_db(mode, indexer_db).await?;
+    if !migrations.denormalization {
+        let charts_without_normalization = &[NewBuilderAccounts::name()];
+        let mut all_enabled_charts_with_deps = setup.update_groups.values().flat_map(|g| {
+            g.group
+                .enabled_members_with_deps(&g.enabled_members)
+                .into_iter()
+        });
+        if let Some(key) = all_enabled_charts_with_deps
+            .find(|key| charts_without_normalization.contains(&key.name().to_string()))
+        {
+            return Err(anyhow!(
+                "chart with name '{key}' is not supported without denormalized database. \
+                Ensure denormalization is complete or disable the corresponding charts."
+            ));
         }
-        update_service.run(settings.default_schedule);
+    }
+    Ok(())
+}
+
+async fn create_charts_if_needed(
+    db: &DatabaseConnection,
+    charts: &RuntimeSetup,
+) -> anyhow::Result<()> {
+    for group_entry in charts.update_groups.values() {
+        group_entry
+            .group
+            .create_charts_sync(db, None, &group_entry.enabled_members)
+            .await?;
+    }
+    Ok(())
+}
+
+/// Returns `(<waiter task>, <listener>)`
+fn init_waiter(
+    settings: &Settings,
+    cctx_db: Option<Arc<DatabaseConnection>>,
+) -> anyhow::Result<(
+    Option<impl Future<Output = anyhow::Result<()>> + use<>>,
+    Option<IndexingStatusListener>,
+)> {
+    let blockscout_api_config = init_blockscout_api_client(settings)?;
+    let (status_waiter, status_listener) = blockscout_api_config
+        .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone(), cctx_db))
+        .unzip();
+    let status_task = status_waiter.map(|w| {
+        async move {
+            w.run().await?;
+            // we don't want to finish on success because of the way
+            // the tasks are handled here
+            sleep_indefinitely().await;
+            anyhow::Result::<()>::Ok(())
+        }
     });
+    Ok((status_task, status_listener))
+}
 
-    let read_service = Arc::new(ReadService::new(db, charts).await?);
-    let health = Arc::new(HealthService::default());
+fn init_authorization(api_keys: HashMap<String, String>) -> Arc<AuthorizationProvider> {
+    if api_keys.is_empty() {
+        tracing::warn!(
+            "No api keys found in settings, provide them to make use of authorization-protected endpoints"
+        )
+    }
+    let api_keys = api_keys
+        .into_iter()
+        .map(|(name, key)| (name, ApiKey::new(key)))
+        .collect();
+    Arc::new(AuthorizationProvider::new(api_keys))
+}
 
-    let grpc_router = grpc_router(read_service.clone(), health.clone());
-    let http_router = HttpRouter {
-        stats: read_service,
-        health: health.clone(),
-    };
-
-    blockscout_service_launcher::launch(&launch_settings, http_router, grpc_router).await
+async fn on_termination(
+    db: &DatabaseConnection,
+    indexer: &DatabaseConnection,
+    cctx_indexer: &Option<Arc<DatabaseConnection>>,
+    shutdown: &GracefulShutdownHandler,
+    futures: &mut JoinSet<anyhow::Result<()>>,
+) {
+    if let Err(e) = db.close_by_ref().await {
+        tracing::error!("Failed to close stats db connection upon termination: {e:?}");
+    }
+    if let Err(e) = indexer.close_by_ref().await {
+        tracing::error!("Failed to close indexer db connection upon termination: {e:?}");
+    }
+    if let Some(cctx_indexer) = cctx_indexer
+        && let Err(e) = cctx_indexer.close_by_ref().await
+    {
+        tracing::error!("Failed to close CCTX indexer db connection upon termination: {e:?}");
+    }
+    shutdown.shutdown_token.cancel();
+    futures.abort_all();
 }

@@ -1,0 +1,35 @@
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'da-indexer-data-s3-migrator/v*'
+    paths:
+      - da-indexer/**
+      - .github/workflows/da-indexer-data-s3-migrator.yml
+      - .github/workflows/_*.yml
+      - .github/actions/**
+  pull_request:
+    paths:
+      - da-indexer/**
+      - .github/workflows/da-indexer-data-s3-migrator.yml
+      - .github/workflows/_*.yml
+      - .github/actions/**
+
+name: Build docker (da-indexer data-s3-migrator)
+
+defaults:
+  run:
+    working-directory: da-indexer
+
+jobs:
+  docker:
+    name: Docker build and docker push
+    uses: ./.github/workflows/_docker-build-push.yml
+    with:
+      service-name: da-indexer-data-s3-migrator
+      docker-context-path: da-indexer
+      dockerfile-path: da-indexer/data-s3-migrator.dockerfile
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}

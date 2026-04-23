@@ -1,26 +1,39 @@
-use super::{bytecodes_comparison::extract_constructor_args, BytecodeRemote};
+use super::{
+    bytecodes_comparison::extract_constructor_args,
+    types::{BytecodeRemote, BytecodeType},
+};
 use crate::{verification, verification::SourceType};
 use anyhow::Context;
 use bytes::Bytes;
-use entity::{files, sea_orm_active_enums::BytecodeType, sources};
+use entity::{files, sources};
 use ethabi::Constructor;
-use sea_orm::{prelude::DbErr, ConnectionTrait, EntityTrait};
+use sea_orm::{
+    prelude::{DateTime, DbErr},
+    ConnectionTrait, EntityTrait,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use verification_common::solidity_libraries;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchContract {
+    pub updated_at: DateTime,
     pub file_name: String,
     pub contract_name: String,
     pub compiler_version: String,
-    pub compiler_settings: String,
+    pub compiler_settings: serde_json::Value,
     pub source_type: SourceType,
     pub source_files: BTreeMap<String, String>,
     pub abi: Option<String>,
     pub constructor_arguments: Option<String>,
     pub match_type: verification::MatchType,
+    pub compilation_artifacts: Option<String>,
+    pub creation_input_artifacts: Option<String>,
+    pub deployed_bytecode_artifacts: Option<String>,
     pub raw_creation_input: Vec<u8>,
     pub raw_deployed_bytecode: Vec<u8>,
+    pub is_blueprint: bool,
+    pub libraries: BTreeMap<String, String>,
 }
 
 impl MatchContract {
@@ -52,17 +65,19 @@ impl MatchContract {
         match_type: verification::MatchType,
     ) -> Result<Self, anyhow::Error> {
         let constructor = get_constructor(source.abi.clone()).context("source has invalid abi")?;
-        let is_creation_input = remote.bytecode_type == BytecodeType::CreationInput;
+        let has_constructor_args = remote.bytecode_type == BytecodeType::CreationCode;
         let local_raw = match remote.bytecode_type {
-            BytecodeType::CreationInput => &source.raw_creation_input,
-            BytecodeType::DeployedBytecode => &source.raw_deployed_bytecode,
+            BytecodeType::CreationCode | BytecodeType::CreationCodeWithoutConstructor => {
+                &source.raw_creation_input
+            }
+            BytecodeType::RuntimeCode => &source.raw_deployed_bytecode,
         };
         let local_raw = Bytes::copy_from_slice(local_raw);
         let constructor_args = extract_constructor_args(
             &remote.data,
             &local_raw,
             constructor.as_ref(),
-            is_creation_input,
+            has_constructor_args,
         )
         .map_err(|e| {
             tracing::error!("failed to extract constructor: {}", e);
@@ -73,18 +88,33 @@ impl MatchContract {
             .into_iter()
             .map(|f| (f.name, f.content))
             .collect();
+        let libraries =
+            solidity_libraries::try_parse_compiler_linked_libraries(&source.compiler_settings)
+                .inspect_err(|e| {
+                    tracing::error!("failed to parse compiler linked libraries: {e:#?}");
+                })?;
         let match_contract = MatchContract {
+            updated_at: source.updated_at,
             file_name: source.file_name,
             contract_name: source.contract_name,
             compiler_version: source.compiler_version,
-            compiler_settings: source.compiler_settings.to_string(),
+            compiler_settings: source.compiler_settings,
             source_type: source.source_type.into(),
             source_files,
             abi: source.abi.map(|abi| abi.to_string()),
             constructor_arguments: constructor_args.map(hex::encode),
             match_type,
+            compilation_artifacts: source.compilation_artifacts.map(|value| value.to_string()),
+            creation_input_artifacts: source
+                .creation_input_artifacts
+                .map(|value| value.to_string()),
+            deployed_bytecode_artifacts: source
+                .deployed_bytecode_artifacts
+                .map(|value| value.to_string()),
             raw_creation_input: source.raw_creation_input,
             raw_deployed_bytecode: source.raw_deployed_bytecode,
+            is_blueprint: false,
+            libraries,
         };
 
         Ok(match_contract)
@@ -108,7 +138,7 @@ mod tests {
     use super::*;
     use crate::verification::MatchType;
     use blockscout_display_bytes::Bytes as DisplayBytes;
-    use entity::{files, sea_orm_active_enums::BytecodeType};
+    use entity::files;
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
 
@@ -147,6 +177,9 @@ mod tests {
             created_at: Default::default(),
             updated_at: Default::default(),
             file_ids_hash: Default::default(),
+            compilation_artifacts: Default::default(),
+            creation_input_artifacts: Default::default(),
+            deployed_bytecode_artifacts: Default::default(),
         }
     }
 
@@ -162,9 +195,9 @@ mod tests {
         }];
 
         let remote = BytecodeRemote {
-            bytecode_type: BytecodeType::CreationInput,
+            bytecode_type: BytecodeType::CreationCode,
             data: DisplayBytes::from_str(
-                &vec![NUMBER_MAIN_PART, NUMBER_META_PART, NUMBER_ARGS_PART].join(""),
+                &[NUMBER_MAIN_PART, NUMBER_META_PART, NUMBER_ARGS_PART].join(""),
             )
             .unwrap()
             .0,
@@ -181,17 +214,11 @@ mod tests {
         assert_eq!(result.file_name, source.file_name);
         assert_eq!(result.contract_name, source.contract_name);
         assert_eq!(result.compiler_version, source.compiler_version);
-        assert_eq!(
-            result.compiler_settings,
-            source.compiler_settings.to_string()
-        );
+        assert_eq!(result.compiler_settings, source.compiler_settings,);
         assert_eq!(result.source_type, source.source_type.into());
         assert_eq!(
             result.source_files,
-            BTreeMap::from_iter(vec![(
-                "Number.sol".to_string(),
-                "contract Number {}".to_string()
-            )])
+            BTreeMap::from_iter([("Number.sol".to_string(), "contract Number {}".to_string())])
         );
         assert_eq!(result.abi, source.abi.map(|abi| abi.to_string()));
         assert_eq!(
@@ -209,9 +236,9 @@ mod tests {
         let source = source();
 
         let remote = BytecodeRemote {
-            bytecode_type: BytecodeType::CreationInput,
+            bytecode_type: BytecodeType::CreationCode,
             data: DisplayBytes::from_str(
-                &vec![NUMBER_MAIN_PART, NUMBER_META_PART, invalid_args].join(""),
+                &[NUMBER_MAIN_PART, NUMBER_META_PART, invalid_args].join(""),
             )
             .unwrap()
             .0,

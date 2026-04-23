@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package blockscout.bens.v1;
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "google/api/field_behavior.proto";
+import "types.proto";
+import "domains_extractor.proto";
+
+option go_package = "github.com/blockscout/blockscout-rs/bens";
+
+service MultichainDomains {
+  // Get detailed information about name for Detailed name page
+  rpc GetDomainNameMultichain(GetDomainNameMultichainRequest) returns (DetailedDomain) {}
+  // Get list of events of domain for Detailed domain page
+  rpc ListDomainEventsMultichain(ListDomainEventsMultichainRequest) returns (ListDomainEventsResponse) {}
+  // Get basic info about name for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+  rpc LookupDomainNameMultichain(LookupDomainNameMultichainRequest) returns (LookupDomainNameResponse) {}
+  // Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+  rpc LookupAddressMultichain(LookupAddressMultichainRequest) returns (LookupAddressResponse) {}
+  // Get detailed information about main address of requested name
+  rpc GetAddressMultichain(GetAddressMultichainRequest) returns (GetAddressResponse) {}
+  // Perform batch resolving of list of addresses to names for blockscout backend requests
+  rpc BatchResolveAddressesMultichain(BatchResolveAddressesMultichainRequest) returns (BatchResolveAddressNamesResponse) {}
+  // Get list of supported protocols
+  rpc GetMultichainProtocols(GetProtocolsMultichainRequest) returns (GetProtocolsResponse) {}
+}
+
+
+/************************************************/
+
+message GetDomainNameMultichainRequest {
+  // Name of name, for example vitalik.eth
+  string name = 1;
+  // The chain (network) where domain search should be done
+  optional int64 chain_id = 2;
+  // Protocol id of domain, default is first priority protocol on that chain
+  optional string protocol_id = 3;
+  // Filtering field to remove expired names
+  bool only_active = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message ListDomainEventsMultichainRequest {
+  // Name of name, for example vitalik.eth
+  string name = 1;
+  // The chain (network) where domain search should be done
+  optional int64 chain_id = 2;
+  // Protocol id of domain, default is first priority protocol on that chain
+  optional string protocol_id = 3;
+  // Sorting field. Default is `timestamp`
+  string sort = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Order direction. Default is DESC
+  Order order = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message LookupDomainNameMultichainRequest {
+  // Optional. Name of domain, for example vitalik.eth. None means lookup for any name
+  optional string name = 1;
+  // The chain (network) where domain search should be done
+  optional int64 chain_id = 2;
+  // comma separated list of protocol ids. Default is ENS protocol only
+  optional string protocols = 3;
+  // Filtering field to remove expired names
+  bool only_active = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Sorting field. Default is `registration_date`
+  string sort = 5 [(google.api.field_behavior) = OPTIONAL];
+  // Order direction. Default is DESC
+  Order order = 6 [(google.api.field_behavior) = OPTIONAL];
+  // Optional. Max number of items in single response. Default is 50
+  optional uint32 page_size = 7;
+  // Optional. Value of `.pagination.page_token` from previous response
+  optional string page_token = 8;
+}
+
+message LookupAddressMultichainRequest {
+  // Address of EOA or contract
+  string address = 1;
+  optional int64 chain_id = 2;
+  // comma separated list of protocol ids. Default is ENS protocol only
+  optional string protocols = 3;
+  // Include domains resolved to the address
+  bool resolved_to = 4;
+  // Include domains owned by the address
+  bool owned_by = 5;
+  // Filtering field to remove expired domains
+  bool only_active = 6 [(google.api.field_behavior) = OPTIONAL];
+  // Sorting field. Default is `registration_date`
+  string sort = 7 [(google.api.field_behavior) = OPTIONAL];
+  // Order direction. Defaut is DESC
+  Order order = 8 [(google.api.field_behavior) = OPTIONAL];
+  // Optional. Max number of items in single response. Default is 50
+  optional uint32 page_size = 9;
+  // Optional. Value of `.pagination.page_token` from previous response
+  optional string page_token = 10;
+}
+
+message GetAddressMultichainRequest {
+  string address = 1;
+  // The chain (network) where domain search should be done
+  optional int64 chain_id = 2;
+  // comma separated list of protocol ids. Default is ENS protocol only
+  optional string protocols = 3;
+}
+
+message BatchResolveAddressesMultichainRequest {
+  // List of requested addresses
+  repeated string addresses = 1;
+  // The chain (network) where domain search should be done
+  optional int64 chain_id = 2;
+  // comma separated list of protocol ids. Default is ENS protocol only
+  optional string protocols = 3;
+}
+
+message GetProtocolsMultichainRequest {
+  // The chain (network) where to get protocols
+  optional int64 chain_id = 1;
+}

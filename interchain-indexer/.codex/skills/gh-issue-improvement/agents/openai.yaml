@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Issue Improvement"
+  short_description: "Draft an enhancement issue from repo context"
+  default_prompt: "Use $gh-issue-improvement to draft a GitHub improvement issue from the current conversation and save it under tmp/gh-issues/."
