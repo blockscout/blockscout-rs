@@ -298,7 +298,13 @@ fn build_bounded_message_paths_query(
             let placeholders: Vec<String> = (0..ids.len())
                 .map(|i| format!("${}", placeholder + i))
                 .collect();
-            where_parts.push(format!("c.id IN ({})", placeholders.join(", ")));
+            let placeholders = placeholders.join(", ");
+            let counterparty_column = match direction {
+                MessagePathDirection::Outgoing => "dst_chain_id",
+                MessagePathDirection::Incoming => "src_chain_id",
+            };
+            aggregate_where_parts.push(format!("{counterparty_column} IN ({placeholders})"));
+            where_parts.push(format!("c.id IN ({placeholders})"));
             for &id in ids {
                 values.push(Value::BigInt(Some(id)));
             }
@@ -6285,6 +6291,67 @@ mod tests {
                 messages_count: 4
             }]
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_include_zero_incoming_counterparty_expands_requested_known_rows_only() {
+        let _db = init_db("message_paths_include_zero_incoming_counterparty_expand").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(4),
+                    name: Set("D".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 3, 4)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(4, 3, 8)
+            .await
+            .unwrap();
+
+        let rows = interchain_db
+            .get_incoming_message_paths(3, None, None, Some(&[2, 3, 4, 999]), true)
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                MessagePathStatsRow {
+                    src_chain_id: 4,
+                    dst_chain_id: 3,
+                    messages_count: 8
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 2,
+                    dst_chain_id: 3,
+                    messages_count: 0
+                },
+            ]
+        );
+        assert!(rows.iter().all(|row| row.src_chain_id != 3));
     }
 
     #[tokio::test]
