@@ -10,8 +10,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 
 FROM chef AS build
 
-# Include proto common definitions (`proto` must be passed as build context)
-COPY --from=proto . /proto
+COPY ./proto /proto
 COPY . .
 COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
