@@ -16,6 +16,5 @@ Session.vim
 
 ## Build
 /target
-**/node_modules/**
 config.toml
 output

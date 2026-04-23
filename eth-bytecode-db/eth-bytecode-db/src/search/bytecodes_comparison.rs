@@ -1,5 +1,6 @@
 // TODO: try move to common crate since code is copipasted from smart-contract-verifier
 
+use crate::verification::MatchType;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
 use entity::{parts, sea_orm_active_enums::PartType};
@@ -74,6 +75,7 @@ impl LocalBytecode {
     }
 }
 
+#[allow(clippy::result_large_err)]
 #[derive(Error, Clone, Debug, PartialEq, Eq)]
 pub enum CompareError {
     #[error("bytecode length is less than expected: {part}; bytecodes: {raw}")]
@@ -94,8 +96,26 @@ pub enum CompareError {
     InvalidConstructorArguments(DisplayBytes),
 }
 
-pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<(), CompareError> {
+#[allow(clippy::result_large_err)]
+pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<MatchType, CompareError> {
     let local_bytecode = &local.raw_bytecode();
+
+    if remote_bytecode.starts_with(local_bytecode) {
+        // Local compilation bytecode is prefix of remote one,
+        // but there is no metadata parts in resultant bytecodes.
+        // As there is no way to determine of the source was the original one
+        // for such contracts, we consider all matches as partial.
+        if !local
+            .parts
+            .iter()
+            .any(|part| matches!(part, BytecodePart::Metadata { .. }))
+        {
+            return Ok(MatchType::Partial);
+        }
+        // If local compilation bytecode is prefix of remote one and metadata parts exist,
+        // metadata parts are the same, and we do not need to compare bytecode parts.
+        return Ok(MatchType::Full);
+    }
 
     if remote_bytecode.len() < local_bytecode.len() {
         return Err(CompareError::BytecodeLengthMismatch {
@@ -106,9 +126,12 @@ pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<(), Com
             ),
         });
     }
-    compare_bytecode_parts(remote_bytecode, local_bytecode, &local.parts)
+    compare_bytecode_parts(remote_bytecode, local_bytecode, &local.parts)?;
+
+    Ok(MatchType::Partial)
 }
 
+#[allow(clippy::result_large_err)]
 pub fn extract_constructor_args(
     remote_raw: &Bytes,
     local_raw: &Bytes,
@@ -143,6 +166,7 @@ pub fn extract_constructor_args(
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn compare_bytecode_parts(
     remote_raw: &Bytes,
     local_raw: &Bytes,
@@ -215,6 +239,7 @@ fn compare_bytecode_parts(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_constructor_args(
     encoded_args: Bytes,
     abi_constructor: &Constructor,
@@ -245,6 +270,7 @@ mod tests {
             id: 0,
             part_type: PartType::Main,
             data: hex::decode(DEFAULT_MAIN).unwrap(),
+            data_text: DEFAULT_MAIN.to_string(),
             created_at: Default::default(),
             updated_at: Default::default(),
         };
@@ -261,6 +287,7 @@ mod tests {
             id: 0,
             part_type: PartType::Metadata,
             data: hex::decode(DEFAULT_META).unwrap(),
+            data_text: DEFAULT_META.to_string(),
             created_at: Default::default(),
             updated_at: Default::default(),
         };
@@ -301,6 +328,7 @@ mod tests {
                     id: i as i64,
                     part_type,
                     data: hex::decode(bytecode).unwrap(),
+                    data_text: bytecode.to_string(),
                     created_at: Default::default(),
                     updated_at: Default::default(),
                 }
@@ -330,7 +358,8 @@ mod tests {
     #[test]
     fn compare_diff_meta() {
         let bytecodes = vec![DEFAULT_MAIN, DEFAULT_META];
-        let remote = format!("{}{}", 
+        let remote = format!(
+            "{}{}",
             DEFAULT_MAIN,
             "a2646970667358221220940dbafd63b6b52884aa9499b7b61e99e33685af80e603ffe485e9efe2ac2f7764736f6c63430008070033"
         );
@@ -360,7 +389,8 @@ mod tests {
     #[test]
     fn compare_diff_meta_double_meta() {
         let bytecodes = vec![DEFAULT_MAIN, DEFAULT_META, DEFAULT_MAIN, DEFAULT_META];
-        let remote = format!("{}{}{}{}", 
+        let remote = format!(
+            "{}{}{}{}",
             DEFAULT_MAIN,
             "a2646970667358221220940dbafd63b6b52884aa9499b7b61e99e33685af80e603ffe485e9efe2ac2f7764736f6c63430008070033",
             DEFAULT_MAIN,
@@ -381,7 +411,8 @@ mod tests {
             ),
         ] {
             let bytecodes = vec![DEFAULT_MAIN, DEFAULT_META, DEFAULT_MAIN, DEFAULT_META];
-            let remote = format!("{}{}{}{}", 
+            let remote = format!(
+                "{}{}{}{}",
                 random_string1,
                 "a2646970667358221220c424331e61ba143d01f757e1a3b6ddcfe99698f6c1862e2133c4d7d277854b9564736f6c63430008070033",
                 random_string2,

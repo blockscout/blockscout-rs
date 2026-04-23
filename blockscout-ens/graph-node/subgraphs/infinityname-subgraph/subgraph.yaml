@@ -1,0 +1,46 @@
+specVersion: 0.0.5
+description: Subgraph to index InfinityName protocol events
+repository: https://github.com/blockscout/blockscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: InfinityNameUpgradeable
+    network: base-mainnet
+    source:
+      abi: InfinityNameUpgradeable
+      address: "0x86f6d95E688A5953074C0aBCb0d9d930837E528E"
+      startBlock: 37009868
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Account
+        - Domain
+        - Transfer
+        - DomainRegistered
+        - PrimaryDomainSet
+        - PrimaryDomainReset
+        - TokenSeized
+        - Registration
+        - NameRegistered
+        - TokenIdToDomain
+        - PrimaryNameRecord
+      abis:
+        - name: InfinityNameUpgradeable
+          file: ./abis/InfinityNameUpgradeable.json
+        - name: ERC721
+          file: ./abis/ERC721.json
+      eventHandlers:
+        - event: DomainRegistered(indexed address,string,uint256)
+          handler: handleDomainRegistered
+        - event: PrimaryDomainSet(indexed address,uint256,string)
+          handler: handlePrimaryDomainSet
+        - event: PrimaryDomainReset(indexed address,uint256)
+          handler: handlePrimaryDomainReset
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+        - event: TokenSeized(indexed address,indexed address,indexed uint256)
+          handler: handleTokenSeized
+      file: ./src/infinityname-registry.ts

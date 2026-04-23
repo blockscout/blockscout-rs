@@ -1,0 +1,163 @@
+syntax = "proto3";
+
+package blockscout.bens.v1;
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "google/api/field_behavior.proto";
+import "types.proto";
+
+option go_package = "github.com/blockscout/blockscout-rs/bens";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Blockscout ENS";
+    version: "1.5.0";
+    contact: {
+      name: "Blockscout";
+      url: "https://blockscout.com";
+      email: "support@blockscout.com";
+    };
+  };
+  host: "bens.services.blockscout.com"
+  schemes: [HTTPS]
+  external_docs: {
+    url: "https://github.com/blockscout/blockscout-rs";
+    description: "More about blockscout microservices";
+  }
+};
+
+
+
+service DomainsExtractor {
+  // Get detailed information about domain for Detailed domain page
+  rpc GetDomain(GetDomainRequest) returns (DetailedDomain) {}
+  // Get list of events of domain for Detailed domain page
+  rpc ListDomainEvents(ListDomainEventsRequest) returns (ListDomainEventsResponse) {}
+  // Get basic info about domain for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+  rpc LookupDomainName(LookupDomainNameRequest) returns (LookupDomainNameResponse) {}
+  // Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
+  rpc LookupAddress(LookupAddressRequest) returns (LookupAddressResponse) {}
+  // Get detailed information about main domain of requested address
+  rpc GetAddress(GetAddressRequest) returns (GetAddressResponse) {}
+  // Perform batch resolving of list of address for blockscout backend requests
+  rpc BatchResolveAddressNames(BatchResolveAddressNamesRequest) returns (BatchResolveAddressNamesResponse) {}
+  // Get list of supported protocols
+  rpc GetProtocols(GetProtocolsRequest) returns (GetProtocolsResponse) {}
+}
+
+/************************************************/
+
+message GetDomainRequest {
+  // Name of domain, for example vitalik.eth
+  string name = 1;
+  // The chain (network) where domain search should be done
+  int64 chain_id = 2;
+  // Filtering field to remove expired domains
+  bool only_active = 3;
+  // Protocol id of domain, default is first priority protocol on that chain
+  optional string protocol_id = 4;
+}
+
+message ListDomainEventsRequest {
+  // Name of domain, for example vitalik.eth
+  string name = 1;
+  // The chain (network) where domain search should be done
+  int64 chain_id = 2;
+  // Sorting field. Default is `timestamp`
+  string sort = 4;
+  // Order direction. Default is DESC
+  Order order = 5;
+  // Protocol id of domain, default is first priority protocol on that chain
+  optional string protocol_id = 6;
+}
+
+message ListDomainEventsResponse {
+  repeated DomainEvent items = 1;
+}
+
+message LookupDomainNameRequest {
+  // Optional. Name of domain, for example vitalik.eth. None means lookup for any name
+  optional string name = 1;
+  // The chain (network) where domain search should be done
+  int64 chain_id = 2;
+  // Filtering field to remove expired domains
+  bool only_active = 3;
+  // Sorting field. Default is `registration_date`
+  string sort = 4;
+  // Order direction. Default is DESC
+  Order order = 5;
+  // Optional. Max number of items in single response. Default is 50
+  optional uint32 page_size = 6;
+  // Optional. Value of `.pagination.page_token` from previous response
+  optional string page_token = 7;
+  // comma separated list of protocol ids to filter by
+  optional string protocols = 8;
+}
+
+message LookupDomainNameResponse {
+  // List of domains that resolved to or owned by requested address
+  // Sorted by relevance, so first address could be displayed as main resolved address
+  repeated Domain items = 1;
+  Pagination next_page_params = 2;
+}
+
+message LookupAddressRequest {
+  // Address of EOA or contract
+  string address = 1;
+  // The chain (network) where domain search should be done
+  int64 chain_id = 2;
+  // Include domains resolved to the address
+  bool resolved_to = 4;
+  // Include domains owned by the address
+  bool owned_by = 5;
+  // Filtering field to remove expired domains
+  bool only_active = 6;
+  // Sorting field. Default is `registration_date`
+  string sort = 7;
+  // Order direction. Defaut is DESC
+  Order order = 8;
+  // Optional. Max number of items in single response. Default is 50
+  optional uint32 page_size = 9;
+  // Optional. Value of `.pagination.page_token` from previous response
+  optional string page_token = 10;
+  // comma separated list of protocol ids to filter by
+  optional string protocols = 11;
+}
+
+message LookupAddressResponse {
+  // List of domains that resolved to or owned by requested address
+  // Sorted by relevance, so first address could be displayed as main resolved address
+  repeated Domain items = 1;
+  Pagination next_page_params = 2;
+}
+
+message GetAddressRequest {
+  string address = 1;
+  int64 chain_id = 2;
+  optional string protocol_id = 3;
+}
+
+message GetAddressResponse {
+  DetailedDomain domain = 1;
+  int32 resolved_domains_count = 2;
+}
+
+message BatchResolveAddressNamesRequest {
+  // List of requested addresses
+  repeated string addresses = 1;
+  // The chain (network) where domain search should be done
+  int64 chain_id = 2;
+}
+
+message BatchResolveAddressNamesResponse {
+  map<string, string> names = 1;
+}
+
+message GetProtocolsRequest {
+    // The chain (network) where to get protocols
+    int64 chain_id = 1;
+}
+
+message GetProtocolsResponse {
+    repeated ProtocolInfo items = 1;
+}

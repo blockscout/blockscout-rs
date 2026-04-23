@@ -3,11 +3,34 @@ config_version: 3
 
 http:
   rules:
-    #################### SolidityVerifier ####################
+    #################### Database ####################
 
     - selector: blockscout.ethBytecodeDb.v2.Database.SearchSources
       post: /api/v2/bytecodes/sources:search
       body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.SearchSourcifySources
+      post: /api/v2/bytecodes/sources:search-sourcify
+      body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.SearchAllianceSources
+      post: /api/v2/bytecodes/sources:search-alliance
+      body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.SearchAllSources
+      post: /api/v2/bytecodes/sources:search-all
+      body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.SearchEventDescriptions
+      post: /api/v2/event-descriptions:search
+      body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.BatchSearchEventDescriptions
+      post: /api/v2/event-descriptions:batch-search
+      body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.GetAllianceStats
+      get: /api/v2/alliance/stats
 
     #################### SolidityVerifier ####################
 
@@ -28,6 +51,10 @@ http:
       post: /api/v2/verifier/vyper/sources:verify-multi-part
       body: "*"
 
+    - selector: blockscout.ethBytecodeDb.v2.VyperVerifier.VerifyStandardJson
+      post: /api/v2/verifier/vyper/sources:verify-standard-json
+      body: "*"
+
     - selector: blockscout.ethBytecodeDb.v2.VyperVerifier.ListCompilerVersions
       get: /api/v2/verifier/vyper/versions
 
@@ -36,6 +63,21 @@ http:
     - selector: blockscout.ethBytecodeDb.v2.SourcifyVerifier.Verify
       post: /api/v2/verifier/sourcify/sources:verify
       body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.SourcifyVerifier.VerifyFromEtherscan
+      post: /api/v2/verifier/sourcify/sources:verify-from-etherscan
+      body: "*"
+
+    #################### Verifier Alliance ####################
+
+    - selector: blockscout.ethBytecodeDb.v2.VerifierAlliance.BatchImportSolidityMultiPart
+      post: /api/v2/alliance/solidity/multi-part:batch-import
+      body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.VerifierAlliance.BatchImportSolidityStandardJson
+      post: /api/v2/alliance/solidity/standard-json:batch-import
+      body: "*"
+
 
     #################### Health ####################
 

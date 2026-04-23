@@ -1,31 +1,109 @@
-# just is like `make` but better https://github.com/casey/just
-
-# list all recipes
 default:
     just --list --unsorted
 
+db-host := env_var_or_default('DB_HOST', "localhost")
+db-port := env_var_or_default('DB_PORT', "5432")
+db-user := env_var_or_default('DB_USER', "postgres")
+db-password := env_var_or_default('DB_PASSWORD', "admin")
+db-name := env_var_or_default('DB_NAME', "stats")
+export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
+export RUST_LOG := env_var_or_default('RUST_LOG', "error")
+export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "0")
+
+docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
+test-db-port := env_var_or_default('TEST_DB_PORT', "9439")
+
+docker-build-dev *args:
+    docker compose -f docker-compose.dev.yml build
+
+docker-run-dev *args:
+    docker compose -f docker-compose.dev.yml up
+
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping
-    docker run -p 5432:5432 --name stats-postgres -e POSTGRES_PASSWORD=admin --rm -d postgres:13.8 -N 500
-    # wait for postgres to start
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres:17.5 -N 500
     sleep 3
-    docker exec -it stats-postgres psql -U postgres -c 'create database stats;'
+    # wait for postgres to start, but only if db_name is not empty
+    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'
 
 stop-postgres:
-    docker kill stats-postgres
+    docker kill {{docker-name}}
 
-restart-postgres:
-    just stop-postgres || true
-    just start-postgres
+start-test-postgres:
+    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
 
-test database_url *args:
-    DATABASE_URL={{database_url}} cargo test {{args}}
+stop-test-postgres:
+    just docker-name="{{docker-name}}-test" stop-postgres
 
-# runs with default database_url
-test-default *args: (test "postgres://postgres:admin@localhost:5432/" args)
+test *args:
+    cargo test {{args}} -- --include-ignored --nocapture
+
+test-with-db *args:
+    # remove db from previous run (if failed)
+    -just                                           stop-test-postgres              2> /dev/null
+    just                                            start-postgres-and-build-tests
+    just db-port="{{test-db-port}}" db-name=""      test                            {{args}}
+
+start-postgres-and-build-tests:
+    #!/bin/bash -eux
+    just start-test-postgres &
+    cargo build --tests &
+    trap 'kill $(jobs -pr) || true' EXIT
+    wait
+    echo "finished postgres wait"
+
+# apply the basic formatting 
+format:
+    if cargo sort --version >/dev/null 2>&1; then cargo sort --workspace; else echo "cargo-sort is not installed, skipping cargo sort"; fi
+    cargo fmt --all -- --config imports_granularity=Crate
+
+# check and lint the code
+check:
+    cargo check
+    cargo clippy --all --all-targets --all-features -- -D warnings
+
+# run formatting and checks together
+format-check:
+    just format
+    just check
+
+check-envs:
+    cargo run --bin env-docs-generation -- --validate-only
+
+generate-envs:
+    cargo run --bin env-docs-generation
 
 restart-generate-entities: 
-    just restart-postgres
+    -just stop-postgres
+    just start-postgres
     just stats/migrate-up
     just stats/generate-entities
     just stop-postgres
+
+run-multichain:
+    STATS__MODE=multichain_aggregator \
+    STATS__MULTICHAIN_FILTER=10,130 \
+    STATS__CHARTS_CONFIG=config/multichain/charts.json \
+    STATS__LAYOUT_CONFIG=config/multichain/layout.json \
+    STATS__UPDATE_GROUPS_CONFIG=config/multichain/update_groups.json \
+    STATS__DB_URL={{DATABASE_URL}} \
+    STATS__INDEXER_DB_URL=postgresql://postgres:admin@localhost:9433/multichain_aggregator \
+    STATS__CREATE_DATABASE=true \
+    STATS__RUN_MIGRATIONS=true \
+    STATS__SERVER__HTTP__ENABLED=true \
+    STATS__SERVER__HTTP__ADDR=0.0.0.0:8080 \
+    STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152 \
+    cargo run --bin stats-server
+
+run-interchain:
+    STATS__MODE=interchain \
+    STATS__CHARTS_CONFIG=config/interchain/charts.json \
+    STATS__LAYOUT_CONFIG=config/interchain/layout.json \
+    STATS__UPDATE_GROUPS_CONFIG=config/interchain/update_groups.json \
+    STATS__DB_URL={{DATABASE_URL}} \
+    STATS__INDEXER_DB_URL=postgresql://postgres:admin@localhost:5433/interchain_indexer \
+    STATS__CREATE_DATABASE=true \
+    STATS__RUN_MIGRATIONS=true \
+    STATS__SERVER__HTTP__ENABLED=true \
+    STATS__SERVER__HTTP__ADDR=0.0.0.0:8080 \
+    cargo run --bin stats-server

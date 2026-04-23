@@ -7,15 +7,12 @@ use eth_bytecode_db::verification::{
     VerificationMetadata, VerificationRequest,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifySolidityMultiPartRequest,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::{VerifyResponse, VerifySolidityMultiPartRequest},
+    http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
 };
 use tonic::Response;
-use verification_test_helpers::{
-    generate_verification_request,
-    smart_contract_veriifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    VerifierService,
-};
+use verification_test_helpers::{generate_verification_request, VerifierService};
 
 const DB_PREFIX: &str = "solidity_multi_part";
 
@@ -24,7 +21,6 @@ fn default_request_content() -> MultiPartFiles {
         source_files: Default::default(),
         evm_version: Some("london".to_string()),
         optimization_runs: None,
-        libraries: Default::default(),
     }
 }
 
@@ -94,7 +90,6 @@ async fn test_historical_data_is_added_into_database(service: MockSolidityVerifi
         "bytecode_type": "CreationInput",
         "compiler_version": "compiler_version",
         "evm_version": "london",
-        "libraries": {},
         "optimization_runs": null,
         "source_files": {}
     });
@@ -130,4 +125,22 @@ async fn test_verification_of_same_source_results_stored_once(
         DB_PREFIX, service,
     )
     .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_of_updated_source_replace_the_old_result() {
+    verification_test_helpers::test_verification_of_updated_source_replace_the_old_result(
+        DB_PREFIX, service,
+    )
+    .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_inserts_event_descriptions() {
+    verification_test_helpers::test_verification_inserts_event_descriptions(DB_PREFIX, service)
+        .await;
 }

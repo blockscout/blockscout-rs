@@ -1,0 +1,177 @@
+{
+  "registry": {
+    "default_name": "Registry",
+    "events": [
+      {
+        "name": "NewOwner",
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "node",
+            "type": "bytes32"
+          },
+          {
+            "indexed": true,
+            "name": "label",
+            "type": "bytes32"
+          },
+          {
+            "indexed": false,
+            "name": "owner",
+            "type": "address"
+          }
+        ]
+      },
+      {
+        "name": "NewResolver",
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "node",
+            "type": "bytes32"
+          },
+          {
+            "indexed": false,
+            "name": "resolver",
+            "type": "address"
+          }
+        ]
+      },
+      {
+        "name": "NewTTL",
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "node",
+            "type": "bytes32"
+          },
+          {
+            "indexed": false,
+            "name": "ttl",
+            "type": "uint64"
+          }
+        ]
+      },
+      {
+        "name": "Transfer",
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "node",
+            "type": "bytes32"
+          },
+          {
+            "indexed": false,
+            "name": "owner",
+            "type": "address"
+          }
+        ]
+      }
+    ]
+  },
+  "controller": {
+    "default_name": "RegistrarController",
+    "events": [
+      {
+        "name": "NameRegistered",
+        "inputs": [
+          {
+            "indexed": false,
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "indexed": true,
+            "name": "label",
+            "type": "bytes32"
+          },
+          {
+            "indexed": true,
+            "name": "owner",
+            "type": "address"
+          }
+        ]
+      },
+      {
+        "name": "NameRenewed",
+        "inputs": [
+          {
+            "indexed": false,
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "indexed": true,
+            "name": "label",
+            "type": "bytes32"
+          },
+          {
+            "indexed": false,
+            "name": "expires",
+            "type": "uint256"
+          }
+        ]
+      }
+    ]
+  },
+  "resolver": {
+    "default_name": "PublicResolver",
+    "events": [
+      {
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "node",
+            "type": "bytes32"
+          },
+          {
+            "indexed": false,
+            "name": "a",
+            "type": "address"
+          }
+        ],
+        "name": "AddrChanged"
+      }
+    ]
+  },
+  "base": {
+    "default_name": "BaseRegistrar",
+    "events": [
+      {
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "id",
+            "type": "uint256"
+          },
+          {
+            "indexed": true,
+            "name": "owner",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "name": "expires",
+            "type": "uint256"
+          }
+        ],
+        "name": "NameRegistered"
+      },
+      {
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "id",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "name": "expires",
+            "type": "uint256"
+          }
+        ],
+        "name": "NameRenewed"
+      }
+    ]
+  }
+}

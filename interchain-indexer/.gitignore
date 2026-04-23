@@ -1,0 +1,6 @@
+*.env
+database
+.claude/settings.local.json
+CLAUDE.local.md
+tmp
+__pycache__

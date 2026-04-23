@@ -1,0 +1,125 @@
+use std::{
+    collections::HashSet,
+    marker::{PhantomData, Send},
+    ops::Range,
+};
+
+use chrono::{DateTime, Utc};
+use sea_orm::{FromQueryResult, Statement};
+
+use crate::{
+    ChartError, ChartKey,
+    charts::db_interaction::read::{cached::find_all_cached, find_all_points},
+    data_source::{
+        kinds::remote_db::{RemoteQueryBehaviour, db_choice::DatabaseChoice},
+        types::{Cacheable, IndexerMigrations, UpdateContext},
+    },
+    range::{UniversalRange, data_source_query_range_to_db_statement_range},
+    types::{TimespanTrait, TimespanValue},
+};
+
+pub trait StatementFromRange: DatabaseChoice {
+    /// `completed_migrations` and `enabled_update_charts_recursive`
+    /// can be used for selecting more optimal query
+    fn get_statement(
+        _range: Option<Range<DateTime<Utc>>>,
+        _completed_migrations: &IndexerMigrations,
+        _enabled_update_charts_recursive: &HashSet<ChartKey>,
+    ) -> Statement {
+        panic!("not implemented for this statement")
+    }
+
+    fn get_statement_with_context(
+        cx: &UpdateContext<'_>,
+        range: Option<Range<DateTime<Utc>>>,
+    ) -> Statement {
+        Self::get_statement(
+            range,
+            &cx.indexer_applied_migrations,
+            &cx.enabled_update_charts_recursive,
+        )
+    }
+}
+
+/// Pull data from remote (blockscout) db according to statement
+/// `S` and sort it by date.
+///
+/// `P` - Type of point to retrieve within query.
+/// `DateValue<String>` can be used to avoid parsing the values,
+/// but `DateValue<Decimal>` or other types can be useful sometimes.
+pub struct PullAllWithAndSort<S, Resolution, Value, AllRangeSource>(
+    PhantomData<(S, Resolution, Value, AllRangeSource)>,
+)
+where
+    S: StatementFromRange,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult,
+    AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>;
+
+impl<S, Resolution, Value, AllRangeSource> RemoteQueryBehaviour
+    for PullAllWithAndSort<S, Resolution, Value, AllRangeSource>
+where
+    S: StatementFromRange,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult,
+    AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>,
+{
+    type Output = Vec<TimespanValue<Resolution, Value>>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError> {
+        let statement = prepare_range_query_statement::<S, AllRangeSource>(cx, range).await?;
+        find_all_points(S::get_db(cx)?, statement).await
+    }
+}
+/// Pull data from remote (blockscout) db according to statement
+/// `S`, sort it by date and cache the result (within one update).
+///
+/// See [`PullAllWithAndSort`] for more info.
+pub struct PullAllWithAndSortCached<S, Point, AllRangeSource>(
+    PhantomData<(S, Point, AllRangeSource)>,
+)
+where
+    S: StatementFromRange,
+    Point: FromQueryResult + TimespanTrait + Clone + Send,
+    Point::Timespan: Ord,
+    Vec<Point>: Cacheable,
+    AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>;
+
+impl<S, Point, AllRangeSource> RemoteQueryBehaviour
+    for PullAllWithAndSortCached<S, Point, AllRangeSource>
+where
+    S: StatementFromRange,
+    Point: FromQueryResult + TimespanTrait + Clone + Send,
+    Point::Timespan: Ord,
+    Vec<Point>: Cacheable,
+    AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>,
+{
+    type Output = Vec<Point>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Vec<Point>, ChartError> {
+        let statement = prepare_range_query_statement::<S, AllRangeSource>(cx, range).await?;
+        find_all_cached(&cx.cache, S::get_db(cx)?, statement).await
+    }
+}
+
+pub async fn prepare_range_query_statement<S, AllRangeSource>(
+    cx: &UpdateContext<'_>,
+    range: UniversalRange<DateTime<Utc>>,
+) -> Result<Statement, ChartError>
+where
+    S: StatementFromRange,
+    AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>,
+{
+    // to not overcomplicate the queries
+    let query_range =
+        data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
+    Ok(S::get_statement_with_context(cx, query_range))
+}

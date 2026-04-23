@@ -1,0 +1,171 @@
+syntax = "proto3";
+
+package blockscout.interchainIndexer.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
+
+import "v1/interchain_indexer.proto";
+
+// Shared ascending/descending order for statistics list endpoints.
+enum SortOrder {
+  DESC = 0;
+  ASC = 1;
+}
+
+// Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
+// Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
+message BridgedTokensListPagination {
+  optional string page_token = 1;
+  optional string direction = 2;
+  optional int64 asset_id = 3;
+  optional string name = 4;
+  optional bool name_blank = 5;
+  optional uint64 count = 6;
+}
+
+// Pagination for `/stats/chains` (composite cursor: direction, count, chain_id).
+message StatsChainsListPagination {
+  optional string page_token = 1;
+  optional string direction = 2;
+  optional uint64 count = 3;
+  optional int64 chain_id = 4;
+}
+
+message GetMessagePathsRequest {
+  int64 chain_id = 1;
+  optional string from_date = 2; // YYYY-MM-DD
+  optional string to_date = 3;   // YYYY-MM-DD
+  optional string counterparty_chain_ids = 4;
+}
+
+message MessagePathRow {
+  ChainInfo source_chain = 1;
+  ChainInfo destination_chain = 2;
+  uint64 messages_count = 3;
+}
+
+message GetMessagePathsResponse {
+  repeated MessagePathRow items = 1;
+}
+
+service InterchainStatisticsService {
+  rpc GetCommonStatistics(GetCommonStatisticsRequest) returns (GetCommonStatisticsResponse) {}
+  rpc GetDailyStatistics(GetDailyStatisticsRequest) returns (GetDailyStatisticsResponse) {}
+  rpc GetBridgedTokens(GetBridgedTokensRequest) returns (GetBridgedTokensResponse) {}
+  rpc GetChainsStats(GetChainsStatsRequest) returns (GetChainsStatsResponse) {}
+  rpc GetSentMessagePaths(GetMessagePathsRequest) returns (GetMessagePathsResponse) {}
+  rpc GetReceivedMessagePaths(GetMessagePathsRequest) returns (GetMessagePathsResponse) {}
+}
+
+enum BridgedTokensSort {
+  TOTAL_TRANSFERS_COUNT = 0;
+  OUTPUT_TRANSFERS_COUNT = 1;
+  INPUT_TRANSFERS_COUNT = 2;
+  NAME = 3;
+}
+
+enum StatsChainsSort {
+  UNIQUE_TRANSFER_USERS_COUNT = 0;
+}
+
+message GetBridgedTokensRequest {
+  int64 chain_id = 1;
+  optional uint32 page_size = 2;
+  optional bool last_page = 3;
+  // Sort field: TOTAL_TRANSFERS_COUNT[default] / OUTPUT_TRANSFERS_COUNT / INPUT_TRANSFERS_COUNT / NAME
+  BridgedTokensSort sort = 4;
+  // Sort order: DESC[default] / ASC
+  SortOrder order = 5;
+  
+  // Token-based pagination
+  optional string page_token = 6;
+  // Flat keys matching `BridgedTokensListPagination` / `next_page_params` / `prev_page_params` (for `api.use_pagination_token=false`, pass that dict fields here).
+  optional string direction = 7;
+  optional int64 asset_id = 8;
+  optional string name = 9;
+  optional bool name_blank = 10;
+  optional uint64 count = 11;
+  // Case-insensitive substring filter on the row display name (`stats_assets.name`).
+  optional string q = 12;
+}
+
+message GetChainsStatsRequest {
+  optional uint32 page_size = 1;
+  optional bool last_page = 2;
+  // Optional comma-separated chain ids filter, for example `123,456`.
+  // When absent or empty, statistics are returned for all known chains.
+  optional string chain_ids = 3;
+  // Sort order: DESC[default] / ASC
+  SortOrder order = 4;
+
+  // token-based pagination
+  optional string page_token = 5;
+
+  // raw pagination fields
+  optional string direction = 6;
+  optional uint64 count = 7;
+  optional int64 chain_id = 8;
+  // Case-insensitive substring filter on chain name or textual chain id.
+  optional string q = 9;
+  // Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]
+  StatsChainsSort sort = 10;
+}
+
+message StatsBridgedTokenItem {
+  string chain_id = 1;
+  string token_address = 2;
+  optional string name = 3;
+  optional string symbol = 4;
+  optional string icon_url = 5;
+  optional uint32 decimals = 6;
+}
+
+message StatsBridgedTokenRow {
+  string stats_asset_id = 1;
+  optional string name = 2;
+  optional string symbol = 3;
+  optional string icon_url = 4;
+  uint64 input_transfers_count = 5;
+  uint64 output_transfers_count = 6;
+  uint64 total_transfers_count = 7;
+  repeated StatsBridgedTokenItem tokens = 8;
+}
+
+message GetBridgedTokensResponse {
+  repeated StatsBridgedTokenRow items = 1;
+  optional BridgedTokensListPagination next_page_params = 2;
+  optional BridgedTokensListPagination prev_page_params = 3;
+}
+
+message StatsChainRow {
+  string id = 1;
+  string name = 2;
+  optional string logo = 3;
+  optional string explorer_url = 4;
+  uint64 unique_transfer_users_count = 5;
+}
+
+message GetChainsStatsResponse {
+  repeated StatsChainRow items = 1;
+  optional StatsChainsListPagination next_page_params = 2;
+  optional StatsChainsListPagination prev_page_params = 3;
+}
+
+message GetCommonStatisticsRequest {
+  optional uint64 timestamp = 1;
+}
+message GetDailyStatisticsRequest {
+  optional uint64 timestamp = 1;
+}
+
+message GetCommonStatisticsResponse {
+  string timestamp = 1;
+  uint64 total_messages = 2;
+  uint64 total_transfers = 3;
+}
+
+message GetDailyStatisticsResponse {
+  string date = 1;
+  uint64 daily_messages = 2;
+  uint64 daily_transfers = 3;
+}

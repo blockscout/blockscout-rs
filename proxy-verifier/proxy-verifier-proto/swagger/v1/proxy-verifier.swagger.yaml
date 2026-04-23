@@ -1,0 +1,418 @@
+swagger: "2.0"
+info:
+  title: proxy-verifier.proto
+  version: version not set
+tags:
+  - name: Proxy
+  - name: SolidityVerifier
+  - name: VyperVerifier
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/chains:
+    get:
+      operationId: Proxy_ListChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - Proxy
+  /api/v1/solidity/compilers:
+    get:
+      operationId: SolidityVerifier_ListCompilers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListCompilersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - SolidityVerifier
+  /api/v1/solidity/sources:verify-multi-part:
+    post:
+      operationId: SolidityVerifier_VerifyMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerificationResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SolidityVerifyMultiPartRequest'
+      tags:
+        - SolidityVerifier
+  /api/v1/solidity/sources:verify-standard-json:
+    post:
+      operationId: SolidityVerifier_VerifyStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerificationResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SolidityVerifyStandardJsonRequest'
+      tags:
+        - SolidityVerifier
+  /api/v1/verification/config:
+    get:
+      operationId: Proxy_GetVerificationConfig
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerificationConfig'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - Proxy
+  /api/v1/vyper/compilers:
+    get:
+      operationId: VyperVerifier_ListCompilers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListCompilersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - VyperVerifier
+  /api/v1/vyper/sources:verify-multi-part:
+    post:
+      operationId: VyperVerifier_VerifyMultiPart
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerificationResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VyperVerifyMultiPartRequest'
+      tags:
+        - VyperVerifier
+  /api/v1/vyper/sources:verify-standard-json:
+    post:
+      operationId: VyperVerifier_VerifyStandardJson
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1VerificationResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1VyperVerifyStandardJsonRequest'
+      tags:
+        - VyperVerifier
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  ContractValidationResultsContractValidationResult:
+    type: object
+    properties:
+      message:
+        type: string
+      status:
+        $ref: '#/definitions/ContractValidationResultsContractValidationResultStatus'
+  ContractValidationResultsContractValidationResultStatus:
+    type: string
+    enum:
+      - STATUS_UNSPECIFIED
+      - VALID
+      - INVALID
+      - INTERNAL_ERROR
+    default: STATUS_UNSPECIFIED
+  ContractVerificationResultsContractVerificationResult:
+    type: object
+    properties:
+      message:
+        type: string
+      status:
+        $ref: '#/definitions/ContractVerificationResultsContractVerificationResultStatus'
+  ContractVerificationResultsContractVerificationResultStatus:
+    type: string
+    enum:
+      - STATUS_UNSPECIFIED
+      - PARTIALLY_VERIFIED
+      - FULLY_VERIFIED
+      - FAILURE
+      - INTERNAL_ERROR
+    default: STATUS_UNSPECIFIED
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  VerificationResponseCompilationFailure:
+    type: object
+    properties:
+      message:
+        type: string
+  VerificationResponseContractValidationResults:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ContractValidationResultsContractValidationResult'
+  VerificationResponseContractVerificationResults:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ContractVerificationResultsContractVerificationResult'
+  googlerpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  v1Chain:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      iconUrl:
+        type: string
+      isTestnet:
+        type: boolean
+  v1Compiler:
+    type: object
+    properties:
+      version:
+        type: string
+      evmVersions:
+        type: array
+        items:
+          type: string
+  v1Contract:
+    type: object
+    properties:
+      chainId:
+        type: string
+      address:
+        type: string
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1ListChainsResponse:
+    type: object
+    properties:
+      chains:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Chain'
+        title: / List of supported chains
+  v1ListCompilersResponse:
+    type: object
+    properties:
+      compilers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Compiler'
+        title: / List of supported compiler versions
+  v1SolidityVerifyMultiPartRequest:
+    type: object
+    properties:
+      contracts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Contract'
+        title: / List of contracts the source code should verify
+      compiler:
+        type: string
+        title: / Compiler version used to compile the contract
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for. If absent results in default EVM version
+      optimizationRuns:
+        type: integer
+        format: int32
+        title: |-
+          / If present, optimizations are enabled with specified number of runs,
+          / otherwise optimizations are disabled
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
+      libraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a library name to its address
+  v1SolidityVerifyStandardJsonRequest:
+    type: object
+    properties:
+      contracts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Contract'
+        title: / List of contracts the source code should verify
+      compiler:
+        type: string
+        title: / Compiler version used to compile the contract
+      input:
+        type: string
+        title: / https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
+  v1VerificationConfig:
+    type: object
+    properties:
+      chains:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Chain'
+      solidityCompilers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Compiler'
+      vyperCompilers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Compiler'
+  v1VerificationResponse:
+    type: object
+    properties:
+      contractVerificationResults:
+        $ref: '#/definitions/VerificationResponseContractVerificationResults'
+      contractValidationResults:
+        $ref: '#/definitions/VerificationResponseContractValidationResults'
+      compilationFailure:
+        $ref: '#/definitions/VerificationResponseCompilationFailure'
+  v1VyperVerifyMultiPartRequest:
+    type: object
+    properties:
+      contracts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Contract'
+        title: / List of contracts the source code should verify
+      compiler:
+        type: string
+        title: / Compiler version used to compile the contract
+      evmVersion:
+        type: string
+        title: / Version of the EVM to compile for. If absent results in default EVM version
+      sourceFiles:
+        type: object
+        additionalProperties:
+          type: string
+        title: / Map from a source file name to the actual source code
+      interfaces:
+        type: object
+        additionalProperties:
+          type: string
+        description: |-
+          / Map from an interface names to the actual interfaces.
+          / If non-specified, no interfaces are considered.
+  v1VyperVerifyStandardJsonRequest:
+    type: object
+    properties:
+      contracts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Contract'
+        title: / List of contracts the source code should verify
+      compiler:
+        type: string
+        title: / Compiler version used to compile the contract
+      input:
+        type: string
+        title: / https://docs.vyperlang.org/en/stable/compiling-a-contract.html#input-json-description

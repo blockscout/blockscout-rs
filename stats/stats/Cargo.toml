@@ -1,30 +1,86 @@
 [package]
 name = "stats"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+
+[features]
+default = []
+test-utils = [
+    "dep:tracing-subscriber",
+    "dep:blockscout-service-launcher",
+    "dep:pretty_assertions",
+    "dep:wiremock",
+    "dep:hex-literal",
+    "dep:serde_json",
+]
 
 [dependencies]
+anyhow = "1"
+async-trait = "0.1"
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "26eed65" }
+blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "cab0e70" }
+blockscout-service-launcher = { workspace = true, features = [
+    "database-1",
+    "test-database",
+], optional = true }
+chrono = "0.4"
 entity = { path = "./entity" }
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs" }
-sea-orm = { version = "0.10", features = [
+futures = "0.3"
+hex = { workspace = true }
+hex-literal = { version = "0.4.1", optional = true }
+itertools = "0.13.0"
+lazy_static = "1.4"
+migration = { path = "./migration" }
+multichain-aggregator-entity = { workspace = true }
+multichain-aggregator-migration = { workspace = true }
+num-traits = { workspace = true }
+paste = "1.0"
+portrait = "0.3.0"
+
+# Dependencies for test-utils only
+pretty_assertions = { version = "1.2", optional = true }
+prometheus = "0.13"
+rand = "0.8"
+rust_decimal = "1.27"
+sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ] }
-tokio = "1"
+sea-orm-migration = { workspace = true }
+sea-query = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = { workspace = true, optional = true }
+stats-proto = { path = "../stats-proto" }
 thiserror = "1.0"
-chrono = "0.4"
-async-trait = "0.1"
+tokio = "1"
 tracing = "0.1"
-migration = { path = "./migration" }
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+], optional = true }
+trait-variant = { workspace = true }
+tynm = "0.1.10"
 url = "2.3"
-rand = "0.8"
-lazy_static = "1.4"
-prometheus = "0.13"
+wiremock = { workspace = true, optional = true }
+zetachain-cctx-entity = { workspace = true }
+zetachain-cctx-migration = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = "1.2"
-sea-orm-migration = { version = "0.10", features = [
-    "runtime-tokio-rustls",
-    "sqlx-postgres",
+blockscout-service-launcher = { workspace = true, features = [
+    "database-1",
+    "test-database",
 ] }
+hex-literal = "0.4.1"
+
+# test-utils
+pretty_assertions = "1.2"
+rust_decimal = "1.27"
+rust_decimal_macros = "1.27"
+sea-orm = { workspace = true, features = [
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "mock",
+] }
+serde_json = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+wiremock = { workspace = true }

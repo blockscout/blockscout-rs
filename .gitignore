@@ -23,6 +23,10 @@ config.toml
 ## Cargo.lock for libs
 libs/Cargo.lock
 
+## NPM dependencies
+**/node_modules/**
+
 ## Secrets
 **.decrypted~**
 **.dec**
+/tac-operation-lifecycle/database/

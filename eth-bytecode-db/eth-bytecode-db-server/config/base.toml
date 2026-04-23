@@ -9,6 +9,7 @@ addr = "0.0.0.0:8051"
 
 [database]
 url = "" # (required) no default value available
+create_database = false
 run_migrations = false
 
 [verifier]

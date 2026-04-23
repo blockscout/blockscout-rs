@@ -1,0 +1,38 @@
+[package]
+name = "multichain-aggregator-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+multichain-aggregator-proto = { workspace = true }
+multichain-aggregator-logic = { workspace = true }
+multichain-aggregator-migration = { workspace = true }
+actix-phoenix-channel = { workspace = true }
+actix-web = { workspace = true }
+alloy-primitives = { workspace = true }
+anyhow = { workspace = true }
+api-client-framework = { workspace = true }
+async-trait = { workspace = true }
+blockscout-service-launcher = { workspace = true }
+blockscout-chains = { workspace = true }
+config = { workspace = true }
+itertools = { workspace = true }
+sea-orm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+tokio = { workspace = true }
+tokio-cron-scheduler = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }
+env-collector = { workspace = true }
+url = { workspace = true, features = ["serde"] }
+recache ={ workspace = true }
+
+[dev-dependencies]
+multichain-aggregator-entity = { workspace = true }
+alloy-primitives = { workspace = true, features = ["getrandom", "serde"]}
+blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database"] }
+pretty_assertions = { workspace = true }
+reqwest = { workspace = true, features = ["json"]}
+wiremock = { workspace = true }

@@ -1,6 +1,9 @@
+use blockscout_service_launcher::{
+    launcher::{MetricsSettings, ServerSettings},
+    tracing::{JaegerSettings, TracingSettings},
+};
 use config::{Config, File};
 use serde::{de, Deserialize};
-use std::{net::SocketAddr, str::FromStr};
 
 /// Wrapper under [`serde::de::IgnoredAny`] which implements
 /// [`PartialEq`] and [`Eq`] for fields to be ignored.
@@ -22,85 +25,13 @@ pub struct Settings {
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
+    pub tracing: TracingSettings,
 
     // Is required as we deny unknown fields, but allow users provide
     // path to config through PREFIX__CONFIG env variable. If removed,
     // the setup would fail with `unknown field `config`, expected one of...`
     #[serde(rename = "config")]
     config_path: IgnoredAny,
-}
-
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
-#[serde(default, deny_unknown_fields)]
-pub struct ServerSettings {
-    pub http: HttpServerSettings,
-    pub grpc: GrpcServerSettings,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct HttpServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for HttpServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8050").expect("valid addr"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct GrpcServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for GrpcServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8051").expect("valid addr"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct MetricsSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-    pub route: String,
-}
-
-impl Default for MetricsSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            addr: SocketAddr::from_str("0.0.0.0:6060").expect("should be valid url"),
-            route: "/metrics".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct JaegerSettings {
-    pub enabled: bool,
-    pub agent_endpoint: String,
-}
-
-impl Default for JaegerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            agent_endpoint: "localhost:6831".to_string(),
-        }
-    }
 }
 
 impl Settings {

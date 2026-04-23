@@ -1,0 +1,38 @@
+{
+  "taiko-mainnet": {
+    "Registry": {
+      "address": "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17",
+      "startBlock": 79080
+    },
+    "Resolver": {
+      "startBlock": 79080
+    },
+    "RegistrarController": {
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 79080
+    },
+    "Base": {
+      "address": "0x411b954302eceed7266a1d11720103ba8fbb3786",
+      "startBlock": 79080
+    },
+    "": ""
+  },
+  "taiko-faucet": {
+    "Registry": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Resolver": {
+      "startBlock": 0
+    },
+    "RegistrarController": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Base": {
+      "address": "",
+      "startBlock": 0
+    },
+    "": ""
+  }
+}

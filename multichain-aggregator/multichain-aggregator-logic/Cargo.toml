@@ -1,0 +1,51 @@
+[package]
+name = "multichain-aggregator-logic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+multichain-aggregator-entity = { workspace = true }
+multichain-aggregator-proto = { workspace = true }
+bens-proto = { workspace = true }
+actix-phoenix-channel = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+api-client-framework = { workspace = true }
+base64 = { workspace = true }
+blockscout-chains = { workspace = true }
+blockscout-service-launcher = { workspace = true }
+bigdecimal = { workspace = true }
+cached = { workspace = true, features = [
+  "proc_macro",
+  "tokio",
+  "async",
+  "async_tokio_rt_multi_thread",
+] }
+lazy_static = { workspace = true }
+prometheus = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+sea-orm = { workspace = true }
+alloy-primitives = { workspace = true, features = ["serde"] }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+strum = { workspace = true, features = ["std"] }
+thiserror = { workspace = true }
+tonic = { workspace = true }
+tokio = { workspace = true }
+tokio-cron-scheduler = { workspace = true }
+reqwest = { workspace = true }
+rust_decimal = { workspace = true }
+url = { workspace = true }
+futures = { workspace = true }
+recache = { workspace = true }
+amplify = { workspace = true }
+base32ct = { workspace = true, features = ["alloc"] }
+itertools = { workspace = true }
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }

@@ -5,16 +5,17 @@ use super::{
         smart_contract_verifier::{BytecodeType, VerifyVyperMultiPartRequest},
         types::{Source, VerificationRequest, VerificationType},
     },
-    process_verify_response, ProcessResponseAction,
+    process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
+use smart_contract_verifier_proto::http_client::vyper_verifier_client;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MultiPartFiles {
     pub evm_version: Option<String>,
-    pub optimizations: Option<bool>,
     pub source_files: BTreeMap<String, String>,
+    pub interfaces: BTreeMap<String, String>,
 }
 
 impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
@@ -24,16 +25,18 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifyVyperMultiPartRequest {
             bytecode_type: BytecodeType::from(request.bytecode_type).into(),
             compiler_version: request.compiler_version,
             source_files: request.content.source_files,
+            interfaces: request.content.interfaces,
             evm_version: request.content.evm_version,
-            optimizations: request.content.optimizations,
+            metadata: request.metadata.map(|metadata| metadata.into()),
         }
     }
 }
 
 pub async fn verify(
-    mut client: Client,
+    client: Client,
     request: VerificationRequest<MultiPartFiles>,
 ) -> Result<Source, Error> {
+    let is_authorized = request.is_authorized;
     let bytecode_type = request.bytecode_type;
     let raw_request_bytecode = hex::decode(request.bytecode.clone().trim_start_matches("0x"))
         .map_err(|err| Error::InvalidArgument(format!("invalid bytecode: {err}")))?;
@@ -41,30 +44,44 @@ pub async fn verify(
     let verification_metadata = request.metadata.clone();
 
     let request: VerifyVyperMultiPartRequest = request.into();
-    let response = client
-        .vyper_client
-        .verify_multi_part(request)
-        .await
-        .map_err(Error::from)?
-        .into_inner();
+    tracing::info!("sending request to the verifier");
+    let response =
+        vyper_verifier_client::verify_multi_part(&client.verifier_http_client, request).await?;
+    tracing::info!(
+        status = response.status,
+        response_message = response.message,
+        "response from the verifier"
+    );
 
+    let verifier_alliance_db_action = VerifierAllianceDbAction::from_db_client_and_metadata(
+        client
+            .alliance_db_client
+            .as_ref()
+            .map(|client| client.main_db()),
+        verification_metadata.clone(),
+        is_authorized,
+    );
     process_verify_response(
-        &client.db_client,
         response,
-        ProcessResponseAction::SaveData {
+        EthBytecodeDbAction::SaveData {
+            db_client: &client.db_client,
             bytecode_type,
             raw_request_bytecode,
             verification_settings,
             verification_type: VerificationType::MultiPartFiles,
             verification_metadata,
         },
+        verifier_alliance_db_action,
     )
     .await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{super::super::types, *};
+    use super::{
+        super::super::{smart_contract_verifier, types},
+        *,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -75,13 +92,21 @@ mod tests {
             compiler_version: "compiler_version".to_string(),
             content: MultiPartFiles {
                 evm_version: Some("istanbul".to_string()),
-                optimizations: Some(true),
                 source_files: BTreeMap::from([
                     ("source_file1".into(), "content1".into()),
                     ("source_file2".into(), "content2".into()),
                 ]),
+                interfaces: BTreeMap::from([
+                    ("interface1".into(), "interface_content1".into()),
+                    ("interface2".into(), "interface_content2".into()),
+                ]),
             },
-            metadata: None,
+            metadata: Some(types::VerificationMetadata {
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
+                ..Default::default()
+            }),
+            is_authorized: false,
         };
         let expected = VerifyVyperMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -91,8 +116,15 @@ mod tests {
                 ("source_file1".into(), "content1".into()),
                 ("source_file2".into(), "content2".into()),
             ]),
+            interfaces: BTreeMap::from([
+                ("interface1".into(), "interface_content1".into()),
+                ("interface2".into(), "interface_content2".into()),
+            ]),
             evm_version: Some("istanbul".to_string()),
-            optimizations: Some(true),
+            metadata: Some(smart_contract_verifier::VerificationMetadata {
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
+            }),
         };
         assert_eq!(
             expected,
@@ -109,13 +141,21 @@ mod tests {
             compiler_version: "compiler_version".to_string(),
             content: MultiPartFiles {
                 evm_version: Some("istanbul".to_string()),
-                optimizations: Some(true),
                 source_files: BTreeMap::from([
                     ("source_file1".into(), "content1".into()),
                     ("source_file2".into(), "content2".into()),
                 ]),
+                interfaces: BTreeMap::from([
+                    ("interface1".into(), "interface_content1".into()),
+                    ("interface2".into(), "interface_content2".into()),
+                ]),
             },
-            metadata: None,
+            metadata: Some(types::VerificationMetadata {
+                chain_id: Some(1),
+                contract_address: Some(bytes::Bytes::from_static(&[1u8; 20])),
+                ..Default::default()
+            }),
+            is_authorized: false,
         };
         let expected = VerifyVyperMultiPartRequest {
             bytecode: "0x1234".to_string(),
@@ -125,8 +165,15 @@ mod tests {
                 ("source_file1".into(), "content1".into()),
                 ("source_file2".into(), "content2".into()),
             ]),
+            interfaces: BTreeMap::from([
+                ("interface1".into(), "interface_content1".into()),
+                ("interface2".into(), "interface_content2".into()),
+            ]),
             evm_version: Some("istanbul".to_string()),
-            optimizations: Some(true),
+            metadata: Some(smart_contract_verifier::VerificationMetadata {
+                chain_id: Some("1".to_string()),
+                contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
+            }),
         };
         assert_eq!(
             expected,

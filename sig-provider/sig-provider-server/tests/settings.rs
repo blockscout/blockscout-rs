@@ -1,10 +1,11 @@
+use blockscout_service_launcher::launcher::ConfigSettings;
 use pretty_assertions::assert_eq;
 use sig_provider_server::Settings;
 
 #[test]
 fn base_settings_are_default() {
     std::env::set_var("SIG_PROVIDER__CONFIG", "config/base.toml");
-    let example = Settings::new().expect("Failed to parse config");
+    let example = Settings::build().expect("Failed to parse config");
     let default = Settings::default();
     assert_eq!(default, example);
 }

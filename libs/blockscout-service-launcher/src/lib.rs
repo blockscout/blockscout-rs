@@ -1,10 +1,14 @@
-mod launch;
-mod metrics;
-mod router;
-mod settings;
-mod tracing;
+#[cfg(feature = "database")]
+pub mod database;
 
-pub use crate::tracing::init_logs;
-pub use launch::{launch, LaunchSettings};
-pub use router::HttpRouter;
-pub use settings::*;
+#[cfg(feature = "launcher")]
+pub mod launcher;
+
+#[cfg(feature = "tracing")]
+pub mod tracing;
+
+#[cfg(feature = "test-server")]
+pub mod test_server;
+
+#[cfg(feature = "test-database")]
+pub mod test_database;

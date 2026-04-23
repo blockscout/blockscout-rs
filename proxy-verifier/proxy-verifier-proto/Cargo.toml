@@ -1,0 +1,18 @@
+[package]
+name = "proxy-verifier-proto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+actix-prost = { version = "0.1.0" }
+actix-prost-macros = { version = "0.1.0" }
+prost = "0.13"
+serde = { version = "1" }
+serde_with = { version = "2.0" }
+tonic = "0.12"
+
+[build-dependencies]
+actix-prost-build = { version = "0.1.0" }
+prost-build = "0.13"
+tonic-build = "0.12"

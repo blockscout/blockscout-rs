@@ -1,0 +1,26 @@
+{
+  "name": "@blockscout/visualizer-types",
+  "version": "0.0.1",
+  "description": "TypeScript definitions for Visualizer microservice",
+  "main": "./dist/visualizer-proto/proto/visualizer.js",
+  "types": "./dist/visualizer-proto/proto/visualizer.d.ts",
+  "scripts": {
+    "build": "npm run compile:proto && npm run compile:ts",
+    "compile:proto": "mkdir -p ./dist && protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt=snakeToCamel=false --ts_proto_opt=stringEnums=true --ts_proto_opt=onlyTypes=true --ts_proto_opt=emitImportedFiles=false --proto_path=../ --proto_path=../../proto/ --ts_proto_out=./dist ../visualizer-proto/proto/visualizer.proto",
+    "compile:ts": "tsc --declaration ./dist/visualizer-proto/proto/visualizer.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blockscout/blockscout-rs.git",
+    "directory": "visualizer/types"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/blockscout/blockscout-rs/issues"
+  },
+  "homepage": "https://github.com/blockscout/blockscout-rs#readme",
+  "devDependencies": {
+    "ts-proto": "1.176.2",
+    "typescript": "5.4.5"
+  }
+}

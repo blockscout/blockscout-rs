@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+    "blockscout",
+    "blockscout-entity",
+    "blockscout-migration",
+    "smart-contract-fiesta",
+    "smart-contract-fiesta-entity",
+    "smart-contract-fiesta-migration",
+]

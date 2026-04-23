@@ -11,6 +11,7 @@ pub struct TestInput {
     pub has_constructor_args: bool,
     pub is_yul: bool,
     pub ignore_creation_tx_input: bool,
+    pub abi: Option<serde_json::Value>,
 
     /// If None, the input would be read from the corresponding file
     pub source_code: Option<String>,
@@ -18,6 +19,9 @@ pub struct TestInput {
     pub creation_tx_input: Option<String>,
     /// If None, the bytecode would be read from the corresponding file
     pub deployed_bytecode: Option<String>,
+
+    /// Would be filled by `test_setup` function later
+    pub file_path: Option<String>,
 }
 
 impl TestInput {
@@ -31,10 +35,13 @@ impl TestInput {
             has_constructor_args: false,
             is_yul: false,
             ignore_creation_tx_input: false,
+            abi: None,
 
             source_code: None,
             creation_tx_input: None,
             deployed_bytecode: None,
+
+            file_path: None,
         }
     }
 

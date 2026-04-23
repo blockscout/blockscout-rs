@@ -3,12 +3,13 @@ mod standard_json_types;
 use crate::standard_json_types::TestInput;
 use actix_web::{
     dev::ServiceResponse,
+    http::StatusCode,
     test,
     test::{read_body, read_body_json, TestRequest},
     App,
 };
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use ethers_solc::artifacts::StandardJsonCompilerInput;
+use foundry_compilers::artifacts::StandardJsonCompilerInput;
 use serde_json::json;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_actix::route_solidity_verifier, VerifyResponse,
@@ -17,6 +18,7 @@ use smart_contract_verifier_server::{Settings, SolidityVerifierService};
 use std::{
     collections::BTreeMap,
     fs,
+    path::PathBuf,
     str::{from_utf8, FromStr},
     sync::Arc,
 };
@@ -31,19 +33,22 @@ async fn global_service() -> &'static Arc<SolidityVerifierService> {
         .get_or_init(|| async {
             let settings = Settings::default();
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = SolidityVerifierService::new(
-                settings.solidity,
-                Arc::new(compilers_lock),
-                settings.extensions.solidity,
-            )
-            .await
-            .expect("couldn't initialize the service");
+            let service = SolidityVerifierService::new(settings.solidity, Arc::new(compilers_lock))
+                .await
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
 }
 
-async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Option<DisplayBytes>) {
+async fn test_setup(
+    dir: &str,
+    input: &mut TestInput,
+) -> (
+    ServiceResponse,
+    Option<DisplayBytes>,
+    Option<serde_json::Value>,
+) {
     let service = global_service().await;
     let app = test::init_service(
         App::new().configure(|config| route_solidity_verifier(config, service.clone())),
@@ -75,6 +80,14 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
         .expect("Expected constructor args must be valid")
     });
 
+    let abi = {
+        let path = PathBuf::from(format!("{prefix}/abi.json"));
+        path.is_file().then(|| {
+            let content = fs::read_to_string(path).expect("Error while reading abi");
+            serde_json::Value::from_str(&content).expect("Error while deserializing abi")
+        })
+    };
+
     let (bytecode, bytecode_type) = if !input.ignore_creation_tx_input {
         (input.creation_tx_input.as_ref().unwrap(), "CREATION_INPUT")
     } else {
@@ -96,11 +109,11 @@ async fn test_setup(dir: &str, input: &mut TestInput) -> (ServiceResponse, Optio
         .send_request(&app)
         .await;
 
-    (response, expected_constructor_argument)
+    (response, expected_constructor_argument, abi)
 }
 
 async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse {
-    let (response, expected_constructor_argument) = test_setup(dir, &mut input).await;
+    let (response, expected_constructor_argument, expected_abi) = test_setup(dir, &mut input).await;
 
     // Assert that status code is success
     if !response.status().is_success() {
@@ -123,7 +136,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         .source
         .expect("Verification source is not Some");
 
-    let abi: Option<Result<ethabi::Contract, _>> = verification_result
+    let abi: Option<Result<serde_json::Value, _>> = verification_result
         .abi
         .as_ref()
         .map(|abi| serde_json::from_str(abi));
@@ -138,6 +151,13 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
             "Abi deserialization failed: {}",
             abi.unwrap().as_ref().unwrap_err()
         );
+        if let Some(expected_abi) = expected_abi {
+            assert_eq!(
+                &expected_abi,
+                abi.as_ref().unwrap().as_ref().unwrap(),
+                "Invalid abi"
+            )
+        }
         assert_eq!(
             verification_result.source_type().as_str_name(),
             "SOLIDITY",
@@ -154,7 +174,6 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     let verification_result_constructor_arguments = verification_result
         .constructor_arguments
         .map(|args| DisplayBytes::from_str(&args).unwrap());
-    let expected_constructor_argument = expected_constructor_argument.map(DisplayBytes::from);
     assert_eq!(
         verification_result_constructor_arguments, expected_constructor_argument,
         "Invalid constructor args"
@@ -188,7 +207,7 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid source"
     );
 
-    let compiler_settings: ethers_solc::artifacts::Settings =
+    let compiler_settings: foundry_compilers::artifacts::Settings =
         serde_json::from_str(&verification_result.compiler_settings)
             .expect("Compiler settings deserialization failed");
 
@@ -212,6 +231,66 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     verification_response_clone
 }
 
+/// Test verification failures (note: do not handle 400 BadRequest responses)
+async fn test_failure(dir: &str, mut input: TestInput, expected_message: &str) {
+    let (response, _expected_constructor_argument, _abi) = test_setup(dir, &mut input).await;
+
+    assert!(
+        response.status().is_success(),
+        "Invalid status code (success expected): {}",
+        response.status()
+    );
+
+    let verification_response: VerifyResponse = read_body_json(response).await;
+
+    assert_eq!(
+        verification_response.status().as_str_name(),
+        "FAILURE", // failure
+        "Invalid verification status. Response: {verification_response:?}"
+    );
+
+    assert!(
+        verification_response.source.is_none(),
+        "In case of failure, source should be None"
+    );
+    assert!(
+        verification_response.extra_data.is_none(),
+        "In case of failure, extra data should be None"
+    );
+
+    assert!(
+        verification_response.message.contains(expected_message),
+        "Invalid message: {}",
+        verification_response.message
+    );
+}
+
+/// Test errors codes (handle 400 BadRequest, 500 InternalServerError and similar responses)
+async fn test_error(
+    dir: &str,
+    mut input: TestInput,
+    expected_status: StatusCode,
+    expected_message: Option<&str>,
+) {
+    let (response, _expected_constructor_argument, _abi) = test_setup(dir, &mut input).await;
+
+    let status = response.status();
+
+    let body = read_body(response).await;
+    let message = from_utf8(&body).expect("Read body as UTF-8");
+
+    assert_eq!(
+        status, expected_status,
+        "Invalid status code. Message: {message}"
+    );
+
+    if let Some(expected_message) = expected_message {
+        assert!(
+            message.contains(expected_message),
+            "Invalid message: {message}"
+        );
+    }
+}
 mod success_tests {
     use super::*;
 
@@ -291,5 +370,40 @@ mod match_types_tests {
         let test_input = TestInput::new("Storage", "v0.8.7+commit.e28d00a7");
         let response = test_success(contract_dir, test_input).await;
         check_match_type(response, MatchType::Full);
+    }
+}
+
+mod failure_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn invalid_input() {
+        let contract_dir = "solidity_0.4.18";
+        let test_input = TestInput::new("Main", "v0.4.18+commit.9cf6e910")
+            // The outer bracket is not closed
+            .with_standard_json_input("{ \"language\": \"Solidity\" ".to_string());
+        test_failure(
+            contract_dir,
+            test_input,
+            "content is not a valid standard json",
+        )
+        .await;
+    }
+}
+
+mod error_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn bad_request() {
+        let contract_dir = "solidity_0.4.18";
+        let test_input = TestInput::new("Main", "invalid_compiler_version");
+        test_error(
+            contract_dir,
+            test_input,
+            StatusCode::BAD_REQUEST,
+            Some("invalid compiler version"),
+        )
+        .await;
     }
 }

@@ -1,5 +1,5 @@
 pub use sea_orm_migration::prelude::*;
-use sea_orm_migration::sea_orm::{ConnectionTrait, Statement, TransactionTrait};
+use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 
 mod m20220101_000001_create_table;
 

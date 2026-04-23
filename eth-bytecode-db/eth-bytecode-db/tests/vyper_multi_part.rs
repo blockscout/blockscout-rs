@@ -7,23 +7,20 @@ use eth_bytecode_db::verification::{
     VerificationMetadata, VerificationRequest,
 };
 use rstest::{fixture, rstest};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifyVyperMultiPartRequest,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::{VerifyResponse, VerifyVyperMultiPartRequest},
+    http_client::mock::{MockVyperVerifierService, SmartContractVerifierServer},
 };
 use tonic::Response;
-use verification_test_helpers::{
-    generate_verification_request,
-    smart_contract_veriifer_mock::{MockVyperVerifierService, SmartContractVerifierServer},
-    VerifierService,
-};
+use verification_test_helpers::{generate_verification_request, VerifierService};
 
 const DB_PREFIX: &str = "vyper_multi_part";
 
 fn default_request_content() -> MultiPartFiles {
     MultiPartFiles {
         source_files: Default::default(),
+        interfaces: Default::default(),
         evm_version: Some("london".to_string()),
-        optimizations: Some(false),
     }
 }
 
@@ -89,8 +86,8 @@ async fn test_historical_data_is_added_into_database(service: MockVyperVerifierS
         "bytecode_type": "CreationInput",
         "compiler_version": "compiler_version",
         "evm_version": "london",
-        "optimizations": false,
-        "source_files": {}
+        "source_files": {},
+        "interfaces": {}
     });
     let verification_type = sea_orm_active_enums::VerificationType::MultiPartFiles;
     verification_test_helpers::test_historical_data_is_added_into_database(
@@ -122,4 +119,22 @@ async fn test_verification_of_same_source_results_stored_once(service: MockVyper
         DB_PREFIX, service,
     )
     .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_of_updated_source_replace_the_old_result() {
+    verification_test_helpers::test_verification_of_updated_source_replace_the_old_result(
+        DB_PREFIX, service,
+    )
+    .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_verification_inserts_event_descriptions() {
+    verification_test_helpers::test_verification_inserts_event_descriptions(DB_PREFIX, service)
+        .await;
 }

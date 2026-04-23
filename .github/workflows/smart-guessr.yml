@@ -1,0 +1,53 @@
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'smart-guessr/v*'
+    paths:
+      - smart-guessr/**
+      - .github/workflows/smart-guessr.yml
+      - .github/workflows/_docker-build-push.yml
+  pull_request:
+    paths:
+      - smart-guessr/**
+      - .github/workflows/smart-guessr.yml
+      - .github/workflows/_docker-build-push.yml
+
+name: Test and docker (smart-guessr)
+
+defaults:
+  run:
+    working-directory: smart-guessr
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        run: bun test --timeout 15000
+        if: success() || failure()
+
+  docker:
+    name: Docker build and docker push
+    needs:
+      - test
+    if: |
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'cancelled')
+    uses: ./.github/workflows/_docker-build-push.yml
+    with:
+      service-name: smart-guessr
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}

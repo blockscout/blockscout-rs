@@ -1,0 +1,54 @@
+{
+  "{{ cookiecutter.network }}": {
+    {%- if cookiecutter.registry %}
+    "{{ cookiecutter.registry_name }}": {
+      "address": "{{ cookiecutter.registry_address }}",
+      "startBlock": {{ cookiecutter.registry_start_block }}
+    },
+    {%- endif %}
+    {%- if cookiecutter.resolver %}
+    "{{ cookiecutter.resolver_name }}": {
+      "startBlock": {{ cookiecutter.resolver_start_block }}
+    },
+    {%- endif %}
+    {%- if cookiecutter.controller %}
+    "{{ cookiecutter.controller_name }}": {
+      "address": "{{ cookiecutter.controller_address }}",
+      "startBlock": {{ cookiecutter.controller_start_block }}
+    },
+    {%- endif %}
+    {%- if cookiecutter.base %}
+    "{{ cookiecutter.base_name }}": {
+      "address": "{{ cookiecutter.base_address }}",
+      "startBlock": {{ cookiecutter.base_start_block }}
+    },
+    {%- endif %}
+    "": ""
+  },
+  "{{ cookiecutter.network_test }}": {
+    {%- if cookiecutter.registry %}
+    "{{ cookiecutter.registry_name }}": {
+      "address": "{{ cookiecutter.registry_address_test }}",
+      "startBlock": {{ cookiecutter.registry_start_block_test }}
+    },
+    {%- endif %}
+    {%- if cookiecutter.resolver %}
+    "{{ cookiecutter.resolver_name }}": {
+      "startBlock": {{ cookiecutter.resolver_start_block_test }}
+    },
+    {%- endif %}
+    {%- if cookiecutter.controller %}
+    "{{ cookiecutter.controller_name }}": {
+      "address": "{{ cookiecutter.controller_address_test }}",
+      "startBlock": {{ cookiecutter.controller_start_block_test }}
+    },
+    {%- endif %}
+    {%- if cookiecutter.base %}
+    "{{ cookiecutter.base_name }}": {
+      "address": "{{ cookiecutter.base_address_test }}",
+      "startBlock": {{ cookiecutter.base_start_block_test }}
+    },
+    {%- endif %}
+    "": ""
+  }
+}

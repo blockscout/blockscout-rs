@@ -1,49 +1,165 @@
 use blockscout_service_launcher::{
-    GrpcServerSettings, HttpServerSettings, JaegerSettings, MetricsSettings, ServerSettings,
-    TracingSettings,
+    launcher::{
+        ConfigSettings, GrpcServerSettings, HttpServerSettings, MetricsSettings, ServerSettings,
+    },
+    tracing::{JaegerSettings, TracingSettings},
 };
-use config::{Config, File};
 use cron::Schedule;
-use serde::{de, Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
-use std::{net::SocketAddr, path::PathBuf, str::FromStr};
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, StringWithSeparator, formats::CommaSeparator, serde_as};
+use stats::{
+    ChartProperties,
+    counters::{
+        ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
+        ArbitrumYesterdayOperationalTxns, NewZetachainCrossChainTxns24h,
+        OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
+        PendingZetachainCrossChainTxns, TotalZetachainCrossChainTxns,
+    },
+    indexing_status::BlockscoutIndexingStatus,
+    lines::{
+        ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
+        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
+        NewZetachainCrossChainTxns, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow,
+        OpStackOperationalTxnsGrowth, ZetachainCrossChainTxnsGrowth,
+    },
+};
+use std::{
+    collections::{BTreeSet, HashMap},
+    net::SocketAddr,
+    path::PathBuf,
+    str::FromStr,
+    time::Duration,
+};
+use tracing::warn;
 
-/// Wrapper under [`serde::de::IgnoredAny`] which implements
-/// [`PartialEq`] and [`Eq`] for fields to be ignored.
-#[derive(Copy, Clone, Debug, Default, Deserialize)]
-struct IgnoredAny(de::IgnoredAny);
+use crate::{
+    RuntimeSetup,
+    config::{self, types::AllChartSettings},
+};
 
-impl PartialEq for IgnoredAny {
-    fn eq(&self, _other: &Self) -> bool {
-        // We ignore that values, so they should not impact the equality
-        true
-    }
-}
-
-impl Eq for IgnoredAny {}
+pub use stats::Mode;
 
 #[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub db_url: String,
+    pub create_database: bool,
     pub run_migrations: bool,
-    pub blockscout_db_url: String,
+
+    /// Mode determines the type of the underlying database and feature flags that were
+    /// previously controlled by `enable_zetachain_cctx` and `multichain_mode`.
+    ///
+    /// The service can be run in one of the following modes:
+    /// - `Blockscout`: run the service for a single blockscout instance (default)
+    /// - `MultichainAggregator`: run the service for a multichain_aggregator
+    /// - `Zetachain`: run the service for a zetachain instance
+    /// - `Interchain`: run the service for a interchain indexer (aka Universal Bridge Indexer)
+    ///
+    /// Modes are mutually exclusive by design.
+    pub mode: Mode,
+
+    pub blockscout_db_url: Option<String>, // deprecated, use `indexer_db_url` instead
+    pub indexer_db_url: Option<String>,
+    /// Url for second db of indexer (currently assumed to be CCTX (cross chain transactions) indexer, see `zetachain-cctx` service)
+    pub second_indexer_db_url: Option<String>,
+    /// Blockscout API url.
+    ///
+    /// Required. To launch without it api use [`Settings::ignore_blockscout_api_absence`].
+    pub blockscout_api_url: Option<url::Url>,
+    /// Disable functionality that utilizes [`Settings::blockscout_api_url`] if the parameter
+    /// is not provided. By default the url is required to not silently suppress such features.
+    pub ignore_blockscout_api_absence: bool,
+    /// Disable functionality that utilizes internal transactions. In particular, it disables
+    /// internal transactions ratio check for starting the service and related charts.
+    ///
+    /// It has a higher priority than config files and respective envs.
+    pub disable_internal_transactions: bool,
+    /// Enable arbitrum-specific charts
+    pub enable_all_arbitrum: bool,
+    /// Enable op-stack-specific charts
+    pub enable_all_op_stack: bool,
+    /// Enable EIP-7702 charts
+    pub enable_all_eip_7702: bool,
+    /// Filter by chain ids for multichain mode.
+    /// TODO: recalculate statistics data when multichain_filter has been changed
+    ///       most likely it's need to implement in conjunction with 3D charts
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
+    pub multichain_filter: Option<Vec<u64>>,
+    /// Set the primary chain_id for Interchain mode
+    /// If the primary chain set, send/receive counters and charts will be built around it
+    /// TODO: recalculate statistics data when interchain_primary_id has been changed
+    ///       most likely it's need to implement in conjunction with 3D charts
+    pub interchain_primary_id: Option<u64>,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
+    pub concurrent_start_updates: usize,
+    pub limits: LimitsSettings,
+    pub conditional_start: StartConditionSettings,
     pub charts_config: PathBuf,
+    pub layout_config: PathBuf,
+    pub update_groups_config: PathBuf,
+    /// Location of swagger file to serve
+    pub swagger_path: PathBuf,
+    /// Linked secondary stats settings. A client is created only when [`LinkedStatsSettings::base_url`]
+    /// is set; otherwise linked forwarding is disabled.
+    ///
+    /// Chaining linked services is technically allowed, but should be avoided unless
+    /// there is a strong operational reason for it.
+    pub linked_stats: LinkedStatsSettings,
+    pub api_keys: HashMap<String, String>,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub tracing: TracingSettings,
+}
 
-    // Is required as we deny unknown fields, but allow users provide
-    // path to config through PREFIX__CONFIG env variable. If removed,
-    // the setup would fail with `unknown field `config`, expected one of...`
-    #[serde(skip_serializing, rename = "config")]
-    config_path: IgnoredAny,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LinkedStatsSettings {
+    #[serde(default)]
+    pub base_url: Option<url::Url>,
+    #[serde(default = "default_linked_stats_timeout")]
+    pub timeout: u64,
+    /// Requested hop budget for linked requests. Values above the hard cap are truncated.
+    #[serde(default = "default_linked_stats_max_hops")]
+    pub max_hops: u32,
+}
+
+pub const LINKED_STATS_MAX_HOPS_HARD_CAP: u32 = 4;
+
+fn default_linked_stats_timeout() -> u64 {
+    3_000
+}
+
+fn default_linked_stats_max_hops() -> u32 {
+    1
+}
+
+impl Default for LinkedStatsSettings {
+    fn default() -> Self {
+        Self {
+            base_url: None,
+            timeout: default_linked_stats_timeout(),
+            max_hops: default_linked_stats_max_hops(),
+        }
+    }
+}
+
+impl LinkedStatsSettings {
+    pub fn timeout(&self) -> Duration {
+        Duration::from_millis(self.timeout)
+    }
+
+    pub fn max_hops(&self) -> u32 {
+        self.max_hops.min(LINKED_STATS_MAX_HOPS_HARD_CAP)
+    }
+}
+
+fn default_swagger_path() -> PathBuf {
+    blockscout_endpoint_swagger::default_swagger_path_from_service_name("stats")
 }
 
 impl Default for Settings {
@@ -53,39 +169,491 @@ impl Default for Settings {
                 http: HttpServerSettings {
                     enabled: true,
                     addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
+                    max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
+                    cors: Default::default(),
+                    base_path: None,
                 },
                 grpc: GrpcServerSettings {
                     enabled: false,
                     addr: SocketAddr::from_str("0.0.0.0:8051").unwrap(),
                 },
             },
+            api_keys: Default::default(),
             db_url: Default::default(),
+            mode: Mode::Blockscout,
             default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
             force_update_on_start: Some(false),
-            charts_config: PathBuf::from_str("config/charts.toml").unwrap(),
+            concurrent_start_updates: 3,
+            limits: Default::default(),
+            conditional_start: Default::default(),
+            charts_config: PathBuf::from_str("config/blockscout_instance/charts.json").unwrap(),
+            layout_config: PathBuf::from_str("config/blockscout_instance/layout.json").unwrap(),
+            update_groups_config: PathBuf::from_str(
+                "config/blockscout_instance/update_groups.json",
+            )
+            .unwrap(),
+            swagger_path: default_swagger_path(),
+            linked_stats: LinkedStatsSettings::default(),
             blockscout_db_url: Default::default(),
+            indexer_db_url: Default::default(),
+            second_indexer_db_url: Default::default(),
+            blockscout_api_url: None,
+            ignore_blockscout_api_absence: false,
+            disable_internal_transactions: false,
+            enable_all_arbitrum: false,
+            enable_all_op_stack: false,
+            enable_all_eip_7702: false,
+            multichain_filter: Default::default(),
+            interchain_primary_id: Default::default(),
+            create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
             jaeger: Default::default(),
             tracing: Default::default(),
-            config_path: Default::default(),
         }
     }
 }
 
-impl Settings {
-    pub fn new() -> anyhow::Result<Self> {
-        let config_path = std::env::var("STATS__CONFIG");
+impl ConfigSettings for Settings {
+    const SERVICE_NAME: &'static str = "STATS";
+}
 
-        let mut builder = Config::builder();
-        if let Ok(config_path) = config_path {
-            builder = builder.add_source(File::with_name(&config_path));
+pub fn handle_disable_internal_transactions(
+    disable_internal_transactions: bool,
+    conditional_start: &mut StartConditionSettings,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if disable_internal_transactions {
+        conditional_start.internal_transactions_ratio.enabled = false;
+        let charts_dependant_on_internal_transactions =
+            RuntimeSetup::all_members_indexing_status_requirements()
+                .into_iter()
+                .filter(|(_k, req)| {
+                    req.blockscout == BlockscoutIndexingStatus::InternalTransactionsIndexed
+                })
+                .map(|(k, _req)| k.into_name());
+        let to_disable: BTreeSet<_> = charts_dependant_on_internal_transactions.collect();
+
+        for disable_name in to_disable {
+            let settings = match (
+                charts.lines.get_mut(&disable_name),
+                charts.counters.get_mut(&disable_name),
+            ) {
+                (Some(settings), _) => settings,
+                (_, Some(settings)) => settings,
+                _ => {
+                    warn!(
+                        "Could not disable internal transactions related chart {}: chart not found in settings. \
+                        This should not be a problem for running the service.",
+                        disable_name
+                    );
+                    continue;
+                }
+            };
+            settings.enabled = false;
+        }
+    }
+}
+
+fn enable_charts(
+    to_enable: &[&str],
+    charts: &mut config::charts::Config<AllChartSettings>,
+    charts_name_for_logs: &str,
+) {
+    for enable_key in to_enable {
+        let settings = match (
+            charts.lines.get_mut(*enable_key),
+            charts.counters.get_mut(*enable_key),
+        ) {
+            (Some(settings), _) => settings,
+            (_, Some(settings)) => settings,
+            _ => {
+                warn!(
+                    "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
+                    chart not found in settings. \
+                    This should not be a problem for running the service.",
+                );
+                continue;
+            }
         };
-        // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
-        builder = builder.add_source(config::Environment::with_prefix("STATS").separator("__"));
+        settings.enabled = true;
+    }
+}
 
-        let settings: Settings = builder.build()?.try_deserialize()?;
+pub fn handle_enable_all_arbitrum(
+    enable_all: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all {
+        enable_charts(
+            &[
+                ArbitrumNewOperationalTxns::key().name(),
+                ArbitrumNewOperationalTxnsWindow::key().name(),
+                ArbitrumTotalOperationalTxns::key().name(),
+                ArbitrumNewOperationalTxns24h::key().name(),
+                ArbitrumOperationalTxnsGrowth::key().name(),
+                ArbitrumYesterdayOperationalTxns::key().name(),
+            ],
+            charts,
+            "arbitrum",
+        )
+    }
+}
 
-        Ok(settings)
+pub fn handle_enable_all_op_stack(
+    enable_all: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all {
+        enable_charts(
+            &[
+                OpStackNewOperationalTxns::key().name(),
+                OpStackNewOperationalTxnsWindow::key().name(),
+                OpStackTotalOperationalTxns::key().name(),
+                OpStackNewOperationalTxns24h::key().name(),
+                OpStackOperationalTxnsGrowth::key().name(),
+                OpStackYesterdayOperationalTxns::key().name(),
+            ],
+            charts,
+            "op-stack",
+        )
+    }
+}
+
+pub fn handle_enable_all_eip_7702(
+    enable_all: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all {
+        enable_charts(
+            &[
+                NewEip7702Auths::key().name(),
+                Eip7702AuthsGrowth::key().name(),
+            ],
+            charts,
+            "eip-7702",
+        )
+    }
+}
+
+pub fn apply_zetachain_cctx_mode_settings(
+    settings: &mut Settings,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    enable_charts(
+        &[
+            NewZetachainCrossChainTxns::key().name(),
+            ZetachainCrossChainTxnsGrowth::key().name(),
+            NewZetachainCrossChainTxns24h::key().name(),
+            PendingZetachainCrossChainTxns::key().name(),
+            TotalZetachainCrossChainTxns::key().name(),
+        ],
+        charts,
+        "zetachain-cctx",
+    );
+    let check_enabled = &mut settings
+        .conditional_start
+        .zetachain_indexed_until_today
+        .enabled;
+    if check_enabled.is_none() {
+        *check_enabled = Some(true);
+    }
+}
+
+pub fn apply_multichain_mode_settings(settings: &mut Settings) {
+    settings.blockscout_api_url = None;
+    settings.ignore_blockscout_api_absence = true;
+    settings.conditional_start.blocks_ratio.enabled = false;
+    settings
+        .conditional_start
+        .internal_transactions_ratio
+        .enabled = false;
+    settings
+        .conditional_start
+        .user_ops_past_indexing_finished
+        .enabled = false;
+}
+
+/// Apply settings for Interchain mode (separate indexer DB, no blockscout API).
+pub fn apply_interchain_mode_settings(settings: &mut Settings) {
+    settings.blockscout_api_url = None;
+    settings.ignore_blockscout_api_absence = true;
+    settings.conditional_start.blocks_ratio.enabled = false;
+    settings
+        .conditional_start
+        .internal_transactions_ratio
+        .enabled = false;
+    settings
+        .conditional_start
+        .user_ops_past_indexing_finished
+        .enabled = false;
+}
+
+/// Various limits like rate limiting and restrictions on input.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct LimitsSettings {
+    /// Limit date interval on corresponding requests (in days).
+    /// (i.e. `?from=2024-03-17&to=2024-04-17`).
+    ///
+    /// If start or end of the range is left empty, min/max values
+    /// from DB are considered.
+    pub requested_points_limit: u32,
+}
+
+impl Default for LimitsSettings {
+    fn default() -> Self {
+        Self {
+            // ~500 years for days seems reasonable
+            requested_points_limit: 182500,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct StartConditionSettings {
+    pub blocks_ratio: ToggleableThreshold,
+    pub internal_transactions_ratio: ToggleableThreshold,
+    pub user_ops_past_indexing_finished: ToggleableCheck,
+    pub zetachain_indexed_until_today: ToggleableOptionalCheck,
+    pub check_period_secs: u32,
+}
+
+impl Default for StartConditionSettings {
+    fn default() -> Self {
+        Self {
+            // in some networks it's always almost 1
+            blocks_ratio: ToggleableThreshold::default(),
+            internal_transactions_ratio: ToggleableThreshold::default(),
+            user_ops_past_indexing_finished: ToggleableCheck::default(),
+            zetachain_indexed_until_today: ToggleableOptionalCheck::default(),
+            check_period_secs: 5,
+        }
+    }
+}
+
+impl StartConditionSettings {
+    pub fn blockscout_checks_enabled(&self) -> bool {
+        self.blocks_ratio.enabled || self.internal_transactions_ratio.enabled
+    }
+    pub fn user_ops_checks_enabled(&self) -> bool {
+        self.user_ops_past_indexing_finished.enabled
+    }
+    pub fn zetachain_checks_enabled(&self) -> bool {
+        self.zetachain_indexed_until_today.enabled.unwrap_or(false)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableThreshold {
+    pub enabled: bool,
+    pub threshold: f64,
+}
+
+impl ToggleableThreshold {
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            threshold: 0.0,
+        }
+    }
+
+    pub fn enabled(value: f64) -> Self {
+        Self {
+            enabled: true,
+            threshold: value,
+        }
+    }
+
+    pub fn set_threshold(mut self, value: f64) -> Self {
+        self.threshold = value;
+        self
+    }
+
+    pub fn set_disabled(mut self) -> Self {
+        self.enabled = false;
+        self
+    }
+}
+
+impl Default for ToggleableThreshold {
+    fn default() -> Self {
+        Self::enabled(0.98)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableCheck {
+    pub enabled: bool,
+}
+
+impl Default for ToggleableCheck {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableOptionalCheck {
+    pub enabled: Option<bool>,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config_env::test_utils::check_envs_parsed_to;
+    use stats::{
+        counters::{LastNewContracts, TotalContracts},
+        lines::{ContractsGrowth, NewContracts},
+    };
+
+    use super::*;
+
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn start_condition_thresholds_can_be_disabled_with_envs() {
+        check_envs_parsed_to(
+            "START_SETTINGS",
+            [(
+                "START_SETTINGS__BLOCKS_RATIO__ENABLED".to_owned(),
+                "false".to_owned(),
+            )]
+            .into(),
+            StartConditionSettings {
+                blocks_ratio: ToggleableThreshold::default().set_disabled(),
+                ..StartConditionSettings::default()
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn disable_internal_transactions_works_correctly() {
+        let mut settings = Settings::default();
+        let charts_settings_default_enabled = config::types::AllChartSettings {
+            enabled: true,
+            ..Default::default()
+        };
+        let mut charts = config::charts::Config {
+            counters: [
+                (
+                    LastNewContracts::key().name().to_owned(),
+                    charts_settings_default_enabled.clone(),
+                ),
+                (
+                    TotalContracts::key().name().to_owned(),
+                    charts_settings_default_enabled.clone(),
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            lines: [
+                (
+                    NewContracts::key().name().to_owned(),
+                    charts_settings_default_enabled.clone(),
+                ),
+                (
+                    ContractsGrowth::key().name().to_owned(),
+                    charts_settings_default_enabled.clone(),
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+        };
+
+        settings.disable_internal_transactions = true;
+        handle_disable_internal_transactions(
+            settings.disable_internal_transactions,
+            &mut settings.conditional_start,
+            &mut charts,
+        );
+
+        assert_eq!(
+            settings
+                .conditional_start
+                .internal_transactions_ratio
+                .enabled,
+            false
+        );
+        assert_eq!(
+            charts
+                .lines
+                .get(NewContracts::key().name())
+                .unwrap()
+                .enabled,
+            false
+        );
+        assert_eq!(
+            charts
+                .lines
+                .get(ContractsGrowth::key().name())
+                .unwrap()
+                .enabled,
+            false
+        );
+        assert_eq!(
+            charts
+                .counters
+                .get(LastNewContracts::key().name())
+                .unwrap()
+                .enabled,
+            false
+        );
+        assert_eq!(
+            charts
+                .counters
+                .get(TotalContracts::key().name())
+                .unwrap()
+                .enabled,
+            true
+        );
+    }
+
+    #[test]
+    fn linked_stats_without_base_url_deserializes() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"timeout": 10}"#).expect("valid config should deserialize");
+        assert!(settings.base_url.is_none());
+        assert_eq!(settings.timeout, 10);
+    }
+
+    #[test]
+    fn linked_stats_empty_object_deserializes_to_defaults() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{}"#).expect("empty linked_stats should deserialize");
+        assert!(settings.base_url.is_none());
+        assert_eq!(settings.timeout, 3_000);
+        assert_eq!(settings.max_hops, 1);
+    }
+
+    #[test]
+    fn linked_stats_defaults_timeout_and_max_hops_when_base_url_is_set() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"base_url":"http://example.com"}"#)
+                .expect("valid linked_stats config should deserialize");
+
+        assert_eq!(
+            settings.base_url.as_ref().unwrap().as_str(),
+            "http://example.com/"
+        );
+        assert_eq!(settings.timeout, 3_000);
+        assert_eq!(settings.max_hops, 1);
+        assert_eq!(settings.max_hops(), 1);
+    }
+
+    #[test]
+    fn linked_stats_max_hops_is_capped_to_hard_limit() {
+        let settings: LinkedStatsSettings =
+            serde_json::from_str(r#"{"base_url":"http://example.com","max_hops":100}"#)
+                .expect("valid linked_stats config should deserialize");
+
+        assert_eq!(settings.max_hops, 100);
+        assert_eq!(settings.max_hops(), LINKED_STATS_MAX_HOPS_HARD_CAP);
     }
 }

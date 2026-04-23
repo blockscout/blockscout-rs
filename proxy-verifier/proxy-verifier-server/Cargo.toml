@@ -1,0 +1,30 @@
+[package]
+name = "proxy-verifier-server"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+proxy-verifier-proto = { path = "../proxy-verifier-proto" }
+proxy-verifier-logic = { path = "../proxy-verifier-logic" }
+
+actix-web = "4"
+anyhow = "1.0"
+async-trait = "0.1"
+blockscout-service-launcher = { workspace = true }
+config = { version = "0.13", features = ["preserve_order"] }
+eth-bytecode-db-proto = { workspace = true, features = ["http-client", "mock"] }
+ethers-core = "2.0.13"
+indexmap = { version = "2.2.6", features = ["serde"] }
+serde = "1.0"
+serde_json = { version = "1.0" }
+tokio = { version = "1.23", features = ["rt-multi-thread", "macros"] }
+tonic = "0.12"
+tracing = "0.1"
+url = { version = "2.5", features = ["serde"] }
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = ["test-server"] }
+pretty_assertions = "1.3"
+reqwest = { version = "0.12", features = ["json"] }
+tempfile = "3.10.0"

@@ -1,0 +1,94 @@
+;; ┏┓┏┓┏┓┏━      
+;; ┏┛┗┫ ┫┗┓┏┓┏┏┳┓
+;; ┗━┗┛┗┛┗┛┗┻┛┛┗┗
+;;                                             
+;; This is an implementation of EIP-2935's predeploy contract.
+;;
+;; The contract implements a ring buffer to create bounded execution block hash
+;; lookup. 
+
+#pragma target "prague"
+
+;; ----------------------------------------------------------------------------
+;; MACROS ---------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+
+;; BUFLEN returns the HISTORY_BUFFER_LENGTH as defined in the EIP.
+#define BUFLEN = 8191
+
+;; SYSADDR is the address which calls the contract to submit a new block hash.
+#define SYSADDR = .address(0xfffffffffffffffffffffffffffffffffffffffe)
+
+;; ----------------------------------------------------------------------------
+;; MACROS END -----------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+
+  ;; Protect the submit routine by verifying the caller is equal to
+  ;; sysaddr().
+  caller            ;; [caller]
+  push SYSADDR      ;; [sysaddr, caller]
+  eq                ;; [sysaddr == caller]
+  jumpi @submit     ;; []
+
+  ;; Fallthrough if addresses don't match -- this means the caller intends
+  ;; to read a block hash.
+
+  ;; Verify input is 32 bytes long.
+  push 32           ;; [32]
+  calldatasize      ;; [calldatasize, 32]
+  sub               ;; [calldatasize - 32]
+
+  ;; Jump to continue if length-check passed, otherwise revert.
+  jumpi @throw      ;; []
+
+  ;; Check if input is requesting a block hash greater than current block number
+  ;; minus 1.
+  push 0            ;; [0]
+  calldataload      ;; [input]
+  push 1            ;; [1, input]
+  number            ;; [number, 1, input]
+  sub               ;; [number-1, input]              
+  dup2              ;; [input, number-1, input]
+  gt                ;; [input > number-1, input]
+  jumpi @throw      ;; [input]
+
+  ;; Check if the input is requesting a block hash before the earliest available
+  ;; hash currently. Since we've verified that input <= number - 1, we know
+  ;; there will be no overflow during the subtraction of number - input.
+  push BUFLEN       ;; [buflen, input]
+  dup2              ;; [input, buflen, input]
+  number            ;; [number, input, buflen, input]
+  sub               ;; [number - input, buflen, input]
+  gt                ;; [number - input > buflen, input]
+  jumpi @throw      ;; [input]
+
+  ;; Load the hash.
+  push BUFLEN       ;; [buflen, input]
+  swap1             ;; [input, buflen]
+  mod               ;; [input % buflen]
+  sload             ;; [hash]
+
+  ;; Load into memory and return.
+  push 0            ;; [0, hash]
+  mstore            ;; []
+  push 32           ;; [32]
+  push 0            ;; [0, 32]
+  return            ;; []
+
+throw:
+  ;; Reverts current execution with no return data.
+  push 0            ;; [0]
+  push 0            ;; [0, 0]
+  revert            ;; []
+
+submit:
+  push 0            ;; [0]
+  calldataload      ;; [in]
+  push BUFLEN       ;; [buflen, in]
+  push 1            ;; [1, buflen, in]
+  number            ;; [number, 1, buflen, in]
+  sub               ;; [number-1, buflen, in]
+  mod               ;; [number-1 % buflen, in]
+  sstore
+
+  stop

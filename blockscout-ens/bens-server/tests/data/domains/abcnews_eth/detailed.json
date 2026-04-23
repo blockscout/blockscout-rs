@@ -1,0 +1,24 @@
+{
+  "expiry_date": null,
+  "id": "0x7a68d23f9d7e32e79f09e024d21e2e12b66f74cbbc4aff0e5a36043a6a42778d",
+  "name": "abcnews.eth",
+  "other_addresses": {},
+  "owner": {
+    "hash": "0xe95Ca676DE726AEe5eD7F6cd4537CDE478cC5020"
+  },
+  "registrant": null,
+  "registration_date": "2017-06-14T01:21:44.000Z",
+  "resolved_address": null,
+  "tokens": [
+    {
+      "contract_hash": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+      "id": "73184468325383835900744378213252247472075144956610402274611094281335906491053",
+      "type": "NATIVE_DOMAIN_TOKEN"
+    }
+  ],
+  "wrapped_owner": null,
+  "protocol": {{ ens_protocol | json_encode() | safe }},
+  "resolved_with_wildcard": false,
+  "resolver_address": null,
+  "stored_offchain": false
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "constant": true,
+    "inputs": [{ "name": "interfaceID", "type": "bytes4" }],
+    "name": "supportsInterface",
+    "outputs": [{ "name": "", "type": "bool" }],
+    "payable": false,
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [{ "name": "node", "type": "bytes32" }],
+    "name": "name",
+    "outputs": [{ "name": "", "type": "string" }],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      { "name": "node", "type": "bytes32" },
+      { "name": "name", "type": "string" }
+    ],
+    "name": "setName",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "_rns", "type": "address" }],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "node", "type": "bytes32" },
+      { "indexed": false, "name": "name", "type": "string" }
+    ],
+    "name": "NameChanged",
+    "type": "event"
+  }
+]

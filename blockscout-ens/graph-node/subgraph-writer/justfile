@@ -1,0 +1,29 @@
+init:
+    python -m pip install -r requirements.txt
+
+try-build-protocol name etherscan_endpoint addresses:
+    python protocol-extractor/get_abi_from_etherscan.py \
+        --endpoint {{etherscan_endpoint}} \
+        --output protocol-extractor/output-abis.json \
+        --addresses {{addresses}}
+    python protocol-extractor/extractor.py \
+        --config protocol-extractor/contract_events.json \
+        --input-abis protocol-extractor/output-abis.json \
+        --output protocols/{{name}}.yaml
+
+template-it-from-protocol protocol output_dir:
+    # todo: -o ../subgraphs
+    cookiecutter --config-file {{protocol}} --output-dir {{output_dir}} --no-input ./templater
+
+
+test-ens MAINNET_ETHERSCAN_API_KEY:
+    just try-build-protocol \
+        test-ens \
+        https://api.etherscan.io/api\?apikey\={{MAINNET_ETHERSCAN_API_KEY}} \
+        0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e,0x253553366Da8546fC250F225fe3d25d0C782303b,0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85,0x231b0Ee14048e9dCcD1d247744d114a4EB5E8E63
+
+test-genome GNOSIS_ETHERSCAN_API_KEY:
+    just try-build-protocol \
+        test-genome \
+        https://api.gnosisscan.io/api\?apikey\={{GNOSIS_ETHERSCAN_API_KEY}} \
+        0xFFC305697bb27483268106be6F22B0555c192804,0x3D3dc123c60c2172c63B1E4D4C026Eb77fb57Bd9,0x4211B1Dcf3adbEbAB6013A907465d2B90e90eb6d,0xFa8093b53AE47DfD24E563F124fA7206089c502a,0x57410305546fe40062144BF182ded612Bb8F13B8,0x3802AB1E503ab373D370d71386DFEe33851e32A9,0xc9e1a0aDdE5168313D5D683c75813100B798374a,0x720DC4afE863fe467cDC00a768617721b912FbAe,0x3250e011E77c462f69D73275A2Da4fbba55181d5,0xC742CB159ccEc58D99CE8F4acb51271288783a82,0xc6DB15d9cDb0402c10A6091855d3c90bb3e4FD1A,0xB21A2AFfC24683b464505160375E0c7D4F8af397,0x9C42F51bb8f71EC8b9A8E22D675226D3aC312208,0x6FdcF80a80dB740f88021232AD58341232Ba61b2,0x51e3e07667A0bCb2f4807640dCB61fd38d7829AF,0xd8c34a379BD95c3EfFF2CA23Dfa27D83962dc44a

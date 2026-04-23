@@ -2,31 +2,35 @@ pub mod solidity;
 pub mod sourcify;
 pub mod vyper;
 
-pub mod middleware;
-
 mod common_types;
 mod compiler;
 mod consts;
+mod lookup_methods;
 mod metrics;
+mod proto_conversions;
 mod scheduler;
-mod verifier;
-
 #[cfg(test)]
 mod tests;
-
-pub(crate) use blockscout_display_bytes::Bytes as DisplayBytes;
+mod verify;
+pub mod zksync;
 
 pub use consts::{
-    DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
+    DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
+    DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 
-pub use middleware::Middleware;
+pub use common_types::{
+    Contract, FullyQualifiedName, Language, MatchType, OnChainCode, OnChainContract,
+    RequestParseError,
+};
+pub use compiler::{
+    CompactVersion, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher, Version,
+};
+pub use verify::{
+    Error, EvmCompilersPool, SolcCompiler, SolcInput, VerificationResult, VerifyingContract,
+    VyperCompiler, VyperInput,
+};
 
-pub use common_types::MatchType;
-pub use compiler::{Compilers, Fetcher, ListFetcher, S3Fetcher, Version};
-pub use sourcify::{Error as SourcifyError, Success as SourcifySuccess};
-pub use verifier::{BytecodePart, Error as VerificationError, Success as VerificationSuccess};
-
-pub use solidity::{Client as SolidityClient, SolcValidator, SolidityCompiler};
-pub use sourcify::SourcifyApiClient;
-pub use vyper::{Client as VyperClient, VyperCompiler};
+pub use lookup_methods::{find_methods, LookupMethodsRequest, LookupMethodsResponse};
+pub use solidity::SolcValidator;
+pub use sourcify::{Error as SourcifyError, SourcifyApiClient, Success as SourcifySuccess};

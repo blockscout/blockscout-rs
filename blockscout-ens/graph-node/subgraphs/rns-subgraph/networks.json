@@ -1,0 +1,36 @@
+{
+  "rootstock": {
+    "RnsRegistry": {
+      "address": "0xCB868AeAbd31E2b66F74E9a55cF064AbB31A4Ad5",
+      "startBlock": 905027
+    },
+    "NameResolver": {
+      "address": "0x4b1a11BF6723e60b9D2e02AA3ecE34E24Bde77d9",
+      "startBlock": 1721969
+    },
+    "PublicResolver": {
+      "startBlock": 905027
+    },
+    "RSKOwner": {
+      "address": "0x45d3e4fb311982a06ba52359d44cb4f5980e0ef1",
+      "startBlock": 1891388
+    }
+  },
+  "rootstock-testnet": {
+    "RnsRegistry": {
+      "address": "0x7d284aaac6e925aad802a53c0c69efe3764597b8",
+      "startBlock": 385322
+    },
+    "NameResolver": {
+      "address": "0x8587385ad60038bB181aFfDF687c4D1B80C4787e",
+      "startBlock": 419964
+    },
+    "PublicResolver": {
+      "startBlock": 385322
+    },
+    "RSKOwner": {
+      "address": "0xca0a477e19bac7e0e172ccfd2e3c28a7200bdb71",
+      "startBlock": 385433
+    }
+  }
+}

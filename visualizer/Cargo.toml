@@ -1,5 +1,10 @@
 [workspace]
+resolver = "2"
 members = [
     "visualizer",
-    "visualizer-server"
+    "visualizer-server",
+    "visualizer-proto"
 ]
+
+[workspace.dependencies]
+blockscout-service-launcher = { version = "0.13.0"  }

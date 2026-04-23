@@ -1,0 +1,40 @@
+{
+    "counters_order": [
+        "average_block_time",
+        "total_txns"
+    ],
+    "line_chart_categories": [
+        {
+            "id": "transactions",
+            "title": "Transactions",
+            "charts_order": [
+                "average_txn_fee",
+                "txns_fee",
+                "new_txns",
+                "txns_growth"
+            ]
+        },
+        {
+            "id": "blocks",
+            "title": "Blocks",
+            "charts_order": [
+                "new_blocks",
+                "average_block_rewards"
+            ]
+        },
+        {
+            "id": "tokens",
+            "title": "Tokens",
+            "charts_order": [
+                "new_native_coin_transfers"
+            ]
+        },
+        {
+            "id": "gas",
+            "title": "Gas",
+            "charts_order": [
+                "average_gas_price"
+            ]
+        }
+    ]
+}

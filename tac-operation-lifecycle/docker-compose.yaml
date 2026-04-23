@@ -1,0 +1,37 @@
+version: "3"
+services:
+  database:
+    image: postgres:17
+    container_name: 'tac-operation-lifecycle-postgres'
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: 'admin'
+      POSTGRES_USER: 'postgres'
+      POSTGRES_HOST_AUTH_METHOD: 'trust'
+    ports:
+      - "9432:5432"
+    volumes:
+      - ./database:/var/lib/postgresql/data
+  
+  tac-operation-lifecycle:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: 'tac-operation-lifecycle'
+    restart: always
+    depends_on:
+      - database
+    ports:
+      - "8050:8050"
+      - "8051:8051"
+    environment:
+      TAC_OPERATION_LIFECYCLE__CONFIG: /app/config.toml
+      TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT__URL: postgres://postgres:admin@database:5432/tac_operation_lifecycle
+    env_file:
+      ## optional: if provided, would overwrite values from configuration file
+      - ./tac-operation-lifecycle-server/config/base.env
+    volumes:
+      ## optional: you can use default config or provide custom via file
+      - ./tac-operation-lifecycle-server/config/testnet.toml:/app/config.toml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

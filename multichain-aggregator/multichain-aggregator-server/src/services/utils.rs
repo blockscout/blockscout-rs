@@ -1,0 +1,56 @@
+use multichain_aggregator_logic::{page_token::PageTokenFormat, types::ChainId};
+use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::Pagination;
+use std::{fmt::Display, str::FromStr};
+use tonic::Status;
+
+#[inline]
+pub fn parse_query<T: FromStr>(input: String) -> Result<T, Status>
+where
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    T::from_str(&input).map_err(|e| Status::invalid_argument(format!("invalid value {input}: {e}")))
+}
+
+#[inline]
+pub fn parse_map_result<'a, E, T, F>(input: &'a str, f: F) -> Result<Vec<T>, Status>
+where
+    E: Display,
+    F: FnMut(&'a str) -> Result<T, E>,
+{
+    input
+        .split(',')
+        .map(f)
+        .collect::<Result<Vec<T>, _>>()
+        .map_err(|e| Status::invalid_argument(format!("invalid argument {input}: {e}")))
+}
+
+pub trait PageTokenExtractor<T: PageTokenFormat> {
+    fn extract_page_token(self) -> Result<Option<T>, Status>;
+}
+
+impl<T: PageTokenFormat> PageTokenExtractor<T> for Option<String> {
+    fn extract_page_token(self) -> Result<Option<T>, Status> {
+        self.map(|s| {
+            T::parse_page_token(s.clone())
+                .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))
+        })
+        .transpose()
+    }
+}
+
+pub fn page_token_to_proto<T: PageTokenFormat>(
+    page_token: Option<T>,
+    page_size: u32,
+) -> Option<Pagination> {
+    page_token.map(|pt| Pagination {
+        page_token: pt.format_page_token(),
+        page_size,
+    })
+}
+
+pub fn parse_chain_ids(chain_ids: Vec<String>) -> Result<Vec<ChainId>, Status> {
+    chain_ids
+        .into_iter()
+        .map(parse_query)
+        .collect::<Result<Vec<_>, _>>()
+}

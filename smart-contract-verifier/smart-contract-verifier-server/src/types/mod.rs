@@ -1,14 +1,16 @@
-mod solidity_multi_part;
-mod solidity_standard_json;
+mod errors;
+mod lookup_methods;
 mod source;
 mod sourcify;
+mod sourcify_from_etherscan;
 mod verify_response;
-mod vyper_multi_part;
 
-pub use solidity_multi_part::VerifySolidityMultiPartRequestWrapper;
-pub use solidity_standard_json::{
-    ParseError as StandardJsonParseError, VerifySolidityStandardJsonRequestWrapper,
-};
+pub mod batch_verification;
+pub mod verification_result;
+pub mod zksolc_standard_json;
+
+pub use errors::StandardJsonParseError;
+pub use lookup_methods::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper};
 pub use sourcify::VerifySourcifyRequestWrapper;
+pub use sourcify_from_etherscan::VerifyFromEtherscanSourcifyRequestWrapper;
 pub use verify_response::VerifyResponseWrapper;
-pub use vyper_multi_part::VerifyVyperMultiPartRequestWrapper;

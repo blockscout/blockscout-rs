@@ -1,33 +1,24 @@
-FROM lukemathwalker/cargo-chef:0.1.47-rust-1.65-buster as chef
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y curl wget unzip
-RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip -O ./protoc.zip \
-          && unzip protoc.zip \
-          && mv ./include/* /usr/include/ \
-          && mv ./bin/protoc /usr/bin/protoc
-
-RUN wget https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.15.0/protoc-gen-openapiv2-v2.15.0-linux-x86_64 -O ./protoc-gen-openapiv2 \
-          && chmod +x protoc-gen-openapiv2 \
-          && mv ./protoc-gen-openapiv2 /usr/bin/protoc-gen-openapiv2
+FROM ghcr.io/blockscout/services-base:latest AS chef
 
 FROM chef AS plan
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM chef as cache
+FROM chef AS cache
 COPY --from=plan /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 FROM chef AS build
 
+# Include proto common definitions (`proto` must be passed as build context)
+COPY --from=proto . /proto
 COPY . .
 COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release
 
-FROM ubuntu:20.04 as run
-RUN apt-get update && apt-get install -y libssl1.1 libssl-dev ca-certificates
+FROM ubuntu:25.04 AS run
+RUN apt-get update && apt-get install -y libssl3 libssl-dev ca-certificates
 
 WORKDIR /app
 ENV APP_USER=app
@@ -41,6 +32,11 @@ COPY --from=build /app/target/release/stats-server /app/stats-server
 RUN chown -R $APP_USER:$APP_USER /app
 USER app
 
-COPY ./config/charts.toml ./config/charts.toml 
+COPY ./config/blockscout_instance ./config/blockscout_instance
+COPY ./config/multichain ./config/multichain
+COPY ./config/interchain ./config/interchain
+
+ENV STATS__SWAGGER_PATH=/app/static/stats.swagger.yaml
+COPY ./stats-proto/swagger/stats.swagger.yaml $STATS__SWAGGER_PATH
 
 CMD ["./stats-server"]

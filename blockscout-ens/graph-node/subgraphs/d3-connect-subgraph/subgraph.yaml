@@ -1,0 +1,56 @@
+specVersion: 0.0.4
+description: Subgraph to index D3 Connect Subgraph
+repository: https://github.com/blockscout/blockscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Registry
+    network: shibarium-testnet
+    source:
+      abi: Registry
+      address: "0x1443bC2bBAB07437BCF9C577b647523A736bB33E"
+      startBlock: 1927346
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Registry.ts
+      entities:
+        - Domain
+        - Account
+        - Resolver
+      abis:
+        - name: Registry
+          file: ./abis/Registry.json
+      eventHandlers:
+        - event: SLDMinted(indexed uint256,address,string,string,uint256)
+          handler: handleSLDMinted
+        - event: SLDMintedForOrder(indexed uint256,address,string,string,uint256,string)
+          handler: handleSLDMintedForOrder
+        - event: SLDRenewed(indexed uint256,uint256,string)
+          handler: handleSLDRenewed
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+  - kind: ethereum/contract
+    name: Resolver
+    network: shibarium-testnet
+    source:
+      abi: Resolver
+      address: "0xae6Bdf6e9edA0bA60F97390e70a545e91B5E8bf2"
+      startBlock: 6806860
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Resolver.ts
+      entities:
+        - Domain
+        - Account
+        - NameChanged
+      abis:
+        - name: Resolver
+          file: ./abis/Resolver.json
+      eventHandlers:
+        - event: SetReverseMapping(address,string,string)
+          handler: handleSetReverseMapping

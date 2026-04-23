@@ -1,15 +1,4 @@
-FROM lukemathwalker/cargo-chef:0.1.52-rust-buster as chef
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y curl wget unzip
-RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-x86_64.zip -O ./protoc.zip \
-          && unzip protoc.zip \
-          && mv ./include/* /usr/include/ \
-          && mv ./bin/protoc /usr/bin/protoc
-
-RUN wget https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.15.0/protoc-gen-openapiv2-v2.15.0-linux-x86_64 -O ./protoc-gen-openapiv2 \
-          && chmod +x protoc-gen-openapiv2 \
-          && mv ./protoc-gen-openapiv2 /usr/bin/protoc-gen-openapiv2
+FROM ghcr.io/blockscout/services-base:latest as chef
 
 FROM chef AS plan
 COPY . .
@@ -26,8 +15,8 @@ COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release
 
-FROM ubuntu:20.04 as run
-RUN apt-get update && apt-get install -y libssl1.1 libssl-dev ca-certificates
+FROM ubuntu:24.04 as run
+RUN apt-get update && apt-get install -y libssl3 libssl-dev ca-certificates
 
 WORKDIR /app
 ENV APP_USER=app
@@ -36,9 +25,9 @@ ENV APP_USER=app
 RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER
 
-COPY --from=build /app/target/release/smart-contract-verifier-http /app/smart-contract-verifier-http
+COPY --from=build /app/target/release/smart-contract-verifier-server /app/smart-contract-verifier-server
 # Change directory access for app user
 RUN chown -R $APP_USER:$APP_USER /app
 USER app
 
-CMD ["./smart-contract-verifier-http"]
+CMD ["./smart-contract-verifier-server"]

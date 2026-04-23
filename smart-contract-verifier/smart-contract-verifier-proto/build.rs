@@ -17,7 +17,23 @@ fn compile(
         .protoc_arg("grpc_api_configuration=proto/v2/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=smart-contract-verifier")
         .bytes(["."])
         .btree_map(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]");
+        .type_attribute(".", "#[actix_prost_macros::serde]")
+        .field_attribute(
+            ".blockscout.smartContractVerifier.v2.HealthCheckRequest.service",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.smartContractVerifier.v2.VerifyVyperMultiPartRequest.interfaces",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.smartContractVerifier.v2.VerifySolidityMultiPartRequest.post_actions",
+            "#[serde(default)]"
+        )
+        .field_attribute(
+            ".blockscout.smartContractVerifier.v2.VerifySolidityStandardJsonRequest.post_actions",
+            "#[serde(default)]"
+        );
     config.compile_protos(protos, includes)?;
     Ok(())
 }
@@ -35,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     compile(
         &[
             "proto/v2/smart-contract-verifier.proto",
+            "proto/v2/zksync-solidity.proto",
             "proto/v2/health.proto",
         ],
         &["proto"],

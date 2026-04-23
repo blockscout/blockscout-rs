@@ -1,13 +1,14 @@
 use anyhow::anyhow;
 use blockscout_service_launcher::{
-    JaegerSettings, MetricsSettings, ServerSettings, TracingSettings,
+    launcher::{ConfigSettings, MetricsSettings, ServerSettings},
+    tracing::{JaegerSettings, TracingSettings},
 };
-use config::{Config, File};
 use cron::Schedule;
-use serde::{de, Deserialize};
+use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use smart_contract_verifier::{
-    DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
+    DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
+    DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 use std::{
     num::{NonZeroU32, NonZeroUsize},
@@ -16,20 +17,6 @@ use std::{
 };
 use url::Url;
 
-/// Wrapper under [`serde::de::IgnoredAny`] which implements
-/// [`PartialEq`] and [`Eq`] for fields to be ignored.
-#[derive(Copy, Clone, Debug, Default, Deserialize)]
-struct IgnoredAny(de::IgnoredAny);
-
-impl PartialEq for IgnoredAny {
-    fn eq(&self, _other: &Self) -> bool {
-        // We ignore that values, so they should not impact the equality
-        true
-    }
-}
-
-impl Eq for IgnoredAny {}
-
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
@@ -37,17 +24,11 @@ pub struct Settings {
     pub solidity: SoliditySettings,
     pub vyper: VyperSettings,
     pub sourcify: SourcifySettings,
+    pub zksync_solidity: ZksyncSoliditySettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub tracing: TracingSettings,
     pub compilers: CompilersSettings,
-    pub extensions: ExtensionsSettings,
-
-    // Is required as we deny unknown fields, but allow users provide
-    // path to config through PREFIX__CONFIG env variable. If removed,
-    // the setup would fail with `unknown field `config`, expected one of...`
-    #[serde(rename = "config")]
-    config_path: IgnoredAny,
 }
 
 #[serde_as]
@@ -63,13 +44,11 @@ pub struct SoliditySettings {
 
 impl Default for SoliditySettings {
     fn default() -> Self {
-        let mut default_dir = std::env::temp_dir();
-        default_dir.push("solidity-compilers");
         Self {
             enabled: true,
-            compilers_dir: default_dir,
-            refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
-            fetcher: Default::default(),
+            compilers_dir: default_compilers_dir("solidity-compilers"),
+            refresh_versions_schedule: schedule_every_hour(),
+            fetcher: default_list_fetcher(DEFAULT_SOLIDITY_COMPILER_LIST),
         }
     }
 }
@@ -87,16 +66,11 @@ pub struct VyperSettings {
 
 impl Default for VyperSettings {
     fn default() -> Self {
-        let mut default_dir = std::env::temp_dir();
-        default_dir.push("vyper-compilers");
-        let fetcher = FetcherSettings::List(ListFetcherSettings {
-            list_url: Url::try_from(DEFAULT_VYPER_COMPILER_LIST).expect("valid url"),
-        });
         Self {
             enabled: true,
-            compilers_dir: default_dir,
-            refresh_versions_schedule: Schedule::from_str("0 0 * * * * *").unwrap(), // every hour
-            fetcher,
+            compilers_dir: default_compilers_dir("vyper-compilers"),
+            refresh_versions_schedule: schedule_every_hour(),
+            fetcher: default_list_fetcher(DEFAULT_VYPER_COMPILER_LIST),
         }
     }
 }
@@ -108,24 +82,10 @@ pub enum FetcherSettings {
     S3(S3FetcherSettings),
 }
 
-impl Default for FetcherSettings {
-    fn default() -> Self {
-        Self::List(Default::default())
-    }
-}
-
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(default, deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct ListFetcherSettings {
     pub list_url: Url,
-}
-
-impl Default for ListFetcherSettings {
-    fn default() -> Self {
-        Self {
-            list_url: Url::try_from(DEFAULT_SOLIDITY_COMPILER_LIST).expect("valid url"),
-        }
-    }
 }
 
 #[derive(Deserialize, Default, Clone, PartialEq, Eq, Debug)]
@@ -155,7 +115,38 @@ impl Default for SourcifySettings {
             enabled: true,
             api_url: Url::try_from(DEFAULT_SOURCIFY_HOST).expect("valid url"),
             verification_attempts: NonZeroU32::new(3).expect("Is not zero"),
-            request_timeout: 10,
+            request_timeout: 15,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ZksyncSoliditySettings {
+    pub enabled: bool,
+    pub evm_compilers_dir: PathBuf,
+    #[serde_as(as = "DisplayFromStr")]
+    pub evm_refresh_versions_schedule: Schedule,
+    pub evm_fetcher: FetcherSettings,
+    pub era_evm_fetcher: FetcherSettings,
+    pub zk_compilers_dir: PathBuf,
+    #[serde_as(as = "DisplayFromStr")]
+    pub zk_refresh_versions_schedule: Schedule,
+    pub zk_fetcher: FetcherSettings,
+}
+
+impl Default for ZksyncSoliditySettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            evm_compilers_dir: default_compilers_dir("zksync-solc-compilers"),
+            evm_refresh_versions_schedule: schedule_every_hour(),
+            evm_fetcher: default_list_fetcher(DEFAULT_SOLIDITY_COMPILER_LIST),
+            era_evm_fetcher: default_list_fetcher(DEFAULT_ERA_SOLIDITY_COMPILER_LIST),
+            zk_compilers_dir: default_compilers_dir("zksync-zksolc-compilers"),
+            zk_refresh_versions_schedule: schedule_every_hour(),
+            zk_fetcher: default_list_fetcher(DEFAULT_ZKSOLC_COMPILER_LIST),
         }
     }
 }
@@ -176,40 +167,8 @@ impl Default for CompilersSettings {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct ExtensionsSettings {
-    pub solidity: Extensions,
-    pub sourcify: Extensions,
-    pub vyper: Extensions,
-}
-
-#[derive(Default, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[serde(default, deny_unknown_fields)]
-pub struct Extensions {
-    #[cfg(feature = "sig-provider-extension")]
-    pub sig_provider: Option<sig_provider_extension::Config>,
-}
-
-impl Settings {
-    pub fn new() -> anyhow::Result<Self> {
-        let config_path = std::env::var("SMART_CONTRACT_VERIFIER__CONFIG");
-
-        let mut builder = Config::builder();
-        if let Ok(config_path) = config_path {
-            builder = builder.add_source(File::with_name(&config_path));
-        };
-        // Use `__` so that it would be possible to address keys with underscores in names (e.g. `access_key`)
-        builder = builder.add_source(
-            config::Environment::with_prefix("SMART_CONTRACT_VERIFIER").separator("__"),
-        );
-
-        let settings: Settings = builder.build()?.try_deserialize()?;
-
-        settings.validate()?;
-
-        Ok(settings)
-    }
+impl ConfigSettings for Settings {
+    const SERVICE_NAME: &'static str = "SMART_CONTRACT_VERIFIER";
 
     fn validate(&self) -> anyhow::Result<()> {
         // Validate s3 fetcher
@@ -221,4 +180,20 @@ impl Settings {
 
         Ok(())
     }
+}
+
+fn default_compilers_dir<P: AsRef<std::path::Path>>(path: P) -> PathBuf {
+    let mut compilers_dir = std::env::temp_dir();
+    compilers_dir.push(path);
+    compilers_dir
+}
+
+fn default_list_fetcher(list_url: &str) -> FetcherSettings {
+    FetcherSettings::List(ListFetcherSettings {
+        list_url: Url::try_from(list_url).expect("invalid default list.json url"),
+    })
+}
+
+fn schedule_every_hour() -> Schedule {
+    Schedule::from_str("0 0 * * * * *").unwrap()
 }

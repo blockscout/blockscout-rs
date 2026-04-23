@@ -23,11 +23,17 @@ pub async fn save_files(root: &Path, files: BTreeMap<PathBuf, String>) -> Result
         let root = root.to_owned();
         tokio::task::spawn_blocking(move || -> Result<(), std::io::Error> {
             if name.has_root() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                return Err(std::io::Error::other(
                     "Error. All paths should be relative.",
                 ));
             }
+
+            // Set a default file prefix if none is provided
+            let name = if name.ends_with(".sol") {
+                name.with_file_name("main.sol")
+            } else {
+                name
+            };
 
             let file_path = root.join(name);
             let prefix = file_path.parent();
