@@ -413,7 +413,10 @@ Zero-chain visibility is service-wide and configurable:
   - message-path endpoints drive the query from `chains` (excluding the
     selected chain) and left-join `stats_messages` / aggregated
     `stats_messages_days`
-  - explicit `counterparty_chain_ids` still suppresses synthesized zero rows
+  - with explicit `counterparty_chain_ids`, message-path endpoints still drive
+    from `chains`, restrict rows to the requested counterparties, exclude the
+    selected chain itself, and return zero-valued rows for requested
+    counterparties that exist in `chains` but have no aggregate row
 - when `false`: both families return only rows with positive aggregated stats
   - `/stats/chains` filters
     `COALESCE(sc.unique_transfer_users_count, 0) > 0 OR COALESCE(sc.unique_message_users_count, 0) > 0)`

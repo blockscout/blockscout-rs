@@ -173,25 +173,29 @@ enum MessagePathDirection {
     Incoming,
 }
 
-fn should_expand_message_paths(
-    include_zero_chains: bool,
-    counterparty_chain_ids: Option<&[i64]>,
-) -> bool {
-    include_zero_chains
-        && counterparty_chain_ids
-            .map(|chain_ids| chain_ids.is_empty())
-            .unwrap_or(true)
-}
-
 fn build_all_time_message_paths_query(
     chain_id: i64,
     direction: MessagePathDirection,
     counterparty_chain_ids: Option<&[i64]>,
     include_zero_chains: bool,
 ) -> (String, Vec<Value>) {
-    if should_expand_message_paths(include_zero_chains, counterparty_chain_ids) {
+    if include_zero_chains {
+        let mut values = vec![Value::BigInt(Some(chain_id))];
+        let mut where_parts = vec![
+            "c.id <> $1".to_string(),
+            "EXISTS (SELECT 1 FROM chains WHERE id = $1)".to_string(),
+        ];
+
+        if let Some(ids) = counterparty_chain_ids.filter(|chain_ids| !chain_ids.is_empty()) {
+            let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("${}", i + 2)).collect();
+            where_parts.push(format!("c.id IN ({})", placeholders.join(", ")));
+            for &id in ids {
+                values.push(Value::BigInt(Some(id)));
+            }
+        }
+
         let sql = match direction {
-            MessagePathDirection::Outgoing => {
+            MessagePathDirection::Outgoing => format!(
                 r#"
 SELECT $1::bigint AS src_chain_id,
        c.id AS dst_chain_id,
@@ -200,12 +204,12 @@ FROM chains c
 LEFT JOIN stats_messages sm
     ON sm.src_chain_id = $1
    AND sm.dst_chain_id = c.id
-WHERE c.id <> $1
-  AND EXISTS (SELECT 1 FROM chains WHERE id = $1)
+WHERE {}
 ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
-"#
-            }
-            MessagePathDirection::Incoming => {
+"#,
+                where_parts.join("\n  AND ")
+            ),
+            MessagePathDirection::Incoming => format!(
                 r#"
 SELECT c.id AS src_chain_id,
        $1::bigint AS dst_chain_id,
@@ -214,14 +218,14 @@ FROM chains c
 LEFT JOIN stats_messages sm
     ON sm.src_chain_id = c.id
    AND sm.dst_chain_id = $1
-WHERE c.id <> $1
-  AND EXISTS (SELECT 1 FROM chains WHERE id = $1)
+WHERE {}
 ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
-"#
-            }
+"#,
+                where_parts.join("\n  AND ")
+            ),
         };
 
-        return (sql.to_string(), vec![Value::BigInt(Some(chain_id))]);
+        return (sql, values);
     }
 
     let filter_column = match direction {
@@ -265,7 +269,7 @@ fn build_bounded_message_paths_query(
     counterparty_chain_ids: Option<&[i64]>,
     include_zero_chains: bool,
 ) -> (String, Vec<Value>) {
-    if should_expand_message_paths(include_zero_chains, counterparty_chain_ids) {
+    if include_zero_chains {
         let mut aggregate_where_parts = vec![match direction {
             MessagePathDirection::Outgoing => "src_chain_id = $1".to_string(),
             MessagePathDirection::Incoming => "dst_chain_id = $1".to_string(),
@@ -282,6 +286,22 @@ fn build_bounded_message_paths_query(
         if let Some(to_date) = to_date {
             aggregate_where_parts.push(format!("date < ${placeholder}"));
             values.push(Value::ChronoDate(Some(Box::new(to_date))));
+            placeholder += 1;
+        }
+
+        let mut where_parts = vec![
+            "c.id <> $1".to_string(),
+            "EXISTS (SELECT 1 FROM chains WHERE id = $1)".to_string(),
+        ];
+
+        if let Some(ids) = counterparty_chain_ids.filter(|chain_ids| !chain_ids.is_empty()) {
+            let placeholders: Vec<String> = (0..ids.len())
+                .map(|i| format!("${}", placeholder + i))
+                .collect();
+            where_parts.push(format!("c.id IN ({})", placeholders.join(", ")));
+            for &id in ids {
+                values.push(Value::BigInt(Some(id)));
+            }
         }
 
         let sql = match direction {
@@ -298,11 +318,11 @@ LEFT JOIN (
     WHERE {}
     GROUP BY dst_chain_id
 ) sm ON sm.dst_chain_id = c.id
-WHERE c.id <> $1
-  AND EXISTS (SELECT 1 FROM chains WHERE id = $1)
+WHERE {}
 ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
 "#,
-                aggregate_where_parts.join(" AND ")
+                aggregate_where_parts.join(" AND "),
+                where_parts.join("\n  AND ")
             ),
             MessagePathDirection::Incoming => format!(
                 r#"
@@ -317,11 +337,11 @@ LEFT JOIN (
     WHERE {}
     GROUP BY src_chain_id
 ) sm ON sm.src_chain_id = c.id
-WHERE c.id <> $1
-  AND EXISTS (SELECT 1 FROM chains WHERE id = $1)
+WHERE {}
 ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
 "#,
-                aggregate_where_parts.join(" AND ")
+                aggregate_where_parts.join(" AND "),
+                where_parts.join("\n  AND ")
             ),
         };
 
@@ -6160,8 +6180,8 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn message_paths_include_zero_counterparty_does_not_synthesize_missing_rows() {
-        let _db = init_db("message_paths_include_zero_counterparty_missing").await;
+    async fn message_paths_include_zero_counterparty_expands_requested_known_rows_only() {
+        let _db = init_db("message_paths_include_zero_counterparty_expand").await;
         let interchain_db = InterchainDatabase::new(_db.client());
         interchain_db
             .upsert_chains(vec![
@@ -6180,6 +6200,11 @@ mod tests {
                     name: Set("C".into()),
                     ..Default::default()
                 },
+                chains::ActiveModel {
+                    id: Set(4),
+                    name: Set("D".into()),
+                    ..Default::default()
+                },
             ])
             .await
             .unwrap();
@@ -6187,12 +6212,31 @@ mod tests {
             .create_or_update_stats_messages(1, 2, 5)
             .await
             .unwrap();
-
-        let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, Some(&[3]), true)
+        interchain_db
+            .create_or_update_stats_messages(1, 4, 7)
             .await
             .unwrap();
-        assert!(rows.is_empty());
+
+        let rows = interchain_db
+            .get_outgoing_message_paths(1, None, None, Some(&[1, 3, 4, 999]), true)
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 4,
+                    messages_count: 7
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 3,
+                    messages_count: 0
+                },
+            ]
+        );
+        assert!(rows.iter().all(|row| row.dst_chain_id != 1));
     }
 
     #[tokio::test]
@@ -6245,8 +6289,8 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn message_paths_bounded_counterparty_filter_applies_in_sql() {
-        let _db = init_db("message_paths_bounded_counterparty").await;
+    async fn message_paths_include_zero_bounded_counterparty_expands_requested_known_rows_only() {
+        let _db = init_db("message_paths_include_zero_bounded_counterparty").await;
         let interchain_db = InterchainDatabase::new(_db.client());
         interchain_db
             .upsert_chains(vec![
@@ -6265,13 +6309,18 @@ mod tests {
                     name: Set("C".into()),
                     ..Default::default()
                 },
+                chains::ActiveModel {
+                    id: Set(4),
+                    name: Set("D".into()),
+                    ..Default::default()
+                },
             ])
             .await
             .unwrap();
 
         for (date, src, dst, count) in [
             (NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(), 1, 2, 2),
-            (NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(), 1, 3, 7),
+            (NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(), 1, 4, 7),
         ] {
             stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
                 date: Set(date),
@@ -6290,19 +6339,27 @@ mod tests {
                 1,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 8).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 9).unwrap()),
-                Some(&[2]),
+                Some(&[1, 2, 3, 999]),
                 true,
             )
             .await
             .unwrap();
         assert_eq!(
             rows,
-            vec![MessagePathStatsRow {
-                src_chain_id: 1,
-                dst_chain_id: 2,
-                messages_count: 2
-            }]
+            vec![
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 2,
+                    messages_count: 2
+                },
+                MessagePathStatsRow {
+                    src_chain_id: 1,
+                    dst_chain_id: 3,
+                    messages_count: 0
+                },
+            ]
         );
+        assert!(rows.iter().all(|row| row.dst_chain_id != 1));
     }
 
     #[tokio::test]
