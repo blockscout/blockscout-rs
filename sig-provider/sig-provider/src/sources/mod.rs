@@ -1,5 +1,6 @@
 pub mod eth_bytecode_db;
 pub mod fourbyte;
+pub mod openchain;
 pub mod sigeth;
 
 use async_trait::async_trait;
