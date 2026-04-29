@@ -4,7 +4,6 @@ use reqwest_middleware::ClientWithMiddleware;
 pub struct Source {
     host: url::Url,
     client: ClientWithMiddleware,
-    n_retries: usize,
 }
 
 impl Source {
@@ -12,34 +11,10 @@ impl Source {
         Source {
             host,
             client: super::new_client(),
-            n_retries: 3,
         }
     }
 
-    #[cfg(test)]
-    pub fn n_retries(mut self, n_retries: usize) -> Source {
-        self.n_retries = n_retries;
-        self
-    }
-
-    async fn fetch(&self, mut path: String) -> Result<Vec<String>, anyhow::Error> {
-        let mut signatures = Vec::default();
-
-        loop {
-            let resp: json::GetResponse = self.try_make_request(&path, self.n_retries).await?;
-            signatures.extend(resp.results.into_iter().map(|sig| sig.text_signature));
-            if let Some(next) = resp.next {
-                path = next;
-            } else {
-                break;
-            }
-        }
-        // TODO: sort using "id" field
-        Ok(signatures)
-    }
-
-    #[async_recursion::async_recursion]
-    async fn try_make_request(&self, path: &str, n: usize) -> anyhow::Result<json::GetResponse> {
+    async fn fetch(&self, path: &str) -> Result<json::GetResponse, anyhow::Error> {
         let response = self
             .client
             .get(self.host.join(path).unwrap())
@@ -47,40 +22,50 @@ impl Source {
             .await
             .map_err(anyhow::Error::msg)?;
         match response.status() {
-            reqwest::StatusCode::OK => Ok(response.json::<json::GetResponse>().await?),
-            reqwest::StatusCode::BAD_GATEWAY if n > 0 => self.try_make_request(path, n - 1).await,
+            reqwest::StatusCode::OK => Ok(response.json().await?),
             status => Err(anyhow::anyhow!(
                 "invalid status code got as a result: {}",
                 status
             )),
         }
     }
+
+    fn convert(sigs: Option<json::SigMap>, hash: &str) -> Vec<String> {
+        // TODO: sort using "filtered" field
+        sigs.and_then(|mut sigs| {
+            sigs.remove(hash)
+                .map(|sigs| sigs.into_iter().map(|sig| sig.name).collect())
+        })
+        .unwrap_or_default()
+    }
 }
 
 #[async_trait::async_trait]
 impl SignatureSource for Source {
-    async fn create_signatures(&self, abi: &str) -> Result<(), anyhow::Error> {
-        self.client
-            .post(self.host.join("/api/v1/import-solidity/").unwrap())
-            .json(&json::CreateRequest { contract_abi: abi })
-            .send()
-            .await
-            .map(|_| ())
-            .map_err(anyhow::Error::msg)
+    async fn create_signatures(&self, _abi: &str) -> Result<(), anyhow::Error> {
+        Ok(())
     }
 
     async fn get_function_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
-        self.fetch(format!(
-            "/api/v1/signatures/?format=json&hex_signature={hex}"
-        ))
-        .await
+        let hash = super::hash(hex);
+        let resp = self
+            .fetch(&format!(
+                "/signature-database/v1/lookup?function={hash}&filter=false"
+            ))
+            .await?;
+        let signatures = Self::convert(resp.result.function, &hash);
+        Ok(signatures)
     }
 
     async fn get_event_signatures(&self, hex: &str) -> Result<Vec<String>, anyhow::Error> {
-        self.fetch(format!(
-            "/api/v1/event-signatures/?format=json&hex_signature={hex}"
-        ))
-        .await
+        let hash = super::hash(hex);
+        let resp = self
+            .fetch(&format!(
+                "/signature-database/v1/lookup?event={hash}&filter=false"
+            ))
+            .await?;
+        let signatures = Self::convert(resp.result.event, &hash);
+        Ok(signatures)
     }
 
     fn source(&self) -> String {
@@ -89,22 +74,27 @@ impl SignatureSource for Source {
 }
 
 mod json {
-    use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
 
-    #[derive(Debug, Serialize)]
-    pub struct CreateRequest<'a> {
-        pub contract_abi: &'a str,
-    }
+    use serde::Deserialize;
 
     #[derive(Debug, Deserialize)]
     pub struct Signature {
-        pub text_signature: String,
+        pub name: String,
+    }
+
+    pub type SigMap = HashMap<String, Vec<Signature>>;
+
+    #[derive(Debug, Deserialize)]
+    pub struct SigTypes {
+        pub function: Option<SigMap>,
+        pub event: Option<SigMap>,
+        pub _error: Option<SigMap>,
     }
 
     #[derive(Debug, Deserialize)]
     pub struct GetResponse {
-        pub next: Option<String>,
-        pub results: Vec<Signature>,
+        pub result: SigTypes,
     }
 }
 
@@ -113,12 +103,12 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
-    const DEFAULT_HOST: &str = "https://www.4byte.directory/";
+    const DEFAULT_HOST: &str = "https://api.4byte.sourcify.dev/";
 
     #[rstest::fixture]
     fn source() -> Source {
         let host = url::Url::from_str(DEFAULT_HOST).expect("default host is not an url");
-        Source::new(host).n_retries(6) // We increase n_retries to avoid most blinking tests
+        Source::new(host)
     }
 
     #[rstest::rstest]

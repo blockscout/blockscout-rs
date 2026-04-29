@@ -28,7 +28,8 @@ impl ConfigSettings for Settings {
 #[serde(default, deny_unknown_fields)]
 pub struct SourcesSettings {
     pub fourbyte: url::Url,
-    pub sigeth: url::Url,
+    pub openchain: url::Url,
+    pub sigeth: Option<url::Url>,
     pub eth_bytecode_db: EthBytecodeDbSettings,
 }
 
@@ -36,7 +37,8 @@ impl Default for SourcesSettings {
     fn default() -> Self {
         Self {
             fourbyte: url::Url::parse("https://www.4byte.directory/").unwrap(),
-            sigeth: url::Url::parse("https://sig.eth.samczsun.com/").unwrap(),
+            openchain: url::Url::parse("https://api.4byte.sourcify.dev/").unwrap(),
+            sigeth: None,
             eth_bytecode_db: Default::default(),
         }
     }
