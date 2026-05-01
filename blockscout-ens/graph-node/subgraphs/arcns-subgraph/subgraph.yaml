@@ -1,0 +1,180 @@
+﻿specVersion: 0.0.5
+description: ArcNS subgraph for Blockscout/BENS — indexes .arc and .circle domain names on Arc Testnet (Chain ID 5042002)
+repository: https://github.com/blockscout/blockscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: ArcController
+    network: arc-testnet
+    source:
+      address: "0xe0A67F2E74Bcb740F0446fF2aCF32081DB877D46"
+      abi: Controller
+      startBlock: 38856377
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Domain
+        - Registration
+        - Account
+        - NewOwner
+        - NameRegistered
+        - NameRenewed
+      abis:
+        - name: Controller
+          file: ./abis/Controller.json
+      eventHandlers:
+        - event: NameRegistered(string,indexed bytes32,indexed address,uint256,uint256)
+          handler: handleArcNameRegistered
+        - event: NameRenewed(string,indexed bytes32,uint256,uint256)
+          handler: handleArcNameRenewed
+      file: ./src/controller.ts
+  - kind: ethereum
+    name: CircleController
+    network: arc-testnet
+    source:
+      address: "0x4CB0650847459d9BbDd5823cc6D320C900D883dA"
+      abi: Controller
+      startBlock: 38856377
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Domain
+        - Registration
+        - Account
+        - NewOwner
+        - NameRegistered
+        - NameRenewed
+      abis:
+        - name: Controller
+          file: ./abis/Controller.json
+      eventHandlers:
+        - event: NameRegistered(string,indexed bytes32,indexed address,uint256,uint256)
+          handler: handleCircleNameRegistered
+        - event: NameRenewed(string,indexed bytes32,uint256,uint256)
+          handler: handleCircleNameRenewed
+      file: ./src/controller.ts
+  - kind: ethereum
+    name: ArcRegistrar
+    network: arc-testnet
+    source:
+      address: "0xD600B8D80e921ec48845fC1769c292601e5e90C4"
+      abi: BaseRegistrar
+      startBlock: 38856377
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Domain
+        - Account
+        - Transfer
+        - NameTransferred
+      abis:
+        - name: BaseRegistrar
+          file: ./abis/BaseRegistrar.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleArcTransfer
+      file: ./src/registrar.ts
+  - kind: ethereum
+    name: CircleRegistrar
+    network: arc-testnet
+    source:
+      address: "0xE1fdE46df4bAC6F433C52a337F4818822735Bf8a"
+      abi: BaseRegistrar
+      startBlock: 38856377
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Domain
+        - Account
+        - Transfer
+        - NameTransferred
+      abis:
+        - name: BaseRegistrar
+          file: ./abis/BaseRegistrar.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleCircleTransfer
+      file: ./src/registrar.ts
+  - kind: ethereum
+    name: Registry
+    network: arc-testnet
+    source:
+      address: "0xc20B3F8C7A7B4FcbFfe35c6C63331a1D9D12fD1A"
+      abi: Registry
+      startBlock: 38856377
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Domain
+        - Account
+        - Resolver
+        - Transfer
+        - NewResolver
+      abis:
+        - name: Registry
+          file: ./abis/Registry.json
+      eventHandlers:
+        - event: Transfer(indexed bytes32,address)
+          handler: handleRegistryTransfer
+        - event: NewResolver(indexed bytes32,address)
+          handler: handleNewResolver
+      file: ./src/registry.ts
+  - kind: ethereum
+    name: Resolver
+    network: arc-testnet
+    source:
+      address: "0x4c3a2D4245346732CE498937fEAD6343e77Eb097"
+      abi: Resolver
+      startBlock: 38856377
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Domain
+        - Resolver
+        - Account
+        - AddrChanged
+        - NameChanged
+      abis:
+        - name: Resolver
+          file: ./abis/Resolver.json
+      eventHandlers:
+        - event: AddrChanged(indexed bytes32,address)
+          handler: handleAddrChanged
+        - event: NameChanged(indexed bytes32,string)
+          handler: handleNameChanged
+      file: ./src/resolver.ts
+  - kind: ethereum
+    name: ReverseRegistrar
+    network: arc-testnet
+    source:
+      address: "0x352a1917Dd82158eC9bc71A0AC84F1b95Af26304"
+      abi: ReverseRegistrar
+      startBlock: 38856377
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Domain
+        - Account
+        - NewOwner
+      abis:
+        - name: ReverseRegistrar
+          file: ./abis/ReverseRegistrar.json
+      eventHandlers:
+        - event: ReverseClaimed(indexed address,indexed bytes32)
+          handler: handleReverseClaimed
+      file: ./src/reverseRegistrar.ts
