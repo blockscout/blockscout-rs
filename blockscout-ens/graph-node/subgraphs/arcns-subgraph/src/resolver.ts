@@ -49,14 +49,24 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
 }
 
 // ─── NameChanged ─────────────────────────────────────────────────────────────
-// Resolver.NameChanged(node, name) — fires when a reverse record name is set.
+// Resolver.NameChanged(node, name) — fires when a reverse record primary name
+// is set via ReverseRegistrar.setName() or Resolver.setName().
 //
-// In the BENS model, reverse resolution is handled by querying Domain entities
-// whose parent is the addr.reverse root node. The Domain.name field on the
-// reverse node Domain holds the primary name string (e.g. "alice.arc").
+// BENS reverse resolution flow:
+//   1. BENS queries name_changed rows joined to domain via domain.resolver.
+//   2. BENS then joins name_changed.name against the forward domain table to
+//      find the canonical forward domain for the primary name.
+//   3. The addr_reverse_names materialized view is built from this join.
 //
-// This handler updates Domain.name for the reverse node Domain so BENS can
-// read it via its reverse_registry technique.
+// CRITICAL: Domain.name on the reverse node MUST remain "<address>.addr.reverse".
+// If Domain.name is overwritten with the primary name (e.g. "flowpay.arc"),
+// BENS produces duplicate reversed_domain_id rows and fails the unique index
+// on addr_reverse_names.
+//
+// Correct behaviour:
+//   - Store the primary name ONLY in NameChanged.name (the resolver event).
+//   - Keep Domain.name as "<address>.addr.reverse" (set by handleReverseClaimed).
+//   - Link Domain.resolver = resolver.id so BENS can join via the resolver.
 
 export function handleNameChanged(event: NameChangedEvent): void {
   let nodeHex = event.params.node.toHexString();
@@ -66,21 +76,21 @@ export function handleNameChanged(event: NameChangedEvent): void {
 
   let resolverAddress = event.address;
 
-  // Update the Resolver entity
+  // Create/update the Resolver entity and link it to the domain node
   let resolver = getOrCreateResolver(resolverAddress, nodeHex);
   resolver.domain = nodeHex;
   resolver.save();
 
-  // Update Domain.name for the reverse node
-  // The reverse node Domain was created by handleReverseClaimed in reverseRegistrar.ts
+  // Link the reverse Domain to this resolver so BENS can join through it.
+  // Do NOT overwrite Domain.name — it must stay as "<address>.addr.reverse".
   let domain = Domain.load(nodeHex);
   if (domain) {
-    domain.name = name;
     domain.resolver = resolver.id;
     domain.save();
   }
 
-  // NameChanged resolver event
+  // Store the primary name in the NameChanged resolver event.
+  // BENS reads name_changed.name from here to resolve the primary name.
   let eventId =
     event.transaction.hash.toHexString() +
     "-" +

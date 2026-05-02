@@ -1,4 +1,4 @@
-﻿# ArcNS Subgraph
+# ArcNS Subgraph
 
 BENS-compatible ENS-like subgraph for Arc Testnet (Chain ID: 5042002).
 

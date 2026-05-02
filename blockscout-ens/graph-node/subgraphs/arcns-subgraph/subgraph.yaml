@@ -1,4 +1,4 @@
-﻿specVersion: 0.0.5
+specVersion: 0.0.5
 description: ArcNS subgraph for Blockscout/BENS — indexes .arc and .circle domain names on Arc Testnet (Chain ID 5042002)
 repository: https://github.com/blockscout/blockscout-rs
 schema:

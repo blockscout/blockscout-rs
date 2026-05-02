@@ -1,4 +1,4 @@
-﻿{
+{
     "subgraphs_reader":  {
                              "networks":  {
                                               "1":  {
@@ -101,8 +101,7 @@
                                                                              },
                                                               "rpc_url":  "https://rpc.testnet.arc.network",
                                                               "use_protocols":  [
-                                                                                    "arcns",
-                                                                                    "arcns-circle"
+                                                                                    "arcns"
                                                                                 ]
                                                           }
                                           },
@@ -339,7 +338,8 @@
                                                "arcns":  {
                                                              "disabled":  false,
                                                              "tld_list":  [
-                                                                              "arc"
+                                                                              "arc",
+                                                                              "circle"
                                                                           ],
                                                              "network_id":  5042002,
                                                              "subgraph_name":  "arcns-subgraph",
@@ -357,7 +357,7 @@
                                                                           }
                                                          },
                                                "arcns-circle":  {
-                                                                    "disabled":  false,
+                                                                    "disabled":  true,
                                                                     "tld_list":  [
                                                                                      "circle"
                                                                                  ],
