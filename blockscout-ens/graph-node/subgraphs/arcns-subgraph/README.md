@@ -22,3 +22,4 @@ Indexes `.arc` and `.circle` names.
 npm install
 npm run codegen
 npm run build
+```

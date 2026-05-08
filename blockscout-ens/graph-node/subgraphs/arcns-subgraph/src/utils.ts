@@ -27,9 +27,8 @@ export function namehash(name: string): Bytes {
   let labels = name.split(".");
   for (let i = labels.length - 1; i >= 0; i--) {
     let labelHash = crypto.keccak256(ByteArray.fromUTF8(labels[i]));
-    let nodeArr = ByteArray.fromHexString(node.toHexString());
     let combined = new ByteArray(64);
-    for (let j = 0; j < 32; j++) combined[j] = nodeArr[j];
+    for (let j = 0; j < 32; j++) combined[j] = node[j];
     for (let j = 0; j < 32; j++) combined[32 + j] = labelHash[j];
     node = Bytes.fromByteArray(crypto.keccak256(combined));
   }
@@ -83,6 +82,38 @@ export function getOrCreateTldDomain(tld: string): Domain {
 }
 
 /**
+ * Returns the Domain entity for the "reverse" TLD root node,
+ * creating it if it does not yet exist.
+ * "reverse" is the TLD parent of all addr.reverse records.
+ */
+export function getOrCreateReverseTldDomain(): Domain {
+  let nodeBytes = namehash("reverse");
+  let nodeHex = nodeBytes.toHexString();
+
+  let domain = Domain.load(nodeHex);
+  if (!domain) {
+    domain = new Domain(nodeHex);
+    domain.name = "reverse";
+    domain.labelName = "reverse";
+    domain.labelhash = Bytes.fromByteArray(
+      crypto.keccak256(ByteArray.fromUTF8("reverse"))
+    );
+    domain.subdomainCount = 0;
+    domain.isMigrated = true;
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
+    domain.createdAt = BigInt.fromI32(0);
+    // "reverse" is a root TLD — no parent
+    let zeroAccount = getOrCreateAccount(
+      Bytes.fromHexString(ZERO_ADDRESS)
+    );
+    domain.owner = zeroAccount.id;
+    domain.save();
+  }
+  return domain;
+}
+
+/**
  * Returns the Domain entity for the addr.reverse root node,
  * creating it if it does not yet exist.
  */
@@ -105,6 +136,9 @@ export function getOrCreateAddrReverseDomain(): Domain {
       Bytes.fromHexString(ZERO_ADDRESS)
     );
     domain.owner = zeroAccount.id;
+    // addr.reverse is a second-level domain under the "reverse" TLD
+    let reverseTld = getOrCreateReverseTldDomain();
+    domain.parent = reverseTld.id;
     domain.save();
   }
   return domain;

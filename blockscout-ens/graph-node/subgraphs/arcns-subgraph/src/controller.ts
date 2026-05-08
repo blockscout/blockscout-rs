@@ -56,9 +56,11 @@ function handleRegistration(event: NameRegisteredEvent, tld: string): void {
   domain.registrant = registrantAccount.id;
   domain.expiryDate = event.params.expires;
   domain.isMigrated = true;
-  // tokenId = uint256(labelhash) — store as BigInt
-  domain.tokenId = BigInt.fromByteArray(
-    ByteArray.fromHexString(labelhashHex)
+  // tokenId = uint256(labelhash) — store as BigInt (big-endian input, reverse for little-endian)
+  let labelhashBytes = ByteArray.fromHexString(labelhashHex);
+  labelhashBytes.reverse();
+  domain.tokenId = BigInt.fromUnsignedBytes(
+    Bytes.fromByteArray(labelhashBytes)
   );
   domain.save();
 
@@ -132,26 +134,26 @@ function handleRenewal(event: NameRenewedEvent, tld: string): void {
     domain.save();
   }
 
-  // Update Registration expiry
+  // Update Registration expiry and emit NameRenewed event only when Registration exists
   let reg = Registration.load(labelhashHex);
   if (reg) {
     reg.expiryDate = event.params.expires;
     reg.cost = event.params.cost;
     reg.save();
-  }
 
-  // NameRenewed registration event
-  let nameRenewId =
-    event.transaction.hash.toHexString() +
-    "-" +
-    event.logIndex.toString() +
-    "-namerenew";
-  let nameRenewEvent = new NameRenewedEntity(nameRenewId);
-  nameRenewEvent.registration = labelhashHex;
-  nameRenewEvent.expiryDate = event.params.expires;
-  nameRenewEvent.blockNumber = event.block.number.toI32();
-  nameRenewEvent.transactionID = event.transaction.hash;
-  nameRenewEvent.save();
+    // NameRenewed registration event — only when Registration exists to avoid dangling reference
+    let nameRenewId =
+      event.transaction.hash.toHexString() +
+      "-" +
+      event.logIndex.toString() +
+      "-namerenew";
+    let nameRenewEvent = new NameRenewedEntity(nameRenewId);
+    nameRenewEvent.registration = labelhashHex;
+    nameRenewEvent.expiryDate = event.params.expires;
+    nameRenewEvent.blockNumber = event.block.number.toI32();
+    nameRenewEvent.transactionID = event.transaction.hash;
+    nameRenewEvent.save();
+  }
 }
 
 // ─── Arc handlers ─────────────────────────────────────────────────────────────
