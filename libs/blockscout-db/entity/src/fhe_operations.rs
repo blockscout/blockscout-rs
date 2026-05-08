@@ -3,18 +3,31 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "transaction_forks")]
+#[sea_orm(table_name = "fhe_operations")]
 pub struct Model {
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub hash: Vec<u8>,
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub index: i32,
     #[sea_orm(
         primary_key,
         auto_increment = false,
         column_type = "VarBinary(StringLen::None)"
     )]
-    pub uncle_hash: Vec<u8>,
+    pub transaction_hash: Vec<u8>,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub log_index: i32,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    pub block_hash: Vec<u8>,
+    pub block_number: i64,
+    pub operation: String,
+    pub operation_type: String,
+    pub fhe_type: String,
+    pub is_scalar: bool,
+    pub hcu_cost: i32,
+    pub hcu_depth: i32,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub caller: Option<Vec<u8>>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    pub result_handle: Vec<u8>,
+    #[sea_orm(column_type = "JsonBinary", nullable)]
+    pub input_handles: Option<Json>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }
@@ -23,7 +36,7 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(
         belongs_to = "super::blocks::Entity",
-        from = "Column::UncleHash",
+        from = "Column::BlockHash",
         to = "super::blocks::Column::Hash",
         on_update = "NoAction",
         on_delete = "Cascade"
@@ -31,7 +44,7 @@ pub enum Relation {
     Blocks,
     #[sea_orm(
         belongs_to = "super::transactions::Entity",
-        from = "Column::Hash",
+        from = "Column::TransactionHash",
         to = "super::transactions::Column::Hash",
         on_update = "NoAction",
         on_delete = "Cascade"

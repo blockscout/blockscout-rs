@@ -3,12 +3,14 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "massive_blocks")]
+#[sea_orm(table_name = "oban_peers")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub number: i64,
-    pub inserted_at: DateTime,
-    pub updated_at: DateTime,
+    #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
+    pub name: String,
+    #[sea_orm(column_type = "Text")]
+    pub node: String,
+    pub started_at: DateTime,
+    pub expires_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

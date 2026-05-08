@@ -3,10 +3,10 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "massive_blocks")]
+#[sea_orm(table_name = "internal_transactions_delete_queue")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub number: i64,
+    pub block_number: i64,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }
