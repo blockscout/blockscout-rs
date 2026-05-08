@@ -17,7 +17,7 @@ test-utils = [
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "26eed65" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "e1596fd" }
 blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "cab0e70" }
 blockscout-service-launcher = { workspace = true, features = [
     "database-1",
