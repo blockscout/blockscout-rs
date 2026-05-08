@@ -3,12 +3,13 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "massive_blocks")]
+#[sea_orm(table_name = "transaction_errors")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub number: i64,
+    #[sea_orm(primary_key)]
+    pub id: i16,
+    #[sea_orm(unique)]
+    pub message: String,
     pub inserted_at: DateTime,
-    pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

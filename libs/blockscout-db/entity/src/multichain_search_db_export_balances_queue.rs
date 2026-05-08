@@ -3,19 +3,19 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "address_coin_balances")]
+#[sea_orm(table_name = "multichain_search_db_export_balances_queue")]
 pub struct Model {
-    #[sea_orm(
-        primary_key,
-        auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
-    )]
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub address_hash: Vec<u8>,
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub block_number: i64,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    pub token_contract_address_hash_or_native: Vec<u8>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
     pub value: Option<Decimal>,
-    pub value_fetched_at: Option<DateTime>,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
+    pub token_id: Option<Decimal>,
+    pub retries_number: Option<i16>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }
