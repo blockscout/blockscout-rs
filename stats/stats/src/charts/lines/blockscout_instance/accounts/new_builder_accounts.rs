@@ -72,9 +72,9 @@ impl StatementFromRange for NewBuilderAccountsStatement {
                         SELECT
                             tt.from_address_hash AS from_address_hash,
                             tt.block_timestamp::date AS day
-                            FROM internal_transactions it
-                                JOIN transactions tt ON tt.index = it.transaction_index
-                                                    AND tt.block_number = it.block_number
+                        FROM internal_transactions it
+                            JOIN transactions tt ON tt.index = it.transaction_index
+                                                AND tt.block_number = it.block_number
                         WHERE
                             it.created_contract_address_id NOTNULL AND
                             tt.block_consensus = TRUE AND
