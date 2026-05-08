@@ -2,8 +2,10 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 17.2 (Debian 17.2-1.pgdg120+1)
--- Dumped by pg_dump version 17.2 (Debian 17.2-1.pgdg120+1)
+\restrict UIIrk8M7cUjBEGaFVdZK8g9lEKg0N3NgDQGe9fG0WmPkqhGV3pqaagnowpzjxJy
+
+-- Dumped from database version 17.2 (Ubuntu 17.2-1.pgdg22.04+1)
+-- Dumped by pg_dump version 17.9
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -11,81 +13,63 @@ SET idle_in_transaction_session_timeout = 0;
 SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
 SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: btree_gin; Type: EXTENSION; Schema: -; Owner: -
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE EXTENSION IF NOT EXISTS btree_gin WITH SCHEMA public;
-
-
---
--- Name: EXTENSION btree_gin; Type: COMMENT; Schema: -; Owner: 
---
-
-COMMENT ON EXTENSION btree_gin IS 'support for indexing common datatypes in GIN';
+CREATE SCHEMA public;
 
 
 --
--- Name: btree_gist; Type: EXTENSION; Schema: -; Owner: -
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
 --
 
-CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
-
-
---
--- Name: EXTENSION btree_gist; Type: COMMENT; Schema: -; Owner: 
---
-
-COMMENT ON EXTENSION btree_gist IS 'support for indexing common datatypes in GiST';
+COMMENT ON SCHEMA public IS 'standard public schema';
 
 
 --
--- Name: citext; Type: EXTENSION; Schema: -; Owner: -
+-- Name: beacon_deposits_status; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
-
-
---
--- Name: EXTENSION citext; Type: COMMENT; Schema: -; Owner: 
---
-
-COMMENT ON EXTENSION citext IS 'data type for case-insensitive character strings';
+CREATE TYPE public.beacon_deposits_status AS ENUM (
+    'invalid',
+    'pending',
+    'completed'
+);
 
 
 --
--- Name: pg_trgm; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
-
-
---
--- Name: EXTENSION pg_trgm; Type: COMMENT; Schema: -; Owner: 
---
-
-COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
-
-
---
--- Name: entry_point_version; Type: TYPE; Schema: public; Owner: postgres
+-- Name: entry_point_version; Type: TYPE; Schema: public; Owner: -
 --
 
 CREATE TYPE public.entry_point_version AS ENUM (
     'v0.6',
-    'v0.7'
+    'v0.7',
+    'v0.8'
 );
 
 
-ALTER TYPE public.entry_point_version OWNER TO postgres;
+--
+-- Name: internal_transactions_call_type; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.internal_transactions_call_type AS ENUM (
+    'call',
+    'callcode',
+    'delegatecall',
+    'staticcall',
+    'invalid'
+);
+
 
 --
--- Name: metadata_tag_record; Type: TYPE; Schema: public; Owner: postgres
+-- Name: metadata_tag_record; Type: TYPE; Schema: public; Owner: -
 --
 
 CREATE TYPE public.metadata_tag_record AS (
@@ -96,17 +80,62 @@ CREATE TYPE public.metadata_tag_record AS (
 );
 
 
-ALTER TYPE public.metadata_tag_record OWNER TO postgres;
+--
+-- Name: multichain_search_counter_type; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.multichain_search_counter_type AS ENUM (
+    'global'
+);
+
 
 --
--- Name: proxy_type; Type: TYPE; Schema: public; Owner: postgres
+-- Name: multichain_search_hash_type; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.multichain_search_hash_type AS ENUM (
+    'block',
+    'transaction',
+    'address'
+);
+
+
+--
+-- Name: multichain_search_token_data_type; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.multichain_search_token_data_type AS ENUM (
+    'metadata',
+    'total_supply',
+    'counters',
+    'market_data'
+);
+
+
+--
+-- Name: oban_job_state; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.oban_job_state AS ENUM (
+    'available',
+    'scheduled',
+    'executing',
+    'retryable',
+    'completed',
+    'discarded',
+    'cancelled'
+);
+
+
+--
+-- Name: proxy_type; Type: TYPE; Schema: public; Owner: -
 --
 
 CREATE TYPE public.proxy_type AS ENUM (
     'eip1167',
     'eip1967',
     'eip1822',
-    'eip930',
+    'eip1967_oz',
     'master_copy',
     'basic_implementation',
     'basic_get_implementation',
@@ -114,14 +143,26 @@ CREATE TYPE public.proxy_type AS ENUM (
     'eip2535',
     'clone_with_immutable_arguments',
     'eip7702',
-    'unknown'
+    'resolved_delegate_proxy',
+    'erc7760',
+    'eip1967_beacon'
 );
 
 
-ALTER TYPE public.proxy_type OWNER TO postgres;
+--
+-- Name: signed_authorization_status; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.signed_authorization_status AS ENUM (
+    'ok',
+    'invalid_chain_id',
+    'invalid_signature',
+    'invalid_nonce'
+);
+
 
 --
--- Name: sponsor_type; Type: TYPE; Schema: public; Owner: postgres
+-- Name: sponsor_type; Type: TYPE; Schema: public; Owner: -
 --
 
 CREATE TYPE public.sponsor_type AS ENUM (
@@ -132,504 +173,12 @@ CREATE TYPE public.sponsor_type AS ENUM (
 );
 
 
-ALTER TYPE public.sponsor_type OWNER TO postgres;
-
---
--- Name: transaction_actions_protocol; Type: TYPE; Schema: public; Owner: postgres
---
-
-CREATE TYPE public.transaction_actions_protocol AS ENUM (
-    'uniswap_v3',
-    'opensea_v1_1',
-    'wrapping',
-    'approval',
-    'zkbob',
-    'aave_v3'
-);
-
-
-ALTER TYPE public.transaction_actions_protocol OWNER TO postgres;
-
---
--- Name: transaction_actions_type; Type: TYPE; Schema: public; Owner: postgres
---
-
-CREATE TYPE public.transaction_actions_type AS ENUM (
-    'mint_nft',
-    'mint',
-    'burn',
-    'collect',
-    'swap',
-    'sale',
-    'cancel',
-    'transfer',
-    'wrap',
-    'unwrap',
-    'approve',
-    'revoke',
-    'withdraw',
-    'deposit',
-    'borrow',
-    'supply',
-    'repay',
-    'flash_loan',
-    'enable_collateral',
-    'disable_collateral',
-    'liquidation_call'
-);
-
-
-ALTER TYPE public.transaction_actions_type OWNER TO postgres;
-
---
--- Name: convert(text[]); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.convert(text[]) RETURNS bytea[]
-    LANGUAGE plpgsql
-    AS $_$
-  DECLARE
-    s bytea[] := ARRAY[]::bytea[];
-    x text;
-  BEGIN
-    FOREACH x IN ARRAY $1
-    LOOP
-      s := array_append(s, decode(replace(x, '0x', ''), 'hex'));
-    END LOOP;
-    RETURN s;
-  END;
-  $_$;
-
-
-ALTER FUNCTION public.convert(text[]) OWNER TO postgres;
-
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
 --
--- Name: account_api_keys; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_api_keys (
-    identity_id bigint NOT NULL,
-    name character varying(255) NOT NULL,
-    value uuid NOT NULL,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
-);
-
-
-ALTER TABLE public.account_api_keys OWNER TO postgres;
-
---
--- Name: account_api_plans; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_api_plans (
-    id integer NOT NULL,
-    max_req_per_second smallint,
-    name character varying(255) NOT NULL,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
-);
-
-
-ALTER TABLE public.account_api_plans OWNER TO postgres;
-
---
--- Name: account_api_plans_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_api_plans_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_api_plans_id_seq OWNER TO postgres;
-
---
--- Name: account_api_plans_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_api_plans_id_seq OWNED BY public.account_api_plans.id;
-
-
---
--- Name: account_custom_abis; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_custom_abis (
-    id integer NOT NULL,
-    identity_id bigint NOT NULL,
-    abi jsonb NOT NULL,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    address_hash_hash bytea,
-    address_hash bytea,
-    name bytea,
-    user_created boolean DEFAULT true
-);
-
-
-ALTER TABLE public.account_custom_abis OWNER TO postgres;
-
---
--- Name: account_custom_abis_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_custom_abis_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_custom_abis_id_seq OWNER TO postgres;
-
---
--- Name: account_custom_abis_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_custom_abis_id_seq OWNED BY public.account_custom_abis.id;
-
-
---
--- Name: account_identities; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_identities (
-    id bigint NOT NULL,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    plan_id bigint DEFAULT 1,
-    uid bytea,
-    uid_hash bytea,
-    email bytea,
-    avatar bytea,
-    verification_email_sent_at timestamp without time zone,
-    otp_sent_at timestamp without time zone
-);
-
-
-ALTER TABLE public.account_identities OWNER TO postgres;
-
---
--- Name: account_identities_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_identities_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_identities_id_seq OWNER TO postgres;
-
---
--- Name: account_identities_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_identities_id_seq OWNED BY public.account_identities.id;
-
-
---
--- Name: account_public_tags_requests; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_public_tags_requests (
-    id bigint NOT NULL,
-    identity_id bigint,
-    company character varying(255),
-    website character varying(255),
-    tags character varying(255),
-    description text,
-    additional_comment character varying(255),
-    request_type character varying(255),
-    is_owner boolean,
-    remove_reason text,
-    request_id character varying(255),
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    addresses bytea[],
-    email bytea,
-    full_name bytea
-);
-
-
-ALTER TABLE public.account_public_tags_requests OWNER TO postgres;
-
---
--- Name: account_public_tags_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_public_tags_requests_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_public_tags_requests_id_seq OWNER TO postgres;
-
---
--- Name: account_public_tags_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_public_tags_requests_id_seq OWNED BY public.account_public_tags_requests.id;
-
-
---
--- Name: account_tag_addresses; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_tag_addresses (
-    id bigint NOT NULL,
-    identity_id bigint,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    address_hash_hash bytea,
-    name bytea,
-    address_hash bytea,
-    user_created boolean DEFAULT true
-);
-
-
-ALTER TABLE public.account_tag_addresses OWNER TO postgres;
-
---
--- Name: account_tag_addresses_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_tag_addresses_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_tag_addresses_id_seq OWNER TO postgres;
-
---
--- Name: account_tag_addresses_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_tag_addresses_id_seq OWNED BY public.account_tag_addresses.id;
-
-
---
--- Name: account_tag_transactions; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_tag_transactions (
-    id bigint NOT NULL,
-    identity_id bigint,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    transaction_hash_hash bytea,
-    name bytea,
-    transaction_hash bytea,
-    user_created boolean DEFAULT true
-);
-
-
-ALTER TABLE public.account_tag_transactions OWNER TO postgres;
-
---
--- Name: account_tag_transactions_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_tag_transactions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_tag_transactions_id_seq OWNER TO postgres;
-
---
--- Name: account_tag_transactions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_tag_transactions_id_seq OWNED BY public.account_tag_transactions.id;
-
-
---
--- Name: account_watchlist_addresses; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_watchlist_addresses (
-    id bigint NOT NULL,
-    watchlist_id bigint,
-    watch_coin_input boolean DEFAULT true,
-    watch_coin_output boolean DEFAULT true,
-    watch_erc_20_input boolean DEFAULT true,
-    watch_erc_20_output boolean DEFAULT true,
-    watch_erc_721_input boolean DEFAULT true,
-    watch_erc_721_output boolean DEFAULT true,
-    watch_erc_1155_input boolean DEFAULT true,
-    watch_erc_1155_output boolean DEFAULT true,
-    notify_email boolean DEFAULT true,
-    notify_epns boolean DEFAULT false,
-    notify_feed boolean DEFAULT true,
-    notify_inapp boolean DEFAULT false,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    address_hash_hash bytea,
-    name bytea,
-    address_hash bytea,
-    watch_erc_404_input boolean DEFAULT true,
-    watch_erc_404_output boolean DEFAULT true,
-    user_created boolean DEFAULT true
-);
-
-
-ALTER TABLE public.account_watchlist_addresses OWNER TO postgres;
-
---
--- Name: account_watchlist_addresses_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_watchlist_addresses_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_watchlist_addresses_id_seq OWNER TO postgres;
-
---
--- Name: account_watchlist_addresses_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_watchlist_addresses_id_seq OWNED BY public.account_watchlist_addresses.id;
-
-
---
--- Name: account_watchlist_notifications; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_watchlist_notifications (
-    id bigint NOT NULL,
-    watchlist_address_id bigint,
-    direction character varying(255),
-    type character varying(255),
-    method character varying(255),
-    block_number integer,
-    amount numeric,
-    transaction_fee numeric,
-    viewed_at timestamp without time zone,
-    inserted_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL,
-    name bytea,
-    subject bytea,
-    from_address_hash bytea,
-    to_address_hash bytea,
-    transaction_hash bytea,
-    subject_hash bytea,
-    from_address_hash_hash bytea,
-    to_address_hash_hash bytea,
-    transaction_hash_hash bytea,
-    watchlist_id bigint NOT NULL
-);
-
-
-ALTER TABLE public.account_watchlist_notifications OWNER TO postgres;
-
---
--- Name: account_watchlist_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_watchlist_notifications_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_watchlist_notifications_id_seq OWNER TO postgres;
-
---
--- Name: account_watchlist_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_watchlist_notifications_id_seq OWNED BY public.account_watchlist_notifications.id;
-
-
---
--- Name: account_watchlist_notifications_watchlist_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_watchlist_notifications_watchlist_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_watchlist_notifications_watchlist_id_seq OWNER TO postgres;
-
---
--- Name: account_watchlist_notifications_watchlist_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_watchlist_notifications_watchlist_id_seq OWNED BY public.account_watchlist_notifications.watchlist_id;
-
-
---
--- Name: account_watchlists; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.account_watchlists (
-    id bigint NOT NULL,
-    name character varying(255) DEFAULT 'default'::character varying,
-    identity_id bigint,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
-);
-
-
-ALTER TABLE public.account_watchlists OWNER TO postgres;
-
---
--- Name: account_watchlists_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.account_watchlists_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.account_watchlists_id_seq OWNER TO postgres;
-
---
--- Name: account_watchlists_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.account_watchlists_id_seq OWNED BY public.account_watchlists.id;
-
-
---
--- Name: address_coin_balances; Type: TABLE; Schema: public; Owner: postgres
+-- Name: address_coin_balances; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_coin_balances (
@@ -642,10 +191,8 @@ CREATE TABLE public.address_coin_balances (
 );
 
 
-ALTER TABLE public.address_coin_balances OWNER TO postgres;
-
 --
--- Name: address_coin_balances_daily; Type: TABLE; Schema: public; Owner: postgres
+-- Name: address_coin_balances_daily; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_coin_balances_daily (
@@ -657,10 +204,8 @@ CREATE TABLE public.address_coin_balances_daily (
 );
 
 
-ALTER TABLE public.address_coin_balances_daily OWNER TO postgres;
-
 --
--- Name: address_contract_code_fetch_attempts; Type: TABLE; Schema: public; Owner: postgres
+-- Name: address_contract_code_fetch_attempts; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_contract_code_fetch_attempts (
@@ -671,10 +216,8 @@ CREATE TABLE public.address_contract_code_fetch_attempts (
 );
 
 
-ALTER TABLE public.address_contract_code_fetch_attempts OWNER TO postgres;
-
 --
--- Name: address_current_token_balances; Type: TABLE; Schema: public; Owner: postgres
+-- Name: address_current_token_balances; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_current_token_balances (
@@ -688,14 +231,14 @@ CREATE TABLE public.address_current_token_balances (
     updated_at timestamp without time zone NOT NULL,
     old_value numeric,
     token_id numeric(78,0),
-    token_type character varying(255)
+    token_type character varying(255),
+    refetch_after timestamp without time zone,
+    retries_count smallint
 );
 
 
-ALTER TABLE public.address_current_token_balances OWNER TO postgres;
-
 --
--- Name: address_current_token_balances_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: address_current_token_balances_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.address_current_token_balances_id_seq
@@ -706,17 +249,44 @@ CREATE SEQUENCE public.address_current_token_balances_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.address_current_token_balances_id_seq OWNER TO postgres;
-
 --
--- Name: address_current_token_balances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: address_current_token_balances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.address_current_token_balances_id_seq OWNED BY public.address_current_token_balances.id;
 
 
 --
--- Name: address_names; Type: TABLE; Schema: public; Owner: postgres
+-- Name: address_ids_to_address_hashes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.address_ids_to_address_hashes (
+    address_id bigint NOT NULL,
+    address_hash bytea NOT NULL
+);
+
+
+--
+-- Name: address_ids_to_address_hashes_address_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.address_ids_to_address_hashes_address_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: address_ids_to_address_hashes_address_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.address_ids_to_address_hashes_address_id_seq OWNED BY public.address_ids_to_address_hashes.address_id;
+
+
+--
+-- Name: address_names; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_names (
@@ -725,37 +295,12 @@ CREATE TABLE public.address_names (
     "primary" boolean DEFAULT false NOT NULL,
     inserted_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL,
-    metadata jsonb,
-    id integer NOT NULL
+    metadata jsonb
 );
 
 
-ALTER TABLE public.address_names OWNER TO postgres;
-
 --
--- Name: address_names_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.address_names_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.address_names_id_seq OWNER TO postgres;
-
---
--- Name: address_names_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.address_names_id_seq OWNED BY public.address_names.id;
-
-
---
--- Name: address_tags; Type: TABLE; Schema: public; Owner: postgres
+-- Name: address_tags; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_tags (
@@ -767,10 +312,8 @@ CREATE TABLE public.address_tags (
 );
 
 
-ALTER TABLE public.address_tags OWNER TO postgres;
-
 --
--- Name: address_tags_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: address_tags_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.address_tags_id_seq
@@ -782,17 +325,15 @@ CREATE SEQUENCE public.address_tags_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.address_tags_id_seq OWNER TO postgres;
-
 --
--- Name: address_tags_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: address_tags_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.address_tags_id_seq OWNED BY public.address_tags.id;
 
 
 --
--- Name: address_to_tags; Type: TABLE; Schema: public; Owner: postgres
+-- Name: address_to_tags; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_to_tags (
@@ -804,10 +345,8 @@ CREATE TABLE public.address_to_tags (
 );
 
 
-ALTER TABLE public.address_to_tags OWNER TO postgres;
-
 --
--- Name: address_to_tags_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: address_to_tags_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.address_to_tags_id_seq
@@ -818,17 +357,15 @@ CREATE SEQUENCE public.address_to_tags_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.address_to_tags_id_seq OWNER TO postgres;
-
 --
--- Name: address_to_tags_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: address_to_tags_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.address_to_tags_id_seq OWNED BY public.address_to_tags.id;
 
 
 --
--- Name: address_token_balances; Type: TABLE; Schema: public; Owner: postgres
+-- Name: address_token_balances; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.address_token_balances (
@@ -847,10 +384,8 @@ CREATE TABLE public.address_token_balances (
 );
 
 
-ALTER TABLE public.address_token_balances OWNER TO postgres;
-
 --
--- Name: address_token_balances_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: address_token_balances_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.address_token_balances_id_seq
@@ -861,17 +396,15 @@ CREATE SEQUENCE public.address_token_balances_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.address_token_balances_id_seq OWNER TO postgres;
-
 --
--- Name: address_token_balances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: address_token_balances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.address_token_balances_id_seq OWNED BY public.address_token_balances.id;
 
 
 --
--- Name: addresses; Type: TABLE; Schema: public; Owner: postgres
+-- Name: addresses; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.addresses (
@@ -890,10 +423,8 @@ CREATE TABLE public.addresses (
 );
 
 
-ALTER TABLE public.addresses OWNER TO postgres;
-
 --
--- Name: administrators; Type: TABLE; Schema: public; Owner: postgres
+-- Name: administrators; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.administrators (
@@ -905,10 +436,8 @@ CREATE TABLE public.administrators (
 );
 
 
-ALTER TABLE public.administrators OWNER TO postgres;
-
 --
--- Name: administrators_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: administrators_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.administrators_id_seq
@@ -919,17 +448,65 @@ CREATE SEQUENCE public.administrators_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.administrators_id_seq OWNER TO postgres;
-
 --
--- Name: administrators_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: administrators_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.administrators_id_seq OWNED BY public.administrators.id;
 
 
 --
--- Name: block_rewards; Type: TABLE; Schema: public; Owner: postgres
+-- Name: beacon_blobs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.beacon_blobs (
+    hash bytea NOT NULL,
+    blob_data bytea,
+    kzg_commitment bytea,
+    kzg_proof bytea,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: beacon_blobs_transactions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.beacon_blobs_transactions (
+    hash bytea NOT NULL,
+    max_fee_per_blob_gas numeric(100,0) NOT NULL,
+    blob_gas_price numeric(100,0) NOT NULL,
+    blob_gas_used numeric(100,0) NOT NULL,
+    blob_versioned_hashes bytea[] NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: beacon_deposits; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.beacon_deposits (
+    pubkey bytea NOT NULL,
+    withdrawal_credentials bytea NOT NULL,
+    amount numeric(100,0) NOT NULL,
+    signature bytea NOT NULL,
+    index bigint NOT NULL,
+    block_number bigint NOT NULL,
+    block_timestamp timestamp without time zone NOT NULL,
+    log_index integer NOT NULL,
+    status public.beacon_deposits_status NOT NULL,
+    from_address_hash bytea NOT NULL,
+    block_hash bytea NOT NULL,
+    transaction_hash bytea NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: block_rewards; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.block_rewards (
@@ -942,10 +519,8 @@ CREATE TABLE public.block_rewards (
 );
 
 
-ALTER TABLE public.block_rewards OWNER TO postgres;
-
 --
--- Name: block_second_degree_relations; Type: TABLE; Schema: public; Owner: postgres
+-- Name: block_second_degree_relations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.block_second_degree_relations (
@@ -956,10 +531,8 @@ CREATE TABLE public.block_second_degree_relations (
 );
 
 
-ALTER TABLE public.block_second_degree_relations OWNER TO postgres;
-
 --
--- Name: blocks; Type: TABLE; Schema: public; Owner: postgres
+-- Name: blocks; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.blocks (
@@ -979,14 +552,32 @@ CREATE TABLE public.blocks (
     updated_at timestamp without time zone NOT NULL,
     refetch_needed boolean DEFAULT false,
     base_fee_per_gas numeric(100,0),
-    is_empty boolean
+    is_empty boolean,
+    blob_gas_used numeric(100,0),
+    excess_blob_gas numeric(100,0)
 );
 
 
-ALTER TABLE public.blocks OWNER TO postgres;
+--
+-- Name: bridged_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.bridged_tokens (
+    foreign_chain_id numeric NOT NULL,
+    foreign_token_contract_address_hash bytea NOT NULL,
+    exchange_rate numeric,
+    custom_metadata character varying(255),
+    lp_token boolean,
+    custom_cap numeric,
+    type character varying(255),
+    home_token_contract_address_hash bytea NOT NULL,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
 
 --
--- Name: constants; Type: TABLE; Schema: public; Owner: postgres
+-- Name: constants; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.constants (
@@ -997,10 +588,8 @@ CREATE TABLE public.constants (
 );
 
 
-ALTER TABLE public.constants OWNER TO postgres;
-
 --
--- Name: contract_methods; Type: TABLE; Schema: public; Owner: postgres
+-- Name: contract_methods; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.contract_methods (
@@ -1013,10 +602,8 @@ CREATE TABLE public.contract_methods (
 );
 
 
-ALTER TABLE public.contract_methods OWNER TO postgres;
-
 --
--- Name: contract_methods_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: contract_methods_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.contract_methods_id_seq
@@ -1027,69 +614,42 @@ CREATE SEQUENCE public.contract_methods_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.contract_methods_id_seq OWNER TO postgres;
-
 --
--- Name: contract_methods_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: contract_methods_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.contract_methods_id_seq OWNED BY public.contract_methods.id;
 
 
 --
--- Name: contract_verification_status; Type: TABLE; Schema: public; Owner: postgres
+-- Name: csv_export_requests; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.contract_verification_status (
-    uid character varying(64) NOT NULL,
-    status smallint NOT NULL,
-    address_hash bytea NOT NULL,
+CREATE TABLE public.csv_export_requests (
+    id uuid NOT NULL,
+    remote_ip_hash bytea NOT NULL,
+    file_id character varying(255),
     inserted_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+    updated_at timestamp without time zone NOT NULL,
+    status character varying(255) DEFAULT 'pending'::character varying NOT NULL,
+    expires_at timestamp(0) without time zone
 );
 
 
-ALTER TABLE public.contract_verification_status OWNER TO postgres;
-
 --
--- Name: decompiled_smart_contracts; Type: TABLE; Schema: public; Owner: postgres
+-- Name: deleted_internal_transactions_address_placeholders; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.decompiled_smart_contracts (
-    id bigint NOT NULL,
-    decompiler_version character varying(255) NOT NULL,
-    decompiled_source_code text NOT NULL,
-    address_hash bytea NOT NULL,
-    inserted_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+CREATE TABLE public.deleted_internal_transactions_address_placeholders (
+    address_id bigint NOT NULL,
+    block_number bigint NOT NULL,
+    count_tos smallint NOT NULL,
+    count_froms smallint NOT NULL
 );
 
 
-ALTER TABLE public.decompiled_smart_contracts OWNER TO postgres;
-
 --
--- Name: decompiled_smart_contracts_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.decompiled_smart_contracts_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.decompiled_smart_contracts_id_seq OWNER TO postgres;
-
---
--- Name: decompiled_smart_contracts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.decompiled_smart_contracts_id_seq OWNED BY public.decompiled_smart_contracts.id;
-
-
---
--- Name: emission_rewards; Type: TABLE; Schema: public; Owner: postgres
+-- Name: emission_rewards; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.emission_rewards (
@@ -1098,22 +658,20 @@ CREATE TABLE public.emission_rewards (
 );
 
 
-ALTER TABLE public.emission_rewards OWNER TO postgres;
-
 --
--- Name: event_notifications; Type: TABLE; Schema: public; Owner: postgres
+-- Name: event_notifications; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.event_notifications (
     id bigint NOT NULL,
-    data text NOT NULL
+    data text NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
 );
 
 
-ALTER TABLE public.event_notifications OWNER TO postgres;
-
 --
--- Name: event_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: event_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.event_notifications_id_seq
@@ -1124,51 +682,94 @@ CREATE SEQUENCE public.event_notifications_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.event_notifications_id_seq OWNER TO postgres;
-
 --
--- Name: event_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: event_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.event_notifications_id_seq OWNED BY public.event_notifications.id;
 
 
 --
--- Name: internal_transactions; Type: TABLE; Schema: public; Owner: postgres
+-- Name: fhe_operations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fhe_operations (
+    transaction_hash bytea NOT NULL,
+    log_index integer NOT NULL,
+    block_hash bytea NOT NULL,
+    block_number bigint NOT NULL,
+    operation character varying(50) NOT NULL,
+    operation_type character varying(20) NOT NULL,
+    fhe_type character varying(10) NOT NULL,
+    is_scalar boolean NOT NULL,
+    hcu_cost integer NOT NULL,
+    hcu_depth integer NOT NULL,
+    caller bytea,
+    result_handle bytea NOT NULL,
+    input_handles jsonb,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: hot_smart_contracts_daily; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.hot_smart_contracts_daily (
+    date date NOT NULL,
+    contract_address_hash bytea NOT NULL,
+    transactions_count integer NOT NULL,
+    total_gas_used numeric(100,0) NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: internal_transactions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.internal_transactions (
     call_type character varying(255),
     created_contract_code bytea,
-    error character varying(255),
     gas numeric(100,0),
     gas_used numeric(100,0),
     index integer NOT NULL,
     init bytea,
     input bytea,
     output bytea,
-    trace_address integer[] NOT NULL,
+    trace_address integer[],
     type character varying(255) NOT NULL,
-    value numeric(100,0) NOT NULL,
+    value numeric(100,0),
     inserted_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL,
     created_contract_address_hash bytea,
     from_address_hash bytea,
     to_address_hash bytea,
-    transaction_hash bytea NOT NULL,
-    block_number integer,
-    transaction_index integer,
-    block_hash bytea NOT NULL,
-    block_index integer NOT NULL,
-    CONSTRAINT call_has_error_or_result CHECK ((((type)::text <> 'call'::text) OR ((gas IS NOT NULL) AND (((error IS NULL) AND (gas_used IS NOT NULL) AND (output IS NOT NULL)) OR ((error IS NOT NULL) AND (output IS NULL)))))),
-    CONSTRAINT create_has_error_or_result CHECK ((((type)::text <> 'create'::text) OR ((gas IS NOT NULL) AND (((error IS NULL) AND (created_contract_address_hash IS NOT NULL) AND (created_contract_code IS NOT NULL) AND (gas_used IS NOT NULL)) OR ((error IS NOT NULL) AND (created_contract_address_hash IS NULL) AND (created_contract_code IS NULL) AND (gas_used IS NULL))))))
+    block_number integer NOT NULL,
+    transaction_index integer NOT NULL,
+    call_type_enum public.internal_transactions_call_type,
+    error_id smallint,
+    from_address_id bigint,
+    to_address_id bigint,
+    created_contract_address_id bigint
 );
 
 
-ALTER TABLE public.internal_transactions OWNER TO postgres;
+--
+-- Name: internal_transactions_delete_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.internal_transactions_delete_queue (
+    block_number bigint NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
 
 --
--- Name: last_fetched_counters; Type: TABLE; Schema: public; Owner: postgres
+-- Name: last_fetched_counters; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.last_fetched_counters (
@@ -1179,10 +780,8 @@ CREATE TABLE public.last_fetched_counters (
 );
 
 
-ALTER TABLE public.last_fetched_counters OWNER TO postgres;
-
 --
--- Name: logs; Type: TABLE; Schema: public; Owner: postgres
+-- Name: logs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.logs (
@@ -1201,10 +800,8 @@ CREATE TABLE public.logs (
 );
 
 
-ALTER TABLE public.logs OWNER TO postgres;
-
 --
--- Name: market_history; Type: TABLE; Schema: public; Owner: postgres
+-- Name: market_history; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.market_history (
@@ -1218,10 +815,8 @@ CREATE TABLE public.market_history (
 );
 
 
-ALTER TABLE public.market_history OWNER TO postgres;
-
 --
--- Name: market_history_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: market_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.market_history_id_seq
@@ -1232,17 +827,15 @@ CREATE SEQUENCE public.market_history_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.market_history_id_seq OWNER TO postgres;
-
 --
--- Name: market_history_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: market_history_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.market_history_id_seq OWNED BY public.market_history.id;
 
 
 --
--- Name: massive_blocks; Type: TABLE; Schema: public; Owner: postgres
+-- Name: massive_blocks; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.massive_blocks (
@@ -1252,10 +845,8 @@ CREATE TABLE public.massive_blocks (
 );
 
 
-ALTER TABLE public.massive_blocks OWNER TO postgres;
-
 --
--- Name: migrations_status; Type: TABLE; Schema: public; Owner: postgres
+-- Name: migrations_status; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.migrations_status (
@@ -1267,10 +858,8 @@ CREATE TABLE public.migrations_status (
 );
 
 
-ALTER TABLE public.migrations_status OWNER TO postgres;
-
 --
--- Name: missing_balance_of_tokens; Type: TABLE; Schema: public; Owner: postgres
+-- Name: missing_balance_of_tokens; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.missing_balance_of_tokens (
@@ -1282,23 +871,20 @@ CREATE TABLE public.missing_balance_of_tokens (
 );
 
 
-ALTER TABLE public.missing_balance_of_tokens OWNER TO postgres;
-
 --
--- Name: missing_block_ranges; Type: TABLE; Schema: public; Owner: postgres
+-- Name: missing_block_ranges; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.missing_block_ranges (
     id bigint NOT NULL,
     from_number integer,
-    to_number integer
+    to_number integer,
+    priority smallint
 );
 
 
-ALTER TABLE public.missing_block_ranges OWNER TO postgres;
-
 --
--- Name: missing_block_ranges_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: missing_block_ranges_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.missing_block_ranges_id_seq
@@ -1309,17 +895,161 @@ CREATE SEQUENCE public.missing_block_ranges_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.missing_block_ranges_id_seq OWNER TO postgres;
-
 --
--- Name: missing_block_ranges_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: missing_block_ranges_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.missing_block_ranges_id_seq OWNED BY public.missing_block_ranges.id;
 
 
 --
--- Name: pending_block_operations; Type: TABLE; Schema: public; Owner: postgres
+-- Name: multichain_search_db_export_balances_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.multichain_search_db_export_balances_queue (
+    id integer NOT NULL,
+    address_hash bytea NOT NULL,
+    token_contract_address_hash_or_native bytea NOT NULL,
+    value numeric(100,0),
+    token_id numeric(78,0),
+    retries_number smallint,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: multichain_search_db_export_balances_queue_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.multichain_search_db_export_balances_queue_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: multichain_search_db_export_balances_queue_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.multichain_search_db_export_balances_queue_id_seq OWNED BY public.multichain_search_db_export_balances_queue.id;
+
+
+--
+-- Name: multichain_search_db_export_counters_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.multichain_search_db_export_counters_queue (
+    "timestamp" timestamp without time zone NOT NULL,
+    counter_type public.multichain_search_counter_type NOT NULL,
+    data jsonb NOT NULL,
+    retries_number smallint,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: multichain_search_db_export_token_info_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.multichain_search_db_export_token_info_queue (
+    address_hash bytea NOT NULL,
+    data_type public.multichain_search_token_data_type NOT NULL,
+    data jsonb NOT NULL,
+    retries_number smallint,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: multichain_search_db_main_export_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.multichain_search_db_main_export_queue (
+    hash bytea NOT NULL,
+    hash_type public.multichain_search_hash_type NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL,
+    block_range int8range,
+    retries_number smallint
+);
+
+
+--
+-- Name: oban_jobs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oban_jobs (
+    id bigint NOT NULL,
+    state public.oban_job_state DEFAULT 'available'::public.oban_job_state NOT NULL,
+    queue text DEFAULT 'default'::text NOT NULL,
+    worker text NOT NULL,
+    args jsonb DEFAULT '{}'::jsonb NOT NULL,
+    errors jsonb[] DEFAULT ARRAY[]::jsonb[] NOT NULL,
+    attempt integer DEFAULT 0 NOT NULL,
+    max_attempts integer DEFAULT 20 NOT NULL,
+    inserted_at timestamp without time zone DEFAULT timezone('UTC'::text, now()) NOT NULL,
+    scheduled_at timestamp without time zone DEFAULT timezone('UTC'::text, now()) NOT NULL,
+    attempted_at timestamp without time zone,
+    completed_at timestamp without time zone,
+    attempted_by text[],
+    discarded_at timestamp without time zone,
+    priority integer DEFAULT 0 NOT NULL,
+    tags text[] DEFAULT ARRAY[]::text[],
+    meta jsonb DEFAULT '{}'::jsonb,
+    cancelled_at timestamp without time zone,
+    CONSTRAINT attempt_range CHECK (((attempt >= 0) AND (attempt <= max_attempts))),
+    CONSTRAINT positive_max_attempts CHECK ((max_attempts > 0)),
+    CONSTRAINT queue_length CHECK (((char_length(queue) > 0) AND (char_length(queue) < 128))),
+    CONSTRAINT worker_length CHECK (((char_length(worker) > 0) AND (char_length(worker) < 128)))
+);
+
+
+--
+-- Name: TABLE oban_jobs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.oban_jobs IS '13';
+
+
+--
+-- Name: oban_jobs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.oban_jobs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: oban_jobs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.oban_jobs_id_seq OWNED BY public.oban_jobs.id;
+
+
+--
+-- Name: oban_peers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE UNLOGGED TABLE public.oban_peers (
+    name text NOT NULL,
+    node text NOT NULL,
+    started_at timestamp without time zone NOT NULL,
+    expires_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: pending_block_operations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.pending_block_operations (
@@ -1330,10 +1060,19 @@ CREATE TABLE public.pending_block_operations (
 );
 
 
-ALTER TABLE public.pending_block_operations OWNER TO postgres;
+--
+-- Name: pending_transaction_operations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pending_transaction_operations (
+    transaction_hash bytea NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
 
 --
--- Name: proxy_implementations; Type: TABLE; Schema: public; Owner: postgres
+-- Name: proxy_implementations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.proxy_implementations (
@@ -1342,14 +1081,14 @@ CREATE TABLE public.proxy_implementations (
     names character varying(255)[] NOT NULL,
     inserted_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL,
-    proxy_type public.proxy_type
+    proxy_type public.proxy_type,
+    conflicting_proxy_types public.proxy_type[],
+    conflicting_address_hashes bytea[]
 );
 
 
-ALTER TABLE public.proxy_implementations OWNER TO postgres;
-
 --
--- Name: proxy_smart_contract_verification_statuses; Type: TABLE; Schema: public; Owner: postgres
+-- Name: proxy_smart_contract_verification_statuses; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.proxy_smart_contract_verification_statuses (
@@ -1361,10 +1100,8 @@ CREATE TABLE public.proxy_smart_contract_verification_statuses (
 );
 
 
-ALTER TABLE public.proxy_smart_contract_verification_statuses OWNER TO postgres;
-
 --
--- Name: scam_address_badge_mappings; Type: TABLE; Schema: public; Owner: postgres
+-- Name: scam_address_badge_mappings; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.scam_address_badge_mappings (
@@ -1374,10 +1111,8 @@ CREATE TABLE public.scam_address_badge_mappings (
 );
 
 
-ALTER TABLE public.scam_address_badge_mappings OWNER TO postgres;
-
 --
--- Name: schema_migrations; Type: TABLE; Schema: public; Owner: postgres
+-- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.schema_migrations (
@@ -1386,31 +1121,28 @@ CREATE TABLE public.schema_migrations (
 );
 
 
-ALTER TABLE public.schema_migrations OWNER TO postgres;
-
 --
--- Name: signed_authorizations; Type: TABLE; Schema: public; Owner: postgres
+-- Name: signed_authorizations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.signed_authorizations (
     transaction_hash bytea NOT NULL,
     index integer NOT NULL,
-    chain_id bigint NOT NULL,
+    chain_id numeric(78,0) NOT NULL,
     address bytea NOT NULL,
-    nonce integer NOT NULL,
+    nonce numeric(20,0) NOT NULL,
     v integer NOT NULL,
     r numeric(100,0) NOT NULL,
     s numeric(100,0) NOT NULL,
     authority bytea,
     inserted_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+    updated_at timestamp without time zone NOT NULL,
+    status public.signed_authorization_status
 );
 
 
-ALTER TABLE public.signed_authorizations OWNER TO postgres;
-
 --
--- Name: smart_contract_audit_reports; Type: TABLE; Schema: public; Owner: postgres
+-- Name: smart_contract_audit_reports; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.smart_contract_audit_reports (
@@ -1432,10 +1164,8 @@ CREATE TABLE public.smart_contract_audit_reports (
 );
 
 
-ALTER TABLE public.smart_contract_audit_reports OWNER TO postgres;
-
 --
--- Name: smart_contract_audit_reports_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: smart_contract_audit_reports_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.smart_contract_audit_reports_id_seq
@@ -1446,17 +1176,28 @@ CREATE SEQUENCE public.smart_contract_audit_reports_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.smart_contract_audit_reports_id_seq OWNER TO postgres;
-
 --
--- Name: smart_contract_audit_reports_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: smart_contract_audit_reports_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.smart_contract_audit_reports_id_seq OWNED BY public.smart_contract_audit_reports.id;
 
 
 --
--- Name: smart_contracts; Type: TABLE; Schema: public; Owner: postgres
+-- Name: smart_contract_verification_statuses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.smart_contract_verification_statuses (
+    uid character varying(64) NOT NULL,
+    status smallint NOT NULL,
+    contract_address_hash bytea NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: smart_contracts; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.smart_contracts (
@@ -1474,7 +1215,6 @@ CREATE TABLE public.smart_contracts (
     evm_version character varying(255),
     external_libraries jsonb[] DEFAULT ARRAY[]::jsonb[],
     verified_via_sourcify boolean,
-    is_vyper_contract boolean,
     partially_verified boolean,
     file_path text,
     is_changed_bytecode boolean DEFAULT false,
@@ -1490,10 +1230,8 @@ CREATE TABLE public.smart_contracts (
 );
 
 
-ALTER TABLE public.smart_contracts OWNER TO postgres;
-
 --
--- Name: smart_contracts_additional_sources; Type: TABLE; Schema: public; Owner: postgres
+-- Name: smart_contracts_additional_sources; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.smart_contracts_additional_sources (
@@ -1506,10 +1244,8 @@ CREATE TABLE public.smart_contracts_additional_sources (
 );
 
 
-ALTER TABLE public.smart_contracts_additional_sources OWNER TO postgres;
-
 --
--- Name: smart_contracts_additional_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: smart_contracts_additional_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.smart_contracts_additional_sources_id_seq
@@ -1520,17 +1256,15 @@ CREATE SEQUENCE public.smart_contracts_additional_sources_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.smart_contracts_additional_sources_id_seq OWNER TO postgres;
-
 --
--- Name: smart_contracts_additional_sources_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: smart_contracts_additional_sources_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.smart_contracts_additional_sources_id_seq OWNED BY public.smart_contracts_additional_sources.id;
 
 
 --
--- Name: smart_contracts_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: smart_contracts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.smart_contracts_id_seq
@@ -1541,17 +1275,15 @@ CREATE SEQUENCE public.smart_contracts_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.smart_contracts_id_seq OWNER TO postgres;
-
 --
--- Name: smart_contracts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: smart_contracts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.smart_contracts_id_seq OWNED BY public.smart_contracts.id;
 
 
 --
--- Name: token_instance_metadata_refetch_attempts; Type: TABLE; Schema: public; Owner: postgres
+-- Name: token_instance_metadata_refetch_attempts; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.token_instance_metadata_refetch_attempts (
@@ -1563,10 +1295,8 @@ CREATE TABLE public.token_instance_metadata_refetch_attempts (
 );
 
 
-ALTER TABLE public.token_instance_metadata_refetch_attempts OWNER TO postgres;
-
 --
--- Name: token_instances; Type: TABLE; Schema: public; Owner: postgres
+-- Name: token_instances; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.token_instances (
@@ -1584,14 +1314,14 @@ CREATE TABLE public.token_instances (
     thumbnails jsonb,
     media_type character varying(255),
     cdn_upload_error character varying(255),
-    is_banned boolean DEFAULT false
+    is_banned boolean DEFAULT false,
+    metadata_url character varying(2048),
+    skip_metadata_url boolean
 );
 
 
-ALTER TABLE public.token_instances OWNER TO postgres;
-
 --
--- Name: token_transfer_token_id_migrator_progress; Type: TABLE; Schema: public; Owner: postgres
+-- Name: token_transfer_token_id_migrator_progress; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.token_transfer_token_id_migrator_progress (
@@ -1602,10 +1332,8 @@ CREATE TABLE public.token_transfer_token_id_migrator_progress (
 );
 
 
-ALTER TABLE public.token_transfer_token_id_migrator_progress OWNER TO postgres;
-
 --
--- Name: token_transfer_token_id_migrator_progress_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: token_transfer_token_id_migrator_progress_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.token_transfer_token_id_migrator_progress_id_seq
@@ -1616,17 +1344,15 @@ CREATE SEQUENCE public.token_transfer_token_id_migrator_progress_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.token_transfer_token_id_migrator_progress_id_seq OWNER TO postgres;
-
 --
--- Name: token_transfer_token_id_migrator_progress_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: token_transfer_token_id_migrator_progress_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.token_transfer_token_id_migrator_progress_id_seq OWNED BY public.token_transfer_token_id_migrator_progress.id;
 
 
 --
--- Name: token_transfers; Type: TABLE; Schema: public; Owner: postgres
+-- Name: token_transfers; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.token_transfers (
@@ -1647,10 +1373,8 @@ CREATE TABLE public.token_transfers (
 );
 
 
-ALTER TABLE public.token_transfers OWNER TO postgres;
-
 --
--- Name: tokens; Type: TABLE; Schema: public; Owner: postgres
+-- Name: tokens; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.tokens (
@@ -1668,34 +1392,48 @@ CREATE TABLE public.tokens (
     fiat_value numeric,
     circulating_market_cap numeric,
     total_supply_updated_at_block bigint,
-    icon_url character varying(255),
+    icon_url text,
     is_verified_via_admin_panel boolean DEFAULT false,
+    bridged boolean,
     volume_24h numeric,
-    metadata_updated_at timestamp without time zone
+    metadata_updated_at timestamp without time zone,
+    transfer_count integer
 );
 
 
-ALTER TABLE public.tokens OWNER TO postgres;
-
 --
--- Name: transaction_actions; Type: TABLE; Schema: public; Owner: postgres
+-- Name: transaction_errors; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.transaction_actions (
-    hash bytea NOT NULL,
-    protocol public.transaction_actions_protocol NOT NULL,
-    data jsonb DEFAULT '{}'::jsonb NOT NULL,
-    type public.transaction_actions_type NOT NULL,
-    log_index integer NOT NULL,
-    inserted_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+CREATE TABLE public.transaction_errors (
+    id smallint NOT NULL,
+    message character varying(255) NOT NULL,
+    inserted_at timestamp without time zone NOT NULL
 );
 
 
-ALTER TABLE public.transaction_actions OWNER TO postgres;
+--
+-- Name: transaction_errors_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transaction_errors_id_seq
+    AS smallint
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
 
 --
--- Name: transaction_forks; Type: TABLE; Schema: public; Owner: postgres
+-- Name: transaction_errors_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transaction_errors_id_seq OWNED BY public.transaction_errors.id;
+
+
+--
+-- Name: transaction_forks; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.transaction_forks (
@@ -1707,10 +1445,8 @@ CREATE TABLE public.transaction_forks (
 );
 
 
-ALTER TABLE public.transaction_forks OWNER TO postgres;
-
 --
--- Name: transaction_stats; Type: TABLE; Schema: public; Owner: postgres
+-- Name: transaction_stats; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.transaction_stats (
@@ -1722,10 +1458,8 @@ CREATE TABLE public.transaction_stats (
 );
 
 
-ALTER TABLE public.transaction_stats OWNER TO postgres;
-
 --
--- Name: transaction_stats_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: transaction_stats_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.transaction_stats_id_seq
@@ -1736,17 +1470,15 @@ CREATE SEQUENCE public.transaction_stats_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.transaction_stats_id_seq OWNER TO postgres;
-
 --
--- Name: transaction_stats_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: transaction_stats_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.transaction_stats_id_seq OWNED BY public.transaction_stats.id;
 
 
 --
--- Name: transactions; Type: TABLE; Schema: public; Owner: postgres
+-- Name: transactions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.transactions (
@@ -1779,8 +1511,10 @@ CREATE TABLE public.transactions (
     max_fee_per_gas numeric(100,0),
     type integer,
     has_error_in_internal_transactions boolean,
-    block_timestamp timestamp without time zone,
     block_consensus boolean DEFAULT true,
+    block_timestamp timestamp without time zone,
+    has_token_transfers boolean,
+    fhe_operations_count integer DEFAULT 0 NOT NULL,
     CONSTRAINT collated_block_number CHECK (((block_hash IS NULL) OR (block_number IS NOT NULL))),
     CONSTRAINT collated_cumalative_gas_used CHECK (((block_hash IS NULL) OR (cumulative_gas_used IS NOT NULL))),
     CONSTRAINT collated_gas_price CHECK (((block_hash IS NULL) OR (gas_price IS NOT NULL))),
@@ -1795,10 +1529,8 @@ CREATE TABLE public.transactions (
 );
 
 
-ALTER TABLE public.transactions OWNER TO postgres;
-
 --
--- Name: user_contacts; Type: TABLE; Schema: public; Owner: postgres
+-- Name: user_contacts; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_contacts (
@@ -1812,10 +1544,8 @@ CREATE TABLE public.user_contacts (
 );
 
 
-ALTER TABLE public.user_contacts OWNER TO postgres;
-
 --
--- Name: user_contacts_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: user_contacts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.user_contacts_id_seq
@@ -1826,17 +1556,15 @@ CREATE SEQUENCE public.user_contacts_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.user_contacts_id_seq OWNER TO postgres;
-
 --
--- Name: user_contacts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: user_contacts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.user_contacts_id_seq OWNED BY public.user_contacts.id;
 
 
 --
--- Name: user_operations; Type: TABLE; Schema: public; Owner: postgres
+-- Name: user_operations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_operations (
@@ -1877,10 +1605,8 @@ CREATE TABLE public.user_operations (
 );
 
 
-ALTER TABLE public.user_operations OWNER TO postgres;
-
 --
--- Name: user_ops_indexer_migrations; Type: TABLE; Schema: public; Owner: postgres
+-- Name: user_ops_indexer_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_ops_indexer_migrations (
@@ -1889,10 +1615,8 @@ CREATE TABLE public.user_ops_indexer_migrations (
 );
 
 
-ALTER TABLE public.user_ops_indexer_migrations OWNER TO postgres;
-
 --
--- Name: users; Type: TABLE; Schema: public; Owner: postgres
+-- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.users (
@@ -1904,10 +1628,8 @@ CREATE TABLE public.users (
 );
 
 
-ALTER TABLE public.users OWNER TO postgres;
-
 --
--- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.users_id_seq
@@ -1918,17 +1640,15 @@ CREATE SEQUENCE public.users_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.users_id_seq OWNER TO postgres;
-
 --
--- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
--- Name: validators; Type: TABLE; Schema: public; Owner: postgres
+-- Name: validators; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.validators (
@@ -1941,10 +1661,8 @@ CREATE TABLE public.validators (
 );
 
 
-ALTER TABLE public.validators OWNER TO postgres;
-
 --
--- Name: withdrawals; Type: TABLE; Schema: public; Owner: postgres
+-- Name: withdrawals; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.withdrawals (
@@ -1958,286 +1676,148 @@ CREATE TABLE public.withdrawals (
 );
 
 
-ALTER TABLE public.withdrawals OWNER TO postgres;
-
 --
--- Name: account_api_plans id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_api_plans ALTER COLUMN id SET DEFAULT nextval('public.account_api_plans_id_seq'::regclass);
-
-
---
--- Name: account_custom_abis id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_custom_abis ALTER COLUMN id SET DEFAULT nextval('public.account_custom_abis_id_seq'::regclass);
-
-
---
--- Name: account_identities id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_identities ALTER COLUMN id SET DEFAULT nextval('public.account_identities_id_seq'::regclass);
-
-
---
--- Name: account_public_tags_requests id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_public_tags_requests ALTER COLUMN id SET DEFAULT nextval('public.account_public_tags_requests_id_seq'::regclass);
-
-
---
--- Name: account_tag_addresses id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_tag_addresses ALTER COLUMN id SET DEFAULT nextval('public.account_tag_addresses_id_seq'::regclass);
-
-
---
--- Name: account_tag_transactions id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_tag_transactions ALTER COLUMN id SET DEFAULT nextval('public.account_tag_transactions_id_seq'::regclass);
-
-
---
--- Name: account_watchlist_addresses id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlist_addresses ALTER COLUMN id SET DEFAULT nextval('public.account_watchlist_addresses_id_seq'::regclass);
-
-
---
--- Name: account_watchlist_notifications id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlist_notifications ALTER COLUMN id SET DEFAULT nextval('public.account_watchlist_notifications_id_seq'::regclass);
-
-
---
--- Name: account_watchlist_notifications watchlist_id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlist_notifications ALTER COLUMN watchlist_id SET DEFAULT nextval('public.account_watchlist_notifications_watchlist_id_seq'::regclass);
-
-
---
--- Name: account_watchlists id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlists ALTER COLUMN id SET DEFAULT nextval('public.account_watchlists_id_seq'::regclass);
-
-
---
--- Name: address_current_token_balances id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: address_current_token_balances id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_current_token_balances ALTER COLUMN id SET DEFAULT nextval('public.address_current_token_balances_id_seq'::regclass);
 
 
 --
--- Name: address_names id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: address_ids_to_address_hashes address_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.address_names ALTER COLUMN id SET DEFAULT nextval('public.address_names_id_seq'::regclass);
+ALTER TABLE ONLY public.address_ids_to_address_hashes ALTER COLUMN address_id SET DEFAULT nextval('public.address_ids_to_address_hashes_address_id_seq'::regclass);
 
 
 --
--- Name: address_tags id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: address_tags id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_tags ALTER COLUMN id SET DEFAULT nextval('public.address_tags_id_seq'::regclass);
 
 
 --
--- Name: address_to_tags id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: address_to_tags id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_to_tags ALTER COLUMN id SET DEFAULT nextval('public.address_to_tags_id_seq'::regclass);
 
 
 --
--- Name: address_token_balances id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: address_token_balances id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_token_balances ALTER COLUMN id SET DEFAULT nextval('public.address_token_balances_id_seq'::regclass);
 
 
 --
--- Name: administrators id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: administrators id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.administrators ALTER COLUMN id SET DEFAULT nextval('public.administrators_id_seq'::regclass);
 
 
 --
--- Name: contract_methods id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: contract_methods id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.contract_methods ALTER COLUMN id SET DEFAULT nextval('public.contract_methods_id_seq'::regclass);
 
 
 --
--- Name: decompiled_smart_contracts id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.decompiled_smart_contracts ALTER COLUMN id SET DEFAULT nextval('public.decompiled_smart_contracts_id_seq'::regclass);
-
-
---
--- Name: event_notifications id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: event_notifications id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.event_notifications ALTER COLUMN id SET DEFAULT nextval('public.event_notifications_id_seq'::regclass);
 
 
 --
--- Name: market_history id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: market_history id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.market_history ALTER COLUMN id SET DEFAULT nextval('public.market_history_id_seq'::regclass);
 
 
 --
--- Name: missing_block_ranges id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: missing_block_ranges id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.missing_block_ranges ALTER COLUMN id SET DEFAULT nextval('public.missing_block_ranges_id_seq'::regclass);
 
 
 --
--- Name: smart_contract_audit_reports id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: multichain_search_db_export_balances_queue id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multichain_search_db_export_balances_queue ALTER COLUMN id SET DEFAULT nextval('public.multichain_search_db_export_balances_queue_id_seq'::regclass);
+
+
+--
+-- Name: oban_jobs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oban_jobs ALTER COLUMN id SET DEFAULT nextval('public.oban_jobs_id_seq'::regclass);
+
+
+--
+-- Name: smart_contract_audit_reports id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.smart_contract_audit_reports ALTER COLUMN id SET DEFAULT nextval('public.smart_contract_audit_reports_id_seq'::regclass);
 
 
 --
--- Name: smart_contracts id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: smart_contracts id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.smart_contracts ALTER COLUMN id SET DEFAULT nextval('public.smart_contracts_id_seq'::regclass);
 
 
 --
--- Name: smart_contracts_additional_sources id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: smart_contracts_additional_sources id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.smart_contracts_additional_sources ALTER COLUMN id SET DEFAULT nextval('public.smart_contracts_additional_sources_id_seq'::regclass);
 
 
 --
--- Name: token_transfer_token_id_migrator_progress id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: token_transfer_token_id_migrator_progress id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.token_transfer_token_id_migrator_progress ALTER COLUMN id SET DEFAULT nextval('public.token_transfer_token_id_migrator_progress_id_seq'::regclass);
 
 
 --
--- Name: transaction_stats id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: transaction_errors id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.transaction_errors ALTER COLUMN id SET DEFAULT nextval('public.transaction_errors_id_seq'::regclass);
+
+
+--
+-- Name: transaction_stats id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.transaction_stats ALTER COLUMN id SET DEFAULT nextval('public.transaction_stats_id_seq'::regclass);
 
 
 --
--- Name: user_contacts id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: user_contacts id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_contacts ALTER COLUMN id SET DEFAULT nextval('public.user_contacts_id_seq'::regclass);
 
 
 --
--- Name: users id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: users id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
 
 
 --
--- Name: account_api_keys account_api_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_api_keys
-    ADD CONSTRAINT account_api_keys_pkey PRIMARY KEY (value);
-
-
---
--- Name: account_api_plans account_api_plans_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_api_plans
-    ADD CONSTRAINT account_api_plans_pkey PRIMARY KEY (id);
-
-
---
--- Name: account_custom_abis account_custom_abis_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_custom_abis
-    ADD CONSTRAINT account_custom_abis_pkey PRIMARY KEY (id);
-
-
---
--- Name: account_identities account_identities_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_identities
-    ADD CONSTRAINT account_identities_pkey PRIMARY KEY (id);
-
-
---
--- Name: account_public_tags_requests account_public_tags_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_public_tags_requests
-    ADD CONSTRAINT account_public_tags_requests_pkey PRIMARY KEY (id);
-
-
---
--- Name: account_tag_addresses account_tag_addresses_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_tag_addresses
-    ADD CONSTRAINT account_tag_addresses_pkey PRIMARY KEY (id);
-
-
---
--- Name: account_tag_transactions account_tag_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_tag_transactions
-    ADD CONSTRAINT account_tag_transactions_pkey PRIMARY KEY (id);
-
-
---
--- Name: account_watchlist_addresses account_watchlist_addresses_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlist_addresses
-    ADD CONSTRAINT account_watchlist_addresses_pkey PRIMARY KEY (id);
-
-
---
--- Name: account_watchlist_notifications account_watchlist_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlist_notifications
-    ADD CONSTRAINT account_watchlist_notifications_pkey PRIMARY KEY (id);
-
-
---
--- Name: account_watchlists account_watchlists_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlists
-    ADD CONSTRAINT account_watchlists_pkey PRIMARY KEY (id);
-
-
---
--- Name: address_coin_balances_daily address_coin_balances_daily_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_coin_balances_daily address_coin_balances_daily_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_coin_balances_daily
@@ -2245,7 +1825,7 @@ ALTER TABLE ONLY public.address_coin_balances_daily
 
 
 --
--- Name: address_coin_balances address_coin_balances_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_coin_balances address_coin_balances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_coin_balances
@@ -2253,7 +1833,7 @@ ALTER TABLE ONLY public.address_coin_balances
 
 
 --
--- Name: address_contract_code_fetch_attempts address_contract_code_fetch_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_contract_code_fetch_attempts address_contract_code_fetch_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_contract_code_fetch_attempts
@@ -2261,7 +1841,7 @@ ALTER TABLE ONLY public.address_contract_code_fetch_attempts
 
 
 --
--- Name: address_current_token_balances address_current_token_balances_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_current_token_balances address_current_token_balances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_current_token_balances
@@ -2269,15 +1849,15 @@ ALTER TABLE ONLY public.address_current_token_balances
 
 
 --
--- Name: address_names address_names_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_ids_to_address_hashes address_ids_to_address_hashes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.address_names
-    ADD CONSTRAINT address_names_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.address_ids_to_address_hashes
+    ADD CONSTRAINT address_ids_to_address_hashes_pkey PRIMARY KEY (address_id);
 
 
 --
--- Name: address_tags address_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_tags address_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_tags
@@ -2285,7 +1865,7 @@ ALTER TABLE ONLY public.address_tags
 
 
 --
--- Name: address_to_tags address_to_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_to_tags address_to_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_to_tags
@@ -2293,7 +1873,7 @@ ALTER TABLE ONLY public.address_to_tags
 
 
 --
--- Name: address_token_balances address_token_balances_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_token_balances address_token_balances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_token_balances
@@ -2301,7 +1881,7 @@ ALTER TABLE ONLY public.address_token_balances
 
 
 --
--- Name: addresses addresses_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: addresses addresses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.addresses
@@ -2309,7 +1889,7 @@ ALTER TABLE ONLY public.addresses
 
 
 --
--- Name: administrators administrators_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: administrators administrators_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.administrators
@@ -2317,7 +1897,31 @@ ALTER TABLE ONLY public.administrators
 
 
 --
--- Name: block_rewards block_rewards_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: beacon_blobs beacon_blobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.beacon_blobs
+    ADD CONSTRAINT beacon_blobs_pkey PRIMARY KEY (hash);
+
+
+--
+-- Name: beacon_blobs_transactions beacon_blobs_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.beacon_blobs_transactions
+    ADD CONSTRAINT beacon_blobs_transactions_pkey PRIMARY KEY (hash);
+
+
+--
+-- Name: beacon_deposits beacon_deposits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.beacon_deposits
+    ADD CONSTRAINT beacon_deposits_pkey PRIMARY KEY (index);
+
+
+--
+-- Name: block_rewards block_rewards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block_rewards
@@ -2325,7 +1929,7 @@ ALTER TABLE ONLY public.block_rewards
 
 
 --
--- Name: block_second_degree_relations block_second_degree_relations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: block_second_degree_relations block_second_degree_relations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block_second_degree_relations
@@ -2333,7 +1937,7 @@ ALTER TABLE ONLY public.block_second_degree_relations
 
 
 --
--- Name: blocks blocks_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: blocks blocks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.blocks
@@ -2341,23 +1945,15 @@ ALTER TABLE ONLY public.blocks
 
 
 --
--- Name: internal_transactions call_has_call_type; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: internal_transactions call_has_call_type_enum; Type: CHECK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE public.internal_transactions
-    ADD CONSTRAINT call_has_call_type CHECK ((((type)::text <> 'call'::text) OR (call_type IS NOT NULL))) NOT VALID;
+    ADD CONSTRAINT call_has_call_type_enum CHECK ((((type)::text <> 'call'::text) OR (call_type IS NOT NULL) OR (call_type_enum IS NOT NULL))) NOT VALID;
 
 
 --
--- Name: internal_transactions call_has_input; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE public.internal_transactions
-    ADD CONSTRAINT call_has_input CHECK ((((type)::text <> 'call'::text) OR (input IS NOT NULL))) NOT VALID;
-
-
---
--- Name: constants constants_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: constants constants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.constants
@@ -2365,7 +1961,7 @@ ALTER TABLE ONLY public.constants
 
 
 --
--- Name: contract_methods contract_methods_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: contract_methods contract_methods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.contract_methods
@@ -2373,15 +1969,15 @@ ALTER TABLE ONLY public.contract_methods
 
 
 --
--- Name: contract_verification_status contract_verification_status_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: internal_transactions create_has_error_id_or_result; Type: CHECK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.contract_verification_status
-    ADD CONSTRAINT contract_verification_status_pkey PRIMARY KEY (uid);
+ALTER TABLE public.internal_transactions
+    ADD CONSTRAINT create_has_error_id_or_result CHECK ((((type)::text <> 'create'::text) OR ((gas IS NOT NULL) AND (((error_id IS NULL) AND (created_contract_address_id IS NOT NULL) AND (created_contract_code IS NOT NULL) AND (gas_used IS NOT NULL)) OR ((error_id IS NOT NULL) AND (created_contract_address_id IS NULL) AND (created_contract_code IS NULL) AND (gas_used IS NULL)))))) NOT VALID;
 
 
 --
--- Name: internal_transactions create_has_init; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: internal_transactions create_has_init; Type: CHECK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE public.internal_transactions
@@ -2389,15 +1985,23 @@ ALTER TABLE public.internal_transactions
 
 
 --
--- Name: decompiled_smart_contracts decompiled_smart_contracts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: csv_export_requests csv_export_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.decompiled_smart_contracts
-    ADD CONSTRAINT decompiled_smart_contracts_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.csv_export_requests
+    ADD CONSTRAINT csv_export_requests_pkey PRIMARY KEY (id);
 
 
 --
--- Name: emission_rewards emission_rewards_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: deleted_internal_transactions_address_placeholders deleted_internal_transactions_address_placeholders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.deleted_internal_transactions_address_placeholders
+    ADD CONSTRAINT deleted_internal_transactions_address_placeholders_pkey PRIMARY KEY (address_id, block_number);
+
+
+--
+-- Name: emission_rewards emission_rewards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.emission_rewards
@@ -2405,7 +2009,7 @@ ALTER TABLE ONLY public.emission_rewards
 
 
 --
--- Name: event_notifications event_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: event_notifications event_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.event_notifications
@@ -2413,15 +2017,55 @@ ALTER TABLE ONLY public.event_notifications
 
 
 --
--- Name: internal_transactions internal_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: fhe_operations fhe_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fhe_operations
+    ADD CONSTRAINT fhe_operations_pkey PRIMARY KEY (transaction_hash, log_index);
+
+
+--
+-- Name: hot_smart_contracts_daily hot_smart_contracts_daily_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.hot_smart_contracts_daily
+    ADD CONSTRAINT hot_smart_contracts_daily_pkey PRIMARY KEY (date, contract_address_hash);
+
+
+--
+-- Name: internal_transactions internal_transactions_block_number_not_null; Type: CHECK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE public.internal_transactions
+    ADD CONSTRAINT internal_transactions_block_number_not_null CHECK ((block_number IS NOT NULL)) NOT VALID;
+
+
+--
+-- Name: internal_transactions_delete_queue internal_transactions_delete_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.internal_transactions_delete_queue
+    ADD CONSTRAINT internal_transactions_delete_queue_pkey PRIMARY KEY (block_number);
+
+
+--
+-- Name: internal_transactions internal_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.internal_transactions
-    ADD CONSTRAINT internal_transactions_pkey PRIMARY KEY (block_hash, block_index);
+    ADD CONSTRAINT internal_transactions_pkey PRIMARY KEY (block_number, transaction_index, index);
 
 
 --
--- Name: last_fetched_counters last_fetched_counters_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: internal_transactions internal_transactions_transaction_index_not_null; Type: CHECK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE public.internal_transactions
+    ADD CONSTRAINT internal_transactions_transaction_index_not_null CHECK ((transaction_index IS NOT NULL)) NOT VALID;
+
+
+--
+-- Name: last_fetched_counters last_fetched_counters_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.last_fetched_counters
@@ -2429,7 +2073,7 @@ ALTER TABLE ONLY public.last_fetched_counters
 
 
 --
--- Name: logs logs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: logs logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.logs
@@ -2437,7 +2081,7 @@ ALTER TABLE ONLY public.logs
 
 
 --
--- Name: market_history market_history_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: market_history market_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.market_history
@@ -2445,7 +2089,7 @@ ALTER TABLE ONLY public.market_history
 
 
 --
--- Name: massive_blocks massive_blocks_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: massive_blocks massive_blocks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.massive_blocks
@@ -2453,7 +2097,7 @@ ALTER TABLE ONLY public.massive_blocks
 
 
 --
--- Name: migrations_status migrations_status_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: migrations_status migrations_status_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.migrations_status
@@ -2461,7 +2105,7 @@ ALTER TABLE ONLY public.migrations_status
 
 
 --
--- Name: missing_balance_of_tokens missing_balance_of_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: missing_balance_of_tokens missing_balance_of_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.missing_balance_of_tokens
@@ -2469,7 +2113,7 @@ ALTER TABLE ONLY public.missing_balance_of_tokens
 
 
 --
--- Name: missing_block_ranges missing_block_ranges_no_overlap; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: missing_block_ranges missing_block_ranges_no_overlap; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.missing_block_ranges
@@ -2477,7 +2121,7 @@ ALTER TABLE ONLY public.missing_block_ranges
 
 
 --
--- Name: missing_block_ranges missing_block_ranges_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: missing_block_ranges missing_block_ranges_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.missing_block_ranges
@@ -2485,7 +2129,39 @@ ALTER TABLE ONLY public.missing_block_ranges
 
 
 --
--- Name: emission_rewards no_overlapping_ranges; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: multichain_search_db_export_balances_queue multichain_search_db_export_balances_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multichain_search_db_export_balances_queue
+    ADD CONSTRAINT multichain_search_db_export_balances_queue_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: multichain_search_db_export_counters_queue multichain_search_db_export_counters_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multichain_search_db_export_counters_queue
+    ADD CONSTRAINT multichain_search_db_export_counters_queue_pkey PRIMARY KEY ("timestamp", counter_type);
+
+
+--
+-- Name: multichain_search_db_export_token_info_queue multichain_search_db_export_token_info_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multichain_search_db_export_token_info_queue
+    ADD CONSTRAINT multichain_search_db_export_token_info_queue_pkey PRIMARY KEY (address_hash, data_type);
+
+
+--
+-- Name: multichain_search_db_main_export_queue multichain_search_db_main_export_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multichain_search_db_main_export_queue
+    ADD CONSTRAINT multichain_search_db_main_export_queue_pkey PRIMARY KEY (hash, hash_type);
+
+
+--
+-- Name: emission_rewards no_overlapping_ranges; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.emission_rewards
@@ -2493,7 +2169,31 @@ ALTER TABLE ONLY public.emission_rewards
 
 
 --
--- Name: pending_block_operations pending_block_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: oban_jobs non_negative_priority; Type: CHECK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oban_jobs
+    ADD CONSTRAINT non_negative_priority CHECK ((priority >= 0)) NOT VALID;
+
+
+--
+-- Name: oban_jobs oban_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oban_jobs
+    ADD CONSTRAINT oban_jobs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oban_peers oban_peers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oban_peers
+    ADD CONSTRAINT oban_peers_pkey PRIMARY KEY (name);
+
+
+--
+-- Name: pending_block_operations pending_block_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.pending_block_operations
@@ -2501,7 +2201,15 @@ ALTER TABLE ONLY public.pending_block_operations
 
 
 --
--- Name: proxy_implementations proxy_implementations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: pending_transaction_operations pending_transaction_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pending_transaction_operations
+    ADD CONSTRAINT pending_transaction_operations_pkey PRIMARY KEY (transaction_hash);
+
+
+--
+-- Name: proxy_implementations proxy_implementations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.proxy_implementations
@@ -2509,7 +2217,7 @@ ALTER TABLE ONLY public.proxy_implementations
 
 
 --
--- Name: proxy_smart_contract_verification_statuses proxy_smart_contract_verification_statuses_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: proxy_smart_contract_verification_statuses proxy_smart_contract_verification_statuses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.proxy_smart_contract_verification_statuses
@@ -2517,7 +2225,7 @@ ALTER TABLE ONLY public.proxy_smart_contract_verification_statuses
 
 
 --
--- Name: scam_address_badge_mappings scam_address_badge_mappings_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: scam_address_badge_mappings scam_address_badge_mappings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.scam_address_badge_mappings
@@ -2525,7 +2233,7 @@ ALTER TABLE ONLY public.scam_address_badge_mappings
 
 
 --
--- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.schema_migrations
@@ -2533,15 +2241,15 @@ ALTER TABLE ONLY public.schema_migrations
 
 
 --
--- Name: internal_transactions selfdestruct_has_from_and_to_address; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: internal_transactions selfdestruct_has_from_and_to_address; Type: CHECK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE public.internal_transactions
-    ADD CONSTRAINT selfdestruct_has_from_and_to_address CHECK ((((type)::text <> 'selfdestruct'::text) OR ((from_address_hash IS NOT NULL) AND (gas IS NULL) AND (to_address_hash IS NOT NULL)))) NOT VALID;
+    ADD CONSTRAINT selfdestruct_has_from_and_to_address CHECK ((((type)::text <> 'selfdestruct'::text) OR ((from_address_id IS NOT NULL) AND (gas IS NULL) AND (to_address_id IS NOT NULL)))) NOT VALID;
 
 
 --
--- Name: signed_authorizations signed_authorizations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: signed_authorizations signed_authorizations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.signed_authorizations
@@ -2549,7 +2257,7 @@ ALTER TABLE ONLY public.signed_authorizations
 
 
 --
--- Name: smart_contract_audit_reports smart_contract_audit_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: smart_contract_audit_reports smart_contract_audit_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.smart_contract_audit_reports
@@ -2557,7 +2265,15 @@ ALTER TABLE ONLY public.smart_contract_audit_reports
 
 
 --
--- Name: smart_contracts_additional_sources smart_contracts_additional_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: smart_contract_verification_statuses smart_contract_verification_statuses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.smart_contract_verification_statuses
+    ADD CONSTRAINT smart_contract_verification_statuses_pkey PRIMARY KEY (uid);
+
+
+--
+-- Name: smart_contracts_additional_sources smart_contracts_additional_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.smart_contracts_additional_sources
@@ -2565,7 +2281,7 @@ ALTER TABLE ONLY public.smart_contracts_additional_sources
 
 
 --
--- Name: smart_contracts smart_contracts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: smart_contracts smart_contracts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.smart_contracts
@@ -2573,7 +2289,7 @@ ALTER TABLE ONLY public.smart_contracts
 
 
 --
--- Name: token_instance_metadata_refetch_attempts token_instance_metadata_refetch_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: token_instance_metadata_refetch_attempts token_instance_metadata_refetch_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.token_instance_metadata_refetch_attempts
@@ -2581,7 +2297,7 @@ ALTER TABLE ONLY public.token_instance_metadata_refetch_attempts
 
 
 --
--- Name: token_instances token_instances_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: token_instances token_instances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.token_instances
@@ -2589,7 +2305,7 @@ ALTER TABLE ONLY public.token_instances
 
 
 --
--- Name: token_transfer_token_id_migrator_progress token_transfer_token_id_migrator_progress_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: token_transfer_token_id_migrator_progress token_transfer_token_id_migrator_progress_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.token_transfer_token_id_migrator_progress
@@ -2597,7 +2313,7 @@ ALTER TABLE ONLY public.token_transfer_token_id_migrator_progress
 
 
 --
--- Name: token_transfers token_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: token_transfers token_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.token_transfers
@@ -2605,7 +2321,7 @@ ALTER TABLE ONLY public.token_transfers
 
 
 --
--- Name: tokens tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: tokens tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.tokens
@@ -2613,15 +2329,15 @@ ALTER TABLE ONLY public.tokens
 
 
 --
--- Name: transaction_actions transaction_actions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: transaction_errors transaction_errors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.transaction_actions
-    ADD CONSTRAINT transaction_actions_pkey PRIMARY KEY (hash, log_index);
+ALTER TABLE ONLY public.transaction_errors
+    ADD CONSTRAINT transaction_errors_pkey PRIMARY KEY (id);
 
 
 --
--- Name: transaction_forks transaction_forks_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: transaction_forks transaction_forks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.transaction_forks
@@ -2629,7 +2345,7 @@ ALTER TABLE ONLY public.transaction_forks
 
 
 --
--- Name: transaction_stats transaction_stats_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: transaction_stats transaction_stats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.transaction_stats
@@ -2637,7 +2353,7 @@ ALTER TABLE ONLY public.transaction_stats
 
 
 --
--- Name: transactions transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: transactions transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.transactions
@@ -2645,7 +2361,15 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- Name: user_contacts user_contacts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_names unique_address_names; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.address_names
+    ADD CONSTRAINT unique_address_names PRIMARY KEY (address_hash, name);
+
+
+--
+-- Name: user_contacts user_contacts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_contacts
@@ -2653,7 +2377,7 @@ ALTER TABLE ONLY public.user_contacts
 
 
 --
--- Name: user_operations user_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: user_operations user_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_operations
@@ -2661,7 +2385,7 @@ ALTER TABLE ONLY public.user_operations
 
 
 --
--- Name: user_ops_indexer_migrations user_ops_indexer_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: user_ops_indexer_migrations user_ops_indexer_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_ops_indexer_migrations
@@ -2669,7 +2393,7 @@ ALTER TABLE ONLY public.user_ops_indexer_migrations
 
 
 --
--- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.users
@@ -2677,7 +2401,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: validators validators_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: validators validators_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.validators
@@ -2685,7 +2409,7 @@ ALTER TABLE ONLY public.validators
 
 
 --
--- Name: withdrawals withdrawals_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: withdrawals withdrawals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.withdrawals
@@ -2693,1114 +2417,1059 @@ ALTER TABLE ONLY public.withdrawals
 
 
 --
--- Name: account_api_keys_identity_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_api_keys_identity_id_index ON public.account_api_keys USING btree (identity_id);
-
-
---
--- Name: account_api_plans_id_max_req_per_second_name_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX account_api_plans_id_max_req_per_second_name_index ON public.account_api_plans USING btree (id, max_req_per_second, name);
-
-
---
--- Name: account_custom_abis_identity_id_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX account_custom_abis_identity_id_address_hash_hash_index ON public.account_custom_abis USING btree (identity_id, address_hash_hash) WHERE (user_created = true);
-
-
---
--- Name: account_custom_abis_identity_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_custom_abis_identity_id_index ON public.account_custom_abis USING btree (identity_id);
-
-
---
--- Name: account_identities_uid_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX account_identities_uid_hash_index ON public.account_identities USING btree (uid_hash);
-
-
---
--- Name: account_tag_addresses_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_tag_addresses_address_hash_hash_index ON public.account_tag_addresses USING btree (address_hash_hash);
-
-
---
--- Name: account_tag_addresses_identity_id_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX account_tag_addresses_identity_id_address_hash_hash_index ON public.account_tag_addresses USING btree (identity_id, address_hash_hash) WHERE (user_created = true);
-
-
---
--- Name: account_tag_addresses_identity_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_tag_addresses_identity_id_index ON public.account_tag_addresses USING btree (identity_id);
-
-
---
--- Name: account_tag_transactions_identity_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_tag_transactions_identity_id_index ON public.account_tag_transactions USING btree (identity_id);
-
-
---
--- Name: account_tag_transactions_identity_id_tx_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX account_tag_transactions_identity_id_tx_hash_hash_index ON public.account_tag_transactions USING btree (identity_id, transaction_hash_hash) WHERE (user_created = true);
-
-
---
--- Name: account_tag_transactions_tx_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_tag_transactions_tx_hash_hash_index ON public.account_tag_transactions USING btree (transaction_hash_hash);
-
-
---
--- Name: account_watchlist_addresses_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_watchlist_addresses_address_hash_hash_index ON public.account_watchlist_addresses USING btree (address_hash_hash);
-
-
---
--- Name: account_watchlist_addresses_watchlist_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_watchlist_addresses_watchlist_id_index ON public.account_watchlist_addresses USING btree (watchlist_id);
-
-
---
--- Name: account_watchlist_notifications_from_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_watchlist_notifications_from_address_hash_hash_index ON public.account_watchlist_notifications USING btree (from_address_hash_hash);
-
-
---
--- Name: account_watchlist_notifications_to_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_watchlist_notifications_to_address_hash_hash_index ON public.account_watchlist_notifications USING btree (to_address_hash_hash);
-
-
---
--- Name: account_watchlist_notifications_transaction_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_watchlist_notifications_transaction_hash_hash_index ON public.account_watchlist_notifications USING btree (transaction_hash_hash);
-
-
---
--- Name: account_watchlist_notifications_watchlist_address_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_watchlist_notifications_watchlist_address_id_index ON public.account_watchlist_notifications USING btree (watchlist_address_id);
-
-
---
--- Name: account_watchlist_notifications_watchlist_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_watchlist_notifications_watchlist_id_index ON public.account_watchlist_notifications USING btree (watchlist_id);
-
-
---
--- Name: account_watchlists_identity_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX account_watchlists_identity_id_index ON public.account_watchlists USING btree (identity_id);
-
-
---
--- Name: address_coin_balances_block_number_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_coin_balances_block_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_coin_balances_block_number_index ON public.address_coin_balances USING btree (block_number);
 
 
 --
--- Name: address_coin_balances_value_fetched_at_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX address_coin_balances_value_fetched_at_index ON public.address_coin_balances USING btree (value_fetched_at);
-
-
---
--- Name: address_contract_code_fetch_attempts_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_contract_code_fetch_attempts_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_contract_code_fetch_attempts_address_hash_index ON public.address_contract_code_fetch_attempts USING btree (address_hash);
 
 
 --
--- Name: address_cur_token_balances_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_cur_token_balances_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_cur_token_balances_index ON public.address_current_token_balances USING btree (block_number);
 
 
 --
--- Name: address_current_token_balances_token_contract_address_hash__val; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_current_token_balance_token_contract_address_hash_v_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX address_current_token_balances_token_contract_address_hash__val ON public.address_current_token_balances USING btree (token_contract_address_hash, value DESC, address_hash DESC) WHERE ((address_hash <> '\x0000000000000000000000000000000000000000'::bytea) AND (value > (0)::numeric));
+CREATE INDEX address_current_token_balance_token_contract_address_hash_v_idx ON public.address_current_token_balances USING btree (token_contract_address_hash, value DESC, address_hash DESC) WHERE ((address_hash <> '\x0000000000000000000000000000000000000000'::bytea) AND (value > (0)::numeric));
 
 
 --
--- Name: address_current_token_balances_token_contract_address_hash_valu; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_current_token_balances_token_contract_address_hash_valu; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_current_token_balances_token_contract_address_hash_valu ON public.address_current_token_balances USING btree (token_contract_address_hash, value);
 
 
 --
--- Name: address_current_token_balances_token_id_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_current_token_balances_token_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_current_token_balances_token_id_index ON public.address_current_token_balances USING btree (token_id);
 
 
 --
--- Name: address_decompiler_version; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_ids_to_address_hashes_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX address_decompiler_version ON public.decompiled_smart_contracts USING btree (address_hash, decompiler_version);
+CREATE UNIQUE INDEX address_ids_to_address_hashes_address_hash_index ON public.address_ids_to_address_hashes USING btree (address_hash);
 
 
 --
--- Name: address_names_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_names_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX address_names_address_hash_index ON public.address_names USING btree (address_hash) WHERE ("primary" = true);
 
 
 --
--- Name: address_tags_id_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_tags_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX address_tags_id_index ON public.address_tags USING btree (id);
 
 
 --
--- Name: address_tags_label_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_tags_label_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX address_tags_label_index ON public.address_tags USING btree (label);
 
 
 --
--- Name: address_to_tags_address_hash_tag_id_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_to_tags_address_hash_tag_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX address_to_tags_address_hash_tag_id_index ON public.address_to_tags USING btree (address_hash, tag_id);
 
 
 --
--- Name: address_token_balances_address_hash_token_contract_address_hash; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_token_balances_address_hash_token_contract_address_hash; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_token_balances_address_hash_token_contract_address_hash ON public.address_token_balances USING btree (address_hash, token_contract_address_hash, block_number);
 
 
 --
--- Name: address_token_balances_block_number_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_token_balances_block_number_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_token_balances_block_number_address_hash_index ON public.address_token_balances USING btree (block_number, address_hash);
 
 
 --
--- Name: address_token_balances_token_contract_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_token_balances_token_contract_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_token_balances_token_contract_address_hash_index ON public.address_token_balances USING btree (token_contract_address_hash);
 
 
 --
--- Name: address_token_balances_token_id_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: address_token_balances_token_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX address_token_balances_token_id_index ON public.address_token_balances USING btree (token_id);
 
 
 --
--- Name: addresses_fetched_coin_balance_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: addresses_fetched_coin_balance_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX addresses_fetched_coin_balance_hash_index ON public.addresses USING btree (fetched_coin_balance DESC, hash) WHERE (fetched_coin_balance > (0)::numeric);
 
 
 --
--- Name: addresses_fetched_coin_balance_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: addresses_fetched_coin_balance_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX addresses_fetched_coin_balance_index ON public.addresses USING btree (fetched_coin_balance);
 
 
 --
--- Name: addresses_inserted_at_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: addresses_hash_contract_code_not_null; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX addresses_hash_contract_code_not_null ON public.addresses USING btree (hash) WHERE (contract_code IS NOT NULL);
+
+
+--
+-- Name: addresses_inserted_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX addresses_inserted_at_index ON public.addresses USING btree (inserted_at);
 
 
 --
--- Name: administrators_user_id_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: addresses_transactions_count_asc_coin_balance_desc_hash_partial; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX addresses_transactions_count_asc_coin_balance_desc_hash_partial ON public.addresses USING btree (transactions_count NULLS FIRST, fetched_coin_balance DESC, hash) WHERE (fetched_coin_balance > (0)::numeric);
+
+
+--
+-- Name: addresses_transactions_count_desc_partial; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX addresses_transactions_count_desc_partial ON public.addresses USING btree (transactions_count DESC NULLS LAST) WHERE (fetched_coin_balance > (0)::numeric);
+
+
+--
+-- Name: addresses_verified_fetched_coin_balance_DESC_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "addresses_verified_fetched_coin_balance_DESC_hash_index" ON public.addresses USING btree (fetched_coin_balance DESC NULLS LAST, hash) WHERE (verified = true);
+
+
+--
+-- Name: addresses_verified_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX addresses_verified_hash_index ON public.addresses USING btree (hash) WHERE (verified = true);
+
+
+--
+-- Name: addresses_verified_transactions_count_DESC_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "addresses_verified_transactions_count_DESC_hash_index" ON public.addresses USING btree (transactions_count DESC NULLS LAST, hash) WHERE (verified = true);
+
+
+--
+-- Name: administrators_user_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX administrators_user_id_index ON public.administrators USING btree (user_id);
 
 
 --
--- Name: audit_report_unique_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: audit_report_unique_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX audit_report_unique_index ON public.smart_contract_audit_reports USING btree (address_hash, audit_report_url, audit_publish_date, audit_company_name);
 
 
 --
--- Name: block_rewards_block_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: beacon_deposits_block_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX beacon_deposits_block_hash_index ON public.beacon_deposits USING btree (block_hash);
+
+
+--
+-- Name: beacon_deposits_from_address_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX beacon_deposits_from_address_hash_index ON public.beacon_deposits USING btree (from_address_hash);
+
+
+--
+-- Name: beacon_deposits_pubkey_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX beacon_deposits_pubkey_index ON public.beacon_deposits USING btree (pubkey) WHERE (status <> 'invalid'::public.beacon_deposits_status);
+
+
+--
+-- Name: beacon_deposits_pubkey_withdrawal_credentials_amount_signature_; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX beacon_deposits_pubkey_withdrawal_credentials_amount_signature_ ON public.beacon_deposits USING btree (pubkey, withdrawal_credentials, amount, signature, block_timestamp) WHERE (status = 'pending'::public.beacon_deposits_status);
+
+
+--
+-- Name: block_rewards_block_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX block_rewards_block_hash_index ON public.block_rewards USING btree (block_hash);
 
 
 --
--- Name: blocks_consensus_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: blocks_consensus_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX blocks_consensus_index ON public.blocks USING btree (consensus);
 
 
 --
--- Name: blocks_date; Type: INDEX; Schema: public; Owner: postgres
+-- Name: blocks_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX blocks_date ON public.blocks USING btree (date("timestamp"), number);
 
 
 --
--- Name: blocks_inserted_at_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: blocks_inserted_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX blocks_inserted_at_index ON public.blocks USING btree (inserted_at);
 
 
 --
--- Name: blocks_is_empty_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: blocks_is_empty_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX blocks_is_empty_index ON public.blocks USING btree (is_empty);
 
 
 --
--- Name: blocks_miner_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: blocks_miner_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX blocks_miner_hash_index ON public.blocks USING btree (miner_hash);
 
 
 --
--- Name: blocks_miner_hash_number_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: blocks_miner_hash_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX blocks_miner_hash_number_index ON public.blocks USING btree (miner_hash, number);
 
 
 --
--- Name: blocks_number_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: blocks_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX blocks_number_index ON public.blocks USING btree (number);
 
 
 --
--- Name: blocks_timestamp_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: blocks_timestamp_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX blocks_timestamp_index ON public.blocks USING btree ("timestamp");
 
 
 --
--- Name: consensus_block_hashes_refetch_needed; Type: INDEX; Schema: public; Owner: postgres
+-- Name: bridged_tokens_home_token_contract_address_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX bridged_tokens_home_token_contract_address_hash_index ON public.bridged_tokens USING btree (home_token_contract_address_hash);
+
+
+--
+-- Name: consensus_block_hashes_refetch_needed; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX consensus_block_hashes_refetch_needed ON public.blocks USING btree (hash) WHERE (consensus AND refetch_needed);
 
 
 --
--- Name: contract_methods_identifier_abi_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: contract_methods_identifier_md5_abi_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX contract_methods_identifier_abi_index ON public.contract_methods USING btree (identifier, abi);
+CREATE UNIQUE INDEX contract_methods_identifier_md5_abi_index ON public.contract_methods USING btree (identifier, md5((abi)::text));
 
 
 --
--- Name: contract_methods_inserted_at_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: contract_methods_inserted_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX contract_methods_inserted_at_index ON public.contract_methods USING btree (inserted_at);
 
 
 --
--- Name: email_unique_for_user; Type: INDEX; Schema: public; Owner: postgres
+-- Name: csv_export_requests_pending_per_ip; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX csv_export_requests_pending_per_ip ON public.csv_export_requests USING btree (remote_ip_hash) WHERE ((status)::text = 'pending'::text);
+
+
+--
+-- Name: email_unique_for_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX email_unique_for_user ON public.user_contacts USING btree (user_id, email);
 
 
 --
--- Name: empty_consensus_blocks; Type: INDEX; Schema: public; Owner: postgres
+-- Name: empty_consensus_blocks; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX empty_consensus_blocks ON public.blocks USING btree (consensus) WHERE (is_empty IS NULL);
 
 
 --
--- Name: fetched_current_token_balances; Type: INDEX; Schema: public; Owner: postgres
+-- Name: fetched_current_token_balances; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX fetched_current_token_balances ON public.address_current_token_balances USING btree (address_hash, token_contract_address_hash, COALESCE(token_id, ('-1'::integer)::numeric));
 
 
 --
--- Name: fetched_token_balances; Type: INDEX; Schema: public; Owner: postgres
+-- Name: fetched_token_balances; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX fetched_token_balances ON public.address_token_balances USING btree (address_hash, token_contract_address_hash, COALESCE(token_id, ('-1'::integer)::numeric), block_number);
 
 
 --
--- Name: internal_transactions_created_contract_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: fhe_operations_caller_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX internal_transactions_created_contract_address_hash_index ON public.internal_transactions USING btree (created_contract_address_hash);
-
-
---
--- Name: internal_transactions_created_contract_address_hash_partial_ind; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX internal_transactions_created_contract_address_hash_partial_ind ON public.internal_transactions USING btree (created_contract_address_hash, block_number DESC, transaction_index DESC, index DESC) WHERE ((((type)::text = 'call'::text) AND (index > 0)) OR ((type)::text <> 'call'::text));
+CREATE INDEX fhe_operations_caller_index ON public.fhe_operations USING btree (caller) WHERE (caller IS NOT NULL);
 
 
 --
--- Name: internal_transactions_from_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: fhe_operations_fhe_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX internal_transactions_from_address_hash_index ON public.internal_transactions USING btree (from_address_hash);
-
-
---
--- Name: internal_transactions_from_address_hash_partial_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX internal_transactions_from_address_hash_partial_index ON public.internal_transactions USING btree (from_address_hash, block_number DESC, transaction_index DESC, index DESC) WHERE ((((type)::text = 'call'::text) AND (index > 0)) OR ((type)::text <> 'call'::text));
+CREATE INDEX fhe_operations_fhe_type_index ON public.fhe_operations USING btree (fhe_type);
 
 
 --
--- Name: internal_transactions_to_address_hash_partial_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: fhe_operations_log_index_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX internal_transactions_to_address_hash_partial_index ON public.internal_transactions USING btree (to_address_hash, block_number DESC, transaction_index DESC, index DESC) WHERE ((((type)::text = 'call'::text) AND (index > 0)) OR ((type)::text <> 'call'::text));
-
-
---
--- Name: internal_transactions_transaction_hash_index_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX internal_transactions_transaction_hash_index_index ON public.internal_transactions USING btree (transaction_hash, index);
+CREATE INDEX fhe_operations_log_index_index ON public.fhe_operations USING btree (log_index);
 
 
 --
--- Name: logs_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: fhe_operations_operation_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX logs_address_hash_index ON public.logs USING btree (address_hash);
-
-
---
--- Name: logs_address_hash_transaction_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX logs_address_hash_transaction_hash_index ON public.logs USING btree (address_hash, transaction_hash);
+CREATE INDEX fhe_operations_operation_index ON public.fhe_operations USING btree (operation);
 
 
 --
--- Name: logs_block_number_ASC__index_ASC_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: fhe_operations_operation_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX "logs_block_number_ASC__index_ASC_index" ON public.logs USING btree (block_number, index);
+CREATE INDEX fhe_operations_operation_type_index ON public.fhe_operations USING btree (operation_type);
 
 
 --
--- Name: logs_block_number_DESC__index_DESC_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: fhe_operations_transaction_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fhe_operations_transaction_hash_index ON public.fhe_operations USING btree (transaction_hash);
+
+
+--
+-- Name: idx_hot_smart_contracts_date_gas; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_hot_smart_contracts_date_gas ON public.hot_smart_contracts_daily USING btree (date DESC, total_gas_used DESC);
+
+
+--
+-- Name: idx_hot_smart_contracts_date_transactions_count; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_hot_smart_contracts_date_transactions_count ON public.hot_smart_contracts_daily USING btree (date DESC, transactions_count DESC);
+
+
+--
+-- Name: internal_transactions_block_number_DESC_transaction_index_DESC_; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "internal_transactions_block_number_DESC_transaction_index_DESC_" ON public.internal_transactions USING btree (block_number DESC, transaction_index DESC, index DESC);
+
+
+--
+-- Name: internal_transactions_block_number_created_contract_address_id_; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX internal_transactions_block_number_created_contract_address_id_ ON public.internal_transactions USING btree (block_number, created_contract_address_id) WHERE (created_contract_address_id IS NOT NULL);
+
+
+--
+-- Name: internal_transactions_created_contract_address_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX internal_transactions_created_contract_address_id_index ON public.internal_transactions USING btree (created_contract_address_id);
+
+
+--
+-- Name: internal_transactions_from_address_id_partial_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX internal_transactions_from_address_id_partial_index ON public.internal_transactions USING btree (from_address_id, block_number DESC, transaction_index DESC, index DESC) WHERE ((((type)::text = 'call'::text) AND (index > 0)) OR ((type)::text <> 'call'::text));
+
+
+--
+-- Name: internal_transactions_to_address_id_partial_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX internal_transactions_to_address_id_partial_index ON public.internal_transactions USING btree (to_address_id, block_number DESC, transaction_index DESC, index DESC) WHERE ((((type)::text = 'call'::text) AND (index > 0)) OR ((type)::text <> 'call'::text));
+
+
+--
+-- Name: logs_address_hash_block_number_DESC_index_DESC_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "logs_address_hash_block_number_DESC_index_DESC_index" ON public.logs USING btree (address_hash, block_number DESC, index DESC);
+
+
+--
+-- Name: logs_address_hash_first_topic_block_number_index_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX logs_address_hash_first_topic_block_number_index_index ON public.logs USING btree (address_hash, first_topic, block_number, index);
+
+
+--
+-- Name: logs_block_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX logs_block_hash_index ON public.logs USING btree (block_hash);
+
+
+--
+-- Name: logs_block_number_DESC__index_DESC_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX "logs_block_number_DESC__index_DESC_index" ON public.logs USING btree (block_number DESC, index DESC);
 
 
 --
--- Name: logs_first_topic_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: logs_deposits_withdrawals_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX logs_deposits_withdrawals_index ON public.logs USING btree (transaction_hash, block_hash, index, address_hash) WHERE (first_topic = ANY (ARRAY['\xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c'::bytea, '\x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65'::bytea]));
+
+
+--
+-- Name: logs_first_topic_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX logs_first_topic_index ON public.logs USING btree (first_topic);
 
 
 --
--- Name: logs_fourth_topic_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: logs_fourth_topic_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX logs_fourth_topic_index ON public.logs USING btree (fourth_topic);
 
 
 --
--- Name: logs_index_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX logs_index_index ON public.logs USING btree (index);
-
-
---
--- Name: logs_second_topic_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: logs_second_topic_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX logs_second_topic_index ON public.logs USING btree (second_topic);
 
 
 --
--- Name: logs_third_topic_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: logs_third_topic_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX logs_third_topic_index ON public.logs USING btree (third_topic);
 
 
 --
--- Name: logs_transaction_hash_index_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: logs_transaction_hash_index_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX logs_transaction_hash_index_index ON public.logs USING btree (transaction_hash, index);
 
 
 --
--- Name: market_history_date_secondary_coin_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: market_history_date_secondary_coin_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX market_history_date_secondary_coin_index ON public.market_history USING btree (date, secondary_coin);
 
 
 --
--- Name: method_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: method_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX method_id ON public.transactions USING btree (SUBSTRING(input FROM 1 FOR 4));
 
 
 --
--- Name: missing_block_ranges_from_number_DESC_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX "missing_block_ranges_from_number_DESC_index" ON public.missing_block_ranges USING btree (from_number DESC);
-
-
---
--- Name: missing_block_ranges_from_number_to_number_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: missing_block_ranges_from_number_to_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX missing_block_ranges_from_number_to_number_index ON public.missing_block_ranges USING btree (from_number, to_number);
 
 
 --
--- Name: nephew_hash_to_uncle_hash; Type: INDEX; Schema: public; Owner: postgres
+-- Name: missing_block_ranges_priority_DESC_NULLS_LAST_from_number_DESC_; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "missing_block_ranges_priority_DESC_NULLS_LAST_from_number_DESC_" ON public.missing_block_ranges USING btree (priority DESC NULLS LAST, from_number DESC);
+
+
+--
+-- Name: multichain_search_db_main_export_queue_upper_block_range_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX multichain_search_db_main_export_queue_upper_block_range_index ON public.multichain_search_db_main_export_queue USING btree (upper(block_range) DESC);
+
+
+--
+-- Name: nephew_hash_to_uncle_hash; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX nephew_hash_to_uncle_hash ON public.block_second_degree_relations USING btree (nephew_hash, uncle_hash);
 
 
 --
--- Name: one_consensus_block_at_height; Type: INDEX; Schema: public; Owner: postgres
+-- Name: oban_jobs_args_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX oban_jobs_args_index ON public.oban_jobs USING gin (args);
+
+
+--
+-- Name: oban_jobs_meta_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX oban_jobs_meta_index ON public.oban_jobs USING gin (meta);
+
+
+--
+-- Name: oban_jobs_state_cancelled_at_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX oban_jobs_state_cancelled_at_index ON public.oban_jobs USING btree (state, cancelled_at);
+
+
+--
+-- Name: oban_jobs_state_discarded_at_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX oban_jobs_state_discarded_at_index ON public.oban_jobs USING btree (state, discarded_at);
+
+
+--
+-- Name: oban_jobs_state_queue_priority_scheduled_at_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX oban_jobs_state_queue_priority_scheduled_at_id_index ON public.oban_jobs USING btree (state, queue, priority, scheduled_at, id);
+
+
+--
+-- Name: one_consensus_block_at_height; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX one_consensus_block_at_height ON public.blocks USING btree (number) WHERE consensus;
 
 
 --
--- Name: one_consensus_child_per_parent; Type: INDEX; Schema: public; Owner: postgres
+-- Name: one_consensus_child_per_parent; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX one_consensus_child_per_parent ON public.blocks USING btree (parent_hash) WHERE consensus;
 
 
 --
--- Name: one_primary_per_user; Type: INDEX; Schema: public; Owner: postgres
+-- Name: one_primary_per_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX one_primary_per_user ON public.user_contacts USING btree (user_id) WHERE "primary";
 
 
 --
--- Name: owner_role_limit; Type: INDEX; Schema: public; Owner: postgres
+-- Name: owner_role_limit; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX owner_role_limit ON public.administrators USING btree (role) WHERE ((role)::text = 'owner'::text);
 
 
 --
--- Name: pending_block_operations_block_number_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: pending_block_operations_block_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX pending_block_operations_block_number_index ON public.pending_block_operations USING btree (block_number);
 
 
 --
--- Name: pending_txs_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: pending_txs_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX pending_txs_index ON public.transactions USING btree (inserted_at, hash) WHERE ((block_hash IS NULL) AND ((error IS NULL) OR ((error)::text <> 'dropped/replaced'::text)));
 
 
 --
--- Name: proxy_implementations_proxy_type_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: proxy_implementations_proxy_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX proxy_implementations_proxy_type_index ON public.proxy_implementations USING btree (proxy_type);
 
 
 --
--- Name: signed_authorizations_authority_nonce_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: signed_authorizations_authority_nonce_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX signed_authorizations_authority_nonce_index ON public.signed_authorizations USING btree (authority, nonce);
 
 
 --
--- Name: smart_contract_audit_reports_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: smart_contract_audit_reports_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX smart_contract_audit_reports_address_hash_index ON public.smart_contract_audit_reports USING btree (address_hash);
 
 
 --
--- Name: smart_contracts_additional_sources_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: smart_contracts_additional_sources_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX smart_contracts_additional_sources_address_hash_index ON public.smart_contracts_additional_sources USING btree (address_hash);
 
 
 --
--- Name: smart_contracts_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: smart_contracts_additional_sources_file_name_address_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX smart_contracts_additional_sources_file_name_address_hash_index ON public.smart_contracts_additional_sources USING btree (address_hash, file_name);
+
+
+--
+-- Name: smart_contracts_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX smart_contracts_address_hash_index ON public.smart_contracts USING btree (address_hash);
 
 
 --
--- Name: smart_contracts_certified_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: smart_contracts_certified_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX smart_contracts_certified_index ON public.smart_contracts USING btree (certified);
 
 
 --
--- Name: smart_contracts_contract_code_md5_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: smart_contracts_contract_code_md5_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX smart_contracts_contract_code_md5_index ON public.smart_contracts USING btree (contract_code_md5);
 
 
 --
--- Name: smart_contracts_trgm_idx; Type: INDEX; Schema: public; Owner: postgres
+-- Name: smart_contracts_language_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX smart_contracts_language_index ON public.smart_contracts USING btree (language);
+
+
+--
+-- Name: smart_contracts_trgm_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX smart_contracts_trgm_idx ON public.smart_contracts USING gin (to_tsvector('english'::regconfig, (name)::text));
 
 
 --
--- Name: token_instance_metadata_refetch_attempts_token_contract_address; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_instance_metadata_refetch_attempts_token_contract_address; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_instance_metadata_refetch_attempts_token_contract_address ON public.token_instance_metadata_refetch_attempts USING btree (token_contract_address_hash, token_id);
 
 
 --
--- Name: token_instances_error_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_instances_error_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_instances_error_index ON public.token_instances USING btree (error);
 
 
 --
--- Name: token_instances_owner_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_instances_owner_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_instances_owner_address_hash_index ON public.token_instances USING btree (owner_address_hash);
 
 
 --
--- Name: token_instances_token_contract_address_hash_token_id_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_instances_token_contract_address_hash_token_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_instances_token_contract_address_hash_token_id_index ON public.token_instances USING btree (token_contract_address_hash, token_id);
 
 
 --
--- Name: token_instances_token_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX token_instances_token_id_index ON public.token_instances USING btree (token_id);
-
-
---
--- Name: token_transfers_block_consensus_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_transfers_block_consensus_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_transfers_block_consensus_index ON public.token_transfers USING btree (block_consensus);
 
 
 --
--- Name: token_transfers_block_number_ASC_log_index_ASC_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX "token_transfers_block_number_ASC_log_index_ASC_index" ON public.token_transfers USING btree (block_number, log_index);
-
-
---
--- Name: token_transfers_block_number_DESC_log_index_DESC_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_transfers_block_number_DESC_log_index_DESC_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX "token_transfers_block_number_DESC_log_index_DESC_index" ON public.token_transfers USING btree (block_number DESC, log_index DESC);
 
 
 --
--- Name: token_transfers_block_number_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX token_transfers_block_number_index ON public.token_transfers USING btree (block_number);
-
-
---
--- Name: token_transfers_from_address_hash_block_number_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_transfers_from_address_hash_block_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_transfers_from_address_hash_block_number_index ON public.token_transfers USING btree (from_address_hash, block_number);
 
 
 --
--- Name: token_transfers_from_address_hash_transaction_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX token_transfers_from_address_hash_transaction_hash_index ON public.token_transfers USING btree (from_address_hash, transaction_hash);
-
-
---
--- Name: token_transfers_to_address_hash_block_number_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_transfers_to_address_hash_block_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_transfers_to_address_hash_block_number_index ON public.token_transfers USING btree (to_address_hash, block_number);
 
 
 --
--- Name: token_transfers_to_address_hash_transaction_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX token_transfers_to_address_hash_transaction_hash_index ON public.token_transfers USING btree (to_address_hash, transaction_hash);
-
-
---
--- Name: token_transfers_token_contract_address_hash__block_number_DESC_; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_transfers_token_contract_address_hash__block_number_DESC_; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX "token_transfers_token_contract_address_hash__block_number_DESC_" ON public.token_transfers USING btree (token_contract_address_hash, block_number DESC, log_index DESC);
 
 
 --
--- Name: token_transfers_token_contract_address_hash_token_ids_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_transfers_token_contract_address_hash_token_ids_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_transfers_token_contract_address_hash_token_ids_index ON public.token_transfers USING gin (token_contract_address_hash, token_ids);
 
 
 --
--- Name: token_transfers_token_contract_address_hash_transaction_hash_in; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX token_transfers_token_contract_address_hash_transaction_hash_in ON public.token_transfers USING btree (token_contract_address_hash, transaction_hash);
-
-
---
--- Name: token_transfers_token_type_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_transfers_token_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_transfers_token_type_index ON public.token_transfers USING btree (token_type);
 
 
 --
--- Name: token_transfers_transaction_hash_log_index_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: token_transfers_transaction_hash_log_index_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX token_transfers_transaction_hash_log_index_index ON public.token_transfers USING btree (transaction_hash, log_index);
 
 
 --
--- Name: tokens_contract_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: tokens_name_partial_fts_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX tokens_contract_address_hash_index ON public.tokens USING btree (contract_address_hash);
+CREATE INDEX tokens_name_partial_fts_index ON public.tokens USING gin (to_tsvector('english'::regconfig, name)) WHERE (symbol IS NULL);
 
 
 --
--- Name: tokens_symbol_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: tokens_symbol_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX tokens_symbol_index ON public.tokens USING btree (symbol);
 
 
 --
--- Name: tokens_trgm_idx; Type: INDEX; Schema: public; Owner: postgres
+-- Name: tokens_trgm_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX tokens_trgm_idx ON public.tokens USING gin (to_tsvector('english'::regconfig, ((symbol || ' '::text) || name)));
 
 
 --
--- Name: tokens_type_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: tokens_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX tokens_type_index ON public.tokens USING btree (type);
 
 
 --
--- Name: transaction_actions_protocol_type_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transaction_errors_message_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX transaction_actions_protocol_type_index ON public.transaction_actions USING btree (protocol, type);
+CREATE UNIQUE INDEX transaction_errors_message_index ON public.transaction_errors USING btree (message);
 
 
 --
--- Name: transaction_stats_date_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transaction_stats_date_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX transaction_stats_date_index ON public.transaction_stats USING btree (date);
 
 
 --
--- Name: transactions_block_consensus_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_block_consensus_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_block_consensus_index ON public.transactions USING btree (block_consensus);
 
 
 --
--- Name: transactions_block_hash_error_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_block_hash_error_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_block_hash_error_index ON public.transactions USING btree (block_hash, error);
 
 
 --
--- Name: transactions_block_hash_index_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_block_hash_index_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX transactions_block_hash_index_index ON public.transactions USING btree (block_hash, index);
 
 
 --
--- Name: transactions_block_number_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_block_number_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_block_number_index ON public.transactions USING btree (block_number);
 
 
 --
--- Name: transactions_block_timestamp_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_block_timestamp_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_block_timestamp_index ON public.transactions USING btree (block_timestamp);
 
 
 --
--- Name: transactions_created_contract_address_hash_with_pending_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_created_contract_address_hash_w_pending_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX transactions_created_contract_address_hash_with_pending_index ON public.transactions USING btree (created_contract_address_hash, block_number DESC, index DESC, inserted_at DESC, hash);
-
-
---
--- Name: transactions_created_contract_address_hash_with_pending_index_a; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX transactions_created_contract_address_hash_with_pending_index_a ON public.transactions USING btree (created_contract_address_hash, block_number, index, inserted_at, hash DESC);
+CREATE INDEX transactions_created_contract_address_hash_w_pending_index ON public.transactions USING btree (created_contract_address_hash, block_number, index, inserted_at, hash DESC) WHERE (created_contract_address_hash IS NOT NULL);
 
 
 --
--- Name: transactions_created_contract_code_indexed_at_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_created_contract_code_indexed_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_created_contract_code_indexed_at_index ON public.transactions USING btree (created_contract_code_indexed_at);
 
 
 --
--- Name: transactions_from_address_hash_with_pending_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX transactions_from_address_hash_with_pending_index ON public.transactions USING btree (from_address_hash, block_number DESC, index DESC, inserted_at DESC, hash);
-
-
---
--- Name: transactions_from_address_hash_with_pending_index_asc; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_from_address_hash_with_pending_index_asc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_from_address_hash_with_pending_index_asc ON public.transactions USING btree (from_address_hash, block_number, index, inserted_at, hash DESC);
 
 
 --
--- Name: transactions_inserted_at_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_has_token_transfers_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX transactions_has_token_transfers_index ON public.transactions USING btree (has_token_transfers);
+
+
+--
+-- Name: transactions_inserted_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_inserted_at_index ON public.transactions USING btree (inserted_at);
 
 
 --
--- Name: transactions_nonce_from_address_hash_block_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_nonce_from_address_hash_block_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_nonce_from_address_hash_block_hash_index ON public.transactions USING btree (nonce, from_address_hash, block_hash);
 
 
 --
--- Name: transactions_recent_collated_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_recent_blob_transactions_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX transactions_recent_blob_transactions_index ON public.transactions USING btree (block_number DESC, index DESC) WHERE (type = 3);
+
+
+--
+-- Name: transactions_recent_collated_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_recent_collated_index ON public.transactions USING btree (block_number DESC, index DESC);
 
 
 --
--- Name: transactions_status_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_status_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_status_index ON public.transactions USING btree (status);
 
 
 --
--- Name: transactions_to_address_hash_with_pending_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX transactions_to_address_hash_with_pending_index ON public.transactions USING btree (to_address_hash, block_number DESC, index DESC, inserted_at DESC, hash);
-
-
---
--- Name: transactions_to_address_hash_with_pending_index_asc; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_to_address_hash_with_pending_index_asc; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_to_address_hash_with_pending_index_asc ON public.transactions USING btree (to_address_hash, block_number, index, inserted_at, hash DESC);
 
 
 --
--- Name: transactions_updated_at_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: transactions_token_transfer_method_id_ordered_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX transactions_token_transfer_method_id_ordered_index ON public.transactions USING btree (SUBSTRING(input FROM 1 FOR 4), block_number DESC, index DESC) WHERE (has_token_transfers = true);
+
+
+--
+-- Name: transactions_updated_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX transactions_updated_at_index ON public.transactions USING btree (updated_at);
 
 
 --
--- Name: uncataloged_tokens; Type: INDEX; Schema: public; Owner: postgres
+-- Name: uncataloged_tokens; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX uncataloged_tokens ON public.tokens USING btree (cataloged) WHERE (cataloged = false);
 
 
 --
--- Name: uncle_hash_to_nephew_hash; Type: INDEX; Schema: public; Owner: postgres
+-- Name: uncle_hash_to_nephew_hash; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX uncle_hash_to_nephew_hash ON public.block_second_degree_relations USING btree (uncle_hash, nephew_hash);
 
 
 --
--- Name: unfetched_address_token_balances_v2_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: unfetched_address_token_balances_v2_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX unfetched_address_token_balances_v2_index ON public.address_token_balances USING btree (id) WHERE ((((address_hash <> '\x0000000000000000000000000000000000000000'::bytea) AND ((token_type)::text = 'ERC-721'::text)) OR ((token_type)::text = 'ERC-20'::text) OR ((token_type)::text = 'ERC-1155'::text) OR ((token_type)::text = 'ERC-404'::text)) AND ((value_fetched_at IS NULL) OR (value IS NULL)));
 
 
 --
--- Name: unfetched_balances; Type: INDEX; Schema: public; Owner: postgres
+-- Name: unfetched_balances; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX unfetched_balances ON public.address_coin_balances USING btree (address_hash, block_number) WHERE (value_fetched_at IS NULL);
 
 
 --
--- Name: unfetched_uncles; Type: INDEX; Schema: public; Owner: postgres
+-- Name: unfetched_uncles; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX unfetched_uncles ON public.block_second_degree_relations USING btree (nephew_hash, uncle_hash) WHERE (uncle_fetched_at IS NULL);
 
 
 --
--- Name: unique_address_names; Type: INDEX; Schema: public; Owner: postgres
+-- Name: unique_multichain_search_db_current_token_balances; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX unique_address_names ON public.address_names USING btree (address_hash, name);
+CREATE UNIQUE INDEX unique_multichain_search_db_current_token_balances ON public.multichain_search_db_export_balances_queue USING btree (address_hash, token_contract_address_hash_or_native, COALESCE(token_id, ('-1'::integer)::numeric));
 
 
 --
--- Name: unique_username; Type: INDEX; Schema: public; Owner: postgres
+-- Name: unique_username; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX unique_username ON public.users USING btree (username);
 
 
 --
--- Name: unique_watchlist_id_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE UNIQUE INDEX unique_watchlist_id_address_hash_hash_index ON public.account_watchlist_addresses USING btree (watchlist_id, address_hash_hash) WHERE (user_created = true);
-
-
---
--- Name: user_operations_block_number_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: user_operations_block_number_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX user_operations_block_number_hash_index ON public.user_operations USING btree (block_number DESC, hash DESC);
 
 
 --
--- Name: user_operations_block_number_transaction_hash_bundle_index_inde; Type: INDEX; Schema: public; Owner: postgres
+-- Name: user_operations_block_number_transaction_hash_bundle_index_inde; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX user_operations_block_number_transaction_hash_bundle_index_inde ON public.user_operations USING btree (block_number DESC, transaction_hash DESC, bundle_index DESC);
 
 
 --
--- Name: user_operations_bundler_transaction_hash_bundle_index_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: user_operations_bundler_transaction_hash_bundle_index_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX user_operations_bundler_transaction_hash_bundle_index_index ON public.user_operations USING btree (bundler, transaction_hash, bundle_index);
 
 
 --
--- Name: user_operations_factory_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: user_operations_factory_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX user_operations_factory_index ON public.user_operations USING btree (factory);
 
 
 --
--- Name: user_operations_paymaster_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: user_operations_paymaster_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX user_operations_paymaster_index ON public.user_operations USING btree (paymaster);
 
 
 --
--- Name: user_operations_sender_factory_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: user_operations_sender_factory_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX user_operations_sender_factory_index ON public.user_operations USING btree (sender, factory);
 
 
 --
--- Name: user_operations_transaction_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: user_operations_transaction_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX user_operations_transaction_hash_index ON public.user_operations USING btree (transaction_hash);
 
 
 --
--- Name: withdrawals_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: withdrawals_address_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX withdrawals_address_hash_index ON public.withdrawals USING btree (address_hash);
 
 
 --
--- Name: withdrawals_block_hash_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: withdrawals_block_hash_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX withdrawals_block_hash_index ON public.withdrawals USING btree (block_hash);
 
 
 --
--- Name: account_api_keys account_api_keys_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: token_instances repack_trigger; Type: TRIGGER; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.account_api_keys
-    ADD CONSTRAINT account_api_keys_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.account_identities(id) ON DELETE CASCADE;
+CREATE TRIGGER repack_trigger AFTER INSERT OR DELETE OR UPDATE ON public.token_instances FOR EACH ROW EXECUTE FUNCTION repack.repack_trigger('token_id', 'token_contract_address_hash');
 
-
---
--- Name: account_custom_abis account_custom_abis_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_custom_abis
-    ADD CONSTRAINT account_custom_abis_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.account_identities(id) ON DELETE CASCADE;
+ALTER TABLE public.token_instances ENABLE ALWAYS TRIGGER repack_trigger;
 
 
 --
--- Name: account_identities account_identities_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_identities
-    ADD CONSTRAINT account_identities_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.account_api_plans(id);
-
-
---
--- Name: account_public_tags_requests account_public_tags_requests_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_public_tags_requests
-    ADD CONSTRAINT account_public_tags_requests_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.account_identities(id);
-
-
---
--- Name: account_tag_addresses account_tag_addresses_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_tag_addresses
-    ADD CONSTRAINT account_tag_addresses_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.account_identities(id) ON DELETE CASCADE;
-
-
---
--- Name: account_tag_transactions account_tag_transactions_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_tag_transactions
-    ADD CONSTRAINT account_tag_transactions_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.account_identities(id) ON DELETE CASCADE;
-
-
---
--- Name: account_watchlist_addresses account_watchlist_addresses_watchlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlist_addresses
-    ADD CONSTRAINT account_watchlist_addresses_watchlist_id_fkey FOREIGN KEY (watchlist_id) REFERENCES public.account_watchlists(id) ON DELETE CASCADE;
-
-
---
--- Name: account_watchlists account_watchlists_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.account_watchlists
-    ADD CONSTRAINT account_watchlists_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.account_identities(id) ON DELETE CASCADE;
-
-
---
--- Name: address_to_tags address_to_tags_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: address_to_tags address_to_tags_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.address_to_tags
@@ -3808,7 +3477,7 @@ ALTER TABLE ONLY public.address_to_tags
 
 
 --
--- Name: administrators administrators_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: administrators administrators_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.administrators
@@ -3816,7 +3485,15 @@ ALTER TABLE ONLY public.administrators
 
 
 --
--- Name: block_rewards block_rewards_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: beacon_blobs_transactions beacon_blobs_transactions_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.beacon_blobs_transactions
+    ADD CONSTRAINT beacon_blobs_transactions_hash_fkey FOREIGN KEY (hash) REFERENCES public.transactions(hash) ON DELETE CASCADE;
+
+
+--
+-- Name: block_rewards block_rewards_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block_rewards
@@ -3824,7 +3501,7 @@ ALTER TABLE ONLY public.block_rewards
 
 
 --
--- Name: block_second_degree_relations block_second_degree_relations_nephew_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: block_second_degree_relations block_second_degree_relations_nephew_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.block_second_degree_relations
@@ -3832,23 +3509,47 @@ ALTER TABLE ONLY public.block_second_degree_relations
 
 
 --
--- Name: internal_transactions internal_transactions_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: bridged_tokens bridged_tokens_home_token_contract_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bridged_tokens
+    ADD CONSTRAINT bridged_tokens_home_token_contract_address_hash_fkey FOREIGN KEY (home_token_contract_address_hash) REFERENCES public.tokens(contract_address_hash);
+
+
+--
+-- Name: deleted_internal_transactions_address_placeholders deleted_internal_transactions_address_placeholders_address_id_f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.deleted_internal_transactions_address_placeholders
+    ADD CONSTRAINT deleted_internal_transactions_address_placeholders_address_id_f FOREIGN KEY (address_id) REFERENCES public.address_ids_to_address_hashes(address_id);
+
+
+--
+-- Name: fhe_operations fhe_operations_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fhe_operations
+    ADD CONSTRAINT fhe_operations_block_hash_fkey FOREIGN KEY (block_hash) REFERENCES public.blocks(hash) ON DELETE CASCADE;
+
+
+--
+-- Name: fhe_operations fhe_operations_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fhe_operations
+    ADD CONSTRAINT fhe_operations_transaction_hash_fkey FOREIGN KEY (transaction_hash) REFERENCES public.transactions(hash) ON DELETE CASCADE;
+
+
+--
+-- Name: internal_transactions internal_transactions_error_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.internal_transactions
-    ADD CONSTRAINT internal_transactions_block_hash_fkey FOREIGN KEY (block_hash) REFERENCES public.blocks(hash);
+    ADD CONSTRAINT internal_transactions_error_id_fkey FOREIGN KEY (error_id) REFERENCES public.transaction_errors(id);
 
 
 --
--- Name: internal_transactions internal_transactions_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.internal_transactions
-    ADD CONSTRAINT internal_transactions_transaction_hash_fkey FOREIGN KEY (transaction_hash) REFERENCES public.transactions(hash) ON DELETE CASCADE;
-
-
---
--- Name: logs logs_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: logs logs_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.logs
@@ -3856,7 +3557,7 @@ ALTER TABLE ONLY public.logs
 
 
 --
--- Name: logs logs_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: logs logs_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.logs
@@ -3864,7 +3565,7 @@ ALTER TABLE ONLY public.logs
 
 
 --
--- Name: pending_block_operations pending_block_operations_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: pending_block_operations pending_block_operations_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.pending_block_operations
@@ -3872,7 +3573,15 @@ ALTER TABLE ONLY public.pending_block_operations
 
 
 --
--- Name: proxy_smart_contract_verification_statuses proxy_smart_contract_verification_statuses_contract_address_has; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: pending_transaction_operations pending_transaction_operations_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pending_transaction_operations
+    ADD CONSTRAINT pending_transaction_operations_transaction_hash_fkey FOREIGN KEY (transaction_hash) REFERENCES public.transactions(hash) ON DELETE CASCADE;
+
+
+--
+-- Name: proxy_smart_contract_verification_statuses proxy_smart_contract_verification_statuses_contract_address_has; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.proxy_smart_contract_verification_statuses
@@ -3880,7 +3589,7 @@ ALTER TABLE ONLY public.proxy_smart_contract_verification_statuses
 
 
 --
--- Name: scam_address_badge_mappings scam_address_badge_mappings_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: scam_address_badge_mappings scam_address_badge_mappings_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.scam_address_badge_mappings
@@ -3888,7 +3597,7 @@ ALTER TABLE ONLY public.scam_address_badge_mappings
 
 
 --
--- Name: signed_authorizations signed_authorizations_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: signed_authorizations signed_authorizations_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.signed_authorizations
@@ -3896,7 +3605,7 @@ ALTER TABLE ONLY public.signed_authorizations
 
 
 --
--- Name: smart_contract_audit_reports smart_contract_audit_reports_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: smart_contract_audit_reports smart_contract_audit_reports_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.smart_contract_audit_reports
@@ -3904,7 +3613,7 @@ ALTER TABLE ONLY public.smart_contract_audit_reports
 
 
 --
--- Name: smart_contracts_additional_sources smart_contracts_additional_sources_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: smart_contracts_additional_sources smart_contracts_additional_sources_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.smart_contracts_additional_sources
@@ -3912,7 +3621,7 @@ ALTER TABLE ONLY public.smart_contracts_additional_sources
 
 
 --
--- Name: token_instances token_instances_token_contract_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: token_instances token_instances_token_contract_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.token_instances
@@ -3920,7 +3629,7 @@ ALTER TABLE ONLY public.token_instances
 
 
 --
--- Name: token_transfers token_transfers_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: token_transfers token_transfers_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.token_transfers
@@ -3928,7 +3637,7 @@ ALTER TABLE ONLY public.token_transfers
 
 
 --
--- Name: token_transfers token_transfers_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: token_transfers token_transfers_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.token_transfers
@@ -3936,15 +3645,7 @@ ALTER TABLE ONLY public.token_transfers
 
 
 --
--- Name: transaction_actions transaction_actions_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.transaction_actions
-    ADD CONSTRAINT transaction_actions_hash_fkey FOREIGN KEY (hash) REFERENCES public.transactions(hash) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: transaction_forks transaction_forks_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: transaction_forks transaction_forks_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.transaction_forks
@@ -3952,7 +3653,7 @@ ALTER TABLE ONLY public.transaction_forks
 
 
 --
--- Name: transaction_forks transaction_forks_uncle_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: transaction_forks transaction_forks_uncle_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.transaction_forks
@@ -3960,7 +3661,7 @@ ALTER TABLE ONLY public.transaction_forks
 
 
 --
--- Name: transactions transactions_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: transactions transactions_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.transactions
@@ -3968,7 +3669,7 @@ ALTER TABLE ONLY public.transactions
 
 
 --
--- Name: user_contacts user_contacts_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: user_contacts user_contacts_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_contacts
@@ -3976,7 +3677,7 @@ ALTER TABLE ONLY public.user_contacts
 
 
 --
--- Name: withdrawals withdrawals_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: withdrawals withdrawals_block_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.withdrawals
@@ -3986,4 +3687,6 @@ ALTER TABLE ONLY public.withdrawals
 --
 -- PostgreSQL database dump complete
 --
+
+\unrestrict UIIrk8M7cUjBEGaFVdZK8g9lEKg0N3NgDQGe9fG0WmPkqhGV3pqaagnowpzjxJy
 
