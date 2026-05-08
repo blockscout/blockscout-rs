@@ -2,8 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict UIIrk8M7cUjBEGaFVdZK8g9lEKg0N3NgDQGe9fG0WmPkqhGV3pqaagnowpzjxJy
-
 -- Dumped from database version 17.2 (Ubuntu 17.2-1.pgdg22.04+1)
 -- Dumped by pg_dump version 17.9
 
@@ -3687,6 +3685,3 @@ ALTER TABLE ONLY public.withdrawals
 --
 -- PostgreSQL database dump complete
 --
-
-\unrestrict UIIrk8M7cUjBEGaFVdZK8g9lEKg0N3NgDQGe9fG0WmPkqhGV3pqaagnowpzjxJy
-
