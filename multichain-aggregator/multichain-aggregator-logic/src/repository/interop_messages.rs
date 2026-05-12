@@ -32,7 +32,7 @@ where
         return Ok(vec![]);
     }
 
-    interop_messages.sort_by(|a, b| (a.init_chain_id, a.nonce).cmp(&(b.init_chain_id, b.nonce)));
+    interop_messages.sort_by_key(|a| (a.init_chain_id, a.nonce));
 
     let (interop_messages, transfers): (Vec<_>, Vec<_>) = interop_messages
         .into_iter()
