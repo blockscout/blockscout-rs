@@ -306,6 +306,7 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     }
     if let Some(address) = SearchTerm::try_parse_address(query) {
         terms.push(SearchTerm::TokenInfo(address.to_string()));
+        terms.push(SearchTerm::Nft(address.to_string()));
         terms.push(SearchTerm::AddressHash(address));
         return terms;
     }
@@ -335,6 +336,7 @@ mod tests {
             parse_search_terms("0x0000000000000000000000000000000000000000"),
             vec![
                 SearchTerm::TokenInfo(alloy_primitives::Address::ZERO.to_string()),
+                SearchTerm::Nft(alloy_primitives::Address::ZERO.to_string()),
                 SearchTerm::AddressHash(alloy_primitives::Address::ZERO),
             ]
         );

@@ -20,7 +20,7 @@ where
 {
     let models = models.into_iter().collect::<Vec<_>>();
     let models_count = models.len();
-    let query = match prepare_batch_update_query_with_expr_cols(models.into_iter(), expr_cols) {
+    let query = match prepare_batch_update_query_with_expr_cols(models, expr_cols) {
         Ok(query) => query,
         Err(PrepareBatchUpdateError::NoColumnsToUpdate) => {
             return Ok(());
