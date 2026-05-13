@@ -2,7 +2,7 @@ use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, pending_messages,
-    sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
+    sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferType},
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
 };
 use parking_lot::RwLock;
@@ -1335,8 +1335,21 @@ impl InterchainDatabase {
         let mut report = BackfillStatsReport::default();
 
         let msg_rows = crosschain_messages::Entity::find()
+            .join(
+                JoinType::InnerJoin,
+                crosschain_messages::Relation::Bridges.def(),
+            )
             .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
-            .filter(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+            // Failed is only terminal for bridge types whose `Consolidate` impl flags it as final.
+            .filter(
+                Condition::any()
+                    .add(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+                    .add(
+                        Condition::all()
+                            .add(crosschain_messages::Column::Status.eq(MessageStatus::Failed))
+                            .add(bridges::Column::Type.eq(BridgeType::Amb)),
+                    ),
+            )
             .filter(crosschain_messages::Column::DstChainId.is_not_null())
             .order_by_asc(crosschain_messages::Column::Id)
             .limit(message_limit)
@@ -3906,10 +3919,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(stats_messages::Entity::find().count(db).await.unwrap(), 0);
+        assert_eq!(stats_messages::Entity::find().count(db).await.unwrap(), 1);
         assert_eq!(
             stats_messages_days::Entity::find().count(db).await.unwrap(),
-            0
+            1
         );
     }
 

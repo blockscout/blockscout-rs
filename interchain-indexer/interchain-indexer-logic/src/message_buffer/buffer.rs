@@ -193,6 +193,7 @@ mod tests {
                     ..Default::default()
                 },
                 transfers: vec![],
+                amb_confirmations: vec![],
             }))
         }
     }

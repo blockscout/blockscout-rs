@@ -1,5 +1,7 @@
 use anyhow::Result;
-use interchain_indexer_entity::{crosschain_messages, crosschain_transfers};
+use interchain_indexer_entity::{
+    amb_messages_confirmations, crosschain_messages, crosschain_transfers,
+};
 use serde::{Deserialize, Serialize};
 
 use super::cursor::BridgeId;
@@ -33,6 +35,7 @@ pub struct ConsolidatedMessage {
     pub is_final: bool,
     pub message: crosschain_messages::ActiveModel,
     pub transfers: Vec<crosschain_transfers::ActiveModel>,
+    pub amb_confirmations: Vec<amb_messages_confirmations::ActiveModel>,
 }
 
 /// Converts an in-flight entry into a consolidated database payload.

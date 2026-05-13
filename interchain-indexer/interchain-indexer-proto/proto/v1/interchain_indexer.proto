@@ -149,6 +149,7 @@ enum MessageStatus {
   MESSAGE_STATUS_INITIATED = 0;
   MESSAGE_STATUS_COMPLETED = 1;
   MESSAGE_STATUS_FAILED = 2;
+  MESSAGE_STATUS_READY_TO_CLAIM = 3;
 }
 
 message InterchainMessage {

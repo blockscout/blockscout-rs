@@ -198,6 +198,7 @@ impl Consolidate for Message {
             is_final,
             message,
             transfers,
+            amb_confirmations: Vec::new(),
         }))
     }
 }

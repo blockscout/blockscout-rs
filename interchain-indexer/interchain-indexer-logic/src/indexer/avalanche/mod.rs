@@ -81,6 +81,7 @@ pub struct AvalancheIndexer {
 
 /// Cleanup guard that ensures proper cleanup when the indexer task exits.
 /// On drop, it clears handles, aborts the buffer task, and sets the appropriate state.
+// TODO: Avalanche can adopt indexer::cleanup_guard::CleanupGuard in a follow-up task.
 struct IndexerCleanupGuard {
     is_running: Arc<std::sync::atomic::AtomicBool>,
     state: Arc<parking_lot::RwLock<CrosschainIndexerState>>,

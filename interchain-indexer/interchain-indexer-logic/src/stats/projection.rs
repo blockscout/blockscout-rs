@@ -55,7 +55,10 @@ pub async fn project_messages_batch(
             .in_tuples(pks.iter().copied()),
         )
         .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
-        .filter(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+        .filter(
+            crosschain_messages::Column::Status
+                .is_in([MessageStatus::Completed, MessageStatus::Failed]),
+        )
         .filter(crosschain_messages::Column::DstChainId.is_not_null())
         .all(tx)
         .await?;
@@ -642,7 +645,10 @@ pub async fn project_transfers_batch(
             sea_orm::JoinType::InnerJoin,
             crosschain_transfers::Relation::CrosschainMessages.def(),
         )
-        .filter(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+        .filter(
+            crosschain_messages::Column::Status
+                .is_in([MessageStatus::Completed, MessageStatus::Failed]),
+        )
         .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
         .filter(crosschain_transfers::Column::Id.is_in(ids.clone()))
         .all(tx)

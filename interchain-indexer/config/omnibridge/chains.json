@@ -2,48 +2,17 @@
     {
         "chain_id": 1,
         "name": "Ethereum",
-        "native_id": null,
-        "icon": "",
+        "icon": "https://ethereum.org/static/c48a5f760c34dfadcf05a208dab137ab/0e3d3/eth-diamond-purple.png",
+        "explorer": {
+            "url": "https://eth.blockscout.com",
+            "custom_tx_route": "/tx/{hash}",
+            "custom_address_route": "/address/{hash}",
+            "custom_token_route": "/token/{hash}"
+        },
         "rpcs": [
             {
-                "tenderly": {
-                    "url": "https://gateway.tenderly.co/public/mainnet"
-                }
-            },
-            {
-                "rpcfast": {
-                    "url": "https://eth-mainnet.rpcfast.com",
-                    "enabled": false,
-                    "max_rps": 10,
-                    "error_threshold": 3,
-                    "api_key": {
-                        "location": "query",
-                        "name": "api_key"
-                    }
-                }
-            },
-            {
-                "infura": {
-                    "url": "https://mainnet.infura.io/v3/{{YOUR_INFURA_PROJECT_ID}}",
-                    "enabled": false,
-                    "max_rps": 100,
-                    "error_threshold": 5,
-                    "api_key": {
-                        "location": "url",
-                        "name": "YOUR_INFURA_PROJECT_ID"
-                    }
-                }
-            },
-            {
-                "myrpc-example": {
-                    "url": "https://example.myrpc.io/eth",
-                    "enabled": false,
-                    "max_rps": 20,
-                    "error_threshold": 10,
-                    "api_key": {
-                        "location": "Header",
-                        "name": "X-API-KEY"
-                    }
+                "publicnode": {
+                    "url": "https://ethereum-rpc.publicnode.com"
                 }
             }
         ]
@@ -51,15 +20,17 @@
     {
         "chain_id": 100,
         "name": "Gnosis",
-        "native_id": null,
-        "icon": "",
+        "icon": "https://docs.gnosischain.com/img/gnosis-chain-logo.svg",
+        "explorer": {
+            "url": "https://gnosis.blockscout.com",
+            "custom_tx_route": "/tx/{hash}",
+            "custom_address_route": "/address/{hash}",
+            "custom_token_route": "/token/{hash}"
+        },
         "rpcs": [
             {
-                "gnosis": {
+                "gnosis_official": {
                     "url": "https://rpc.gnosischain.com"
-                },
-                "gateway": {
-                    "url": "https://rpc.gnosis.gateway.fm"
                 }
             }
         ]

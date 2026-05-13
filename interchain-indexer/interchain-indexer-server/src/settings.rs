@@ -6,7 +6,7 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use interchain_indexer_logic::{
-    ChainInfoServiceSettings, TokenInfoServiceSettings,
+    ChainInfoServiceSettings, TokenInfoServiceSettings, amb::settings::AmbIndexerSettings,
     avalanche::settings::AvalancheIndexerSettings, example::settings::ExampleIndexerSettings,
     settings::MessageBufferSettings,
 };
@@ -32,6 +32,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub avalanche_indexer: AvalancheIndexerSettings,
+
+    #[serde(default)]
+    pub amb_indexer: AmbIndexerSettings,
 
     #[serde(default)]
     pub server: ServerSettings,
@@ -107,6 +110,7 @@ impl Settings {
             chain_info: ChainInfoServiceSettings::default(),
             example_indexer: Default::default(),
             avalanche_indexer: Default::default(),
+            amb_indexer: Default::default(),
             server: Default::default(),
             metrics: Default::default(),
             tracing: Default::default(),

@@ -599,6 +599,7 @@ fn message_status_to_proto(status: &DbMessageStatus) -> MessageStatus {
         DbMessageStatus::Initiated => MessageStatus::MessageStatusInitiated,
         DbMessageStatus::Completed => MessageStatus::MessageStatusCompleted,
         DbMessageStatus::Failed => MessageStatus::MessageStatusFailed,
+        DbMessageStatus::ReadyToClaim => MessageStatus::MessageStatusReadyToClaim,
     }
 }
 

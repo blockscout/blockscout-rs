@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use alloy::primitives::ChainId;
 use interchain_indexer_entity::{
-    crosschain_messages, crosschain_transfers, indexer_checkpoints, pending_messages,
+    amb_messages_confirmations, crosschain_messages, crosschain_transfers, indexer_checkpoints,
+    pending_messages,
 };
 use itertools::Itertools;
 use sea_orm::{
@@ -62,6 +63,16 @@ fn crosschain_transfers_on_conflict() -> OnConflict {
     .to_owned()
 }
 
+fn amb_messages_confirmations_on_conflict() -> OnConflict {
+    OnConflict::columns([
+        amb_messages_confirmations::Column::MessageId,
+        amb_messages_confirmations::Column::BridgeId,
+        amb_messages_confirmations::Column::ValidatorAddress,
+    ])
+    .do_nothing()
+    .to_owned()
+}
+
 pub(super) async fn offload_stale_to_pending<T: Consolidate>(
     tx: &DatabaseTransaction,
     stale_entries: &[(Key, BufferItem<T>)],
@@ -88,14 +99,21 @@ pub(super) async fn flush_to_final_storage(
     tx: &DatabaseTransaction,
     consolidated_entries: Vec<ConsolidatedMessage>,
 ) -> Result<(), DbErr> {
-    let (messages, transfers): (Vec<_>, Vec<_>) = consolidated_entries
+    let (messages, transfers, amb_confirmations): (Vec<_>, Vec<_>, Vec<_>) = consolidated_entries
         .into_iter()
-        .map(|c| (c.message, c.transfers))
-        .unzip();
+        .map(|c| (c.message, c.transfers, c.amb_confirmations))
+        .multiunzip();
     let transfers = transfers.into_iter().flatten().collect::<Vec<_>>();
+    let amb_confirmations = amb_confirmations.into_iter().flatten().collect::<Vec<_>>();
 
     batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
     batched_upsert(tx, &transfers, crosschain_transfers_on_conflict()).await?;
+    batched_upsert(
+        tx,
+        &amb_confirmations,
+        amb_messages_confirmations_on_conflict(),
+    )
+    .await?;
 
     Ok(())
 }

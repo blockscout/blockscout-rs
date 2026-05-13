@@ -118,4 +118,7 @@ Small topics may keep some sections brief.
 - `config-loading-and-validation.md` — two-channel config system (env-based
   Settings vs file-only JSON), `deny_unknown_fields` coverage, DB seeding
   upsert semantics, late validation pattern, and stats-style env-patching
+- Follow-up: migrate Avalanche's inline cleanup guard / EVM log orchestration
+  onto `interchain-indexer-logic/src/indexer/cleanup_guard.rs` and
+  `interchain-indexer-logic/src/indexer/evm/`.
   cross-reference
