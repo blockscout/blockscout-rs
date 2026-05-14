@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod native_coin_holders_growth;
 pub mod native_coin_supply;
 pub mod new_native_coin_holders;

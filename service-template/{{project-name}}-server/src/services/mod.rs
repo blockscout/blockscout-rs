@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod health;
 {% if proto_ex %}
 mod {{proto_ex_name}};

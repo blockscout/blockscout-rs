@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 /// DB read routines for Interchain mode.
 use chrono::{NaiveDateTime, Utc};
 use sea_orm::{DatabaseConnection, DbErr, FromQueryResult, Statement};

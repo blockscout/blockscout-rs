@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::test_input_data::TestInputData;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
@@ -201,7 +203,7 @@ impl TestCase {
             };
             let ordered_auxdata_ranges = ordered_auxdata
                 .into_iter()
-                .map(|auxdata| (auxdata.offset..auxdata.offset + auxdata.value.len()))
+                .map(|auxdata| auxdata.offset..auxdata.offset + auxdata.value.len())
                 .collect::<Vec<_>>();
 
             let mut parts = Vec::new();

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub use crate::settings::{BlockscoutSettings, Settings};
 use crate::{
     instances::get_instances,

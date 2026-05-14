@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Paginated chain list with `stats_chains.unique_transfer_users_count` (`/stats/chains`).
 
 use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};

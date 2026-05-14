@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Context;
 use blockscout_display_bytes::Bytes;
 use governor::{Quota, RateLimiter};

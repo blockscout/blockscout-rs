@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Service mode for DB and query branching.
 //! Used by both the stats library and stats-server settings.
 

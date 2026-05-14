@@ -2,7 +2,7 @@
 name = "mismatch"
 version = "1.0.0"
 description = "Crate for abstract mismatching. Useful for error propagation."
-license = "MIT"
+license = "LicenseRef-Blockscout"
 repository = "https://github.com/blockscout/blockscout-rs"
 edition = "2021"
 keywords = ["mismatch", "error"]

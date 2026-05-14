@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use {{crate_name}}_server::Settings;
 use env_collector::{run_env_collector_cli, EnvCollectorSettingsBuilder, PrefixFilter};
 

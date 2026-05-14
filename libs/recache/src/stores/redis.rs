@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::stores::AsyncCacheStore;
 use bon::bon;
 use redis::{AsyncCommands, RedisError};

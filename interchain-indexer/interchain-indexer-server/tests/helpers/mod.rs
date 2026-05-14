@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use interchain_indexer_server::Settings;
 use reqwest::Url;

@@ -2,7 +2,7 @@
 name = "blockscout-service-launcher"
 version = "0.22.0"
 description = "Allows to launch blazingly fast blockscout rust services"
-license = "MIT"
+license = "LicenseRef-Blockscout"
 repository = "https://github.com/blockscout/blockscout-rs"
 keywords = ["blockscout", "service", "starter", "launcher", "microservices"]
 categories = ["web-programming::http-server"]

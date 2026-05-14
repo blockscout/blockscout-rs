@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::celestia::l2_router::{
     types::{L2BatchMetadata, L2Config, L2Type},
     L2Router,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::config;
 use crate::{Endpoint, Error, HttpApiClient, HttpApiClientConfig};
 use reqwest::header::HeaderValue;

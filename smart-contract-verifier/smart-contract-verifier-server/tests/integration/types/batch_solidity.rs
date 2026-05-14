@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::*;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::Deserialize;

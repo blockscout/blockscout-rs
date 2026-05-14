@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! New interchain transfers sent line chart (transfers whose message has src_tx_hash set, per day).
 //! When interchain_primary_id is set, filters by message's src_chain_id; otherwise counts all sent.
 

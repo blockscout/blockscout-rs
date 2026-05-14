@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::sync::Arc;
 
 use interchain_indexer_logic::CrosschainIndexer;

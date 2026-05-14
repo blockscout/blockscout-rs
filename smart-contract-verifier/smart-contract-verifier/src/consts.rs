@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #[cfg(target_os = "linux")]
 pub const DEFAULT_SOLIDITY_COMPILER_LIST: &str =
     "https://binaries.soliditylang.org/linux-amd64/list.json";

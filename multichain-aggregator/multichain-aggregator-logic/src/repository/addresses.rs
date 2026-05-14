@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     repository::{paginate_query, pagination::KeySpec, prepare_ts_query},
     types::{

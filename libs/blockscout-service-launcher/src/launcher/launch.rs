@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     metrics::Metrics,
     router::{configure_router, HttpRouter},

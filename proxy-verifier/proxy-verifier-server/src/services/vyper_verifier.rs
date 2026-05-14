@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::{
     vyper_verifier_server::VyperVerifier, ListCompilersRequest, ListCompilersResponse,
     VerificationResponse, VyperVerifyMultiPartRequest, VyperVerifyStandardJsonRequest,

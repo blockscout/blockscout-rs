@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Source that is persisted in local database.
 //!
 //! Such sources are the only ones (so far) that

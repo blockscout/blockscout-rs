@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod disassemble;
 mod find_methods;
 mod method;

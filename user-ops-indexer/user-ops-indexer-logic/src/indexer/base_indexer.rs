@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     indexer::{
         rpc_utils::{CallTracer, TraceClient, TraceType},

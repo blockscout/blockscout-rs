@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use nonempty::NonEmpty;
 use sea_query::{Alias, Expr, PostgresQueryBuilder};
 use sqlx::PgPool;

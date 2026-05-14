@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     bidirectional_stream::{BidirectionalStream, Direction},
     channel::ChannelCentral,

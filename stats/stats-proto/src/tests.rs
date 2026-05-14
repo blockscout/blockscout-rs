@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use prost::Message;
 
 use crate::blockscout::stats::v1::{self as proto};

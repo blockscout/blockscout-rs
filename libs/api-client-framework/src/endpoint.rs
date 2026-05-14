@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Debug};
 use url::Url;

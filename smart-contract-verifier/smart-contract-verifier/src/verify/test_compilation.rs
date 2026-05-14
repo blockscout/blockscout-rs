@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     compilation,
     evm_compilers::{EvmCompiler, EvmCompilersPool},

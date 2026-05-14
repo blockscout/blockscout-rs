@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Error;
 use governor::{
     clock::DefaultClock,

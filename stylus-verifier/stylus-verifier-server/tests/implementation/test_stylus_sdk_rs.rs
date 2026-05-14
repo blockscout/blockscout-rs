@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types_stylus_sdk_rs::VerifyGithubRepositoryTestCase;
 use stylus_verifier_proto::blockscout::stylus_verifier::v1::VerifyResponse;
 

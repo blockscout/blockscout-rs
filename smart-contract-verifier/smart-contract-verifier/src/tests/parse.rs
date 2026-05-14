@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![allow(dead_code, unused)]
 
 use pretty_assertions::assert_eq;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use api_client_framework::{Endpoint, Error, HttpApiClient as Client, HttpApiClientConfig};
 use reqwest::Method;
 use url::Url;

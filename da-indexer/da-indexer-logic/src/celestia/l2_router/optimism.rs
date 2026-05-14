@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{new_client, types::L2BatchMetadata, L2Config};
 use anyhow::{anyhow, Result};
 use blockscout_display_bytes::Bytes;

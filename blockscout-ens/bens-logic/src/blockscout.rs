@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::primitives::TxHash;
 use cached::proc_macro::cached;
 use futures::StreamExt;

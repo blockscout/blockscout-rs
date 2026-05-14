@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use serde::Deserialize;
 use serde_with::{StringWithSeparator, formats::CommaSeparator, serde_as};
 use std::time::Duration;

@@ -3,6 +3,7 @@ name = "blockscout-db-entity"
 version = "0.5.0+blockscout.11.0.3"
 edition = "2024"
 publish = false
+license = "LicenseRef-Blockscout"
 
 [lib]
 name = "entity"

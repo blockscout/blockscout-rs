@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod test_startup_works;
 mod test_stylus_sdk_rs;
 mod types_stylus_sdk_rs;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::test_database::TestDbGuard;
 use eth_bytecode_db_proto::http_client;
 use verifier_alliance_database_tests::{build_all_tests, TestCase};

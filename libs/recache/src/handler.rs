@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{handler::cache_request_builder::*, stores::AsyncCacheStore};
 use bon::Builder;
 use dashmap::DashMap;

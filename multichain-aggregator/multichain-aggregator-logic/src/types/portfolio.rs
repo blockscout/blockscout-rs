@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::address_token_balances::fiat_balance_query;
 use crate::{proto, types::ChainId};
 use entity::address_token_balances::Entity;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{collections::HashMap, future::Future, path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{

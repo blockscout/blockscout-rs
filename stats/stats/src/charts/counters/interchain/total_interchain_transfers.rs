@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Total interchain transfers (total indexed count, no filters).
 //! Counts all rows in crosschain_transfers. Does not use interchain_primary_id.
 

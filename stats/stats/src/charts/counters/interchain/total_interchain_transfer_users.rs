@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Total unique interchain transfer users (distinct sender_address and recipient_address).
 //! When interchain_primary_id is set, only transfers whose message has src_chain_id or dst_chain_id = primary_id.
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{protocols::DomainName, subgraph::sql::DbErr};
 use sqlx::{postgres::PgQueryResult, PgPool};
 use tracing::instrument;

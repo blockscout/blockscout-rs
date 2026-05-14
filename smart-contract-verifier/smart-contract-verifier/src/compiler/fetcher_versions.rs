@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::scheduler;
 use async_trait::async_trait;
 use cron::Schedule;

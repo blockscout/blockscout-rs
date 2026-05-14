@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     proto::{
         database_actix::route_database, health_actix::route_health, health_server::HealthServer,

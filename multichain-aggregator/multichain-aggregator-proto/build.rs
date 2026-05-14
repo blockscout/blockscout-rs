@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use actix_prost_build::{ActixGenerator, GeneratorList};
 use prost_build::{Config, ServiceGenerator};
 use prost_wkt_build::{FileDescriptorSet, Message};

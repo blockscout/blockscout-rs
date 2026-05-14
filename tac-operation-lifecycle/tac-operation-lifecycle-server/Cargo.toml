@@ -2,6 +2,7 @@
 name = "tac-operation-lifecycle-server"
 version = "0.2.0"
 edition = "2021"
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 actix-web = { workspace = true }

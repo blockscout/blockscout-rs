@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Context;
 use blockscout::{Client, Settings};
 use blockscout_service_launcher::{self as launcher, launcher::ConfigSettings};

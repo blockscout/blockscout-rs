@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::conversion::ConversionError;
 use bens_logic::{protocols::ProtocolError, subgraph::SubgraphReadError};
 

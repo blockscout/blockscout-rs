@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //!
 //! The `solc --standard-json` input settings optimizer.
 //!

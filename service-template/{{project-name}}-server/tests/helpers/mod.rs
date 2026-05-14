@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::{
     {% if database -%}
     test_database::TestDbGuard,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use smart_contract_verifier_proto::{
     blockscout::smart_contract_verifier::v2 as proto,
     http_client::{

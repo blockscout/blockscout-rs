@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{auth::Error, consts};
 use cookie::Cookie;
 use reqwest::header::{HeaderMap, HeaderValue};

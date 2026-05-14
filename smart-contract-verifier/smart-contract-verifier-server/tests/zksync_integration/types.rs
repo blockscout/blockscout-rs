@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use bytes::Bytes;
 use pretty_assertions::assert_eq;
 use serde::{de::DeserializeOwned, Deserialize};

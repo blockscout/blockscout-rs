@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![allow(clippy::single_element_loop)]
 
 use actix_prost_build::{ActixGenerator, GeneratorList};

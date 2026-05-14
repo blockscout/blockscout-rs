@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{BridgeConfig, ChainConfig, Settings, config::IndexerType};
 use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};

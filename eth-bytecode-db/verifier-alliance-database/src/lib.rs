@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 /// Provides access to internal functions to access the database.
 /// They mostly do not provide transactions consistency, and require
 /// users to be care of transactions themselves.

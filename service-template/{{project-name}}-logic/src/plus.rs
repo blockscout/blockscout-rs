@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 /// Adds two numbers together
 ///
 /// # Arguments

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Common types for the configs
 
 use std::collections::{BTreeMap, HashSet};

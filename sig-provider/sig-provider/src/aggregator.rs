@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{sources::CompleteSignatureSource, SignatureSource};
 use anyhow::Context;
 use ethabi::{Event, EventParam, ParamType, RawLog, Token};

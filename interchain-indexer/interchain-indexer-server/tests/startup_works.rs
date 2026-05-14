@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod helpers;
 
 use blockscout_service_launcher::test_server;

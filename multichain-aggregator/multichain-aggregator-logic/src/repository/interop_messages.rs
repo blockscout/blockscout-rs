@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{interop_message_transfers, macros::update_if_not_null, paginate_cursor};
 use crate::{
     error::ParseError,

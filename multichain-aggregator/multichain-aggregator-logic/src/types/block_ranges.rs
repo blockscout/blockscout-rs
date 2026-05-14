@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::ChainId;
 use crate::proto;
 use entity::block_ranges::Model;

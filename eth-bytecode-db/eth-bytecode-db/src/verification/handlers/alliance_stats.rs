@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::super::Client;
 use anyhow::Error;
 use sea_orm::{ColumnTrait, EntityTrait, FromQueryResult, QuerySelect};

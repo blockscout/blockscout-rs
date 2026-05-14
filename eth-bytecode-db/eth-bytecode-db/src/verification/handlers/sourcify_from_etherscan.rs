@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     super::{
         client::Client, errors::Error, smart_contract_verifier::VerifyFromEtherscanSourcifyRequest,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use lazy_static::lazy_static;
 use prometheus::{HistogramVec, IntCounterVec, register_histogram_vec, register_int_counter_vec};
 

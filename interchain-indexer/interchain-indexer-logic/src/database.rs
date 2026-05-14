@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,

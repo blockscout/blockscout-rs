@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::{
     database::ReplicaDatabaseSettings,
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod solidity_verifier_multi_part;
 pub mod solidity_verifier_standard_json;
 

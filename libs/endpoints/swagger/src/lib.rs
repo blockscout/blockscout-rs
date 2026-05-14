@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{path::PathBuf, sync::Arc};
 
 use actix_files::NamedFile;

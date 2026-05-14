@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     coin_type::Coin,
     entity::subgraph::domain::{DetailedDomain, Domain},

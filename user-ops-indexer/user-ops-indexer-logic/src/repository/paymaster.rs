@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{repository::user_op::user_ops_blocks_rel, types::paymaster::Paymaster};
 use alloy::primitives::Address;
 use entity::user_operations::{Column, Entity};

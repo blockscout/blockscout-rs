@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Common utilities used across statistics
 
 use chrono::{DateTime, NaiveDate, NaiveTime, TimeDelta, Utc};

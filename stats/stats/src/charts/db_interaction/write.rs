@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use chrono::{DateTime, Offset, TimeZone};
 use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
 use sea_orm::{Set, Unchanged, prelude::*, sea_query};

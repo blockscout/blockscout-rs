@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     disassemble::{disassemble_bytecode, DisassembledOpcode},
     method::Method,

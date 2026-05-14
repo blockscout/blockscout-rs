@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     proto::multichain_aggregator_service_server::MultichainAggregatorService,
     services::{

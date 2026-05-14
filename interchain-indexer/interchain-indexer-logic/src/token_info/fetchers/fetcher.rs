@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::{network::Ethereum, providers::DynProvider};
 use async_trait::async_trait;
 

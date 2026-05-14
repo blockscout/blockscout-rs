@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use chrono::Utc;
 use sqlx::types::BigDecimal;
 use std::collections::HashMap;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_display_bytes::ToHex;
 use bytes::Bytes;
 use pretty_assertions::assert_eq;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![allow(clippy::derive_partial_eq_without_eq)]
 pub mod blockscout {
     pub mod multichain_aggregator {

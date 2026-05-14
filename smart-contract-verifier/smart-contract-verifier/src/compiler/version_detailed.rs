@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::fetcher::Version;
 use chrono::NaiveDate;
 use semver::{BuildMetadata, Prerelease};

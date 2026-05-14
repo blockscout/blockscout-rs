@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use parking_lot::RwLock;

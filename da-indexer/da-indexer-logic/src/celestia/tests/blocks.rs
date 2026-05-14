@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use sea_orm::DatabaseConnection;
 
 use crate::{celestia::repository::blocks, common::tests::init_db};

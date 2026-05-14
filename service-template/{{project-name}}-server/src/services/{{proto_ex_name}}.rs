@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::{{proto_ex_name}}_server::*;
 use crate::proto::*;
 use tonic::{Request, Response, Status};

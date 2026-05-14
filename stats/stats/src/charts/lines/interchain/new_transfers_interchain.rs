@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! New interchain transfers line chart (total indexed per day, no filters).
 //! Counts transfers by associated message's init_timestamp date. Does not use interchain_primary_id.
 

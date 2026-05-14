@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{
     clone::Clone, collections::BTreeMap, fmt::Debug, future::Future, str::FromStr, sync::Arc,
 };

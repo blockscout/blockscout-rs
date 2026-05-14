@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! `map` for a data source, i.e. applies a function to the output
 //! of some other source.
 

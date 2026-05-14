@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::{
     solidity_verifier_server::SolidityVerifier, ListCompilersRequest, ListCompilersResponse,
     SolidityVerifyMultiPartRequest, SolidityVerifyStandardJsonRequest, VerificationResponse,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Cumulative total number of interchain messages sent (by associated message: src_tx_hash set).
 
 use super::new_messages_sent_interchain::NewMessagesSentInterchainInt;

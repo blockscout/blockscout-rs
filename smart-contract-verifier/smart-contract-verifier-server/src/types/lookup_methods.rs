@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto;
 use alloy_json_abi::JsonAbi;
 use amplify::{From, Wrapper};

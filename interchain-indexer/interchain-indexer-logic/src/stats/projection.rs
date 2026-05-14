@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Batch projection of finalized `crosschain_messages` / `crosschain_transfers` into stats tables.
 //! Used by the buffer flush (inline) and backfill. All updates for a batch run in one transaction.
 

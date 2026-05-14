@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::primitives::U256;
 use sea_orm::prelude::BigDecimal;
 use std::str::FromStr;

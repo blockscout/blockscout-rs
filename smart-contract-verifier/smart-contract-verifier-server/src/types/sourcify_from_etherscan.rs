@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::VerifyFromEtherscanSourcifyRequest;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod standard_json_types;
 
 use crate::standard_json_types::TestInput;

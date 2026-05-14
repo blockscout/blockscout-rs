@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{compiler::{CompactVersion, DetailedVersion, DownloadCache, Fetcher}, Version, zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract}};
 use anyhow::Context;
 use async_trait::async_trait;

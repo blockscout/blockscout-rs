@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use thiserror::Error;
 use tonic::{Code, Status};
 

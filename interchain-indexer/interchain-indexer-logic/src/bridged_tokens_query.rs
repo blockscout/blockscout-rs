@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Aggregated bridged-token stats per `stats_asset` for a chain (`/stats/bridged-tokens`).
 
 use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};

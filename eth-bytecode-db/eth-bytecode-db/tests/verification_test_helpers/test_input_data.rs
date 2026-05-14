@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use eth_bytecode_db::verification::{BytecodePart, MatchType, Source, SourceType};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     client_receiver::ClientReceiver, event::ChannelEvent,
     subscription_registry::SubscriptionRegistry,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::anyhow;
 use std::str::FromStr;
 use tonlib_core::TonAddress;

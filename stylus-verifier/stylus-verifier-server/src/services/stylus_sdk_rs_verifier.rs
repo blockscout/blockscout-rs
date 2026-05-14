@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::settings::DockerApiSettings;
 use async_trait::async_trait;
 use stylus_verifier_logic::stylus_sdk_rs;

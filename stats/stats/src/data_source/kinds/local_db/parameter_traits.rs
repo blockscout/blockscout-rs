@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{future::Future, marker::Send};
 
 use blockscout_metrics_tools::AggregateTimer;

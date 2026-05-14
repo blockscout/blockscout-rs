@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::collections::HashSet;
 
 use crate::{chart_prelude::*, types::new_txns::NewTxnsCombinedPoint};

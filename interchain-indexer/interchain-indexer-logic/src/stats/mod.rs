@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Statistics orchestration ([`StatsService`]) and batch projection into stats tables.
 
 mod list_query;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! New operational transactions for the last N days
 //! (usually 30).
 //!

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{compiler_output::SharedCompilerOutput, Error};
 use crate::{
     compiler::DownloadCache, metrics, metrics::GuardedGauge, DetailedVersion, Fetcher, Language,

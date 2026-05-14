@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{bridge_contracts, indexer_checkpoints};
 
 impl indexer_checkpoints::Model {

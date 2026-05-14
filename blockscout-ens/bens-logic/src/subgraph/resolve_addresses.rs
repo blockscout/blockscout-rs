@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     entity::subgraph::domain::DomainWithAddress,
     protocols::{hash_name::hex, AddressResolveTechnique, DomainName, Protocol},

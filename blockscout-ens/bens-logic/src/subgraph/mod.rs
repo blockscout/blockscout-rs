@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod domain_tokens;
 mod offchain;
 mod pagination;

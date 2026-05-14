@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     services::{health::HealthService, stylus_sdk_rs_verifier::StylusSdkRsVerifierService},
     settings::Settings,

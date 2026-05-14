@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{chart_prelude::*, gettable_const};
 
 use super::{Txns24hStats, TxnsStatsValue};

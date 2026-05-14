@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::types::{Files, Success};
 use crate::MatchType;
 use serde::Deserialize;

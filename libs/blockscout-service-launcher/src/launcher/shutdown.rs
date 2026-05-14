@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{future::Future, time::Duration};
 
 use tokio::{task::JoinSet, time::error::Elapsed};

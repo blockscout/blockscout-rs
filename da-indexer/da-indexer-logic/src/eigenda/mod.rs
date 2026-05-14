@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod client;
 pub mod da;
 pub mod job;

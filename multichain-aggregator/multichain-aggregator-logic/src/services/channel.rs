@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::ChainId;
 use actix_phoenix_channel::{ChannelConn, ChannelEvent, ChannelHandler};
 use serde::Serialize;

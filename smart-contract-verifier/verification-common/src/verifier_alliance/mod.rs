@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod code_artifact_types;
 mod compilation_artifacts;
 mod creation_code_artifacts;

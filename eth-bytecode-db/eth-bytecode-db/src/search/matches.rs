@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     candidates::{get_matches_by_candidates, BytecodeCandidate},
     types::BytecodeRemote,

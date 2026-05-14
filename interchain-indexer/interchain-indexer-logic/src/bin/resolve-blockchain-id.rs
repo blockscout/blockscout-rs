@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::{Context, Result, anyhow};
 use interchain_indexer_logic::avalanche_data_api::{
     AvalancheDataApiClient, AvalancheDataApiClientSettings, AvalancheDataApiNetwork,

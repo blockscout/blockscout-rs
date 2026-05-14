@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod verification_test_helpers;
 
 use eth_bytecode_db::verification;

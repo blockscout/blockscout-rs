@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     protocols::{
         AddressResolveTechnique, DeployedProtocol, Network, Protocol, ProtocolError, ProtocolInfo,

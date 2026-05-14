@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use chrono::NaiveDateTime;
 
 const NANOS_PER_SEC: i64 = 1_000_000_000;

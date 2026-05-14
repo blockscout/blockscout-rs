@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::{
     HealthCheckRequest, HealthCheckResponse, health_check_response, health_server::Health,
 };

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use minicbor::{Decode, Decoder, data::Type};
 use semver::Version;
 use thiserror::Error;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::{ChainId, interop_message_transfers::InteropMessageTransfer};
 use entity::{
     interop_messages,

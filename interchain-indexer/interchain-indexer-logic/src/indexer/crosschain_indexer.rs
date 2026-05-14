@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},

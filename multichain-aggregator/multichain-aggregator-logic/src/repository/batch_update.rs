@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, ConnectionTrait, DbErr, EntityName,
     EntityTrait, IdenStatic, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, Value,

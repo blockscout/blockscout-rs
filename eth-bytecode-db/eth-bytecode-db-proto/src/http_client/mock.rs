@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::blockscout::eth_bytecode_db::v2::{
     database_actix::route_database, database_server::Database,
     solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,

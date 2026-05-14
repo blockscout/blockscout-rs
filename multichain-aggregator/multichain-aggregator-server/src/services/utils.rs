@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use multichain_aggregator_logic::{page_token::PageTokenFormat, types::ChainId};
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::Pagination;
 use std::{fmt::Display, str::FromStr};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Cumulative total number of accounts in the network.
 
 use super::new_accounts::NewAccountsInt;

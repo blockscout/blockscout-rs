@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod ccip_read;
 pub(crate) mod d3;
 pub(crate) mod ens;

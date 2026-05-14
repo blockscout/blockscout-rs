@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy_primitives::Address;
 use base32ct::{Base32Unpadded, Encoding};
 use std::str::FromStr;

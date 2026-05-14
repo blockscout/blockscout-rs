@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use async_trait::async_trait;
 use ethabi::{ethereum_types::H256, RawLog};
 use sig_provider::SourceAggregator;

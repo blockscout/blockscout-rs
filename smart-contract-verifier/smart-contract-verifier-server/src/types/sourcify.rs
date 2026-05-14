@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::VerifySourcifyRequest;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::sourcify::api::VerificationRequest;

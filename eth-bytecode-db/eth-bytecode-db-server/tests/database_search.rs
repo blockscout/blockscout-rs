@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod verification_test_helpers;
 
 use crate::verification_test_helpers::test_input_data::TestInputData;

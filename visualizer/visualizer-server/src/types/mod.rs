@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod util;
 mod visualize_contracts;
 mod visualize_response;

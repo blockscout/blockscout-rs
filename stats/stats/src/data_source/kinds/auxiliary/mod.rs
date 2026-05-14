@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Data sources not intended to be used independently.
 //! Usually useful in combination with other parameters.
 

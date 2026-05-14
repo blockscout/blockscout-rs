@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::ops::Bound;
 
 use crate::{chart_prelude::*, lines::zetachain_cctx_datetime_range_filter};

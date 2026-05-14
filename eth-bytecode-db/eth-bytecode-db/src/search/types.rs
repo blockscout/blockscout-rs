@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use bytes::Bytes;
 use entity::sea_orm_active_enums;
 use std::fmt::{Display, Formatter};

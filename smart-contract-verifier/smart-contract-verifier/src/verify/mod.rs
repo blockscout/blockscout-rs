@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod cbor_auxdata;
 mod compilation;
 mod compiler_output;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::settings::Settings;
 use alloy::providers::ProviderBuilder;
 use sea_orm::DatabaseConnection;

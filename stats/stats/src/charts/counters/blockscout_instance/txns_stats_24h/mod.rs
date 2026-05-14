@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{collections::HashSet, ops::Range};
 
 use crate::{chart_prelude::*, lines::op_stack_operational_transactions_filter};

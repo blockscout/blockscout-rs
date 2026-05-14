@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Tests for the case
 //! - blockscout is fully indexed
 //! - stats server is fully enabled & initialized

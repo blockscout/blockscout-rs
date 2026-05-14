@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::test_server;
 use proxy_verifier_server::Settings;
 use reqwest::Url;

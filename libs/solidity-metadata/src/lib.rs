@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use minicbor::{data::Type, Decode, Decoder};
 use semver::Version;
 use std::str::FromStr;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod solidity_batch_import;
 mod solidity_verify;
 

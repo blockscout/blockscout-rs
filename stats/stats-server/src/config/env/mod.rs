@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Basically the same as normal (JSON) config but without lists.
 //! Lists are not supported by `config` crate with environmental vars
 //! (and are not expected to, since lists are not present in env).

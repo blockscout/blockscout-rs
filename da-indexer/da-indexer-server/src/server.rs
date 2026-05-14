@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     proto::{health_actix::route_health, health_server::HealthServer},
     services::{CelestiaService, EigenDaService, HealthService},

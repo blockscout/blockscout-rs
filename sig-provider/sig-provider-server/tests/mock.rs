@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::test_server;
 use httpmock::{Mock, MockServer, Then, When};
 use pretty_assertions::assert_eq;

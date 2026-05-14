@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::blockscout::smart_contract_verifier::v2::{
     solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,
     sourcify_verifier_actix::route_sourcify_verifier, sourcify_verifier_server::SourcifyVerifier,

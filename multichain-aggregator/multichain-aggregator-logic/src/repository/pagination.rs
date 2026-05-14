@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use sea_orm::{
     Order, Value,
     sea_query::{ExprTrait, IntoValueTuple, NullOrdering, SelectStatement, SimpleExpr, ValueTuple},

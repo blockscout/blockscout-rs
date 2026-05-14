@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_post_request},

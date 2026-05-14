@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use sqlx::PgPool;
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]

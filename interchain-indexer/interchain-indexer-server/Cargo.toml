@@ -2,6 +2,7 @@
 name = "interchain-indexer-server"
 version = "0.1.0"
 edition = "2024"
+license = "LicenseRef-Blockscout"
 
 [features]
 avalanche-e2e = []

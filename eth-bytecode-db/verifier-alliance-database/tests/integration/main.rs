@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod contract_deployments;
 mod internal_compiled_contracts;
 mod transformations;

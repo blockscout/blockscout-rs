@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! De/Serialization of hexadecimal encoded bytes with "0x" prefix
 //!
 //! Adapted from `serde_with::hex` (https://docs.rs/serde_with/3.8.1/serde_with/hex/index.html)

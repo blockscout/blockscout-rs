@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::sync::Arc;
 
 use tac_operation_lifecycle_logic::database::{

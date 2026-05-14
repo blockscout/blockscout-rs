@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::primitives::Address;
 use bens_logic::subgraph::{Order, ResolverInSubgraph};
 use bens_proto::blockscout::bens::v1 as proto;

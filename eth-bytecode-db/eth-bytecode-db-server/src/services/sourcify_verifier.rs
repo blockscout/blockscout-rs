@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::verifier_base;
 use crate::proto::{
     sourcify_verifier_server, VerifyFromEtherscanSourcifyRequest, VerifyResponse,

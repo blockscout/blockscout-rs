@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub const API_KEY_NAME: &str = "api_key";
 pub const HEADER_JWT_TOKEN_NAME: &str = "authorization";
 pub const COOKIE_JWT_TOKEN_NAME: &str = "_explorer_key";

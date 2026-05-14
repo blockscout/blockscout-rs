@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use reqwest_middleware::Middleware;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::{str::FromStr, sync::Arc};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use actix_web::{
     test,
     test::{read_body, read_body_json, TestRequest},

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use recache::{handler::CacheHandler, stores::redis::RedisStore};
 use serde::{Deserialize, Serialize};
 use std::{

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{blockscout, handlers::process_verification_request, Contract, VerificationResponse};
 use blockscout_display_bytes::ToHex;
 use eth_bytecode_db_proto::{

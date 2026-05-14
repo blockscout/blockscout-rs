@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Number of block rewards in each timespan.
 //!
 //! Intended for correct calculation of `average_block_rewards` rather
