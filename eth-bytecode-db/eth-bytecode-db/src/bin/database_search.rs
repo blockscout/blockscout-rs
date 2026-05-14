@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use entity::sea_orm_active_enums::BytecodeType;
 use eth_bytecode_db::{
     search::eth_bytecode_db_find_contract,

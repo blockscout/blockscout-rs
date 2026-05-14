@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{chart_prelude::*, lines::AccountsGrowth};
 
 pub struct Properties;

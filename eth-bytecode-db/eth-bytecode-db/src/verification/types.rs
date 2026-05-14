@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::smart_contract_verifier;
 use crate::FromHex;
 use anyhow::Context;

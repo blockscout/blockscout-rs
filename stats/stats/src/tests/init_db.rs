@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::test_database::TestDbGuard;
 
 // TODO: When interchain-indexer will be merged into the main branch, rework this approach.

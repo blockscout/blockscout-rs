@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use da_indexer_logic::{indexer::Indexer, s3_storage::S3Storage, settings::IndexerSettings};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;

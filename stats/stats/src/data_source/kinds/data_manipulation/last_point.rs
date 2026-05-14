@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Last point data source.
 //!
 //! Takes last data point from some other (vector) source

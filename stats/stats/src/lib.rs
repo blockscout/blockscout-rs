@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![recursion_limit = "256"]
 
 mod charts;

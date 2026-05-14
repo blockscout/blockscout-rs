@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::{
     verify_response::{ExtraData, PostActionResponses, Status},
     Source, VerifyResponse,

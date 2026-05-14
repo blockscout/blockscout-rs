@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 // TODO: after implementing https://github.com/blockscout/blockscout-rs/issues/208
 // remove this file and use code from "store verification results"
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Logic for overwriting config values from some env variables.
 
 use anyhow::Context;

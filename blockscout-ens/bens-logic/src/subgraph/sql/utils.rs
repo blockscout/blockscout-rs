@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::subgraph::{DomainPaginationInput, Paginator};
 use anyhow::Context;
 use nonempty::NonEmpty;

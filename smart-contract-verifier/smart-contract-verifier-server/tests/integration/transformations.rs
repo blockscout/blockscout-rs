@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::{
     from_file,
     transformations::{TestCase, TestCaseMultiPart, TestCaseStandardJson},

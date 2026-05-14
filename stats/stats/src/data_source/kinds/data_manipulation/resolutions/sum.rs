@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Constructors for lower resolutions taking sum of values within the range.
 //!
 //! Intended for "new"/"delta" charts where change of something

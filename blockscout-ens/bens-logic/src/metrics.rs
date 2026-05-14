@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use lazy_static::lazy_static;
 use prometheus::{register_int_counter, IntCounter};
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 // mod verification_test_helpers;
 //
 // use pretty_assertions::assert_eq;

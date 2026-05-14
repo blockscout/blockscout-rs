@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![allow(dead_code)]
 
 // mod alliance_solidity_multi_part_batch_import;

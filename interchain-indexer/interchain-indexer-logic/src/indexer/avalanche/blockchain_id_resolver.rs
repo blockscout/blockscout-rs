@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     InterchainDatabase,
     avalanche_data_api::{AvalancheDataApiClient, AvalancheDataApiClientSettings},

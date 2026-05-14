@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{blockscout, eth_bytecode_db};
 use anyhow::Context;
 use blockscout_display_bytes::Bytes;

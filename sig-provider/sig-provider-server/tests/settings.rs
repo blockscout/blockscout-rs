@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::launcher::ConfigSettings;
 use pretty_assertions::assert_eq;
 use sig_provider_server::Settings;

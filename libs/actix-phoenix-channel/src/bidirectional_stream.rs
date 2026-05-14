@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use futures_lite::Stream;
 use std::{
     fmt::Debug,

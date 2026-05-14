@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto;
 use amplify::{From, Wrapper};
 use eth_bytecode_db::search;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::cmp::Ordering;
 
 use itertools::EitherOrBoth;

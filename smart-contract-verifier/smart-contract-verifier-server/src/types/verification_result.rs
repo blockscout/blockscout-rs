@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_display_bytes::ToHex;
 use serde_json::Value;
 use smart_contract_verifier::{Error, Language, VerificationResult, VerifyingContract};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::conversion::{
     address_from_str_inner, event_sort_from_inner, order_direction_from_inner,
     pagination_from_proto_by_fields, ConversionError,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::verification_test_helpers::{
     init_alliance_db, init_db, init_eth_bytecode_db_server_with_settings_setup,
     init_verifier_server, verifier_alliance_types::TestCase, VerifierService,

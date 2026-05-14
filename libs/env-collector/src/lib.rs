@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Context;
 use clap::Parser;
 use config::{Config, File};

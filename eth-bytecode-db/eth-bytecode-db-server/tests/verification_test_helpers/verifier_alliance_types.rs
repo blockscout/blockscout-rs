@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::test_input_data::TestInputData;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;

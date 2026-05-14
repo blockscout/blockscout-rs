@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! JSON config. Currently the one and only config file format.
 
 pub mod charts;

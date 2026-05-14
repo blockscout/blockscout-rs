@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::utils::derive_setters;
 
 /// Types implementing this trait are used to both represent

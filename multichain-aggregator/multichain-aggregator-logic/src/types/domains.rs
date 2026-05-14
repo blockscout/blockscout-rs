@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{error::ParseError, proto};
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use serde::{Deserialize, Serialize};

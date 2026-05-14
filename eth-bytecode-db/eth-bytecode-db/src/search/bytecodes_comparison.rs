@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 // TODO: try move to common crate since code is copipasted from smart-contract-verifier
 
 use crate::verification::MatchType;

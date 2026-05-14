@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
     verify_response, BytecodeType, SearchSourcesRequest, SearchSourcesResponse, Source,
     VerificationMetadata, VerifyResponse, VerifySolidityMultiPartRequest,

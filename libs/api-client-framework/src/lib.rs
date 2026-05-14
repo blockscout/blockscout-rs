@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Adapted from https://github.com/cloudflare/cloudflare-rs
 
 mod async_client;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{collections::HashMap, future::Future, path::PathBuf, str::FromStr, time::Duration};
 
 use blockscout_service_launcher::{

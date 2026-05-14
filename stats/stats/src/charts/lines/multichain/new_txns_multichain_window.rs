@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::new_txns_multichain::NewTxnsMultichainStatement;
 use crate::{chart_prelude::*, lines::NEW_TXNS_WINDOW_RANGE};
 

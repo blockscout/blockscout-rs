@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::primitives::{Address, B256, FixedBytes};
 use serde::{Deserialize, Serialize};
 

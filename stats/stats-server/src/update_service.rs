@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use chrono::{NaiveDate, Utc};
 use cron::Schedule;
 use futures::{StreamExt, stream::FuturesUnordered};

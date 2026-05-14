@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     bytecodes_comparison::extract_constructor_args,
     types::{BytecodeRemote, BytecodeType},

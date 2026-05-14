@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::types::{ApiFilesResponse, ApiRequest, ApiVerificationResponse};
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::marker::PhantomData;
 
 use chrono::NaiveDate;

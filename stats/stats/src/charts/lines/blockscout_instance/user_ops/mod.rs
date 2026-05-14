@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Stats for user-ops-indexer.
 //! In other words, about account abstraction as per ERC 4337.
 

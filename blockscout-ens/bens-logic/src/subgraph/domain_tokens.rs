@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{DomainToken, DomainTokenType};
 use crate::{
     entity::subgraph::domain::DetailedDomain,

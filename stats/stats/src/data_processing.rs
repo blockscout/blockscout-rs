@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use chrono::NaiveDate;
 use itertools::EitherOrBoth;
 

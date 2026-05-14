@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     client::models::profiling::BlockchainType,
     database::{OrderDirection, TacDatabase},

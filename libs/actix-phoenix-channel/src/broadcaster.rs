@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::event::ChannelEvent;
 use async_broadcast::{InactiveReceiver, Receiver as ActiveReceiver, Sender};
 use futures_lite::Stream;

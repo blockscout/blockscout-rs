@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::internal::{self, Error, Sol2Uml};
 use crate::response::{OutputMask, Response, ResponseFieldMask};
 use std::{collections::BTreeMap, path::PathBuf};

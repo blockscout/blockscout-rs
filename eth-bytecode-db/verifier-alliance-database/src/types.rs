@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use sea_orm::prelude::{DateTimeWithTimeZone, Uuid};
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{

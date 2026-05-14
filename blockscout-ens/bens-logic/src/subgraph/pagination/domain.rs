@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{paginate_list, Order, PaginatedList, PaginationInput, Paginator};
 use crate::subgraph::{DomainSortField, LookupOutput};
 use anyhow::Context;

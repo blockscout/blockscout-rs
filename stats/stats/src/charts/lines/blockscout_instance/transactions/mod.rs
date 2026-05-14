@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod arbitrum_new_operational_txns;
 pub mod arbitrum_new_operational_txns_window;
 pub mod arbitrum_operational_txns_growth;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::CachedView;
 use crate::{
     entity::subgraph::domain::DomainWithAddress,

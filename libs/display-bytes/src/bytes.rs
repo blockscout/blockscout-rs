@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 /// Adapted from ethers-core (https://github.com/gakonst/ethers-rs/blob/master/ethers-core/src/types/bytes.rs)
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{

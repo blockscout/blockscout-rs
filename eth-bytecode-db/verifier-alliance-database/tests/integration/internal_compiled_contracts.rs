@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::from_json;
 use blockscout_service_launcher::test_database::database;
 use std::collections::BTreeMap;

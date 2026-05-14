@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Total transaction fees for an interval
 
 use std::{collections::HashSet, ops::Range};

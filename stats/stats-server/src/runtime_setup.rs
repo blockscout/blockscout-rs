@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Setting up the runtime according to provided configs.
 //!
 //! ## Adding new charts

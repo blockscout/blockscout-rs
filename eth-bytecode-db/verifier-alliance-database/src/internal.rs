@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::helpers;
 use anyhow::{anyhow, Context, Error};
 use blockscout_display_bytes::ToHex;

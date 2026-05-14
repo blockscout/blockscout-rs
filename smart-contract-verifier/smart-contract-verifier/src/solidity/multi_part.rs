@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     compiler::DetailedVersion, verify, Error, EvmCompilersPool, OnChainContract, SolcCompiler,
     SolcInput, VerificationResult,

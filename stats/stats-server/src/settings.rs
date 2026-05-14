@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::{
     launcher::{
         ConfigSettings, GrpcServerSettings, HttpServerSettings, MetricsSettings, ServerSettings,

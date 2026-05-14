@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::AdditionalTable;
 use crate::{
     entity::subgraph::domain::{CreationAddr2Name, DomainWithAddress},

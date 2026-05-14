@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     proto::cluster_explorer_service_server::ClusterExplorerService,
     services::{macros::*, utils::*},

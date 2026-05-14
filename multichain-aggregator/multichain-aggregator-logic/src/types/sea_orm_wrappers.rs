@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy_primitives::{Address, B256, Bytes};
 use amplify::Wrapper;
 use sea_orm::{ColIdx, DbErr, QueryResult, TryGetError, TryGetable};

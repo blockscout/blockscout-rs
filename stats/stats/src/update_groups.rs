@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! It makes sense to focus on the slowest querying charts
 //! when making update groups, as we want to synchronize
 //! update of other lighter charts to perform simultaneously

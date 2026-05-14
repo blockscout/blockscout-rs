@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Batch step logic for [cumulative chart](`crate::data_source::kinds::local_db::DailyCumulativeLocalDbChartSource`)
 
 use std::{fmt::Display, marker::PhantomData, ops::Add, str::FromStr};

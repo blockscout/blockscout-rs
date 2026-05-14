@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{address_from_logic, order_direction_from_inner, ConversionError};
 use bens_logic::{
     entity::subgraph::domain_event::DomainEvent,

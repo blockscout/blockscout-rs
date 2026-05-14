@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::StandardJsonParseError;
 use crate::proto::zksync::solidity::VerifyStandardJsonRequest;
 use amplify::{From, Wrapper};

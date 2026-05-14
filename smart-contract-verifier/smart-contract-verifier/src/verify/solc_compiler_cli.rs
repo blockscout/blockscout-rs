@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Module for compiling solidity contracts using cmd args.
 //! foundry_compilers compiler uses --standard-json method of input,
 //! because it's very easy and convient, however --standard-json flag

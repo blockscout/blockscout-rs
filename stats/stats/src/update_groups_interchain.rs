@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Update groups for Interchain mode (simple chart/counters set).
 
 use crate::{

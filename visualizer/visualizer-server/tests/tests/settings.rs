@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use pretty_assertions::assert_eq;
 use visualizer_server::Settings;
 

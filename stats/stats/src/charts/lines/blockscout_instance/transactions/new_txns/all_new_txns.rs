@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{chart_prelude::*, types::new_txns::ExtractAllTxns};
 
 use super::NewTxnsCombinedRemote;

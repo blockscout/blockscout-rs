@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 // use actix_web::{test, test::TestRequest, App};
 // use pretty_assertions::assert_eq;
 // use serde_json::json;

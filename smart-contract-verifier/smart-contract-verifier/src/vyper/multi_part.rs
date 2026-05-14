@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     compiler::DetailedVersion, verify, verify::vyper_compiler_input, Error, EvmCompilersPool,
     OnChainContract, VerificationResult, VyperCompiler, VyperInput,

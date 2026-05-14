@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::chart_prelude::*;
 use blockscout_db::entity::{blocks, transactions};
 

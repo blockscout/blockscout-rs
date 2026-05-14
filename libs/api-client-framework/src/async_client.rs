@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::endpoint::Endpoint;
 use crate::Error;
 use reqwest::{header::HeaderMap, Response, StatusCode};

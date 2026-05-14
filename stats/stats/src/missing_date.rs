@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Tools for operating with missing data
 use std::{fmt::Debug, ops::RangeInclusive};
 

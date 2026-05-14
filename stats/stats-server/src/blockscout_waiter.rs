@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{sync::Arc, time::Duration};
 
 use crate::settings::{Settings, StartConditionSettings, ToggleableThreshold};

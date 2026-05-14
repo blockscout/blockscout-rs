@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! End-to-end tests for Avalanche indexer using Anvil-forked networks.
 //!
 //! These tests fork live Avalanche networks (C-Chain and NUMINE subnet) at

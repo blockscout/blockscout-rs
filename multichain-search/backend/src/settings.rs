@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{net::SocketAddr, str::FromStr};
 
 use config::{Config, File};

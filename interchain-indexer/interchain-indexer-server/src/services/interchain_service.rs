@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     BridgeConfig,
     proto::{interchain_service_server::*, *},

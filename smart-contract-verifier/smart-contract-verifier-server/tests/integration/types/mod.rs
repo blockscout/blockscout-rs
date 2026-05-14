@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use serde_json::Value;
 
 pub trait TestCaseRequest {

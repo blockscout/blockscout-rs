@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{event::ChannelEvent, subscription_registry::SubscriptionRegistry};
 use async_broadcast::Receiver as BroadcastReceiver;
 use async_channel::Receiver;

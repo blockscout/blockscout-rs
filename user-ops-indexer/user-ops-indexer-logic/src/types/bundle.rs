@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::repository::bundle::BundleDB;
 use alloy::primitives::{Address, TxHash};
 

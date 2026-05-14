@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use actix_cors::Cors;
 use config::{Config, File};
 use serde::{Deserialize, Serialize};

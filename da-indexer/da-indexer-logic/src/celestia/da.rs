@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{job::CelestiaJob, parser, repository::blocks, settings::IndexerSettings};
 use crate::{
     celestia::{client, repository::blobs},

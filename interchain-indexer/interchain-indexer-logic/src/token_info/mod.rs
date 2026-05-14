@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod blockscout_tokeninfo;
 mod fetchers;
 pub mod service;

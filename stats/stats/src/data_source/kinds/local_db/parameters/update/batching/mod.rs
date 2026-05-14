@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Batching for update process.
 //!
 //! Update for some period P can be done only with dependencies'

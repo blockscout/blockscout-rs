@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::stylus_sdk_rs::{Error, Success, VerifyGithubRepositoryRequest};
 use semver::Version;
 use std::path::PathBuf;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::s3_storage::{S3Object, S3Storage};
 use sea_orm::FromQueryResult;
 

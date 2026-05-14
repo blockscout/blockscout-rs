@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::{
     network::Ethereum,
     primitives::{Address, B256, keccak256},

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings::ApiSettings};
 use sea_orm::DatabaseConnection;
 use std::{str::FromStr, sync::Arc};

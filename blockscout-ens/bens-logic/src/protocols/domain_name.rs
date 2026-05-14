@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{hash_name::hash_ens_domain_name, ProtocolError, Tld};
 use crate::{
     hex,

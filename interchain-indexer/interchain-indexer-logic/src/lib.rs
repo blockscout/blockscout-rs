@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod avalanche_data_api;
 mod bridged_tokens_query;
 mod bulk;

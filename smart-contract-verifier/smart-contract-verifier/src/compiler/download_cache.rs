@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::fetcher::{FetchError, Fetcher, Version};
 use crate::metrics;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};

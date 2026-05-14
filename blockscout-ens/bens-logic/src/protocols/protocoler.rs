@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     blockscout::BlockscoutClient,
     protocols::{CleanName, DomainNameOnProtocol, ProtocolError},

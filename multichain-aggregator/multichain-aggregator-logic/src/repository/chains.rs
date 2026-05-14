@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::{ChainId, chains::Chain};
 use entity::{
     api_keys,

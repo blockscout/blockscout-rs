@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::docker;
 use alloy_json_abi::JsonAbi;
 use anyhow::{anyhow, Context};

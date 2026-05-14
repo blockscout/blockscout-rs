@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub use sea_orm_migration::prelude::*;
 
 mod m20251030_000001_initial;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use env_collector::{EnvCollectorSettingsBuilder, PrefixFilter, run_env_collector_cli};
 use interchain_indexer_server::Settings;
 

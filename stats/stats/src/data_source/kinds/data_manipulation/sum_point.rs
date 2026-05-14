@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Sum data source.
 //!
 //! Sums all points from the other (vector) source.

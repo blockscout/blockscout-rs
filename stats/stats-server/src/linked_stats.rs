@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use stats_proto::blockscout::stats::v1 as proto_v1;

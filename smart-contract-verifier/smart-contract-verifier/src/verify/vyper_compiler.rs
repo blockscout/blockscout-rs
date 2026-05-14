@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{evm_compilers, Error};
 use crate::{DetailedVersion, Language, Version};
 use anyhow::Context;

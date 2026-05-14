@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     proto::{
         verifier_alliance_server, VerifierAllianceBatchImportResponse,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod buffer;
 mod buffer_item;
 mod cursor;

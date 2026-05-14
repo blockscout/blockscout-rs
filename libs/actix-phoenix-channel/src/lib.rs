@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod actix_handler;
 mod bidirectional_stream;
 mod broadcaster;

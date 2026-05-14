@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::time::Duration;
 
 use self::disperser::{disperser_client::DisperserClient, RetrieveBlobRequest};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::sol;
 use serde::{Deserialize, Serialize};
 

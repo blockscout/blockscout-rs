@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #[cfg(feature = "database")]
 pub mod database;
 

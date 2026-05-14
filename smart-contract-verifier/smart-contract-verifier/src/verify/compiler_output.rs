@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use foundry_compilers::artifacts;
 use serde::Deserialize;
 use std::collections::BTreeMap;

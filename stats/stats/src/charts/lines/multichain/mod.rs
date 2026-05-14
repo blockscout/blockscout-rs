@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod accounts_growth_multichain;
 pub mod new_txns_multichain;
 pub mod new_txns_multichain_window;

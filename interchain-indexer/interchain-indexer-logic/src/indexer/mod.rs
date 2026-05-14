@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod avalanche;
 pub mod crosschain_indexer;
 pub mod example;

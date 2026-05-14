@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::paginate_cursor;
 use crate::types::{ChainId, block_ranges::BlockRange};
 use entity::block_ranges::{Column, Entity, Model};

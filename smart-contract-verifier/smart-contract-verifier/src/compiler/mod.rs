@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod download_cache;
 mod fetcher;
 mod fetcher_list;

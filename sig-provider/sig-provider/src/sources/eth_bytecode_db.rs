@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     eth_bytecode_db::json::{
         BatchSearchEventDescriptionResponse, BatchSearchEventDescriptionsRequest,

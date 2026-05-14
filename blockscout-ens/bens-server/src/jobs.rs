@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Context;
 use bens_logic::subgraph::SubgraphReader;
 use std::sync::Arc;

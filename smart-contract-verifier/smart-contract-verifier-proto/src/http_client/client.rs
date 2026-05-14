@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{config, Error, Result};
 use crate::blockscout::smart_contract_verifier::v2 as proto;
 

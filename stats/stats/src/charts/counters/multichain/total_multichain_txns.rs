@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{chart_prelude::*, utils::sql_with_multichain_filter_opt};
 
 pub struct TotalMultichainTxnsStatement;

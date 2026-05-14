@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub trait HttpRouter {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig);
 }

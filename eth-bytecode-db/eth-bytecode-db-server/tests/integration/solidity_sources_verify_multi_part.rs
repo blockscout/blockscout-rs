@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::routes::eth_bytecode_db::SoliditySourcesVerifyMultiPart;
 
 mod verifier_alliance {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     error::Error,
     types::{GoogleVerifyRequest, VerifyRequest, VerifyResponse},

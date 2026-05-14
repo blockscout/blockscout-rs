@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::tac_service_server::TacService;
 use chrono::NaiveDateTime;
 use std::sync::Arc;

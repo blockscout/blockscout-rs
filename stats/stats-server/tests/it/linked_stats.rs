@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{str::FromStr, time::Duration};
 
 use blockscout_service_launcher::{

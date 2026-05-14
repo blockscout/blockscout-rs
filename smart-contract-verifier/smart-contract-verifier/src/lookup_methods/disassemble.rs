@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::opcodes::{opcode, Opcode};
 use bytes::Bytes;
 use std::fmt::Debug;

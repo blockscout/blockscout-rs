@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     create_provider_pools_from_chains, load_bridges_from_file, load_chains_from_file,
     proto::{

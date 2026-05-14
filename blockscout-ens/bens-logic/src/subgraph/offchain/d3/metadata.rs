@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     protocols::{D3ConnectProtocol, DomainNameOnProtocol},
     subgraph::offchain::Reader,

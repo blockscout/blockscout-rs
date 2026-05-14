@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::future::Future;
 
 use chrono::{DateTime, Utc};

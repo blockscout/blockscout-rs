@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Accounts that are active during the period + were active during some previous time
 
 use std::{marker::PhantomData, ops::Range};

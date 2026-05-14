@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::chart_prelude::*;
 use multichain_aggregator_entity::interop_messages;
 use sea_orm::Condition;

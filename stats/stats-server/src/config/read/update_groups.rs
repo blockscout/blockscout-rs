@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::config::{json, types::UpdateSchedule};
 use convert_case::{Case, Casing};
 use serde::{Deserialize, Serialize};

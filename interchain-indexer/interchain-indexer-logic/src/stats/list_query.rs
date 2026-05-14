@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Shared parameters for the stats list endpoints (`/stats/bridged-tokens`,
 //! `/stats/chains`). Both endpoints accept the same sort + cursor + search
 //! shape, parameterized by their entity-specific sort field (`S`) and

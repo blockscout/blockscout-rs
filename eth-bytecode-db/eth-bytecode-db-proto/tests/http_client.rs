@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use eth_bytecode_db_proto::{
     blockscout::eth_bytecode_db::v2 as proto,
     http_client::{

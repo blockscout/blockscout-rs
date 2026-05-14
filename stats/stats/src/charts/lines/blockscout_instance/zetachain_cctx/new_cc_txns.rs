@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{collections::HashSet, ops::Range};
 
 use crate::{chart_prelude::*, charts::db_interaction::read::zetachain_cctx::TIMESTAMP_COLUMN};

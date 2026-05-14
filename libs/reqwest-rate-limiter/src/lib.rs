@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use governor::{clock, middleware, state, NotUntil, RateLimiter};
 use reqwest::{Request, Response};
 use reqwest_middleware::{Middleware, Next};

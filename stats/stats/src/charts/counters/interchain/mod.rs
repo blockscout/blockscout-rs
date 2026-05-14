@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod total_interchain_messages;
 mod total_interchain_messages_received;
 mod total_interchain_messages_sent;

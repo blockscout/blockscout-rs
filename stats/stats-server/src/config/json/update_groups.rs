@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::config::types::UpdateSchedule;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

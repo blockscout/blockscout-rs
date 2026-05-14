@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use reqwest::header::HeaderValue;
 use reqwest_middleware::Middleware;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};

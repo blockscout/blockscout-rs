@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use env_collector::{run_env_collector_cli, PrefixFilter};
 use tac_operation_lifecycle_server::Settings;
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::ChainId;
 use crate::{error::ParseError, proto};
 use blockscout_chains::BlockscoutChainData;

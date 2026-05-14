@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::time::{Duration, Instant};
 
 /// Timer that combines multiple time intervals into a single measurements.

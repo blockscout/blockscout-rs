@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::conversion::{self};
 use async_trait::async_trait;
 use bens_logic::subgraph::SubgraphReader;

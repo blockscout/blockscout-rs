@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod contracts_growth;
 pub mod new_contracts;
 pub mod new_verified_contracts;

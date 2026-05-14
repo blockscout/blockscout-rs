@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use serde_json::json;
 use wiremock::{
     matchers::{header_regex, method, path, query_param},

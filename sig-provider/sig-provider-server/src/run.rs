@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{health::HealthService, settings::SourcesSettings, Service, Settings};
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings, tracing};
 use sig_provider::{

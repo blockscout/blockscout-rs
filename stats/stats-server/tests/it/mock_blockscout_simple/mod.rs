@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Tests for fully initialized blockscout without reindexing.
 //!
 //! The tests also must not change the state of blockscout db.

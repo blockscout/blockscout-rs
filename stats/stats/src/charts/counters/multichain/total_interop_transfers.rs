@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use multichain_aggregator_entity::{interop_messages, interop_messages_transfers};
 
 use crate::{

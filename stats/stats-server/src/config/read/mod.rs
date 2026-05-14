@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Actually reading configs.
 //!
 //! Currently the configs are read from json files. Values can be overridden with env variables

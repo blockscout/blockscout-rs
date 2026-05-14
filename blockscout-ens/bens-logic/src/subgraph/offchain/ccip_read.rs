@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::protocols::{hash_name::CustomDomainIdGenerator, DeployedProtocol};
 use alloy::{
     providers::{ProviderBuilder, RootProvider},

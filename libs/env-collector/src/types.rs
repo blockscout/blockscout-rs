@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use derive_builder::Builder;
 use std::path::PathBuf;
 

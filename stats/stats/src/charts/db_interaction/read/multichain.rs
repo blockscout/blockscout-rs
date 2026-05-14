@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use chrono::{NaiveDateTime, Utc};
 use multichain_aggregator_entity::block_ranges;
 use num_traits::ToPrimitive;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::{VerifierMock, VerifierRequest, VerifierResponse, VerifierRoute};
 use smart_contract_verifier_proto::{
     blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,

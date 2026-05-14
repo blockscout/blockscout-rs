@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{types::BytecodeRemote, MatchContract};
 use crate::{
     search::bytecodes_comparison::{compare, CompareError, LocalBytecode},

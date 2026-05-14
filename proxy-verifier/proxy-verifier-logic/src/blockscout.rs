@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use api_client_framework::{reqwest::Method, Endpoint, Error, HttpApiClient};
 use blockscout_display_bytes::ToHex;
 use serde::Deserialize;

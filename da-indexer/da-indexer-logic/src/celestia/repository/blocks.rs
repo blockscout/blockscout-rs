@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use da_indexer_entity::celestia_blocks::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     sea_query::{Expr, OnConflict},

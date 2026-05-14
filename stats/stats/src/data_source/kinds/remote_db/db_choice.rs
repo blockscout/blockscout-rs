@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use sea_orm::DatabaseConnection;
 
 use crate::{ChartError, data_source::UpdateContext};

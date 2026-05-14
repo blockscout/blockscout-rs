@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::metrics;
 use std::{
     collections::BTreeMap,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![cfg(any(feature = "test-utils", test))]
 
 //! Mock data for interchain indexer DB (crosschain_messages, crosschain_transfers).

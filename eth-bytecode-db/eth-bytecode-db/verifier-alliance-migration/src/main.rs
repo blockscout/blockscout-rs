@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use sea_orm_migration::prelude::*;
 
 #[async_std::main]

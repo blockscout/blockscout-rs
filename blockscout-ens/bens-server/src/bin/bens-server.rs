@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use bens_server::Settings;
 use blockscout_service_launcher::launcher::ConfigSettings;
 

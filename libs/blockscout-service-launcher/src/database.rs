@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Context;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;

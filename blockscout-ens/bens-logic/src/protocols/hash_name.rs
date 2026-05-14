@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::primitives::{keccak256, B256};
 use alloy_ccip_read::DomainIdProvider;
 

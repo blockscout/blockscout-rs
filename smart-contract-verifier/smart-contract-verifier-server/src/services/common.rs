@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::settings::{FetcherSettings, S3FetcherSettings};
 use cron::Schedule;
 use s3::{creds::Credentials, Bucket, Region};

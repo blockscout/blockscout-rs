@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{config, Error, Result};
 use crate::blockscout::eth_bytecode_db::v2 as proto;
 

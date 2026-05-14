@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use crate::{

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::chart_prelude::*;
 
 use super::new_aa_wallets::NewAccountAbstractionWalletsInt;

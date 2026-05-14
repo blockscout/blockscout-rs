@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::code_artifact_types::{CborAuxdata, LinkReferences};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

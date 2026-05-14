@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use verification_common::verifier_alliance::{

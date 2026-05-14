@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::primitives::{Address, Bytes, ChainId, TxHash};
 use anyhow::{Context, Result};
 use interchain_indexer_entity::{

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #[macro_use]
 extern crate lazy_static;
 

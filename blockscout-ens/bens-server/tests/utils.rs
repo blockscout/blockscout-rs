@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![allow(unused_macros, unused_imports)]
 
 use actix_web::web::redirect;

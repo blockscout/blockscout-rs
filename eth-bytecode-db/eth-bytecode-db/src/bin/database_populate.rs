@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use entity::sources;
 use eth_bytecode_db::tests::verifier_mock::{generate_and_insert, ContractInfo, ContractType};
 use sea_orm::{Database, DatabaseConnection, EntityTrait, PaginatorTrait};

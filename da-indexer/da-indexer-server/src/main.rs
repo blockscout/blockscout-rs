@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::launcher::ConfigSettings;
 use da_indexer_server::Settings;
 

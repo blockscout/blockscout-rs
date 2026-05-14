@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![allow(dead_code)]
 mod helpers;
 mod test_db;

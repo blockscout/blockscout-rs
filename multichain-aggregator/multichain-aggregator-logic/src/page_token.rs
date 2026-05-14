@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy_primitives::{Address, B256};
 use base64::Engine;
 use bigdecimal::BigDecimal;
