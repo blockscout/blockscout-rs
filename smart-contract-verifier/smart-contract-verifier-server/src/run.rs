@@ -129,6 +129,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         service_name: "smart_contract_verifier".to_owned(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: Default::default(),
     };
 
     blockscout_service_launcher::tracing::init_logs(
@@ -137,5 +138,5 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         &settings.jaeger,
     )?;
 
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }
