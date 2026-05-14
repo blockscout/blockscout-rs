@@ -2,6 +2,7 @@
 name = "verifier-alliance-database"
 version = "0.1.0"
 edition = "2021"
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 anyhow = { workspace = true }

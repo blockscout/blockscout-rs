@@ -3,6 +3,7 @@ name = "visualizer"
 version = "0.1.0"
 edition = "2021"
 repository = "https://github.com/blockscout/blockscout-rs/sol_to_uml"
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 anyhow = "1.0"

@@ -2,6 +2,7 @@
 name = "multichain-aggregator-server"
 version = "0.1.0"
 edition = "2024"
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 multichain-aggregator-proto = { workspace = true }
