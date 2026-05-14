@@ -1,0 +1,305 @@
+# ArcNS BENS-compatible subgraph schema
+# Conforms to the ENS-like schema required by Blockscout/BENS.
+# This schema is intentionally identical in structure to the BENS ENS subgraph
+# schema used by all supported protocols (ens-subgraph, rns-subgraph, bns-subgraph).
+# Do NOT add ArcNS-specific fields here — BENS reads this schema directly.
+
+type Domain @entity {
+  "The namehash of the name (hex string)"
+  id: ID!
+  "The human readable name, if known"
+  name: String
+  "The human readable label name"
+  labelName: String
+  "keccak256(labelName)"
+  labelhash: Bytes
+  "The namehash of the parent name"
+  parent: Domain
+  "Child domains derived from this domain"
+  subdomains: [Domain!]! @derivedFrom(field: "parent")
+  "The number of subdomains"
+  subdomainCount: Int!
+  "Address logged from current resolver, if any"
+  resolvedAddress: Account
+  "The resolver that controls the domain's settings"
+  resolver: Resolver
+  "The time-to-live (TTL) value of the domain's records"
+  ttl: BigInt
+  "Indicates whether the domain has been migrated to a new registrar"
+  isMigrated: Boolean!
+  "The time when the domain was created"
+  createdAt: BigInt!
+  "The account that owns the domain (registry owner)"
+  owner: Account!
+  "The account that owns the ERC-721 NFT for the domain"
+  registrant: Account
+  "Wrapped owner — not applicable for ArcNS v1; always null"
+  wrappedOwner: Account
+  "The expiry date for the domain"
+  expiryDate: BigInt
+  "The registration associated with the domain"
+  registration: Registration @derivedFrom(field: "domain")
+  "Wrapped domain — not applicable for ArcNS v1; always null"
+  wrappedDomain: WrappedDomain @derivedFrom(field: "domain")
+  "The events associated with the domain"
+  events: [DomainEvent!]! @derivedFrom(field: "domain")
+  "Is domain stored offchain — always false for ArcNS v1"
+  storedOffchain: Boolean!
+  "Is domain resolved with wildcard — always false for ArcNS v1"
+  resolvedWithWildcard: Boolean!
+  "Token ID for the domain (ERC-721 tokenId = uint256(labelhash))"
+  tokenId: BigInt
+}
+
+interface DomainEvent {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+}
+
+type Transfer implements DomainEvent @entity {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  owner: Account!
+}
+
+type NewOwner implements DomainEvent @entity {
+  id: ID!
+  parentDomain: Domain!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  owner: Account!
+}
+
+type NewResolver implements DomainEvent @entity {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  resolver: Resolver!
+}
+
+type NewTTL implements DomainEvent @entity {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  ttl: BigInt!
+}
+
+# WrappedTransfer / NameWrapped / NameUnwrapped / FusesSet / ExpiryExtended
+# are included for schema completeness (BENS expects these types to exist)
+# but will never be populated for ArcNS v1 which has no NameWrapper.
+
+type WrappedTransfer implements DomainEvent @entity {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  owner: Account!
+}
+
+type NameWrapped implements DomainEvent @entity {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  name: String
+  fuses: Int!
+  owner: Account!
+  expiryDate: BigInt!
+}
+
+type NameUnwrapped implements DomainEvent @entity {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  owner: Account!
+}
+
+type FusesSet implements DomainEvent @entity {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  fuses: Int!
+}
+
+type ExpiryExtended implements DomainEvent @entity {
+  id: ID!
+  domain: Domain!
+  blockNumber: Int!
+  transactionID: Bytes!
+  expiryDate: BigInt!
+}
+
+type Registration @entity {
+  "Keyed by labelhash hex string (ENS convention)"
+  id: ID!
+  domain: Domain!
+  registrationDate: BigInt!
+  expiryDate: BigInt!
+  cost: BigInt
+  registrant: Account!
+  labelName: String
+  events: [RegistrationEvent!]! @derivedFrom(field: "registration")
+}
+
+interface RegistrationEvent {
+  id: ID!
+  registration: Registration!
+  blockNumber: Int!
+  transactionID: Bytes!
+}
+
+type NameRegistered implements RegistrationEvent @entity {
+  id: ID!
+  registration: Registration!
+  blockNumber: Int!
+  transactionID: Bytes!
+  registrant: Account!
+  expiryDate: BigInt!
+}
+
+type NameRenewed implements RegistrationEvent @entity {
+  id: ID!
+  registration: Registration!
+  blockNumber: Int!
+  transactionID: Bytes!
+  expiryDate: BigInt!
+}
+
+type NameTransferred implements RegistrationEvent @entity {
+  id: ID!
+  registration: Registration!
+  blockNumber: Int!
+  transactionID: Bytes!
+  newOwner: Account!
+}
+
+# WrappedDomain — included for schema completeness; never populated for ArcNS v1.
+type WrappedDomain @entity {
+  id: ID!
+  domain: Domain!
+  expiryDate: BigInt!
+  fuses: Int!
+  owner: Account!
+  name: String
+}
+
+type Account @entity {
+  id: ID!
+  domains: [Domain!]! @derivedFrom(field: "owner")
+  wrappedDomains: [WrappedDomain!] @derivedFrom(field: "owner")
+  registrations: [Registration!] @derivedFrom(field: "registrant")
+}
+
+type Resolver @entity {
+  "Concatenation of resolver address and domain namehash: {resolverAddress}-{nodeHex}"
+  id: ID!
+  domain: Domain
+  address: Bytes!
+  addr: Account
+  contentHash: Bytes
+  texts: [String!]
+  coinTypes: [BigInt!]
+  events: [ResolverEvent!]! @derivedFrom(field: "resolver")
+}
+
+interface ResolverEvent {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+}
+
+type AddrChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  addr: Account!
+}
+
+type MulticoinAddrChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  coinType: BigInt!
+  addr: Bytes!
+}
+
+type NameChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  name: String!
+}
+
+type AbiChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  contentType: BigInt!
+}
+
+type PubkeyChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  x: Bytes!
+  y: Bytes!
+}
+
+type TextChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  key: String!
+  value: String
+}
+
+type ContenthashChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  hash: Bytes!
+}
+
+type InterfaceChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  interfaceID: Bytes!
+  implementer: Bytes!
+}
+
+type AuthorisationChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  owner: Bytes!
+  target: Bytes!
+  isAuthorized: Boolean!
+}
+
+type VersionChanged implements ResolverEvent @entity {
+  id: ID!
+  resolver: Resolver!
+  blockNumber: Int!
+  transactionID: Bytes!
+  version: BigInt!
+}
