@@ -62,9 +62,9 @@ impl Default for PoolConfig {
         Self {
             health_period: Duration::from_millis(1000),
             max_block_lag: 100,
-            retry_count: 3,
-            retry_initial_delay_ms: 5,
-            retry_max_delay_ms: 100,
+            retry_count: 5,
+            retry_initial_delay_ms: 200,
+            retry_max_delay_ms: 5000,
         }
     }
 }

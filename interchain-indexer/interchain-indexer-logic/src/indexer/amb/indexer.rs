@@ -10,6 +10,7 @@ use alloy::{
     network::Ethereum,
     primitives::{Address, B256},
     providers::DynProvider,
+    rpc::types::Log,
 };
 use anyhow::{Result, ensure};
 use dashmap::DashMap;
@@ -146,7 +147,6 @@ impl AmbIndexer {
         let mut combined_stream = SelectAll::new();
         for chain in &ctx.chains {
             let filter = ctx.abi_registry.filter_for_chain(chain.chain_id)?;
-            tracing::warn!("Applied filer for chain {}: {:?}", chain.chain_id, filter);
             let stream = crate::indexer::evm::build_log_stream_for_chain(
                 chain.provider.clone(),
                 chain.chain_id,
@@ -165,35 +165,62 @@ impl AmbIndexer {
             if batch.is_empty() {
                 continue;
             }
-            let logs_by_tx = crate::indexer::evm::group_logs_by_transaction(&batch);
-            let hashes = logs_by_tx.keys().copied().collect::<Vec<_>>();
-            let receipts = crate::indexer::evm::fetch_receipts_for_transactions(
-                &provider,
-                hashes,
-                ctx.settings.receipt_concurrency as usize,
-            )
-            .await?;
-
-            for (hash, _logs) in logs_by_tx {
-                let Some((receipt_logs, block)) = receipts.get(&hash) else {
-                    tracing::warn!(
-                        bridge_id = ctx.bridge_id,
-                        chain_id,
-                        tx_hash = %hash,
-                        "missing AMB receipt fetched for transaction"
-                    );
-                    continue;
-                };
-                let event_ctx = EventContext {
-                    bridge_id: ctx.bridge_id,
+            if let Err(err) = Self::process_batch(&ctx, chain_id, &provider, &batch).await {
+                tracing::error!(
+                    err = ?err,
+                    bridge_id = ctx.bridge_id,
                     chain_id,
-                    abi_registry: &ctx.abi_registry,
-                    payload_processors: &ctx.payload_processors,
-                    buffer: &ctx.buffer,
-                    message_hash_lookup: &ctx.message_hash_lookup,
-                    pending_message_hash_events: &ctx.pending_message_hash_events,
-                };
-                events::dispatch_transaction(&event_ctx, receipt_logs, block).await?;
+                    batch_size = batch.len(),
+                    "failed to process AMB log batch, continuing"
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn process_batch(
+        ctx: &RunContext,
+        chain_id: i64,
+        provider: &DynProvider<Ethereum>,
+        batch: &[Log],
+    ) -> Result<()> {
+        let logs_by_tx = crate::indexer::evm::group_logs_by_transaction(batch);
+        let hashes = logs_by_tx.keys().copied().collect::<Vec<_>>();
+        let receipts = crate::indexer::evm::fetch_receipts_for_transactions(
+            provider,
+            hashes,
+            ctx.settings.receipt_concurrency as usize,
+        )
+        .await?;
+
+        for (hash, _logs) in logs_by_tx {
+            let Some((receipt_logs, block)) = receipts.get(&hash) else {
+                tracing::warn!(
+                    bridge_id = ctx.bridge_id,
+                    chain_id,
+                    tx_hash = %hash,
+                    "missing AMB receipt fetched for transaction"
+                );
+                continue;
+            };
+            let event_ctx = EventContext {
+                bridge_id: ctx.bridge_id,
+                chain_id,
+                abi_registry: &ctx.abi_registry,
+                payload_processors: &ctx.payload_processors,
+                buffer: &ctx.buffer,
+                message_hash_lookup: &ctx.message_hash_lookup,
+                pending_message_hash_events: &ctx.pending_message_hash_events,
+            };
+            if let Err(err) = events::dispatch_transaction(&event_ctx, receipt_logs, block).await {
+                tracing::error!(
+                    err = ?err,
+                    bridge_id = ctx.bridge_id,
+                    chain_id,
+                    tx_hash = %hash,
+                    "failed to dispatch AMB transaction, continuing"
+                );
             }
         }
 

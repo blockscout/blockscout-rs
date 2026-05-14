@@ -16,7 +16,8 @@ use super::{
     payload_processor::{PayloadDecodeContext, PayloadProcessor},
     types::{
         AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution, DestinationExecutionEvent,
-        Direction, Message, SourceRequest, SourceRequestEvent, ValidatorConfirmation,
+        Direction, Message, SourceRequest, SourceRequestEvent, SourceTransferDetails,
+        ValidatorConfirmation,
     },
     version::AmbSide,
 };
@@ -61,12 +62,26 @@ pub(super) async fn dispatch_transaction(
 
         let result = match event.name.as_str() {
             "UserRequestForAffirmation" => {
-                handle_source_request(ctx, event, log, block_timestamp, Direction::EthToGnosis)
-                    .await
+                handle_source_request(
+                    ctx,
+                    event,
+                    log,
+                    receipt_logs,
+                    block_timestamp,
+                    Direction::EthToGnosis,
+                )
+                .await
             }
             "UserRequestForSignature" => {
-                handle_source_request(ctx, event, log, block_timestamp, Direction::GnosisToEth)
-                    .await
+                handle_source_request(
+                    ctx,
+                    event,
+                    log,
+                    receipt_logs,
+                    block_timestamp,
+                    Direction::GnosisToEth,
+                )
+                .await
             }
             "SignedForAffirmation" | "SignedForUserRequest" => {
                 handle_validator_confirmation(ctx, event, log, block_timestamp).await
@@ -138,6 +153,7 @@ async fn handle_source_request(
     ctx: &EventContext<'_>,
     event: &alloy::json_abi::Event,
     log: &Log,
+    receipt_logs: &[Log],
     block_timestamp: chrono::NaiveDateTime,
     direction: Direction,
 ) -> Result<()> {
@@ -204,7 +220,65 @@ async fn handle_source_request(
         )
         .await?;
 
+    if let Some(source_transfer) =
+        find_tokens_bridging_initiated(ctx, receipt_logs, &message_id)
+    {
+        ctx.buffer
+            .alter(key, ctx.chain_id as u64, 0, |message| {
+                message.source_transfer = Some(source_transfer);
+                Ok(())
+            })
+            .await?;
+    }
+
     drain_pending_message_hash_events(ctx, message_hash, key).await
+}
+
+/// Scan the source transaction's receipt for the mediator's
+/// `TokensBridgingInitiated(address indexed token, address indexed sender, uint256 value, bytes32 indexed messageId)`
+/// event matching `message_id`. Returns the source-side token, sender, and amount.
+fn find_tokens_bridging_initiated(
+    ctx: &EventContext<'_>,
+    receipt_logs: &[Log],
+    message_id: &B256,
+) -> Option<SourceTransferDetails> {
+    for log in receipt_logs {
+        let topic = log.topic0()?;
+        let (event, kind) =
+            ctx.abi_registry
+                .event_for_log(ctx.chain_id, log.address(), topic)?;
+        if !matches!(kind, ContractKind::OmnibridgeMediator)
+            || event.name != "TokensBridgingInitiated"
+        {
+            continue;
+        }
+        let decoded = event.decode_log(log.data()).ok()?;
+        let token = match decoded.indexed.first()? {
+            DynSolValue::Address(value) => *value,
+            _ => continue,
+        };
+        let sender = match decoded.indexed.get(1)? {
+            DynSolValue::Address(value) => *value,
+            _ => continue,
+        };
+        let event_message_id = match decoded.indexed.get(2)? {
+            DynSolValue::FixedBytes(value, 32) => *value,
+            _ => continue,
+        };
+        if &event_message_id != message_id {
+            continue;
+        }
+        let amount = match decoded.body.first()? {
+            DynSolValue::Uint(value, _) => *value,
+            _ => continue,
+        };
+        return Some(SourceTransferDetails {
+            token,
+            sender,
+            amount,
+        });
+    }
+    None
 }
 
 async fn handle_validator_confirmation(

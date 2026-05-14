@@ -393,6 +393,16 @@ async fn ensure_asset_for_transfer(
     let a = token_to_asset.get(&k_src).copied();
     let b = token_to_asset.get(&k_dst).copied();
 
+    tracing::warn!(
+        chain_from = k_src.0,
+        chain_to = k_dst.0,
+        token_from = format!("0x{}", hex::encode(k_src.1.clone())),
+        token_to = format!("0x{}", hex::encode(k_dst.1.clone())),
+        src_asset = a,
+        dst_asset = b,
+        ""
+    );
+
     let asset_id = match (a, b) {
         (Some(x), Some(y)) if x == y => x,
         (Some(x), Some(y)) => {

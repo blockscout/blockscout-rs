@@ -100,6 +100,13 @@ pub(crate) enum DecodedPayload {
     },
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct SourceTransferDetails {
+    pub(crate) token: Address,
+    pub(crate) sender: Address,
+    pub(crate) amount: U256,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub(crate) struct Message {
     pub(crate) direction: Option<Direction>,
@@ -108,6 +115,7 @@ pub(crate) struct Message {
     pub(crate) validator_confirmations: HashMap<Address, ValidatorConfirmation>,
     pub(crate) destination_execution: Option<DestinationExecution>,
     pub(crate) decoded_payload: Option<DecodedPayload>,
+    pub(crate) source_transfer: Option<SourceTransferDetails>,
 }
 
 impl SourceRequest {

@@ -197,13 +197,6 @@ impl AbiRegistry {
             bail!("no AMB ABI filter entries for chain {chain_id}");
         }
 
-        tracing::warn!(
-            "Filter for chain {}: addresses={:?}, topics={:?}",
-            chain_id,
-            addresses,
-            topics
-        );
-
         Ok(Filter::new()
             .address(addresses.into_iter().collect::<Vec<_>>())
             .event_signature(topics.into_iter().collect::<Vec<_>>()))

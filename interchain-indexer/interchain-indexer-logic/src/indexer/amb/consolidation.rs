@@ -9,7 +9,9 @@ use sea_orm::{ActiveValue, prelude::BigDecimal};
 
 use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
 
-use super::types::{DecodedPayload, DestinationExecution, Direction, Message};
+use super::types::{
+    DecodedPayload, DestinationExecution, Direction, Message, SourceTransferDetails,
+};
 
 impl Consolidate for Message {
     fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>> {
@@ -52,7 +54,13 @@ impl Consolidate for Message {
         };
 
         let transfers = match &self.decoded_payload {
-            Some(payload) => vec![build_transfer(payload, key, direction, source)?],
+            Some(payload) => vec![build_transfer(
+                payload,
+                key,
+                direction,
+                source,
+                self.source_transfer.as_ref(),
+            )?],
             None => Vec::new(),
         };
 
@@ -129,13 +137,14 @@ fn build_transfer(
     key: &Key,
     direction: Direction,
     source: &super::types::AnnotatedEvent<super::types::SourceRequestEvent>,
+    source_transfer: Option<&SourceTransferDetails>,
 ) -> Result<crosschain_transfers::ActiveModel> {
     let DecodedPayload::OmnibridgeTransfer {
-        token_src_address,
+        token_src_address: payload_token_src,
         token_dst_address,
-        src_amount,
+        src_amount: payload_src_amount,
         dst_amount,
-        sender,
+        sender: payload_sender,
         recipient,
     } = payload;
 
@@ -145,6 +154,15 @@ fn build_transfer(
         }
     };
 
+    // The decoded application payload only carries destination-chain values
+    // (mediator calldata + `TokensBridged` event). Prefer the
+    // `TokensBridgingInitiated` event captured on the source chain for the
+    // source-side token, sender and amount.
+    let token_src = source_transfer.map_or(*payload_token_src, |t| t.token);
+    let src_amount_u256 = source_transfer.map_or(*payload_src_amount, |t| t.amount);
+    let sender_addr = source_transfer.map_or(*payload_sender, |t| t.sender);
+    let token_dst = token_dst_address.unwrap_or(*payload_token_src);
+
     Ok(crosschain_transfers::ActiveModel {
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
@@ -152,16 +170,11 @@ fn build_transfer(
         r#type: ActiveValue::Set(Some(TransferType::Erc20)),
         token_src_chain_id: ActiveValue::Set(token_src_chain_id),
         token_dst_chain_id: ActiveValue::Set(token_dst_chain_id),
-        src_amount: ActiveValue::Set(BigDecimal::from_str(&src_amount.to_string())?),
+        src_amount: ActiveValue::Set(BigDecimal::from_str(&src_amount_u256.to_string())?),
         dst_amount: ActiveValue::Set(BigDecimal::from_str(&dst_amount.to_string())?),
-        token_src_address: ActiveValue::Set(token_src_address.as_slice().to_vec()),
-        token_dst_address: ActiveValue::Set(
-            token_dst_address
-                .unwrap_or(*token_src_address)
-                .as_slice()
-                .to_vec(),
-        ),
-        sender_address: ActiveValue::Set(Some(sender.as_slice().to_vec())),
+        token_src_address: ActiveValue::Set(token_src.as_slice().to_vec()),
+        token_dst_address: ActiveValue::Set(token_dst.as_slice().to_vec()),
+        sender_address: ActiveValue::Set(Some(sender_addr.as_slice().to_vec())),
         recipient_address: ActiveValue::Set(Some(recipient.as_slice().to_vec())),
         token_ids: ActiveValue::Set(None),
         stats_processed: ActiveValue::Set(0),
