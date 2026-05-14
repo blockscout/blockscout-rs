@@ -203,7 +203,7 @@ impl TestCase {
             };
             let ordered_auxdata_ranges = ordered_auxdata
                 .into_iter()
-                .map(|auxdata| (auxdata.offset..auxdata.offset + auxdata.value.len()))
+                .map(|auxdata| auxdata.offset..auxdata.offset + auxdata.value.len())
                 .collect::<Vec<_>>();
 
             let mut parts = Vec::new();
