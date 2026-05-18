@@ -18,6 +18,7 @@ use url::Url;
 
 const MAX_NETWORKS_LIMIT: usize = 5;
 const MAX_PROTOCOLS_FROM_USER_INPUT: usize = 5;
+const PROTOCOL_DAPP_URL_TEMPLATE_NAME: &str = "protocol_dapp_url";
 
 #[derive(Debug, Clone)]
 pub struct Protocoler {
@@ -148,32 +149,30 @@ pub struct ProtocolMeta {
     /// full domain name (e.g. `cc.imfx.eth`). When the placeholder cannot be
     /// substituted (e.g. the domain has no resolved name), the URL is omitted.
     #[serde(default)]
-    pub protocol_url_template: Option<ProtocolUrlTemplate>,
+    pub protocol_dapp_url_template: Option<ProtocolDappUrlTemplate>,
 }
 
 impl ProtocolMeta {
-    pub fn render_protocol_url(&self, name: Option<&str>) -> Option<String> {
-        let template = self.protocol_url_template.as_ref()?;
+    pub fn render_protocol_dapp_url(&self, name: Option<&str>) -> Option<String> {
+        let template = self.protocol_dapp_url_template.as_ref()?;
         let name = name?;
         template.render(name)
     }
 }
 
-const PROTOCOL_URL_TEMPLATE_NAME: &str = "protocol_url";
-
 /// A URL template (Tera/Jinja syntax) compiled once at config load time so
 /// per-request rendering is cheap. Equality and serialization use only the
 /// raw template string.
 #[derive(Debug, Clone)]
-pub struct ProtocolUrlTemplate {
+pub struct ProtocolDappUrlTemplate {
     raw: String,
     compiled: Arc<Tera>,
 }
 
-impl ProtocolUrlTemplate {
+impl ProtocolDappUrlTemplate {
     pub fn new(raw: String) -> Result<Self, tera::Error> {
         let mut tera = Tera::default();
-        tera.add_raw_template(PROTOCOL_URL_TEMPLATE_NAME, &raw)?;
+        tera.add_raw_template(PROTOCOL_DAPP_URL_TEMPLATE_NAME, &raw)?;
         Ok(Self {
             raw,
             compiled: Arc::new(tera),
@@ -183,14 +182,14 @@ impl ProtocolUrlTemplate {
     pub fn render(&self, name: &str) -> Option<String> {
         let mut ctx = tera::Context::new();
         ctx.insert("name", name);
-        match self.compiled.render(PROTOCOL_URL_TEMPLATE_NAME, &ctx) {
+        match self.compiled.render(PROTOCOL_DAPP_URL_TEMPLATE_NAME, &ctx) {
             Ok(url) => Some(url),
             Err(err) => {
                 tracing::warn!(
                     template = self.raw,
                     name,
                     error = ?err,
-                    "failed to render protocol url template",
+                    "failed to render protocol dapp url template",
                 );
                 None
             }
@@ -198,21 +197,21 @@ impl ProtocolUrlTemplate {
     }
 }
 
-impl PartialEq for ProtocolUrlTemplate {
+impl PartialEq for ProtocolDappUrlTemplate {
     fn eq(&self, other: &Self) -> bool {
         self.raw == other.raw
     }
 }
 
-impl Eq for ProtocolUrlTemplate {}
+impl Eq for ProtocolDappUrlTemplate {}
 
-impl Serialize for ProtocolUrlTemplate {
+impl Serialize for ProtocolDappUrlTemplate {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.raw.serialize(serializer)
     }
 }
 
-impl<'de> Deserialize<'de> for ProtocolUrlTemplate {
+impl<'de> Deserialize<'de> for ProtocolDappUrlTemplate {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
         Self::new(raw).map_err(serde::de::Error::custom)
@@ -598,12 +597,13 @@ mod tld_tests {
 }
 
 #[cfg(test)]
-mod protocol_url_template_tests {
-    use super::{ProtocolMeta, ProtocolUrlTemplate};
+mod protocol_dapp_url_template_tests {
+    use super::{ProtocolDappUrlTemplate, ProtocolMeta};
 
     #[test]
     fn renders_name_placeholder() {
-        let t = ProtocolUrlTemplate::new("https://app.ens.domains/{{ name }}".to_string()).unwrap();
+        let t =
+            ProtocolDappUrlTemplate::new("https://app.ens.domains/{{ name }}".to_string()).unwrap();
         assert_eq!(
             t.render("cc.imfx.eth").as_deref(),
             Some("https://app.ens.domains/cc.imfx.eth"),
@@ -612,7 +612,7 @@ mod protocol_url_template_tests {
 
     #[test]
     fn template_without_placeholder_is_returned_as_is() {
-        let t = ProtocolUrlTemplate::new("https://app.ens.domains/".to_string()).unwrap();
+        let t = ProtocolDappUrlTemplate::new("https://app.ens.domains/".to_string()).unwrap();
         assert_eq!(
             t.render("anything").as_deref(),
             Some("https://app.ens.domains/"),
@@ -622,7 +622,7 @@ mod protocol_url_template_tests {
     #[test]
     fn invalid_template_fails_compile() {
         // Unterminated expression should fail at construction time.
-        let result = ProtocolUrlTemplate::new("https://example.com/{{ name".to_string());
+        let result = ProtocolDappUrlTemplate::new("https://example.com/{{ name".to_string());
         assert!(result.is_err());
     }
 
@@ -630,37 +630,41 @@ mod protocol_url_template_tests {
     fn unknown_placeholder_renders_to_none() {
         // `unknown` is not provided by render() — Tera errors out and we
         // surface it as None so the URL is simply omitted from the response.
-        let t = ProtocolUrlTemplate::new("https://example.com/{{ unknown }}".to_string()).unwrap();
+        let t =
+            ProtocolDappUrlTemplate::new("https://example.com/{{ unknown }}".to_string()).unwrap();
         assert!(t.render("anything").is_none());
     }
 
     #[test]
     fn meta_render_returns_none_when_template_absent() {
         let meta = ProtocolMeta::default();
-        assert!(meta.render_protocol_url(Some("foo.eth")).is_none());
+        assert!(meta.render_protocol_dapp_url(Some("foo.eth")).is_none());
     }
 
     #[test]
     fn meta_render_returns_none_when_name_absent() {
         let meta = ProtocolMeta {
-            protocol_url_template: Some(
-                ProtocolUrlTemplate::new("https://app.ens.domains/{{ name }}".to_string()).unwrap(),
+            protocol_dapp_url_template: Some(
+                ProtocolDappUrlTemplate::new("https://app.ens.domains/{{ name }}".to_string())
+                    .unwrap(),
             ),
             ..Default::default()
         };
-        assert!(meta.render_protocol_url(None).is_none());
+        assert!(meta.render_protocol_dapp_url(None).is_none());
     }
 
     #[test]
     fn meta_render_substitutes_name() {
         let meta = ProtocolMeta {
-            protocol_url_template: Some(
-                ProtocolUrlTemplate::new("https://app.ens.domains/{{ name }}".to_string()).unwrap(),
+            protocol_dapp_url_template: Some(
+                ProtocolDappUrlTemplate::new("https://app.ens.domains/{{ name }}".to_string())
+                    .unwrap(),
             ),
             ..Default::default()
         };
         assert_eq!(
-            meta.render_protocol_url(Some("cc.imfx.eth")).as_deref(),
+            meta.render_protocol_dapp_url(Some("cc.imfx.eth"))
+                .as_deref(),
             Some("https://app.ens.domains/cc.imfx.eth"),
         );
     }
@@ -668,7 +672,7 @@ mod protocol_url_template_tests {
     #[test]
     fn deserializes_and_round_trips_through_json() {
         let json = r#""https://app.ens.domains/{{ name }}""#;
-        let parsed: ProtocolUrlTemplate = serde_json::from_str(json).unwrap();
+        let parsed: ProtocolDappUrlTemplate = serde_json::from_str(json).unwrap();
         assert_eq!(
             parsed.render("vitalik.eth").as_deref(),
             Some("https://app.ens.domains/vitalik.eth"),
@@ -680,7 +684,7 @@ mod protocol_url_template_tests {
     #[test]
     fn deserialization_of_invalid_template_fails_loud() {
         let json = r#""https://example.com/{{ name""#;
-        let result: Result<ProtocolUrlTemplate, _> = serde_json::from_str(json);
+        let result: Result<ProtocolDappUrlTemplate, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }
 }

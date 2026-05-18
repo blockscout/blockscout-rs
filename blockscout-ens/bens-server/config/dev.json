@@ -108,7 +108,7 @@
           "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
           "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
           "docs_url": "https://docs.ens.domains/",
-          "protocol_url_template": "https://app.ens.domains/{{ name }}"
+          "protocol_dapp_url_template": "https://app.ens.domains/{{ name }}"
         },
         "specific": {
           "type": "ens_like",
@@ -135,7 +135,7 @@
           "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
           "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
           "docs_url": "https://docs.ens.domains/",
-          "protocol_url_template": "https://sepolia.app.ens.domains/{{ name }}"
+          "protocol_dapp_url_template": "https://sepolia.app.ens.domains/{{ name }}"
         }
       },
       "d3-connect-shib": {
