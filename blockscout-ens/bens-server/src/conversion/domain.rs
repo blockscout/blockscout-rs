@@ -150,6 +150,10 @@ pub fn detailed_domain_from_logic(
         .into_iter()
         .map(|t| domain_token_from_logic(t, chain_id))
         .collect();
+    let protocol_url = protocol
+        .info
+        .meta
+        .render_protocol_url(domain.name.as_deref());
     let protocol = Some(protocol_from_logic(protocol, network));
     Ok(proto::DetailedDomain {
         id: domain.id,
@@ -166,6 +170,7 @@ pub fn detailed_domain_from_logic(
         stored_offchain: domain.stored_offchain,
         resolved_with_wildcard: domain.resolved_with_wildcard,
         resolver_address,
+        protocol_url,
     })
 }
 
@@ -184,6 +189,11 @@ pub fn domain_from_logic(
         .wrapped_owner
         .map(|wrapped_owner| address_from_str_logic(&wrapped_owner, chain_id))
         .transpose()?;
+    let protocol_url = output
+        .protocol
+        .info
+        .meta
+        .render_protocol_url(domain.name.as_deref());
     let protocol = Some(protocol_from_logic(
         output.protocol,
         output.deployment_network,
@@ -197,6 +207,7 @@ pub fn domain_from_logic(
         expiry_date: domain.expiry_date.map(date_from_logic),
         registration_date: date_from_logic(domain.registration_date),
         protocol,
+        protocol_url,
     })
 }
 
