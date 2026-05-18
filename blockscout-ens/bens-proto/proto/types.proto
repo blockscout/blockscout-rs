@@ -22,6 +22,9 @@ message Domain {
     optional string expiry_date = 6;
     // Protocol that domain belongs to
     ProtocolInfo protocol = 8;
+    // Optional. Deep link to this domain inside the protocol's own dApp,
+    // rendered from the protocol's `protocol_dapp_url_template` config.
+    optional string protocol_dapp_url = 9;
   }
   
   message DetailedDomain {
@@ -51,6 +54,9 @@ message Domain {
     bool stored_offchain = 13;
     bool resolved_with_wildcard = 14;
     optional Address resolver_address = 15;
+    // Optional. Deep link to this domain inside the protocol's own dApp,
+    // rendered from the protocol's `protocol_dapp_url_template` config.
+    optional string protocol_dapp_url = 16;
   }
   
   message ProtocolInfo {

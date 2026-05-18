@@ -20,5 +20,6 @@
   "protocol": {{ ens_protocol | json_encode() | safe }},
   "resolved_with_wildcard": false,
   "resolver_address": null,
+  "protocol_dapp_url": "https://app.ens.domains/abcnews.eth",
   "stored_offchain": false
 }

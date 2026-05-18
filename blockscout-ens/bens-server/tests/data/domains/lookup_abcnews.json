@@ -11,6 +11,7 @@
     "resolved_address": {
       "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
     },
+    "protocol_dapp_url": null,
     "protocol": {{ genome_protocol | json_encode() | safe }}
   },
   {
@@ -23,6 +24,7 @@
     "wrapped_owner": null,
     "registration_date": "2017-06-14T01:21:44.000Z",
     "resolved_address": null,
+    "protocol_dapp_url": "https://app.ens.domains/abcnews.eth",
     "protocol": {{ ens_protocol | json_encode() | safe }}
   }
 ]

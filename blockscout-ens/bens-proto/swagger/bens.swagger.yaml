@@ -747,6 +747,11 @@ definitions:
         type: boolean
       resolver_address:
         $ref: '#/definitions/v1Address'
+      protocol_dapp_url:
+        type: string
+        description: |-
+          Optional. Deep link to this domain inside the protocol's own dApp,
+          rendered from the protocol's `protocol_dapp_url_template` config.
   v1Domain:
     type: object
     properties:
@@ -774,6 +779,11 @@ definitions:
       protocol:
         $ref: '#/definitions/v1ProtocolInfo'
         title: Protocol that domain belongs to
+      protocol_dapp_url:
+        type: string
+        description: |-
+          Optional. Deep link to this domain inside the protocol's own dApp,
+          rendered from the protocol's `protocol_dapp_url_template` config.
   v1DomainEvent:
     type: object
     properties:
