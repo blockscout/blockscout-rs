@@ -1,13 +1,12 @@
 use alloy::{
-    dyn_abi::{DynSolValue, EventExt, JsonAbiExt},
+    dyn_abi::{DynSolValue, JsonAbiExt},
     primitives::{Address, B256, Selector, U256},
-    rpc::types::Log,
 };
 use anyhow::{Context, Result};
 
 use super::{
-    abi::{AbiRegistry, ContractKind},
-    types::DecodedPayload,
+    abi::AbiRegistry,
+    types::{DecodedPayload, DestinationTransferDetails},
 };
 
 pub(crate) trait PayloadProcessor: Send + Sync {
@@ -21,7 +20,7 @@ pub(crate) struct PayloadDecodeContext<'a> {
     pub(crate) sender: Address,
     pub(crate) message_id: B256,
     pub(crate) application_calldata: &'a [u8],
-    pub(crate) destination_receipt_logs: &'a [Log],
+    pub(crate) destination_transfer: Option<&'a DestinationTransferDetails>,
     pub(crate) abi_registry: &'a AbiRegistry,
 }
 
@@ -78,8 +77,10 @@ impl PayloadProcessor for OmnibridgePayloadProcessor {
             _ => return Ok(None),
         };
 
-        let (token_dst_address, final_recipient, dst_amount) =
-            find_tokens_bridged(ctx).unwrap_or((None, recipient, amount));
+        let (token_dst_address, final_recipient, dst_amount) = ctx
+            .destination_transfer
+            .map(|transfer| (Some(transfer.token), transfer.recipient, transfer.amount))
+            .unwrap_or((None, recipient, amount));
 
         if token_dst_address.is_none() {
             tracing::warn!(
@@ -163,41 +164,4 @@ fn expect_uint(values: &[DynSolValue], index: usize, function_name: &str) -> Res
         Some(DynSolValue::Uint(value, _)) => Ok(*value),
         other => anyhow::bail!("expected uint argument {index} in {function_name}, got {other:?}"),
     }
-}
-
-fn find_tokens_bridged(ctx: &PayloadDecodeContext<'_>) -> Option<(Option<Address>, Address, U256)> {
-    for log in ctx.destination_receipt_logs {
-        if log.address() != ctx.executor {
-            continue;
-        }
-        let Some(topic) = log.topic0() else {
-            continue;
-        };
-        let Some((event, ContractKind::OmnibridgeMediator)) =
-            ctx.abi_registry
-                .event_for_log(ctx.dst_chain_id, log.address(), topic)
-        else {
-            continue;
-        };
-        if event.name != "TokensBridged" {
-            continue;
-        }
-
-        let decoded = event.decode_log(log.data()).ok()?;
-        let token = match decoded.indexed.first()? {
-            DynSolValue::Address(value) => *value,
-            _ => return None,
-        };
-        let recipient = match decoded.indexed.get(1)? {
-            DynSolValue::Address(value) => *value,
-            _ => return None,
-        };
-        let amount = match decoded.body.first()? {
-            DynSolValue::Uint(value, _) => *value,
-            _ => return None,
-        };
-        return Some((Some(token), recipient, amount));
-    }
-
-    None
 }

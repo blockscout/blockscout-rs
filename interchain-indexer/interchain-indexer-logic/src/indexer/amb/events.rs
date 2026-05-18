@@ -16,8 +16,8 @@ use super::{
     payload_processor::{PayloadDecodeContext, PayloadProcessor},
     types::{
         AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution, DestinationExecutionEvent,
-        Direction, Message, SourceRequest, SourceRequestEvent, SourceTransferDetails,
-        ValidatorConfirmation,
+        DestinationTransferDetails, Direction, Message, SourceRequest, SourceRequestEvent,
+        SourceTransferDetails, ValidatorConfirmation,
     },
     version::AmbSide,
 };
@@ -46,8 +46,6 @@ pub(super) async fn dispatch_transaction(
     let block_timestamp = chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
         .map(|dt| dt.naive_utc())
         .context("invalid block timestamp")?;
-
-    let mut destination_for_payload: Option<(Key, DestinationExecutionEvent)> = None;
 
     for log in receipt_logs {
         let Some(topic) = log.topic0() else {
@@ -94,13 +92,11 @@ pub(super) async fn dispatch_transaction(
                     ctx,
                     event,
                     log,
+                    receipt_logs,
                     block_timestamp,
                     DestinationKind::Affirmation,
                 )
                 .await;
-                if let Ok(Some(value)) = &out {
-                    destination_for_payload = Some(value.clone());
-                }
                 out.map(|_| ())
             }
             "RelayedMessage" => {
@@ -108,13 +104,11 @@ pub(super) async fn dispatch_transaction(
                     ctx,
                     event,
                     log,
+                    receipt_logs,
                     block_timestamp,
                     DestinationKind::Relayed,
                 )
                 .await;
-                if let Ok(Some(value)) = &out {
-                    destination_for_payload = Some(value.clone());
-                }
                 out.map(|_| ())
             }
             _ => Ok(()),
@@ -140,10 +134,6 @@ pub(super) async fn dispatch_transaction(
                 "processed AMB event"
             );
         }
-    }
-
-    if let Some((key, destination)) = destination_for_payload {
-        maybe_decode_payload(ctx, receipt_logs, key, destination).await?;
     }
 
     Ok(())
@@ -220,9 +210,7 @@ async fn handle_source_request(
         )
         .await?;
 
-    if let Some(source_transfer) =
-        find_tokens_bridging_initiated(ctx, receipt_logs, &message_id)
-    {
+    if let Some(source_transfer) = find_tokens_bridging_initiated(ctx, receipt_logs, &message_id) {
         ctx.buffer
             .alter(key, ctx.chain_id as u64, 0, |message| {
                 message.source_transfer = Some(source_transfer);
@@ -231,7 +219,8 @@ async fn handle_source_request(
             .await?;
     }
 
-    drain_pending_message_hash_events(ctx, message_hash, key).await
+    drain_pending_message_hash_events(ctx, message_hash, key).await?;
+    maybe_decode_payload(ctx, key).await
 }
 
 /// Scan the source transaction's receipt for the mediator's
@@ -243,39 +232,95 @@ fn find_tokens_bridging_initiated(
     message_id: &B256,
 ) -> Option<SourceTransferDetails> {
     for log in receipt_logs {
-        let topic = log.topic0()?;
-        let (event, kind) =
+        let Some(topic) = log.topic0() else {
+            continue;
+        };
+        let Some((event, kind)) =
             ctx.abi_registry
-                .event_for_log(ctx.chain_id, log.address(), topic)?;
+                .event_for_log(ctx.chain_id, log.address(), topic)
+        else {
+            continue;
+        };
         if !matches!(kind, ContractKind::OmnibridgeMediator)
             || event.name != "TokensBridgingInitiated"
         {
             continue;
         }
-        let decoded = event.decode_log(log.data()).ok()?;
-        let token = match decoded.indexed.first()? {
-            DynSolValue::Address(value) => *value,
-            _ => continue,
+        let Ok(decoded) = event.decode_log(log.data()) else {
+            continue;
         };
-        let sender = match decoded.indexed.get(1)? {
-            DynSolValue::Address(value) => *value,
-            _ => continue,
+        let Some(DynSolValue::Address(token)) = decoded.indexed.first() else {
+            continue;
         };
-        let event_message_id = match decoded.indexed.get(2)? {
-            DynSolValue::FixedBytes(value, 32) => *value,
-            _ => continue,
+        let Some(DynSolValue::Address(sender)) = decoded.indexed.get(1) else {
+            continue;
         };
-        if &event_message_id != message_id {
+        let Some(DynSolValue::FixedBytes(event_message_id, 32)) = decoded.indexed.get(2) else {
+            continue;
+        };
+        if event_message_id != message_id {
             continue;
         }
-        let amount = match decoded.body.first()? {
-            DynSolValue::Uint(value, _) => *value,
-            _ => continue,
+        let Some(DynSolValue::Uint(amount, _)) = decoded.body.first() else {
+            continue;
         };
         return Some(SourceTransferDetails {
-            token,
-            sender,
-            amount,
+            token: *token,
+            sender: *sender,
+            amount: *amount,
+        });
+    }
+    None
+}
+
+/// Scan the destination transaction's receipt for the mediator's
+/// `TokensBridged(address indexed token, address indexed recipient, uint256 value, bytes32 indexed messageId)`
+/// event matching `message_id`. Returns the destination-side token, recipient,
+/// and amount so payload decoding can be retried after source-side data arrives.
+fn find_tokens_bridged(
+    ctx: &EventContext<'_>,
+    receipt_logs: &[Log],
+    executor: Address,
+    message_id: &B256,
+) -> Option<DestinationTransferDetails> {
+    for log in receipt_logs {
+        if log.address() != executor {
+            continue;
+        }
+        let Some(topic) = log.topic0() else {
+            continue;
+        };
+        let Some((event, kind)) =
+            ctx.abi_registry
+                .event_for_log(ctx.chain_id, log.address(), topic)
+        else {
+            continue;
+        };
+        if !matches!(kind, ContractKind::OmnibridgeMediator) || event.name != "TokensBridged" {
+            continue;
+        }
+        let Ok(decoded) = event.decode_log(log.data()) else {
+            continue;
+        };
+        let Some(DynSolValue::Address(token)) = decoded.indexed.first() else {
+            continue;
+        };
+        let Some(DynSolValue::Address(recipient)) = decoded.indexed.get(1) else {
+            continue;
+        };
+        let Some(DynSolValue::FixedBytes(event_message_id, 32)) = decoded.indexed.get(2) else {
+            continue;
+        };
+        if event_message_id != message_id {
+            continue;
+        }
+        let Some(DynSolValue::Uint(amount, _)) = decoded.body.first() else {
+            continue;
+        };
+        return Some(DestinationTransferDetails {
+            token: *token,
+            recipient: *recipient,
+            amount: *amount,
         });
     }
     None
@@ -435,9 +480,10 @@ async fn handle_destination_execution(
     ctx: &EventContext<'_>,
     event: &alloy::json_abi::Event,
     log: &Log,
+    receipt_logs: &[Log],
     block_timestamp: chrono::NaiveDateTime,
     kind: DestinationKind,
-) -> Result<Option<(Key, DestinationExecutionEvent)>> {
+) -> Result<Option<Key>> {
     let decoded = event.decode_log(log.data())?;
     let sender = expect_address(decoded.indexed.first(), "sender")?;
     let executor = expect_address(decoded.indexed.get(1), "executor")?;
@@ -463,6 +509,7 @@ async fn handle_destination_execution(
         },
         destination_chain_id: ctx.chain_id,
     };
+    let destination_transfer = find_tokens_bridged(ctx, receipt_logs, executor, &message_id);
 
     ctx.buffer
         .alter(key, ctx.chain_id as u64, block_number, |message| {
@@ -470,50 +517,67 @@ async fn handle_destination_execution(
                 DestinationKind::Affirmation => DestinationExecution::Affirmation(annotated),
                 DestinationKind::Relayed => DestinationExecution::Relayed(annotated),
             });
+            if let Some(destination_transfer) = destination_transfer {
+                message.destination_transfer = Some(destination_transfer);
+            }
             Ok(())
         })
         .await?;
 
-    Ok(Some((key, execution)))
+    maybe_decode_payload(ctx, key).await?;
+
+    Ok(Some(key))
 }
 
-async fn maybe_decode_payload(
-    ctx: &EventContext<'_>,
-    receipt_logs: &[Log],
-    key: Key,
-    destination: DestinationExecutionEvent,
-) -> Result<()> {
-    let mut source_request = None;
-    ctx.buffer
-        .alter(key, ctx.chain_id as u64, 0, |message| {
-            source_request = message.source_request.clone();
-            Ok(())
-        })
-        .await?;
+async fn maybe_decode_payload(ctx: &EventContext<'_>, key: Key) -> Result<()> {
+    let (source_request, destination_execution, destination_transfer, is_decoded) = {
+        let entry = ctx.buffer.get_mut_or_default(key).await?;
+        (
+            entry.inner.source_request.clone(),
+            entry.inner.destination_execution.clone(),
+            entry.inner.destination_transfer.clone(),
+            entry.inner.decoded_payload.is_some(),
+        )
+    };
+    if is_decoded {
+        return Ok(());
+    }
     let Some(source_request) = source_request else {
         return Ok(());
     };
+    let Some(destination_execution) = destination_execution else {
+        return Ok(());
+    };
     let source_event = source_request.event();
+    let destination_event = destination_execution.event();
 
     for processor in ctx.payload_processors {
-        if !processor.matches(ctx.chain_id, destination.executor) {
+        if !processor.matches(
+            destination_event.destination_chain_id,
+            destination_event.event.executor,
+        ) {
             continue;
         }
         let decode_ctx = PayloadDecodeContext {
-            dst_chain_id: ctx.chain_id,
-            executor: destination.executor,
+            dst_chain_id: destination_event.destination_chain_id,
+            executor: destination_event.event.executor,
             sender: source_event.event.header.sender,
-            message_id: destination.message_id,
+            message_id: destination_event.event.message_id,
             application_calldata: &source_event.event.application_calldata,
-            destination_receipt_logs: receipt_logs,
+            destination_transfer: destination_transfer.as_ref(),
             abi_registry: ctx.abi_registry,
         };
         if let Some(decoded_payload) = processor.decode(&decode_ctx)? {
             ctx.buffer
-                .alter(key, ctx.chain_id as u64, 0, |message| {
-                    message.decoded_payload = Some(decoded_payload);
-                    Ok(())
-                })
+                .alter(
+                    key,
+                    destination_event.destination_chain_id as u64,
+                    destination_event.block_number as u64,
+                    |message| {
+                        message.decoded_payload = Some(decoded_payload);
+                        Ok(())
+                    },
+                )
                 .await?;
             break;
         }

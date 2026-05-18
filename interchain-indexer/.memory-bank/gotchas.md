@@ -63,6 +63,25 @@ Events are skipped when they fail either filter:
 
 ---
 
+## AMB Source and Destination Events Can Arrive Out of Order
+
+**Symptom:** AMB/Omnibridge messages are indexed, but transfers are missing for
+one direction, especially when destination-chain execution is processed before
+the source-chain request during catchup.
+
+**Root cause:** AMB indexing merges independent chain streams. Destination
+events such as `RelayedMessage` / `AffirmationCompleted` can be observed before
+the matching `UserRequestForSignature` / `UserRequestForAffirmation`. Payload
+decoding must therefore not depend on having source data available while the
+destination receipt logs are still in hand.
+
+**Fix:** Persist destination-side `TokensBridged` details into the buffered AMB
+message and retry payload decoding whenever either source or destination state is
+updated. Keep the decode path based on buffered state, not transient receipt-log
+availability.
+
+---
+
 ## Token Info Caches Errors
 
 **Symptom:** Token metadata fetch fails once, then never retries.
