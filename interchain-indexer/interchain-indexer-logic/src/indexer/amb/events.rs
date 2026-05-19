@@ -530,7 +530,7 @@ async fn handle_destination_execution(
 }
 
 async fn maybe_decode_payload(ctx: &EventContext<'_>, key: Key) -> Result<()> {
-    let (source_request, destination_execution, destination_transfer, is_decoded) = {
+    let (source_request, destination_execution, destination_transfer, has_decoded_payload) = {
         let entry = ctx.buffer.get_mut_or_default(key).await?;
         (
             entry.inner.source_request.clone(),
@@ -539,45 +539,53 @@ async fn maybe_decode_payload(ctx: &EventContext<'_>, key: Key) -> Result<()> {
             entry.inner.decoded_payload.is_some(),
         )
     };
-    if is_decoded {
+    if has_decoded_payload && destination_transfer.is_none() {
         return Ok(());
     }
     let Some(source_request) = source_request else {
         return Ok(());
     };
-    let Some(destination_execution) = destination_execution else {
-        return Ok(());
-    };
     let source_event = source_request.event();
-    let destination_event = destination_execution.event();
+    let (destination_chain_id, executor, message_id, mutation_chain_id, mutation_block_number) =
+        match destination_execution.as_ref() {
+            Some(destination_execution) => {
+                let destination_event = destination_execution.event();
+                (
+                    destination_event.destination_chain_id,
+                    destination_event.event.executor,
+                    destination_event.event.message_id,
+                    destination_event.destination_chain_id as u64,
+                    destination_event.block_number as u64,
+                )
+            }
+            None => (
+                source_event.event.header.destination_chain_id,
+                source_event.event.header.executor,
+                source_event.event.message_id,
+                source_event.source_chain_id as u64,
+                source_event.block_number as u64,
+            ),
+        };
 
     for processor in ctx.payload_processors {
-        if !processor.matches(
-            destination_event.destination_chain_id,
-            destination_event.event.executor,
-        ) {
+        if !processor.matches(destination_chain_id, executor) {
             continue;
         }
         let decode_ctx = PayloadDecodeContext {
-            dst_chain_id: destination_event.destination_chain_id,
-            executor: destination_event.event.executor,
+            dst_chain_id: destination_chain_id,
+            executor,
             sender: source_event.event.header.sender,
-            message_id: destination_event.event.message_id,
+            message_id,
             application_calldata: &source_event.event.application_calldata,
             destination_transfer: destination_transfer.as_ref(),
             abi_registry: ctx.abi_registry,
         };
         if let Some(decoded_payload) = processor.decode(&decode_ctx)? {
             ctx.buffer
-                .alter(
-                    key,
-                    destination_event.destination_chain_id as u64,
-                    destination_event.block_number as u64,
-                    |message| {
-                        message.decoded_payload = Some(decoded_payload);
-                        Ok(())
-                    },
-                )
+                .alter(key, mutation_chain_id, mutation_block_number, |message| {
+                    message.decoded_payload = Some(decoded_payload);
+                    Ok(())
+                })
                 .await?;
             break;
         }

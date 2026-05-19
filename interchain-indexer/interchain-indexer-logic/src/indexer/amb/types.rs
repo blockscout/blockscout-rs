@@ -88,7 +88,7 @@ pub(crate) struct ValidatorConfirmation {
     pub(crate) block_timestamp: NaiveDateTime,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum DecodedPayload {
     OmnibridgeTransfer {
         token_src_address: Address,

@@ -104,11 +104,20 @@ impl PayloadProcessor for OmnibridgePayloadProcessor {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use alloy::{
         dyn_abi::{DynSolValue, JsonAbiExt},
         json_abi::Function,
-        primitives::{U256, address},
+        primitives::{Address, B256, U256, address},
     };
+
+    use crate::indexer::amb::{
+        abi::{AbiRegistry, ContractAbi, ContractKind},
+        types::{DecodedPayload, DestinationTransferDetails},
+    };
+
+    use super::{OmnibridgePayloadProcessor, PayloadDecodeContext, PayloadProcessor};
 
     #[test]
     fn function_decode_uses_selector_stripped_calldata() {
@@ -147,6 +156,131 @@ mod tests {
 
         assert_eq!(decoded, values);
         assert!(function.abi_decode_input(&calldata).is_err());
+    }
+
+    #[test]
+    fn omnibridge_payload_decode_works_before_destination_execution() {
+        let function = handle_native_tokens_function();
+        let mediator = address!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let token = address!("1111111111111111111111111111111111111111");
+        let recipient = address!("2222222222222222222222222222222222222222");
+        let sender = address!("3333333333333333333333333333333333333333");
+        let amount = U256::from(1000);
+        let calldata = function
+            .abi_encode_input(&[
+                DynSolValue::Address(token),
+                DynSolValue::Address(recipient),
+                DynSolValue::Uint(amount, 256),
+            ])
+            .expect("encoded input");
+        let registry = registry_with_function(1, mediator, function);
+        let processor = OmnibridgePayloadProcessor::new(1, mediator);
+
+        let decoded = processor
+            .decode(&PayloadDecodeContext {
+                dst_chain_id: 1,
+                executor: mediator,
+                sender,
+                message_id: B256::ZERO,
+                application_calldata: &calldata,
+                destination_transfer: None,
+                abi_registry: &registry,
+            })
+            .expect("payload decode")
+            .expect("omnibridge payload");
+
+        assert_eq!(
+            decoded,
+            DecodedPayload::OmnibridgeTransfer {
+                token_src_address: token,
+                token_dst_address: None,
+                src_amount: amount,
+                dst_amount: amount,
+                sender,
+                recipient,
+            }
+        );
+    }
+
+    #[test]
+    fn omnibridge_payload_decode_uses_destination_transfer_when_present() {
+        let function = handle_native_tokens_function();
+        let mediator = address!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let token = address!("1111111111111111111111111111111111111111");
+        let calldata_recipient = address!("2222222222222222222222222222222222222222");
+        let sender = address!("3333333333333333333333333333333333333333");
+        let destination_token = address!("4444444444444444444444444444444444444444");
+        let final_recipient = address!("5555555555555555555555555555555555555555");
+        let calldata_amount = U256::from(1000);
+        let destination_amount = U256::from(990);
+        let calldata = function
+            .abi_encode_input(&[
+                DynSolValue::Address(token),
+                DynSolValue::Address(calldata_recipient),
+                DynSolValue::Uint(calldata_amount, 256),
+            ])
+            .expect("encoded input");
+        let registry = registry_with_function(1, mediator, function);
+        let processor = OmnibridgePayloadProcessor::new(1, mediator);
+        let destination_transfer = DestinationTransferDetails {
+            token: destination_token,
+            recipient: final_recipient,
+            amount: destination_amount,
+        };
+
+        let decoded = processor
+            .decode(&PayloadDecodeContext {
+                dst_chain_id: 1,
+                executor: mediator,
+                sender,
+                message_id: B256::ZERO,
+                application_calldata: &calldata,
+                destination_transfer: Some(&destination_transfer),
+                abi_registry: &registry,
+            })
+            .expect("payload decode")
+            .expect("omnibridge payload");
+
+        assert_eq!(
+            decoded,
+            DecodedPayload::OmnibridgeTransfer {
+                token_src_address: token,
+                token_dst_address: Some(destination_token),
+                src_amount: calldata_amount,
+                dst_amount: destination_amount,
+                sender,
+                recipient: final_recipient,
+            }
+        );
+    }
+
+    fn handle_native_tokens_function() -> Function {
+        serde_json::from_str(
+            r#"{
+                "inputs": [
+                    {"internalType":"address","name":"_token","type":"address"},
+                    {"internalType":"address","name":"_recipient","type":"address"},
+                    {"internalType":"uint256","name":"_value","type":"uint256"}
+                ],
+                "name": "handleNativeTokens",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }"#,
+        )
+        .expect("function ABI")
+    }
+
+    fn registry_with_function(chain_id: i64, mediator: Address, function: Function) -> AbiRegistry {
+        let mut functions_by_selector = HashMap::new();
+        functions_by_selector.insert(function.selector(), function);
+        AbiRegistry::from_contracts_for_test(vec![ContractAbi {
+            chain_id,
+            address: mediator,
+            kind: ContractKind::OmnibridgeMediator,
+            events_by_topic: HashMap::new(),
+            functions_by_selector,
+        }])
     }
 }
 

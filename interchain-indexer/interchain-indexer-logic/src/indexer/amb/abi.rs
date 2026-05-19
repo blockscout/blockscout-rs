@@ -39,6 +39,18 @@ pub(crate) struct AbiRegistry {
 }
 
 impl AbiRegistry {
+    #[cfg(test)]
+    pub(crate) fn from_contracts_for_test(contracts: Vec<ContractAbi>) -> Self {
+        Self {
+            contracts: contracts
+                .into_iter()
+                .map(|contract| ((contract.chain_id, contract.address), contract))
+                .collect(),
+            events_by_chain_topic: HashMap::new(),
+            mediator_by_chain: HashMap::new(),
+        }
+    }
+
     pub(crate) fn from_chains(chains: &[AmbChainConfig]) -> Result<Self> {
         let mut registry = Self::default();
 
