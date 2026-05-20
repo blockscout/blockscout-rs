@@ -173,7 +173,7 @@ pub(crate) use new_cc_txns::zetachain_cctx_datetime_range_filter;
 pub(crate) use new_contracts::NewContractsInt;
 pub(crate) use new_native_coin_transfers::NewNativeCoinTransfersInt;
 pub(crate) use new_txns::{
-    NewTxnsCombinedStatement, NewTxnsInt, NewTxnsMonthlyInt,
+    NewTxnsCombinedStatement, NewTxnsInt,
     op_stack_operational::transactions_filter as op_stack_operational_transactions_filter,
 };
 pub(crate) use new_txns_window::NewTxnsWindowInt;
