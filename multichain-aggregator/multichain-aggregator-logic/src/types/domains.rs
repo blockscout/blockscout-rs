@@ -52,6 +52,8 @@ pub struct Domain {
     pub name: String,
     pub expiry_date: Option<String>,
     pub protocol: ProtocolInfo,
+    pub protocol_dapp_url: Option<String>,
+    pub protocol_dapp_logo: Option<String>,
 }
 
 impl TryFrom<bens_proto::Domain> for Domain {
@@ -72,6 +74,8 @@ impl TryFrom<bens_proto::Domain> for Domain {
             address,
             expiry_date: domain.expiry_date,
             protocol,
+            protocol_dapp_url: domain.protocol_dapp_url,
+            protocol_dapp_logo: domain.protocol_dapp_logo,
         })
     }
 }
@@ -83,6 +87,8 @@ impl From<Domain> for proto::Domain {
             name: v.name,
             expiry_date: v.expiry_date,
             protocol: Some(v.protocol.into()),
+            protocol_dapp_url: v.protocol_dapp_url,
+            protocol_dapp_logo: v.protocol_dapp_logo,
         }
     }
 }
@@ -94,6 +100,8 @@ pub struct DomainInfo {
     pub expiry_date: Option<String>,
     pub protocol: ProtocolInfo,
     pub names_count: u32,
+    pub protocol_dapp_url: Option<String>,
+    pub protocol_dapp_logo: Option<String>,
 }
 
 impl TryFrom<bens_proto::GetAddressResponse> for DomainInfo {
@@ -118,6 +126,8 @@ impl TryFrom<bens_proto::GetAddressResponse> for DomainInfo {
             expiry_date: domain.expiry_date,
             protocol,
             names_count: res.resolved_domains_count as u32,
+            protocol_dapp_url: domain.protocol_dapp_url,
+            protocol_dapp_logo: domain.protocol_dapp_logo,
         })
     }
 }
@@ -140,6 +150,8 @@ impl From<DomainInfo> for Domain {
             name: v.name,
             expiry_date: v.expiry_date,
             protocol: v.protocol,
+            protocol_dapp_url: v.protocol_dapp_url,
+            protocol_dapp_logo: v.protocol_dapp_logo,
         }
     }
 }
@@ -148,6 +160,8 @@ impl From<DomainInfo> for Domain {
 pub struct BasicDomainInfo {
     pub name: String,
     pub protocol: ProtocolInfo,
+    pub protocol_dapp_url: Option<String>,
+    pub protocol_dapp_logo: Option<String>,
 }
 
 impl From<DomainInfo> for BasicDomainInfo {
@@ -155,6 +169,8 @@ impl From<DomainInfo> for BasicDomainInfo {
         Self {
             name: v.name,
             protocol: v.protocol,
+            protocol_dapp_url: v.protocol_dapp_url,
+            protocol_dapp_logo: v.protocol_dapp_logo,
         }
     }
 }
@@ -164,6 +180,8 @@ impl From<BasicDomainInfo> for proto::BasicDomainInfo {
         Self {
             name: v.name,
             protocol: Some(v.protocol.into()),
+            protocol_dapp_url: v.protocol_dapp_url,
+            protocol_dapp_logo: v.protocol_dapp_logo,
         }
     }
 }
