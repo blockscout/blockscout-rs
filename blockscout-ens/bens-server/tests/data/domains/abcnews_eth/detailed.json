@@ -21,5 +21,6 @@
   "resolved_with_wildcard": false,
   "resolver_address": null,
   "protocol_dapp_url": "https://app.ens.domains/abcnews.eth",
+  "protocol_dapp_logo": null,
   "stored_offchain": false
 }

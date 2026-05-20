@@ -12,6 +12,7 @@
     },
     "wrapped_owner": null,
     "protocol_dapp_url": null,
+    "protocol_dapp_logo": null,
     "protocol": {{ genome_protocol | json_encode() | safe }}
   },
   {
@@ -27,6 +28,7 @@
     },
     "wrapped_owner": null,
     "protocol_dapp_url": null,
+    "protocol_dapp_logo": null,
     "protocol": {{ genome_protocol | json_encode() | safe }}
   }
 ]

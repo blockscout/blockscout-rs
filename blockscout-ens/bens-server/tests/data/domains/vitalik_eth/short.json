@@ -11,5 +11,6 @@
   "registration_date": "2017-06-18T08:39:14.000Z",
   "expiry_date": "2038-01-19T03:14:07.000Z",
   "protocol": {{ ens_protocol | json_encode() | safe }},
-  "protocol_dapp_url": "https://app.ens.domains/vitalik.eth"
+  "protocol_dapp_url": "https://app.ens.domains/vitalik.eth",
+  "protocol_dapp_logo": null
 }

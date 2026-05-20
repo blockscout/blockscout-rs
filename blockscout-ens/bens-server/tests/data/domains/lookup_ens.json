@@ -14,7 +14,8 @@
       "hash": "0x161447a2AB515b2bC1908A1817355Da7d4462cE7"
     },
     "protocol": {{ ens_protocol | json_encode() | safe }},
-    "protocol_dapp_url": "https://app.ens.domains/zt-c7c8172af17ab662.zkbtcnetwork.eth"
+    "protocol_dapp_url": "https://app.ens.domains/zt-c7c8172af17ab662.zkbtcnetwork.eth",
+    "protocol_dapp_logo": null
   },
   {
     "expiry_date": "2026-08-21T12:39:24.000Z",
@@ -29,7 +30,8 @@
     "registration_date": "2025-05-23T06:50:12.000Z",
     "resolved_address": null,
     "protocol": {{ ens_protocol | json_encode() | safe }},
-    "protocol_dapp_url": "https://app.ens.domains/😀😀😀😀😀😀.eth"
+    "protocol_dapp_url": "https://app.ens.domains/😀😀😀😀😀😀.eth",
+    "protocol_dapp_logo": null
   },
   {
     "expiry_date": null,
@@ -44,7 +46,8 @@
     },
     "wrapped_owner": null,
     "protocol": {{ ens_protocol | json_encode() | safe }},
-    "protocol_dapp_url": "https://app.ens.domains/⌐◨-◨.eth"
+    "protocol_dapp_url": "https://app.ens.domains/⌐◨-◨.eth",
+    "protocol_dapp_logo": null
   },
   {
     "expiry_date": "2026-06-23T14:27:48.000Z",
@@ -61,6 +64,7 @@
       "hash": "0x779518539457d1cF77b55FBE01c5DcCd8cCaD2dF"
     },
     "protocol": {{ ens_protocol | json_encode() | safe }},
-    "protocol_dapp_url": "https://app.ens.domains/00-01.eth"
+    "protocol_dapp_url": "https://app.ens.domains/00-01.eth",
+    "protocol_dapp_logo": null
   }
 ]
