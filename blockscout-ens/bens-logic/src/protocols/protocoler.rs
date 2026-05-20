@@ -150,6 +150,11 @@ pub struct ProtocolMeta {
     /// substituted (e.g. the domain has no resolved name), the URL is omitted.
     #[serde(default)]
     pub protocol_dapp_url_template: Option<ProtocolDappUrlTemplate>,
+    /// Optional logo URL for the protocol's own dApp. Same value for every
+    /// domain in the protocol, but surfaced per-domain in the API so the
+    /// frontend can render it alongside the `protocol_dapp_url` link.
+    #[serde(default)]
+    pub protocol_dapp_logo: Option<String>,
 }
 
 impl ProtocolMeta {

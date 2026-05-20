@@ -752,6 +752,12 @@ definitions:
         description: |-
           Optional. Deep link to this domain inside the protocol's own dApp,
           rendered from the protocol's `protocol_dapp_url_template` config.
+      protocol_dapp_logo:
+        type: string
+        description: |-
+          Optional. Logo URL of the protocol's own dApp. Same value for every
+          domain in the protocol, surfaced here for convenient rendering
+          alongside `protocol_dapp_url`.
   v1Domain:
     type: object
     properties:
@@ -784,6 +790,12 @@ definitions:
         description: |-
           Optional. Deep link to this domain inside the protocol's own dApp,
           rendered from the protocol's `protocol_dapp_url_template` config.
+      protocol_dapp_logo:
+        type: string
+        description: |-
+          Optional. Logo URL of the protocol's own dApp. Same value for every
+          domain in the protocol, surfaced here for convenient rendering
+          alongside `protocol_dapp_url`.
   v1DomainEvent:
     type: object
     properties:
