@@ -226,6 +226,10 @@ message GetAddressPortfolioResponse {
 message BasicDomainInfo {
   string name = 1;
   blockscout.multichainAggregator.v1.ProtocolInfo protocol = 2;
+  // Optional. Deep link to this domain inside the protocol's own dApp.
+  optional string protocol_dapp_url = 3;
+  // Optional. Logo URL of the protocol's own dApp.
+  optional string protocol_dapp_logo = 4;
 }
 
 message GetAddressResponse {

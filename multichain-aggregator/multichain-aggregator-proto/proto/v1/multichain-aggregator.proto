@@ -126,6 +126,10 @@ message Domain {
   string name = 2;
   optional string expiry_date = 3;
   ProtocolInfo protocol = 4;
+  // Optional. Deep link to this domain inside the protocol's own dApp.
+  optional string protocol_dapp_url = 5;
+  // Optional. Logo URL of the protocol's own dApp.
+  optional string protocol_dapp_logo = 6;
 }
 
 message ChainBlockNumber {

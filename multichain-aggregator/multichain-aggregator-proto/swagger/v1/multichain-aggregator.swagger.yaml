@@ -1632,6 +1632,12 @@ definitions:
         type: string
       protocol:
         $ref: '#/definitions/v1ProtocolInfo'
+      protocol_dapp_url:
+        type: string
+        description: Optional. Deep link to this domain inside the protocol's own dApp.
+      protocol_dapp_logo:
+        type: string
+        description: Optional. Logo URL of the protocol's own dApp.
   v1BatchImportRequest:
     type: object
     properties:
@@ -1788,6 +1794,12 @@ definitions:
         type: string
       protocol:
         $ref: '#/definitions/v1ProtocolInfo'
+      protocol_dapp_url:
+        type: string
+        description: Optional. Deep link to this domain inside the protocol's own dApp.
+      protocol_dapp_logo:
+        type: string
+        description: Optional. Logo URL of the protocol's own dApp.
   v1DomainInfo:
     type: object
     properties:
