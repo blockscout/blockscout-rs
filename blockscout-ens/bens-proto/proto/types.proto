@@ -25,8 +25,12 @@ message Domain {
     // Optional. Deep link to this domain inside the protocol's own dApp,
     // rendered from the protocol's `protocol_dapp_url_template` config.
     optional string protocol_dapp_url = 9;
+    // Optional. Logo URL of the protocol's own dApp. Same value for every
+    // domain in the protocol, surfaced here for convenient rendering
+    // alongside `protocol_dapp_url`.
+    optional string protocol_dapp_logo = 10;
   }
-  
+
   message DetailedDomain {
     // Unique id for the domain, also known as nodehash
     string id = 1;
@@ -57,6 +61,10 @@ message Domain {
     // Optional. Deep link to this domain inside the protocol's own dApp,
     // rendered from the protocol's `protocol_dapp_url_template` config.
     optional string protocol_dapp_url = 16;
+    // Optional. Logo URL of the protocol's own dApp. Same value for every
+    // domain in the protocol, surfaced here for convenient rendering
+    // alongside `protocol_dapp_url`.
+    optional string protocol_dapp_logo = 17;
   }
   
   message ProtocolInfo {
