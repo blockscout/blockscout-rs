@@ -83,7 +83,7 @@ impl PayloadProcessor for OmnibridgePayloadProcessor {
             .unwrap_or((None, recipient, amount));
 
         if token_dst_address.is_none() {
-            tracing::warn!(
+            tracing::debug!(
                 dst_chain_id = ctx.dst_chain_id,
                 executor = %ctx.executor,
                 message_id = %ctx.message_id,

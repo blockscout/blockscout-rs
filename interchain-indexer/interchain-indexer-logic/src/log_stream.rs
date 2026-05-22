@@ -78,15 +78,23 @@ impl LogStream {
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
 
+        tracing::info!(
+            bridge_id,
+            chain_id,
+            genesis_block,
+            backward_cursor,
+            "Starting catchup stream"
+        );
+
         async_stream::stream! {
             let mut to_block = backward_cursor;
             while to_block >= genesis_block {
                 let from_block = to_block.saturating_sub(batch_span).max(genesis_block);
-                tracing::debug!(bridge_id, chain_id, from_block, to_block, batch_size, "catchup logs batch");
+                tracing::info!(bridge_id, chain_id, from_block, to_block, size =? (to_block - from_block + 1), "scanning CATCHUP  logs");
 
                 match fetch_logs(provider.clone(), &filter, from_block, to_block).await {
                     Ok(logs) => {
-                        tracing::info!(
+                        tracing::debug!(
                             bridge_id,
                             chain_id,
                             count = logs.len(),
@@ -115,6 +123,8 @@ impl LogStream {
                         continue;
                     }
                 }
+
+                tokio::time::sleep(poll_interval).await;
             }
 
             tracing::info!(bridge_id, chain_id, genesis_block, "catchup complete, reached genesis block");
@@ -137,6 +147,13 @@ impl LogStream {
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
 
+        tracing::info!(
+            bridge_id,
+            chain_id,
+            realtime_cursor,
+            "Starting realtime stream"
+        );
+
         async_stream::stream! {
             let mut from_block = realtime_cursor;
             loop {
@@ -154,17 +171,18 @@ impl LogStream {
                     continue;
                 };
 
+                tracing::info!(bridge_id, chain_id, from_block, to_block, size =? (to_block - from_block + 1), "scanning REALTIME logs");
                 match fetch_logs(provider.clone(), &filter, from_block, to_block).await {
                     Ok(logs) => {
                         if !logs.is_empty() {
-                            tracing::info!(
+                            tracing::debug!(
                                 bridge_id,
                                 chain_id,
                                 count = logs.len(),
                                 from_block,
                                 to_block,
                                 batch_size,
-                                "found realtime logs"
+                                "fetched realtime logs"
                             );
                             yield logs;
                         }

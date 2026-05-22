@@ -2,10 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use alloy::{
     dyn_abi::{DynSolValue, EventExt},
-    primitives::{Address, B256, keccak256},
+    primitives::{keccak256, Address, B256},
     rpc::types::{Block, Log},
 };
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use dashmap::DashMap;
 
 use crate::message_buffer::{Key, MessageBuffer};
@@ -34,8 +34,20 @@ pub(super) struct EventContext<'a> {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct PendingMessageHashEvents {
-    validator_confirmations: HashMap<Address, ValidatorConfirmation>,
-    signatures_collected: Option<AnnotatedEvent<CollectedSignaturesEvent>>,
+    validator_confirmations: HashMap<Address, PendingValidatorConfirmation>,
+    signatures_collected: Option<PendingCollectedSignatures>,
+}
+
+#[derive(Clone, Debug)]
+struct PendingValidatorConfirmation {
+    chain_id: u64,
+    confirmation: ValidatorConfirmation,
+}
+
+#[derive(Clone, Debug)]
+struct PendingCollectedSignatures {
+    chain_id: u64,
+    event: AnnotatedEvent<CollectedSignaturesEvent>,
 }
 
 pub(super) async fn dispatch_transaction(
@@ -174,6 +186,7 @@ async fn handle_source_request(
 
     let header = parse_amb_header(&encoded_data, header_layout)?;
     let source_chain_id = header.source_chain_id;
+    let block_number = log.block_number.context("missing block number")?;
     let destination_chain_id = header.destination_chain_id;
     let application_calldata = encoded_data[header.payload_offset..].to_vec();
     let key = key_from_message_id(&message_id, ctx.bridge_id)?;
@@ -188,7 +201,7 @@ async fn handle_source_request(
             header: header.into(),
         },
         transaction_hash: log.transaction_hash.context("missing tx hash")?,
-        block_number: log.block_number.context("missing block number")? as i64,
+        block_number: block_number as i64,
         block_timestamp,
         source_chain_id,
         destination_chain_id,
@@ -212,7 +225,7 @@ async fn handle_source_request(
 
     if let Some(source_transfer) = find_tokens_bridging_initiated(ctx, receipt_logs, &message_id) {
         ctx.buffer
-            .alter(key, ctx.chain_id as u64, 0, |message| {
+            .alter(key, ctx.chain_id as u64, block_number, |message| {
                 message.source_transfer = Some(source_transfer);
                 Ok(())
             })
@@ -344,13 +357,21 @@ async fn handle_validator_confirmation(
     };
 
     match ctx.message_hash_lookup.get(&message_hash).map(|key| *key) {
-        Some(key) => apply_validator_confirmation(ctx, key, confirmation).await,
+        Some(key) => {
+            apply_validator_confirmation(ctx, key, ctx.chain_id as u64, confirmation).await
+        }
         None => {
             ctx.pending_message_hash_events
                 .entry(message_hash)
                 .or_default()
                 .validator_confirmations
-                .insert(signer, confirmation);
+                .insert(
+                    signer,
+                    PendingValidatorConfirmation {
+                        chain_id: ctx.chain_id as u64,
+                        confirmation,
+                    },
+                );
             tracing::debug!(
                 bridge_id = ctx.bridge_id,
                 chain_id = ctx.chain_id,
@@ -389,12 +410,15 @@ async fn handle_collected_signatures(
     };
 
     match ctx.message_hash_lookup.get(&message_hash).map(|key| *key) {
-        Some(key) => apply_collected_signatures(ctx, key, annotated).await,
+        Some(key) => apply_collected_signatures(ctx, key, ctx.chain_id as u64, annotated).await,
         None => {
             ctx.pending_message_hash_events
                 .entry(message_hash)
                 .or_default()
-                .signatures_collected = Some(annotated);
+                .signatures_collected = Some(PendingCollectedSignatures {
+                    chain_id: ctx.chain_id as u64,
+                    event: annotated,
+                });
             tracing::debug!(
                 bridge_id = ctx.bridge_id,
                 chain_id = ctx.chain_id,
@@ -419,12 +443,24 @@ async fn drain_pending_message_hash_events(
     let confirmation_count = pending.validator_confirmations.len();
     let has_signatures_collected = pending.signatures_collected.is_some();
 
-    for confirmation in pending.validator_confirmations.into_values() {
-        apply_validator_confirmation(ctx, key, confirmation).await?;
+    for pending_confirmation in pending.validator_confirmations.into_values() {
+        apply_validator_confirmation(
+            ctx,
+            key,
+            pending_confirmation.chain_id,
+            pending_confirmation.confirmation,
+        )
+        .await?;
     }
 
     if let Some(signatures_collected) = pending.signatures_collected {
-        apply_collected_signatures(ctx, key, signatures_collected).await?;
+        apply_collected_signatures(
+            ctx,
+            key,
+            signatures_collected.chain_id,
+            signatures_collected.event,
+        )
+        .await?;
     }
 
     tracing::debug!(
@@ -442,11 +478,12 @@ async fn drain_pending_message_hash_events(
 async fn apply_validator_confirmation(
     ctx: &EventContext<'_>,
     key: Key,
+    chain_id: u64,
     confirmation: ValidatorConfirmation,
 ) -> Result<()> {
     let block_number = confirmation.block_number;
     ctx.buffer
-        .alter(key, ctx.chain_id as u64, block_number, |message| {
+        .alter(key, chain_id, block_number, |message| {
             message
                 .validator_confirmations
                 .insert(confirmation.validator_address, confirmation);
@@ -458,12 +495,13 @@ async fn apply_validator_confirmation(
 async fn apply_collected_signatures(
     ctx: &EventContext<'_>,
     key: Key,
+    chain_id: u64,
     annotated: AnnotatedEvent<CollectedSignaturesEvent>,
 ) -> Result<()> {
     let block_number = u64::try_from(annotated.block_number)
         .context("collected-signatures block number out of range")?;
     ctx.buffer
-        .alter(key, ctx.chain_id as u64, block_number, |message| {
+        .alter(key, chain_id, block_number, |message| {
             message.signatures_collected = Some(annotated);
             Ok(())
         })

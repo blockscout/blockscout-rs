@@ -247,7 +247,7 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
         self.remove_from_hot_if_unchanged(&plan.hot_evictions, &mut plan.stats);
 
         let totals = plan.stats.totals();
-        tracing::info!(
+        tracing::debug!(
             hot_len = self.inner.len(),
             consolidated = plan.consolidated_entries.len(),
             partial = plan.keys_to_mark_flushed.len(),
@@ -312,6 +312,7 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
 
                     let old = persistence::fetch_cursors(&cursor_builder, tx).await?;
                     let new = cursor_builder.calculate_updates(&old);
+                    tracing::debug!(new =? new, "cursor maintenance");
                     persistence::upsert_cursors(tx, &new).await?;
                     Ok(new)
                 })

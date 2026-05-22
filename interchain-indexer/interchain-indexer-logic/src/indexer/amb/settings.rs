@@ -27,7 +27,7 @@ impl Default for AmbIndexerSettings {
 }
 
 fn default_pull_interval() -> Duration {
-    Duration::from_millis(10_000)
+    Duration::from_millis(500)
 }
 
 fn default_batch_size() -> u64 {

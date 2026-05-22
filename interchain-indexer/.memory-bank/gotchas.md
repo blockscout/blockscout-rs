@@ -82,6 +82,24 @@ availability.
 
 ---
 
+## AMB Queued Events Must Preserve Their Emitting Chain
+
+**Symptom:** `indexer_checkpoints.realtime_cursor` for Ethereum can jump to a
+Gnosis block number, causing Ethereum realtime polling to wait forever because
+the cursor is higher than the Ethereum latest block.
+
+**Root cause:** AMB validator/signature events may be observed before the
+matching source request and temporarily queued by `message_hash`. Any queued
+event must store the chain that emitted it. If the event is later drained using
+the source request's current chain context, the buffer records the queued
+event's block number under the wrong chain and checkpoint maintenance persists
+that wrong `(bridge_id, chain_id)` cursor.
+
+**Fix:** Keep cursor attribution tied to the physical log source chain, not the
+AMB header source/destination chain or the context that drains a pending queue.
+
+---
+
 ## Token Info Caches Errors
 
 **Symptom:** Token metadata fetch fails once, then never retries.
