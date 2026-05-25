@@ -100,6 +100,27 @@ AMB header source/destination chain or the context that drains a pending queue.
 
 ---
 
+## AMB Home/Foreign Side Comes From Proxy ABI Events
+
+**Symptom:** AMB/Omnibridge indexing fails during startup with an error about a
+missing Home or Foreign chain, or events are subscribed on the wrong side.
+
+**Root cause:** AMB configs do not hardcode Ethereum/Gnosis chain IDs. The
+indexer infers each configured `amb_proxy` as Foreign or Home from its ABI event
+set:
+- Foreign proxy ABI must include `UserRequestForAffirmation` and `RelayedMessage`
+- Home proxy ABI must include `UserRequestForSignature`, `AffirmationCompleted`,
+  validator signature events, and `CollectedSignatures`
+
+The bridge config must contain exactly one Home and one Foreign proxy for
+destination-side event annotation and collected-signature routing.
+
+**Fix:** For non-mainnet AMB deployments, keep the side-specific proxy ABI
+events in `bridges.json` / `bridges-testnet.json`. Do not rely on numeric chain
+IDs to identify Home or Foreign.
+
+---
+
 ## Token Info Caches Errors
 
 **Symptom:** Token metadata fetch fails once, then never retries.

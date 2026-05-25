@@ -1,0 +1,44 @@
+[
+    {
+        "chain_id": 11155111,
+        "name": "Sepolia",
+        "icon": "https://ethereum.org/static/c48a5f760c34dfadcf05a208dab137ab/0e3d3/eth-diamond-purple.png",
+        "explorer": {
+            "url": "https://eth-sepolia.blockscout.com"
+        },
+        "rpcs": [
+            {
+                "publicnode": {
+                    "url": "https://ethereum-sepolia-rpc.publicnode.com"
+                },
+                "tenderly": {
+                    "url": "https://sepolia.gateway.tenderly.co"
+                },
+                "drpc": {
+                    "url": "https://sepolia.drpc.org"
+                }
+            }
+        ]
+    },
+    {
+        "chain_id": 10200,
+        "name": "Chiado",
+        "icon": "https://docs.gnosischain.com/img/gnosis-chain-logo.svg",
+        "explorer": {
+            "url": "https://gnosis-chiado.blockscout.com/"
+        },
+        "rpcs": [
+            {
+                "gateway_archive": {
+                    "url": "https://rpc.chiado.gnosis.gateway.fm"
+                },
+                "gnosis_official": {
+                    "url": "https://rpc.chiadochain.net"
+                },
+                "ankr": {
+                    "url": "https://rpc.ankr.com/gnosis_testnet"
+                }
+            }
+        ]
+    }
+]

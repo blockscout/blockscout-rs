@@ -78,7 +78,7 @@ pub(super) async fn dispatch_transaction(
                     log,
                     receipt_logs,
                     block_timestamp,
-                    Direction::EthToGnosis,
+                    Direction::ForeignToHome,
                 )
                 .await
             }
@@ -89,7 +89,7 @@ pub(super) async fn dispatch_transaction(
                     log,
                     receipt_logs,
                     block_timestamp,
-                    Direction::GnosisToEth,
+                    Direction::HomeToForeign,
                 )
                 .await
             }
@@ -180,7 +180,8 @@ async fn handle_source_request(
         bail!("source request was not emitted by AMB proxy");
     };
     match (direction, side) {
-        (Direction::EthToGnosis, AmbSide::Foreign) | (Direction::GnosisToEth, AmbSide::Home) => {}
+        (Direction::ForeignToHome, AmbSide::Foreign)
+        | (Direction::HomeToForeign, AmbSide::Home) => {}
         _ => bail!("source request emitted on unexpected AMB side"),
     }
 
@@ -215,8 +216,8 @@ async fn handle_source_request(
             |message| {
                 message.direction = Some(direction);
                 message.source_request = Some(match direction {
-                    Direction::EthToGnosis => SourceRequest::Affirmation(annotated),
-                    Direction::GnosisToEth => SourceRequest::Signature(annotated),
+                    Direction::ForeignToHome => SourceRequest::Affirmation(annotated),
+                    Direction::HomeToForeign => SourceRequest::Signature(annotated),
                 });
                 Ok(())
             },
@@ -396,6 +397,8 @@ async fn handle_collected_signatures(
     let message_hash = expect_b256(decoded.body.get(1), "messageHash")?;
     let count = expect_uint(decoded.body.get(2), "NumberOfCollectedSignatures")?;
     let block_number = log.block_number.context("missing block number")?;
+    let side = ctx.abi_registry.side_for_chain(ctx.chain_id)?;
+    let destination_chain_id = ctx.abi_registry.counterpart_chain_id(side)?;
     let annotated = AnnotatedEvent {
         event: CollectedSignaturesEvent {
             authority_responsible_for_relay: authority,
@@ -405,8 +408,8 @@ async fn handle_collected_signatures(
         transaction_hash: log.transaction_hash.context("missing tx hash")?,
         block_number: block_number as i64,
         block_timestamp,
-        source_chain_id: 100,
-        destination_chain_id: 1,
+        source_chain_id: ctx.chain_id,
+        destination_chain_id,
     };
 
     match ctx.message_hash_lookup.get(&message_hash).map(|key| *key) {
@@ -527,6 +530,18 @@ async fn handle_destination_execution(
     let executor = expect_address(decoded.indexed.get(1), "executor")?;
     let message_id = expect_b256(decoded.indexed.get(2), "messageId")?;
     let status = expect_bool(decoded.body.first(), "status")?;
+    let (_, contract_kind) = ctx
+        .abi_registry
+        .event_for_log(
+            ctx.chain_id,
+            log.address(),
+            log.topic0().expect("topic exists"),
+        )
+        .context("destination event contract missing from registry")?;
+    let ContractKind::AmbProxy { side, .. } = contract_kind else {
+        bail!("destination execution was not emitted by AMB proxy");
+    };
+    let source_chain_id = ctx.abi_registry.counterpart_chain_id(side)?;
     let key = key_from_message_id(&message_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
     let execution = DestinationExecutionEvent {
@@ -540,11 +555,7 @@ async fn handle_destination_execution(
         transaction_hash: log.transaction_hash.context("missing tx hash")?,
         block_number: block_number as i64,
         block_timestamp,
-        source_chain_id: if matches!(kind, DestinationKind::Affirmation) {
-            1
-        } else {
-            100
-        },
+        source_chain_id,
         destination_chain_id: ctx.chain_id,
     };
     let destination_transfer = find_tokens_bridged(ctx, receipt_logs, executor, &message_id);

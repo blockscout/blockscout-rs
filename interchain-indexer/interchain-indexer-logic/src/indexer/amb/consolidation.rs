@@ -116,7 +116,7 @@ fn status_and_finality(
                 true,
             )
         }
-        (Direction::GnosisToEth, None) if message.signatures_collected.is_some() => {
+        (Direction::HomeToForeign, None) if message.signatures_collected.is_some() => {
             let event = message
                 .signatures_collected
                 .as_ref()
@@ -149,7 +149,7 @@ fn build_transfer(
     } = payload;
 
     let (token_src_chain_id, token_dst_chain_id) = match direction {
-        Direction::EthToGnosis | Direction::GnosisToEth => {
+        Direction::ForeignToHome | Direction::HomeToForeign => {
             (source.source_chain_id, source.destination_chain_id)
         }
     };

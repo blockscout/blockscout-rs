@@ -7,8 +7,8 @@ pub(crate) enum AmbVersion {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MediatorVersion {
-    EthV6,
-    GnosisV8,
+    V6,
+    V8,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,7 +18,7 @@ pub(crate) enum HeaderLayout {
     Legacy,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum AmbSide {
     Foreign,
     Home,
@@ -52,8 +52,8 @@ static AMB_V6_GRAMMAR: AmbGrammar = AmbGrammar {
     ],
 };
 
-static ETH_MEDIATOR_V6_GRAMMAR: MediatorGrammar = MediatorGrammar {
-    version: MediatorVersion::EthV6,
+static MEDIATOR_V6_GRAMMAR: MediatorGrammar = MediatorGrammar {
+    version: MediatorVersion::V6,
     events: &[
         "TokensBridgingInitiated",
         "TokensBridged",
@@ -70,10 +70,10 @@ static ETH_MEDIATOR_V6_GRAMMAR: MediatorGrammar = MediatorGrammar {
     ],
 };
 
-static GNOSIS_MEDIATOR_V8_GRAMMAR: MediatorGrammar = MediatorGrammar {
-    version: MediatorVersion::GnosisV8,
-    events: ETH_MEDIATOR_V6_GRAMMAR.events,
-    functions: ETH_MEDIATOR_V6_GRAMMAR.functions,
+static MEDIATOR_V8_GRAMMAR: MediatorGrammar = MediatorGrammar {
+    version: MediatorVersion::V8,
+    events: MEDIATOR_V6_GRAMMAR.events,
+    functions: MEDIATOR_V6_GRAMMAR.functions,
 };
 
 pub(crate) fn amb_grammar_for(version: i16) -> Result<&'static AmbGrammar> {
@@ -83,16 +83,11 @@ pub(crate) fn amb_grammar_for(version: i16) -> Result<&'static AmbGrammar> {
     }
 }
 
-pub(crate) fn mediator_grammar_for(
-    chain_id: i64,
-    version: i16,
-) -> Result<&'static MediatorGrammar> {
-    match (chain_id, version) {
-        (1, 6) => Ok(&ETH_MEDIATOR_V6_GRAMMAR),
-        (100, 8) => Ok(&GNOSIS_MEDIATOR_V8_GRAMMAR),
-        _ => bail!(
-            "no Omnibridge mediator grammar registered for chain {chain_id} version {version}"
-        ),
+pub(crate) fn mediator_grammar_for(version: i16) -> Result<&'static MediatorGrammar> {
+    match version {
+        6 => Ok(&MEDIATOR_V6_GRAMMAR),
+        8 => Ok(&MEDIATOR_V8_GRAMMAR),
+        _ => bail!("no Omnibridge mediator grammar registered for version {version}"),
     }
 }
 
@@ -104,18 +99,18 @@ mod tests {
     fn test_grammar_lookup_known_versions() {
         assert_eq!(amb_grammar_for(6).unwrap().version, AmbVersion::V6);
         assert_eq!(
-            mediator_grammar_for(1, 6).unwrap().version,
-            MediatorVersion::EthV6
+            mediator_grammar_for(6).unwrap().version,
+            MediatorVersion::V6
         );
         assert_eq!(
-            mediator_grammar_for(100, 8).unwrap().version,
-            MediatorVersion::GnosisV8
+            mediator_grammar_for(8).unwrap().version,
+            MediatorVersion::V8
         );
     }
 
     #[test]
     fn test_grammar_lookup_unknown_versions_returns_error() {
         assert!(amb_grammar_for(5).is_err());
-        assert!(mediator_grammar_for(100, 6).is_err());
+        assert!(mediator_grammar_for(7).is_err());
     }
 }

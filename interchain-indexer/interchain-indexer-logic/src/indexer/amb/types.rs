@@ -8,8 +8,10 @@ use super::header::AmbHeader;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Direction {
-    EthToGnosis,
-    GnosisToEth,
+    #[serde(alias = "ForeignToHome")]
+    ForeignToHome,
+    #[serde(alias = "HomeToForeign")]
+    HomeToForeign,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
