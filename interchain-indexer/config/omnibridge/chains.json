@@ -13,6 +13,12 @@
             {
                 "publicnode": {
                     "url": "https://ethereum-rpc.publicnode.com"
+                },
+                "gateway": {
+                    "url": "https://rpc.eth.gateway.fm"
+                },
+                "drpc": {
+                    "url": "https://eth.drpc.org"
                 }
             }
         ]
@@ -29,8 +35,14 @@
         },
         "rpcs": [
             {
+                "gateway": {
+                    "url": "https://rpc.gnosis.gateway.fm"
+                },
                 "gnosis_official": {
                     "url": "https://rpc.gnosischain.com"
+                },
+                "ankr": {
+                    "url": "https://rpc.ankr.com/gnosis"
                 }
             }
         ]

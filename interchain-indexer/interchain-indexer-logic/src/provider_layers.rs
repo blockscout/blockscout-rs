@@ -14,11 +14,14 @@ use alloy::{
     rpc::client::RpcClient,
     transports::{
         TransportError, TransportErrorKind, TransportFut,
-        http::{Http, reqwest::Url},
+        http::{
+            Http,
+            reqwest::{Client, Url},
+        },
     },
 };
 use alloy_json_rpc::{Request, RequestPacket, ResponsePacket};
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use futures::future;
 use governor::{
     Quota, RateLimiter,
@@ -57,6 +60,8 @@ pub struct PoolConfig {
     pub retry_max_delay_ms: u64,
 }
 
+const RPC_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+
 impl Default for PoolConfig {
     fn default() -> Self {
         Self {
@@ -91,10 +96,14 @@ pub fn build_layered_http_provider(
     cfg: PoolConfig,
 ) -> Result<DynProvider<Ethereum>> {
     let mut transports = Vec::with_capacity(node_cfgs.len());
+    let client = Client::builder()
+        .timeout(RPC_HTTP_TIMEOUT)
+        .build()
+        .context("failed to build RPC HTTP client")?;
 
     for cfg in &node_cfgs {
         let url = Url::parse(&cfg.http_url)?;
-        transports.push(Http::new(url));
+        transports.push(Http::with_client(client.clone(), url));
     }
 
     Ok(build_layered_provider_from_services(

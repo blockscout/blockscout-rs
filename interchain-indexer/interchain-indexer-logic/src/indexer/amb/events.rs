@@ -2,10 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use alloy::{
     dyn_abi::{DynSolValue, EventExt},
-    primitives::{keccak256, Address, B256},
+    primitives::{Address, B256, keccak256},
     rpc::types::{Block, Log},
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use dashmap::DashMap;
 
 use crate::message_buffer::{Key, MessageBuffer};
@@ -416,9 +416,9 @@ async fn handle_collected_signatures(
                 .entry(message_hash)
                 .or_default()
                 .signatures_collected = Some(PendingCollectedSignatures {
-                    chain_id: ctx.chain_id as u64,
-                    event: annotated,
-                });
+                chain_id: ctx.chain_id as u64,
+                event: annotated,
+            });
             tracing::debug!(
                 bridge_id = ctx.bridge_id,
                 chain_id = ctx.chain_id,
