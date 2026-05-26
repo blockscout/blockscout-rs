@@ -34,6 +34,7 @@ fn crosschain_messages_on_conflict() -> OnConflict {
     ])
     .update_columns([
         crosschain_messages::Column::Status,
+        crosschain_messages::Column::SrcChainId,
         crosschain_messages::Column::DstChainId,
         crosschain_messages::Column::DstTxHash,
         crosschain_messages::Column::LastUpdateTimestamp,

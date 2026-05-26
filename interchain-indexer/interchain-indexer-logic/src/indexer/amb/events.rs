@@ -5,7 +5,7 @@ use alloy::{
     primitives::{Address, B256, keccak256},
     rpc::types::{Block, Log},
 };
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use dashmap::DashMap;
 
 use crate::message_buffer::{Key, MessageBuffer};
@@ -186,6 +186,24 @@ async fn handle_source_request(
     }
 
     let header = parse_amb_header(&encoded_data, header_layout)?;
+    let expected_destination_chain_id = ctx.abi_registry.counterpart_chain_id(side)?;
+    ensure!(
+        header.source_chain_id == ctx.chain_id,
+        "AMB header source_chain_id {} does not match emitting chain {}",
+        header.source_chain_id,
+        ctx.chain_id,
+    );
+    ensure!(
+        header.destination_chain_id == expected_destination_chain_id,
+        "AMB header destination_chain_id {} does not match configured counterpart {}",
+        header.destination_chain_id,
+        expected_destination_chain_id,
+    );
+    ensure!(
+        header.source_chain_id != header.destination_chain_id,
+        "AMB header has source_chain_id == destination_chain_id ({})",
+        header.source_chain_id,
+    );
     let source_chain_id = header.source_chain_id;
     let block_number = log.block_number.context("missing block number")?;
     let destination_chain_id = header.destination_chain_id;
@@ -643,8 +661,17 @@ async fn maybe_decode_payload(ctx: &EventContext<'_>, key: Key) -> Result<()> {
     Ok(())
 }
 
+// Derive an i64 buffer key from the full 32-byte AMB `messageId`.
+//
+// The raw AMB `messageId` is structured as
+// `[4-byte version | 20-byte AMB proxy address | 8-byte nonce]`, so its last 8
+// bytes are *just the nonce*. Home and Foreign proxies increment nonces
+// independently, which means same-nonce messages from opposite sides collide
+// on any key derived from those tail bytes. Hashing the full 32 bytes spreads
+// the key uniformly over the i64 space.
 fn key_from_message_id(message_id: &B256, bridge_id: i32) -> Result<Key> {
-    let bytes: [u8; 8] = message_id.as_slice()[24..32].try_into()?;
+    let digest = keccak256(message_id.as_slice());
+    let bytes: [u8; 8] = digest.as_slice()[..8].try_into()?;
     Ok(Key::new(
         i64::from_be_bytes(bytes),
         i16::try_from(bridge_id).context("bridge_id out of range")?,
