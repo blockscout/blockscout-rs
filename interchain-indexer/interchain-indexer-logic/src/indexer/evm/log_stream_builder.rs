@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use alloy::{
     network::Ethereum,
@@ -56,6 +56,7 @@ pub(crate) async fn build_log_stream_for_chain(
         .catchup_cursor(catchup_cursor)
         .bridge_id(bridge_id)
         .chain_id(chain_id)
+        .db(Arc::new(db.clone()))
         .catchup()
         .realtime()
         .build()?

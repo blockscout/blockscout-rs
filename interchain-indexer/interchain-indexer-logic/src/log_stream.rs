@@ -6,10 +6,11 @@ use alloy::{
 use anyhow::Result;
 use bon::Builder;
 use futures::{StreamExt, stream};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use crate::log_stream::log_stream_builder::{
-    IsSet, IsUnset, SetEnableCatchup, SetEnableRealtime, State,
+use crate::{
+    InterchainDatabase,
+    log_stream::log_stream_builder::{IsSet, IsUnset, SetEnableCatchup, SetEnableRealtime, State},
 };
 
 #[derive(Builder)]
@@ -31,6 +32,10 @@ pub struct LogStream {
     batch_size: u64,
     bridge_id: Option<i32>,
     chain_id: Option<i64>,
+    /// Database handle used to persist the `catchup_max_cursor` checkpoint
+    /// when the catchup stream finishes scanning down to `genesis_block`.
+    /// Required for catchup completion to survive restarts.
+    db: Option<Arc<InterchainDatabase>>,
     #[builder(setters(vis = ""))]
     enable_catchup: bool,
     #[builder(setters(vis = ""))]
@@ -77,6 +82,7 @@ impl LogStream {
         let backward_cursor = self.catchup_cursor;
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
+        let db = self.db.clone();
 
         tracing::info!(
             bridge_id,
@@ -126,6 +132,8 @@ impl LogStream {
 
                 tokio::time::sleep(poll_interval).await;
             }
+
+            persist_catchup_complete(db.as_deref(), bridge_id, chain_id, genesis_block).await;
 
             tracing::info!(bridge_id, chain_id, genesis_block, "catchup complete, reached genesis block");
         }
@@ -251,4 +259,36 @@ async fn fetch_logs(
     let filter = filter.clone().from_block(from_block).to_block(to_block);
     let logs = provider.get_logs(&filter).await?;
     Ok(logs)
+}
+
+/// Persist that catchup has scanned down to `genesis_block`. Without this,
+/// `catchup_max_cursor` would remain at the last observed message and a
+/// restart would re-walk the empty range below it on every boot.
+async fn persist_catchup_complete(
+    db: Option<&InterchainDatabase>,
+    bridge_id: Option<i32>,
+    chain_id: Option<i64>,
+    genesis_block: u64,
+) {
+    let (Some(db), Some(bridge_id), Some(chain_id)) = (db, bridge_id, chain_id) else {
+        tracing::warn!(
+            bridge_id,
+            chain_id,
+            "skipping catchup checkpoint persistence: db/bridge_id/chain_id missing"
+        );
+        return;
+    };
+
+    if let Err(err) = db
+        .mark_catchup_complete(bridge_id as u64, chain_id as u64, genesis_block)
+        .await
+    {
+        tracing::error!(
+            err = ?err,
+            bridge_id,
+            chain_id,
+            genesis_block,
+            "failed to persist catchup completion checkpoint"
+        );
+    }
 }

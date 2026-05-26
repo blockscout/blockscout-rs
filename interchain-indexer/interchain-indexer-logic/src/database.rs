@@ -2024,6 +2024,52 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
+    /// Mark catchup as finalized for a (bridge_id, chain_id) pair by lowering
+    /// `catchup_max_cursor` down to `genesis_block`. Uses `LEAST(...)` so the
+    /// cursor is never moved upward (catchup cursor only decreases as scanning
+    /// progresses backward).
+    ///
+    /// Without this signal, catchup completion is invisible to the cursor
+    /// machinery when there are no buffer items between the last observed
+    /// message and the genesis block — restart would re-walk that empty range.
+    ///
+    /// Only updates an existing row. If no checkpoint row exists yet (no logs
+    /// observed and no maintenance run has created the row), this is a no-op.
+    pub async fn mark_catchup_complete(
+        &self,
+        bridge_id: u64,
+        chain_id: u64,
+        genesis_block: u64,
+    ) -> anyhow::Result<()> {
+        let genesis_block_i64 = genesis_block as i64;
+        indexer_checkpoints::Entity::update_many()
+            .col_expr(
+                indexer_checkpoints::Column::CatchupMaxCursor,
+                Expr::cust(format!(
+                    "LEAST(indexer_checkpoints.catchup_max_cursor, {genesis_block_i64})"
+                )),
+            )
+            .col_expr(
+                indexer_checkpoints::Column::UpdatedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id as i32))
+            .filter(indexer_checkpoints::Column::ChainId.eq(chain_id as i64))
+            .exec(self.db.as_ref())
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    err = ?e,
+                    bridge_id,
+                    chain_id,
+                    genesis_block,
+                    "failed to mark catchup complete in database"
+                )
+            })?;
+
+        Ok(())
+    }
+
     pub async fn get_token_info(
         &self,
         chain_id: u64,

@@ -262,6 +262,7 @@ impl AvalancheIndexer {
                 .catchup_cursor(catchup_cursor)
                 .bridge_id(bridge_id)
                 .chain_id(chain_id)
+                .db(Arc::new(db.clone()))
                 .catchup()
                 .realtime()
                 .build()?
