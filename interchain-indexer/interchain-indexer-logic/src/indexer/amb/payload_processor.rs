@@ -102,6 +102,22 @@ impl PayloadProcessor for OmnibridgePayloadProcessor {
     }
 }
 
+fn expect_address(values: &[DynSolValue], index: usize, function_name: &str) -> Result<Address> {
+    match values.get(index) {
+        Some(DynSolValue::Address(value)) => Ok(*value),
+        other => {
+            anyhow::bail!("expected address argument {index} in {function_name}, got {other:?}")
+        }
+    }
+}
+
+fn expect_uint(values: &[DynSolValue], index: usize, function_name: &str) -> Result<U256> {
+    match values.get(index) {
+        Some(DynSolValue::Uint(value, _)) => Ok(*value),
+        other => anyhow::bail!("expected uint argument {index} in {function_name}, got {other:?}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -284,18 +300,3 @@ mod tests {
     }
 }
 
-fn expect_address(values: &[DynSolValue], index: usize, function_name: &str) -> Result<Address> {
-    match values.get(index) {
-        Some(DynSolValue::Address(value)) => Ok(*value),
-        other => {
-            anyhow::bail!("expected address argument {index} in {function_name}, got {other:?}")
-        }
-    }
-}
-
-fn expect_uint(values: &[DynSolValue], index: usize, function_name: &str) -> Result<U256> {
-    match values.get(index) {
-        Some(DynSolValue::Uint(value, _)) => Ok(*value),
-        other => anyhow::bail!("expected uint argument {index} in {function_name}, got {other:?}"),
-    }
-}
