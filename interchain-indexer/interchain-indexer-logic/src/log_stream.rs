@@ -3,7 +3,7 @@ use alloy::{
     providers::{DynProvider, Provider},
     rpc::types::{Filter, Log},
 };
-use anyhow::Result;
+use anyhow::{Error, Result};
 use bon::Builder;
 use futures::{StreamExt, stream};
 use std::{sync::Arc, time::Duration};
@@ -197,14 +197,25 @@ impl LogStream {
                         from_block = to_block + 1;
                     }
                     Err(e) => {
-                        tracing::error!(
-                            err =? e,
-                            bridge_id,
-                            chain_id,
-                            from_block,
-                            to_block,
-                            "failed to fetch realtime logs"
-                        );
+                        if is_get_logs_error_silent(&e) {
+                            tracing::debug!(
+                                err =? e,
+                                bridge_id,
+                                chain_id,
+                                from_block,
+                                to_block,
+                                "realtime logs are not available at the reported latest block yet, retrying"
+                            );
+                        } else {
+                            tracing::error!(
+                                err =? e,
+                                bridge_id,
+                                chain_id,
+                                from_block,
+                                to_block,
+                                "failed to fetch realtime logs"
+                            );
+                        }
                         tokio::time::sleep(poll_interval).await;
                         continue;
                     }
@@ -261,6 +272,14 @@ async fn fetch_logs(
     Ok(logs)
 }
 
+fn is_get_logs_error_silent(err: &Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .to_string()
+            .contains("from block is greater than latest block")
+    })
+}
+
 /// Persist that catchup has scanned down to `genesis_block`. Without this,
 /// `catchup_max_cursor` would remain at the last observed message and a
 /// restart would re-walk the empty range below it on every boot.
@@ -290,5 +309,41 @@ async fn persist_catchup_complete(
             genesis_block,
             "failed to persist catchup completion checkpoint"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Context;
+
+    use super::*;
+
+    #[test]
+    fn recognizes_realtime_tip_ahead_error() {
+        let err = anyhow::anyhow!(
+            "server returned an error response: error code -32602: invalid params, data: \"from block is greater than latest block\""
+        );
+
+        assert!(is_get_logs_error_silent(&err));
+    }
+
+    #[test]
+    fn recognizes_realtime_tip_ahead_error_in_source_chain() {
+        let err = Err::<(), _>(anyhow::anyhow!(
+            "server returned an error response: error code -32602: invalid params, data: \"from block is greater than latest block\""
+        ))
+        .context("failed to fetch logs")
+        .unwrap_err();
+
+        assert!(is_get_logs_error_silent(&err));
+    }
+
+    #[test]
+    fn ignores_other_realtime_errors() {
+        let err = anyhow::anyhow!(
+            "server returned an error response: error code -32005: query returned more than 10000 results"
+        );
+
+        assert!(!is_get_logs_error_silent(&err));
     }
 }
