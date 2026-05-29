@@ -33,7 +33,7 @@ services:
     depends_on:
       - db
       - redis-db
-    image: ghcr.io/evgenkor/blockscout-private:9.3.5
+    image: ghcr.io/evgenkor/blockscout-private:11.1.2
     pull_policy: always
     restart: always
     stop_grace_period: 5m
@@ -58,7 +58,7 @@ services:
       INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: true
       INDEXER_DISABLE_HOT_SMART_CONTRACTS_FETCHER: true
       DISABLE_MARKET: 'true'
-      ECTO_USE_SSL: false
+      ECTO_SSL_MODE: disable
       DISABLE_EXCHANGE_RATES: true
       SUPPORTED_CHAINS: "[]"
     ports:
@@ -96,15 +96,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  stats:
+  stats-interchain:
     image: ghcr.io/blockscout/stats:v2.14.1
-    container_name: 'stats'
+    container_name: 'stats-interchain'
     restart: always
     depends_on:
       - db
       - interchain-indexer
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
       STATS__MODE: interchain
       STATS__INTERCHAIN_PRIMARY_ID: 8021
@@ -120,13 +120,35 @@ services:
       STATS__SERVER__HTTP__CORS__ENABLED: true
       STATS__SERVER__HTTP__CORS__ALLOWED_ORIGIN: '*'
 
+  stats:
+    image: ghcr.io/blockscout/stats:v2.15.0
+    container_name: 'stats'
+    restart: always
+    depends_on:
+      - db
+      - backend
+      - stats-interchain
+    ports:
+      - "8080:8080"
+    environment:
+      STATS__MODE: blockscout
+      STATS__BLOCKSCOUT_API_URL: http://localhost:4000
+      STATS__DB_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/stats
+      STATS__INDEXER_DB_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
+      STATS__CREATE_DATABASE: true
+      STATS__RUN_MIGRATIONS: true
+      STATS__SERVER__HTTP__ENABLED: true
+      STATS__SERVER__HTTP__ADDR: 0.0.0.0:8080
+      STATS__SERVER__HTTP__CORS__ENABLED: true
+      STATS__SERVER__HTTP__CORS__ALLOWED_ORIGIN: '*'
+      STATS__LINKED_STATS__BASE_URL: http://localhost:8080
+
   frontend:
     depends_on:
       - backend
       - caddy
-    image: ghcr.io/evgenkor/frontend-private:cross-chain-alpha.0
+    image: ghcr.io/evgenkor/frontend-private:v2.8.0
     pull_policy: always
-    platform: linux/amd64
     restart: always
     container_name: 'frontend'
     environment:
