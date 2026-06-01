@@ -40,6 +40,10 @@ services:
     container_name: 'backend'
     command: sh -c 'bin/blockscout eval "Elixir.Explorer.ReleaseTasks.create_and_migrate()" && bin/blockscout start'
     environment:
+      APPLICATION_MODE: all
+      COIN: NUMINE
+      COIN_NAME: NUMINE
+      DISABLE_MARKET: true
       ETHEREUM_JSONRPC_VARIANT: geth
       ETHEREUM_JSONRPC_HTTP_URL: https://subnets.avax.network/numi/mainnet/rpc
       ETHEREUM_JSONRPC_TRACE_URL: https://subnets.avax.network/numi/mainnet/rpc
@@ -53,16 +57,18 @@ services:
       DATABASE_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
       SECRET_KEY_BASE: 56NtB48ear7+wMSf0IQuWDAAazhpb31qyc7GiyspBP2vh7t5zlCsF5QDv76chXeN # TODO: default, please change
       NETWORK: EVM
-      PORT: 4000 
+      +PORT: 4000 
       INDEXER_DISABLE_PENDING_TRANSACTIONS_FETCHER: true
       INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: true
       INDEXER_DISABLE_HOT_SMART_CONTRACTS_FETCHER: true
-      DISABLE_MARKET: 'true'
+      MIGRATION_DELETE_ZERO_VALUE_INTERNAL_TRANSACTIONS_ENABLED: true
+      MIGRATION_SHRINK_INTERNAL_TRANSACTIONS_BATCH_SIZE: 100
       ECTO_SSL_MODE: disable
       DISABLE_EXCHANGE_RATES: true
       SUPPORTED_CHAINS: "[]"
     ports:
       - "4000:4000"
+      - "81:80"
     links:
       - db:database
     # volumes:
@@ -91,13 +97,14 @@ services:
       INTERCHAIN_INDEXER__METRICS__ADDR: 0.0.0.0:6060
       INTERCHAIN_INDEXER__SERVER__HTTP__CORS__ENABLED: true
       INTERCHAIN_INDEXER__SERVER__HTTP__CORS__ALLOWED_ORIGIN: '*'
+      RUST_LOG: info,alloy_transport_http=warn
     volumes:
       - ./config:/app/config
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   stats-interchain:
-    image: ghcr.io/blockscout/stats:v2.14.1
+    image: ghcr.io/blockscout/stats:v2.15.0
     container_name: 'stats-interchain'
     restart: always
     depends_on:
@@ -132,7 +139,8 @@ services:
       - "8080:8080"
     environment:
       STATS__MODE: blockscout
-      STATS__BLOCKSCOUT_API_URL: http://localhost:4000
+      #STATS__BLOCKSCOUT_API_URL: http://backend:4000
+      STATS__IGNORE_BLOCKSCOUT_API_ABSENCE: true
       STATS__DB_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/stats
       STATS__INDEXER_DB_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
       STATS__CREATE_DATABASE: true
@@ -141,7 +149,7 @@ services:
       STATS__SERVER__HTTP__ADDR: 0.0.0.0:8080
       STATS__SERVER__HTTP__CORS__ENABLED: true
       STATS__SERVER__HTTP__CORS__ALLOWED_ORIGIN: '*'
-      STATS__LINKED_STATS__BASE_URL: http://localhost:8080
+      STATS__LINKED_STATS__BASE_URL: http://stats-interchain:8080
 
   frontend:
     depends_on:
@@ -154,6 +162,7 @@ services:
     environment:
       NEXT_PUBLIC_API_HOST: localhost
       NEXT_PUBLIC_STATS_API_HOST: http://localhost:8080
+      NEXT_PUBLIC_STATS_API_BASE_PATH: /
       FAVICON_MASTER_URL: https://ash.center/img/ash-logo.svg # TODO: set to actual logo
       NEXT_PUBLIC_NETWORK_NAME: NUMINE
       NEXT_PUBLIC_NETWORK_ID: 8021
@@ -164,8 +173,7 @@ services:
       NEXT_PUBLIC_INTERCHAIN_INDEXER_API_HOST: http://localhost:8050
       NEXT_PUBLIC_CROSS_CHAIN_TXS_ENABLED: true
       NEXT_PUBLIC_HOMEPAGE_CHARTS: "['daily_txs']"
-      #NEXT_PUBLIC_STATS_API_HOST: ""
-      #NEXT_PUBLIC_STATS_API_BASE_PATH: /stats-service
+      
   caddy:
     depends_on:
       - backend
