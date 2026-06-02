@@ -40,6 +40,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 | `BENS__TRACING__ENABLED`                         |                          |                                                               | `true`         |
 | `BENS__TRACING__FORMAT`                          |                          |                                                               | `default`      |
 | `BENS__SUBGRAPHS_READER__REFRESH_CACHE_DISABLED` |                          |                                                               | `false`        |
+| `BENS__SUBGRAPHS_READER__MAX_PROTOCOLS_FROM_USER_INPUT` |                    | max protocols per request when chain id is omitted; `null` disables the limit | `5`            |
 | `BENS__REPLICA_DATABASE__CONNECT__URL`           | true                     | e.g. `postgresql://postgres:postgres@localhost:5433/postgres` |                |
 | `BENS__REPLICA_DATABASE__HEALTH_CHECK_INTERVAL`  |                          |                                                               | `10`           |
 | `BENS__REPLICA_DATABASE__MAX_LAG`                |                          |                                                               | `300`          |

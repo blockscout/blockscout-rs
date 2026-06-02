@@ -188,7 +188,7 @@ pub async fn mocked_reader(pool: PgPool) -> SubgraphReader {
             .expect("ReadWriteRepo for tests"),
     );
     let (networks, protocols) = mocked_networks_and_protocols().await;
-    SubgraphReader::initialize(db, networks, protocols)
+    SubgraphReader::initialize(db, networks, protocols, Some(5))
         .await
         .expect("failed to init reader")
 }
