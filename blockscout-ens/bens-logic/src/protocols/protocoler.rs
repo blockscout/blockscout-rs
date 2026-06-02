@@ -17,13 +17,15 @@ use tera::Tera;
 use url::Url;
 
 const MAX_NETWORKS_LIMIT: usize = 5;
-const MAX_PROTOCOLS_FROM_USER_INPUT: usize = 5;
 const PROTOCOL_DAPP_URL_TEMPLATE_NAME: &str = "protocol_dapp_url";
 
 #[derive(Debug, Clone)]
 pub struct Protocoler {
     networks: BTreeMap<i64, Network>,
     protocols: BTreeMap<String, Protocol>,
+    /// Maximum number of protocols a user may specify in a single protocol-scoped
+    /// request (network id omitted). `None` disables the limit.
+    max_protocols_from_user_input: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -264,6 +266,7 @@ impl Protocoler {
     pub fn initialize(
         networks: impl IntoIterator<Item = (i64, Network)>,
         protocols: impl IntoIterator<Item = (String, Protocol)>,
+        max_protocols_from_user_input: Option<usize>,
     ) -> Result<Self, anyhow::Error> {
         let networks = networks.into_iter().collect::<BTreeMap<_, _>>();
         let protocols = protocols.into_iter().collect::<BTreeMap<_, _>>();
@@ -291,6 +294,7 @@ impl Protocoler {
         Ok(Self {
             networks,
             protocols,
+            max_protocols_from_user_input,
         })
     }
 
@@ -397,11 +401,13 @@ impl Protocoler {
             let deduped = protocols.into_iter().collect::<HashSet<_>>();
             let protocols = self.protocols_by_slugs(deduped)?;
             if let Some(protocols) = NonEmpty::from_vec(protocols) {
-                if protocols.len() > MAX_PROTOCOLS_FROM_USER_INPUT {
-                    return Err(ProtocolError::TooManyProtocols {
-                        specified: protocols.len(),
-                        max: MAX_PROTOCOLS_FROM_USER_INPUT,
-                    });
+                if let Some(max) = self.max_protocols_from_user_input {
+                    if protocols.len() > max {
+                        return Err(ProtocolError::TooManyProtocols {
+                            specified: protocols.len(),
+                            max,
+                        });
+                    }
                 }
                 return Ok(protocols);
             }
@@ -771,7 +777,8 @@ mod tests {
             ),
         ];
 
-        Protocoler::initialize(networks, protocols).expect("should initialize successfully")
+        Protocoler::initialize(networks, protocols, Some(5))
+            .expect("should initialize successfully")
     }
 
     #[rstest]
