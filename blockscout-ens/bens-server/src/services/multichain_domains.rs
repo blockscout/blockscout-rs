@@ -124,7 +124,14 @@ impl MultichainDomains for MultichainDomainsService {
 
         let resolved_domains_count = self
             .subgraph_reader
-            .count_domains_by_address(input.address, true, false, chain_id, input.protocols)
+            .count_domains_by_address(
+                input.address,
+                true,
+                false,
+                chain_id,
+                input.protocols,
+                input.all_protocols,
+            )
             .await
             .map_err(|e| conversion::map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
             as i32;

@@ -84,6 +84,7 @@ pub fn multichain_get_address_from_proto(
         address: address_from_str_inner(&proto.address)?,
         network_id: proto.chain_id,
         protocols: split_protocols(proto.protocols),
+        all_protocols: proto.all_protocols,
     };
     Ok(input)
 }

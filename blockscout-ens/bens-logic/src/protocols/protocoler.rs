@@ -386,14 +386,28 @@ impl Protocoler {
         Ok(protocols)
     }
 
+    /// Returns every deployed protocol across all networks.
+    pub fn all_deployed_protocols(&self) -> Result<NonEmpty<DeployedProtocol<'_>>, ProtocolError> {
+        let protocols = self.iter_deployed_protocols().collect::<Vec<_>>();
+        NonEmpty::from_vec(protocols).ok_or_else(|| {
+            ProtocolError::ProtocolNotFound("no deployed protocols found".to_string())
+        })
+    }
+
     pub fn deployed_protocols_from_user_input(
         &self,
         network_id: Option<i64>,
         protocols: Option<NonEmpty<String>>,
+        all_protocols: bool,
     ) -> Result<NonEmpty<DeployedProtocol<'_>>, ProtocolError> {
+        // `all_protocols` without a network means every protocol on every network.
+        if all_protocols && network_id.is_none() {
+            return self.all_deployed_protocols();
+        }
         if let Some(network_id) = network_id {
-            // If network id is provided, this is a network-specific request and provided protocols are filters
-            let maybe_filter = protocols;
+            // If network id is provided, this is a network-specific request and provided protocols are filters.
+            // `all_protocols` drops the filter so every protocol on the network is returned.
+            let maybe_filter = if all_protocols { None } else { protocols };
             return self.protocols_of_network(network_id, maybe_filter);
         }
         if let Some(protocols) = protocols {
@@ -427,8 +441,9 @@ impl Protocoler {
         &self,
         network_id: Option<i64>,
         protocols: Option<NonEmpty<String>>,
+        all_protocols: bool,
     ) -> Result<NonEmpty<&Protocol>, ProtocolError> {
-        self.deployed_protocols_from_user_input(network_id, protocols)
+        self.deployed_protocols_from_user_input(network_id, protocols, all_protocols)
             .map(|nonempty| nonempty.map(|p| p.protocol))
     }
 
@@ -872,19 +887,27 @@ mod tests {
     // }
 
     #[rstest]
-    #[case(Some(1), None, vec!["ens"])]
-    #[case(None, Some(vec!["ens".to_string()]), vec!["ens"])]
-    #[case(Some(1337), None, vec!["ens", "gnosis"])]
-    #[case(Some(1337), Some(vec!["ens".to_string()]), vec!["ens"])]
-    #[case(None, None, vec!["ens"])] // fallback to mainnet
+    #[case(Some(1), None, false, vec!["ens"])]
+    #[case(None, Some(vec!["ens".to_string()]), false, vec!["ens"])]
+    #[case(Some(1337), None, false, vec!["ens", "gnosis"])]
+    #[case(Some(1337), Some(vec!["ens".to_string()]), false, vec!["ens"])]
+    #[case(None, None, false, vec!["ens"])] // fallback to mainnet
+    #[case(None, None, true, vec!["ens", "gnosis"])] // all_protocols: every deployed protocol
+    #[case(None, Some(vec!["ens".to_string()]), true, vec!["ens", "gnosis"])] // all_protocols ignores filter
+    #[case(Some(1337), Some(vec!["ens".to_string()]), true, vec!["ens", "gnosis"])] // all_protocols scoped to chain
     fn test_protocols_of_user_input_success(
         protocoler: Protocoler,
         #[case] network_id: Option<i64>,
         #[case] protocols_input: Option<Vec<String>>,
+        #[case] all_protocols: bool,
         #[case] expected_slugs: Vec<&str>,
     ) {
         let protocols_input = protocols_input.map(|slugs| NonEmpty::from_vec(slugs).unwrap());
-        let result = protocoler.deployed_protocols_from_user_input(network_id, protocols_input);
+        let result = protocoler.deployed_protocols_from_user_input(
+            network_id,
+            protocols_input,
+            all_protocols,
+        );
         assert!(result.is_ok());
         let protocols = result.unwrap();
         let actual_slugs: Vec<&str> = protocols
@@ -897,7 +920,8 @@ mod tests {
     #[rstest]
     fn test_protocols_of_user_input_invalid_protocol(protocoler: Protocoler) {
         let protocols_input = nonempty!["nonexistent".to_string()];
-        let result = protocoler.deployed_protocols_from_user_input(None, Some(protocols_input));
+        let result =
+            protocoler.deployed_protocols_from_user_input(None, Some(protocols_input), false);
         assert!(result.is_err());
         match result.unwrap_err() {
             ProtocolError::ProtocolNotFound(name) => assert_eq!(name, "nonexistent"),

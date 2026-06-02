@@ -117,9 +117,11 @@ impl SubgraphReader {
         &self,
         input: LookupDomainInput,
     ) -> Result<PaginatedList<LookupOutput>, SubgraphReadError> {
-        let protocols = self
-            .protocoler
-            .deployed_protocols_from_user_input(input.network_id, input.protocols)?;
+        let protocols = self.protocoler.deployed_protocols_from_user_input(
+            input.network_id,
+            input.protocols,
+            false,
+        )?;
         let find_domains_input = if let Some(name) = input.name {
             // special logic for lookup by name, no error returned if name is invalid! wow, so cool!
             let Ok(clean_name) = CleanName::new(&name) else {
@@ -181,9 +183,11 @@ impl SubgraphReader {
         if address_should_be_ignored(&input.address) {
             return Ok(PaginatedList::empty());
         }
-        let protocols = self
-            .protocoler
-            .protocols_from_user_input(input.network_id, input.protocols.clone())?;
+        let protocols = self.protocoler.protocols_from_user_input(
+            input.network_id,
+            input.protocols.clone(),
+            false,
+        )?;
         let domains = sql::find_resolved_addresses(self.pg_pool(), protocols, &input).await?;
         let output = lookup_output_from_domains(domains, &self.protocoler)?;
         let paginated = input
@@ -200,9 +204,11 @@ impl SubgraphReader {
         if address_should_be_ignored(&input.address) {
             return Ok(Default::default());
         }
-        let protocols = self
-            .protocoler
-            .protocols_from_user_input(input.network_id, input.protocols.clone())?;
+        let protocols = self.protocoler.protocols_from_user_input(
+            input.network_id,
+            input.protocols.clone(),
+            input.all_protocols,
+        )?;
         let maybe_domain_name = resolve_addresses(self.pg_pool(), protocols, vec![input.address])
             .await?
             .into_iter()
@@ -237,13 +243,14 @@ impl SubgraphReader {
         owned_by: bool,
         network_id: Option<i64>,
         protocols: Option<NonEmpty<String>>,
+        all_protocols: bool,
     ) -> Result<i64, SubgraphReadError> {
         if address_should_be_ignored(&address) {
             return Ok(Default::default());
         }
-        let protocols = self
-            .protocoler
-            .protocols_from_user_input(network_id, protocols)?;
+        let protocols =
+            self.protocoler
+                .protocols_from_user_input(network_id, protocols, all_protocols)?;
         let only_active = true;
         let count = sql::count_domains_by_address(
             self.pg_pool(),
@@ -271,9 +278,9 @@ impl SubgraphReader {
         &self,
         input: BatchResolveAddressNamesInput,
     ) -> Result<BTreeMap<Address, String>, SubgraphReadError> {
-        let protocols = self
-            .protocoler
-            .protocols_from_user_input(input.network_id, input.protocols)?;
+        let protocols =
+            self.protocoler
+                .protocols_from_user_input(input.network_id, input.protocols, false)?;
         // remove duplicates
         let addresses = remove_addresses_from_batch(input.addresses);
         let addresses_len = addresses.len();

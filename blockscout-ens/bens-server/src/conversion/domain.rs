@@ -79,6 +79,7 @@ pub fn get_address_from_inner(
         network_id: Some(inner.chain_id),
         address,
         protocols: inner.protocol_id.map(|p| nonempty![p]),
+        all_protocols: false,
     })
 }
 
