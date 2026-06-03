@@ -33,7 +33,7 @@ services:
     depends_on:
       - db
       - redis-db
-    image: ghcr.io/evgenkor/blockscout-private:11.1.2
+    image: ghcr.io/evgenkor/blockscout-private:11.1.3
     pull_policy: always
     restart: always
     stop_grace_period: 5m
@@ -41,8 +41,6 @@ services:
     command: sh -c 'bin/blockscout eval "Elixir.Explorer.ReleaseTasks.create_and_migrate()" && bin/blockscout start'
     environment:
       APPLICATION_MODE: all
-      COIN: NUMINE
-      COIN_NAME: NUMINE
       DISABLE_MARKET: true
       ETHEREUM_JSONRPC_VARIANT: geth
       ETHEREUM_JSONRPC_HTTP_URL: https://subnets.avax.network/numi/mainnet/rpc
@@ -52,12 +50,12 @@ services:
       # You can remove/comment the following 4 lines for newly created network
       FIRST_BLOCK: 557000
       TRACE_FIRST_BLOCK: 557000
-      # INDEXER_CATCHUP_BLOCKS_BATCH_SIZE: 20
-      # INDEXER_CATCHUP_BLOCKS_CONCURRENCY: 1
+      INDEXER_CATCHUP_BLOCKS_BATCH_SIZE: 20
+      INDEXER_CATCHUP_BLOCKS_CONCURRENCY: 1
       DATABASE_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
       SECRET_KEY_BASE: 56NtB48ear7+wMSf0IQuWDAAazhpb31qyc7GiyspBP2vh7t5zlCsF5QDv76chXeN # TODO: default, please change
       NETWORK: EVM
-      +PORT: 4000 
+      PORT: 4000 
       INDEXER_DISABLE_PENDING_TRANSACTIONS_FETCHER: true
       INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: true
       INDEXER_DISABLE_HOT_SMART_CONTRACTS_FETCHER: true
@@ -139,8 +137,7 @@ services:
       - "8080:8080"
     environment:
       STATS__MODE: blockscout
-      #STATS__BLOCKSCOUT_API_URL: http://backend:4000
-      STATS__IGNORE_BLOCKSCOUT_API_ABSENCE: true
+      STATS__BLOCKSCOUT_API_URL: http://backend:4000
       STATS__DB_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/stats
       STATS__INDEXER_DB_URL: postgresql://postgres:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
       STATS__CREATE_DATABASE: true
