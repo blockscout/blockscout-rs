@@ -47,6 +47,13 @@ paths:
           in: query
           required: false
           type: string
+        - name: all_protocols
+          description: |-
+            If true, search across all supported protocols and ignore `protocols`.
+            When `chain_id` is set, the search is scoped to all protocols on that chain.
+          in: query
+          required: false
+          type: boolean
       tags:
         - MultichainDomains
   /api/v1/addresses:batch-resolve:

@@ -124,7 +124,14 @@ impl DomainsExtractor for DomainsExtractorService {
 
         let resolved_domains_count = self
             .subgraph_reader
-            .count_domains_by_address(input.address, true, false, Some(chain_id), input.protocols)
+            .count_domains_by_address(
+                input.address,
+                true,
+                false,
+                Some(chain_id),
+                input.protocols,
+                false,
+            )
             .await
             .map_err(|e| map_subgraph_error(e, Some(self.subgraph_reader.pg_pool())))?
             as i32;
