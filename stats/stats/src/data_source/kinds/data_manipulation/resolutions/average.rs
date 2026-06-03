@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Constructors for lower resolutions of average value charts
 use std::{fmt::Debug, marker::PhantomData};
 

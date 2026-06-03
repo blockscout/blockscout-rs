@@ -2,7 +2,7 @@
 name = "blockscout-metrics-tools"
 version = "0.1.0"
 description = "Collection of tools helpful for metrics collection"
-license = "MIT"
+license = "LicenseRef-Blockscout"
 repository = "https://github.com/blockscout/blockscout-rs"
 edition = "2021"
 keywords = ["metrics", "time"]

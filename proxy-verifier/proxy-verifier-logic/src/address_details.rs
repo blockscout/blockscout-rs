@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{blockscout, Contract, Error};
 use blockscout_display_bytes::ToHex;
 use ethers_core::types;

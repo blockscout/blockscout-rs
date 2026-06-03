@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::user_op::{ListUserOp, UserOp};
 use alloy::primitives::{Address, B256};
 use blockscout_db::entity::blocks;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::config::types::LineChartCategory;
 use serde::{Deserialize, Serialize};
 

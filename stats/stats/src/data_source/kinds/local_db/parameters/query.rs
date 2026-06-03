@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{fmt::Debug, marker::PhantomData};
 
 use chrono::{DateTime, Utc};

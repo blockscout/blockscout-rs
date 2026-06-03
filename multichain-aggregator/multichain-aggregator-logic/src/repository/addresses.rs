@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     repository::{paginate_query, pagination::KeySpec, prepare_ts_query},
     types::{
@@ -20,7 +22,7 @@ pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), D
 where
     C: ConnectionTrait,
 {
-    addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
+    addresses.sort_by_key(|a| (a.hash, a.chain_id));
     let addresses = addresses.into_iter().map(ActiveModel::from);
 
     Entity::insert_many(addresses)

@@ -3,6 +3,7 @@ name = "tac-operation-lifecycle-entity"
 version = "0.1.0"
 edition = "2021"
 publish = false
+license = "LicenseRef-Blockscout"
 
 [lib]
 path = "src/lib.rs"

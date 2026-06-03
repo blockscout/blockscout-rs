@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Total interchain transfers sent (by associated message: src_tx_hash IS NOT NULL).
 //! When interchain_primary_id is set, filters by message's src_chain_id; otherwise counts all sent.
 

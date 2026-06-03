@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use stylus_verifier_proto::grpc::health::v1::{
     health_check_response, health_server::Health, HealthCheckRequest, HealthCheckResponse,
 };

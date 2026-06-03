@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{marker::PhantomData, ops::Deref, sync::Arc};
 
 use async_trait::async_trait;

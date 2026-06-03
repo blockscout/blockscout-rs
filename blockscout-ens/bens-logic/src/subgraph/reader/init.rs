@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     protocols::{
         AddressResolveTechnique, DeployedProtocol, Network, Protocol, ProtocolError, ProtocolInfo,
@@ -27,6 +29,7 @@ impl SubgraphReader {
         db: Arc<ReadWriteRepo>,
         networks: HashMap<i64, Network>,
         protocol_infos: HashMap<String, ProtocolInfo>,
+        max_protocols_from_user_input: Option<usize>,
     ) -> Result<Self, anyhow::Error> {
         let deployments = sql::get_deployments(db.read_db().get_postgres_connection_pool())
             .await?
@@ -76,7 +79,8 @@ impl SubgraphReader {
             .collect::<HashMap<_, _>>();
 
         tracing::info!(networks =? networks.keys().collect::<Vec<_>>(), "initialized subgraph reader");
-        let protocoler = Protocoler::initialize(networks, protocols)?;
+        let protocoler =
+            Protocoler::initialize(networks, protocols, max_protocols_from_user_input)?;
         let patcher = SubgraphPatcher::new();
         let this = Self::new(db, protocoler, patcher);
         this.init_cache().await.context("init cache tables")?;

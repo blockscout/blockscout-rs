@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod addr_reverse_names;
 mod address_names;
 pub use addr_reverse_names::AddrReverseNamesView;

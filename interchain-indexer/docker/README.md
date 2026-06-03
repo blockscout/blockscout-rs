@@ -110,6 +110,8 @@ docker-compose logs -f SERVICE_NAME
 - `backend`: the main Blockscout API Backend
 - `interchain-indexer`: Universal Bridge Indexer
 - `frontend`: Blockscout frontend web-server
+- `stats`: Blocksout instance statistic service
+- `stats-interchain`: Universal Bridge Indexer statistic service
 
 ## 4. Usage: Frontend, API, Swagger, and metrics
 

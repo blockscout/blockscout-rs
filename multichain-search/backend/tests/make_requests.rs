@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use actix_web::{http::StatusCode, test, web, web::Data, App};
 use multichain_search::{proxy, server, Settings};
 use pretty_assertions::assert_eq;

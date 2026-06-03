@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     auth::Error,
     jwt_headers::{build_http_headers, extract_jwt},

@@ -5,6 +5,7 @@ version = "0.6.0"
 edition = "2021"
 repository = "https://github.com/blockscout/blockscout-rs"
 keywords = ["ethereum", "web3", "solidity"]
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 alloy-core = { workspace = true }

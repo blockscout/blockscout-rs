@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 /// Cached query methods. Can be used on any db, because why not.
 /// Intended for heavy queries to blockscout database.
 use crate::{

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::address_coin_balances::AddressCoinBalance;
 use entity::address_coin_balances::{ActiveModel, Column, Entity};
 use sea_orm::{ConnectionTrait, DbErr, EntityTrait, prelude::Expr, sea_query::OnConflict};

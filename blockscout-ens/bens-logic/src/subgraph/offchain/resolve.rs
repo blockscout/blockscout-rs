@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::ResolveResult;
 use crate::{
     protocols::{AddressResolveTechnique, DomainNameOnProtocol, ProtocolSpecific},

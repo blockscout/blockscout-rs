@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{evm_compilers, solc_compiler_cli, Error};
 use crate::{DetailedVersion, Language, Version};
 use anyhow::Context;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::settings::JaegerSettings;
 use opentelemetry::{sdk::trace::Tracer, trace::TraceError};
 use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, prelude::*};

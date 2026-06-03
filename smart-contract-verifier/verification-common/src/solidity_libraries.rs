@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::verifier_alliance::Match;
 use anyhow::Context;
 use blockscout_display_bytes::ToHex;

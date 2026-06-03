@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::test_database::TestDbGuard;
 use migration::{
     from_sql, Alias, DynIden, IntoIden, MigrationName, MigrationTrait, MigratorTrait, SchemaManager,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::ChainId;
 use chrono::NaiveDateTime;
 use entity::counters_global_imported::Model as GlobalCountersModel;

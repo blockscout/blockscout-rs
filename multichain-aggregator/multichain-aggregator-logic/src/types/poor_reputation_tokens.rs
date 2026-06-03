@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{error::ParseError, proto, types::ChainId};
 use entity::poor_reputation_tokens::ActiveModel;
 use sea_orm::ActiveValue::Set;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::paginate_cursor;
 use crate::types::{ChainId, hashes::Hash};
 use alloy_primitives::BlockHash;

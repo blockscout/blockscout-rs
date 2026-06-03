@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     jobs,
     services::{
@@ -81,6 +83,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         tracing::info!("running migrations");
         bens_logic::migrations::run(db_repo.main_db().get_postgres_connection_pool()).await?;
     }
+    let max_protocols_from_user_input = settings.subgraphs_reader.max_protocols_from_user_input;
     let networks = settings
         .subgraphs_reader
         .networks
@@ -135,9 +138,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         protocols.keys().collect::<Vec<_>>()
     );
 
-    let subgraph_reader = SubgraphReader::initialize(db_repo.clone(), networks, protocols)
-        .await
-        .context("failed to initialize subgraph-reader")?;
+    let subgraph_reader = SubgraphReader::initialize(
+        db_repo.clone(),
+        networks,
+        protocols,
+        max_protocols_from_user_input,
+    )
+    .await
+    .context("failed to initialize subgraph-reader")?;
     let subgraph_reader = Arc::new(subgraph_reader);
     let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader.clone()));
     let multichain_domains = Arc::new(MultichainDomainsService::new(subgraph_reader.clone()));

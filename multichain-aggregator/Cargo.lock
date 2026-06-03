@@ -1035,7 +1035,7 @@ checksum = "55248b47b0caf0546f7988906588779981c43bb1bc9d0c44087278f80cdb44ba"
 [[package]]
 name = "bens-proto"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?tag=bens%2Fv1.6.4#a1ee15bd88c3ba331cbfa5ccb03a5eaccd398eba"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=30ce71a#30ce71a5a2e9e059ac6b778b785dc65a05df7c94"
 dependencies = [
  "actix-prost",
  "actix-prost-build",

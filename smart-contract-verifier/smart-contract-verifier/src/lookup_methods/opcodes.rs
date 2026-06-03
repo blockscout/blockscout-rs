@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 // Changed version of
 // https://github.com/Jon-Becker/heimdall-rs/blob/6363d2fe02b68a4b03e0d5f726f605d1360250b7/common/src/ether/evm/core/opcodes.rs
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::collections::HashSet;
 
 use stats_proto::blockscout::stats::v1 as proto_v1;

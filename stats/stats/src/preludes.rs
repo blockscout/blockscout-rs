@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod sea_orm_prelude {
     pub use sea_orm::{
         ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, DbBackend, EntityName,

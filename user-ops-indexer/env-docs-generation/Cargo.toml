@@ -2,6 +2,7 @@
 name = "env-docs-generation"
 version = "0.1.0"
 edition = "2024"
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 user-ops-indexer-server = { path = "../user-ops-indexer-server" }

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod amb;
 pub mod avalanche;
 pub(crate) mod cleanup_guard;

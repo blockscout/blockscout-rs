@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use alloy::{
     json_abi::JsonAbi,
     primitives::{Address, Bytes, Selector, U256},

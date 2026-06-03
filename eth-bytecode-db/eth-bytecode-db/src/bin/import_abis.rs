@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use eth_bytecode_db::verification::import_existing_abis;
 use sea_orm::Database;
 

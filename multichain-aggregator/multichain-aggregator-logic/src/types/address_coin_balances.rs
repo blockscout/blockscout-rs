@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::ChainId;
 use crate::error::ParseError;
 use entity::address_coin_balances::{ActiveModel, Model};

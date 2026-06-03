@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Total interchain messages received on the primary chain.
 //! Counts messages where the destination event was indexed (dst_tx_hash IS NOT NULL).
 //! When interchain_primary_id is set, filters by dst_chain_id; otherwise counts all received messages.

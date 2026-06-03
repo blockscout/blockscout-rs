@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     ChainId,
     address_coin_balances::AddressCoinBalance,

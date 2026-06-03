@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::bytes_from_hex_or_base64;
 use crate::proto::eigen_da_service_server::EigenDaService as EigenDa;
 use base64::prelude::*;

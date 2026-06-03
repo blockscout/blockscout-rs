@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::{ChainId, api_keys::ApiKeyError};
 use alloy_primitives::hex::FromHexError;
 use bigdecimal::ParseBigDecimalError;

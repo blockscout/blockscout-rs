@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::compiler::{FileValidator, Version};
 use anyhow::{Context, Error};
 use async_trait::async_trait;

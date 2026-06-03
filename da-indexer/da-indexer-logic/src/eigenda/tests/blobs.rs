@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     common::tests::{init_db, initialize_s3_storage, is_s3_storage_empty},
     eigenda::repository::{batches, blobs},

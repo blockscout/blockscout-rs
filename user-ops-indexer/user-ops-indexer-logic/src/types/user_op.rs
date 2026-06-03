@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     indexer::common::decode_execute_call_data, repository::user_op::ListUserOpDB,
     types::common::u256_to_decimal,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod alliance_db;
 mod any_match;
 mod bytecodes_comparison;

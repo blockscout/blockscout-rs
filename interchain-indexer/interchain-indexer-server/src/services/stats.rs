@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::chain_info_proto::chain_model_to_proto;
 use crate::{
     proto::{interchain_statistics_service_server::*, *},

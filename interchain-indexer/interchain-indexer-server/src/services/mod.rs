@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod chain_info_proto;
 mod health;
 mod interchain_service;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #[tokio::test]
 async fn test_health_endpoint() {
     // Underlying `blockscout_service_launcher::init_server` uses health endpoint

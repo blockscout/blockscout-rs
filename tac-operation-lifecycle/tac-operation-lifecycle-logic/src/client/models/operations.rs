@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use serde::Deserialize;
 
 #[derive(Deserialize)]

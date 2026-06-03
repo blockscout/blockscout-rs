@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod blockscout;
 mod client;
 mod eth_bytecode_db;

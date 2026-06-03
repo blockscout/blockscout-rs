@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod auth;
 pub mod blockscout_waiter;
 mod config;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::path::PathBuf;

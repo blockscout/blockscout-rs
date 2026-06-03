@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Result;
 use celestia_types::{
     blob::Blob, nmt::Namespace, AppVersion, DataAvailabilityHeader, ExtendedDataSquare,

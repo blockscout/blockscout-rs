@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     types::{
         CustomError, EmptyCustomError, ErrorResponse, GetSourceFilesResponse,

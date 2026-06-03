@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Essentially the same logic as with `NewAccounts`
 //! but for account abstraction wallets.
 use std::{collections::HashSet, ops::Range};

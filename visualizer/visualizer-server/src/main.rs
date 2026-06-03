@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use visualizer_server::Settings;
 
 #[tokio::main]

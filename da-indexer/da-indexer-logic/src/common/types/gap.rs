@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::fmt;
 
 use sea_orm::FromQueryResult;

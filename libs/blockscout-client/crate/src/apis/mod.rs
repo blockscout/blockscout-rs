@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{error, fmt};
 
 #[derive(Debug, Clone)]

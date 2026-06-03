@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::{

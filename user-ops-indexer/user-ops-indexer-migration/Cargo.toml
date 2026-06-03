@@ -3,6 +3,7 @@ name = "user-ops-indexer-migration"
 version = "0.0.0"
 edition = "2021"
 publish = false
+license = "LicenseRef-Blockscout"
 
 [lib]
 name = "migration"

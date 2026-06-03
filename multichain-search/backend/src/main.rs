@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Context;
 use multichain_search::{init_logs, server::run, Settings};
 use std::error::Error;

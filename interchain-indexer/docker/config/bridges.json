@@ -9,6 +9,7 @@
         "ui_url": null,
         "docs_url": null,
         "home_chain_id": 8021,
+        "process_unknown_chains": false,
         "contracts": [
             {
                 "chain_id": 43114,

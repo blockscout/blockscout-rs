@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Orchestration layer for statistics: projection triggers, backfill, rollup refresh, token enrichment.
 
 use std::sync::Arc;

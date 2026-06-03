@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 /// Operational transactions - metrics originally designed for Arbitrum.
 /// They represent number of transactions excluding a one-per-block system transaction.
 ///

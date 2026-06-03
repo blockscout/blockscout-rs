@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{interop_message_transfers, macros::update_if_not_null, paginate_cursor};
 use crate::{
     error::ParseError,
@@ -32,7 +34,7 @@ where
         return Ok(vec![]);
     }
 
-    interop_messages.sort_by(|a, b| (a.init_chain_id, a.nonce).cmp(&(b.init_chain_id, b.nonce)));
+    interop_messages.sort_by_key(|a| (a.init_chain_id, a.nonce));
 
     let (interop_messages, transfers): (Vec<_>, Vec<_>) = interop_messages
         .into_iter()

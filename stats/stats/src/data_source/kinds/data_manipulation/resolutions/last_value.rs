@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Constructors for lower resolutions taking last value within the range.
 //!
 //! Intended for "growth" charts where cumulative number of something

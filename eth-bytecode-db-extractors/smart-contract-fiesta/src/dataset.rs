@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Context;
 use blockscout_display_bytes::Bytes;
 use entity::{contract_addresses, sea_orm_active_enums::VerificationMethod};

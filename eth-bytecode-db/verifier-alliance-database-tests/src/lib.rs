@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod test_case;
 
 pub use blockscout_service_launcher::test_database::TestDbGuard;

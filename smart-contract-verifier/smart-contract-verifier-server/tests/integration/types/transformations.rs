@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{TestCaseRequest, TestCaseResponse};
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use pretty_assertions::assert_eq;

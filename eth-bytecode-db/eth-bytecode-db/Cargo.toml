@@ -3,6 +3,7 @@ name = "eth-bytecode-db"
 version = "0.1.0"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 alloy-json-abi = { workspace = true, features = ["serde_json"] }

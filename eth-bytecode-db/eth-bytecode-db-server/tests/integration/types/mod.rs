@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier_proto::http_client::mock::SmartContractVerifierServer;
 use std::path::PathBuf;

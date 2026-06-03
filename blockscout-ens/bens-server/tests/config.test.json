@@ -43,7 +43,8 @@
         "meta": {
           "short_name": "ens short",
           "title": "ens title",
-          "description": "ens description"
+          "description": "ens description",
+          "protocol_dapp_url_template": "https://app.ens.domains/{{ name }}"
         }
       },
       "genome": {

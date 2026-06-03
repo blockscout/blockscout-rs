@@ -2,7 +2,7 @@
 name = "blockscout-endpoint-swagger"
 version = "0.1.1"
 description = "Configuration tools for enabling swagger endpoint"
-license = "MIT"
+license = "LicenseRef-Blockscout"
 repository = "https://github.com/blockscout/blockscout-rs"
 keywords = ["blockscout", "service", "http", "microservices", "swagger", "endpoint"]
 categories = ["web-programming::http-server"]

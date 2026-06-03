@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use entity::{sea_orm_active_enums::PartType, sources};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;

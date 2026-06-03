@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 /// Methods intended for interacting with local db
 use crate::{
     ChartError, ChartProperties, MissingDatePolicy,

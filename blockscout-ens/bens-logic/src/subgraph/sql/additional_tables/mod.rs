@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod addr2name;
 mod cache_views;
 mod primary_name_record;

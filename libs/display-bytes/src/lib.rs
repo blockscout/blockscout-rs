@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #[cfg(feature = "ethers-core")]
 pub use ethers_core::types::Bytes;
 

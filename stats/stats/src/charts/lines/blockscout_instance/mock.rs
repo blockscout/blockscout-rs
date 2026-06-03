@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{chart_prelude::*, missing_date::fit_into_range, range::Incrementable};
 
 use rand::{Rng, SeedableRng, distributions::uniform::SampleUniform, rngs::StdRng};

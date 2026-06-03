@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod blockscout;
 pub mod coin_type;
 pub mod entity;

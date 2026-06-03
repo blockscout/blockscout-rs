@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::event::ChannelEvent;
 use dashmap::DashSet;
 use std::sync::Arc;

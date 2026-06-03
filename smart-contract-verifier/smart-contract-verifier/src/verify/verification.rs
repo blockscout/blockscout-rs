@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::OnChainCode;
 use verification_common::{
     verifier_alliance,

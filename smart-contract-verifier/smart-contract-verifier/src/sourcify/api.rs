@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     api_client::SourcifyApiClient,
     types::{ApiRequest, ApiVerificationResponse, Error, Files, ResultItem, Success},

@@ -3,6 +3,7 @@ name = "recaptcha-verifier"
 version = "0.1.0"
 edition = "2024"
 description = "Google reCAPTCHA v2/v3 verification library"
+license = "LicenseRef-Blockscout"
 
 [features]
 default = ["rustls-tls"]

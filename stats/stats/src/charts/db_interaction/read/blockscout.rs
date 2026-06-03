@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 /// Methods intended for interacting with blockscout db
 use blockscout_db::entity::blocks;
 use chrono::NaiveDateTime;

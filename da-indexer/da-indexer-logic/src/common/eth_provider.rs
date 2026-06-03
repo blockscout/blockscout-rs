@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use ethabi::Address;
 use ethers::{
     providers::{Middleware, Provider},

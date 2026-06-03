@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use mismatch::Mismatch;

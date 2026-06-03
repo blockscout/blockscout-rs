@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Context;
 use sea_orm::{
     sea_query::OnConflict, ActiveModelBehavior, ActiveModelTrait, ColumnTrait, ConnectionTrait,

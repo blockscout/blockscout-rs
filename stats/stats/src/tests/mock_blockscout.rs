@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![cfg(any(feature = "test-utils", test))]
 
 use blockscout_db::entity::{
-    address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
-    migrations_status,
-    sea_orm_active_enums::{EntryPointVersion, SponsorType},
+    address_coin_balances_daily, address_ids_to_address_hashes, addresses, block_rewards, blocks,
+    internal_transactions, migrations_status,
+    sea_orm_active_enums::{EntryPointVersion, SignedAuthorizationStatus, SponsorType},
     signed_authorizations, smart_contracts, tokens, transactions, user_operations,
 };
 use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
@@ -181,6 +183,16 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
     // contract created during internal transaction
     {
         let contract_in_internal_txn = mock_address(100, true, false);
+        let contract_address_id = address_ids_to_address_hashes::Entity::insert(
+            address_ids_to_address_hashes::ActiveModel {
+                address_hash: Set(contract_in_internal_txn.hash.as_ref().clone()),
+                ..Default::default()
+            },
+        )
+        .exec(blockscout)
+        .await
+        .unwrap()
+        .last_insert_id;
         addresses::Entity::insert(contract_in_internal_txn.clone())
             .exec(blockscout)
             .await
@@ -188,7 +200,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         let internal_txn = mock_internal_transaction(
             &contract_creation_txns[0],
             0,
-            Some(&contract_in_internal_txn),
+            Some((&contract_in_internal_txn, contract_address_id)),
         );
         internal_transactions::Entity::insert(internal_txn)
             .exec(blockscout)
@@ -735,17 +747,22 @@ fn mock_smart_contract(
 fn mock_internal_transaction(
     tx: &transactions::ActiveModel,
     index: i32,
-    contract: Option<&addresses::ActiveModel>,
+    contract: Option<(&addresses::ActiveModel, i64)>,
 ) -> internal_transactions::ActiveModel {
-    let created_contract_address_hash = match contract {
-        Some(contract) => Set(Some(contract.hash.as_ref().clone())),
-        None => NotSet,
+    let (created_contract_address_hash, created_contract_address_id) = match contract {
+        Some((contract, address_id)) => (
+            Set(Some(contract.hash.as_ref().clone())),
+            Set(Some(address_id)),
+        ),
+        None => (NotSet, NotSet),
     };
 
     internal_transactions::ActiveModel {
         index: Set(index),
-        transaction_hash: Set(tx.hash.as_ref().clone()),
+        transaction_index: Set(Some(tx.index.as_ref().unwrap())),
+        block_number: Set(Some(tx.block_number.as_ref().unwrap())),
         created_contract_address_hash,
+        created_contract_address_id,
         trace_address: Set(Default::default()),
         r#type: Set(Default::default()),
         value: Set(Default::default()),
@@ -901,13 +918,14 @@ fn mock_signed_authorization(
     signed_authorizations::ActiveModel {
         transaction_hash: Set(transaction.hash.as_ref().clone()),
         index: Set(index),
-        chain_id: Set(1),
+        chain_id: Set(Decimal::from(1)),
         address: Set(address),
-        nonce: Set(index * 1000),
+        nonce: Set(Decimal::from(index * 1000)),
         v: Set(27), // Dummy signature components
         r: Set(Decimal::from(123)),
         s: Set(Decimal::from(321)),
         authority: Set(Some(authority)),
+        status: Set(Some(SignedAuthorizationStatus::Ok)),
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
     }

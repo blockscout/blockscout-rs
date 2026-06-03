@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod batching;
 pub mod clear_and_query_all;
 pub mod point;

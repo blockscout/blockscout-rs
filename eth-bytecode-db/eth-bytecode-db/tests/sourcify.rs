@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod verification_test_helpers;
 
 use async_trait::async_trait;

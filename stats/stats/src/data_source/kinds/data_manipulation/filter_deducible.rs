@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Filter points that can be deduced according to `MissingDatePolicy`.
 //! Can help with space usage efficiency.
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod arbitrum;
 mod optimism;
 pub mod settings;

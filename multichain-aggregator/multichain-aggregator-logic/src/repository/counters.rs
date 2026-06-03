@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::counters::Counters;
 use entity::counters_global_imported::{
     ActiveModel as GlobalCountersActiveModel, Column as GlobalCountersColumn,

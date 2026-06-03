@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! The opposite of [cumulative chart](crate::data_source::kinds::local_db::DailyCumulativeLocalDbChartSource).
 //! However, it can also work on remotely stored sources, thus different location of the type.
 //!

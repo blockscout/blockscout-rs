@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod cluster_explorer;
 mod health;
 mod multichain_aggregator;

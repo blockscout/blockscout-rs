@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![cfg(any(feature = "test-utils", test))]
 
 use std::str::FromStr;

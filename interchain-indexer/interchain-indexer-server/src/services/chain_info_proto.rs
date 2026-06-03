@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use interchain_indexer_entity::chains::Model as ChainModel;
 
 use crate::proto::ChainInfo;

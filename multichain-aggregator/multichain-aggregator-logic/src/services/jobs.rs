@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{future::Future, sync::Arc};
 use tokio::time::{Duration, Instant};
 use tokio_cron_scheduler::{Job, JobSchedulerError};

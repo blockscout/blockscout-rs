@@ -2,6 +2,7 @@
 name = "env-docs-generation"
 version = "0.1.0"
 edition = "2021"
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "26eed65" }

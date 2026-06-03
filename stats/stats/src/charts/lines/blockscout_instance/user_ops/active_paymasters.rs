@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Active paymasters on each day.
 
 use std::{collections::HashSet, ops::Range};

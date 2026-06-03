@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use stats_proto::blockscout::stats::v1::{
     HealthCheckRequest, HealthCheckResponse, health_check_response, health_server::Health,
 };

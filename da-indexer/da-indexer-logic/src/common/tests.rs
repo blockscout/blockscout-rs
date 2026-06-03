@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::test_database::TestDbGuard;
 
 pub async fn init_db(test_name: &str) -> TestDbGuard {

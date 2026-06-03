@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::test_server;
 use multichain_aggregator_logic::{
     repository::chains,

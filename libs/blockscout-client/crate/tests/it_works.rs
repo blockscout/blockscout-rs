@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_client::{Api, ApiClient, Configuration};
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! New interchain messages line chart (total indexed per day, no filters).
 //! Counts messages by init_timestamp date from crosschain_messages. Does not use interchain_primary_id.
 

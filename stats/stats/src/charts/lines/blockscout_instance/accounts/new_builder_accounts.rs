@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{collections::HashSet, ops::Range};
 
 use crate::chart_prelude::*;
@@ -73,9 +75,10 @@ impl StatementFromRange for NewBuilderAccountsStatement {
                             tt.from_address_hash AS from_address_hash,
                             tt.block_timestamp::date AS day
                         FROM internal_transactions it
-                            JOIN transactions tt ON tt.hash = it.transaction_hash
+                            JOIN transactions tt ON tt.index = it.transaction_index
+                                                AND tt.block_number = it.block_number
                         WHERE
-                            it.created_contract_address_hash NOTNULL AND
+                            it.created_contract_address_id NOTNULL AND
                             tt.block_consensus = TRUE AND
                             tt.block_timestamp != to_timestamp(0) {block_filter}
                     ) txns_plus_internal_txns

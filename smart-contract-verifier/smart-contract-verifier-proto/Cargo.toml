@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "LicenseRef-Blockscout"
 
 [dependencies]
 actix-prost = { workspace = true }
@@ -14,6 +15,7 @@ prost = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true, features = ["hex", "base64"] }
 tonic = { workspace = true }
+tonic-prost = { workspace = true }
 
 anyhow = { workspace = true, optional = true }
 mockall = { workspace = true, optional = true }
@@ -27,7 +29,7 @@ url = { workspace = true, optional = true }
 [build-dependencies]
 actix-prost-build = { workspace = true }
 prost-build = { workspace = true }
-tonic-build = { workspace = true }
+tonic-prost-build = { workspace = true }
 
 [dev-dependencies]
 smart-contract-verifier-proto = { workspace = true, features = ["http-client", "mock"] }

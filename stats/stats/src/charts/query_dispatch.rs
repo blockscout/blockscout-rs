@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{fmt::Debug, future::Future, pin::Pin, sync::Arc};
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};

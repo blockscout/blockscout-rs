@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Avalanche Teleporter (ICM) + ICTT indexer implementation.
 //!
 //! ## Summary

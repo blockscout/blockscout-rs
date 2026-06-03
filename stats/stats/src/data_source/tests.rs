@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{collections::HashSet, ops::Range, str::FromStr, sync::Arc};
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -78,12 +80,13 @@ impl StatementFromRange for NewContractsQuery {
                                 t.block_timestamp != to_timestamp(0) {tx_filter}
                             UNION
                             SELECT
-                                it.created_contract_address_hash AS hash,
+                                ai.address_hash AS hash,
                                 b.timestamp::date AS day
                             FROM internal_transactions it
-                                JOIN blocks b ON b.hash = it.block_hash
+                                JOIN blocks b ON b.number = it.block_number
+                                JOIN address_ids_to_address_hashes ai ON ai.address_id = it.created_contract_address_id
                             WHERE
-                                it.created_contract_address_hash NOTNULL AND
+                                it.created_contract_address_id NOTNULL AND
                                 b.consensus = TRUE AND
                                 b.timestamp != to_timestamp(0) {block_filter}
                         ) txns_plus_internal_txns
@@ -113,12 +116,13 @@ impl StatementFromRange for NewContractsQuery {
                                 b.timestamp != to_timestamp(0) {filter}
                             UNION
                             SELECT
-                                it.created_contract_address_hash AS hash,
+                                ai.address_hash AS hash,
                                 b.timestamp::date AS day
                             FROM internal_transactions it
-                                JOIN blocks b ON b.hash = it.block_hash
+                                JOIN blocks b ON b.number = it.block_number
+                                JOIN address_ids_to_address_hashes ai ON ai.address_id = it.created_contract_address_id
                             WHERE
-                                it.created_contract_address_hash NOTNULL AND
+                                it.created_contract_address_id NOTNULL AND
                                 b.consensus = TRUE AND
                                 b.timestamp != to_timestamp(0) {filter}
                         ) txns_plus_internal_txns

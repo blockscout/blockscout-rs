@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use sea_orm_migration::prelude::*;
 use see_migration_test_helpers::EmptyStruct;
 

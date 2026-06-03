@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod chart;
 pub mod counters;
 pub mod db_interaction;

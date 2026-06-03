@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{fmt::Debug, str::FromStr};
 use tracing::{field::Field, span::Attributes, Id, Subscriber};
 use tracing_subscriber::{

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::fmt::{Display, Formatter};
 
 #[derive(thiserror::Error, Debug)]

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::bytes_from_hex_or_base64;
 use crate::proto::celestia_service_server::CelestiaService as Celestia;
 use base64::prelude::*;

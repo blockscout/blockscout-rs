@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod common_transport;
 pub mod eth_provider;
 pub mod repository;

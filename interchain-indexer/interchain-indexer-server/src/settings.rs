@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::path::PathBuf;
 
 use blockscout_service_launcher::{

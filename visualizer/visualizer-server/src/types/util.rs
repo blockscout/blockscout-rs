@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::proto::FieldMask;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};

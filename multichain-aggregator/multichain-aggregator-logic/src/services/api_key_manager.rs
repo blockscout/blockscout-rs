@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     repository::api_keys,
     types::api_keys::{ApiKey, ApiKeyError},

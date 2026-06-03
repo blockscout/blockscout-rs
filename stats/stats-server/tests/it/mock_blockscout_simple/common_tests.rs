@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Since the files are organized according to
 //! the initialization requirements, the actual testing code
 //! is reused between these cases

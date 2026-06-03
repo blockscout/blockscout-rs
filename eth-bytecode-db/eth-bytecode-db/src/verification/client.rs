@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::database::ReadWriteRepo;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;

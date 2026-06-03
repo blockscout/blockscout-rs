@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::indexer::rpc_utils::TraceClient;
 use alloy::primitives::{address, Address};
 use serde::{Deserialize, Serialize};

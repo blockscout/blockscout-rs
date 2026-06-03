@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub use visualizer_proto::{
     blockscout::visualizer::v1::{
         solidity_visualizer_actix, solidity_visualizer_server, VisualizeContractsRequest,

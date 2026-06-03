@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use actix_phoenix_channel::{
     ChannelCentral, ChannelConn, ChannelEvent, ChannelHandler, configure_channel_websocket_route,
 };

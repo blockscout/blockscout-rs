@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{common, s3_storage::S3Storage};
 use anyhow::Context;
 use da_indexer_entity::{

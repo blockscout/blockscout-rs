@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 // ! Cursor management for bidirectional blockchain indexing.
 //!
 //! This module provides primitives for tracking scan boundaries when indexing

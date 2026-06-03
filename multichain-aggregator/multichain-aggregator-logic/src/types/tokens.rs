@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::ChainId;
 use crate::{
     clients::blockscout::{node_api_config::NodeApiConfigResponse, stats::StatsResponse},

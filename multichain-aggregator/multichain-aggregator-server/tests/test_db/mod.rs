@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use migration::{
     Alias, DynIden, IntoIden, MigrationName, MigrationTrait, MigratorTrait, SchemaManager, from_sql,
 };

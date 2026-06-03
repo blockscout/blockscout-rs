@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use bens_logic::protocols::{AddressResolveTechnique, ProtocolMeta, ProtocolSpecific, Tld};
 use blockscout_service_launcher::{
     database::{
@@ -47,10 +49,18 @@ pub struct SubgraphsReaderSettings {
     pub refresh_cache_schedule: String,
     #[serde(default)]
     pub refresh_cache_disabled: bool,
+    /// Maximum number of protocols a user may specify in a single protocol-scoped
+    /// request (chain id omitted). `None` disables the limit.
+    #[serde(default = "default_max_protocols_from_user_input")]
+    pub max_protocols_from_user_input: Option<usize>,
 }
 
 fn default_refresh_cache_schedule() -> String {
     "0 0 * * * *".to_string() // every hour
+}
+
+fn default_max_protocols_from_user_input() -> Option<usize> {
+    None
 }
 
 impl Default for SubgraphsReaderSettings {
@@ -60,6 +70,7 @@ impl Default for SubgraphsReaderSettings {
             protocols: Default::default(),
             refresh_cache_schedule: default_refresh_cache_schedule(),
             refresh_cache_disabled: false,
+            max_protocols_from_user_input: default_max_protocols_from_user_input(),
         }
     }
 }

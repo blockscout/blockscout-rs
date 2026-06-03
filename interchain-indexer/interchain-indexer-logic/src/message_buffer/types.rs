@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use anyhow::Result;
 use interchain_indexer_entity::{
     amb_messages_confirmations, crosschain_messages, crosschain_transfers,

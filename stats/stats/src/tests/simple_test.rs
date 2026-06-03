@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{
     init_db::{
         init_db_all, init_db_all_interchain, init_db_all_multichain, init_db_zetachain_cctx,

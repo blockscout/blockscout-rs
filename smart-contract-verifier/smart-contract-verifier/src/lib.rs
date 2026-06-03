@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod solidity;
 pub mod sourcify;
 pub mod vyper;

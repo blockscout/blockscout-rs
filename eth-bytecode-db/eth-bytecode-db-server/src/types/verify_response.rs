@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::source::SourceWrapper;
 use crate::proto;
 use amplify::{From, Wrapper};

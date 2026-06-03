@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod utils;
 
 use crate::utils::{build_query, check_list_result, data_file_as_json, start_server};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::SignatureSource;
 use reqwest_middleware::ClientWithMiddleware;
 

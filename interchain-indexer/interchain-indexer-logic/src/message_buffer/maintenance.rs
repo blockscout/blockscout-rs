@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{collections::HashMap, iter::Sum, ops::Add, time::Instant};
 
 use anyhow::{Context, Result};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Remote database source.
 //!
 //! The main application - SQL queries from remote (=blockscout) database.

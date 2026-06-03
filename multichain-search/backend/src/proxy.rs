@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use actix_web::{
     dev::RequestHead,
     http::{uri::PathAndQuery, StatusCode, Uri},

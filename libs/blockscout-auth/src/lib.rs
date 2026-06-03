@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod auth;
 mod jwt_headers;
 mod mock;

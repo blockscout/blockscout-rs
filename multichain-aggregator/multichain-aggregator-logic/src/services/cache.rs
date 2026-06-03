@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     repository::tokens::ListClusterTokensPageToken,
     services::{self, coin_price::CoinPriceCache},

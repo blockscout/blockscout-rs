@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};

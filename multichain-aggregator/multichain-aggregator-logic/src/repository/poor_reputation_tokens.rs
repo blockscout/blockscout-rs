@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::poor_reputation_tokens::PoorReputationToken;
 use entity::poor_reputation_tokens::{ActiveModel, Column, Entity};
 use sea_orm::{ConnectionTrait, DbErr, EntityTrait, sea_query::OnConflict};

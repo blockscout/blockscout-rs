@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use blockscout_service_launcher::test_database::TestDbGuard;
 use celestia_types::{nmt::Namespace, AppVersion, Blob as CelestiaBlob, Commitment};
 

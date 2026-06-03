@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Tests are combined into single "rust tests"
 //! to reuse slowly-initialized parts, such as blockscout database
 //! or stats service

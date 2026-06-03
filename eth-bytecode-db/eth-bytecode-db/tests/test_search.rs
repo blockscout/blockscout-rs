@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![cfg(feature = "test-utils")]
 
 use blockscout_service_launcher::test_database::TestDbGuard;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 mod solidity_multiple_types;
 
 use actix_web::{

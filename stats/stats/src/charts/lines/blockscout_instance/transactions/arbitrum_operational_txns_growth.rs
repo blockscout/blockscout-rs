@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::chart_prelude::*;
 
 use super::arbitrum_new_operational_txns::ArbitrumNewOperationalTxns;

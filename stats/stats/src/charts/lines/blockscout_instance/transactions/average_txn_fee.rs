@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! Average fee per transaction
 
 use std::{collections::HashSet, ops::Range};

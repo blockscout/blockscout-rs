@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::{
     protocols::{DomainNameOnProtocol, EnsLikeProtocol},
     subgraph::offchain::{ccip_read::reader_from_protocol, DomainInfoFromOffchainResolution},

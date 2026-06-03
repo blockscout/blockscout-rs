@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::types::bundler::Bundler;
 use alloy::primitives::Address;
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};

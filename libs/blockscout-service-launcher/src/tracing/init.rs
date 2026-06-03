@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use super::{JaegerSettings, TracingFormat, TracingSettings};
 use opentelemetry::{
     global::{self},

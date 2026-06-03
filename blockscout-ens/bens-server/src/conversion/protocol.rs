@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use bens_logic::protocols::{Network, Protocol};
 use bens_proto::blockscout::bens::v1 as proto;
 

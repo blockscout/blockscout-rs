@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::ops::Range;
 
 use chrono::{DateTime, NaiveDate, Utc};

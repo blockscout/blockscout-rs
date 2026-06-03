@@ -21,7 +21,7 @@ start-postgres:
     docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres -N 500
     sleep 3
     # wait for postgres to start, but only if db_name is not empty
-    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U {{db-user}} -c "create database {{db-name}};"'
+    $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U {{db-user}} -c "create database \"{{db-name}}\";"'
 
 stop-postgres:
     docker rm -f {{docker-name}}

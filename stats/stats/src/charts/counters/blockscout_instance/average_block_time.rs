@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::cmp::Reverse;
 
 use crate::{chart_prelude::*, utils::NANOS_PER_SEC};

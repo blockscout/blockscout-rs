@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use interchain_indexer_entity::chains;
 use parking_lot::RwLock;
 use sea_orm::JsonValue;

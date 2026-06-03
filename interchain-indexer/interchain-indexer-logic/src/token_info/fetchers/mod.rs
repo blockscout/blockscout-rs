@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 pub mod erc20;
 pub mod erc20_token_home;
 pub mod fetcher;

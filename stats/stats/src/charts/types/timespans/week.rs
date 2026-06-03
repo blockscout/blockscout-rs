@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use std::{cmp::Ordering, ops::RangeInclusive};
 
 use chrono::{Days, NaiveDate, NaiveWeek, Weekday};

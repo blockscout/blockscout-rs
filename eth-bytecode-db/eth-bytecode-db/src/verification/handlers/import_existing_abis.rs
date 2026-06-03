@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 use crate::verification::handlers::process_abi_data;
 use anyhow::Context;
 use entity::sources;

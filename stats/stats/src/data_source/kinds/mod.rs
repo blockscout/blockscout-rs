@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 //! To simplify implementation of overly-generic `DataSource` trait
 //! as well as to reduce boilerblate, types in this module can
 //! be used.

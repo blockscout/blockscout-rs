@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![allow(dead_code)]
 
 use bens_logic::{
@@ -75,7 +77,7 @@ async fn main() -> Result<(), anyhow::Error> {
             },
         ),
     ]);
-    let reader = SubgraphReader::initialize(db, networks, protocol_infos).await?;
+    let reader = SubgraphReader::initialize(db, networks, protocol_infos, None).await?;
 
     let addresses = vec![
         "0x0292f204513eeafe8c032ffc4cb4c7e10eca908c",

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
 #![allow(unused_imports)]
 #![allow(clippy::too_many_arguments)]
 
