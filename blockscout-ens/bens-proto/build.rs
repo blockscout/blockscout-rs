@@ -39,14 +39,18 @@ fn compile(
             "LookupAddressRequest.sort",
             "LookupAddressRequest.order",
             "GetDomainNameMultichainRequest.only_active",
+            "GetAddressMultichainRequest.all_protocols",
             "LookupDomainNameMultichainRequest.only_active",
             "LookupDomainNameMultichainRequest.sort",
             "LookupDomainNameMultichainRequest.order",
+            "LookupDomainNameMultichainRequest.all_protocols",
             "LookupAddressMultichainRequest.only_active",
             "LookupAddressMultichainRequest.sort",
             "LookupAddressMultichainRequest.order",
+            "LookupAddressMultichainRequest.all_protocols",
             "ListDomainEventsMultichainRequest.sort",
             "ListDomainEventsMultichainRequest.order",
+            "BatchResolveAddressesMultichainRequest.all_protocols",
         ],
     );
     config.compile_protos(protos, includes)?;
