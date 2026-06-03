@@ -186,7 +186,7 @@ impl SubgraphReader {
         let protocols = self.protocoler.protocols_from_user_input(
             input.network_id,
             input.protocols.clone(),
-            false,
+            input.all_protocols,
         )?;
         let domains = sql::find_resolved_addresses(self.pg_pool(), protocols, &input).await?;
         let output = lookup_output_from_domains(domains, &self.protocoler)?;
@@ -668,6 +668,7 @@ mod tests {
                 only_active: false,
                 pagination: Default::default(),
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get vitalik domains");
@@ -690,6 +691,7 @@ mod tests {
                 only_active: false,
                 pagination: Default::default(),
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get vitalik domains");
@@ -713,6 +715,7 @@ mod tests {
                 only_active: false,
                 pagination: Default::default(),
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get expired domains");
@@ -736,6 +739,7 @@ mod tests {
                 only_active: true,
                 pagination: Default::default(),
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get expired domains");

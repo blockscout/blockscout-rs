@@ -72,6 +72,7 @@ pub fn multichain_lookup_address_from_proto(
         only_active: proto.only_active,
         network_id: proto.chain_id,
         protocols: split_protocols(proto.protocols),
+        all_protocols: proto.all_protocols,
         pagination,
     };
     Ok(input)

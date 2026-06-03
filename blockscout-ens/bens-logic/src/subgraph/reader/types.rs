@@ -122,6 +122,7 @@ pub struct LookupAddressInput {
     pub only_active: bool,
     pub network_id: Option<i64>,
     pub protocols: Option<NonEmpty<String>>,
+    pub all_protocols: bool,
     pub pagination: DomainPaginationInput,
 }
 

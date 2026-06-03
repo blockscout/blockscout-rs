@@ -68,6 +68,7 @@ pub fn lookup_address_from_inner(
         only_active: inner.only_active,
         pagination,
         protocols: maybe_filter_protocols,
+        all_protocols: false,
     })
 }
 
