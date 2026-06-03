@@ -120,7 +120,7 @@ impl SubgraphReader {
         let protocols = self.protocoler.deployed_protocols_from_user_input(
             input.network_id,
             input.protocols,
-            false,
+            input.all_protocols,
         )?;
         let find_domains_input = if let Some(name) = input.name {
             // special logic for lookup by name, no error returned if name is invalid! wow, so cool!
@@ -278,9 +278,11 @@ impl SubgraphReader {
         &self,
         input: BatchResolveAddressNamesInput,
     ) -> Result<BTreeMap<Address, String>, SubgraphReadError> {
-        let protocols =
-            self.protocoler
-                .protocols_from_user_input(input.network_id, input.protocols, false)?;
+        let protocols = self.protocoler.protocols_from_user_input(
+            input.network_id,
+            input.protocols,
+            input.all_protocols,
+        )?;
         // remove duplicates
         let addresses = remove_addresses_from_batch(input.addresses);
         let addresses_len = addresses.len();
@@ -348,6 +350,7 @@ impl SubgraphReader {
                     addresses,
                     network_id: Some(network_id),
                     protocols: None,
+                    all_protocols: false,
                 })
                 .await?;
             // Fill the `name` field using a resolved map (keys are 0x-lowercase strings)
@@ -501,6 +504,7 @@ mod tests {
                 only_active: false,
                 pagination: Default::default(),
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get vitalik domains");
@@ -525,6 +529,7 @@ mod tests {
                 only_active: false,
                 pagination: Default::default(),
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get vitalik domains");
@@ -545,6 +550,7 @@ mod tests {
                 only_active: false,
                 pagination: pagination_for_domain,
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get abcnews domains");
@@ -569,6 +575,7 @@ mod tests {
                 only_active: false,
                 pagination: pagination_for_domain,
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get 00-01 domains");
@@ -593,6 +600,7 @@ mod tests {
                 only_active: false,
                 pagination: pagination_for_domain,
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get zt-c7c8172af17ab662.zkbtcnetwork domains");
@@ -617,6 +625,7 @@ mod tests {
                 only_active: false,
                 pagination: pagination_for_domain,
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get ⌐◨-◨ domains");
@@ -641,6 +650,7 @@ mod tests {
                 only_active: false,
                 pagination: pagination_for_domain,
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to get 😀😀😀😀😀😀 domains");
@@ -878,6 +888,7 @@ mod tests {
                 addresses,
                 network_id: Some(DEFAULT_CHAIN_ID),
                 protocols: None,
+                all_protocols: false,
             })
             .await
             .expect("failed to resolve addresess");

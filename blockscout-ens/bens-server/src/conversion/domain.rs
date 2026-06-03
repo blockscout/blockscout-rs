@@ -46,6 +46,7 @@ pub fn lookup_domain_name_from_inner(
         only_active: inner.only_active,
         pagination,
         protocols: maybe_filter_protocols,
+        all_protocols: false,
     })
 }
 
@@ -105,6 +106,7 @@ pub fn batch_resolve_from_inner(
         network_id: Some(inner.chain_id),
         addresses,
         protocols: None,
+        all_protocols: false,
     })
 }
 
