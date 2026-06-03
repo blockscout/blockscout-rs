@@ -106,6 +106,13 @@ paths:
           in: query
           required: false
           type: string
+        - name: all_protocols
+          description: |-
+            If true, search across all supported protocols and ignore `protocols`.
+            When `chain_id` is set, the search is scoped to all protocols on that chain.
+          in: query
+          required: false
+          type: boolean
         - name: resolved_to
           description: Include domains resolved to the address
           in: query
@@ -263,6 +270,13 @@ paths:
           in: query
           required: false
           type: string
+        - name: all_protocols
+          description: |-
+            If true, search across all supported protocols and ignore `protocols`.
+            When `chain_id` is set, the search is scoped to all protocols on that chain.
+          in: query
+          required: false
+          type: boolean
         - name: only_active
           description: Filtering field to remove expired names
           in: query
@@ -705,6 +719,11 @@ definitions:
       protocols:
         type: string
         title: comma separated list of protocol ids. Default is ENS protocol only
+      all_protocols:
+        type: boolean
+        description: |-
+          If true, search across all supported protocols and ignore `protocols`.
+          When `chain_id` is set, the search is scoped to all protocols on that chain.
   v1DetailedDomain:
     type: object
     properties:
