@@ -385,25 +385,75 @@ async fn try_link_token(
     Ok(())
 }
 
+/// Read the stats asset a chain-local token is already linked to, if any.
+///
+/// Used to resolve an endpoint before attempting to link it: a failed
+/// `INSERT` (e.g. a `UNIQUE (chain_id, token_address)` violation) aborts the
+/// whole Postgres transaction, so we must never rely on a failing insert to
+/// detect an existing mapping.
+async fn lookup_token_asset(
+    tx: &DatabaseTransaction,
+    chain_id: i64,
+    token_address: Vec<u8>,
+) -> Result<Option<i64>, DbErr> {
+    Ok(stats_asset_tokens::Entity::find()
+        .filter(stats_asset_tokens::Column::ChainId.eq(chain_id))
+        .filter(stats_asset_tokens::Column::TokenAddress.eq(token_address))
+        .one(tx)
+        .await?
+        .map(|r| r.stats_asset_id))
+}
+
+/// Whether a stats asset already has a (necessarily different) token linked on
+/// the given chain. `stats_asset_tokens` PK is `(stats_asset_id, chain_id)`, so
+/// an asset holds at most one token per chain; checking this via `SELECT` lets
+/// us detect an unresolvable conflict without an `INSERT` that would abort the
+/// transaction.
+async fn asset_has_token_on_chain(
+    tx: &DatabaseTransaction,
+    stats_asset_id: i64,
+    chain_id: i64,
+) -> Result<bool, DbErr> {
+    Ok(stats_asset_tokens::Entity::find()
+        .filter(stats_asset_tokens::Column::StatsAssetId.eq(stats_asset_id))
+        .filter(stats_asset_tokens::Column::ChainId.eq(chain_id))
+        .one(tx)
+        .await?
+        .is_some())
+}
+
+/// Resolve the stats asset for a transfer's endpoints, linking tokens as needed.
+///
+/// Returns `Ok(None)` when the endpoints cannot be reconciled to a single asset
+/// (e.g. corrupt token data that would map one asset to two tokens on a chain).
+/// The caller skips such a transfer's stats projection instead of failing the
+/// whole batch — every link is preceded by a `SELECT`, so a conflict is detected
+/// without issuing an `INSERT` that would poison the shared maintenance
+/// transaction (which also carries message and cursor persistence).
 async fn ensure_asset_for_transfer(
     tx: &DatabaseTransaction,
     t: &crosschain_transfers::Model,
     token_to_asset: &mut HashMap<TokenKey, i64>,
-) -> Result<i64, DbErr> {
+) -> Result<Option<i64>, DbErr> {
     let k_src = (t.token_src_chain_id, t.token_src_address.clone());
     let k_dst = (t.token_dst_chain_id, t.token_dst_address.clone());
-    let a = token_to_asset.get(&k_src).copied();
-    let b = token_to_asset.get(&k_dst).copied();
 
-    tracing::warn!(
-        chain_from = k_src.0,
-        chain_to = k_dst.0,
-        token_from = format!("0x{}", hex::encode(k_src.1.clone())),
-        token_to = format!("0x{}", hex::encode(k_dst.1.clone())),
-        src_asset = a,
-        dst_asset = b,
-        ""
-    );
+    // Resolve each endpoint's existing stats asset before linking: prefer the
+    // in-batch cache, then fall back to the persisted mapping.
+    let a = match token_to_asset.get(&k_src).copied() {
+        Some(x) => Some(x),
+        None => lookup_token_asset(tx, k_src.0, k_src.1.clone()).await?,
+    };
+    let b = match token_to_asset.get(&k_dst).copied() {
+        Some(y) => Some(y),
+        None => lookup_token_asset(tx, k_dst.0, k_dst.1.clone()).await?,
+    };
+    if let Some(x) = a {
+        token_to_asset.insert(k_src.clone(), x);
+    }
+    if let Some(y) = b {
+        token_to_asset.insert(k_dst.clone(), y);
+    }
 
     let asset_id = match (a, b) {
         (Some(x), Some(y)) if x == y => x,
@@ -412,68 +462,62 @@ async fn ensure_asset_for_transfer(
                 transfer_id = t.id,
                 src_stats_asset_id = x,
                 dst_stats_asset_id = y,
-                "stats projection: conflicting stats asset mapping for transfer endpoints"
+                "stats projection: transfer endpoints map to different stats assets; skipping"
             );
-            return Err(DbErr::Custom(format!(
-                "stats projection: transfer {} connects tokens already mapped to different stats assets (stats_asset_id {} vs {}); aborting batch",
-                t.id, x, y
-            )));
+            return Ok(None);
         }
         (Some(x), None) => {
-            if try_link_token(tx, x, k_dst.0, k_dst.1.clone())
-                .await
-                .is_ok()
-            {
-                token_to_asset.insert(k_dst, x);
-            } else if let Some(r) = stats_asset_tokens::Entity::find()
-                .filter(stats_asset_tokens::Column::ChainId.eq(k_dst.0))
-                .filter(stats_asset_tokens::Column::TokenAddress.eq(k_dst.1.clone()))
-                .one(tx)
-                .await?
-            {
-                if r.stats_asset_id != x {
-                    return Err(DbErr::Custom(format!(
-                        "stats projection: transfer {} destination token already mapped to stats_asset_id {}, expected {}",
-                        t.id, r.stats_asset_id, x
-                    )));
-                }
-                token_to_asset.insert(k_dst, x);
+            if asset_has_token_on_chain(tx, x, k_dst.0).await? {
+                tracing::warn!(
+                    transfer_id = t.id,
+                    stats_asset_id = x,
+                    chain_id = k_dst.0,
+                    "stats projection: stats asset already has a different token on the destination chain; skipping transfer"
+                );
+                return Ok(None);
             }
+            try_link_token(tx, x, k_dst.0, k_dst.1.clone()).await?;
+            token_to_asset.insert(k_dst, x);
             x
         }
         (None, Some(y)) => {
-            if try_link_token(tx, y, k_src.0, k_src.1.clone())
-                .await
-                .is_ok()
-            {
-                token_to_asset.insert(k_src, y);
-            } else if let Some(r) = stats_asset_tokens::Entity::find()
-                .filter(stats_asset_tokens::Column::ChainId.eq(k_src.0))
-                .filter(stats_asset_tokens::Column::TokenAddress.eq(k_src.1.clone()))
-                .one(tx)
-                .await?
-            {
-                if r.stats_asset_id != y {
-                    return Err(DbErr::Custom(format!(
-                        "stats projection: transfer {} source token already mapped to stats_asset_id {}, expected {}",
-                        t.id, r.stats_asset_id, y
-                    )));
-                }
-                token_to_asset.insert(k_src, y);
+            if asset_has_token_on_chain(tx, y, k_src.0).await? {
+                tracing::warn!(
+                    transfer_id = t.id,
+                    stats_asset_id = y,
+                    chain_id = k_src.0,
+                    "stats projection: stats asset already has a different token on the source chain; skipping transfer"
+                );
+                return Ok(None);
             }
+            try_link_token(tx, y, k_src.0, k_src.1.clone()).await?;
+            token_to_asset.insert(k_src, y);
             y
         }
         (None, None) => {
+            // A fresh asset can hold at most one token per chain; two distinct
+            // tokens on the same chain cannot both link to it.
+            if k_src.0 == k_dst.0 && k_src.1 != k_dst.1 {
+                tracing::warn!(
+                    transfer_id = t.id,
+                    chain_id = k_src.0,
+                    "stats projection: transfer endpoints are two different tokens on one chain; skipping"
+                );
+                return Ok(None);
+            }
             let id = insert_stats_asset(tx).await?;
             try_link_token(tx, id, k_src.0, k_src.1.clone()).await?;
-            try_link_token(tx, id, k_dst.0, k_dst.1.clone()).await?;
+            // Avoid a duplicate link when both endpoints are the same chain-local token.
+            if k_dst != k_src {
+                try_link_token(tx, id, k_dst.0, k_dst.1.clone()).await?;
+            }
             token_to_asset.insert(k_src, id);
             token_to_asset.insert(k_dst, id);
             id
         }
     };
 
-    Ok(asset_id)
+    Ok(Some(asset_id))
 }
 
 fn token_decimals(token_rows: &HashMap<TokenKey, tokens::Model>, k: &TokenKey) -> Option<i16> {
@@ -686,13 +730,27 @@ pub async fn project_transfers_batch(
 
     use std::collections::hash_map::Entry;
 
+    // Resolve each transfer's stats asset. A transfer whose endpoints cannot be
+    // reconciled to a single asset (corrupt token data, conflicting mapping) is
+    // skipped rather than aborting the batch — otherwise one bad transfer would
+    // roll back the shared maintenance transaction (message + cursor writes)
+    // every cycle. Skipped transfers are still marked processed below so they
+    // are not retried forever.
+    let mut proj_transfers: Vec<crosschain_transfers::Model> = Vec::with_capacity(transfers.len());
     let mut asset_ids: Vec<i64> = Vec::with_capacity(transfers.len());
     let mut edge_key_per_transfer: Vec<EdgeKey> = Vec::with_capacity(transfers.len());
+    let mut skipped_ids: Vec<i64> = Vec::new();
     for t in &transfers {
-        let asset_id = ensure_asset_for_transfer(tx, t, &mut token_to_asset).await?;
-        asset_ids.push(asset_id);
-        edge_key_per_transfer.push((asset_id, t.token_src_chain_id, t.token_dst_chain_id));
+        match ensure_asset_for_transfer(tx, t, &mut token_to_asset).await? {
+            Some(asset_id) => {
+                edge_key_per_transfer.push((asset_id, t.token_src_chain_id, t.token_dst_chain_id));
+                asset_ids.push(asset_id);
+                proj_transfers.push(t.clone());
+            }
+            None => skipped_ids.push(t.id),
+        }
     }
+    let transfers = proj_transfers;
 
     let existing_edges = load_stats_asset_edges_for_keys(tx, &edge_key_per_transfer).await?;
     let mut edge_acc: HashMap<EdgeKey, EdgeAccum> = HashMap::new();
@@ -823,7 +881,29 @@ pub async fn project_transfers_batch(
         .await?;
     }
 
-    Ok(transfers.len())
+    // Mark conflict-skipped transfers processed (without a stats asset) so the
+    // maintenance loop does not reprocess and re-skip them every cycle.
+    if !skipped_ids.is_empty() {
+        run_in_batches(&skipped_ids, 1, |batch| async {
+            crosschain_transfers::Entity::update_many()
+                .col_expr(
+                    crosschain_transfers::Column::StatsProcessed,
+                    Expr::col(crosschain_transfers::Column::StatsProcessed).add(1),
+                )
+                .col_expr(
+                    crosschain_transfers::Column::UpdatedAt,
+                    Expr::current_timestamp().into(),
+                )
+                .filter(crosschain_transfers::Column::Id.is_in(batch.iter().copied()))
+                .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
+                .exec(tx)
+                .await?;
+            Ok(())
+        })
+        .await?;
+    }
+
+    Ok(transfers.len() + skipped_ids.len())
 }
 
 #[cfg(test)]

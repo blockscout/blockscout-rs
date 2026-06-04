@@ -4113,6 +4113,105 @@ mod tests {
         assert_eq!(edge.amount_side, EdgeAmountSide::Source);
     }
 
+    // Regression: a transfer whose endpoints cannot be reconciled to one stats
+    // asset (here a token already linked elsewhere on the destination chain)
+    // must be skipped, not abort the batch — otherwise it would poison the
+    // shared maintenance transaction and wedge message indexing every cycle.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_skips_conflicting_transfer_without_aborting() {
+        let _db = init_db("stats_projection_skips_conflicting_transfer").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        let token_a = [0x1cu8; 20].to_vec();
+        let token_b = [0x16u8; 20].to_vec();
+
+        // Transfer 1: token_a on chain 1 <-> token_a on chain 100. Establishes an
+        // asset that holds token_a on BOTH chains.
+        crosschain_messages::Entity::insert(completed_message(92070, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92070),
+            message_id: Set(92070),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(1_000u64)),
+            dst_amount: Set(BigDecimal::from(1_000u64)),
+            token_src_address: Set(token_a.clone()),
+            token_dst_address: Set(token_a.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_transfers_batch(tx, &[92070i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        // Transfer 2: token_a on chain 1 <-> token_b on chain 100. token_a maps to
+        // the asset from transfer 1, which already holds a token on chain 100, so
+        // linking token_b would violate the (stats_asset_id, chain_id) PK.
+        crosschain_messages::Entity::insert(completed_message(92071, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92071),
+            message_id: Set(92071),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(BigDecimal::from(2_000u64)),
+            dst_amount: Set(BigDecimal::from(2_000u64)),
+            token_src_address: Set(token_a.clone()),
+            token_dst_address: Set(token_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Must NOT abort; the conflicting transfer is skipped.
+        let processed = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(tx, &[92071i64]).await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            processed, 1,
+            "conflicting transfer counted as handled (skipped)"
+        );
+
+        let t = crosschain_transfers::Entity::find_by_id(92071i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            t.stats_processed, 1,
+            "skipped transfer marked processed so it is not retried every cycle"
+        );
+        assert!(
+            t.stats_asset_id.is_none(),
+            "skipped transfer is left without a stats asset"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn stats_projection_edge_uses_source_when_source_indexed_even_without_source_decimals() {
@@ -4590,10 +4689,13 @@ mod tests {
         assert_eq!(t.stats_processed, 0);
     }
 
+    // A transfer whose two endpoints are already mapped to *different* stats
+    // assets cannot be reconciled. It is skipped (and marked processed) rather
+    // than aborting the batch, so the shared maintenance transaction commits.
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn stats_projection_rejects_conflicting_asset_mappings() {
-        let _db = init_db("stats_projection_rejects_conflicting_asset_mappings").await;
+    async fn stats_projection_skips_transfer_with_conflicting_asset_mappings() {
+        let _db = init_db("stats_projection_skips_conflicting_asset_mappings").await;
         let conn = _db.client();
         let db = conn.as_ref();
         seed_minimal_bridge(db).await;
@@ -4654,23 +4756,32 @@ mod tests {
         .await
         .unwrap();
 
-        let res = db
-            .transaction(|tx| {
-                Box::pin(async move {
-                    crate::stats::projection::project_messages_batch(tx, &[(92024i64, 1i32)])
-                        .await?;
-                    crate::stats::projection::project_transfers_batch(tx, &[92024i64]).await?;
-                    Ok::<(), sea_orm::DbErr>(())
-                })
+        // Must commit: the unreconcilable transfer is skipped, not fatal.
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(tx, &[(92024i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92024i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
             })
-            .await;
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("different stats assets") || msg.contains("92024"),
-            "unexpected error: {msg}"
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92024i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            t.stats_processed, 1,
+            "skipped transfer marked processed so it is not retried every cycle"
         );
+        assert!(
+            t.stats_asset_id.is_none(),
+            "skipped transfer is left without a stats asset"
+        );
+        // The conflicting endpoints keep their original, distinct mappings.
+        assert_ne!(aid_a, aid_b);
     }
 
     #[tokio::test]

@@ -196,6 +196,7 @@ mod tests {
                 },
                 transfers: vec![],
                 amb_confirmations: vec![],
+                amb_anomalies: vec![],
             }))
         }
     }

@@ -14,6 +14,7 @@ use super::{
     abi::{AbiRegistry, ContractKind},
     header::parse_amb_header,
     payload_processor::{PayloadDecodeContext, PayloadProcessor},
+    settings::AmbIndexerSettings,
     types::{
         AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution, DestinationExecutionEvent,
         DestinationTransferDetails, Direction, Message, SourceRequest, SourceRequestEvent,
@@ -30,6 +31,32 @@ pub(super) struct EventContext<'a> {
     pub(super) buffer: &'a Arc<MessageBuffer<Message>>,
     pub(super) message_hash_lookup: &'a Arc<DashMap<B256, Key>>,
     pub(super) pending_message_hash_events: &'a Arc<DashMap<B256, PendingMessageHashEvents>>,
+    pub(super) settings: &'a AmbIndexerSettings,
+}
+
+/// AMB-local wrapper around `MessageBuffer::alter` that stamps the current
+/// `clock_skew_tolerance` onto the entry before applying the mutation.
+///
+/// All AMB mutations must go through this helper so that `consolidate` — which
+/// only ever runs on hot entries reached via an `alter` — always sees a current
+/// tolerance, even for entries restored from the cold tier (the tolerance is
+/// `#[serde(skip)]` and therefore not persisted).
+async fn alter_amb<F>(
+    ctx: &EventContext<'_>,
+    key: Key,
+    chain_id: u64,
+    block_number: u64,
+    mutator: F,
+) -> Result<()>
+where
+    F: FnOnce(&mut Message) -> Result<()>,
+{
+    ctx.buffer
+        .alter(key, chain_id, block_number, |message| {
+            message.clock_skew_tolerance = ctx.settings.clock_skew_tolerance;
+            mutator(message)
+        })
+        .await
 }
 
 #[derive(Clone, Debug, Default)]
@@ -226,29 +253,28 @@ async fn handle_source_request(
         destination_chain_id,
     };
 
-    ctx.buffer
-        .alter(
-            key,
-            ctx.chain_id as u64,
-            annotated.block_number as u64,
-            |message| {
-                message.direction = Some(direction);
-                message.source_request = Some(match direction {
-                    Direction::ForeignToHome => SourceRequest::Affirmation(annotated),
-                    Direction::HomeToForeign => SourceRequest::Signature(annotated),
-                });
-                Ok(())
-            },
-        )
-        .await?;
+    alter_amb(
+        ctx,
+        key,
+        ctx.chain_id as u64,
+        annotated.block_number as u64,
+        |message| {
+            message.direction = Some(direction);
+            message.source_request = Some(match direction {
+                Direction::ForeignToHome => SourceRequest::Affirmation(annotated),
+                Direction::HomeToForeign => SourceRequest::Signature(annotated),
+            });
+            Ok(())
+        },
+    )
+    .await?;
 
     if let Some(source_transfer) = find_tokens_bridging_initiated(ctx, receipt_logs, &message_id) {
-        ctx.buffer
-            .alter(key, ctx.chain_id as u64, block_number, |message| {
-                message.source_transfer = Some(source_transfer);
-                Ok(())
-            })
-            .await?;
+        alter_amb(ctx, key, ctx.chain_id as u64, block_number, |message| {
+            message.source_transfer = Some(source_transfer);
+            Ok(())
+        })
+        .await?;
     }
 
     drain_pending_message_hash_events(ctx, message_hash, key).await?;
@@ -503,14 +529,13 @@ async fn apply_validator_confirmation(
     confirmation: ValidatorConfirmation,
 ) -> Result<()> {
     let block_number = confirmation.block_number;
-    ctx.buffer
-        .alter(key, chain_id, block_number, |message| {
-            message
-                .validator_confirmations
-                .insert(confirmation.validator_address, confirmation);
-            Ok(())
-        })
-        .await
+    alter_amb(ctx, key, chain_id, block_number, |message| {
+        message
+            .validator_confirmations
+            .insert(confirmation.validator_address, confirmation);
+        Ok(())
+    })
+    .await
 }
 
 async fn apply_collected_signatures(
@@ -521,12 +546,11 @@ async fn apply_collected_signatures(
 ) -> Result<()> {
     let block_number = u64::try_from(annotated.block_number)
         .context("collected-signatures block number out of range")?;
-    ctx.buffer
-        .alter(key, chain_id, block_number, |message| {
-            message.signatures_collected = Some(annotated);
-            Ok(())
-        })
-        .await
+    alter_amb(ctx, key, chain_id, block_number, |message| {
+        message.signatures_collected = Some(annotated);
+        Ok(())
+    })
+    .await
 }
 
 #[derive(Clone, Copy)]
@@ -578,20 +602,69 @@ async fn handle_destination_execution(
     };
     let destination_transfer = find_tokens_bridged(ctx, receipt_logs, executor, &message_id);
 
-    ctx.buffer
-        .alter(key, ctx.chain_id as u64, block_number, |message| {
-            message.destination_execution = Some(match kind {
-                DestinationKind::Affirmation => DestinationExecution::Affirmation(annotated),
-                DestinationKind::Relayed => DestinationExecution::Relayed(annotated),
-            });
-            if let Some(destination_transfer) = destination_transfer {
-                message.destination_transfer = Some(destination_transfer);
-            }
-            Ok(())
-        })
-        .await?;
+    // `messageId` collision safeguards (the authoritative split happens in
+    // `consolidate`, which compares both sides and the timestamps):
+    // - if an existing source request carries a different `(sender, executor)`
+    //   header, the source body is being displaced — schedule removal of its
+    //   `messageHash` from the lookup so stray validator confirmations do not
+    //   attach to the executed entry, and skip payload decode of the mixed body;
+    // - if a *second* destination execution conflicts with the one already held,
+    //   capture it in `displaced` instead of overwriting the canonical one.
+    let new_identity = (sender, executor);
+    let mut displaced_source_hash: Option<B256> = None;
+    alter_amb(ctx, key, ctx.chain_id as u64, block_number, |message| {
+        let new_execution = match kind {
+            DestinationKind::Affirmation => DestinationExecution::Affirmation(annotated),
+            DestinationKind::Relayed => DestinationExecution::Relayed(annotated),
+        };
 
-    maybe_decode_payload(ctx, key).await?;
+        if let Some(source) = &message.source_request {
+            let header = &source.event().event.header;
+            if (header.sender, header.executor) != new_identity {
+                displaced_source_hash = Some(keccak256(&source.event().event.encoded_data));
+            }
+        }
+
+        let conflicts_existing_destination = message
+            .destination_execution
+            .as_ref()
+            .map(|existing| {
+                let existing = existing.event();
+                (existing.event.sender, existing.event.executor) != new_identity
+            })
+            .unwrap_or(false);
+        if conflicts_existing_destination {
+            message.displaced.push(new_execution);
+        } else {
+            message.destination_execution = Some(new_execution);
+        }
+
+        if let Some(destination_transfer) = destination_transfer {
+            message.destination_transfer = Some(destination_transfer);
+        }
+        Ok(())
+    })
+    .await?;
+
+    if let Some(message_hash) = displaced_source_hash
+        && ctx.message_hash_lookup.remove(&message_hash).is_some()
+    {
+        tracing::warn!(
+            bridge_id = ctx.bridge_id,
+            chain_id = ctx.chain_id,
+            tx_hash = ?log.transaction_hash,
+            message_id = %message_id,
+            message_hash = %message_hash,
+            "dropped displaced source messageHash from lookup after AMB messageId collision"
+        );
+    }
+
+    // Skip payload decode when the destination body's header disagrees with the
+    // buffered source request: decoding a mixed body would produce a bogus
+    // transfer. The displaced source body is captured as an anomaly downstream.
+    if displaced_source_hash.is_none() {
+        maybe_decode_payload(ctx, key).await?;
+    }
 
     Ok(Some(key))
 }
@@ -648,12 +721,17 @@ async fn maybe_decode_payload(ctx: &EventContext<'_>, key: Key) -> Result<()> {
             abi_registry: ctx.abi_registry,
         };
         if let Some(decoded_payload) = processor.decode(&decode_ctx)? {
-            ctx.buffer
-                .alter(key, mutation_chain_id, mutation_block_number, |message| {
+            alter_amb(
+                ctx,
+                key,
+                mutation_chain_id,
+                mutation_block_number,
+                |message| {
                     message.decoded_payload = Some(decoded_payload);
                     Ok(())
-                })
-                .await?;
+                },
+            )
+            .await?;
             break;
         }
     }

@@ -36,8 +36,10 @@ fn crosschain_messages_on_conflict() -> OnConflict {
     ])
     .update_columns([
         crosschain_messages::Column::Status,
+        crosschain_messages::Column::InitTimestamp,
         crosschain_messages::Column::SrcChainId,
         crosschain_messages::Column::DstChainId,
+        crosschain_messages::Column::SrcTxHash,
         crosschain_messages::Column::DstTxHash,
         crosschain_messages::Column::LastUpdateTimestamp,
         crosschain_messages::Column::SenderAddress,
@@ -76,6 +78,13 @@ fn amb_messages_confirmations_on_conflict() -> OnConflict {
     .to_owned()
 }
 
+// Anomalies are append-only investigative rows with a DB-assigned BIGSERIAL PK,
+// so there is no natural conflict key. `batched_upsert` requires an `OnConflict`;
+// a no-target `do_nothing` is the no-op form (rows are inserted, never updated).
+fn amb_message_anomalies_on_conflict() -> OnConflict {
+    OnConflict::new().do_nothing().to_owned()
+}
+
 pub(super) async fn offload_stale_to_pending<T: Consolidate>(
     tx: &DatabaseTransaction,
     stale_entries: &[(Key, BufferItem<T>)],
@@ -102,12 +111,14 @@ pub(super) async fn flush_to_final_storage(
     tx: &DatabaseTransaction,
     consolidated_entries: Vec<ConsolidatedMessage>,
 ) -> Result<(), DbErr> {
-    let (messages, transfers, amb_confirmations): (Vec<_>, Vec<_>, Vec<_>) = consolidated_entries
-        .into_iter()
-        .map(|c| (c.message, c.transfers, c.amb_confirmations))
-        .multiunzip();
+    let (messages, transfers, amb_confirmations, amb_anomalies): (Vec<_>, Vec<_>, Vec<_>, Vec<_>) =
+        consolidated_entries
+            .into_iter()
+            .map(|c| (c.message, c.transfers, c.amb_confirmations, c.amb_anomalies))
+            .multiunzip();
     let transfers = transfers.into_iter().flatten().collect::<Vec<_>>();
     let amb_confirmations = amb_confirmations.into_iter().flatten().collect::<Vec<_>>();
+    let amb_anomalies = amb_anomalies.into_iter().flatten().collect::<Vec<_>>();
 
     batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
     batched_upsert(tx, &transfers, crosschain_transfers_on_conflict()).await?;
@@ -117,6 +128,7 @@ pub(super) async fn flush_to_final_storage(
         amb_messages_confirmations_on_conflict(),
     )
     .await?;
+    batched_upsert(tx, &amb_anomalies, amb_message_anomalies_on_conflict()).await?;
 
     Ok(())
 }

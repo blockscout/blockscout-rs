@@ -201,6 +201,7 @@ impl Consolidate for Message {
             message,
             transfers,
             amb_confirmations: Vec::new(),
+            amb_anomalies: Vec::new(),
         }))
     }
 }

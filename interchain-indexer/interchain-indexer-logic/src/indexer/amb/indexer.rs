@@ -212,6 +212,7 @@ impl AmbIndexer {
                 buffer: &ctx.buffer,
                 message_hash_lookup: &ctx.message_hash_lookup,
                 pending_message_hash_events: &ctx.pending_message_hash_events,
+                settings: &ctx.settings,
             };
             if let Err(err) = events::dispatch_transaction(&event_ctx, receipt_logs, block).await {
                 tracing::error!(

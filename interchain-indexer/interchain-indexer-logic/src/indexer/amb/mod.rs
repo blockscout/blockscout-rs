@@ -3,6 +3,7 @@ mod consolidation;
 mod events;
 mod header;
 pub mod indexer;
+mod metrics;
 mod payload_processor;
 pub mod settings;
 mod types;

@@ -126,6 +126,17 @@ pub(crate) struct Message {
     pub(crate) decoded_payload: Option<DecodedPayload>,
     pub(crate) source_transfer: Option<SourceTransferDetails>,
     pub(crate) destination_transfer: Option<DestinationTransferDetails>,
+    /// Additional destination executions that arrived on this key but conflict
+    /// with the one held in `destination_execution` (a `messageId` collision on
+    /// the destination side). Captured as anomalies at consolidation instead of
+    /// overwriting the canonical execution.
+    pub(crate) displaced: Vec<DestinationExecution>,
+    /// Clock-skew tolerance for collision detection, threaded in from
+    /// `AmbIndexerSettings`. Not persisted (`#[serde(skip)]`): it is re-stamped
+    /// from current settings on every AMB `alter`, and `consolidate` only runs
+    /// on hot entries that were necessarily reached through an `alter` first.
+    #[serde(skip)]
+    pub(crate) clock_skew_tolerance: std::time::Duration,
 }
 
 impl SourceRequest {
