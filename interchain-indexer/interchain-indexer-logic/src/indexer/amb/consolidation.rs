@@ -84,6 +84,26 @@ impl Consolidate for Message {
                 .push(destination_anomaly(displaced_event, canonical, key));
         }
 
+        let status_dbg = match &consolidated.message.status {
+            ActiveValue::Set(status) => format!("{status:?}"),
+            _ => "unset".to_string(),
+        };
+        let dst_tx_hash_set =
+            matches!(&consolidated.message.dst_tx_hash, ActiveValue::Set(Some(_)));
+        tracing::trace!(
+            bridge_id = key.bridge_id,
+            buffer_key = key.message_id,
+            has_source = source.is_some(),
+            has_destination_execution = destination_execution.is_some(),
+            has_signatures_collected = self.signatures_collected.is_some(),
+            direction = ?self.direction,
+            displaced = self.displaced.len(),
+            status = %status_dbg,
+            dst_tx_hash_set,
+            is_final = consolidated.is_final,
+            "AMB diag: consolidated message"
+        );
+
         Ok(Some(consolidated))
     }
 }
@@ -272,10 +292,16 @@ fn status_and_finality(
                 .signatures_collected
                 .as_ref()
                 .expect("checked is_some");
+            // `CollectedSignatures` is emitted on the Home chain, which for a
+            // `HomeToForeign` message is the *source* chain. It marks the message
+            // as claimable but is not a destination transaction, so `dst_tx_hash`
+            // stays `None` until the message is actually executed on the
+            // destination (`RelayedMessage`/`AffirmationCompleted`). Its timestamp
+            // is still the latest known progress, so it drives `last_update_timestamp`.
             (
                 MessageStatus::ReadyToClaim,
                 Some(event.block_timestamp),
-                Some(event.transaction_hash.as_slice().to_vec()),
+                None,
                 false,
             )
         }
@@ -450,11 +476,13 @@ mod tests {
     use rstest::rstest;
     use sea_orm::ActiveValue;
 
+    use alloy::primitives::U256;
+
     use super::is_collision;
     use crate::{
         indexer::amb::types::{
-            AmbHeaderData, AnnotatedEvent, DestinationExecution, DestinationExecutionEvent,
-            Direction, Message, SourceRequest, SourceRequestEvent,
+            AmbHeaderData, AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution,
+            DestinationExecutionEvent, Direction, Message, SourceRequest, SourceRequestEvent,
         },
         message_buffer::{Consolidate, Key},
     };
@@ -659,6 +687,47 @@ mod tests {
             set_value!(anomaly.conflict_sender),
             Some(addr(8).as_slice().to_vec())
         );
+    }
+
+    #[test]
+    fn test_consolidate_ready_to_claim_leaves_dst_tx_hash_unset() {
+        // HomeToForeign with collected signatures but no destination execution:
+        // claimable, but `CollectedSignatures` is a Home/source-chain event, so it
+        // must not leak into `dst_tx_hash`.
+        let signatures_collected = AnnotatedEvent {
+            event: CollectedSignaturesEvent {
+                authority_responsible_for_relay: addr(3),
+                message_hash: hash(0xCC),
+                count: U256::from(1),
+            },
+            transaction_hash: hash(0x44),
+            block_number: 15,
+            block_timestamp: ts(2_500),
+            // emitted on the Home chain, which is the source for HomeToForeign
+            source_chain_id: SRC_CHAIN,
+            destination_chain_id: DST_CHAIN,
+        };
+        let message = Message {
+            direction: Some(Direction::HomeToForeign),
+            source_request: Some(source(addr(1), addr(2), ts(2_000))),
+            signatures_collected: Some(signatures_collected),
+            ..Default::default()
+        };
+        let key = Key::new(42, 7);
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+
+        assert!(!consolidated.is_final);
+        let m = &consolidated.message;
+        assert_eq!(set_value!(m.status), MessageStatus::ReadyToClaim);
+        assert_eq!(set_value!(m.dst_tx_hash), None);
+        // Source side is still recorded.
+        assert_eq!(
+            set_value!(m.src_tx_hash),
+            Some(hash(0x11).as_slice().to_vec())
+        );
+        // The signatures-collected timestamp drives last_update_timestamp.
+        assert_eq!(set_value!(m.last_update_timestamp), Some(ts(2_500)));
     }
 
     #[test]

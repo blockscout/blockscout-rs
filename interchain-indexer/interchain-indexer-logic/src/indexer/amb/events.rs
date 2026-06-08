@@ -97,6 +97,16 @@ pub(super) async fn dispatch_transaction(
             continue;
         };
 
+        tracing::trace!(
+            bridge_id = ctx.bridge_id,
+            chain_id = ctx.chain_id,
+            tx_hash = ?log.transaction_hash,
+            log_index = ?log.log_index,
+            address = %log.address(),
+            event_name = %event.name,
+            "AMB diag: matched configured event"
+        );
+
         let result = match event.name.as_str() {
             "UserRequestForAffirmation" => {
                 handle_source_request(
@@ -238,6 +248,19 @@ async fn handle_source_request(
     let key = key_from_message_id(&message_id, ctx.bridge_id)?;
     let message_hash = keccak256(&encoded_data);
     ctx.message_hash_lookup.insert(message_hash, key);
+
+    tracing::trace!(
+        bridge_id = ctx.bridge_id,
+        chain_id = ctx.chain_id,
+        ?direction,
+        message_id = %message_id,
+        buffer_key = key.message_id,
+        message_hash = %message_hash,
+        source_chain_id,
+        destination_chain_id,
+        tx_hash = ?log.transaction_hash,
+        "AMB diag: source request -> buffer key"
+    );
 
     let annotated = AnnotatedEvent {
         event: SourceRequestEvent {
@@ -457,7 +480,17 @@ async fn handle_collected_signatures(
     };
 
     match ctx.message_hash_lookup.get(&message_hash).map(|key| *key) {
-        Some(key) => apply_collected_signatures(ctx, key, ctx.chain_id as u64, annotated).await,
+        Some(key) => {
+            tracing::trace!(
+                bridge_id = ctx.bridge_id,
+                chain_id = ctx.chain_id,
+                buffer_key = key.message_id,
+                message_hash = %message_hash,
+                tx_hash = ?log.transaction_hash,
+                "AMB diag: collected signatures -> buffer key (source known)"
+            );
+            apply_collected_signatures(ctx, key, ctx.chain_id as u64, annotated).await
+        }
         None => {
             ctx.pending_message_hash_events
                 .entry(message_hash)
@@ -602,6 +635,19 @@ async fn handle_destination_execution(
     };
     let destination_transfer = find_tokens_bridged(ctx, receipt_logs, executor, &message_id);
 
+    tracing::trace!(
+        bridge_id = ctx.bridge_id,
+        chain_id = ctx.chain_id,
+        message_id = %message_id,
+        buffer_key = key.message_id,
+        counterpart_source_chain_id = source_chain_id,
+        sender = %sender,
+        executor = %executor,
+        status,
+        tx_hash = ?log.transaction_hash,
+        "AMB diag: destination execution -> buffer key"
+    );
+
     // `messageId` collision safeguards (the authoritative split happens in
     // `consolidate`, which compares both sides and the timestamps):
     // - if an existing source request carries a different `(sender, executor)`
@@ -612,6 +658,8 @@ async fn handle_destination_execution(
     //   capture it in `displaced` instead of overwriting the canonical one.
     let new_identity = (sender, executor);
     let mut displaced_source_hash: Option<B256> = None;
+    let mut diag_existing_source_identity: Option<(Address, Address)> = None;
+    let mut diag_pushed_as_displaced = false;
     alter_amb(ctx, key, ctx.chain_id as u64, block_number, |message| {
         let new_execution = match kind {
             DestinationKind::Affirmation => DestinationExecution::Affirmation(annotated),
@@ -620,6 +668,7 @@ async fn handle_destination_execution(
 
         if let Some(source) = &message.source_request {
             let header = &source.event().event.header;
+            diag_existing_source_identity = Some((header.sender, header.executor));
             if (header.sender, header.executor) != new_identity {
                 displaced_source_hash = Some(keccak256(&source.event().event.encoded_data));
             }
@@ -635,6 +684,7 @@ async fn handle_destination_execution(
             .unwrap_or(false);
         if conflicts_existing_destination {
             message.displaced.push(new_execution);
+            diag_pushed_as_displaced = true;
         } else {
             message.destination_execution = Some(new_execution);
         }
@@ -645,6 +695,19 @@ async fn handle_destination_execution(
         Ok(())
     })
     .await?;
+
+    tracing::trace!(
+        bridge_id = ctx.bridge_id,
+        chain_id = ctx.chain_id,
+        message_id = %message_id,
+        buffer_key = key.message_id,
+        source_already_buffered = diag_existing_source_identity.is_some(),
+        existing_source_identity = ?diag_existing_source_identity,
+        new_identity = ?new_identity,
+        pushed_as_displaced = diag_pushed_as_displaced,
+        displaced_source = displaced_source_hash.is_some(),
+        "AMB diag: destination execution applied to buffer entry"
+    );
 
     if let Some(message_hash) = displaced_source_hash
         && ctx.message_hash_lookup.remove(&message_hash).is_some()
