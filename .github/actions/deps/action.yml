@@ -1,24 +1,106 @@
 name: 'Install dependencies'
-description: 'Install all required dependecies to build and run crates'
+description: 'Install all required dependencies to build and run crates'
+
+inputs:
+  protoc-version:
+    description: 'protoc version to install'
+    required: false
+    default: '25.0'
+  protoc-gen-openapiv2-version:
+    description: 'protoc-gen-openapiv2 version to install'
+    required: false
+    default: '2.18.1'
+
 runs:
   using: "composite"
   steps:
-    - id: install-apt
+    - name: Detect architecture
+      id: detect-arch
       shell: bash
       run: |
+        set -euo pipefail
+
+        # Map `uname -m` to the asset suffixes used by each upstream project.
+        arch="$(uname -m)"
+        case "$arch" in
+          x86_64|amd64)  protoc_arch="x86_64";   openapiv2_arch="x86_64" ;;
+          aarch64|arm64) protoc_arch="aarch_64"; openapiv2_arch="arm64" ;;
+          *) echo "::error::Unsupported architecture: $arch"; exit 1 ;;
+        esac
+
+        {
+          echo "protoc_arch=$protoc_arch"
+          echo "openapiv2_arch=$openapiv2_arch"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Install apt packages
+      id: install-apt
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        # Collect only the tools that are not already on PATH.
+        missing=()
+        for pkg in curl wget unzip; do
+          command -v "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+        done
+
+        # Skip apt entirely (no network) when everything is present.
+        if [ "${#missing[@]}" -eq 0 ]; then
+          echo "curl, wget, unzip already installed, skipping"
+          exit 0
+        fi
+
         sudo apt-get update
-        sudo apt-get install curl wget unzip
-    - id: install-protoc
+        sudo apt-get install -y "${missing[@]}"
+
+    - name: Install protoc
+      id: install-protoc
       shell: bash
       run: |
-        wget https://github.com/protocolbuffers/protobuf/releases/download/v25.0/protoc-25.0-linux-x86_64.zip -O ./protoc.zip
-        unzip protoc.zip
+        set -euo pipefail
+
+        version="${{ inputs.protoc-version }}"
+        arch="${{ steps.detect-arch.outputs.protoc_arch }}"
+
+        # Skip if the requested version is already installed.
+        if command -v protoc >/dev/null 2>&1 && [ "$(protoc --version | awk '{print $2}')" = "$version" ]; then
+          echo "protoc $version already installed, skipping"
+          exit 0
+        fi
+
+        # Download into a temp dir that is cleaned up on exit.
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+        wget "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/protoc-${version}-linux-${arch}.zip" -O "$tmp/protoc.zip"
+        unzip -o "$tmp/protoc.zip" -d "$tmp"
+
+        # Refresh bundled well-known-type includes, then install the binary.
         sudo rm -rf /usr/include/google
-        sudo mv ./include/* /usr/include/
-        sudo mv ./bin/protoc /usr/bin/protoc
-    - id: install-protoc-gen-openapiv2
+        sudo cp -r "$tmp"/include/* /usr/include/
+        sudo install -m 0755 "$tmp/bin/protoc" /usr/bin/protoc
+
+    - name: Install protoc-gen-openapiv2
+      id: install-protoc-gen-openapiv2
       shell: bash
       run: |
-        wget https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.18.1/protoc-gen-openapiv2-v2.18.1-linux-x86_64 -O ./protoc-gen-openapiv2
-        chmod +x protoc-gen-openapiv2
-        sudo mv ./protoc-gen-openapiv2 /usr/bin/protoc-gen-openapiv2
+        set -euo pipefail
+
+        version="${{ inputs.protoc-gen-openapiv2-version }}"
+        arch="${{ steps.detect-arch.outputs.openapiv2_arch }}"
+
+        # Skip if the requested version is already installed.
+        # `--version` prints e.g. "Version 2.18.1, commit ..."; strip the leading
+        # "v" (if any) and the trailing comma to compare against the input.
+        if command -v protoc-gen-openapiv2 >/dev/null 2>&1 && \
+           [ "$(protoc-gen-openapiv2 --version 2>&1 | awk '{print $2}' | tr -d 'v,')" = "$version" ]; then
+          echo "protoc-gen-openapiv2 $version already installed, skipping"
+          exit 0
+        fi
+
+        # Download into a temp dir that is cleaned up on exit.
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+        wget "https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v${version}/protoc-gen-openapiv2-v${version}-linux-${arch}" -O "$tmp/protoc-gen-openapiv2"
+
+        sudo install -m 0755 "$tmp/protoc-gen-openapiv2" /usr/bin/protoc-gen-openapiv2
