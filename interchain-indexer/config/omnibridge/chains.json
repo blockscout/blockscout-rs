@@ -39,7 +39,8 @@
                     "url": "https://rpc.gnosis.gateway.fm"
                 },
                 "gnosis_official": {
-                    "url": "https://rpc.gnosischain.com"
+                    "url": "https://rpc.gnosischain.com",
+                    "max_rps": 2
                 },
                 "ankr": {
                     "url": "https://rpc.ankr.com/gnosis"
