@@ -576,7 +576,7 @@ fn is_request_deterministic_error(code: i64) -> bool {
     )
 }
 
-/// Benign, request-specific conditions some nodes report in the implementation-
+/// Benign, request-speciCommit fic conditions some nodes report in the implementation-
 /// defined server-error range (e.g. querying past the chain head, or a contract
 /// call that reverts — some clients surface these under `-32000`/`-32015`
 /// instead of a dedicated code). These are not node-health problems and are

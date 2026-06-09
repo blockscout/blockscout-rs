@@ -36,7 +36,6 @@ pub(crate) struct AmbGrammar {
 pub(crate) struct MediatorGrammar {
     pub(crate) version: MediatorVersion,
     pub(crate) events: &'static [&'static str],
-    pub(crate) functions: &'static [&'static str],
 }
 
 static AMB_V6_GRAMMAR: AmbGrammar = AmbGrammar {
@@ -60,20 +59,11 @@ static MEDIATOR_V6_GRAMMAR: MediatorGrammar = MediatorGrammar {
         "NewTokenRegistered",
         "FailedMessageFixed",
     ],
-    functions: &[
-        "handleNativeTokens",
-        "handleNativeTokensAndCall",
-        "handleBridgedTokens",
-        "handleBridgedTokensAndCall",
-        "deployAndHandleBridgedTokens",
-        "deployAndHandleBridgedTokensAndCall",
-    ],
 };
 
 static MEDIATOR_V8_GRAMMAR: MediatorGrammar = MediatorGrammar {
     version: MediatorVersion::V8,
     events: MEDIATOR_V6_GRAMMAR.events,
-    functions: MEDIATOR_V6_GRAMMAR.functions,
 };
 
 pub(crate) fn amb_grammar_for(version: i16) -> Result<&'static AmbGrammar> {

@@ -13,7 +13,6 @@ use crate::message_buffer::{Key, MessageBuffer};
 use super::{
     abi::{AbiRegistry, ContractKind},
     header::parse_amb_header,
-    payload_processor::{PayloadDecodeContext, PayloadProcessor},
     settings::AmbIndexerSettings,
     types::{
         AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution, DestinationExecutionEvent,
@@ -27,7 +26,6 @@ pub(super) struct EventContext<'a> {
     pub(super) bridge_id: i32,
     pub(super) chain_id: i64,
     pub(super) abi_registry: &'a AbiRegistry,
-    pub(super) payload_processors: &'a [Box<dyn PayloadProcessor>],
     pub(super) buffer: &'a Arc<MessageBuffer<Message>>,
     pub(super) message_hash_lookup: &'a Arc<DashMap<B256, Key>>,
     pub(super) pending_message_hash_events: &'a Arc<DashMap<B256, PendingMessageHashEvents>>,
@@ -300,8 +298,7 @@ async fn handle_source_request(
         .await?;
     }
 
-    drain_pending_message_hash_events(ctx, message_hash, key).await?;
-    maybe_decode_payload(ctx, key).await
+    drain_pending_message_hash_events(ctx, message_hash, key).await
 }
 
 /// Scan the source transaction's receipt for the mediator's
@@ -357,24 +354,26 @@ fn find_tokens_bridging_initiated(
 /// Scan the destination transaction's receipt for the mediator's
 /// `TokensBridged(address indexed token, address indexed recipient, uint256 value, bytes32 indexed messageId)`
 /// event matching `message_id`. Returns the destination-side token, recipient,
-/// and amount so payload decoding can be retried after source-side data arrives.
+/// and amount.
+///
+/// Matched on (registered Omnibridge mediator on `chain_id`) + event name +
+/// `message_id`, mirroring [`find_tokens_bridging_initiated`]. The emitting
+/// address is deliberately **not** required to equal the AMB execution
+/// `executor`: when a message is routed through a contract that forwards to the
+/// mediator (e.g. a Safe), the recorded `executor` is that recipient contract,
+/// not the mediator that emits `TokensBridged`. `message_id` is unique, so it is
+/// a sufficient and reliable key.
 fn find_tokens_bridged(
-    ctx: &EventContext<'_>,
+    abi_registry: &AbiRegistry,
+    chain_id: i64,
     receipt_logs: &[Log],
-    executor: Address,
     message_id: &B256,
 ) -> Option<DestinationTransferDetails> {
     for log in receipt_logs {
-        if log.address() != executor {
-            continue;
-        }
         let Some(topic) = log.topic0() else {
             continue;
         };
-        let Some((event, kind)) =
-            ctx.abi_registry
-                .event_for_log(ctx.chain_id, log.address(), topic)
-        else {
+        let Some((event, kind)) = abi_registry.event_for_log(chain_id, log.address(), topic) else {
             continue;
         };
         if !matches!(kind, ContractKind::OmnibridgeMediator) || event.name != "TokensBridged" {
@@ -633,7 +632,8 @@ async fn handle_destination_execution(
         source_chain_id,
         destination_chain_id: ctx.chain_id,
     };
-    let destination_transfer = find_tokens_bridged(ctx, receipt_logs, executor, &message_id);
+    let destination_transfer =
+        find_tokens_bridged(ctx.abi_registry, ctx.chain_id, receipt_logs, &message_id);
 
     tracing::trace!(
         bridge_id = ctx.bridge_id,
@@ -722,84 +722,7 @@ async fn handle_destination_execution(
         );
     }
 
-    // Skip payload decode when the destination body's header disagrees with the
-    // buffered source request: decoding a mixed body would produce a bogus
-    // transfer. The displaced source body is captured as an anomaly downstream.
-    if displaced_source_hash.is_none() {
-        maybe_decode_payload(ctx, key).await?;
-    }
-
     Ok(Some(key))
-}
-
-async fn maybe_decode_payload(ctx: &EventContext<'_>, key: Key) -> Result<()> {
-    let (source_request, destination_execution, destination_transfer, has_decoded_payload) = {
-        let entry = ctx.buffer.get_mut_or_default(key).await?;
-        (
-            entry.inner.source_request.clone(),
-            entry.inner.destination_execution.clone(),
-            entry.inner.destination_transfer.clone(),
-            entry.inner.decoded_payload.is_some(),
-        )
-    };
-    if has_decoded_payload && destination_transfer.is_none() {
-        return Ok(());
-    }
-    let Some(source_request) = source_request else {
-        return Ok(());
-    };
-    let source_event = source_request.event();
-    let (destination_chain_id, executor, message_id, mutation_chain_id, mutation_block_number) =
-        match destination_execution.as_ref() {
-            Some(destination_execution) => {
-                let destination_event = destination_execution.event();
-                (
-                    destination_event.destination_chain_id,
-                    destination_event.event.executor,
-                    destination_event.event.message_id,
-                    destination_event.destination_chain_id as u64,
-                    destination_event.block_number as u64,
-                )
-            }
-            None => (
-                source_event.event.header.destination_chain_id,
-                source_event.event.header.executor,
-                source_event.event.message_id,
-                source_event.source_chain_id as u64,
-                source_event.block_number as u64,
-            ),
-        };
-
-    for processor in ctx.payload_processors {
-        if !processor.matches(destination_chain_id, executor) {
-            continue;
-        }
-        let decode_ctx = PayloadDecodeContext {
-            dst_chain_id: destination_chain_id,
-            executor,
-            sender: source_event.event.header.sender,
-            message_id,
-            application_calldata: &source_event.event.application_calldata,
-            destination_transfer: destination_transfer.as_ref(),
-            abi_registry: ctx.abi_registry,
-        };
-        if let Some(decoded_payload) = processor.decode(&decode_ctx)? {
-            alter_amb(
-                ctx,
-                key,
-                mutation_chain_id,
-                mutation_block_number,
-                |message| {
-                    message.decoded_payload = Some(decoded_payload);
-                    Ok(())
-                },
-            )
-            .await?;
-            break;
-        }
-    }
-
-    Ok(())
 }
 
 // Derive an i64 buffer key from the full 32-byte AMB `messageId`.
@@ -851,5 +774,119 @@ fn expect_uint(value: Option<&DynSolValue>, name: &str) -> Result<alloy::primiti
     match value {
         Some(DynSolValue::Uint(value, _)) => Ok(*value),
         other => bail!("expected uint {name}, got {other:?}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use alloy::{
+        json_abi::Event,
+        primitives::{Address, B256, Bytes, LogData, U256, address, b256},
+        rpc::types::Log,
+    };
+
+    use super::find_tokens_bridged;
+    use crate::indexer::amb::abi::{AbiRegistry, ContractAbi, ContractKind};
+
+    fn tokens_bridged_event() -> Event {
+        serde_json::from_str(
+            r#"{
+                "anonymous": false,
+                "inputs": [
+                    {"indexed": true,  "name": "token",     "type": "address"},
+                    {"indexed": true,  "name": "recipient", "type": "address"},
+                    {"indexed": false, "name": "value",     "type": "uint256"},
+                    {"indexed": true,  "name": "messageId", "type": "bytes32"}
+                ],
+                "name": "TokensBridged",
+                "type": "event"
+            }"#,
+        )
+        .expect("TokensBridged ABI")
+    }
+
+    fn registry_with_mediator(chain_id: i64, mediator: Address, event: Event) -> AbiRegistry {
+        let mut events_by_topic = HashMap::new();
+        events_by_topic.insert(event.selector(), event);
+        AbiRegistry::from_contracts_for_test(vec![ContractAbi {
+            chain_id,
+            address: mediator,
+            kind: ContractKind::OmnibridgeMediator,
+            events_by_topic,
+        }])
+    }
+
+    fn tokens_bridged_log(
+        emitter: Address,
+        token: Address,
+        recipient: Address,
+        message_id: B256,
+        value: U256,
+        event: &Event,
+    ) -> Log {
+        let topics = vec![
+            event.selector(),
+            B256::left_padding_from(token.as_slice()),
+            B256::left_padding_from(recipient.as_slice()),
+            message_id,
+        ];
+        let data = Bytes::from(value.to_be_bytes::<32>().to_vec());
+        Log {
+            inner: alloy::primitives::Log {
+                address: emitter,
+                data: LogData::new_unchecked(topics, data),
+            },
+            ..Default::default()
+        }
+    }
+
+    /// `TokensBridged` is matched by (registered mediator + messageId), even when
+    /// the AMB execution `executor` is a different contract than the mediator
+    /// that emitted the event (e.g. a Safe recipient forwarding to the mediator).
+    /// Regression for completed transfers landing with `token_dst_address` NULL.
+    #[test]
+    fn find_tokens_bridged_matches_by_message_id_independent_of_executor() {
+        let chain_id = 1;
+        let mediator = address!("88ad09518695c6c3712ac10a214be5109a655671");
+        // Recipient (and AMB executor) is the end-user Safe, NOT the mediator.
+        let recipient = address!("9ecf5384f8a2172ec279391b244dcc46cd46e55b");
+        let token = address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48");
+        let message_id = b256!("00050000a7823d6f1e31569f51861e345b30c6bebf70ebe7000000000001dbbe");
+        let value = U256::from(22_228_660_000u64);
+        let event = tokens_bridged_event();
+        let registry = registry_with_mediator(chain_id, mediator, event.clone());
+
+        // The mediator emits `TokensBridged`; the executor differs from it.
+        let logs = vec![tokens_bridged_log(
+            mediator, token, recipient, message_id, value, &event,
+        )];
+
+        let found = find_tokens_bridged(&registry, chain_id, &logs, &message_id)
+            .expect("TokensBridged must match by messageId regardless of executor");
+        assert_eq!(found.token, token);
+        assert_eq!(found.recipient, recipient);
+        assert_eq!(found.amount, value);
+    }
+
+    #[test]
+    fn find_tokens_bridged_ignores_other_message_ids() {
+        let chain_id = 1;
+        let mediator = address!("88ad09518695c6c3712ac10a214be5109a655671");
+        let event = tokens_bridged_event();
+        let registry = registry_with_mediator(chain_id, mediator, event.clone());
+        let logs = vec![tokens_bridged_log(
+            mediator,
+            address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+            address!("9ecf5384f8a2172ec279391b244dcc46cd46e55b"),
+            b256!("00050000a7823d6f1e31569f51861e345b30c6bebf70ebe7000000000001dbbe"),
+            U256::from(1u64),
+            &event,
+        )];
+
+        let other_message_id =
+            b256!("0000000000000000000000000000000000000000000000000000000000000001");
+        assert!(find_tokens_bridged(&registry, chain_id, &logs, &other_message_id).is_none());
     }
 }

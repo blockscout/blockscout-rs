@@ -216,12 +216,12 @@ pub(super) fn token_keys_from_finalized_for_enrichment(
             continue;
         }
         for t in &c.transfers {
-            if let (ActiveValue::Set(sc), ActiveValue::Set(sa)) =
+            if let (ActiveValue::Set(sc), ActiveValue::Set(Some(sa))) =
                 (&t.token_src_chain_id, &t.token_src_address)
             {
                 out.insert((*sc, sa.clone()));
             }
-            if let (ActiveValue::Set(dc), ActiveValue::Set(da)) =
+            if let (ActiveValue::Set(dc), ActiveValue::Set(Some(da))) =
                 (&t.token_dst_chain_id, &t.token_dst_address)
             {
                 out.insert((*dc, da.clone()));

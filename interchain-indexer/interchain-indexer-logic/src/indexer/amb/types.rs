@@ -90,18 +90,6 @@ pub(crate) struct ValidatorConfirmation {
     pub(crate) block_timestamp: NaiveDateTime,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum DecodedPayload {
-    OmnibridgeTransfer {
-        token_src_address: Address,
-        token_dst_address: Option<Address>,
-        src_amount: U256,
-        dst_amount: U256,
-        sender: Address,
-        recipient: Address,
-    },
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct SourceTransferDetails {
     pub(crate) token: Address,
@@ -123,7 +111,6 @@ pub(crate) struct Message {
     pub(crate) signatures_collected: Option<AnnotatedEvent<CollectedSignaturesEvent>>,
     pub(crate) validator_confirmations: HashMap<Address, ValidatorConfirmation>,
     pub(crate) destination_execution: Option<DestinationExecution>,
-    pub(crate) decoded_payload: Option<DecodedPayload>,
     pub(crate) source_transfer: Option<SourceTransferDetails>,
     pub(crate) destination_transfer: Option<DestinationTransferDetails>,
     /// Additional destination executions that arrived on this key but conflict

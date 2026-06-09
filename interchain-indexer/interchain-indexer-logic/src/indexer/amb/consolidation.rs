@@ -12,7 +12,7 @@ use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
 use super::{
     metrics::AMB_IDENTITY_CONFLICTS_TOTAL,
     types::{
-        AnnotatedEvent, DecodedPayload, DestinationExecution, DestinationExecutionEvent,
+        AnnotatedEvent, DestinationExecution, DestinationExecutionEvent,
         DestinationTransferDetails, Direction, Message, SourceRequest, SourceRequestEvent,
         SourceTransferDetails,
     },
@@ -172,15 +172,19 @@ fn build_source_led(
         updated_at: ActiveValue::NotSet,
     };
 
-    let transfers = match &message.decoded_payload {
-        Some(payload) => vec![build_transfer(
-            payload,
+    // A transfer row exists as soon as either the source-chain
+    // `TokensBridgingInitiated` or the destination-chain `TokensBridged` event
+    // has been observed. Pure (non-token) AMB messages produce no transfer.
+    let transfers = if message.source_transfer.is_some() || message.destination_transfer.is_some() {
+        vec![build_transfer(
             key,
             direction,
             source,
             message.source_transfer.as_ref(),
-        )?],
-        None => Vec::new(),
+            message.destination_transfer.as_ref(),
+        )?]
+    } else {
+        Vec::new()
     };
 
     let amb_confirmations = message
@@ -309,36 +313,34 @@ fn status_and_finality(
     }
 }
 
+/// Build a transfer row for a source-led message purely from the bridge's
+/// token events. The source side (token, amount, sender) comes only from the
+/// source-chain `TokensBridgingInitiated` event; the destination side (token,
+/// amount, recipient) only from the destination-chain `TokensBridged` event.
+/// Whichever event has not yet been observed leaves its columns NULL — they are
+/// never mirrored from the opposite side (which would conflate, for example, a
+/// source token with the destination token).
 fn build_transfer(
-    payload: &DecodedPayload,
     key: &Key,
     direction: Direction,
     source: &AnnotatedEvent<SourceRequestEvent>,
     source_transfer: Option<&SourceTransferDetails>,
+    destination_transfer: Option<&DestinationTransferDetails>,
 ) -> Result<crosschain_transfers::ActiveModel> {
-    let DecodedPayload::OmnibridgeTransfer {
-        token_src_address: payload_token_src,
-        token_dst_address,
-        src_amount: payload_src_amount,
-        dst_amount,
-        sender: payload_sender,
-        recipient,
-    } = payload;
-
     let (token_src_chain_id, token_dst_chain_id) = match direction {
         Direction::ForeignToHome | Direction::HomeToForeign => {
             (source.source_chain_id, source.destination_chain_id)
         }
     };
 
-    // The decoded application payload only carries destination-chain values
-    // (mediator calldata + `TokensBridged` event). Prefer the
-    // `TokensBridgingInitiated` event captured on the source chain for the
-    // source-side token, sender and amount.
-    let token_src = source_transfer.map_or(*payload_token_src, |t| t.token);
-    let src_amount_u256 = source_transfer.map_or(*payload_src_amount, |t| t.amount);
-    let sender_addr = source_transfer.map_or(*payload_sender, |t| t.sender);
-    let token_dst = token_dst_address.unwrap_or(*payload_token_src);
+    let src_amount = match source_transfer {
+        Some(t) => Some(amount_to_decimal(t.amount)?),
+        None => None,
+    };
+    let dst_amount = match destination_transfer {
+        Some(t) => Some(amount_to_decimal(t.amount)?),
+        None => None,
+    };
 
     Ok(crosschain_transfers::ActiveModel {
         message_id: ActiveValue::Set(key.message_id),
@@ -347,12 +349,16 @@ fn build_transfer(
         r#type: ActiveValue::Set(Some(TransferType::Erc20)),
         token_src_chain_id: ActiveValue::Set(token_src_chain_id),
         token_dst_chain_id: ActiveValue::Set(token_dst_chain_id),
-        src_amount: ActiveValue::Set(BigDecimal::from_str(&src_amount_u256.to_string())?),
-        dst_amount: ActiveValue::Set(BigDecimal::from_str(&dst_amount.to_string())?),
-        token_src_address: ActiveValue::Set(token_src.as_slice().to_vec()),
-        token_dst_address: ActiveValue::Set(token_dst.as_slice().to_vec()),
-        sender_address: ActiveValue::Set(Some(sender_addr.as_slice().to_vec())),
-        recipient_address: ActiveValue::Set(Some(recipient.as_slice().to_vec())),
+        src_amount: ActiveValue::Set(src_amount),
+        dst_amount: ActiveValue::Set(dst_amount),
+        token_src_address: ActiveValue::Set(source_transfer.map(|t| t.token.as_slice().to_vec())),
+        token_dst_address: ActiveValue::Set(
+            destination_transfer.map(|t| t.token.as_slice().to_vec()),
+        ),
+        sender_address: ActiveValue::Set(source_transfer.map(|t| t.sender.as_slice().to_vec())),
+        recipient_address: ActiveValue::Set(
+            destination_transfer.map(|t| t.recipient.as_slice().to_vec()),
+        ),
         token_ids: ActiveValue::Set(None),
         stats_processed: ActiveValue::Set(0),
         stats_asset_id: ActiveValue::Set(None),
@@ -362,16 +368,15 @@ fn build_transfer(
     })
 }
 
-/// Transfer for a destination-only row. The source side (origin token, sender,
-/// source amount) is unknown because there is no consistent source request, so
-/// the NOT NULL token/amount columns are filled best-effort from the
-/// destination `TokensBridged` event and `sender_address` is left NULL.
+/// Transfer for a destination-only row: an executed body with no consistent
+/// source request. Only the destination `TokensBridged` event is known, so the
+/// source side (token, amount, sender) is left NULL rather than mirrored from
+/// the destination.
 fn build_destination_only_transfer(
     transfer: &DestinationTransferDetails,
     destination: &AnnotatedEvent<DestinationExecutionEvent>,
     key: &Key,
 ) -> Result<crosschain_transfers::ActiveModel> {
-    let amount = BigDecimal::from_str(&transfer.amount.to_string())?;
     Ok(crosschain_transfers::ActiveModel {
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
@@ -379,10 +384,10 @@ fn build_destination_only_transfer(
         r#type: ActiveValue::Set(Some(TransferType::Erc20)),
         token_src_chain_id: ActiveValue::Set(destination.source_chain_id),
         token_dst_chain_id: ActiveValue::Set(destination.destination_chain_id),
-        src_amount: ActiveValue::Set(amount.clone()),
-        dst_amount: ActiveValue::Set(amount),
-        token_src_address: ActiveValue::Set(transfer.token.as_slice().to_vec()),
-        token_dst_address: ActiveValue::Set(transfer.token.as_slice().to_vec()),
+        src_amount: ActiveValue::Set(None),
+        dst_amount: ActiveValue::Set(Some(amount_to_decimal(transfer.amount)?)),
+        token_src_address: ActiveValue::Set(None),
+        token_dst_address: ActiveValue::Set(Some(transfer.token.as_slice().to_vec())),
         sender_address: ActiveValue::Set(None),
         recipient_address: ActiveValue::Set(Some(transfer.recipient.as_slice().to_vec())),
         token_ids: ActiveValue::Set(None),
@@ -392,6 +397,11 @@ fn build_destination_only_transfer(
         updated_at: ActiveValue::NotSet,
         id: ActiveValue::NotSet,
     })
+}
+
+fn amount_to_decimal(amount: alloy::primitives::U256) -> Result<BigDecimal> {
+    BigDecimal::from_str(&amount.to_string())
+        .with_context(|| format!("failed to parse transfer amount {amount}"))
 }
 
 /// Anomaly row for a source body displaced by a colliding executed body. The
@@ -478,11 +488,14 @@ mod tests {
 
     use alloy::primitives::U256;
 
+    use sea_orm::prelude::BigDecimal;
+
     use super::is_collision;
     use crate::{
         indexer::amb::types::{
             AmbHeaderData, AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution,
-            DestinationExecutionEvent, Direction, Message, SourceRequest, SourceRequestEvent,
+            DestinationExecutionEvent, DestinationTransferDetails, Direction, Message,
+            SourceRequest, SourceRequestEvent, SourceTransferDetails,
         },
         message_buffer::{Consolidate, Key},
     };
@@ -785,5 +798,102 @@ mod tests {
             set_value!(anomaly.conflict_sender),
             Some(addr(1).as_slice().to_vec())
         );
+    }
+
+    fn source_transfer(token: Address, amount: u64) -> SourceTransferDetails {
+        SourceTransferDetails {
+            token,
+            sender: addr(0x1A),
+            amount: U256::from(amount),
+        }
+    }
+
+    fn destination_transfer(token: Address, amount: u64) -> DestinationTransferDetails {
+        DestinationTransferDetails {
+            token,
+            recipient: addr(0x2B),
+            amount: U256::from(amount),
+        }
+    }
+
+    #[test]
+    fn test_consolidate_transfer_full_pair_keeps_sides_distinct() {
+        // Both bridge events observed: each side carries its own chain's token.
+        let message = Message {
+            direction: Some(Direction::HomeToForeign),
+            source_request: Some(source(addr(1), addr(2), ts(2_000))),
+            destination_execution: Some(destination(addr(1), addr(2), ts(2_100), true, 0x22)),
+            source_transfer: Some(source_transfer(addr(0xAA), 1_000)),
+            destination_transfer: Some(destination_transfer(addr(0xBB), 990)),
+            clock_skew_tolerance: Duration::from_secs(300),
+            ..Default::default()
+        };
+
+        let consolidated = message.consolidate(&Key::new(42, 7)).unwrap().unwrap();
+        let t = &consolidated.transfers[0];
+
+        assert_eq!(set_value!(t.token_src_address), Some(addr(0xAA).to_vec()));
+        assert_eq!(set_value!(t.token_dst_address), Some(addr(0xBB).to_vec()));
+        assert_eq!(set_value!(t.src_amount), Some(BigDecimal::from(1_000)));
+        assert_eq!(set_value!(t.dst_amount), Some(BigDecimal::from(990)));
+        assert_eq!(set_value!(t.sender_address), Some(addr(0x1A).to_vec()));
+        assert_eq!(set_value!(t.recipient_address), Some(addr(0x2B).to_vec()));
+    }
+
+    #[test]
+    fn test_consolidate_transfer_source_only_leaves_destination_null() {
+        // Only `TokensBridgingInitiated` seen: destination side is unknown and
+        // left NULL rather than mirrored from the source.
+        let message = Message {
+            direction: Some(Direction::HomeToForeign),
+            source_request: Some(source(addr(1), addr(2), ts(2_000))),
+            source_transfer: Some(source_transfer(addr(0xAA), 1_000)),
+            ..Default::default()
+        };
+
+        let consolidated = message.consolidate(&Key::new(42, 7)).unwrap().unwrap();
+        let t = &consolidated.transfers[0];
+
+        assert_eq!(set_value!(t.token_src_address), Some(addr(0xAA).to_vec()));
+        assert_eq!(set_value!(t.token_dst_address), None);
+        assert_eq!(set_value!(t.src_amount), Some(BigDecimal::from(1_000)));
+        assert_eq!(set_value!(t.dst_amount), None);
+        assert_eq!(set_value!(t.recipient_address), None);
+    }
+
+    #[test]
+    fn test_consolidate_transfer_destination_only_leaves_source_null() {
+        // Only `TokensBridged` seen (no consistent source request): the source
+        // side is unknown and left NULL, including the sender.
+        let message = Message {
+            destination_execution: Some(destination(addr(1), addr(2), ts(2_000), true, 0x22)),
+            destination_transfer: Some(destination_transfer(addr(0xBB), 990)),
+            ..Default::default()
+        };
+
+        let consolidated = message.consolidate(&Key::new(42, 7)).unwrap().unwrap();
+        let t = &consolidated.transfers[0];
+
+        assert_eq!(set_value!(t.token_src_address), None);
+        assert_eq!(set_value!(t.token_dst_address), Some(addr(0xBB).to_vec()));
+        assert_eq!(set_value!(t.src_amount), None);
+        assert_eq!(set_value!(t.dst_amount), Some(BigDecimal::from(990)));
+        assert_eq!(set_value!(t.sender_address), None);
+        assert_eq!(set_value!(t.recipient_address), Some(addr(0x2B).to_vec()));
+    }
+
+    #[test]
+    fn test_consolidate_without_token_events_yields_no_transfer() {
+        // A pure (non-token) AMB message produces a canonical row but no transfer.
+        let message = Message {
+            direction: Some(Direction::HomeToForeign),
+            source_request: Some(source(addr(1), addr(2), ts(2_000))),
+            destination_execution: Some(destination(addr(1), addr(2), ts(2_100), true, 0x22)),
+            clock_skew_tolerance: Duration::from_secs(300),
+            ..Default::default()
+        };
+
+        let consolidated = message.consolidate(&Key::new(42, 7)).unwrap().unwrap();
+        assert!(consolidated.transfers.is_empty());
     }
 }

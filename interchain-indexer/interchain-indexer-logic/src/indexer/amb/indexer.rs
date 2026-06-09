@@ -28,7 +28,6 @@ use crate::{
 use super::{
     abi::AbiRegistry,
     events::{self, EventContext, PendingMessageHashEvents},
-    payload_processor::{OmnibridgePayloadProcessor, PayloadProcessor},
     settings::AmbIndexerSettings,
     types::Message,
 };
@@ -51,7 +50,6 @@ pub struct AmbIndexer {
     bridge_id: i32,
     chains: Vec<AmbChainConfig>,
     abi_registry: Arc<AbiRegistry>,
-    payload_processors: Arc<Vec<Box<dyn PayloadProcessor>>>,
     message_hash_lookup: Arc<DashMap<B256, Key>>,
     pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>>,
     settings: AmbIndexerSettings,
@@ -69,7 +67,6 @@ struct RunContext {
     bridge_id: i32,
     chains: Vec<AmbChainConfig>,
     abi_registry: Arc<AbiRegistry>,
-    payload_processors: Arc<Vec<Box<dyn PayloadProcessor>>>,
     message_hash_lookup: Arc<DashMap<B256, Key>>,
     pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>>,
     settings: AmbIndexerSettings,
@@ -90,17 +87,6 @@ impl AmbIndexer {
         );
 
         let abi_registry = Arc::new(AbiRegistry::from_chains(&chains)?);
-        let payload_processors = Arc::new(
-            chains
-                .iter()
-                .map(|chain| {
-                    Box::new(OmnibridgePayloadProcessor::new(
-                        chain.chain_id,
-                        chain.mediator_address,
-                    )) as Box<dyn PayloadProcessor>
-                })
-                .collect(),
-        );
         let db = stats.interchain_db_arc();
         let buffer = MessageBuffer::new_with_stats(stats, buffer_settings.clone());
 
@@ -109,7 +95,6 @@ impl AmbIndexer {
             bridge_id,
             chains,
             abi_registry,
-            payload_processors,
             message_hash_lookup: Arc::new(DashMap::new()),
             pending_message_hash_events: Arc::new(DashMap::new()),
             settings: settings.clone(),
@@ -129,7 +114,6 @@ impl AmbIndexer {
             bridge_id: self.bridge_id,
             chains: self.chains.clone(),
             abi_registry: self.abi_registry.clone(),
-            payload_processors: self.payload_processors.clone(),
             message_hash_lookup: self.message_hash_lookup.clone(),
             pending_message_hash_events: self.pending_message_hash_events.clone(),
             settings: self.settings.clone(),
@@ -208,7 +192,6 @@ impl AmbIndexer {
                 bridge_id: ctx.bridge_id,
                 chain_id,
                 abi_registry: &ctx.abi_registry,
-                payload_processors: &ctx.payload_processors,
                 buffer: &ctx.buffer,
                 message_hash_lookup: &ctx.message_hash_lookup,
                 pending_message_hash_events: &ctx.pending_message_hash_events,

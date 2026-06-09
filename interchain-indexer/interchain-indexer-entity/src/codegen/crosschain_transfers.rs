@@ -16,14 +16,14 @@ pub struct Model {
     pub r#type: Option<TransferType>,
     pub token_src_chain_id: i64,
     pub token_dst_chain_id: i64,
-    #[sea_orm(column_type = "Decimal(Some((78, 0)))")]
-    pub src_amount: BigDecimal,
-    #[sea_orm(column_type = "Decimal(Some((78, 0)))")]
-    pub dst_amount: BigDecimal,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub token_src_address: Vec<u8>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub token_dst_address: Vec<u8>,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
+    pub src_amount: Option<BigDecimal>,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
+    pub dst_amount: Option<BigDecimal>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub token_src_address: Option<Vec<u8>>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub token_dst_address: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub sender_address: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]

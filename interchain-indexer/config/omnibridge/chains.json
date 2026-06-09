@@ -41,9 +41,6 @@
                 "gnosis_official": {
                     "url": "https://rpc.gnosischain.com",
                     "max_rps": 2
-                },
-                "ankr": {
-                    "url": "https://rpc.ankr.com/gnosis"
                 }
             }
         ]

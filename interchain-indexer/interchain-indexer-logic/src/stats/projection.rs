@@ -28,8 +28,12 @@ pub fn token_keys_for_stats_enrichment_from_transfer_models(
 ) -> Vec<(i64, Vec<u8>)> {
     let mut s = HashSet::new();
     for t in transfers {
-        s.insert((t.token_src_chain_id, t.token_src_address.clone()));
-        s.insert((t.token_dst_chain_id, t.token_dst_address.clone()));
+        if let Some(addr) = &t.token_src_address {
+            s.insert((t.token_src_chain_id, addr.clone()));
+        }
+        if let Some(addr) = &t.token_dst_address {
+            s.insert((t.token_dst_chain_id, addr.clone()));
+        }
     }
     s.into_iter().collect()
 }
@@ -285,7 +289,10 @@ async fn enrich_stats_assets_for_batch(
             if a != aid {
                 continue;
             }
-            let ks = (t.token_src_chain_id, t.token_src_address.clone());
+            let Some(addr) = &t.token_src_address else {
+                continue;
+            };
+            let ks = (t.token_src_chain_id, addr.clone());
             if let Some(row) = token_rows.get(&ks) {
                 if pick_name.is_none() {
                     pick_name = non_empty_opt(row.name.clone());
@@ -302,7 +309,10 @@ async fn enrich_stats_assets_for_batch(
             if a != aid {
                 continue;
             }
-            let kd = (t.token_dst_chain_id, t.token_dst_address.clone());
+            let Some(addr) = &t.token_dst_address else {
+                continue;
+            };
+            let kd = (t.token_dst_chain_id, addr.clone());
             if let Some(row) = token_rows.get(&kd) {
                 if pick_name.is_none() {
                     pick_name = non_empty_opt(row.name.clone());
@@ -435,86 +445,115 @@ async fn ensure_asset_for_transfer(
     t: &crosschain_transfers::Model,
     token_to_asset: &mut HashMap<TokenKey, i64>,
 ) -> Result<Option<i64>, DbErr> {
-    let k_src = (t.token_src_chain_id, t.token_src_address.clone());
-    let k_dst = (t.token_dst_chain_id, t.token_dst_address.clone());
+    // A transfer side whose token is unknown (its bridge event was never
+    // observed) contributes no endpoint to reconcile.
+    let k_src = t
+        .token_src_address
+        .clone()
+        .map(|addr| (t.token_src_chain_id, addr));
+    let k_dst = t
+        .token_dst_address
+        .clone()
+        .map(|addr| (t.token_dst_chain_id, addr));
 
-    // Resolve each endpoint's existing stats asset before linking: prefer the
-    // in-batch cache, then fall back to the persisted mapping.
-    let a = match token_to_asset.get(&k_src).copied() {
-        Some(x) => Some(x),
-        None => lookup_token_asset(tx, k_src.0, k_src.1.clone()).await?,
+    // Resolve each present endpoint's existing stats asset before linking:
+    // prefer the in-batch cache, then fall back to the persisted mapping.
+    let a = match &k_src {
+        Some(k) => match token_to_asset.get(k).copied() {
+            Some(x) => Some(x),
+            None => lookup_token_asset(tx, k.0, k.1.clone()).await?,
+        },
+        None => None,
     };
-    let b = match token_to_asset.get(&k_dst).copied() {
-        Some(y) => Some(y),
-        None => lookup_token_asset(tx, k_dst.0, k_dst.1.clone()).await?,
+    let b = match &k_dst {
+        Some(k) => match token_to_asset.get(k).copied() {
+            Some(y) => Some(y),
+            None => lookup_token_asset(tx, k.0, k.1.clone()).await?,
+        },
+        None => None,
     };
-    if let Some(x) = a {
-        token_to_asset.insert(k_src.clone(), x);
+    if let (Some(k), Some(x)) = (&k_src, a) {
+        token_to_asset.insert(k.clone(), x);
     }
-    if let Some(y) = b {
-        token_to_asset.insert(k_dst.clone(), y);
+    if let (Some(k), Some(y)) = (&k_dst, b) {
+        token_to_asset.insert(k.clone(), y);
     }
 
-    let asset_id = match (a, b) {
-        (Some(x), Some(y)) if x == y => x,
-        (Some(x), Some(y)) => {
-            tracing::warn!(
-                transfer_id = t.id,
-                src_stats_asset_id = x,
-                dst_stats_asset_id = y,
-                "stats projection: transfer endpoints map to different stats assets; skipping"
-            );
-            return Ok(None);
-        }
-        (Some(x), None) => {
-            if asset_has_token_on_chain(tx, x, k_dst.0).await? {
+    let asset_id = match (k_src, k_dst) {
+        // Both endpoints known: reconcile them to a single asset.
+        (Some(k_src), Some(k_dst)) => match (a, b) {
+            (Some(x), Some(y)) if x == y => x,
+            (Some(x), Some(y)) => {
                 tracing::warn!(
                     transfer_id = t.id,
-                    stats_asset_id = x,
-                    chain_id = k_dst.0,
-                    "stats projection: stats asset already has a different token on the destination chain; skipping transfer"
+                    src_stats_asset_id = x,
+                    dst_stats_asset_id = y,
+                    "stats projection: transfer endpoints map to different stats assets; skipping"
                 );
                 return Ok(None);
             }
-            try_link_token(tx, x, k_dst.0, k_dst.1.clone()).await?;
-            token_to_asset.insert(k_dst, x);
-            x
-        }
-        (None, Some(y)) => {
-            if asset_has_token_on_chain(tx, y, k_src.0).await? {
-                tracing::warn!(
-                    transfer_id = t.id,
-                    stats_asset_id = y,
-                    chain_id = k_src.0,
-                    "stats projection: stats asset already has a different token on the source chain; skipping transfer"
-                );
-                return Ok(None);
+            (Some(x), None) => {
+                if asset_has_token_on_chain(tx, x, k_dst.0).await? {
+                    tracing::warn!(
+                        transfer_id = t.id,
+                        stats_asset_id = x,
+                        chain_id = k_dst.0,
+                        "stats projection: stats asset already has a different token on the destination chain; skipping transfer"
+                    );
+                    return Ok(None);
+                }
+                try_link_token(tx, x, k_dst.0, k_dst.1.clone()).await?;
+                token_to_asset.insert(k_dst, x);
+                x
             }
-            try_link_token(tx, y, k_src.0, k_src.1.clone()).await?;
-            token_to_asset.insert(k_src, y);
-            y
-        }
-        (None, None) => {
-            // A fresh asset can hold at most one token per chain; two distinct
-            // tokens on the same chain cannot both link to it.
-            if k_src.0 == k_dst.0 && k_src.1 != k_dst.1 {
-                tracing::warn!(
-                    transfer_id = t.id,
-                    chain_id = k_src.0,
-                    "stats projection: transfer endpoints are two different tokens on one chain; skipping"
-                );
-                return Ok(None);
+            (None, Some(y)) => {
+                if asset_has_token_on_chain(tx, y, k_src.0).await? {
+                    tracing::warn!(
+                        transfer_id = t.id,
+                        stats_asset_id = y,
+                        chain_id = k_src.0,
+                        "stats projection: stats asset already has a different token on the source chain; skipping transfer"
+                    );
+                    return Ok(None);
+                }
+                try_link_token(tx, y, k_src.0, k_src.1.clone()).await?;
+                token_to_asset.insert(k_src, y);
+                y
             }
-            let id = insert_stats_asset(tx).await?;
-            try_link_token(tx, id, k_src.0, k_src.1.clone()).await?;
-            // Avoid a duplicate link when both endpoints are the same chain-local token.
-            if k_dst != k_src {
-                try_link_token(tx, id, k_dst.0, k_dst.1.clone()).await?;
+            (None, None) => {
+                // A fresh asset can hold at most one token per chain; two distinct
+                // tokens on the same chain cannot both link to it.
+                if k_src.0 == k_dst.0 && k_src.1 != k_dst.1 {
+                    tracing::warn!(
+                        transfer_id = t.id,
+                        chain_id = k_src.0,
+                        "stats projection: transfer endpoints are two different tokens on one chain; skipping"
+                    );
+                    return Ok(None);
+                }
+                let id = insert_stats_asset(tx).await?;
+                try_link_token(tx, id, k_src.0, k_src.1.clone()).await?;
+                // Avoid a duplicate link when both endpoints are the same chain-local token.
+                if k_dst != k_src {
+                    try_link_token(tx, id, k_dst.0, k_dst.1.clone()).await?;
+                }
+                token_to_asset.insert(k_src, id);
+                token_to_asset.insert(k_dst, id);
+                id
             }
-            token_to_asset.insert(k_src, id);
-            token_to_asset.insert(k_dst, id);
-            id
-        }
+        },
+        // Only one endpoint known: map to its asset, creating one if needed.
+        (Some(k), None) | (None, Some(k)) => match a.or(b) {
+            Some(existing) => existing,
+            None => {
+                let id = insert_stats_asset(tx).await?;
+                try_link_token(tx, id, k.0, k.1.clone()).await?;
+                token_to_asset.insert(k, id);
+                id
+            }
+        },
+        // No token info on either side: nothing to map.
+        (None, None) => return Ok(None),
     };
 
     Ok(Some(asset_id))
@@ -522,6 +561,23 @@ async fn ensure_asset_for_transfer(
 
 fn token_decimals(token_rows: &HashMap<TokenKey, tokens::Model>, k: &TokenKey) -> Option<i16> {
     token_rows.get(k).and_then(|m| m.decimals)
+}
+
+/// Raw transfer amount for an edge's side, falling back to the opposite side
+/// when the requested side is unknown (e.g. a destination-only transfer has no
+/// source amount). Defaults to zero only when neither side has an amount.
+fn transfer_amount_for_side(
+    transfer: &crosschain_transfers::Model,
+    amount_side: &EdgeAmountSide,
+) -> BigDecimal {
+    let (primary, fallback) = match amount_side {
+        EdgeAmountSide::Source => (&transfer.src_amount, &transfer.dst_amount),
+        EdgeAmountSide::Destination => (&transfer.dst_amount, &transfer.src_amount),
+    };
+    primary
+        .clone()
+        .or_else(|| fallback.clone())
+        .unwrap_or_else(|| BigDecimal::from(0u64))
 }
 
 type EdgeKey = (i64, i64, i64);
@@ -588,10 +644,7 @@ fn edge_transfer_amount_for_side(
     dst_decimals: Option<i16>,
     stats_asset_id: i64,
 ) -> Result<BigDecimal, DbErr> {
-    let amount = match amount_side {
-        EdgeAmountSide::Source => transfer.src_amount.clone(),
-        EdgeAmountSide::Destination => transfer.dst_amount.clone(),
-    };
+    let amount = transfer_amount_for_side(transfer, amount_side);
     let incoming_dec = match amount_side {
         EdgeAmountSide::Source => src_decimals,
         EdgeAmountSide::Destination => dst_decimals,
@@ -720,8 +773,12 @@ pub async fn project_transfers_batch(
     let mut pairs: HashSet<TokenKey> = HashSet::new();
     let mut message_keys: HashSet<MessageKey> = HashSet::new();
     for t in &transfers {
-        pairs.insert((t.token_src_chain_id, t.token_src_address.clone()));
-        pairs.insert((t.token_dst_chain_id, t.token_dst_address.clone()));
+        if let Some(addr) = &t.token_src_address {
+            pairs.insert((t.token_src_chain_id, addr.clone()));
+        }
+        if let Some(addr) = &t.token_dst_address {
+            pairs.insert((t.token_dst_chain_id, addr.clone()));
+        }
         message_keys.insert((t.message_id, t.bridge_id));
     }
     let mut token_to_asset = load_token_asset_map(tx, &pairs).await?;
@@ -757,10 +814,14 @@ pub async fn project_transfers_batch(
 
     for (t, &asset_id) in transfers.iter().zip(&asset_ids) {
         let edge_key: EdgeKey = (asset_id, t.token_src_chain_id, t.token_dst_chain_id);
-        let k_src = (t.token_src_chain_id, t.token_src_address.clone());
-        let k_dst = (t.token_dst_chain_id, t.token_dst_address.clone());
-        let src_dec = token_decimals(&token_rows, &k_src);
-        let dst_dec = token_decimals(&token_rows, &k_dst);
+        let src_dec = t
+            .token_src_address
+            .as_ref()
+            .and_then(|addr| token_decimals(&token_rows, &(t.token_src_chain_id, addr.clone())));
+        let dst_dec = t
+            .token_dst_address
+            .as_ref()
+            .and_then(|addr| token_decimals(&token_rows, &(t.token_dst_chain_id, addr.clone())));
         let source_chain_indexed = message_rows
             .get(&(t.message_id, t.bridge_id))
             .is_some_and(|message| message.src_tx_hash.is_some());
@@ -778,12 +839,12 @@ pub async fn project_transfers_batch(
                     acc.apply_transfer(asset_id, t, src_dec, dst_dec)?;
                     v.insert(acc);
                 } else {
-                    let (amount_side, cumulative, decimals) =
-                        if source_chain_indexed || src_dec.is_some() {
-                            (EdgeAmountSide::Source, t.src_amount.clone(), src_dec)
-                        } else {
-                            (EdgeAmountSide::Destination, t.dst_amount.clone(), dst_dec)
-                        };
+                    let (amount_side, decimals) = if source_chain_indexed || src_dec.is_some() {
+                        (EdgeAmountSide::Source, src_dec)
+                    } else {
+                        (EdgeAmountSide::Destination, dst_dec)
+                    };
+                    let cumulative = transfer_amount_for_side(t, &amount_side);
                     v.insert(EdgeAccum::NewInBatch {
                         amount_side,
                         working_decimals: decimals,
@@ -924,10 +985,10 @@ mod token_key_tests {
             r#type: None,
             token_src_chain_id: 1,
             token_dst_chain_id: 100,
-            src_amount: BigDecimal::from(0u64),
-            dst_amount: BigDecimal::from(0u64),
-            token_src_address: a.clone(),
-            token_dst_address: b.clone(),
+            src_amount: Some(BigDecimal::from(0u64)),
+            dst_amount: Some(BigDecimal::from(0u64)),
+            token_src_address: Some(a.clone()),
+            token_dst_address: Some(b.clone()),
             sender_address: None,
             recipient_address: None,
             token_ids: None,
@@ -938,8 +999,8 @@ mod token_key_tests {
         };
         let t2 = crosschain_transfers::Model {
             id: 2,
-            token_src_address: a.clone(),
-            token_dst_address: b.clone(),
+            token_src_address: Some(a.clone()),
+            token_dst_address: Some(b.clone()),
             ..t1.clone()
         };
         let keys = token_keys_for_stats_enrichment_from_transfer_models(&[t1, t2]);

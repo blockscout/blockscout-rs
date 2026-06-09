@@ -53,3 +53,15 @@ CREATE TABLE amb_message_anomalies (
 
 CREATE INDEX idx_amb_message_anomalies_native_id
     ON amb_message_anomalies (bridge_id, native_id);
+
+-- AMB Omnibridge transfers are reconstructed purely from on-chain events
+-- (`TokensBridgingInitiated` on the source chain, `TokensBridged` on the
+-- destination chain). Until both halves are observed, the unseen side's token
+-- and amount are genuinely unknown. Make these columns nullable so the unknown
+-- side is left NULL rather than mirrored from the known side (which produced
+-- misleading rows where token_src_address == token_dst_address).
+ALTER TABLE crosschain_transfers
+    ALTER COLUMN src_amount        DROP NOT NULL,
+    ALTER COLUMN dst_amount        DROP NOT NULL,
+    ALTER COLUMN token_src_address DROP NOT NULL,
+    ALTER COLUMN token_dst_address DROP NOT NULL;

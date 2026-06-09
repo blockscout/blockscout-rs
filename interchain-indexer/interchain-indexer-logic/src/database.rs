@@ -57,10 +57,10 @@ pub struct JoinedTransfer {
     pub r#type: Option<TransferType>,
     pub token_src_chain_id: i64,
     pub token_dst_chain_id: i64,
-    pub src_amount: BigDecimal,
-    pub dst_amount: BigDecimal,
-    pub token_src_address: Vec<u8>,
-    pub token_dst_address: Vec<u8>,
+    pub src_amount: Option<BigDecimal>,
+    pub dst_amount: Option<BigDecimal>,
+    pub token_src_address: Option<Vec<u8>>,
+    pub token_dst_address: Option<Vec<u8>>,
     pub sender_address: Option<Vec<u8>>,
     pub recipient_address: Option<Vec<u8>>,
     pub token_ids: Option<Vec<Decimal>>,
@@ -3329,10 +3329,10 @@ mod tests {
             r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(c6),
             token_dst_chain_id: Set(c7),
-            src_amount: Set(BigDecimal::from(1u64)),
-            dst_amount: Set(BigDecimal::from(1u64)),
-            token_src_address: Set(token.clone()),
-            token_dst_address: Set(token.clone()),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(token.clone())),
+            token_dst_address: Set(Some(token.clone())),
             sender_address: Set(Some(addr_t1.clone())),
             recipient_address: Set(Some(addr_t2.clone())),
             stats_processed: Set(0),
@@ -4075,10 +4075,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(5_000u64)),
-            dst_amount: Set(BigDecimal::from(5_000u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(5_000u64))),
+            dst_amount: Set(Some(BigDecimal::from(5_000u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4141,10 +4141,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(1_000u64)),
-            dst_amount: Set(BigDecimal::from(1_000u64)),
-            token_src_address: Set(token_a.clone()),
-            token_dst_address: Set(token_a.clone()),
+            src_amount: Set(Some(BigDecimal::from(1_000u64))),
+            dst_amount: Set(Some(BigDecimal::from(1_000u64))),
+            token_src_address: Set(Some(token_a.clone())),
+            token_dst_address: Set(Some(token_a.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4173,10 +4173,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(2_000u64)),
-            dst_amount: Set(BigDecimal::from(2_000u64)),
-            token_src_address: Set(token_a.clone()),
-            token_dst_address: Set(token_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(2_000u64))),
+            dst_amount: Set(Some(BigDecimal::from(2_000u64))),
+            token_src_address: Set(Some(token_a.clone())),
+            token_dst_address: Set(Some(token_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4245,10 +4245,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(100u64)),
-            dst_amount: Set(BigDecimal::from(50u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(100u64))),
+            dst_amount: Set(Some(BigDecimal::from(50u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4311,10 +4311,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(100u64)),
-            dst_amount: Set(BigDecimal::from(200u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(100u64))),
+            dst_amount: Set(Some(BigDecimal::from(200u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4368,10 +4368,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(999u64)),
-            dst_amount: Set(BigDecimal::from(10u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(999u64))),
+            dst_amount: Set(Some(BigDecimal::from(10u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4409,10 +4409,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(888u64)),
-            dst_amount: Set(BigDecimal::from(7u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(888u64))),
+            dst_amount: Set(Some(BigDecimal::from(7u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4478,10 +4478,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(100u64)),
-            dst_amount: Set(BigDecimal::from(50u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(100u64))),
+            dst_amount: Set(Some(BigDecimal::from(50u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4539,10 +4539,10 @@ mod tests {
                 index: Set(0),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(100),
-                src_amount: Set(BigDecimal::from(src_amt)),
-                dst_amount: Set(BigDecimal::from(dst_amt)),
-                token_src_address: Set(addr_a.clone()),
-                token_dst_address: Set(addr_b.clone()),
+                src_amount: Set(Some(BigDecimal::from(src_amt))),
+                dst_amount: Set(Some(BigDecimal::from(dst_amt))),
+                token_src_address: Set(Some(addr_a.clone())),
+                token_dst_address: Set(Some(addr_b.clone())),
                 ..Default::default()
             })
             .exec(db)
@@ -4660,10 +4660,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(1u64)),
-            dst_amount: Set(BigDecimal::from(1u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4746,10 +4746,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(1u64)),
-            dst_amount: Set(BigDecimal::from(1u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4829,10 +4829,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(1u64)),
-            dst_amount: Set(BigDecimal::from(1u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4884,10 +4884,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(3u64)),
-            dst_amount: Set(BigDecimal::from(3u64)),
-            token_src_address: Set([0x81u8; 20].to_vec()),
-            token_dst_address: Set([0x82u8; 20].to_vec()),
+            src_amount: Set(Some(BigDecimal::from(3u64))),
+            dst_amount: Set(Some(BigDecimal::from(3u64))),
+            token_src_address: Set(Some([0x81u8; 20].to_vec())),
+            token_dst_address: Set(Some([0x82u8; 20].to_vec())),
             ..Default::default()
         })
         .exec(db)
@@ -5238,10 +5238,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(100u64)),
-            dst_amount: Set(BigDecimal::from(100u64)),
-            token_src_address: Set([0x33u8; 20].to_vec()),
-            token_dst_address: Set([0x44u8; 20].to_vec()),
+            src_amount: Set(Some(BigDecimal::from(100u64))),
+            dst_amount: Set(Some(BigDecimal::from(100u64))),
+            token_src_address: Set(Some([0x33u8; 20].to_vec())),
+            token_dst_address: Set(Some([0x44u8; 20].to_vec())),
             ..Default::default()
         })
         .exec(db)
@@ -5293,10 +5293,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(42u64)),
-            dst_amount: Set(BigDecimal::from(42u64)),
-            token_src_address: Set([0x55u8; 20].to_vec()),
-            token_dst_address: Set([0x66u8; 20].to_vec()),
+            src_amount: Set(Some(BigDecimal::from(42u64))),
+            dst_amount: Set(Some(BigDecimal::from(42u64))),
+            token_src_address: Set(Some([0x55u8; 20].to_vec())),
+            token_dst_address: Set(Some([0x66u8; 20].to_vec())),
             ..Default::default()
         })
         .exec(db)
@@ -5353,10 +5353,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(7u64)),
-            dst_amount: Set(BigDecimal::from(7u64)),
-            token_src_address: Set([0x77u8; 20].to_vec()),
-            token_dst_address: Set([0x88u8; 20].to_vec()),
+            src_amount: Set(Some(BigDecimal::from(7u64))),
+            dst_amount: Set(Some(BigDecimal::from(7u64))),
+            token_src_address: Set(Some([0x77u8; 20].to_vec())),
+            token_dst_address: Set(Some([0x88u8; 20].to_vec())),
             ..Default::default()
         })
         .exec(db)

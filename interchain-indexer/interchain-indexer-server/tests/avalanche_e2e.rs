@@ -317,12 +317,22 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     assert_eq!(transfer.token_dst_chain_id, chain_id_dest as i64);
 
     assert_eq!(
-        hex::encode_prefixed(&transfer.token_src_address),
+        hex::encode_prefixed(
+            transfer
+                .token_src_address
+                .as_ref()
+                .expect("token_src_address")
+        ),
         "0x33a31e0f62c0ddf25090b61ef21a70d5f48725b7"
     );
 
     assert_eq!(
-        hex::encode_prefixed(&transfer.token_dst_address),
+        hex::encode_prefixed(
+            transfer
+                .token_dst_address
+                .as_ref()
+                .expect("token_dst_address")
+        ),
         "0x012cb6651cb29c7d5dc96173756a773f7fb87cfb"
     );
 
@@ -339,11 +349,11 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     // Verify amounts (sender and recipient should match for a successful transfer)
     assert_eq!(
         transfer.src_amount,
-        BigDecimal::from(21633300000000000000u128)
+        Some(BigDecimal::from(21633300000000000000u128))
     );
     assert_eq!(
         transfer.dst_amount,
-        BigDecimal::from(21633300000000000000u128)
+        Some(BigDecimal::from(21633300000000000000u128))
     );
 
     indexer.stop().await;

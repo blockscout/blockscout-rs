@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use alloy::{
-    json_abi::{Event, Function, JsonAbi},
-    primitives::{Address, B256, Selector},
+    json_abi::{Event, JsonAbi},
+    primitives::{Address, B256},
     rpc::types::Filter,
 };
 use anyhow::{Context, Result, bail, ensure};
@@ -28,7 +28,6 @@ pub(crate) struct ContractAbi {
     pub(crate) address: Address,
     pub(crate) kind: ContractKind,
     pub(crate) events_by_topic: HashMap<B256, Event>,
-    pub(crate) functions_by_selector: HashMap<Selector, Function>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -85,7 +84,6 @@ impl AbiRegistry {
                 },
                 chain.amb_abi.as_ref(),
                 amb_events,
-                &[],
             )?;
 
             let mediator_grammar = mediator_grammar_for(chain.mediator_version)?;
@@ -96,7 +94,6 @@ impl AbiRegistry {
                 ContractKind::OmnibridgeMediator,
                 chain.mediator_abi.as_ref(),
                 mediator_grammar.events,
-                mediator_grammar.functions,
             )?;
             registry
                 .mediator_by_chain
@@ -130,7 +127,6 @@ impl AbiRegistry {
             .with_context(|| format!("AMB bridge config missing side for chain {chain_id}"))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn insert_contract(
         &mut self,
         chain_id: i64,
@@ -138,7 +134,6 @@ impl AbiRegistry {
         kind: ContractKind,
         abi_value: Option<&Value>,
         required_events: &[&str],
-        required_functions: &[&str],
     ) -> Result<()> {
         let abi_value = abi_value.with_context(|| {
             format!("missing ABI for AMB contract row chain_id={chain_id} address={address}")
@@ -163,23 +158,8 @@ impl AbiRegistry {
             events_by_topic.insert(event.selector(), event);
         }
 
-        let mut functions_by_selector = HashMap::new();
-        for function_name in required_functions {
-            let function = abi
-                .functions
-                .get(*function_name)
-                .and_then(|functions| functions.first())
-                .cloned()
-                .with_context(|| {
-                    format!(
-                        "ABI for chain_id={chain_id} address={address} missing function {function_name}"
-                    )
-                })?;
-            functions_by_selector.insert(function.selector(), function);
-        }
-
         ensure!(
-            !events_by_topic.is_empty() || !functions_by_selector.is_empty(),
+            !events_by_topic.is_empty(),
             "ABI for chain_id={chain_id} address={address} has no subscribed items"
         );
 
@@ -194,7 +174,6 @@ impl AbiRegistry {
                 address,
                 kind,
                 events_by_topic,
-                functions_by_selector,
             },
         );
 
@@ -215,17 +194,6 @@ impl AbiRegistry {
                     .get(topic)
                     .map(|event| (event, contract.kind))
             })
-    }
-
-    pub(crate) fn function_for_selector(
-        &self,
-        chain_id: i64,
-        mediator: Address,
-        selector: Selector,
-    ) -> Option<&Function> {
-        self.contracts
-            .get(&(chain_id, mediator))
-            .and_then(|contract| contract.functions_by_selector.get(&selector))
     }
 
     pub(crate) fn filter_for_chain(&self, chain_id: i64) -> Result<Filter> {
@@ -319,7 +287,6 @@ mod tests {
                     address,
                     kind: ContractKind::OmnibridgeMediator,
                     events_by_topic,
-                    functions_by_selector: HashMap::new(),
                 },
             )]),
             events_by_chain_topic: HashMap::new(),

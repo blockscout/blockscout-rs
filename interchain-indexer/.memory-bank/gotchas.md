@@ -71,14 +71,53 @@ the source-chain request during catchup.
 
 **Root cause:** AMB indexing merges independent chain streams. Destination
 events such as `RelayedMessage` / `AffirmationCompleted` can be observed before
-the matching `UserRequestForSignature` / `UserRequestForAffirmation`. Payload
-decoding must therefore not depend on having source data available while the
-destination receipt logs are still in hand.
+the matching `UserRequestForSignature` / `UserRequestForAffirmation`. Transfer
+reconstruction must therefore not depend on having both sides in hand at the
+same time.
 
-**Fix:** Persist destination-side `TokensBridged` details into the buffered AMB
-message and retry payload decoding whenever either source or destination state is
-updated. Keep the decode path based on buffered state, not transient receipt-log
-availability.
+**Fix:** Persist source-side `TokensBridgingInitiated` (`source_transfer`) and
+destination-side `TokensBridged` (`destination_transfer`) details into the
+buffered AMB message as each is observed. The transfer row is built at
+consolidation from whichever sides are present; a side whose event has not yet
+arrived is left NULL (see *AMB Transfer Sides Are Nullable and Never Mirrored*).
+The transfer is **not** reconstructed from the AMB application calldata — see
+[ADR-003](adr/003-amb-event-based-transfers.md).
+
+---
+
+## AMB Transfer Sides Are Nullable and Never Mirrored
+
+**Symptom:** `crosschain_transfers` rows where `token_src_address == token_dst_address`
+(and identical `src_amount`/`dst_amount`) for AMB/Omnibridge — i.e. a "transfer"
+that looks like it moved the same token to itself.
+
+**Root cause (historical):** `token_src_address`, `token_dst_address`,
+`src_amount`, `dst_amount` were once `NOT NULL`. When a side was unknown, the
+indexer substituted the only token it had into both columns. The substituted
+value came from the AMB application calldata, whose token is the *native-chain*
+token (source token for `handleBridgedTokens*`, but the **destination** token
+for `handleNativeTokens*`), so mirroring conflated the two sides and corrupted
+stats projection.
+
+**Current behavior:** Those four columns are **nullable**. Each transfer side is
+populated *only* from its own bridge event — source from `TokensBridgingInitiated`,
+destination from `TokensBridged`. A side whose event has not been observed is
+left **NULL**; it is never mirrored from the opposite side. So
+`token_src_address == token_dst_address` now means a genuine same-address pair,
+not a placeholder.
+
+**Implications:**
+- Readers must treat all four columns as optional. The proto layer emits
+  `source_token`/`destination_token = None` and omits the amount when NULL.
+- Stats projection skips a NULL endpoint (no token-key enrichment, no asset link
+  for that side) and falls back to the known side's amount for edge volume; see
+  `stats/projection.rs`.
+- Old mirrored rows persist until reindexed — this change is go-forward only.
+- The down migration backfills NULLs with a zero-address / zero-amount sentinel
+  (not by mirroring) to restore `NOT NULL`.
+
+See [ADR-003](adr/003-amb-event-based-transfers.md) and
+`research/amb-omnibridge-token-reconstruction.md`.
 
 ---
 
