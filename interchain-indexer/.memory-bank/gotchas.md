@@ -83,6 +83,13 @@ arrived is left NULL (see *AMB Transfer Sides Are Nullable and Never Mirrored*).
 The transfer is **not** reconstructed from the AMB application calldata — see
 [ADR-003](adr/003-amb-event-based-transfers.md).
 
+Persistence must preserve this order independence too. A destination-only
+finalized entry can be evicted, then a later source-only partial flush can hit
+the same `(message_id, bridge_id, index)` transfer key. `crosschain_transfers`
+conflict handling must merge nullable side columns with the stored row rather
+than blindly updating them, or the late partial side will clear token/amount
+data that was already extracted from the opposite-side event.
+
 ---
 
 ## AMB Transfer Sides Are Nullable and Never Mirrored

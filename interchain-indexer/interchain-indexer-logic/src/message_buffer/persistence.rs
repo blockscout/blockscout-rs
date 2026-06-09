@@ -9,7 +9,7 @@ use interchain_indexer_entity::{
 };
 use itertools::Itertools;
 use sea_orm::{
-    ActiveValue, DatabaseTransaction, DbErr, EntityTrait, Iterable, QueryFilter,
+    ActiveValue, DatabaseTransaction, DbErr, EntityTrait, QueryFilter,
     sea_query::{Expr, OnConflict},
 };
 use std::collections::HashSet;
@@ -123,21 +123,71 @@ fn crosschain_messages_on_conflict() -> OnConflict {
 }
 
 fn crosschain_transfers_on_conflict() -> OnConflict {
+    // Transfer sides are reconstructed independently. A later partial flush must
+    // enrich the missing side without clearing the side that was already known.
+    let prefer_incoming = |col: &str| {
+        Expr::cust(format!(
+            "COALESCE(EXCLUDED.{col}, crosschain_transfers.{col})"
+        ))
+    };
+
     OnConflict::columns([
         crosschain_transfers::Column::MessageId,
         crosschain_transfers::Column::BridgeId,
         crosschain_transfers::Column::Index,
     ])
-    .update_columns(crosschain_transfers::Column::iter().filter(|column| {
-        !matches!(
-            column,
-            crosschain_transfers::Column::Id
-                | crosschain_transfers::Column::MessageId
-                | crosschain_transfers::Column::BridgeId
-                | crosschain_transfers::Column::Index
-                | crosschain_transfers::Column::CreatedAt
-        )
-    }))
+    .value(
+        crosschain_transfers::Column::Type,
+        Expr::cust(r#"COALESCE(EXCLUDED."type", crosschain_transfers."type")"#),
+    )
+    .value(
+        crosschain_transfers::Column::TokenSrcChainId,
+        Expr::cust("EXCLUDED.token_src_chain_id"),
+    )
+    .value(
+        crosschain_transfers::Column::TokenDstChainId,
+        Expr::cust("EXCLUDED.token_dst_chain_id"),
+    )
+    .value(
+        crosschain_transfers::Column::SrcAmount,
+        prefer_incoming("src_amount"),
+    )
+    .value(
+        crosschain_transfers::Column::DstAmount,
+        prefer_incoming("dst_amount"),
+    )
+    .value(
+        crosschain_transfers::Column::TokenSrcAddress,
+        prefer_incoming("token_src_address"),
+    )
+    .value(
+        crosschain_transfers::Column::TokenDstAddress,
+        prefer_incoming("token_dst_address"),
+    )
+    .value(
+        crosschain_transfers::Column::SenderAddress,
+        prefer_incoming("sender_address"),
+    )
+    .value(
+        crosschain_transfers::Column::RecipientAddress,
+        prefer_incoming("recipient_address"),
+    )
+    .value(
+        crosschain_transfers::Column::TokenIds,
+        prefer_incoming("token_ids"),
+    )
+    .value(
+        crosschain_transfers::Column::StatsProcessed,
+        Expr::cust("EXCLUDED.stats_processed"),
+    )
+    .value(
+        crosschain_transfers::Column::StatsAssetId,
+        Expr::cust("EXCLUDED.stats_asset_id"),
+    )
+    .value(
+        crosschain_transfers::Column::UpdatedAt,
+        Expr::current_timestamp(),
+    )
     .to_owned()
 }
 
@@ -347,9 +397,12 @@ pub(super) async fn upsert_cursors(
 mod tests {
     use chrono::{DateTime, NaiveDateTime};
     use interchain_indexer_entity::{
-        bridges, chains, crosschain_messages, sea_orm_active_enums::MessageStatus,
+        bridges, chains, crosschain_messages, crosschain_transfers,
+        sea_orm_active_enums::{MessageStatus, TransferType},
     };
-    use sea_orm::{ActiveValue, EntityTrait, TransactionTrait};
+    use sea_orm::{
+        ActiveValue, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait, prelude::BigDecimal,
+    };
 
     use super::{ConsolidatedMessage, flush_to_final_storage};
     use crate::{InterchainDatabase, test_utils::init_db};
@@ -422,6 +475,66 @@ mod tests {
         }
     }
 
+    fn destination_only_completed_with_transfer() -> ConsolidatedMessage {
+        let mut entry = destination_only_completed();
+        entry.transfers = vec![transfer(
+            None,
+            Some(990),
+            None,
+            Some(vec![0xBB]),
+            None,
+            Some(vec![0x2B]),
+        )];
+        entry
+    }
+
+    fn source_only_ready_to_claim_with_transfer() -> ConsolidatedMessage {
+        let mut entry = source_only_ready_to_claim();
+        entry.transfers = vec![transfer(
+            Some(1_000),
+            None,
+            Some(vec![0xAA]),
+            None,
+            Some(vec![0x1A]),
+            None,
+        )];
+        entry
+    }
+
+    fn amount(value: Option<u64>) -> Option<BigDecimal> {
+        value.map(BigDecimal::from)
+    }
+
+    fn transfer(
+        src_amount: Option<u64>,
+        dst_amount: Option<u64>,
+        token_src_address: Option<Vec<u8>>,
+        token_dst_address: Option<Vec<u8>>,
+        sender_address: Option<Vec<u8>>,
+        recipient_address: Option<Vec<u8>>,
+    ) -> crosschain_transfers::ActiveModel {
+        crosschain_transfers::ActiveModel {
+            message_id: ActiveValue::Set(MESSAGE_ID),
+            bridge_id: ActiveValue::Set(BRIDGE_ID),
+            index: ActiveValue::Set(0),
+            r#type: ActiveValue::Set(Some(TransferType::Erc20)),
+            token_src_chain_id: ActiveValue::Set(SRC_CHAIN),
+            token_dst_chain_id: ActiveValue::Set(DST_CHAIN),
+            src_amount: ActiveValue::Set(amount(src_amount)),
+            dst_amount: ActiveValue::Set(amount(dst_amount)),
+            token_src_address: ActiveValue::Set(token_src_address),
+            token_dst_address: ActiveValue::Set(token_dst_address),
+            sender_address: ActiveValue::Set(sender_address),
+            recipient_address: ActiveValue::Set(recipient_address),
+            token_ids: ActiveValue::Set(None),
+            stats_processed: ActiveValue::Set(0),
+            stats_asset_id: ActiveValue::Set(None),
+            created_at: ActiveValue::NotSet,
+            updated_at: ActiveValue::NotSet,
+            id: ActiveValue::NotSet,
+        }
+    }
+
     async fn seed_fk_prerequisites(db: &InterchainDatabase) {
         db.upsert_bridges(vec![bridges::ActiveModel {
             id: ActiveValue::Set(BRIDGE_ID),
@@ -460,6 +573,17 @@ mod tests {
             .await
             .unwrap()
             .expect("crosschain_messages row must exist")
+    }
+
+    async fn load_transfer(db: &InterchainDatabase) -> crosschain_transfers::Model {
+        crosschain_transfers::Entity::find()
+            .filter(crosschain_transfers::Column::MessageId.eq(MESSAGE_ID))
+            .filter(crosschain_transfers::Column::BridgeId.eq(BRIDGE_ID))
+            .filter(crosschain_transfers::Column::Index.eq(0))
+            .one(db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("crosschain_transfers row must exist")
     }
 
     #[tokio::test]
@@ -510,5 +634,43 @@ mod tests {
         assert_eq!(row.src_tx_hash, Some(vec![0x11]));
         assert_eq!(row.payload, Some(vec![0xFA]));
         assert_eq!(row.init_timestamp, ts(1_000));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_late_source_does_not_clear_completed_transfer_destination_side() {
+        let test_db = init_db("flush_late_source_no_clear_dst_transfer").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, destination_only_completed_with_transfer()).await;
+        flush(&db, source_only_ready_to_claim_with_transfer()).await;
+
+        let transfer = load_transfer(&db).await;
+        assert_eq!(transfer.token_src_address, Some(vec![0xAA]));
+        assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
+        assert_eq!(transfer.src_amount, Some(BigDecimal::from(1_000)));
+        assert_eq!(transfer.dst_amount, Some(BigDecimal::from(990)));
+        assert_eq!(transfer.sender_address, Some(vec![0x1A]));
+        assert_eq!(transfer.recipient_address, Some(vec![0x2B]));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_late_destination_does_not_clear_source_transfer_side() {
+        let test_db = init_db("flush_late_destination_no_clear_src_transfer").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, source_only_ready_to_claim_with_transfer()).await;
+        flush(&db, destination_only_completed_with_transfer()).await;
+
+        let transfer = load_transfer(&db).await;
+        assert_eq!(transfer.token_src_address, Some(vec![0xAA]));
+        assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
+        assert_eq!(transfer.src_amount, Some(BigDecimal::from(1_000)));
+        assert_eq!(transfer.dst_amount, Some(BigDecimal::from(990)));
+        assert_eq!(transfer.sender_address, Some(vec![0x1A]));
+        assert_eq!(transfer.recipient_address, Some(vec![0x2B]));
     }
 }
