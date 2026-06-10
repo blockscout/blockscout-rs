@@ -198,6 +198,7 @@ impl Consolidate for Message {
 
         Ok(Some(ConsolidatedMessage {
             is_final,
+            replace_existing: false,
             message,
             transfers,
             amb_confirmations: Vec::new(),

@@ -187,6 +187,7 @@ mod tests {
 
             Ok(Some(ConsolidatedMessage {
                 is_final: self.is_final,
+                replace_existing: false,
                 message: interchain_indexer_entity::crosschain_messages::ActiveModel {
                     id: ActiveValue::Set(key.message_id),
                     bridge_id: ActiveValue::Set(key.bridge_id as i32),

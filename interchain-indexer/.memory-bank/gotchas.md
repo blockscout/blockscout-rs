@@ -92,6 +92,26 @@ data that was already extracted from the opposite-side event.
 
 ---
 
+## AMB Collision Replacement Must Delete Before Insert
+
+**Symptom:** After detecting an AMB `messageId` collision, the canonical
+`crosschain_messages` row still contains fields from the displaced body
+(`src_tx_hash`, `payload`, `sender_address`), or its `crosschain_transfers` row
+still contains the displaced source-side token/amount.
+
+**Root cause:** The normal AMB persistence path intentionally uses `COALESCE`
+and nullable-side transfer merging so out-of-order source/destination events can
+enrich each other. That merge policy is wrong for a confirmed collision: the
+old row belongs to a different AMB body and must not be enriched.
+
+**Fix:** Collision-produced canonical rows must request replacement. The
+maintenance flush deletes the existing `(id, bridge_id)` row first, relying on
+FK cascade to remove old transfers/confirmations, then inserts the executed body
+and anomaly rows in the same transaction. Do not use replacement for ordinary
+late source/destination merges.
+
+---
+
 ## AMB Transfer Sides Are Nullable and Never Mirrored
 
 **Symptom:** `crosschain_transfers` rows where `token_src_address == token_dst_address`
@@ -164,6 +184,33 @@ destination-side event annotation and collected-signature routing.
 **Fix:** For non-mainnet AMB deployments, keep the side-specific proxy ABI
 events in `bridges.json` / `bridges-testnet.json`. Do not rely on numeric chain
 IDs to identify Home or Foreign.
+
+---
+
+## AMB Header Sender Is Not The Source Transaction Initiator
+
+**Symptom:** AMB/Omnibridge `crosschain_messages.sender_address` can show the
+AMB message header sender instead of the address that initiated the source-chain
+transaction.
+
+**Root cause:** AMB receipts include the EVM transaction origin (`receipt.from`),
+but the shared EVM receipt helper currently drops it before AMB event dispatch.
+Source request consolidation then writes `source_event.header.sender` into the
+canonical message row. The AMB header sender/executor are protocol identity
+fields and are still required for message matching and collision detection, but
+they are not a substitute for the source transaction initiator.
+
+Recipient has a separate semantic trap: AMB message destination is the AMB
+message executor, not the Omnibridge transfer recipient. `TokensBridged.recipient`
+belongs only to the transfer row (`crosschain_transfers.recipient_address`), not
+to the canonical AMB message row.
+
+**Fix:** Thread `receipt.from` through the AMB source request event and write it
+to `crosschain_messages.sender_address` for source-led rows. Preserve AMB header
+sender/executor separately for collision checks. For AMB message recipient,
+write the message executor only: destination execution executor when available,
+otherwise the source header executor. Do not fulfill message `recipient_address`
+from `destination_transfer.recipient`. Existing rows need reindexing to change.
 
 ---
 

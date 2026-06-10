@@ -179,7 +179,7 @@ impl AmbIndexer {
         .await?;
 
         for (hash, _logs) in logs_by_tx {
-            let Some((receipt_logs, block)) = receipts.get(&hash) else {
+            let Some(receipt) = receipts.get(&hash) else {
                 tracing::warn!(
                     bridge_id = ctx.bridge_id,
                     chain_id,
@@ -197,7 +197,14 @@ impl AmbIndexer {
                 pending_message_hash_events: &ctx.pending_message_hash_events,
                 settings: &ctx.settings,
             };
-            if let Err(err) = events::dispatch_transaction(&event_ctx, receipt_logs, block).await {
+            if let Err(err) = events::dispatch_transaction(
+                &event_ctx,
+                &receipt.logs,
+                &receipt.block,
+                receipt.transaction_from,
+            )
+            .await
+            {
                 tracing::error!(
                     err = ?err,
                     bridge_id = ctx.bridge_id,

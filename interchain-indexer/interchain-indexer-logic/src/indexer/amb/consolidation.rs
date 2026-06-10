@@ -50,6 +50,7 @@ impl Consolidate for Message {
                         self.destination_transfer.as_ref(),
                         key,
                     )?;
+                    consolidated.replace_existing = true;
                     consolidated
                         .amb_anomalies
                         .push(source_anomaly(source, destination, key));
@@ -164,7 +165,7 @@ fn build_source_led(
         native_id: ActiveValue::Set(Some(source_event.message_id.as_slice().to_vec())),
         src_tx_hash: ActiveValue::Set(Some(source.transaction_hash.as_slice().to_vec())),
         dst_tx_hash: ActiveValue::Set(dst_tx_hash),
-        sender_address: ActiveValue::Set(Some(source_event.header.sender.as_slice().to_vec())),
+        sender_address: ActiveValue::Set(Some(source_event.transaction_from.as_slice().to_vec())),
         recipient_address: ActiveValue::Set(recipient_address.map(|a| a.as_slice().to_vec())),
         payload: ActiveValue::Set(Some(source_event.application_calldata.clone())),
         stats_processed: ActiveValue::Set(0),
@@ -206,6 +207,7 @@ fn build_source_led(
 
     Ok(ConsolidatedMessage {
         is_final,
+        replace_existing: false,
         message: message_model,
         transfers,
         amb_confirmations,
@@ -230,10 +232,6 @@ fn build_destination_only(
     } else {
         MessageStatus::Failed
     };
-    let recipient = destination_transfer
-        .map(|transfer| transfer.recipient)
-        .unwrap_or(event.executor);
-
     let message_model = crosschain_messages::ActiveModel {
         id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
@@ -245,8 +243,8 @@ fn build_destination_only(
         native_id: ActiveValue::Set(Some(event.message_id.as_slice().to_vec())),
         src_tx_hash: ActiveValue::Set(None),
         dst_tx_hash: ActiveValue::Set(Some(destination.transaction_hash.as_slice().to_vec())),
-        sender_address: ActiveValue::Set(Some(event.sender.as_slice().to_vec())),
-        recipient_address: ActiveValue::Set(Some(recipient.as_slice().to_vec())),
+        sender_address: ActiveValue::Set(None),
+        recipient_address: ActiveValue::Set(Some(event.executor.as_slice().to_vec())),
         payload: ActiveValue::Set(None),
         stats_processed: ActiveValue::Set(0),
         created_at: ActiveValue::NotSet,
@@ -260,6 +258,7 @@ fn build_destination_only(
 
     Ok(ConsolidatedMessage {
         is_final: true,
+        replace_existing: false,
         message: message_model,
         transfers,
         amb_confirmations: Vec::new(),
@@ -525,6 +524,15 @@ mod tests {
     }
 
     fn source(sender: Address, executor: Address, block_ts: NaiveDateTime) -> SourceRequest {
+        source_with_origin(sender, executor, sender, block_ts)
+    }
+
+    fn source_with_origin(
+        header_sender: Address,
+        executor: Address,
+        transaction_from: Address,
+        block_ts: NaiveDateTime,
+    ) -> SourceRequest {
         SourceRequest::Signature(AnnotatedEvent {
             event: SourceRequestEvent {
                 message_id: hash(0xAA),
@@ -532,12 +540,13 @@ mod tests {
                 application_calldata: vec![4, 5],
                 header: AmbHeaderData {
                     message_id: hash(0xAA),
-                    sender,
+                    sender: header_sender,
                     executor,
                     source_chain_id: SRC_CHAIN,
                     destination_chain_id: DST_CHAIN,
                     payload_offset: 0,
                 },
+                transaction_from,
             },
             transaction_hash: hash(0x11),
             block_number: 10,
@@ -645,6 +654,7 @@ mod tests {
             .expect("destination-only entry must consolidate");
 
         assert!(consolidated.is_final);
+        assert!(!consolidated.replace_existing);
         assert!(consolidated.amb_anomalies.is_empty());
         let m = &consolidated.message;
         assert_eq!(set_value!(m.status), MessageStatus::Completed);
@@ -657,6 +667,34 @@ mod tests {
             Some(hash(0x22).as_slice().to_vec())
         );
         assert_eq!(set_value!(m.payload), None);
+        assert_eq!(set_value!(m.sender_address), None);
+        assert_eq!(
+            set_value!(m.recipient_address),
+            Some(addr(2).as_slice().to_vec())
+        );
+    }
+
+    #[test]
+    fn test_consolidate_destination_only_uses_execution_executor_not_transfer_recipient() {
+        let message = Message {
+            destination_execution: Some(destination(addr(1), addr(2), ts(2_000), true, 0x22)),
+            destination_transfer: Some(destination_transfer(addr(0xBB), 990)),
+            ..Default::default()
+        };
+        let key = Key::new(42, 7);
+
+        let consolidated = message
+            .consolidate(&key)
+            .unwrap()
+            .expect("destination-only entry must consolidate");
+
+        assert_eq!(set_value!(consolidated.message.sender_address), None);
+        assert_eq!(
+            set_value!(consolidated.message.recipient_address),
+            Some(addr(2).as_slice().to_vec())
+        );
+        let t = &consolidated.transfers[0];
+        assert_eq!(set_value!(t.recipient_address), Some(addr(0x2B).to_vec()));
     }
 
     #[test]
@@ -675,6 +713,7 @@ mod tests {
         let consolidated = message.consolidate(&key).unwrap().unwrap();
 
         assert!(consolidated.is_final);
+        assert!(consolidated.replace_existing);
         // Canonical = destination-only executed row.
         let m = &consolidated.message;
         assert_eq!(set_value!(m.src_tx_hash), None);
@@ -682,10 +721,7 @@ mod tests {
             set_value!(m.dst_tx_hash),
             Some(hash(0x22).as_slice().to_vec())
         );
-        assert_eq!(
-            set_value!(m.sender_address),
-            Some(addr(8).as_slice().to_vec())
-        );
+        assert_eq!(set_value!(m.sender_address), None,);
 
         // Exactly one anomaly for the displaced source body, with full encoded_data.
         assert_eq!(consolidated.amb_anomalies.len(), 1);
@@ -700,6 +736,45 @@ mod tests {
             set_value!(anomaly.conflict_sender),
             Some(addr(8).as_slice().to_vec())
         );
+    }
+
+    #[test]
+    fn test_consolidate_source_led_message_sender_uses_transaction_origin() {
+        let message = Message {
+            direction: Some(Direction::HomeToForeign),
+            source_request: Some(source_with_origin(addr(1), addr(2), addr(0x55), ts(2_000))),
+            ..Default::default()
+        };
+        let key = Key::new(42, 7);
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+
+        assert_eq!(
+            set_value!(consolidated.message.sender_address),
+            Some(addr(0x55).as_slice().to_vec())
+        );
+    }
+
+    #[test]
+    fn test_consolidate_source_led_message_recipient_uses_executor_not_transfer_recipient() {
+        let message = Message {
+            direction: Some(Direction::HomeToForeign),
+            source_request: Some(source(addr(1), addr(2), ts(2_000))),
+            destination_execution: Some(destination(addr(1), addr(2), ts(2_100), true, 0x22)),
+            destination_transfer: Some(destination_transfer(addr(0xBB), 990)),
+            clock_skew_tolerance: Duration::from_secs(300),
+            ..Default::default()
+        };
+        let key = Key::new(42, 7);
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+
+        assert_eq!(
+            set_value!(consolidated.message.recipient_address),
+            Some(addr(2).as_slice().to_vec())
+        );
+        let t = &consolidated.transfers[0];
+        assert_eq!(set_value!(t.recipient_address), Some(addr(0x2B).to_vec()));
     }
 
     #[test]

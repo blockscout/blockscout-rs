@@ -79,6 +79,7 @@ pub(super) async fn dispatch_transaction(
     ctx: &EventContext<'_>,
     receipt_logs: &[Log],
     block: &Block,
+    transaction_from: Address,
 ) -> Result<()> {
     let block_timestamp = chrono::DateTime::from_timestamp(block.header.timestamp as i64, 0)
         .map(|dt| dt.naive_utc())
@@ -114,6 +115,7 @@ pub(super) async fn dispatch_transaction(
                     receipt_logs,
                     block_timestamp,
                     Direction::ForeignToHome,
+                    transaction_from,
                 )
                 .await
             }
@@ -125,6 +127,7 @@ pub(super) async fn dispatch_transaction(
                     receipt_logs,
                     block_timestamp,
                     Direction::HomeToForeign,
+                    transaction_from,
                 )
                 .await
             }
@@ -193,6 +196,7 @@ async fn handle_source_request(
     receipt_logs: &[Log],
     block_timestamp: chrono::NaiveDateTime,
     direction: Direction,
+    transaction_from: Address,
 ) -> Result<()> {
     let decoded = event.decode_log(log.data())?;
     let message_id = expect_b256(decoded.indexed.first(), "messageId")?;
@@ -256,6 +260,7 @@ async fn handle_source_request(
         message_hash = %message_hash,
         source_chain_id,
         destination_chain_id,
+        transaction_from = %transaction_from,
         tx_hash = ?log.transaction_hash,
         "AMB diag: source request -> buffer key"
     );
@@ -266,6 +271,7 @@ async fn handle_source_request(
             encoded_data,
             application_calldata,
             header: header.into(),
+            transaction_from,
         },
         transaction_hash: log.transaction_hash.context("missing tx hash")?,
         block_number: block_number as i64,

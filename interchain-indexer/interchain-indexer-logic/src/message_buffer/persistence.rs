@@ -208,6 +208,44 @@ fn amb_message_anomalies_on_conflict() -> OnConflict {
     OnConflict::new().do_nothing().to_owned()
 }
 
+fn consolidated_message_pk(
+    message: &crosschain_messages::ActiveModel,
+) -> Result<(i64, i32), DbErr> {
+    match (&message.id, &message.bridge_id) {
+        (ActiveValue::Set(id), ActiveValue::Set(bridge_id)) => Ok((*id, *bridge_id)),
+        _ => Err(DbErr::Custom(
+            "consolidated message must have id and bridge_id set".into(),
+        )),
+    }
+}
+
+async fn delete_replaced_messages(
+    tx: &DatabaseTransaction,
+    replacement_pks: &[(i64, i32)],
+) -> Result<(), DbErr> {
+    let keys: Vec<(i64, i32)> = replacement_pks
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    run_in_batches(&keys, 2, |batch| async {
+        crosschain_messages::Entity::delete_many()
+            .filter(
+                Expr::tuple([
+                    Expr::col(crosschain_messages::Column::Id).into(),
+                    Expr::col(crosschain_messages::Column::BridgeId).into(),
+                ])
+                .in_tuples(batch.iter().copied()),
+            )
+            .exec(tx)
+            .await
+            .map(|_| ())
+    })
+    .await
+}
+
 pub(super) async fn offload_stale_to_pending<T: Consolidate>(
     tx: &DatabaseTransaction,
     stale_entries: &[(Key, BufferItem<T>)],
@@ -234,6 +272,12 @@ pub(super) async fn flush_to_final_storage(
     tx: &DatabaseTransaction,
     consolidated_entries: Vec<ConsolidatedMessage>,
 ) -> Result<(), DbErr> {
+    let replacement_pks = consolidated_entries
+        .iter()
+        .filter(|entry| entry.replace_existing)
+        .map(|entry| consolidated_message_pk(&entry.message))
+        .collect::<Result<Vec<_>, _>>()?;
+
     let (messages, transfers, amb_confirmations, amb_anomalies): (Vec<_>, Vec<_>, Vec<_>, Vec<_>) =
         consolidated_entries
             .into_iter()
@@ -243,6 +287,7 @@ pub(super) async fn flush_to_final_storage(
     let amb_confirmations = amb_confirmations.into_iter().flatten().collect::<Vec<_>>();
     let amb_anomalies = amb_anomalies.into_iter().flatten().collect::<Vec<_>>();
 
+    delete_replaced_messages(tx, &replacement_pks).await?;
     batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
     batched_upsert(tx, &transfers, crosschain_transfers_on_conflict()).await?;
     batched_upsert(
@@ -421,6 +466,7 @@ mod tests {
     fn destination_only_completed() -> ConsolidatedMessage {
         ConsolidatedMessage {
             is_final: true,
+            replace_existing: false,
             message: crosschain_messages::ActiveModel {
                 id: ActiveValue::Set(MESSAGE_ID),
                 bridge_id: ActiveValue::Set(BRIDGE_ID),
@@ -432,7 +478,7 @@ mod tests {
                 native_id: ActiveValue::Set(Some(vec![0xAB])),
                 src_tx_hash: ActiveValue::Set(None),
                 dst_tx_hash: ActiveValue::Set(Some(vec![0xDD])),
-                sender_address: ActiveValue::Set(Some(vec![0x0D])),
+                sender_address: ActiveValue::Set(None),
                 recipient_address: ActiveValue::Set(Some(vec![0xCC])),
                 payload: ActiveValue::Set(None),
                 stats_processed: ActiveValue::Set(0),
@@ -451,6 +497,7 @@ mod tests {
     fn source_only_ready_to_claim() -> ConsolidatedMessage {
         ConsolidatedMessage {
             is_final: false,
+            replace_existing: false,
             message: crosschain_messages::ActiveModel {
                 id: ActiveValue::Set(MESSAGE_ID),
                 bridge_id: ActiveValue::Set(BRIDGE_ID),
@@ -498,6 +545,12 @@ mod tests {
             Some(vec![0x1A]),
             None,
         )];
+        entry
+    }
+
+    fn collision_replacement_destination_only_with_transfer() -> ConsolidatedMessage {
+        let mut entry = destination_only_completed_with_transfer();
+        entry.replace_existing = true;
         entry
     }
 
@@ -671,6 +724,34 @@ mod tests {
         assert_eq!(transfer.src_amount, Some(BigDecimal::from(1_000)));
         assert_eq!(transfer.dst_amount, Some(BigDecimal::from(990)));
         assert_eq!(transfer.sender_address, Some(vec![0x1A]));
+        assert_eq!(transfer.recipient_address, Some(vec![0x2B]));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_collision_replacement_deletes_stale_source_message_and_transfer() {
+        let test_db = init_db("flush_collision_replace_deletes_stale_source").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, source_only_ready_to_claim_with_transfer()).await;
+        flush(&db, collision_replacement_destination_only_with_transfer()).await;
+
+        let row = load(&db).await;
+        assert_eq!(row.status, MessageStatus::Completed);
+        assert_eq!(row.src_tx_hash, None);
+        assert_eq!(row.payload, None);
+        assert_eq!(row.sender_address, None);
+        assert_eq!(row.dst_tx_hash, Some(vec![0xDD]));
+        assert_eq!(row.recipient_address, Some(vec![0xCC]));
+        assert_eq!(row.init_timestamp, ts(2_000));
+
+        let transfer = load_transfer(&db).await;
+        assert_eq!(transfer.token_src_address, None);
+        assert_eq!(transfer.src_amount, None);
+        assert_eq!(transfer.sender_address, None);
+        assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
+        assert_eq!(transfer.dst_amount, Some(BigDecimal::from(990)));
         assert_eq!(transfer.recipient_address, Some(vec![0x2B]));
     }
 }

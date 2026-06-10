@@ -42,6 +42,7 @@ pub(crate) struct SourceRequestEvent {
     pub(crate) encoded_data: Vec<u8>,
     pub(crate) application_calldata: Vec<u8>,
     pub(crate) header: AmbHeaderData,
+    pub(crate) transaction_from: Address,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
