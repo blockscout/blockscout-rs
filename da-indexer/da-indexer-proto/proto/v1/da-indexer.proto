@@ -14,6 +14,10 @@ service EigenDaService {
   rpc GetBlob(GetEigenDaBlobRequest) returns (EigenDaBlob) {}
 }
 
+service EigenDaV2Service {
+    rpc GetBlob(GetEigenDaV2Blob) returns (EigenDaV2Blob) {}
+}
+
 message GetCelestiaBlobRequest {
   uint64 height = 1;
   string commitment = 2;
@@ -62,4 +66,13 @@ message EigenDaBlob {
   string l1_confirmation_tx_hash = 5;
   uint64 size = 6;
   optional string data = 7;
+}
+
+message GetEigenDaV2Blob {
+  string commitment = 1;
+  optional string proxy_base_url = 2;
+}
+
+message EigenDaV2Blob {
+  string data = 1;
 }
