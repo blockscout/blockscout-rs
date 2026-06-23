@@ -36,6 +36,7 @@ pub fn multichain_lookup_domain_name_from_proto(
         only_active: proto.only_active,
         network_id: proto.chain_id,
         protocols: split_protocols(proto.protocols),
+        all_protocols: proto.all_protocols,
         pagination,
     };
     Ok(input)
@@ -72,6 +73,7 @@ pub fn multichain_lookup_address_from_proto(
         only_active: proto.only_active,
         network_id: proto.chain_id,
         protocols: split_protocols(proto.protocols),
+        all_protocols: proto.all_protocols,
         pagination,
     };
     Ok(input)
@@ -84,6 +86,7 @@ pub fn multichain_get_address_from_proto(
         address: address_from_str_inner(&proto.address)?,
         network_id: proto.chain_id,
         protocols: split_protocols(proto.protocols),
+        all_protocols: proto.all_protocols,
     };
     Ok(input)
 }
@@ -99,6 +102,7 @@ pub fn multichain_batch_resolve_addresses_from_proto(
             .collect::<Result<_, _>>()?,
         network_id: proto.chain_id,
         protocols: split_protocols(proto.protocols),
+        all_protocols: proto.all_protocols,
     };
     Ok(input)
 }

@@ -185,6 +185,7 @@ async fn main() -> Result<(), anyhow::Error> {
             addresses,
             network_id: Some(1),
             protocols: None,
+            all_protocols: false,
         })
         .await
         .expect("failed to quick resolve");

@@ -111,6 +111,7 @@ pub struct LookupDomainInput {
     pub only_active: bool,
     pub network_id: Option<i64>,
     pub protocols: Option<NonEmpty<String>>,
+    pub all_protocols: bool,
     pub pagination: DomainPaginationInput,
 }
 
@@ -122,6 +123,7 @@ pub struct LookupAddressInput {
     pub only_active: bool,
     pub network_id: Option<i64>,
     pub protocols: Option<NonEmpty<String>>,
+    pub all_protocols: bool,
     pub pagination: DomainPaginationInput,
 }
 
@@ -130,6 +132,7 @@ pub struct GetAddressInput {
     pub address: Address,
     pub network_id: Option<i64>,
     pub protocols: Option<NonEmpty<String>>,
+    pub all_protocols: bool,
 }
 
 impl Default for DomainPaginationInput {
@@ -148,6 +151,7 @@ pub struct BatchResolveAddressNamesInput {
     pub addresses: Vec<Address>,
     pub network_id: Option<i64>,
     pub protocols: Option<NonEmpty<String>>,
+    pub all_protocols: bool,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]

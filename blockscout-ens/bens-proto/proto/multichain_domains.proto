@@ -60,6 +60,9 @@ message LookupDomainNameMultichainRequest {
   optional int64 chain_id = 2;
   // comma separated list of protocol ids. Default is ENS protocol only
   optional string protocols = 3;
+  // If true, search across all supported protocols and ignore `protocols`.
+  // When `chain_id` is set, the search is scoped to all protocols on that chain.
+  bool all_protocols = 9 [(google.api.field_behavior) = OPTIONAL];
   // Filtering field to remove expired names
   bool only_active = 4 [(google.api.field_behavior) = OPTIONAL];
   // Sorting field. Default is `registration_date`
@@ -78,6 +81,9 @@ message LookupAddressMultichainRequest {
   optional int64 chain_id = 2;
   // comma separated list of protocol ids. Default is ENS protocol only
   optional string protocols = 3;
+  // If true, search across all supported protocols and ignore `protocols`.
+  // When `chain_id` is set, the search is scoped to all protocols on that chain.
+  bool all_protocols = 11 [(google.api.field_behavior) = OPTIONAL];
   // Include domains resolved to the address
   bool resolved_to = 4;
   // Include domains owned by the address
@@ -100,6 +106,9 @@ message GetAddressMultichainRequest {
   optional int64 chain_id = 2;
   // comma separated list of protocol ids. Default is ENS protocol only
   optional string protocols = 3;
+  // If true, search across all supported protocols and ignore `protocols`.
+  // When `chain_id` is set, the search is scoped to all protocols on that chain.
+  bool all_protocols = 4 [(google.api.field_behavior) = OPTIONAL];
 }
 
 message BatchResolveAddressesMultichainRequest {
@@ -109,6 +118,9 @@ message BatchResolveAddressesMultichainRequest {
   optional int64 chain_id = 2;
   // comma separated list of protocol ids. Default is ENS protocol only
   optional string protocols = 3;
+  // If true, search across all supported protocols and ignore `protocols`.
+  // When `chain_id` is set, the search is scoped to all protocols on that chain.
+  bool all_protocols = 4 [(google.api.field_behavior) = OPTIONAL];
 }
 
 message GetProtocolsMultichainRequest {
