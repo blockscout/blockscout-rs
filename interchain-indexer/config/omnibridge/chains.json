@@ -2,7 +2,7 @@
     {
         "chain_id": 1,
         "name": "Ethereum",
-        "icon": "https://ethereum.org/static/c48a5f760c34dfadcf05a208dab137ab/0e3d3/eth-diamond-purple.png",
+        "icon": "https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg",
         "explorer": {
             "url": "https://eth.blockscout.com",
             "custom_tx_route": "/tx/{hash}",
@@ -26,7 +26,7 @@
     {
         "chain_id": 100,
         "name": "Gnosis",
-        "icon": "https://docs.gnosischain.com/img/gnosis-chain-logo.svg",
+        "icon": "https://blockscout-icons.s3.us-east-1.amazonaws.com/gnosis.svg",
         "explorer": {
             "url": "https://gnosis.blockscout.com",
             "custom_tx_route": "/tx/{hash}",

@@ -2,7 +2,7 @@
     {
         "chain_id": 11155111,
         "name": "Sepolia",
-        "icon": "https://ethereum.org/static/c48a5f760c34dfadcf05a208dab137ab/0e3d3/eth-diamond-purple.png",
+        "icon": "https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg",
         "explorer": {
             "url": "https://eth-sepolia.blockscout.com"
         },
@@ -23,7 +23,7 @@
     {
         "chain_id": 10200,
         "name": "Chiado",
-        "icon": "https://docs.gnosischain.com/img/gnosis-chain-logo.svg",
+        "icon": "https://blockscout-icons.s3.us-east-1.amazonaws.com/gnosis.svg",
         "explorer": {
             "url": "https://gnosis-chiado.blockscout.com/"
         },
