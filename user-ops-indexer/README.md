@@ -25,7 +25,7 @@ No additional dependencies
 ### Production
 
 Set the following ENVs on the Blockscout
-instance ([configuration](https://github.com/blockscout/docs/blob/master/for-developers/information-and-settings/env-variables.md#blockscout-account-abstraction)):
+instance ([configuration](https://github.com/blockscout/docs/blob/master/setup/env-variables/backend-envs-integrations.md#blockscout-account-abstraction)):
 
 * `MICROSERVICE_ACCOUNT_ABSTRACTION_ENABLED=true`
 * `MICROSERVICE_ACCOUNT_ABSTRACTION_URL={service_url}`
