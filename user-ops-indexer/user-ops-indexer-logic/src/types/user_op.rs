@@ -69,6 +69,14 @@ pub struct ListUserOp {
 
 impl From<UserOp> for Model {
     fn from(v: UserOp) -> Self {
+        // indexer bug caused gas fees to be flipped in the DB for v0.7 and v0.8
+        // incorrect order in the DB is preserved as is to avoid a heavy reindex
+        let (max_fee_per_gas, max_priority_fee_per_gas) = match v.entry_point_version {
+            EntryPointVersion::V06 => (v.max_fee_per_gas, v.max_priority_fee_per_gas),
+            EntryPointVersion::V07 | EntryPointVersion::V08 => {
+                (v.max_priority_fee_per_gas, v.max_fee_per_gas)
+            }
+        };
         Self {
             hash: v.hash.to_vec(),
             sender: v.sender.to_vec(),
@@ -78,8 +86,8 @@ impl From<UserOp> for Model {
             call_gas_limit: u256_to_decimal(v.call_gas_limit),
             verification_gas_limit: u256_to_decimal(v.verification_gas_limit),
             pre_verification_gas: u256_to_decimal(v.pre_verification_gas),
-            max_fee_per_gas: u256_to_decimal(v.max_fee_per_gas),
-            max_priority_fee_per_gas: u256_to_decimal(v.max_priority_fee_per_gas),
+            max_fee_per_gas: u256_to_decimal(max_fee_per_gas),
+            max_priority_fee_per_gas: u256_to_decimal(max_priority_fee_per_gas),
             paymaster_and_data: v.paymaster_and_data.clone().map(|a| a.to_vec()),
             signature: v.signature.to_vec(),
             aggregator: v.aggregator.map(|a| a.to_vec()),
@@ -110,6 +118,14 @@ impl From<UserOp> for Model {
 
 impl From<Model> for UserOp {
     fn from(v: Model) -> Self {
+        // indexer bug caused gas fees to be flipped in the DB for v0.7 and v0.8
+        // incorrect order in the DB is preserved as is to avoid a heavy reindex
+        let (max_fee_per_gas, max_priority_fee_per_gas) = match v.entry_point_version {
+            EntryPointVersion::V06 => (v.max_fee_per_gas, v.max_priority_fee_per_gas),
+            EntryPointVersion::V07 | EntryPointVersion::V08 => {
+                (v.max_priority_fee_per_gas, v.max_fee_per_gas)
+            }
+        };
         Self {
             hash: B256::from_slice(&v.hash),
             sender: Address::from_slice(&v.sender),
@@ -119,8 +135,8 @@ impl From<Model> for UserOp {
             call_gas_limit: U256::from(v.call_gas_limit.to_u128().unwrap_or(0)),
             verification_gas_limit: U256::from(v.verification_gas_limit.to_u128().unwrap_or(0)),
             pre_verification_gas: U256::from(v.pre_verification_gas.to_u128().unwrap_or(0)),
-            max_fee_per_gas: U256::from(v.max_fee_per_gas.to_u128().unwrap_or(0)),
-            max_priority_fee_per_gas: U256::from(v.max_priority_fee_per_gas.to_u128().unwrap_or(0)),
+            max_fee_per_gas: U256::from(max_fee_per_gas.to_u128().unwrap_or(0)),
+            max_priority_fee_per_gas: U256::from(max_priority_fee_per_gas.to_u128().unwrap_or(0)),
             paymaster_and_data: v.paymaster_and_data.clone().map(Bytes::from),
             signature: Bytes::from(v.signature.clone()),
             aggregator: v.aggregator.clone().map(|a| Address::from_slice(&a)),
@@ -185,9 +201,9 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
                     ))
                     .to_string(),
                     "pre_verification_gas": v.pre_verification_gas.to_string(),
-                    "gas_fees": B128::from(v.max_fee_per_gas.uint_try_to().unwrap_or(U128::ZERO))
+                    "gas_fees": B128::from(v.max_priority_fee_per_gas.uint_try_to().unwrap_or(U128::ZERO))
                         .concat_const::<16, 32>(B128::from(
-                            v.max_priority_fee_per_gas
+                            v.max_fee_per_gas
                                 .uint_try_to()
                                 .unwrap_or(U128::ZERO),
                         ))
