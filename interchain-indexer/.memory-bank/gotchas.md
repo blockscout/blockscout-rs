@@ -63,6 +63,157 @@ Events are skipped when they fail either filter:
 
 ---
 
+## AMB Source and Destination Events Can Arrive Out of Order
+
+**Symptom:** AMB/Omnibridge messages are indexed, but transfers are missing for
+one direction, especially when destination-chain execution is processed before
+the source-chain request during catchup.
+
+**Root cause:** AMB indexing merges independent chain streams. Destination
+events such as `RelayedMessage` / `AffirmationCompleted` can be observed before
+the matching `UserRequestForSignature` / `UserRequestForAffirmation`. Transfer
+reconstruction must therefore not depend on having both sides in hand at the
+same time.
+
+**Fix:** Persist source-side `TokensBridgingInitiated` (`source_transfer`) and
+destination-side `TokensBridged` (`destination_transfer`) details into the
+buffered AMB message as each is observed. The transfer row is built at
+consolidation from whichever sides are present; a side whose event has not yet
+arrived is left NULL (see *AMB Transfer Sides Are Nullable and Never Mirrored*).
+The transfer is **not** reconstructed from the AMB application calldata — see
+[ADR-003](adr/003-amb-event-based-transfers.md).
+
+Persistence must preserve this order independence too. A destination-only
+finalized entry can be evicted, then a later source-only partial flush can hit
+the same `(message_id, bridge_id, index)` transfer key. `crosschain_transfers`
+conflict handling must merge nullable side columns with the stored row rather
+than blindly updating them, or the late partial side will clear token/amount
+data that was already extracted from the opposite-side event.
+
+---
+
+## AMB Collision Replacement Must Delete Before Insert
+
+**Symptom:** After detecting an AMB `messageId` collision, the canonical
+`crosschain_messages` row still contains fields from the displaced body
+(`src_tx_hash`, `payload`, `sender_address`), or its `crosschain_transfers` row
+still contains the displaced source-side token/amount.
+
+**Root cause:** The normal AMB persistence path intentionally uses `COALESCE`
+and nullable-side transfer merging so out-of-order source/destination events can
+enrich each other. That merge policy is wrong for a confirmed collision: the
+old row belongs to a different AMB body and must not be enriched.
+
+**Fix:** Collision-produced canonical rows must request replacement. The
+maintenance flush deletes the existing `(id, bridge_id)` row first, relying on
+FK cascade to remove old transfers/confirmations, then inserts the executed body
+and anomaly rows in the same transaction. Do not use replacement for ordinary
+late source/destination merges.
+
+---
+
+## AMB Transfer Sides Are Nullable and Never Mirrored
+
+**Symptom:** `crosschain_transfers` rows where `token_src_address == token_dst_address`
+(and identical `src_amount`/`dst_amount`) for AMB/Omnibridge — i.e. a "transfer"
+that looks like it moved the same token to itself.
+
+**Root cause (historical):** `token_src_address`, `token_dst_address`,
+`src_amount`, `dst_amount` were once `NOT NULL`. When a side was unknown, the
+indexer substituted the only token it had into both columns. The substituted
+value came from the AMB application calldata, whose token is the *native-chain*
+token (source token for `handleBridgedTokens*`, but the **destination** token
+for `handleNativeTokens*`), so mirroring conflated the two sides and corrupted
+stats projection.
+
+**Current behavior:** Those four columns are **nullable**. Each transfer side is
+populated *only* from its own bridge event — source from `TokensBridgingInitiated`,
+destination from `TokensBridged`. A side whose event has not been observed is
+left **NULL**; it is never mirrored from the opposite side. So
+`token_src_address == token_dst_address` now means a genuine same-address pair,
+not a placeholder.
+
+**Implications:**
+- Readers must treat all four columns as optional. The proto layer emits
+  `source_token`/`destination_token = None` and omits the amount when NULL.
+- Stats projection skips a NULL endpoint (no token-key enrichment, no asset link
+  for that side) and falls back to the known side's amount for edge volume; see
+  `stats/projection.rs`.
+- Old mirrored rows persist until reindexed — this change is go-forward only.
+- The down migration backfills NULLs with a zero-address / zero-amount sentinel
+  (not by mirroring) to restore `NOT NULL`.
+
+See [ADR-003](adr/003-amb-event-based-transfers.md) and
+`research/amb-omnibridge-token-reconstruction.md`.
+
+---
+
+## AMB Queued Events Must Preserve Their Emitting Chain
+
+**Symptom:** `indexer_checkpoints.realtime_cursor` for Ethereum can jump to a
+Gnosis block number, causing Ethereum realtime polling to wait forever because
+the cursor is higher than the Ethereum latest block.
+
+**Root cause:** AMB validator/signature events may be observed before the
+matching source request and temporarily queued by `message_hash`. Any queued
+event must store the chain that emitted it. If the event is later drained using
+the source request's current chain context, the buffer records the queued
+event's block number under the wrong chain and checkpoint maintenance persists
+that wrong `(bridge_id, chain_id)` cursor.
+
+**Fix:** Keep cursor attribution tied to the physical log source chain, not the
+AMB header source/destination chain or the context that drains a pending queue.
+
+---
+
+## AMB Home/Foreign Side Comes From Proxy ABI Events
+
+**Symptom:** AMB/Omnibridge indexing fails during startup with an error about a
+missing Home or Foreign chain, or events are subscribed on the wrong side.
+
+**Root cause:** AMB configs do not hardcode Ethereum/Gnosis chain IDs. The
+indexer infers each configured `amb_proxy` as Foreign or Home from its ABI event
+set:
+- Foreign proxy ABI must include `UserRequestForAffirmation` and `RelayedMessage`
+- Home proxy ABI must include `UserRequestForSignature`, `AffirmationCompleted`,
+  validator signature events, and `CollectedSignatures`
+
+The bridge config must contain exactly one Home and one Foreign proxy for
+destination-side event annotation and collected-signature routing.
+
+**Fix:** For non-mainnet AMB deployments, keep the side-specific proxy ABI
+events in `bridges.json` / `bridges-testnet.json`. Do not rely on numeric chain
+IDs to identify Home or Foreign.
+
+---
+
+## AMB Header Sender Is Not The Source Transaction Initiator
+
+**Symptom:** AMB/Omnibridge `crosschain_messages.sender_address` can show the
+AMB message header sender instead of the address that initiated the source-chain
+transaction.
+
+**Root cause:** AMB receipts include the EVM transaction origin (`receipt.from`),
+but the shared EVM receipt helper currently drops it before AMB event dispatch.
+Source request consolidation then writes `source_event.header.sender` into the
+canonical message row. The AMB header sender/executor are protocol identity
+fields and are still required for message matching and collision detection, but
+they are not a substitute for the source transaction initiator.
+
+Recipient has a separate semantic trap: AMB message destination is the AMB
+message executor, not the Omnibridge transfer recipient. `TokensBridged.recipient`
+belongs only to the transfer row (`crosschain_transfers.recipient_address`), not
+to the canonical AMB message row.
+
+**Fix:** Thread `receipt.from` through the AMB source request event and write it
+to `crosschain_messages.sender_address` for source-led rows. Preserve AMB header
+sender/executor separately for collision checks. For AMB message recipient,
+write the message executor only: destination execution executor when available,
+otherwise the source header executor. Do not fulfill message `recipient_address`
+from `destination_transfer.recipient`. Existing rows need reindexing to change.
+
+---
+
 ## Token Info Caches Errors
 
 **Symptom:** Token metadata fetch fails once, then never retries.

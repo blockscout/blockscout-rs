@@ -9,6 +9,8 @@ pub enum BridgeType {
     Lockmint,
     #[sea_orm(string_value = "avalanche_native")]
     AvalancheNative,
+    #[sea_orm(string_value = "amb")]
+    Amb,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "edge_amount_side")]
@@ -27,6 +29,8 @@ pub enum MessageStatus {
     Completed,
     #[sea_orm(string_value = "failed")]
     Failed,
+    #[sea_orm(string_value = "ready_to_claim")]
+    ReadyToClaim,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "transfer_type")]

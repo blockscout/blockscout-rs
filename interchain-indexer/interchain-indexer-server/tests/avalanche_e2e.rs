@@ -141,6 +141,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
                 address: teleporter_address.into(),
                 started_at_block: block_number_src,
                 version: 1,
+                kind: None,
                 abi: None,
             },
             BridgeContractConfig {
@@ -148,6 +149,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
                 address: teleporter_address.into(),
                 started_at_block: block_number_dest,
                 version: 1,
+                kind: None,
                 abi: None,
             },
         ],
@@ -315,12 +317,22 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     assert_eq!(transfer.token_dst_chain_id, chain_id_dest as i64);
 
     assert_eq!(
-        hex::encode_prefixed(&transfer.token_src_address),
+        hex::encode_prefixed(
+            transfer
+                .token_src_address
+                .as_ref()
+                .expect("token_src_address")
+        ),
         "0x33a31e0f62c0ddf25090b61ef21a70d5f48725b7"
     );
 
     assert_eq!(
-        hex::encode_prefixed(&transfer.token_dst_address),
+        hex::encode_prefixed(
+            transfer
+                .token_dst_address
+                .as_ref()
+                .expect("token_dst_address")
+        ),
         "0x012cb6651cb29c7d5dc96173756a773f7fb87cfb"
     );
 
@@ -337,11 +349,11 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     // Verify amounts (sender and recipient should match for a successful transfer)
     assert_eq!(
         transfer.src_amount,
-        BigDecimal::from(21633300000000000000u128)
+        Some(BigDecimal::from(21633300000000000000u128))
     );
     assert_eq!(
         transfer.dst_amount,
-        BigDecimal::from(21633300000000000000u128)
+        Some(BigDecimal::from(21633300000000000000u128))
     );
 
     indexer.stop().await;
@@ -416,6 +428,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
                 address: teleporter_address.into(),
                 started_at_block: 0,
                 version: 1,
+                kind: None,
                 abi: None,
             },
             BridgeContractConfig {
@@ -423,6 +436,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
                 address: teleporter_address.into(),
                 started_at_block: block_number_dest,
                 version: 1,
+                kind: None,
                 abi: None,
             },
         ],
@@ -611,6 +625,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
                 address: teleporter_address.into(),
                 started_at_block: block_number_src,
                 version: 1,
+                kind: None,
                 abi: None,
             },
             BridgeContractConfig {
@@ -618,6 +633,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
                 address: teleporter_address.into(),
                 started_at_block: 0,
                 version: 1,
+                kind: None,
                 abi: None,
             },
         ],
@@ -787,6 +803,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
                 address: teleporter_address.into(),
                 started_at_block: block_number_src,
                 version: 1,
+                kind: None,
                 abi: None,
             },
         ],
@@ -955,6 +972,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
             address: teleporter_address.into(),
             started_at_block: block_number_dest,
             version: 1,
+            kind: None,
             abi: None,
         }],
         api_url: None,
@@ -1133,6 +1151,7 @@ async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> R
             address: teleporter_address.into(),
             started_at_block: block_number_dest,
             version: 1,
+            kind: None,
             abi: None,
         }],
         api_url: None,
@@ -1280,6 +1299,7 @@ async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()>
             address: teleporter_address.into(),
             started_at_block: block_number_dest,
             version: 1,
+            kind: None,
             abi: None,
         }],
         api_url: None,
@@ -1457,6 +1477,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
                 address: teleporter_address.into(),
                 started_at_block: 0,
                 version: 1,
+                kind: None,
                 abi: None,
             },
             BridgeContractConfig {
@@ -1464,6 +1485,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
                 address: teleporter_address.into(),
                 started_at_block: block_number_dest,
                 version: 1,
+                kind: None,
                 abi: None,
             },
         ],
@@ -1629,6 +1651,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
             address: teleporter_address.into(),
             started_at_block: block_number_dest,
             version: 1,
+            kind: None,
             abi: None,
         }],
         api_url: None,

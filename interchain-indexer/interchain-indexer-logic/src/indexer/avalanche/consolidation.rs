@@ -198,8 +198,11 @@ impl Consolidate for Message {
 
         Ok(Some(ConsolidatedMessage {
             is_final,
+            replace_existing: false,
             message,
             transfers,
+            amb_confirmations: Vec::new(),
+            amb_anomalies: Vec::new(),
         }))
     }
 }
@@ -246,10 +249,10 @@ fn build_transfer(
                 // Always 0 for ICTT transfers
                 index: ActiveValue::Set(0),
                 sender_address: ActiveValue::Set(sender.as_slice().to_vec().into()),
-                src_amount: ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?),
-                dst_amount: ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?),
-                token_src_address: ActiveValue::Set(src_token_addr.as_slice().to_vec()),
-                token_dst_address: ActiveValue::Set(dst_token_addr.as_slice().to_vec()),
+                src_amount: ActiveValue::Set(Some(BigDecimal::from_str(&amount.to_string())?)),
+                dst_amount: ActiveValue::Set(Some(BigDecimal::from_str(&amount.to_string())?)),
+                token_src_address: ActiveValue::Set(Some(src_token_addr.as_slice().to_vec())),
+                token_dst_address: ActiveValue::Set(Some(dst_token_addr.as_slice().to_vec())),
                 recipient_address: ActiveValue::Set(recipient_address.as_slice().to_vec().into()),
                 ..Default::default()
             };
@@ -291,10 +294,10 @@ fn build_transfer(
                 index: ActiveValue::Set(0),
                 // Set required chain ID fields
                 sender_address: ActiveValue::Set(sender.as_slice().to_vec().into()),
-                src_amount: ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?),
-                dst_amount: ActiveValue::Set(BigDecimal::from_str(&amount.to_string())?),
-                token_src_address: ActiveValue::Set(src_token_addr.as_slice().to_vec()),
-                token_dst_address: ActiveValue::Set(dst_token_addr.as_slice().to_vec()),
+                src_amount: ActiveValue::Set(Some(BigDecimal::from_str(&amount.to_string())?)),
+                dst_amount: ActiveValue::Set(Some(BigDecimal::from_str(&amount.to_string())?)),
+                token_src_address: ActiveValue::Set(Some(src_token_addr.as_slice().to_vec())),
+                token_dst_address: ActiveValue::Set(Some(dst_token_addr.as_slice().to_vec())),
                 // If call failed, use fallback recipient
                 recipient_address: ActiveValue::Set(recipient_address.as_slice().to_vec().into()),
                 ..Default::default()

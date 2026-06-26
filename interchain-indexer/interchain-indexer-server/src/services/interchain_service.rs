@@ -249,22 +249,22 @@ impl InterchainServiceImpl {
             source_chain: Some(self.get_chain_info(transfer.token_src_chain_id).await),
             destination_chain: Some(self.get_chain_info(transfer.token_dst_chain_id).await),
             source_token: self
-                .get_token_info(
+                .get_token_info_opt(
                     transfer.token_src_chain_id,
                     transfer.token_src_address.clone(),
                 )
                 .await,
-            source_amount: Some(transfer.src_amount.to_plain_string()),
+            source_amount: transfer.src_amount.as_ref().map(|a| a.to_plain_string()),
             source_transaction_hash: hex_string_opt(message.src_tx_hash.clone()),
             sender: self.get_address_info_opt(transfer.sender_address.clone()),
             send_timestamp: db_datetime_to_string(message.init_timestamp),
             destination_token: self
-                .get_token_info(
+                .get_token_info_opt(
                     transfer.token_dst_chain_id,
                     transfer.token_dst_address.clone(),
                 )
                 .await,
-            destination_amount: Some(transfer.dst_amount.to_plain_string()),
+            destination_amount: transfer.dst_amount.as_ref().map(|a| a.to_plain_string()),
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash.clone()),
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: message.last_update_timestamp.map(db_datetime_to_string),
@@ -282,22 +282,22 @@ impl InterchainServiceImpl {
             source_chain: Some(self.get_chain_info(transfer.token_src_chain_id).await),
             destination_chain: Some(self.get_chain_info(transfer.token_dst_chain_id).await),
             source_token: self
-                .get_token_info(
+                .get_token_info_opt(
                     transfer.token_src_chain_id,
                     transfer.token_src_address.clone(),
                 )
                 .await,
-            source_amount: Some(transfer.src_amount.to_plain_string()),
+            source_amount: transfer.src_amount.as_ref().map(|a| a.to_plain_string()),
             source_transaction_hash: hex_string_opt(transfer.src_tx_hash.clone()),
             sender: self.get_address_info_opt(transfer.sender_address.clone()),
             send_timestamp: db_datetime_to_string(transfer.init_timestamp),
             destination_token: self
-                .get_token_info(
+                .get_token_info_opt(
                     transfer.token_dst_chain_id,
                     transfer.token_dst_address.clone(),
                 )
                 .await,
-            destination_amount: Some(transfer.dst_amount.to_plain_string()),
+            destination_amount: transfer.dst_amount.as_ref().map(|a| a.to_plain_string()),
             destination_transaction_hash: hex_string_opt(transfer.dst_tx_hash.clone()),
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: transfer.last_update_timestamp.map(db_datetime_to_string),
@@ -329,6 +329,19 @@ impl InterchainServiceImpl {
             .as_ref()
             .map(|id| to_hex_prefixed(id.as_slice()))
             .unwrap_or_else(|| format!("0x{:x}", joined.message_id))
+    }
+
+    /// Token info for an optional token address: `None` when the transfer side's
+    /// token is unknown (the corresponding bridge event has not been observed).
+    async fn get_token_info_opt(
+        &self,
+        chain_id: i64,
+        address: Option<Vec<u8>>,
+    ) -> Option<TokenInfo> {
+        match address {
+            Some(address) => self.get_token_info(chain_id, address).await,
+            None => None,
+        }
     }
 
     async fn get_token_info(&self, chain_id: i64, address: Vec<u8>) -> Option<TokenInfo> {
@@ -601,6 +614,7 @@ fn message_status_to_proto(status: &DbMessageStatus) -> MessageStatus {
         DbMessageStatus::Initiated => MessageStatus::MessageStatusInitiated,
         DbMessageStatus::Completed => MessageStatus::MessageStatusCompleted,
         DbMessageStatus::Failed => MessageStatus::MessageStatusFailed,
+        DbMessageStatus::ReadyToClaim => MessageStatus::MessageStatusReadyToClaim,
     }
 }
 

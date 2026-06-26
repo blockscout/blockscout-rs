@@ -16,6 +16,7 @@ An ADR captures the context, decision, and consequences of an architectural choi
 |-----|-------|--------|------|
 | [001](./001-message-buffer-tiered-storage.md) | Message Buffer Tiered Storage | Accepted | 2026-01 |
 | [002](./002-primary-chain-filtering.md) | Primary Chain Filtering for Unknown Chains | Proposed | 2026-02 |
+| [003](./003-amb-event-based-transfers.md) | AMB Transfers Reconstructed From Events; Nullable Transfer Sides | Accepted | 2026-06 |
 
 ## Creating a New ADR
 

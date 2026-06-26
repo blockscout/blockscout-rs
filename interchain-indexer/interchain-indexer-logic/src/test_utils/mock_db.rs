@@ -172,14 +172,18 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(1_000_000_000_000_000_000u64)), // 1 token with 18 decimals
-            dst_amount: Set(BigDecimal::from(1_000_000_000_000_000_000u64)), // 1 token with 18 decimals
-            token_src_address: Set(address!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
-                .as_slice()
-                .to_vec()),
-            token_dst_address: Set(address!("0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83")
-                .as_slice()
-                .to_vec()),
+            src_amount: Set(Some(BigDecimal::from(1_000_000_000_000_000_000u64))), // 1 token with 18 decimals
+            dst_amount: Set(Some(BigDecimal::from(1_000_000_000_000_000_000u64))), // 1 token with 18 decimals
+            token_src_address: Set(Some(
+                address!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            token_dst_address: Set(Some(
+                address!("0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83")
+                    .as_slice()
+                    .to_vec(),
+            )),
             sender_address: Set(Some(
                 address!("0x0000000000000000000000000000000000000001")
                     .as_slice()
@@ -202,14 +206,18 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
 
-            src_amount: Set(BigDecimal::from(5_000_000_000_000_000_000u64)), // 5 tokens with 18 decimals
-            dst_amount: Set(BigDecimal::from(5_000_000_000_000_000_000u64)), // 5 tokens with 18 decimals
-            token_src_address: Set(address!("0xdAC17F958D2ee523a2206206994597C13D831ec7")
-                .as_slice()
-                .to_vec()),
-            token_dst_address: Set(address!("0x4ECaBa5870353805a9F068101A40E0f32ed605C6")
-                .as_slice()
-                .to_vec()),
+            src_amount: Set(Some(BigDecimal::from(5_000_000_000_000_000_000u64))), // 5 tokens with 18 decimals
+            dst_amount: Set(Some(BigDecimal::from(5_000_000_000_000_000_000u64))), // 5 tokens with 18 decimals
+            token_src_address: Set(Some(
+                address!("0xdAC17F958D2ee523a2206206994597C13D831ec7")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            token_dst_address: Set(Some(
+                address!("0x4ECaBa5870353805a9F068101A40E0f32ed605C6")
+                    .as_slice()
+                    .to_vec(),
+            )),
             sender_address: Set(Some(
                 address!("0x9f8F72AA9304c8B593d555F12eF6589cC3A579A2")
                     .as_slice()
@@ -232,10 +240,10 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             token_src_chain_id: Set(100),
             token_dst_chain_id: Set(1),
 
-            src_amount: Set(BigDecimal::from(100_000_000_000_000_000u64)), // 0.1 native token with 18 decimals
-            dst_amount: Set(BigDecimal::from(100_000_000_000_000_000u64)), // 0.1 native token with 18 decimals
-            token_src_address: Set(vec![0; 20]), // Zero address for native token
-            token_dst_address: Set(vec![0; 20]), // Zero address for native token
+            src_amount: Set(Some(BigDecimal::from(100_000_000_000_000_000u64))), // 0.1 native token with 18 decimals
+            dst_amount: Set(Some(BigDecimal::from(100_000_000_000_000_000u64))), // 0.1 native token with 18 decimals
+            token_src_address: Set(Some(vec![0; 20])), // Zero address for native token
+            token_dst_address: Set(Some(vec![0; 20])), // Zero address for native token
             sender_address: Set(Some(
                 address!("0x6B175474E89094C44Da98b954EedeAC495271d0F")
                     .as_slice()
@@ -257,14 +265,18 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             r#type: Set(Some(TransferType::Erc721)),
             token_src_chain_id: Set(100),
             token_dst_chain_id: Set(1),
-            src_amount: Set(BigDecimal::from(1)), // 1 NFT
-            dst_amount: Set(BigDecimal::from(1)), // 1 NFT
-            token_src_address: Set(address!("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599")
-                .as_slice()
-                .to_vec()),
-            token_dst_address: Set(address!("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599")
-                .as_slice()
-                .to_vec()),
+            src_amount: Set(Some(BigDecimal::from(1))), // 1 NFT
+            dst_amount: Set(Some(BigDecimal::from(1))), // 1 NFT
+            token_src_address: Set(Some(
+                address!("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            token_dst_address: Set(Some(
+                address!("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599")
+                    .as_slice()
+                    .to_vec(),
+            )),
             sender_address: Set(Some(
                 address!("0xdAC17F958D2ee523a2206206994597C13D831ec7")
                     .as_slice()
@@ -286,14 +298,18 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             r#type: Set(Some(TransferType::Erc1155)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(10u32)), // 10 tokens
-            dst_amount: Set(BigDecimal::from(10u32)), // 10 tokens
-            token_src_address: Set(address!("0x86C80a8aa58e0A4fa09A69624c31Ab2a6CAD56b8")
-                .as_slice()
-                .to_vec()),
-            token_dst_address: Set(address!("0x7eB05EfCfE5B672A00f6F4eECeC4d1d75C8f5d2c")
-                .as_slice()
-                .to_vec()),
+            src_amount: Set(Some(BigDecimal::from(10u32))), // 10 tokens
+            dst_amount: Set(Some(BigDecimal::from(10u32))), // 10 tokens
+            token_src_address: Set(Some(
+                address!("0x86C80a8aa58e0A4fa09A69624c31Ab2a6CAD56b8")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            token_dst_address: Set(Some(
+                address!("0x7eB05EfCfE5B672A00f6F4eECeC4d1d75C8f5d2c")
+                    .as_slice()
+                    .to_vec(),
+            )),
             sender_address: Set(Some(
                 address!("0x9f8F72AA9304c8B593d555F12eF6589cC3A579A2")
                     .as_slice()

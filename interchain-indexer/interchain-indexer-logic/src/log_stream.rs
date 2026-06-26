@@ -5,13 +5,14 @@ use alloy::{
     providers::{DynProvider, Provider},
     rpc::types::{Filter, Log},
 };
-use anyhow::Result;
+use anyhow::{Error, Result};
 use bon::Builder;
 use futures::{StreamExt, stream};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use crate::log_stream::log_stream_builder::{
-    IsSet, IsUnset, SetEnableCatchup, SetEnableRealtime, State,
+use crate::{
+    InterchainDatabase,
+    log_stream::log_stream_builder::{IsSet, IsUnset, SetEnableCatchup, SetEnableRealtime, State},
 };
 
 #[derive(Builder)]
@@ -33,6 +34,10 @@ pub struct LogStream {
     batch_size: u64,
     bridge_id: Option<i32>,
     chain_id: Option<i64>,
+    /// Database handle used to persist the `catchup_max_cursor` checkpoint
+    /// when the catchup stream finishes scanning down to `genesis_block`.
+    /// Required for catchup completion to survive restarts.
+    db: Option<Arc<InterchainDatabase>>,
     #[builder(setters(vis = ""))]
     enable_catchup: bool,
     #[builder(setters(vis = ""))]
@@ -79,16 +84,25 @@ impl LogStream {
         let backward_cursor = self.catchup_cursor;
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
+        let db = self.db.clone();
+
+        tracing::info!(
+            bridge_id,
+            chain_id,
+            genesis_block,
+            backward_cursor,
+            "Starting catchup stream"
+        );
 
         async_stream::stream! {
             let mut to_block = backward_cursor;
             while to_block >= genesis_block {
                 let from_block = to_block.saturating_sub(batch_span).max(genesis_block);
-                tracing::debug!(bridge_id, chain_id, from_block, to_block, batch_size, "catchup logs batch");
+                tracing::info!(bridge_id, chain_id, from_block, to_block, size =? (to_block - from_block + 1), "scanning CATCHUP  logs");
 
                 match fetch_logs(provider.clone(), &filter, from_block, to_block).await {
                     Ok(logs) => {
-                        tracing::info!(
+                        tracing::debug!(
                             bridge_id,
                             chain_id,
                             count = logs.len(),
@@ -117,7 +131,11 @@ impl LogStream {
                         continue;
                     }
                 }
+
+                tokio::time::sleep(poll_interval).await;
             }
+
+            persist_catchup_complete(db.as_deref(), bridge_id, chain_id, genesis_block).await;
 
             tracing::info!(bridge_id, chain_id, genesis_block, "catchup complete, reached genesis block");
         }
@@ -139,6 +157,13 @@ impl LogStream {
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
 
+        tracing::info!(
+            bridge_id,
+            chain_id,
+            realtime_cursor,
+            "Starting realtime stream"
+        );
+
         async_stream::stream! {
             let mut from_block = realtime_cursor;
             loop {
@@ -156,31 +181,43 @@ impl LogStream {
                     continue;
                 };
 
+                tracing::info!(bridge_id, chain_id, from_block, to_block, size =? (to_block - from_block + 1), "scanning REALTIME logs");
                 match fetch_logs(provider.clone(), &filter, from_block, to_block).await {
                     Ok(logs) => {
                         if !logs.is_empty() {
-                            tracing::info!(
+                            tracing::debug!(
                                 bridge_id,
                                 chain_id,
                                 count = logs.len(),
                                 from_block,
                                 to_block,
                                 batch_size,
-                                "found realtime logs"
+                                "fetched realtime logs"
                             );
                             yield logs;
                         }
                         from_block = to_block + 1;
                     }
                     Err(e) => {
-                        tracing::error!(
-                            err =? e,
-                            bridge_id,
-                            chain_id,
-                            from_block,
-                            to_block,
-                            "failed to fetch realtime logs"
-                        );
+                        if is_get_logs_error_silent(&e) {
+                            tracing::debug!(
+                                err =? e,
+                                bridge_id,
+                                chain_id,
+                                from_block,
+                                to_block,
+                                "realtime logs are not available at the reported latest block yet, retrying"
+                            );
+                        } else {
+                            tracing::error!(
+                                err =? e,
+                                bridge_id,
+                                chain_id,
+                                from_block,
+                                to_block,
+                                "failed to fetch realtime logs"
+                            );
+                        }
                         tokio::time::sleep(poll_interval).await;
                         continue;
                     }
@@ -235,4 +272,80 @@ async fn fetch_logs(
     let filter = filter.clone().from_block(from_block).to_block(to_block);
     let logs = provider.get_logs(&filter).await?;
     Ok(logs)
+}
+
+fn is_get_logs_error_silent(err: &Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .to_string()
+            .contains("from block is greater than latest block")
+    })
+}
+
+/// Persist that catchup has scanned down to `genesis_block`. Without this,
+/// `catchup_max_cursor` would remain at the last observed message and a
+/// restart would re-walk the empty range below it on every boot.
+async fn persist_catchup_complete(
+    db: Option<&InterchainDatabase>,
+    bridge_id: Option<i32>,
+    chain_id: Option<i64>,
+    genesis_block: u64,
+) {
+    let (Some(db), Some(bridge_id), Some(chain_id)) = (db, bridge_id, chain_id) else {
+        tracing::warn!(
+            bridge_id,
+            chain_id,
+            "skipping catchup checkpoint persistence: db/bridge_id/chain_id missing"
+        );
+        return;
+    };
+
+    if let Err(err) = db
+        .mark_catchup_complete(bridge_id as u64, chain_id as u64, genesis_block)
+        .await
+    {
+        tracing::error!(
+            err = ?err,
+            bridge_id,
+            chain_id,
+            genesis_block,
+            "failed to persist catchup completion checkpoint"
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Context;
+
+    use super::*;
+
+    #[test]
+    fn recognizes_realtime_tip_ahead_error() {
+        let err = anyhow::anyhow!(
+            "server returned an error response: error code -32602: invalid params, data: \"from block is greater than latest block\""
+        );
+
+        assert!(is_get_logs_error_silent(&err));
+    }
+
+    #[test]
+    fn recognizes_realtime_tip_ahead_error_in_source_chain() {
+        let err = Err::<(), _>(anyhow::anyhow!(
+            "server returned an error response: error code -32602: invalid params, data: \"from block is greater than latest block\""
+        ))
+        .context("failed to fetch logs")
+        .unwrap_err();
+
+        assert!(is_get_logs_error_silent(&err));
+    }
+
+    #[test]
+    fn ignores_other_realtime_errors() {
+        let err = anyhow::anyhow!(
+            "server returned an error response: error code -32005: query returned more than 10000 results"
+        );
+
+        assert!(!is_get_logs_error_silent(&err));
+    }
 }
