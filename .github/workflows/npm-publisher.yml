@@ -8,9 +8,18 @@ on:
                 type: string
                 required: true
             project_name:
-                description: Project name
-                type: string
+                description: 'Service whose type package to publish'
+                type: choice
                 required: true
+                options:
+                  - blockscout-ens
+                  - interchain-indexer
+                  - multichain-aggregator
+                  - multichain-search
+                  - stats
+                  - tac-operation-lifecycle
+                  - user-ops-indexer
+                  - visualizer
     workflow_call:
         inputs:
             version:
