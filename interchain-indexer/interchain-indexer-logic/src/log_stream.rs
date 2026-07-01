@@ -82,6 +82,7 @@ impl LogStream {
         let batch_span = batch_size.saturating_sub(1);
         let genesis_block = self.genesis_block;
         let backward_cursor = self.catchup_cursor;
+        let realtime_cursor = self.realtime_cursor;
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
         let db = self.db.clone();
@@ -96,6 +97,7 @@ impl LogStream {
 
         async_stream::stream! {
             let mut to_block = backward_cursor;
+            let mut observed_logs = false;
             while to_block >= genesis_block {
                 let from_block = to_block.saturating_sub(batch_span).max(genesis_block);
                 tracing::info!(bridge_id, chain_id, from_block, to_block, size =? (to_block - from_block + 1), "scanning CATCHUP  logs");
@@ -111,6 +113,7 @@ impl LogStream {
                             "fetched catchup logs"
                         );
                         if !logs.is_empty() {
+                            observed_logs = true;
                             yield logs;
                         }
                         if from_block == genesis_block {
@@ -135,7 +138,21 @@ impl LogStream {
                 tokio::time::sleep(poll_interval).await;
             }
 
-            persist_catchup_complete(db.as_deref(), bridge_id, chain_id, genesis_block).await;
+            let realtime_cursor_on_insert = safe_catchup_completion_realtime_cursor(
+                genesis_block,
+                backward_cursor,
+                realtime_cursor,
+                observed_logs,
+            );
+
+            persist_catchup_complete(
+                db.as_deref(),
+                bridge_id,
+                chain_id,
+                genesis_block,
+                realtime_cursor_on_insert,
+            )
+            .await;
 
             tracing::info!(bridge_id, chain_id, genesis_block, "catchup complete, reached genesis block");
         }
@@ -290,6 +307,7 @@ async fn persist_catchup_complete(
     bridge_id: Option<i32>,
     chain_id: Option<i64>,
     genesis_block: u64,
+    realtime_cursor_on_insert: Option<u64>,
 ) {
     let (Some(db), Some(bridge_id), Some(chain_id)) = (db, bridge_id, chain_id) else {
         tracing::warn!(
@@ -301,7 +319,12 @@ async fn persist_catchup_complete(
     };
 
     if let Err(err) = db
-        .mark_catchup_complete(bridge_id as u64, chain_id as u64, genesis_block)
+        .mark_catchup_complete(
+            bridge_id as u64,
+            chain_id as u64,
+            genesis_block,
+            realtime_cursor_on_insert,
+        )
         .await
     {
         tracing::error!(
@@ -309,9 +332,27 @@ async fn persist_catchup_complete(
             bridge_id,
             chain_id,
             genesis_block,
+            realtime_cursor_on_insert,
             "failed to persist catchup completion checkpoint"
         );
     }
+}
+
+fn safe_catchup_completion_realtime_cursor(
+    genesis_block: u64,
+    catchup_cursor: u64,
+    realtime_cursor: u64,
+    observed_catchup_logs: bool,
+) -> Option<u64> {
+    if observed_catchup_logs || realtime_cursor < genesis_block {
+        return None;
+    }
+
+    // `realtime_cursor` is an inclusive realtime start block, not an
+    // already-processed cursor. It is safe to persist on insert only when the
+    // completed catchup pass covered every configured block below it and found
+    // no logs; otherwise a restart should rescan instead of skipping forward.
+    (catchup_cursor.saturating_add(1) >= realtime_cursor).then_some(realtime_cursor)
 }
 
 #[cfg(test)]
@@ -347,5 +388,33 @@ mod tests {
         );
 
         assert!(!is_get_logs_error_silent(&err));
+    }
+
+    #[test]
+    fn safe_catchup_completion_realtime_cursor_allows_empty_contiguous_range() {
+        let cursor = safe_catchup_completion_realtime_cursor(10, 99, 100, false);
+
+        assert_eq!(cursor, Some(100));
+    }
+
+    #[test]
+    fn safe_catchup_completion_realtime_cursor_rejects_observed_logs() {
+        let cursor = safe_catchup_completion_realtime_cursor(10, 99, 100, true);
+
+        assert_eq!(cursor, None);
+    }
+
+    #[test]
+    fn safe_catchup_completion_realtime_cursor_rejects_gap_before_realtime() {
+        let cursor = safe_catchup_completion_realtime_cursor(10, 90, 100, false);
+
+        assert_eq!(cursor, None);
+    }
+
+    #[test]
+    fn safe_catchup_completion_realtime_cursor_rejects_invalid_insert_state() {
+        let cursor = safe_catchup_completion_realtime_cursor(100, 99, 50, false);
+
+        assert_eq!(cursor, None);
     }
 }

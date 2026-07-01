@@ -2035,39 +2035,86 @@ impl InterchainDatabase {
     /// machinery when there are no buffer items between the last observed
     /// message and the genesis block — restart would re-walk that empty range.
     ///
-    /// Only updates an existing row. If no checkpoint row exists yet (no logs
-    /// observed and no maintenance run has created the row), this is a no-op.
+    /// When `realtime_cursor_on_insert` is provided, this uses upsert semantics
+    /// and creates a missing checkpoint row with the supplied realtime cursor.
+    /// Callers should only provide it after proving the catchup range before
+    /// that realtime cursor contained no logs; otherwise creating a new row
+    /// could hide unprocessed events after restart.
     pub async fn mark_catchup_complete(
         &self,
         bridge_id: u64,
         chain_id: u64,
         genesis_block: u64,
+        realtime_cursor_on_insert: Option<u64>,
     ) -> anyhow::Result<()> {
         let genesis_block_i64 = genesis_block as i64;
-        indexer_checkpoints::Entity::update_many()
-            .col_expr(
-                indexer_checkpoints::Column::CatchupMaxCursor,
-                Expr::cust(format!(
-                    "LEAST(indexer_checkpoints.catchup_max_cursor, {genesis_block_i64})"
-                )),
+
+        let query_result = if let Some(realtime_cursor) = realtime_cursor_on_insert {
+            indexer_checkpoints::Entity::insert(indexer_checkpoints::ActiveModel {
+                bridge_id: ActiveValue::Set(bridge_id as i32),
+                chain_id: ActiveValue::Set(chain_id as i64),
+                catchup_min_cursor: ActiveValue::Set(0),
+                catchup_max_cursor: ActiveValue::Set(genesis_block_i64),
+                finality_cursor: ActiveValue::Set(0),
+                realtime_cursor: ActiveValue::Set(realtime_cursor as i64),
+                created_at: ActiveValue::NotSet,
+                updated_at: ActiveValue::NotSet,
+            })
+            .on_conflict(
+                OnConflict::columns([
+                    indexer_checkpoints::Column::BridgeId,
+                    indexer_checkpoints::Column::ChainId,
+                ])
+                .value(
+                    indexer_checkpoints::Column::CatchupMaxCursor,
+                    Expr::cust(
+                        "LEAST(indexer_checkpoints.catchup_max_cursor, EXCLUDED.catchup_max_cursor)",
+                    ),
+                )
+                .value(
+                    indexer_checkpoints::Column::RealtimeCursor,
+                    Expr::cust(
+                        "GREATEST(indexer_checkpoints.realtime_cursor, EXCLUDED.realtime_cursor)",
+                    ),
+                )
+                .value(
+                    indexer_checkpoints::Column::UpdatedAt,
+                    Expr::current_timestamp(),
+                )
+                .to_owned(),
             )
-            .col_expr(
-                indexer_checkpoints::Column::UpdatedAt,
-                Expr::current_timestamp().into(),
-            )
-            .filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id as i32))
-            .filter(indexer_checkpoints::Column::ChainId.eq(chain_id as i64))
             .exec(self.db.as_ref())
             .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    err = ?e,
-                    bridge_id,
-                    chain_id,
-                    genesis_block,
-                    "failed to mark catchup complete in database"
+            .map(|_| ())
+        } else {
+            indexer_checkpoints::Entity::update_many()
+                .col_expr(
+                    indexer_checkpoints::Column::CatchupMaxCursor,
+                    Expr::cust(format!(
+                        "LEAST(indexer_checkpoints.catchup_max_cursor, {genesis_block_i64})"
+                    )),
                 )
-            })?;
+                .col_expr(
+                    indexer_checkpoints::Column::UpdatedAt,
+                    Expr::current_timestamp().into(),
+                )
+                .filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id as i32))
+                .filter(indexer_checkpoints::Column::ChainId.eq(chain_id as i64))
+                .exec(self.db.as_ref())
+                .await
+                .map(|_| ())
+        };
+
+        query_result.inspect_err(|e| {
+            tracing::error!(
+                err = ?e,
+                bridge_id,
+                chain_id,
+                genesis_block,
+                realtime_cursor_on_insert,
+                "failed to mark catchup complete in database"
+            )
+        })?;
 
         Ok(())
     }
@@ -2604,7 +2651,7 @@ fn build_pagination_from_transfers(
 mod tests {
     use chrono::{NaiveDate, Utc};
     use interchain_indexer_entity::{
-        chains, crosschain_messages, crosschain_transfers,
+        chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
         sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
         stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages,
         stats_messages_days, tokens,
@@ -2698,6 +2745,64 @@ mod tests {
         let stored_chain = chains.iter().find(|chain| chain.id == 43114).unwrap();
         assert_eq!(stored_chain.name, ava_chain.name.unwrap());
         assert_eq!(stored_chain.icon, ava_chain.icon.unwrap());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn mark_catchup_complete_upserts_empty_range_checkpoint() {
+        let db = init_db("mark_catchup_complete_upserts_empty_range_checkpoint").await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .mark_catchup_complete(1, 1, 10, Some(100))
+            .await
+            .unwrap();
+
+        let inserted = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(inserted.catchup_max_cursor, 10);
+        assert_eq!(inserted.realtime_cursor, 100);
+
+        interchain_db
+            .mark_catchup_complete(1, 1, 20, Some(90))
+            .await
+            .unwrap();
+
+        let unchanged = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(unchanged.catchup_max_cursor, 10);
+        assert_eq!(unchanged.realtime_cursor, 100);
+
+        interchain_db
+            .mark_catchup_complete(1, 1, 5, Some(120))
+            .await
+            .unwrap();
+
+        let updated = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(updated.catchup_max_cursor, 5);
+        assert_eq!(updated.realtime_cursor, 120);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn mark_catchup_complete_without_safe_realtime_cursor_does_not_insert() {
+        let db = init_db("mark_catchup_complete_without_safe_realtime_cursor").await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .mark_catchup_complete(1, 100, 10, None)
+            .await
+            .unwrap();
+
+        let checkpoints_count = indexer_checkpoints::Entity::find()
+            .filter(indexer_checkpoints::Column::BridgeId.eq(1))
+            .filter(indexer_checkpoints::Column::ChainId.eq(100))
+            .count(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(checkpoints_count, 0);
     }
 
     #[tokio::test]
