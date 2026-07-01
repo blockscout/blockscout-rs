@@ -249,6 +249,7 @@ async fn handle_source_request(
     let application_calldata = encoded_data[header.payload_offset..].to_vec();
     let key = key_from_message_id(&message_id, ctx.bridge_id)?;
     let message_hash = keccak256(&encoded_data);
+    let source_identity = (header.sender, header.executor);
     ctx.message_hash_lookup.insert(message_hash, key);
 
     tracing::trace!(
@@ -280,12 +281,21 @@ async fn handle_source_request(
         destination_chain_id,
     };
 
+    let mut displaced_by_existing_destination = false;
     alter_amb(
         ctx,
         key,
         ctx.chain_id as u64,
         annotated.block_number as u64,
         |message| {
+            displaced_by_existing_destination = message
+                .destination_execution
+                .as_ref()
+                .map(|destination| {
+                    let destination = destination.event();
+                    (destination.event.sender, destination.event.executor) != source_identity
+                })
+                .unwrap_or(false);
             message.direction = Some(direction);
             message.source_request = Some(match direction {
                 Direction::ForeignToHome => SourceRequest::Affirmation(annotated),
@@ -304,7 +314,35 @@ async fn handle_source_request(
         .await?;
     }
 
-    drain_pending_message_hash_events(ctx, message_hash, key).await
+    if displaced_by_existing_destination
+        && ctx
+            .message_hash_lookup
+            .remove_if(&message_hash, |_, canonical_key| *canonical_key == key)
+            .is_some()
+    {
+        tracing::warn!(
+            bridge_id = ctx.bridge_id,
+            chain_id = ctx.chain_id,
+            tx_hash = ?log.transaction_hash,
+            message_id = %message_id,
+            message_hash = %message_hash,
+            "dropped displaced source messageHash from lookup after AMB messageId collision"
+        );
+    }
+
+    if is_canonical_message_hash_lookup(ctx.message_hash_lookup, message_hash, key) {
+        drain_pending_message_hash_events(ctx, message_hash, key).await
+    } else {
+        tracing::debug!(
+            bridge_id = ctx.bridge_id,
+            chain_id = ctx.chain_id,
+            tx_hash = ?log.transaction_hash,
+            message_id = %message_id,
+            message_hash = %message_hash,
+            "skipped queued AMB message-hash events for non-canonical source request"
+        );
+        Ok(())
+    }
 }
 
 /// Scan the source transaction's receipt for the mediator's
@@ -560,6 +598,16 @@ async fn drain_pending_message_hash_events(
     Ok(())
 }
 
+fn is_canonical_message_hash_lookup(
+    message_hash_lookup: &DashMap<B256, Key>,
+    message_hash: B256,
+    key: Key,
+) -> bool {
+    message_hash_lookup
+        .get(&message_hash)
+        .is_some_and(|canonical_key| *canonical_key == key)
+}
+
 async fn apply_validator_confirmation(
     ctx: &EventContext<'_>,
     key: Key,
@@ -792,9 +840,11 @@ mod tests {
         primitives::{Address, B256, Bytes, LogData, U256, address, b256},
         rpc::types::Log,
     };
+    use dashmap::DashMap;
 
-    use super::find_tokens_bridged;
+    use super::{find_tokens_bridged, is_canonical_message_hash_lookup};
     use crate::indexer::amb::abi::{AbiRegistry, ContractAbi, ContractKind};
+    use crate::message_buffer::Key;
 
     fn tokens_bridged_event() -> Event {
         serde_json::from_str(
@@ -894,5 +944,30 @@ mod tests {
         let other_message_id =
             b256!("0000000000000000000000000000000000000000000000000000000000000001");
         assert!(find_tokens_bridged(&registry, chain_id, &logs, &other_message_id).is_none());
+    }
+
+    #[test]
+    fn is_canonical_message_hash_lookup_requires_current_key_match() {
+        let lookup = DashMap::new();
+        let message_hash =
+            b256!("1111111111111111111111111111111111111111111111111111111111111111");
+        let canonical_key = Key::new(10, 1);
+        let displaced_key = Key::new(11, 1);
+
+        assert!(
+            !is_canonical_message_hash_lookup(&lookup, message_hash, canonical_key),
+            "missing lookup must not be treated as canonical",
+        );
+
+        lookup.insert(message_hash, canonical_key);
+        assert!(is_canonical_message_hash_lookup(
+            &lookup,
+            message_hash,
+            canonical_key,
+        ));
+        assert!(
+            !is_canonical_message_hash_lookup(&lookup, message_hash, displaced_key),
+            "a lookup for another key must not drain queued hash events",
+        );
     }
 }
