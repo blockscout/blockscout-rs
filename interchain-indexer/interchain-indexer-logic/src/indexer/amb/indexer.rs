@@ -241,7 +241,14 @@ impl CrosschainIndexer for AmbIndexer {
 
         *self.state.write() = CrosschainIndexerState::Running;
 
-        let buffer_handle = self.buffer.clone().start().await?;
+        let buffer_handle = match self.buffer.clone().start().await {
+            Ok(handle) => handle,
+            Err(err) => {
+                self.is_running.store(false, Ordering::Release);
+                *self.state.write() = CrosschainIndexerState::Idle;
+                return Err(err);
+            }
+        };
         *self.buffer_handle.write() = Some(buffer_handle);
 
         let run_ctx = Arc::new(self.run_context());
