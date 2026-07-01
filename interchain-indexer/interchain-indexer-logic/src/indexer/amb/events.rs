@@ -741,11 +741,11 @@ async fn handle_destination_execution(
             diag_pushed_as_displaced = true;
         } else {
             message.destination_execution = Some(new_execution);
+            if let Some(destination_transfer) = destination_transfer {
+                message.destination_transfer = Some(destination_transfer);
+            }
         }
 
-        if let Some(destination_transfer) = destination_transfer {
-            message.destination_transfer = Some(destination_transfer);
-        }
         Ok(())
     })
     .await?;
@@ -843,8 +843,10 @@ mod tests {
     use dashmap::DashMap;
 
     use super::{find_tokens_bridged, is_canonical_message_hash_lookup};
-    use crate::indexer::amb::abi::{AbiRegistry, ContractAbi, ContractKind};
-    use crate::message_buffer::Key;
+    use crate::{
+        indexer::amb::abi::{AbiRegistry, ContractAbi, ContractKind},
+        message_buffer::Key,
+    };
 
     fn tokens_bridged_event() -> Event {
         serde_json::from_str(
