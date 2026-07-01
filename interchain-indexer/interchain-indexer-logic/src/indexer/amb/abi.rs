@@ -135,6 +135,11 @@ impl AbiRegistry {
         abi_value: Option<&Value>,
         required_events: &[&str],
     ) -> Result<()> {
+        ensure!(
+            !self.contracts.contains_key(&(chain_id, address)),
+            "duplicate AMB contract ABI for chain_id={chain_id} address={address}"
+        );
+
         let abi_value = abi_value.with_context(|| {
             format!("missing ABI for AMB contract row chain_id={chain_id} address={address}")
         })?;
@@ -324,5 +329,44 @@ mod tests {
             amb_side_for_abi(10200, address, Some(&home_abi), grammar).expect("home side"),
             AmbSide::Home
         );
+    }
+
+    #[test]
+    fn insert_contract_rejects_duplicate_chain_address() {
+        let address = Address::from([2; 20]);
+        let first_abi = serde_json::json!([
+            {"type":"event","name":"FirstEvent","inputs":[],"anonymous":false}
+        ]);
+        let duplicate_abi = serde_json::json!([
+            {"type":"event","name":"DuplicateEvent","inputs":[],"anonymous":false}
+        ]);
+        let mut registry = AbiRegistry::default();
+
+        registry
+            .insert_contract(
+                1,
+                address,
+                ContractKind::OmnibridgeMediator,
+                Some(&first_abi),
+                &["FirstEvent"],
+            )
+            .expect("first contract inserted");
+
+        let err = registry
+            .insert_contract(
+                1,
+                address,
+                ContractKind::OmnibridgeMediator,
+                Some(&duplicate_abi),
+                &["DuplicateEvent"],
+            )
+            .expect_err("duplicate contract rejected");
+
+        assert!(
+            err.to_string()
+                .contains("duplicate AMB contract ABI for chain_id=1")
+        );
+        assert_eq!(registry.contracts.len(), 1);
+        assert_eq!(registry.events_by_chain_topic.len(), 1);
     }
 }
