@@ -110,6 +110,10 @@ pub use eip_7702_auths_growth::{
     Eip7702AuthsGrowth, Eip7702AuthsGrowthMonthly, Eip7702AuthsGrowthWeekly,
     Eip7702AuthsGrowthYearly,
 };
+pub use filecoin_chain_fees_growth::{
+    FilecoinChainFeesGrowth, FilecoinChainFeesGrowthMonthly, FilecoinChainFeesGrowthWeekly,
+    FilecoinChainFeesGrowthYearly,
+};
 pub use filecoin_new_chain_fees::{
     FilecoinNewChainFees, FilecoinNewChainFeesMonthly, FilecoinNewChainFeesWeekly,
     FilecoinNewChainFeesYearly,
