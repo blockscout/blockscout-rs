@@ -110,6 +110,10 @@ pub use eip_7702_auths_growth::{
     Eip7702AuthsGrowth, Eip7702AuthsGrowthMonthly, Eip7702AuthsGrowthWeekly,
     Eip7702AuthsGrowthYearly,
 };
+pub use filecoin_new_chain_fees::{
+    FilecoinNewChainFees, FilecoinNewChainFeesMonthly, FilecoinNewChainFeesWeekly,
+    FilecoinNewChainFeesYearly,
+};
 pub use gas_used_growth::{
     GasUsedGrowth, GasUsedGrowthMonthly, GasUsedGrowthWeekly, GasUsedGrowthYearly,
 };
@@ -172,6 +176,7 @@ pub use verified_contracts_growth::{
 
 pub(crate) use burn_actor_balance::{BurnActorBalance, BurnActorBalanceFloat};
 pub(crate) use fevm_fee_tips::{FevmFeeTips, FevmFeeTipsFloat};
+pub(crate) use filecoin_new_chain_fees::FilecoinNewChainFeesFloat;
 pub(crate) use native_coin_holders_growth::NativeCoinHoldersGrowthInt;
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub(crate) use new_blocks::{NewBlocksInt, NewBlocksMonthlyInt, NewBlocksStatement};
