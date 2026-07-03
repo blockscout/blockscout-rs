@@ -4,3 +4,4 @@
 //! `burn + miner tips`).
 
 pub mod burn_actor_balance;
+pub mod fevm_fee_tips;

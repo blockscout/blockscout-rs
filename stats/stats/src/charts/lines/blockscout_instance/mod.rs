@@ -171,6 +171,7 @@ pub use verified_contracts_growth::{
 };
 
 pub(crate) use burn_actor_balance::{BurnActorBalance, BurnActorBalanceFloat};
+pub(crate) use fevm_fee_tips::{FevmFeeTips, FevmFeeTipsFloat};
 pub(crate) use native_coin_holders_growth::NativeCoinHoldersGrowthInt;
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub(crate) use new_blocks::{NewBlocksInt, NewBlocksMonthlyInt, NewBlocksStatement};
