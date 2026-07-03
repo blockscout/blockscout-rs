@@ -20,9 +20,10 @@ use stats::{
     indexing_status::BlockscoutIndexingStatus,
     lines::{
         ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
-        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
-        NewZetachainCrossChainTxns, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow,
-        OpStackOperationalTxnsGrowth, ZetachainCrossChainTxnsGrowth,
+        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, FilecoinChainFeesGrowth,
+        FilecoinNewChainFees, NewEip7702Auths, NewZetachainCrossChainTxns,
+        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
+        ZetachainCrossChainTxnsGrowth,
     },
 };
 use std::{
@@ -83,6 +84,8 @@ pub struct Settings {
     pub enable_all_op_stack: bool,
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
+    /// Enable filecoin-specific charts
+    pub enable_all_filecoin: bool,
     /// Filter by chain ids for multichain mode.
     /// TODO: recalculate statistics data when multichain_filter has been changed
     ///       most likely it's need to implement in conjunction with 3D charts
@@ -205,6 +208,7 @@ impl Default for Settings {
             enable_all_arbitrum: false,
             enable_all_op_stack: false,
             enable_all_eip_7702: false,
+            enable_all_filecoin: false,
             multichain_filter: Default::default(),
             interchain_primary_id: Default::default(),
             create_database: Default::default(),
@@ -334,6 +338,26 @@ pub fn handle_enable_all_eip_7702(
             ],
             charts,
             "eip-7702",
+        )
+    }
+}
+
+/// Enables only the two public charts (with all their resolutions).
+/// The intermediate charts (`burnActorBalance`, `fevmFeeTips`) stay
+/// disabled — hidden from the API — and are updated transitively as
+/// dependencies of the public charts.
+pub fn handle_enable_all_filecoin(
+    enable_all: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all {
+        enable_charts(
+            &[
+                FilecoinNewChainFees::key().name(),
+                FilecoinChainFeesGrowth::key().name(),
+            ],
+            charts,
+            "filecoin",
         )
     }
 }

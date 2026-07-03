@@ -13,7 +13,8 @@ use crate::{
     settings::{
         Mode, Settings, apply_interchain_mode_settings, apply_multichain_mode_settings,
         apply_zetachain_cctx_mode_settings, handle_disable_internal_transactions,
-        handle_enable_all_arbitrum, handle_enable_all_eip_7702, handle_enable_all_op_stack,
+        handle_enable_all_arbitrum, handle_enable_all_eip_7702, handle_enable_all_filecoin,
+        handle_enable_all_op_stack,
     },
     update_service::{UpdateService, UpdateServiceConfig},
 };
@@ -52,6 +53,7 @@ pub async fn stats(
     handle_enable_all_arbitrum(settings.enable_all_arbitrum, &mut charts_config);
     handle_enable_all_op_stack(settings.enable_all_op_stack, &mut charts_config);
     handle_enable_all_eip_7702(settings.enable_all_eip_7702, &mut charts_config);
+    handle_enable_all_filecoin(settings.enable_all_filecoin, &mut charts_config);
     handle_disable_internal_transactions(
         settings.disable_internal_transactions,
         &mut settings.conditional_start,
