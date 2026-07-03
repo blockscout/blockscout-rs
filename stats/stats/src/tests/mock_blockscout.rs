@@ -669,7 +669,7 @@ fn mock_failed_transaction(
     }
 }
 
-fn mock_address_coin_balance_daily(
+pub(crate) fn mock_address_coin_balance_daily(
     addr: Vec<u8>,
     day: NaiveDate,
     value: Option<i128>,
