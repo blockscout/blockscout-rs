@@ -376,6 +376,8 @@ impl RuntimeSetup {
             Arc::new(VerifiedContractsPageGroup),
             // zetachain cross chain txns
             Arc::new(ZetachainCrossChainTxnsGroup),
+            // filecoin chain fees
+            Arc::new(FilecoinChainFeesGroup),
             // multichain: singletons
             Arc::new(TotalInteropMessagesGroup),
             Arc::new(TotalInteropTransfersGroup),
