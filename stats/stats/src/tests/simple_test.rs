@@ -681,6 +681,13 @@ async fn prepare_chart_test_inner<C: DataSource + ChartProperties>(
 
 /// Both for counters and line charts
 ///
+/// `fill_filecoin` applies the Filecoin fixture layer *on top of* the shared
+/// fixture data. It is deliberately a plain bool and not a [`Mode`] variant:
+/// `Mode` is a production setting, while this is a test-only data layer.
+/// Should a second additive fixture layer ever appear, replace the bool with
+/// a set/struct of flags (not an enum — layers stack and may combine) set
+/// once here.
+///
 /// returns `(init_time, db, indexer, zetachain_cctx)`
 async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
     test_name: &str,

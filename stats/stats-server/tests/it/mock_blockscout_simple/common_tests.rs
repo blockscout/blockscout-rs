@@ -150,9 +150,14 @@ pub async fn test_lines_ok(
     // should not return charts that are disabled or waiting for indexing
     assert_eq!(enabled_resolutions, HashMap::new());
 
-    // filecoin charts (both public and intermediate) are off by default
-    // (`enable_all_filecoin = false`); their positive counterparts live in
-    // `stats_filecoin_enabled.rs`
+    assert_filecoin_charts_disabled_by_default(&base).await;
+}
+
+/// Filecoin charts (both public and intermediate) are off by default
+/// (`enable_all_filecoin = false`), so every scenario booting with default
+/// settings must not serve them; their positive counterparts live in
+/// `stats_filecoin_enabled.rs`.
+async fn assert_filecoin_charts_disabled_by_default(base: &Url) {
     for line_name in [
         "filecoinNewChainFees",
         "filecoinChainFeesGrowth",

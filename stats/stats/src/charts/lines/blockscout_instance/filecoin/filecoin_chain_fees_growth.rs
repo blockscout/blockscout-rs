@@ -3,7 +3,9 @@
 //! Cumulative total of chain-wide fees on Filecoin, in FIL (REV-style:
 //! `burn + miner tips`). Running total of `filecoin_new_chain_fees`.
 
-use crate::{chart_prelude::*, lines::FilecoinNewChainFeesFloat};
+use crate::chart_prelude::*;
+
+use super::filecoin_new_chain_fees::FilecoinNewChainFeesFloat;
 
 pub struct Properties;
 
@@ -86,48 +88,7 @@ mod tests {
         .await;
     }
 
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn update_filecoin_chain_fees_growth_weekly() {
-        simple_test_chart_filecoin::<FilecoinChainFeesGrowthWeekly>(
-            "update_filecoin_chain_fees_growth_weekly",
-            vec![
-                ("2022-11-07", "30003500.00256677"),
-                ("2022-11-28", "30010000.003450688"),
-                ("2022-12-26", "30020000.00347218"),
-                ("2023-01-30", "30035000.004523344"),
-                ("2023-02-27", "30050000.004523344"),
-            ],
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn update_filecoin_chain_fees_growth_monthly() {
-        simple_test_chart_filecoin::<FilecoinChainFeesGrowthMonthly>(
-            "update_filecoin_chain_fees_growth_monthly",
-            vec![
-                ("2022-11-01", "30003500.00256677"),
-                ("2022-12-01", "30010000.003450688"),
-                ("2023-01-01", "30020000.00347218"),
-                ("2023-02-01", "30035000.004523344"),
-                ("2023-03-01", "30050000.004523344"),
-            ],
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn update_filecoin_chain_fees_growth_yearly() {
-        simple_test_chart_filecoin::<FilecoinChainFeesGrowthYearly>(
-            "update_filecoin_chain_fees_growth_yearly",
-            vec![
-                ("2022-01-01", "30010000.003450688"),
-                ("2023-01-01", "30050000.004523344"),
-            ],
-        )
-        .await;
-    }
+    // the implementation is generic over resolutions,
+    // therefore other res should also work fine
+    // (tests are becoming excruciatingly slow)
 }

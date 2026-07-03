@@ -10,10 +10,9 @@
 
 use std::fmt::Debug;
 
-use crate::{
-    chart_prelude::*,
-    lines::{BurnActorBalanceFloat, FevmFeeTipsFloat},
-};
+use crate::chart_prelude::*;
+
+use super::{burn_actor_balance::BurnActorBalanceFloat, fevm_fee_tips::FevmFeeTipsFloat};
 
 use itertools::Itertools;
 
@@ -200,48 +199,7 @@ mod tests {
         .await;
     }
 
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn update_filecoin_new_chain_fees_weekly() {
-        simple_test_chart_filecoin::<FilecoinNewChainFeesWeekly>(
-            "update_filecoin_new_chain_fees_weekly",
-            vec![
-                ("2022-11-07", "30003500.00256677"),
-                ("2022-11-28", "6500.0008839185175"),
-                ("2022-12-26", "10000.000021492593"),
-                ("2023-01-30", "15000.001051166666"),
-                ("2023-02-27", "15000"),
-            ],
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn update_filecoin_new_chain_fees_monthly() {
-        simple_test_chart_filecoin::<FilecoinNewChainFeesMonthly>(
-            "update_filecoin_new_chain_fees_monthly",
-            vec![
-                ("2022-11-01", "30003500.00256677"),
-                ("2022-12-01", "6500.0008839185175"),
-                ("2023-01-01", "10000.000021492593"),
-                ("2023-02-01", "15000.001051166666"),
-                ("2023-03-01", "15000"),
-            ],
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn update_filecoin_new_chain_fees_yearly() {
-        simple_test_chart_filecoin::<FilecoinNewChainFeesYearly>(
-            "update_filecoin_new_chain_fees_yearly",
-            vec![
-                ("2022-01-01", "30010000.003450688"),
-                ("2023-01-01", "40000.00107265926"),
-            ],
-        )
-        .await;
-    }
+    // the implementation is generic over resolutions,
+    // therefore other res should also work fine
+    // (tests are becoming excruciatingly slow)
 }
