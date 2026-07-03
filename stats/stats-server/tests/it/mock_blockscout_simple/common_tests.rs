@@ -149,6 +149,30 @@ pub async fn test_lines_ok(
 
     // should not return charts that are disabled or waiting for indexing
     assert_eq!(enabled_resolutions, HashMap::new());
+
+    // filecoin charts (both public and intermediate) are off by default
+    // (`enable_all_filecoin = false`); their positive counterparts live in
+    // `stats_filecoin_enabled.rs`
+    for line_name in [
+        "filecoinNewChainFees",
+        "filecoinChainFeesGrowth",
+        "burnActorBalance",
+        "fevmFeeTips",
+    ] {
+        let response = reqwest::Client::new()
+            .request(
+                reqwest::Method::GET,
+                base.join(&format!("/api/v1/lines/{line_name}")).unwrap(),
+            )
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            reqwest::StatusCode::NOT_FOUND,
+            "disabled filecoin chart {line_name} must not be served"
+        );
+    }
 }
 
 pub async fn test_counters_ok(

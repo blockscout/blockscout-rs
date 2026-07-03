@@ -11,17 +11,20 @@ use chrono::NaiveDate;
 use stats::tests::{
     init_db::{init_db_blockscout, init_db_zetachain_cctx},
     mock_blockscout::fill_mock_blockscout_data,
+    mock_blockscout_filecoin::fill_mock_blockscout_filecoin_data,
     mock_zetachain_cctx::fill_mock_zetachain_cctx_data,
 };
 use tokio::sync::OnceCell;
 
 mod common_tests;
+mod stats_filecoin_enabled;
 mod stats_full;
 mod stats_no_specific;
 mod stats_not_indexed;
 mod stats_not_updated;
 
 static MOCK_BLOCKSCOUT: OnceCell<TestDbGuard> = OnceCell::const_new();
+static MOCK_BLOCKSCOUT_FILECOIN: OnceCell<TestDbGuard> = OnceCell::const_new();
 static MOCK_ZETACHAIN_CCTX: OnceCell<TestDbGuard> = OnceCell::const_new();
 
 /// All tests using this must not change the state of blockscout db.
@@ -32,6 +35,24 @@ async fn get_mock_blockscout() -> &'static TestDbGuard {
             let blockscout_db = init_db_blockscout(test_name).await;
             fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap())
                 .await;
+            blockscout_db
+        })
+        .await
+}
+
+/// Shared fixture + the Filecoin layer, kept separate from
+/// [`get_mock_blockscout`] so that foreign f099 / `base_fee_per_gas` data
+/// never leaks into the tests running against the original DB.
+///
+/// All tests using this must not change the state of the db.
+async fn get_mock_blockscout_filecoin() -> &'static TestDbGuard {
+    MOCK_BLOCKSCOUT_FILECOIN
+        .get_or_init(|| async {
+            let test_name = "tests_with_mock_blockscout_filecoin";
+            let blockscout_db = init_db_blockscout(test_name).await;
+            let max_date = NaiveDate::from_str("2023-03-01").unwrap();
+            fill_mock_blockscout_data(&blockscout_db, max_date).await;
+            fill_mock_blockscout_filecoin_data(&blockscout_db, max_date).await;
             blockscout_db
         })
         .await
