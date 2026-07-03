@@ -3,6 +3,7 @@
 mod accounts;
 mod blocks;
 mod contracts;
+mod filecoin;
 mod gas;
 mod tokens;
 mod transactions;
@@ -12,6 +13,7 @@ mod zetachain_cctx;
 use accounts::*;
 use blocks::*;
 use contracts::*;
+use filecoin::*;
 use gas::*;
 use tokens::*;
 use transactions::*;
@@ -168,6 +170,7 @@ pub use verified_contracts_growth::{
     VerifiedContractsGrowthYearly,
 };
 
+pub(crate) use burn_actor_balance::{BurnActorBalance, BurnActorBalanceFloat};
 pub(crate) use native_coin_holders_growth::NativeCoinHoldersGrowthInt;
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub(crate) use new_blocks::{NewBlocksInt, NewBlocksMonthlyInt, NewBlocksStatement};
