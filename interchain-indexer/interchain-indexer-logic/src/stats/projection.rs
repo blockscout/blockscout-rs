@@ -7,14 +7,15 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
 use interchain_indexer_entity::{
-    crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{EdgeAmountSide, MessageStatus},
+    bridges, crosschain_messages, crosschain_transfers,
+    sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus},
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_messages, stats_messages_days,
     tokens,
 };
 use sea_orm::{
     ActiveValue::{Set, Unchanged},
-    ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, QuerySelect, RelationTrait,
+    ColumnTrait, Condition, DatabaseTransaction, DbErr, EntityTrait, JoinType, QueryFilter,
+    QuerySelect, RelationTrait,
     prelude::BigDecimal,
     sea_query::{Expr, OnConflict},
 };
@@ -38,9 +39,20 @@ pub fn token_keys_for_stats_enrichment_from_transfer_models(
     s.into_iter().collect()
 }
 
+fn finalized_message_stats_condition() -> Condition {
+    Condition::any()
+        .add(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+        .add(
+            Condition::all()
+                .add(crosschain_messages::Column::Status.eq(MessageStatus::Failed))
+                .add(bridges::Column::Type.eq(BridgeType::Amb)),
+        )
+}
+
 /// Project eligible finalized messages into `stats_messages`, `stats_messages_days`,
 /// and mark them processed.
-/// Eligible: `stats_processed = 0`, `status = completed`, `dst_chain_id` set.
+/// Eligible: `stats_processed = 0`, `status = completed` (all bridges) or
+/// `failed` (AMB only), `dst_chain_id` set.
 /// Returns how many message rows were updated.
 pub async fn project_messages_batch(
     tx: &DatabaseTransaction,
@@ -53,6 +65,10 @@ pub async fn project_messages_batch(
     let pks: Vec<(i64, i32)> = unique.into_iter().collect();
 
     let rows = crosschain_messages::Entity::find()
+        .join(
+            JoinType::InnerJoin,
+            crosschain_messages::Relation::Bridges.def(),
+        )
         .filter(
             Expr::tuple([
                 Expr::col(crosschain_messages::Column::Id).into(),
@@ -61,10 +77,7 @@ pub async fn project_messages_batch(
             .in_tuples(pks.iter().copied()),
         )
         .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
-        .filter(
-            crosschain_messages::Column::Status
-                .is_in([MessageStatus::Completed, MessageStatus::Failed]),
-        )
+        .filter(finalized_message_stats_condition())
         .filter(crosschain_messages::Column::DstChainId.is_not_null())
         .all(tx)
         .await?;
@@ -736,7 +749,8 @@ impl EdgeAccum {
 }
 
 /// Project eligible transfers into stats asset tables and mark them processed.
-/// Eligible: `stats_processed = 0` and parent message `completed`.
+/// Eligible: `stats_processed = 0` and parent message `completed` (all bridges)
+/// or `failed` (AMB only).
 /// Returns how many transfer rows were counted.
 pub async fn project_transfers_batch(
     tx: &DatabaseTransaction,
@@ -751,13 +765,14 @@ pub async fn project_transfers_batch(
 
     let transfers = crosschain_transfers::Entity::find()
         .join(
-            sea_orm::JoinType::InnerJoin,
+            JoinType::InnerJoin,
             crosschain_transfers::Relation::CrosschainMessages.def(),
         )
-        .filter(
-            crosschain_messages::Column::Status
-                .is_in([MessageStatus::Completed, MessageStatus::Failed]),
+        .join(
+            JoinType::InnerJoin,
+            crosschain_messages::Relation::Bridges.def(),
         )
+        .filter(finalized_message_stats_condition())
         .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
         .filter(crosschain_transfers::Column::Id.is_in(ids.clone()))
         .all(tx)
