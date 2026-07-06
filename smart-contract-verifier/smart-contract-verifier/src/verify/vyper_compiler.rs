@@ -193,10 +193,7 @@ mod tests {
 
     #[test]
     fn existing_output_selection_is_preserved() {
-        let mut input = build_input(
-            &["a.vy", "libs/dep.vy"],
-            &["libs", "."],
-        );
+        let mut input = build_input(&["a.vy", "libs/dep.vy"], &["libs", "."]);
         input
             .settings
             .output_selection
