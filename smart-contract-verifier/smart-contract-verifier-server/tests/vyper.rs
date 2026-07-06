@@ -540,4 +540,14 @@ mod standard_json {
             vyper_types::from_file::<StandardJson>("standard_json_contracts_with_integrity_hashes");
         test_success(test_case).await;
     }
+
+    #[tokio::test]
+    async fn verify_success_with_search_paths_and_omitted_output_selection() {
+        // The input relies on `search_paths` to resolve library imports (snekmate) that are
+        // embedded in `sources`, and omits `outputSelection` entirely. The verifier must select
+        // the top-level contracts (excluding files under library search paths) so the contract
+        // is emitted and verified.
+        let test_case = vyper_types::from_file::<StandardJson>("standard_json_search_paths");
+        test_success(test_case).await;
+    }
 }
