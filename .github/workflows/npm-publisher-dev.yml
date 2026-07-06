@@ -1,0 +1,40 @@
+name: Publish types package to NPM (dev)
+# This workflow is used to publish the dev version (before release) of the types packages to npm.
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service whose type package to publish'
+        type: choice
+        required: true
+        options:
+          - blockscout-ens
+          - interchain-indexer
+          - multichain-aggregator
+          - multichain-search
+          - stats
+          - tac-operation-lifecycle
+          - user-ops-indexer
+          - visualizer
+
+jobs:
+  version:
+    name: Resolve dev package version
+    runs-on: ubuntu-latest
+    outputs:
+      package_version: ${{ steps.set.outputs.package_version }}
+    steps:
+      - name: Set version from commit SHA
+        id: set
+        run: echo "package_version=0.0.1-beta.${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Build and publish
+    needs: version
+    uses: ./.github/workflows/npm-publisher.yml
+    with:
+      project_name: ${{ inputs.service }}
+      version: ${{ needs.version.outputs.package_version }}
+    secrets:
+      inherit

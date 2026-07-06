@@ -209,7 +209,7 @@ impl IndexerV07 {
             + paymaster_verification_gas_limit
             + paymaster_post_op_gas_limit;
 
-        let (max_fee_per_gas, max_priority_fee_per_gas) =
+        let (max_priority_fee_per_gas, max_fee_per_gas) =
             unpack_uints(&user_op.user_op.gasFees[..]);
 
         let factory = match extract_address(&user_op.user_op.initCode) {
