@@ -177,14 +177,6 @@ fn crosschain_transfers_on_conflict() -> OnConflict {
         prefer_incoming("token_ids"),
     )
     .value(
-        crosschain_transfers::Column::StatsProcessed,
-        Expr::cust("EXCLUDED.stats_processed"),
-    )
-    .value(
-        crosschain_transfers::Column::StatsAssetId,
-        Expr::cust("EXCLUDED.stats_asset_id"),
-    )
-    .value(
         crosschain_transfers::Column::UpdatedAt,
         Expr::current_timestamp(),
     )
@@ -444,9 +436,11 @@ mod tests {
     use interchain_indexer_entity::{
         bridges, chains, crosschain_messages, crosschain_transfers,
         sea_orm_active_enums::{MessageStatus, TransferType},
+        stats_assets,
     };
     use sea_orm::{
-        ActiveValue, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait, prelude::BigDecimal,
+        ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait,
+        prelude::BigDecimal,
     };
 
     use super::{ConsolidatedMessage, flush_to_final_storage};
@@ -639,6 +633,18 @@ mod tests {
             .expect("crosschain_transfers row must exist")
     }
 
+    async fn mark_transfer_projected(
+        db: &InterchainDatabase,
+        stats_processed: i16,
+        stats_asset_id: Option<i64>,
+    ) {
+        let transfer = load_transfer(db).await;
+        let mut active: crosschain_transfers::ActiveModel = transfer.into();
+        active.stats_processed = ActiveValue::Set(stats_processed);
+        active.stats_asset_id = ActiveValue::Set(stats_asset_id);
+        active.update(db.db.as_ref()).await.unwrap();
+    }
+
     #[tokio::test]
     #[ignore = "needs database"]
     async fn test_late_source_does_not_regress_completed_message() {
@@ -725,6 +731,32 @@ mod tests {
         assert_eq!(transfer.dst_amount, Some(BigDecimal::from(990)));
         assert_eq!(transfer.sender_address, Some(vec![0x1A]));
         assert_eq!(transfer.recipient_address, Some(vec![0x2B]));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_late_source_does_not_reset_projected_transfer_stats() {
+        let test_db = init_db("flush_late_source_preserves_transfer_stats").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, destination_only_completed_with_transfer()).await;
+        let stats_asset_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db.db.as_ref())
+        .await
+        .unwrap()
+        .id;
+        mark_transfer_projected(&db, 1, Some(stats_asset_id)).await;
+
+        flush(&db, source_only_ready_to_claim_with_transfer()).await;
+
+        let transfer = load_transfer(&db).await;
+        assert_eq!(transfer.stats_processed, 1);
+        assert_eq!(transfer.stats_asset_id, Some(stats_asset_id));
+        assert_eq!(transfer.token_src_address, Some(vec![0xAA]));
+        assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
     }
 
     #[tokio::test]
