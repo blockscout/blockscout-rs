@@ -322,7 +322,7 @@ async fn persist_catchup_complete(
         .mark_catchup_complete(
             bridge_id as u64,
             chain_id as u64,
-            genesis_block,
+            genesis_block.saturating_sub(1),
             realtime_cursor_on_insert,
         )
         .await
