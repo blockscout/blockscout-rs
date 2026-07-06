@@ -5,6 +5,7 @@ edition = "2024"
 license = "LicenseRef-Blockscout"
 
 [features]
+amb-e2e = []
 avalanche-e2e = []
 
 [dependencies]

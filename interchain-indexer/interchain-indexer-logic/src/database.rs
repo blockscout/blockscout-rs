@@ -4,7 +4,7 @@ use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, pending_messages,
-    sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
+    sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferType},
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
 };
 use parking_lot::RwLock;
@@ -57,10 +57,10 @@ pub struct JoinedTransfer {
     pub r#type: Option<TransferType>,
     pub token_src_chain_id: i64,
     pub token_dst_chain_id: i64,
-    pub src_amount: BigDecimal,
-    pub dst_amount: BigDecimal,
-    pub token_src_address: Vec<u8>,
-    pub token_dst_address: Vec<u8>,
+    pub src_amount: Option<BigDecimal>,
+    pub dst_amount: Option<BigDecimal>,
+    pub token_src_address: Option<Vec<u8>>,
+    pub token_dst_address: Option<Vec<u8>>,
     pub sender_address: Option<Vec<u8>>,
     pub recipient_address: Option<Vec<u8>>,
     pub token_ids: Option<Vec<Decimal>>,
@@ -1337,8 +1337,21 @@ impl InterchainDatabase {
         let mut report = BackfillStatsReport::default();
 
         let msg_rows = crosschain_messages::Entity::find()
+            .join(
+                JoinType::InnerJoin,
+                crosschain_messages::Relation::Bridges.def(),
+            )
             .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
-            .filter(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+            // Failed is only terminal for bridge types whose `Consolidate` impl flags it as final.
+            .filter(
+                Condition::any()
+                    .add(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+                    .add(
+                        Condition::all()
+                            .add(crosschain_messages::Column::Status.eq(MessageStatus::Failed))
+                            .add(bridges::Column::Type.eq(BridgeType::Amb)),
+                    ),
+            )
             .filter(crosschain_messages::Column::DstChainId.is_not_null())
             .order_by_asc(crosschain_messages::Column::Id)
             .limit(message_limit)
@@ -2013,6 +2026,99 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
+    /// Mark catchup as finalized for a (bridge_id, chain_id) pair by lowering
+    /// `catchup_max_cursor` down to `genesis_block`. Uses `LEAST(...)` so the
+    /// cursor is never moved upward (catchup cursor only decreases as scanning
+    /// progresses backward).
+    ///
+    /// Without this signal, catchup completion is invisible to the cursor
+    /// machinery when there are no buffer items between the last observed
+    /// message and the genesis block — restart would re-walk that empty range.
+    ///
+    /// When `realtime_cursor_on_insert` is provided, this uses upsert semantics
+    /// and creates a missing checkpoint row with the supplied realtime cursor.
+    /// Callers should only provide it after proving the catchup range before
+    /// that realtime cursor contained no logs; otherwise creating a new row
+    /// could hide unprocessed events after restart.
+    pub async fn mark_catchup_complete(
+        &self,
+        bridge_id: u64,
+        chain_id: u64,
+        genesis_block: u64,
+        realtime_cursor_on_insert: Option<u64>,
+    ) -> anyhow::Result<()> {
+        let genesis_block_i64 = genesis_block as i64;
+
+        let query_result = if let Some(realtime_cursor) = realtime_cursor_on_insert {
+            indexer_checkpoints::Entity::insert(indexer_checkpoints::ActiveModel {
+                bridge_id: ActiveValue::Set(bridge_id as i32),
+                chain_id: ActiveValue::Set(chain_id as i64),
+                catchup_min_cursor: ActiveValue::Set(0),
+                catchup_max_cursor: ActiveValue::Set(genesis_block_i64),
+                finality_cursor: ActiveValue::Set(0),
+                realtime_cursor: ActiveValue::Set(realtime_cursor as i64),
+                created_at: ActiveValue::NotSet,
+                updated_at: ActiveValue::NotSet,
+            })
+            .on_conflict(
+                OnConflict::columns([
+                    indexer_checkpoints::Column::BridgeId,
+                    indexer_checkpoints::Column::ChainId,
+                ])
+                .value(
+                    indexer_checkpoints::Column::CatchupMaxCursor,
+                    Expr::cust(
+                        "LEAST(indexer_checkpoints.catchup_max_cursor, EXCLUDED.catchup_max_cursor)",
+                    ),
+                )
+                .value(
+                    indexer_checkpoints::Column::RealtimeCursor,
+                    Expr::cust(
+                        "GREATEST(indexer_checkpoints.realtime_cursor, EXCLUDED.realtime_cursor)",
+                    ),
+                )
+                .value(
+                    indexer_checkpoints::Column::UpdatedAt,
+                    Expr::current_timestamp(),
+                )
+                .to_owned(),
+            )
+            .exec(self.db.as_ref())
+            .await
+            .map(|_| ())
+        } else {
+            indexer_checkpoints::Entity::update_many()
+                .col_expr(
+                    indexer_checkpoints::Column::CatchupMaxCursor,
+                    Expr::cust(format!(
+                        "LEAST(indexer_checkpoints.catchup_max_cursor, {genesis_block_i64})"
+                    )),
+                )
+                .col_expr(
+                    indexer_checkpoints::Column::UpdatedAt,
+                    Expr::current_timestamp().into(),
+                )
+                .filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id as i32))
+                .filter(indexer_checkpoints::Column::ChainId.eq(chain_id as i64))
+                .exec(self.db.as_ref())
+                .await
+                .map(|_| ())
+        };
+
+        query_result.inspect_err(|e| {
+            tracing::error!(
+                err = ?e,
+                bridge_id,
+                chain_id,
+                genesis_block,
+                realtime_cursor_on_insert,
+                "failed to mark catchup complete in database"
+            )
+        })?;
+
+        Ok(())
+    }
+
     pub async fn get_token_info(
         &self,
         chain_id: u64,
@@ -2545,8 +2651,8 @@ fn build_pagination_from_transfers(
 mod tests {
     use chrono::{NaiveDate, Utc};
     use interchain_indexer_entity::{
-        chains, crosschain_messages, crosschain_transfers,
-        sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
+        bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
+        sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferType},
         stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages,
         stats_messages_days, tokens,
     };
@@ -2639,6 +2745,64 @@ mod tests {
         let stored_chain = chains.iter().find(|chain| chain.id == 43114).unwrap();
         assert_eq!(stored_chain.name, ava_chain.name.unwrap());
         assert_eq!(stored_chain.icon, ava_chain.icon.unwrap());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn mark_catchup_complete_upserts_empty_range_checkpoint() {
+        let db = init_db("mark_catchup_complete_upserts_empty_range_checkpoint").await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .mark_catchup_complete(1, 1, 10, Some(100))
+            .await
+            .unwrap();
+
+        let inserted = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(inserted.catchup_max_cursor, 10);
+        assert_eq!(inserted.realtime_cursor, 100);
+
+        interchain_db
+            .mark_catchup_complete(1, 1, 20, Some(90))
+            .await
+            .unwrap();
+
+        let unchanged = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(unchanged.catchup_max_cursor, 10);
+        assert_eq!(unchanged.realtime_cursor, 100);
+
+        interchain_db
+            .mark_catchup_complete(1, 1, 5, Some(120))
+            .await
+            .unwrap();
+
+        let updated = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(updated.catchup_max_cursor, 5);
+        assert_eq!(updated.realtime_cursor, 120);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn mark_catchup_complete_without_safe_realtime_cursor_does_not_insert() {
+        let db = init_db("mark_catchup_complete_without_safe_realtime_cursor").await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .mark_catchup_complete(1, 100, 10, None)
+            .await
+            .unwrap();
+
+        let checkpoints_count = indexer_checkpoints::Entity::find()
+            .filter(indexer_checkpoints::Column::BridgeId.eq(1))
+            .filter(indexer_checkpoints::Column::ChainId.eq(100))
+            .count(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(checkpoints_count, 0);
     }
 
     #[tokio::test]
@@ -3270,10 +3434,10 @@ mod tests {
             r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(c6),
             token_dst_chain_id: Set(c7),
-            src_amount: Set(BigDecimal::from(1u64)),
-            dst_amount: Set(BigDecimal::from(1u64)),
-            token_src_address: Set(token.clone()),
-            token_dst_address: Set(token.clone()),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(token.clone())),
+            token_dst_address: Set(Some(token.clone())),
             sender_address: Set(Some(addr_t1.clone())),
             recipient_address: Set(Some(addr_t2.clone())),
             stats_processed: Set(0),
@@ -3855,6 +4019,23 @@ mod tests {
         let conn = _db.client();
         let db = conn.as_ref();
         seed_minimal_bridge(db).await;
+        bridges::Entity::update(bridges::ActiveModel {
+            id: Set(1),
+            r#type: Set(Some(BridgeType::Amb)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        bridges::Entity::insert(bridges::ActiveModel {
+            id: Set(2),
+            name: Set("Non-AMB".into()),
+            r#type: Set(Some(BridgeType::Lockmint)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
 
         crosschain_messages::Entity::insert_many([
             crosschain_messages::ActiveModel {
@@ -3871,6 +4052,17 @@ mod tests {
             crosschain_messages::ActiveModel {
                 id: Set(92068),
                 bridge_id: Set(1),
+                status: Set(MessageStatus::Failed),
+                init_timestamp: Set(Utc::now().naive_utc()),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                src_tx_hash: Set(Some(vec![0xabu8; 32])),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(92066),
+                bridge_id: Set(2),
                 status: Set(MessageStatus::Failed),
                 init_timestamp: Set(Utc::now().naive_utc()),
                 src_chain_id: Set(1),
@@ -3899,7 +4091,12 @@ mod tests {
             Box::pin(async move {
                 crate::stats::projection::project_messages_batch(
                     tx,
-                    &[(92067i64, 1i32), (92068i64, 1i32), (92069i64, 1i32)],
+                    &[
+                        (92066i64, 2i32),
+                        (92067i64, 1i32),
+                        (92068i64, 1i32),
+                        (92069i64, 1i32),
+                    ],
                 )
                 .await
                 .map(|_| ())
@@ -3908,10 +4105,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(stats_messages::Entity::find().count(db).await.unwrap(), 0);
+        assert_eq!(stats_messages::Entity::find().count(db).await.unwrap(), 1);
         assert_eq!(
             stats_messages_days::Entity::find().count(db).await.unwrap(),
-            0
+            1
         );
     }
 
@@ -4016,10 +4213,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(5_000u64)),
-            dst_amount: Set(BigDecimal::from(5_000u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(5_000u64))),
+            dst_amount: Set(Some(BigDecimal::from(5_000u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4052,6 +4249,105 @@ mod tests {
         assert_eq!(edge.transfers_count, 1);
         assert_eq!(edge.cumulative_amount, BigDecimal::from(5_000u64));
         assert_eq!(edge.amount_side, EdgeAmountSide::Source);
+    }
+
+    // Regression: a transfer whose endpoints cannot be reconciled to one stats
+    // asset (here a token already linked elsewhere on the destination chain)
+    // must be skipped, not abort the batch — otherwise it would poison the
+    // shared maintenance transaction and wedge message indexing every cycle.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_skips_conflicting_transfer_without_aborting() {
+        let _db = init_db("stats_projection_skips_conflicting_transfer").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        let token_a = [0x1cu8; 20].to_vec();
+        let token_b = [0x16u8; 20].to_vec();
+
+        // Transfer 1: token_a on chain 1 <-> token_a on chain 100. Establishes an
+        // asset that holds token_a on BOTH chains.
+        crosschain_messages::Entity::insert(completed_message(92070, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92070),
+            message_id: Set(92070),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(Some(BigDecimal::from(1_000u64))),
+            dst_amount: Set(Some(BigDecimal::from(1_000u64))),
+            token_src_address: Set(Some(token_a.clone())),
+            token_dst_address: Set(Some(token_a.clone())),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_transfers_batch(tx, &[92070i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        // Transfer 2: token_a on chain 1 <-> token_b on chain 100. token_a maps to
+        // the asset from transfer 1, which already holds a token on chain 100, so
+        // linking token_b would violate the (stats_asset_id, chain_id) PK.
+        crosschain_messages::Entity::insert(completed_message(92071, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92071),
+            message_id: Set(92071),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(Some(BigDecimal::from(2_000u64))),
+            dst_amount: Set(Some(BigDecimal::from(2_000u64))),
+            token_src_address: Set(Some(token_a.clone())),
+            token_dst_address: Set(Some(token_b.clone())),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Must NOT abort; the conflicting transfer is skipped.
+        let processed = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(tx, &[92071i64]).await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            processed, 1,
+            "conflicting transfer counted as handled (skipped)"
+        );
+
+        let t = crosschain_transfers::Entity::find_by_id(92071i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            t.stats_processed, 1,
+            "skipped transfer marked processed so it is not retried every cycle"
+        );
+        assert!(
+            t.stats_asset_id.is_none(),
+            "skipped transfer is left without a stats asset"
+        );
     }
 
     #[tokio::test]
@@ -4087,10 +4383,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(100u64)),
-            dst_amount: Set(BigDecimal::from(50u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(100u64))),
+            dst_amount: Set(Some(BigDecimal::from(50u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4153,10 +4449,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(100u64)),
-            dst_amount: Set(BigDecimal::from(200u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(100u64))),
+            dst_amount: Set(Some(BigDecimal::from(200u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4210,10 +4506,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(999u64)),
-            dst_amount: Set(BigDecimal::from(10u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(999u64))),
+            dst_amount: Set(Some(BigDecimal::from(10u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4251,10 +4547,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(888u64)),
-            dst_amount: Set(BigDecimal::from(7u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(888u64))),
+            dst_amount: Set(Some(BigDecimal::from(7u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4320,10 +4616,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(100u64)),
-            dst_amount: Set(BigDecimal::from(50u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(100u64))),
+            dst_amount: Set(Some(BigDecimal::from(50u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4381,10 +4677,10 @@ mod tests {
                 index: Set(0),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(100),
-                src_amount: Set(BigDecimal::from(src_amt)),
-                dst_amount: Set(BigDecimal::from(dst_amt)),
-                token_src_address: Set(addr_a.clone()),
-                token_dst_address: Set(addr_b.clone()),
+                src_amount: Set(Some(BigDecimal::from(src_amt))),
+                dst_amount: Set(Some(BigDecimal::from(dst_amt))),
+                token_src_address: Set(Some(addr_a.clone())),
+                token_dst_address: Set(Some(addr_b.clone())),
                 ..Default::default()
             })
             .exec(db)
@@ -4502,10 +4798,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(1u64)),
-            dst_amount: Set(BigDecimal::from(1u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4531,10 +4827,13 @@ mod tests {
         assert_eq!(t.stats_processed, 0);
     }
 
+    // A transfer whose two endpoints are already mapped to *different* stats
+    // assets cannot be reconciled. It is skipped (and marked processed) rather
+    // than aborting the batch, so the shared maintenance transaction commits.
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn stats_projection_rejects_conflicting_asset_mappings() {
-        let _db = init_db("stats_projection_rejects_conflicting_asset_mappings").await;
+    async fn stats_projection_skips_transfer_with_conflicting_asset_mappings() {
+        let _db = init_db("stats_projection_skips_conflicting_asset_mappings").await;
         let conn = _db.client();
         let db = conn.as_ref();
         seed_minimal_bridge(db).await;
@@ -4585,33 +4884,42 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(1u64)),
-            dst_amount: Set(BigDecimal::from(1u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
         .await
         .unwrap();
 
-        let res = db
-            .transaction(|tx| {
-                Box::pin(async move {
-                    crate::stats::projection::project_messages_batch(tx, &[(92024i64, 1i32)])
-                        .await?;
-                    crate::stats::projection::project_transfers_batch(tx, &[92024i64]).await?;
-                    Ok::<(), sea_orm::DbErr>(())
-                })
+        // Must commit: the unreconcilable transfer is skipped, not fatal.
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(tx, &[(92024i64, 1i32)]).await?;
+                crate::stats::projection::project_transfers_batch(tx, &[92024i64]).await?;
+                Ok::<(), sea_orm::DbErr>(())
             })
-            .await;
-        assert!(res.is_err());
-        let err = res.unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("different stats assets") || msg.contains("92024"),
-            "unexpected error: {msg}"
+        })
+        .await
+        .unwrap();
+
+        let t = crosschain_transfers::Entity::find_by_id(92024i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            t.stats_processed, 1,
+            "skipped transfer marked processed so it is not retried every cycle"
         );
+        assert!(
+            t.stats_asset_id.is_none(),
+            "skipped transfer is left without a stats asset"
+        );
+        // The conflicting endpoints keep their original, distinct mappings.
+        assert_ne!(aid_a, aid_b);
     }
 
     #[tokio::test]
@@ -4659,10 +4967,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(1u64)),
-            dst_amount: Set(BigDecimal::from(1u64)),
-            token_src_address: Set(addr_a.clone()),
-            token_dst_address: Set(addr_b.clone()),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(addr_a.clone())),
+            token_dst_address: Set(Some(addr_b.clone())),
             ..Default::default()
         })
         .exec(db)
@@ -4714,10 +5022,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(3u64)),
-            dst_amount: Set(BigDecimal::from(3u64)),
-            token_src_address: Set([0x81u8; 20].to_vec()),
-            token_dst_address: Set([0x82u8; 20].to_vec()),
+            src_amount: Set(Some(BigDecimal::from(3u64))),
+            dst_amount: Set(Some(BigDecimal::from(3u64))),
+            token_src_address: Set(Some([0x81u8; 20].to_vec())),
+            token_dst_address: Set(Some([0x82u8; 20].to_vec())),
             ..Default::default()
         })
         .exec(db)
@@ -5068,10 +5376,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(100u64)),
-            dst_amount: Set(BigDecimal::from(100u64)),
-            token_src_address: Set([0x33u8; 20].to_vec()),
-            token_dst_address: Set([0x44u8; 20].to_vec()),
+            src_amount: Set(Some(BigDecimal::from(100u64))),
+            dst_amount: Set(Some(BigDecimal::from(100u64))),
+            token_src_address: Set(Some([0x33u8; 20].to_vec())),
+            token_dst_address: Set(Some([0x44u8; 20].to_vec())),
             ..Default::default()
         })
         .exec(db)
@@ -5123,10 +5431,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(42u64)),
-            dst_amount: Set(BigDecimal::from(42u64)),
-            token_src_address: Set([0x55u8; 20].to_vec()),
-            token_dst_address: Set([0x66u8; 20].to_vec()),
+            src_amount: Set(Some(BigDecimal::from(42u64))),
+            dst_amount: Set(Some(BigDecimal::from(42u64))),
+            token_src_address: Set(Some([0x55u8; 20].to_vec())),
+            token_dst_address: Set(Some([0x66u8; 20].to_vec())),
             ..Default::default()
         })
         .exec(db)
@@ -5183,10 +5491,10 @@ mod tests {
             index: Set(0),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
-            src_amount: Set(BigDecimal::from(7u64)),
-            dst_amount: Set(BigDecimal::from(7u64)),
-            token_src_address: Set([0x77u8; 20].to_vec()),
-            token_dst_address: Set([0x88u8; 20].to_vec()),
+            src_amount: Set(Some(BigDecimal::from(7u64))),
+            dst_amount: Set(Some(BigDecimal::from(7u64))),
+            token_src_address: Set(Some([0x77u8; 20].to_vec())),
+            token_dst_address: Set(Some([0x88u8; 20].to_vec())),
             ..Default::default()
         })
         .exec(db)

@@ -1068,6 +1068,7 @@ definitions:
       - MESSAGE_STATUS_INITIATED
       - MESSAGE_STATUS_COMPLETED
       - MESSAGE_STATUS_FAILED
+      - MESSAGE_STATUS_READY_TO_CLAIM
     default: MESSAGE_STATUS_INITIATED
   v1Pagination:
     type: object

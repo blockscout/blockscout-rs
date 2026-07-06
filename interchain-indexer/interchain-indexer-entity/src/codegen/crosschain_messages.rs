@@ -34,6 +34,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::amb_messages_confirmations::Entity")]
+    AmbMessagesConfirmations,
     #[sea_orm(
         belongs_to = "super::bridges::Entity",
         from = "Column::BridgeId",
@@ -60,6 +62,12 @@ pub enum Relation {
     Chains1,
     #[sea_orm(has_many = "super::crosschain_transfers::Entity")]
     CrosschainTransfers,
+}
+
+impl Related<super::amb_messages_confirmations::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AmbMessagesConfirmations.def()
+    }
 }
 
 impl Related<super::bridges::Entity> for Entity {

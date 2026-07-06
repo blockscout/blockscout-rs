@@ -21,6 +21,7 @@ fn main() {
                 "INTERCHAIN_INDEXER__DATABASE__CONNECT_OPTIONS",
                 "INTERCHAIN_INDEXER__EXAMPLE_INDEXER",
                 "INTERCHAIN_INDEXER__AVALANCHE_INDEXER",
+                "INTERCHAIN_INDEXER__AMB_INDEXER",
             ]))
             .anchor_postfix(Some("service".to_string()))
             .build()
@@ -34,6 +35,17 @@ fn main() {
                 "INTERCHAIN_INDEXER__AVALANCHE_INDEXER",
             ]))
             .anchor_postfix(Some("avalanche".to_string()))
+            .build()
+            .expect("failed to build env collector settings"),
+    );
+
+    run_env_collector_cli::<Settings>(
+        settings
+            .config_path("interchain-indexer-server/config/example.toml")
+            .vars_filter(PrefixFilter::whitelist(&[
+                "INTERCHAIN_INDEXER__AMB_INDEXER",
+            ]))
+            .anchor_postfix(Some("amb".to_string()))
             .build()
             .expect("failed to build env collector settings"),
     );

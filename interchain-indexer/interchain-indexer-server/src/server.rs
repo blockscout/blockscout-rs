@@ -111,10 +111,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let db = Arc::new(interchain_db.clone());
 
     let chains = load_chains_from_file(&settings.chains_config)?;
-    let chains_providers = create_provider_pools_from_chains(chains.clone()).await?;
+    // Single provider pool per chain, shared by the token info service and the
+    // indexers. `DynProvider` is `Arc`-backed, so cloning the map shares the
+    // same underlying failover state (one health task, one primary per chain).
+    let chain_providers = create_provider_pools_from_chains(chains.clone()).await?;
     let token_info_service = Arc::new(TokenInfoService::new(
         db.clone(),
-        chains_providers,
+        chain_providers.clone(),
         settings.token_info.clone(),
     ));
     let stats = Arc::new(StatsService::new(
@@ -189,14 +192,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.chain_info.clone(),
     ));
 
-    // Separate provider pool for indexers (`TokenInfoService` owns the first pool).
-    let chain_providers_for_indexers = create_provider_pools_from_chains(chains.clone()).await?;
-
     let indexers = spawn_configured_indexers(
         stats.clone(),
         &bridges,
         &chains,
-        &chain_providers_for_indexers,
+        &chain_providers,
         &settings,
     )
     .await?;

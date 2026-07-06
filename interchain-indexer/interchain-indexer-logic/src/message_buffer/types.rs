@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use anyhow::Result;
-use interchain_indexer_entity::{crosschain_messages, crosschain_transfers};
+use interchain_indexer_entity::{
+    amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
+};
 use serde::{Deserialize, Serialize};
 
 use super::cursor::BridgeId;
@@ -33,8 +35,16 @@ impl Key {
 #[derive(Clone, Debug)]
 pub struct ConsolidatedMessage {
     pub is_final: bool,
+    /// Delete an existing final row for this `(id, bridge_id)` before inserting
+    /// this payload. Used when a protocol-specific collision intentionally
+    /// displaces the old body; normal out-of-order merges must keep this false.
+    pub replace_existing: bool,
     pub message: crosschain_messages::ActiveModel,
     pub transfers: Vec<crosschain_transfers::ActiveModel>,
+    pub amb_confirmations: Vec<amb_messages_confirmations::ActiveModel>,
+    /// AMB-specific `messageId` collision captures. Internal-only, append-only.
+    /// Avalanche leaves this empty (mirrors `amb_confirmations`).
+    pub amb_anomalies: Vec<amb_message_anomalies::ActiveModel>,
 }
 
 /// Converts an in-flight entry into a consolidated database payload.

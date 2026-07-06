@@ -18,6 +18,9 @@ use std::{collections::HashMap, path::Path, str::FromStr, time::Duration};
 #[serde(rename_all = "snake_case")]
 pub enum IndexerType {
     IcmIctt,
+    #[serde(rename = "amb")]
+    #[allow(clippy::upper_case_acronyms)]
+    AMB,
     #[default]
     Unknown,
 }
@@ -55,6 +58,7 @@ pub struct BridgeContractConfig {
     pub address: Vec<u8>,
     pub version: i16,
     pub started_at_block: u64,
+    pub kind: Option<String>,
     pub abi: Option<String>,
 }
 
@@ -139,6 +143,7 @@ impl BridgeContractConfig {
             chain_id: ActiveValue::Set(self.chain_id),
             address: ActiveValue::Set(self.address.clone()),
             version: ActiveValue::Set(self.version),
+            kind: ActiveValue::Set(self.kind.clone()),
             started_at_block: ActiveValue::Set(Some(
                 i64::try_from(self.started_at_block).expect("started_at_block must fit into i64"),
             )),
@@ -160,6 +165,7 @@ impl From<bridge_contracts::Model> for BridgeContractConfig {
             address: model.address,
             version: model.version,
             started_at_block,
+            kind: model.kind,
             abi: abi_string,
         }
     }
@@ -545,6 +551,7 @@ mod tests {
             address: vec![0x12; 20],
             version: 1,
             started_at_block: 12345,
+            kind: None,
             abi: None,
         };
 
@@ -573,6 +580,7 @@ mod tests {
             started_at_block: Some(12345),
             created_at: None,
             updated_at: None,
+            kind: None,
         };
 
         let config: BridgeContractConfig = model.into();
@@ -597,6 +605,7 @@ mod tests {
             created_at: None,
             updated_at: None,
             started_at_block: None,
+            kind: None,
         };
 
         let none_block: BridgeContractConfig = common.clone().into();

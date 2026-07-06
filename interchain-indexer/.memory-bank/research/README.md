@@ -118,4 +118,12 @@ Small topics may keep some sections brief.
 - `config-loading-and-validation.md` — two-channel config system (env-based
   Settings vs file-only JSON), `deny_unknown_fields` coverage, DB seeding
   upsert semantics, late validation pattern, and stats-style env-patching
+- `amb-omnibridge-token-reconstruction.md` — how AMB/Omnibridge transfer rows
+  get their token addresses/amounts from `TokensBridgingInitiated` /
+  `TokensBridged` events (not calldata), the native/bridged token model and
+  `handleBridgedTokens` vs `handleNativeTokens` directional semantics, and the
+  nullable transfer-side columns
+- Follow-up: migrate Avalanche's inline cleanup guard / EVM log orchestration
+  onto `interchain-indexer-logic/src/indexer/cleanup_guard.rs` and
+  `interchain-indexer-logic/src/indexer/evm/`.
   cross-reference

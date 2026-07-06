@@ -2,6 +2,8 @@
 
 pub mod prelude;
 
+pub mod amb_message_anomalies;
+pub mod amb_messages_confirmations;
 pub mod avalanche_icm_blockchain_ids;
 pub mod bridge_contracts;
 pub mod bridges;
