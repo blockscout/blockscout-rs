@@ -71,14 +71,30 @@ pub async fn project_messages_batch(
         )
         .filter(
             Expr::tuple([
-                Expr::col(crosschain_messages::Column::Id).into(),
-                Expr::col(crosschain_messages::Column::BridgeId).into(),
+                Expr::col((crosschain_messages::Entity, crosschain_messages::Column::Id)).into(),
+                Expr::col((
+                    crosschain_messages::Entity,
+                    crosschain_messages::Column::BridgeId,
+                ))
+                .into(),
             ])
             .in_tuples(pks.iter().copied()),
         )
-        .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
+        .filter(
+            Expr::col((
+                crosschain_messages::Entity,
+                crosschain_messages::Column::StatsProcessed,
+            ))
+            .eq(0i16),
+        )
         .filter(finalized_message_stats_condition())
-        .filter(crosschain_messages::Column::DstChainId.is_not_null())
+        .filter(
+            Expr::col((
+                crosschain_messages::Entity,
+                crosschain_messages::Column::DstChainId,
+            ))
+            .is_not_null(),
+        )
         .all(tx)
         .await?;
 
@@ -773,8 +789,20 @@ pub async fn project_transfers_batch(
             crosschain_messages::Relation::Bridges.def(),
         )
         .filter(finalized_message_stats_condition())
-        .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
-        .filter(crosschain_transfers::Column::Id.is_in(ids.clone()))
+        .filter(
+            Expr::col((
+                crosschain_transfers::Entity,
+                crosschain_transfers::Column::StatsProcessed,
+            ))
+            .eq(0i16),
+        )
+        .filter(
+            Expr::col((
+                crosschain_transfers::Entity,
+                crosschain_transfers::Column::Id,
+            ))
+            .is_in(ids.clone()),
+        )
         .all(tx)
         .await?;
 

@@ -2651,8 +2651,8 @@ fn build_pagination_from_transfers(
 mod tests {
     use chrono::{NaiveDate, Utc};
     use interchain_indexer_entity::{
-        chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
-        sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
+        bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
+        sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferType},
         stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages,
         stats_messages_days, tokens,
     };
@@ -4019,6 +4019,23 @@ mod tests {
         let conn = _db.client();
         let db = conn.as_ref();
         seed_minimal_bridge(db).await;
+        bridges::Entity::update(bridges::ActiveModel {
+            id: Set(1),
+            r#type: Set(Some(BridgeType::Amb)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        bridges::Entity::insert(bridges::ActiveModel {
+            id: Set(2),
+            name: Set("Non-AMB".into()),
+            r#type: Set(Some(BridgeType::Lockmint)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
 
         crosschain_messages::Entity::insert_many([
             crosschain_messages::ActiveModel {
@@ -4035,6 +4052,17 @@ mod tests {
             crosschain_messages::ActiveModel {
                 id: Set(92068),
                 bridge_id: Set(1),
+                status: Set(MessageStatus::Failed),
+                init_timestamp: Set(Utc::now().naive_utc()),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                src_tx_hash: Set(Some(vec![0xabu8; 32])),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(92066),
+                bridge_id: Set(2),
                 status: Set(MessageStatus::Failed),
                 init_timestamp: Set(Utc::now().naive_utc()),
                 src_chain_id: Set(1),
@@ -4063,7 +4091,12 @@ mod tests {
             Box::pin(async move {
                 crate::stats::projection::project_messages_batch(
                     tx,
-                    &[(92067i64, 1i32), (92068i64, 1i32), (92069i64, 1i32)],
+                    &[
+                        (92066i64, 2i32),
+                        (92067i64, 1i32),
+                        (92068i64, 1i32),
+                        (92069i64, 1i32),
+                    ],
                 )
                 .await
                 .map(|_| ())
