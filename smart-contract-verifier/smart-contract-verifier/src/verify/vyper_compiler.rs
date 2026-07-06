@@ -38,14 +38,16 @@ impl evm_compilers::CompilerInput for VyperInput {
                 .filter(|p| *p != ".")
                 .collect();
             for path in self.sources.keys() {
-                let path = path.to_string_lossy();
+                // Use `Path::starts_with` (component-wise) rather than raw string prefix
+                // matching, so a search path like `libs` does not misclassify `library.vy`.
                 let is_library = library_prefixes
                     .iter()
                     .any(|prefix| path.starts_with(prefix));
                 if !is_library {
-                    self.settings
-                        .output_selection
-                        .insert(path.into_owned(), default_output_selection.clone());
+                    self.settings.output_selection.insert(
+                        path.to_string_lossy().into_owned(),
+                        default_output_selection.clone(),
+                    );
                 }
             }
         }
@@ -189,6 +191,17 @@ mod tests {
 
         let selected: Vec<_> = input.settings.output_selection.keys().cloned().collect();
         assert_eq!(selected, vec!["a.vy".to_string(), "b.vy".to_string()]);
+    }
+
+    #[test]
+    fn omitted_output_selection_matches_search_paths_by_component() {
+        // `library.vy` shares a raw string prefix with the `lib` search path but is not under
+        // it, so it must be treated as a top-level contract, not a library file.
+        let mut input = build_input(&["library.vy", "lib/dep.vy"], &["lib", "."]);
+        input.normalize_output_selection(&semver::Version::new(0, 4, 3));
+
+        let selected: Vec<_> = input.settings.output_selection.keys().cloned().collect();
+        assert_eq!(selected, vec!["library.vy".to_string()]);
     }
 
     #[test]
