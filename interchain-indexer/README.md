@@ -105,10 +105,6 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 | `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START`                          |                          | Recalculate the statistics tables for messages and transfers (`stats_messages`, `stats_asset*`) on service startup. This is needed only after the first application of the `m20260312_175120_add_stats_tables` migration, and only if there are existing DB records before it. This option should normally be disabled after the migration to reduce service startup time.                                                                                                  | `false`       |
 | `INTERCHAIN_INDEXER__STATS__CHAINS_RECALCULATION_PERIOD_SECS`           |                          | Interval in seconds between full recomputations of per-chain distinct user counters in `stats_chains` (from `crosschain_messages` / `crosschain_transfers`, any status). Only chains with at least one counted user address keep a row; stale rows are deleted. Set to `0` to disable the background task.                                                                                                                                                                  | `3600`        |
 | `INTERCHAIN_INDEXER__STATS__INCLUDE_ZERO_CHAINS`                        |                          | When `true`, stats endpoints (`/api/v1/stats/chains` and `/api/v1/stats/chain/{chain_id}/messages-paths/*`) include known chains from `chains` even when the aggregated stats row is missing or has a zero value. For message paths with `counterparty_chain_ids`, zero rows are still returned for the explicitly requested counterparties that exist in `chains`, and no other counterparties are added. Disable it to return only chains with positive aggregated stats. | `true`        |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE`                           |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `1000`        |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__PULL_INTERVAL_MS`                     |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `500`         |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__RECEIPT_CONCURRENCY`                  |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `25`          |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__CLOCK_SKEW_TOLERANCE`                 |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `300`         |
 
 [anchor]: <> (anchors.envs.end.service)
 
@@ -127,12 +123,16 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 
 ### AMB Indexer Settings
 
+[anchor]: <> (anchors.envs.start.amb)
+
 | Variable                                                     | Req&#x200B;uir&#x200B;ed | Description                                                    | Default value |
 | ------------------------------------------------------------ | ------------------------ | -------------------------------------------------------------- | ------------- |
 | `INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE`                |                          | Number of contract events to be pulled at once.                | `1000`        |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__PULL_INTERVAL_MS`          |                          | Duration between pulling contract events. Unit: `milliseconds` | `10000`       |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__PULL_INTERVAL_MS`          |                          | Duration between pulling contract events. Unit: `milliseconds` | `500`       |
 | `INTERCHAIN_INDEXER__AMB_INDEXER__RECEIPT_CONCURRENCY`       |                          | Maximum concurrent receipt and block fetches per AMB batch.    | `25`          |
 | `INTERCHAIN_INDEXER__AMB_INDEXER__CLOCK_SKEW_TOLERANCE`      |                          | Tolerance for a destination execution preceding its source request before flagging an AMB `messageId` collision. Unit: `seconds` | `300`         |
+
+[anchor]: <> (anchors.envs.end.amb)
 
 ### Metrics Settings (Prometheus-compatible)
 
