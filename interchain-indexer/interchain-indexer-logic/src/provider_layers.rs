@@ -557,7 +557,12 @@ fn failover_error(packet: &ResponsePacket) -> Option<TransportError> {
 /// identically on every endpoint, so failing over only wastes attempts and
 /// wrongly penalizes healthy nodes; those propagate to the caller unchanged.
 fn should_failover_on_error(code: i64, message: &str) -> bool {
-    !is_request_deterministic_error(code) && !is_benign_server_error(message)
+    match () {
+        _ if is_node_health_error(message) => true,
+        _ if is_request_deterministic_error(code) => false,
+        _ if is_benign_server_error(message) => false,
+        _ => true,
+    }
 }
 
 /// JSON-RPC error codes that reflect the *request* or its on-chain outcome
@@ -576,7 +581,25 @@ fn is_request_deterministic_error(code: i64) -> bool {
     )
 }
 
-/// Benign, request-speciCommit fic conditions some nodes report in the implementation-
+/// Explicit node-health conditions some nodes report with deterministic
+/// JSON-RPC codes. The message should override the code because these failures
+/// are endpoint-specific and can succeed on another node.
+fn is_node_health_error(message: &str) -> bool {
+    const NODE_HEALTH: [&str; 8] = [
+        "unauthorized",
+        "unauthenticated",
+        "forbidden",
+        "authenticate",
+        "api key",
+        "rate limit",
+        "too many requests",
+        "quota exceeded",
+    ];
+    let message = message.to_ascii_lowercase();
+    NODE_HEALTH.iter().any(|pattern| message.contains(pattern))
+}
+
+/// Benign, request-specific conditions some nodes report in the implementation-
 /// defined server-error range (e.g. querying past the chain head, or a contract
 /// call that reverts — some clients surface these under `-32000`/`-32015`
 /// instead of a dedicated code). These are not node-health problems and are
@@ -809,6 +832,11 @@ mod tests {
         ));
         assert!(should_failover_on_error(-32005, "rate limit exceeded"));
         assert!(should_failover_on_error(-32603, "internal error"));
+        assert!(should_failover_on_error(
+            -32602,
+            "Unauthorized: You must authenticate your request with an API key."
+        ));
+        assert!(should_failover_on_error(-32600, "rate limit exceeded"));
 
         // Deterministic request errors → do not fail over.
         assert!(!should_failover_on_error(-32602, "invalid params"));
