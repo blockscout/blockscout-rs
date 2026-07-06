@@ -6,7 +6,7 @@
     "indexer_type": "amb",
     "enabled": true,
     "api_url": null,
-    "ui_url": "https://bridge.gnosischain.com/",
+    "ui_url": "https://bridge.gnosischain.com/bridge-explorer/transaction/{{message_id}}",
     "docs_url": "https://docs.gnosischain.com/bridges/About%20Token%20Bridges/amb-bridge",
     "contracts": [
       {

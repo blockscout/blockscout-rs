@@ -312,6 +312,18 @@ state. Check provider config, `onchain_retry_interval`, and
 
 ---
 
+## Stats Asset Mapping Conflicts Skip Transfer Projection
+
+**Symptom:** Repeated warnings like `stats projection: transfer endpoints map to different stats assets; skipping transfer_id=... src_stats_asset_id=... dst_stats_asset_id=...`.
+
+**Root cause:** `stats_asset_tokens` already maps the transfer's source token and destination token to two different logical `stats_assets`. Projection cannot safely infer that those assets should be merged, because each `stats_asset` may hold at most one token per chain and auto-merging could corrupt bridged-token aggregates.
+
+**Impact:** Canonical `crosschain_messages` / `crosschain_transfers` rows remain persisted. Only bridged-token stats projection skips that transfer: no `stats_asset_edges` increment and `crosschain_transfers.stats_asset_id` stays `NULL`. The skipped row is still marked `stats_processed += 1`, so the same row should not warn every maintenance cycle; ongoing warnings usually mean new transfers hit the same fragmented mapping or a backfill is processing historical rows.
+
+**Fix:** Treat as a data repair problem. Verify the two assets really represent the same bridged token, then merge their `stats_asset_tokens`, `stats_asset_edges`, and affected `crosschain_transfers` consistently before resetting skipped transfer stats for re-projection. For local development, a fresh reindex may be simpler.
+
+---
+
 ## Upgrading Unknown Chains to Proper Bridges
 
 **Symptom:** You have partial messages (unknown source chain) and want to properly index that chain pair.

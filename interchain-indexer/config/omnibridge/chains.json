@@ -11,14 +11,14 @@
         },
         "rpcs": [
             {
-                "publicnode": {
-                    "url": "https://ethereum-rpc.publicnode.com"
-                },
                 "gateway": {
                     "url": "https://rpc.eth.gateway.fm"
                 },
                 "drpc": {
                     "url": "https://eth.drpc.org"
+                },
+                "1rpc": {
+                    "url": "https://1rpc.io/eth"
                 }
             }
         ]

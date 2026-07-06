@@ -8,9 +8,6 @@
         },
         "rpcs": [
             {
-                "publicnode": {
-                    "url": "https://ethereum-sepolia-rpc.publicnode.com"
-                },
                 "tenderly": {
                     "url": "https://sepolia.gateway.tenderly.co"
                 },
