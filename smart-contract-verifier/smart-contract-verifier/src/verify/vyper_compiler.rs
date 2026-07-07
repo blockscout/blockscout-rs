@@ -23,6 +23,34 @@ impl evm_compilers::CompilerInput for VyperInput {
             "evm.deployedBytecode".to_string(),
             "evm.methodIdentifiers".to_string(),
         ];
+        // If the request omitted `outputSelection`, populate it with the top-level contract
+        // sources so that the compiler actually emits contracts. We exclude files that were
+        // provided only to satisfy imports from library search paths (e.g. snekmate embedded
+        // under `.venv/.../site-packages`): selecting such library modules directly makes vyper
+        // fail with "module is used but not initialized". Files under the `"."` search path (or
+        // when no library search paths are set) are treated as top-level contracts.
+        if self.settings.output_selection.is_empty() {
+            let library_prefixes: Vec<&str> = self
+                .settings
+                .search_paths
+                .iter()
+                .map(String::as_str)
+                .filter(|p| *p != ".")
+                .collect();
+            for path in self.sources.keys() {
+                // Use `Path::starts_with` (component-wise) rather than raw string prefix
+                // matching, so a search path like `libs` does not misclassify `library.vy`.
+                let is_library = library_prefixes
+                    .iter()
+                    .any(|prefix| path.starts_with(prefix));
+                if !is_library {
+                    self.settings.output_selection.insert(
+                        path.to_string_lossy().into_owned(),
+                        default_output_selection.clone(),
+                    );
+                }
+            }
+        }
         // v0.3.10 was the latest release prior to v0.4.0 pre-releases
         if version > &semver::Version::new(0, 3, 10) {
             for (_key, value) in self.settings.output_selection.iter_mut() {
@@ -101,5 +129,93 @@ impl evm_compilers::EvmCompiler for VyperCompiler {
             serde_json::from_slice(&output).context("deserializing compiler output into value")?;
 
         Ok(output_value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::verify::{evm_compilers::CompilerInput, vyper_compiler_input};
+    use foundry_compilers::artifacts::{Source, Sources};
+    use std::path::PathBuf;
+
+    fn build_input(sources: &[&str], search_paths: &[&str]) -> VyperInput {
+        let sources: Sources = sources
+            .iter()
+            .map(|path| (PathBuf::from(path), Source::new("")))
+            .collect();
+        VyperInput {
+            language: "Vyper".to_string(),
+            sources,
+            interfaces: Default::default(),
+            settings: vyper_compiler_input::Settings {
+                evm_version: None,
+                optimize: None,
+                bytecode_metadata: None,
+                // Empty, mirroring a standard-json request that omits `outputSelection`
+                // (serde default for the field), as opposed to `Settings::default()` which
+                // pre-populates a `{"*": ..}` selection.
+                output_selection: Default::default(),
+                search_paths: search_paths.iter().map(|s| s.to_string()).collect(),
+            },
+        }
+    }
+
+    #[test]
+    fn omitted_output_selection_excludes_library_search_paths() {
+        let mut input = build_input(
+            &[
+                "contracts/dao/LiquidityGauge.vy",
+                "contracts/dao/erc4626.vy",
+                ".venv/lib/pypy3.11/site-packages/snekmate/utils/math.vy",
+            ],
+            &[".venv/lib/pypy3.11/site-packages", "."],
+        );
+        input.normalize_output_selection(&semver::Version::new(0, 4, 3));
+
+        let selected: Vec<_> = input.settings.output_selection.keys().cloned().collect();
+        assert_eq!(
+            selected,
+            vec![
+                "contracts/dao/LiquidityGauge.vy".to_string(),
+                "contracts/dao/erc4626.vy".to_string(),
+            ],
+            "only top-level contracts should be selected, not sources under library search paths"
+        );
+    }
+
+    #[test]
+    fn omitted_output_selection_without_library_paths_selects_all_sources() {
+        let mut input = build_input(&["a.vy", "b.vy"], &["."]);
+        input.normalize_output_selection(&semver::Version::new(0, 4, 3));
+
+        let selected: Vec<_> = input.settings.output_selection.keys().cloned().collect();
+        assert_eq!(selected, vec!["a.vy".to_string(), "b.vy".to_string()]);
+    }
+
+    #[test]
+    fn omitted_output_selection_matches_search_paths_by_component() {
+        // `library.vy` shares a raw string prefix with the `lib` search path but is not under
+        // it, so it must be treated as a top-level contract, not a library file.
+        let mut input = build_input(&["library.vy", "lib/dep.vy"], &["lib", "."]);
+        input.normalize_output_selection(&semver::Version::new(0, 4, 3));
+
+        let selected: Vec<_> = input.settings.output_selection.keys().cloned().collect();
+        assert_eq!(selected, vec!["library.vy".to_string()]);
+    }
+
+    #[test]
+    fn existing_output_selection_is_preserved() {
+        let mut input = build_input(&["a.vy", "libs/dep.vy"], &["libs", "."]);
+        input
+            .settings
+            .output_selection
+            .insert("a.vy".to_string(), vec!["evm.bytecode".to_string()]);
+        input.normalize_output_selection(&semver::Version::new(0, 4, 3));
+
+        // The library-exclusion default only kicks in for an empty output selection, so the
+        // provided key set is kept as-is (values are normalized to the defaults).
+        let selected: Vec<_> = input.settings.output_selection.keys().cloned().collect();
+        assert_eq!(selected, vec!["a.vy".to_string()]);
     }
 }
