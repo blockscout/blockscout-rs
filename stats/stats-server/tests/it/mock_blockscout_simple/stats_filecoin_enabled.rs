@@ -19,7 +19,10 @@ use stats_server::stats;
 use url::Url;
 
 use crate::{
-    common::{ChartSubset, get_test_stats_settings, sorted_vec, wait_for_subset_to_update},
+    common::{
+        ChartSubset, assert_lines_not_served, get_test_stats_settings, sorted_vec,
+        wait_for_subset_to_update,
+    },
     it::mock_blockscout_simple::get_mock_blockscout_filecoin,
 };
 
@@ -86,22 +89,12 @@ async fn test_filecoin_charts_are_listed(base: &Url) {
 /// materialize according to the missing date policy — including the genuine
 /// no-data day of the fixture (`2022-12-15`: no f099 row, no block).
 async fn get_filled_daily_data(base: &Url, chart_name: &str) -> HashMap<String, String> {
-    let chart: serde_json::Value =
+    let chart: stats_proto::blockscout::stats::v1::LineChart =
         send_get_request(base, &format!("/api/v1/lines/{chart_name}")).await;
     chart
-        .as_object()
-        .expect("response has to be json object")
-        .get("chart")
-        .expect("response doesn't have 'chart' field")
-        .as_array()
-        .expect("'chart' field has to be json array")
-        .iter()
-        .map(|point| {
-            (
-                point["date"].as_str().unwrap().to_string(),
-                point["value"].as_str().unwrap().to_string(),
-            )
-        })
+        .chart
+        .into_iter()
+        .map(|point| (point.date, point.value))
         .collect()
 }
 
@@ -117,6 +110,9 @@ async fn test_filecoin_new_chain_fees_data(base: &Url) {
         ("2022-11-11", "0.001193214813588"),
         // no-data day (no f099 row, no block): filled with 0 (FillZero)
         ("2022-12-15", "0"),
+        // mixed day: understated tips-only value (see the `fevmFeeTips`
+        // characterization test in the stats crate)
+        ("2023-02-14", "0.0001"),
         // burn-only day
         ("2023-03-01", "15000"),
     ];
@@ -148,27 +144,13 @@ async fn test_filecoin_chain_fees_growth_data(base: &Url) {
     );
     assert_eq!(
         data.get("2023-03-01").map(String::as_str),
-        Some("30050000.004523344")
+        Some("30050000.004623346")
     );
 }
 
 async fn test_filecoin_intermediates_are_hidden(base: &Url) {
     // not served by the line chart endpoints...
-    for chart_name in ["burnActorBalance", "fevmFeeTips"] {
-        let response = reqwest::Client::new()
-            .request(
-                reqwest::Method::GET,
-                base.join(&format!("/api/v1/lines/{chart_name}")).unwrap(),
-            )
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(
-            response.status(),
-            reqwest::StatusCode::NOT_FOUND,
-            "intermediate chart {chart_name} must not be served"
-        );
-    }
+    assert_lines_not_served(base, &["burnActorBalance", "fevmFeeTips"]).await;
     // ...and not listed in any section
     let line_charts: stats_proto::blockscout::stats::v1::LineCharts =
         send_get_request(base, "/api/v1/lines").await;

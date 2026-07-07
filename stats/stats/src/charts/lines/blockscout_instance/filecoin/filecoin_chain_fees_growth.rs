@@ -67,8 +67,9 @@ mod tests {
     // surrounding days (`2022-12-01`, `2023-01-01`) pin that the running
     // total carried across the gap correctly; the filled "previous day's
     // cumulative" behavior is asserted at the API level. `2022-11-11`
-    // (tips-only) and `2023-03-01` (burn-only) advance the total by exactly
-    // that single contribution.
+    // (tips-only), `2023-02-14` (mixed, understated tips-only) and
+    // `2023-03-01` (burn-only) advance the total by exactly that single
+    // contribution.
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_filecoin_chain_fees_growth() {
@@ -82,7 +83,8 @@ mod tests {
                 ("2022-12-01", "30010000.003450688"),
                 ("2023-01-01", "30020000.00347218"),
                 ("2023-02-01", "30035000.004523344"),
-                ("2023-03-01", "30050000.004523344"),
+                ("2023-02-14", "30035000.004623346"),
+                ("2023-03-01", "30050000.004623346"),
             ],
         )
         .await;

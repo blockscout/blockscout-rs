@@ -179,6 +179,8 @@ mod tests {
     // - `2022-11-11`: tips-only day (no f099 row — balance carried over);
     // - `2022-12-15`: genuine no-data day, asserted **by absence** — unfilled
     //   reads omit gap days; the filled `0` is asserted at the API level;
+    // - `2023-02-14`: mixed day — tips-only, understated (see the
+    //   `fevmFeeTips` characterization test);
     // - `2023-03-01`: burn-only day (f099 row, no counted tips).
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -193,6 +195,7 @@ mod tests {
                 ("2022-12-01", "6500.0008839185175"),
                 ("2023-01-01", "10000.000021492593"),
                 ("2023-02-01", "15000.001051166666"),
+                ("2023-02-14", "0.0001"),
                 ("2023-03-01", "15000"),
             ],
         )

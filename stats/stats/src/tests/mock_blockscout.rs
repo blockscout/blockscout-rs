@@ -401,7 +401,7 @@ fn mock_blocks(max_date: NaiveDate) -> Vec<blocks::ActiveModel> {
     .collect::<Vec<_>>()
 }
 
-fn mock_block(index: i64, ts: NaiveDateTime, consensus: bool) -> blocks::ActiveModel {
+pub(crate) fn mock_block(index: i64, ts: NaiveDateTime, consensus: bool) -> blocks::ActiveModel {
     let size = (1000 + (index * 15485863) % 5000) as i32;
     let gas_limit = if index <= 3 { 12_500_000 } else { 30_000_000 };
     blocks::ActiveModel {
@@ -421,7 +421,7 @@ fn mock_block(index: i64, ts: NaiveDateTime, consensus: bool) -> blocks::ActiveM
     }
 }
 
-fn mock_addresses() -> Vec<addresses::ActiveModel> {
+pub(crate) fn mock_addresses() -> Vec<addresses::ActiveModel> {
     (1..9)
         .map(|seed| mock_address(seed, false, false))
         .collect::<Vec<_>>()
@@ -443,7 +443,7 @@ fn mock_address(seed: i64, is_contract: bool, is_verified: bool) -> addresses::A
 }
 
 #[derive(Debug, Clone)]
-enum TxType {
+pub(crate) enum TxType {
     Transfer,
     ContractCall,
     ContractCreation(Vec<u8>),
@@ -538,7 +538,7 @@ fn reindexing_mock_txns(
         .collect()
 }
 
-fn mock_transaction(
+pub(crate) fn mock_transaction(
     block: &blocks::ActiveModel,
     gas: i64,
     gas_price: i64,

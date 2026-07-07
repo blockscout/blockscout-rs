@@ -14,12 +14,9 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::chart_prelude::*;
 
-const ETHER: i64 = i64::pow(10, 18);
+use super::ETHER;
 
 /// Hex of the 20-byte EVM representation of the Filecoin burn actor (f099).
-///
-/// Must stay in sync with `BURN_ACTOR_HASH_HEX` in
-/// `crate::tests::mock_blockscout_filecoin`.
 pub(crate) const BURN_ACTOR_HASH_HEX: &str = "ff00000000000000000000000000000000000063";
 
 pub struct BurnActorBalanceStatement;
@@ -38,44 +35,32 @@ impl StatementFromRange for BurnActorBalanceStatement {
         // query uses a date column, therefore `sql_with_range_filter_opt`
         // does not quite fit (it compares against timestamps); the interval
         // is closed on both ends so that a batch seam landing on midnight
-        // does not drop the end day
-        match day_range {
-            Some(range) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r"
-                    SELECT
-                        day as date,
-                        (value / $1)::float AS value
-                    FROM address_coin_balances_daily
-                    WHERE
-                        address_hash = decode($2, 'hex') AND
-                        value is not NULL AND
-                        day != to_timestamp(0) AND
+        // does not drop the end day — hence the filter is assembled locally
+        // instead of via the shared (half-open, timestamp-typed) helper
+        let mut values = vec![ETHER.into(), BURN_ACTOR_HASH_HEX.into()];
+        let day_filter = match day_range {
+            Some(range) => {
+                values.push(range.start.into());
+                values.push(range.end.into());
+                " AND
                         day >= $3 AND
-                        day <= $4;
-                ",
-                vec![
-                    ETHER.into(),
-                    BURN_ACTOR_HASH_HEX.into(),
-                    range.start.into(),
-                    range.end.into(),
-                ],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r"
-                    SELECT
-                        day as date,
-                        (value / $1)::float AS value
-                    FROM address_coin_balances_daily
-                    WHERE
-                        address_hash = decode($2, 'hex') AND
-                        value is not NULL AND
-                        day != to_timestamp(0);
-                ",
-                vec![ETHER.into(), BURN_ACTOR_HASH_HEX.into()],
-            ),
-        }
+                        day <= $4"
+            }
+            None => "",
+        };
+        let sql = format!(
+            r"
+                SELECT
+                    day as date,
+                    (value / $1)::float AS value
+                FROM address_coin_balances_daily
+                WHERE
+                    address_hash = decode($2, 'hex') AND
+                    value is not NULL AND
+                    day != to_timestamp(0){day_filter};
+            "
+        );
+        Statement::from_sql_and_values(DbBackend::Postgres, sql, values)
     }
 }
 
@@ -106,8 +91,12 @@ impl ChartProperties for Properties {
     }
 }
 
+// `BatchMaxDays`: a light single-address lookup on the
+// `(address_hash, day)` primary key returning one tiny row per day — the
+// whole range is cheaper in one query (cf. `NewAccounts`), unlike the heavy
+// join of `FevmFeeTips`, which stays batched
 pub type BurnActorBalance =
-    DirectVecLocalDbChartSource<BurnActorBalanceRemoteString, Batch30Days, Properties>;
+    DirectVecLocalDbChartSource<BurnActorBalanceRemoteString, BatchMaxDays, Properties>;
 pub type BurnActorBalanceFloat = MapParseTo<StripExt<BurnActorBalance>, f64>;
 
 #[cfg(test)]
@@ -125,10 +114,6 @@ mod tests {
     fn burn_actor_hash_is_20_bytes() {
         assert_eq!(BURN_ACTOR_HASH_HEX.len(), 40);
         assert_eq!(hex::decode(BURN_ACTOR_HASH_HEX).map(|v| v.len()), Ok(20));
-        assert_eq!(
-            BURN_ACTOR_HASH_HEX,
-            crate::tests::mock_blockscout_filecoin::BURN_ACTOR_HASH_HEX
-        );
     }
 
     #[test]

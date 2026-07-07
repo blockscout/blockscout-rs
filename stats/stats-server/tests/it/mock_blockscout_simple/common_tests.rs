@@ -16,7 +16,7 @@ use url::Url;
 
 use crate::{
     array_of_variables_with_names,
-    common::{enabled_resolutions, sorted_vec},
+    common::{assert_lines_not_served, enabled_resolutions, sorted_vec},
 };
 
 pub async fn test_lines_ok(
@@ -158,26 +158,16 @@ pub async fn test_lines_ok(
 /// settings must not serve them; their positive counterparts live in
 /// `stats_filecoin_enabled.rs`.
 async fn assert_filecoin_charts_disabled_by_default(base: &Url) {
-    for line_name in [
-        "filecoinNewChainFees",
-        "filecoinChainFeesGrowth",
-        "burnActorBalance",
-        "fevmFeeTips",
-    ] {
-        let response = reqwest::Client::new()
-            .request(
-                reqwest::Method::GET,
-                base.join(&format!("/api/v1/lines/{line_name}")).unwrap(),
-            )
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(
-            response.status(),
-            reqwest::StatusCode::NOT_FOUND,
-            "disabled filecoin chart {line_name} must not be served"
-        );
-    }
+    assert_lines_not_served(
+        base,
+        &[
+            "filecoinNewChainFees",
+            "filecoinChainFeesGrowth",
+            "burnActorBalance",
+            "fevmFeeTips",
+        ],
+    )
+    .await;
 }
 
 pub async fn test_counters_ok(
