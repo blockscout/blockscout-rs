@@ -82,6 +82,7 @@ pub async fn run_tests_with_nothing_indexed() {
             blockscout_indexed,
             user_ops_indexed,
             zetachain_indexed,
+            false,
         )
         .boxed(),
         test_counters_ok(
@@ -140,6 +141,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
             blockscout_indexed,
             user_ops_indexed,
             zetachain_indexed,
+            false,
         )
         .boxed(),
         test_counters_ok(

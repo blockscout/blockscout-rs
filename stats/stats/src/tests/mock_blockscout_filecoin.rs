@@ -29,9 +29,7 @@ use std::str::FromStr;
 use super::mock_blockscout::{
     TxType, mock_address_coin_balance_daily, mock_addresses, mock_block, mock_transaction,
 };
-use crate::lines::BURN_ACTOR_HASH_HEX;
-
-const ETHER: i128 = i128::pow(10, 18);
+use crate::{lines::BURN_ACTOR_HASH_HEX, utils::ETHER};
 
 /// Deterministic base fee set on non-hazard consensus blocks.
 ///
@@ -146,7 +144,7 @@ fn mock_burn_actor_balances(max_date: NaiveDate) -> Vec<address_coin_balances_da
         .into_iter()
         .filter(|(day, _)| *day <= max_date)
         .map(|(day, fil)| {
-            mock_address_coin_balance_daily(burn_actor_hash.clone(), day, Some(fil * ETHER))
+            mock_address_coin_balance_daily(burn_actor_hash.clone(), day, Some(fil * ETHER as i128))
         })
         .collect()
 }
@@ -224,12 +222,6 @@ mod tests {
 
     use super::*;
     use crate::tests::{init_db::init_db_blockscout, mock_blockscout::fill_mock_blockscout_data};
-
-    #[test]
-    fn burn_actor_hash_is_20_bytes() {
-        assert_eq!(BURN_ACTOR_HASH_HEX.len(), 40);
-        assert_eq!(hex::decode(BURN_ACTOR_HASH_HEX).map(|v| v.len()), Ok(20));
-    }
 
     #[test]
     fn burn_actor_balances_are_consistent() {

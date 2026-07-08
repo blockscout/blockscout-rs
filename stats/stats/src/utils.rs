@@ -9,6 +9,16 @@ use std::ops::{Range, RangeInclusive};
 // this const is not public in `chrono` for some reason
 pub const NANOS_PER_SEC: i32 = 1_000_000_000;
 
+/// attoFIL per FIL / wei per ETH — the 10^18 divisor between a chain's base
+/// unit and its whole coin.
+///
+/// Several older charts still carry local copies of this value; when touching
+/// them, migrate to this constant instead: `ETHER` in
+/// `transactions/txns_fee.rs`, `transactions/average_txn_fee.rs`,
+/// `counters/blockscout_instance/txns_stats_24h/mod.rs`; `ETH` in
+/// `blocks/average_block_rewards.rs`, `tokens/native_coin_supply.rs`.
+pub(crate) const ETHER: i64 = i64::pow(10, 18);
+
 pub fn day_start(date: &NaiveDate) -> DateTime<Utc> {
     date.and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
         .and_utc()
@@ -42,6 +52,36 @@ pub fn produce_filter_and_values(
                 " AND
                 {filter_by} < ${arg_n_2} AND
                 {filter_by} >= ${arg_n_1}"
+            ),
+            vec![range.start.into(), range.end.into()],
+        )
+    } else {
+        ("".to_owned(), vec![])
+    }
+}
+
+/// Same as [`produce_filter_and_values`] but for a date (e.g. `day`) column:
+/// compares `NaiveDate`s and produces a **closed** interval (both ends
+/// inclusive), so that a batch seam landing on midnight does not drop the
+/// end day.
+///
+/// ### Results
+/// Vec should be appended to the args.
+/// String should be inserted in places for filter.
+#[doc(hidden)]
+pub fn produce_day_filter_and_values(
+    range: Option<Range<NaiveDate>>,
+    filter_by: &str,
+    filter_arg_number_start: usize,
+) -> (String, Vec<Value>) {
+    if let Some(range) = range {
+        let arg_n_1 = filter_arg_number_start;
+        let arg_n_2 = arg_n_1 + 1;
+        (
+            format!(
+                " AND
+                {filter_by} >= ${arg_n_1} AND
+                {filter_by} <= ${arg_n_2}"
             ),
             vec![range.start.into(), range.end.into()],
         )
@@ -416,6 +456,27 @@ mod test {
                 aboba >= $123"
                     .to_string(),
                 vec![time_1.into(), time_2.into()]
+            )
+        );
+    }
+
+    #[test]
+    fn day_filter_and_values_works() {
+        assert_eq!(
+            produce_day_filter_and_values(None, "day", 3),
+            ("".to_string(), vec![])
+        );
+
+        let day_1 = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
+        let day_2 = NaiveDate::from_ymd_opt(2023, 2, 1).unwrap();
+        assert_eq!(
+            produce_day_filter_and_values(Some(day_1..day_2), "day", 3),
+            (
+                " AND
+                day >= $3 AND
+                day <= $4"
+                    .to_string(),
+                vec![day_1.into(), day_2.into()]
             )
         );
     }

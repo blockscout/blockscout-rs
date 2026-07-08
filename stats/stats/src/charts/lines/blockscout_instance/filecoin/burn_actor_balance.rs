@@ -12,9 +12,7 @@
 
 use std::{collections::HashSet, ops::Range};
 
-use crate::chart_prelude::*;
-
-use super::ETHER;
+use crate::{chart_prelude::*, utils::ETHER};
 
 /// Hex of the 20-byte EVM representation of the Filecoin burn actor (f099).
 pub(crate) const BURN_ACTOR_HASH_HEX: &str = "ff00000000000000000000000000000000000063";
@@ -33,21 +31,13 @@ impl StatementFromRange for BurnActorBalanceStatement {
             start.date_naive()..end.date_naive()
         });
         // query uses a date column, therefore `sql_with_range_filter_opt`
-        // does not quite fit (it compares against timestamps); the interval
-        // is closed on both ends so that a batch seam landing on midnight
-        // does not drop the end day — hence the filter is assembled locally
-        // instead of via the shared (half-open, timestamp-typed) helper
+        // does not quite fit (it compares against timestamps, and its
+        // half-open end would drop the end day whenever a batch seam lands
+        // on midnight) — the closed-interval date helper is used instead
         let mut values = vec![ETHER.into(), BURN_ACTOR_HASH_HEX.into()];
-        let day_filter = match day_range {
-            Some(range) => {
-                values.push(range.start.into());
-                values.push(range.end.into());
-                " AND
-                        day >= $3 AND
-                        day <= $4"
-            }
-            None => "",
-        };
+        let (day_filter, day_values) =
+            produce_day_filter_and_values(day_range, "day", values.len() + 1);
+        values.extend(day_values);
         let sql = format!(
             r"
                 SELECT

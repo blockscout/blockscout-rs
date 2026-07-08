@@ -24,6 +24,7 @@ pub async fn test_lines_ok(
     blockscout_indexed: bool,
     user_ops_indexed: bool,
     zetachain_indexed: bool,
+    filecoin_enabled: bool,
 ) {
     let line_charts: stats_proto::blockscout::stats::v1::LineCharts =
         send_get_request(&base, "/api/v1/lines").await;
@@ -102,6 +103,9 @@ pub async fn test_lines_ok(
             "zetachainCrossChainTxnsGrowth",
         ]);
     }
+    if filecoin_enabled {
+        expected_lines.extend(["filecoinNewChainFees", "filecoinChainFeesGrowth"]);
+    }
 
     for line_name in expected_lines {
         let line_resolutions = enabled_resolutions
@@ -150,7 +154,13 @@ pub async fn test_lines_ok(
     // should not return charts that are disabled or waiting for indexing
     assert_eq!(enabled_resolutions, HashMap::new());
 
-    assert_filecoin_charts_disabled_by_default(&base).await;
+    if filecoin_enabled {
+        // even with the flag on, the intermediates must never be served;
+        // the names mirror `assert_filecoin_charts_disabled_by_default`
+        assert_lines_not_served(&base, &["burnActorBalance", "fevmFeeTips"]).await;
+    } else {
+        assert_filecoin_charts_disabled_by_default(&base).await;
+    }
 }
 
 /// Filecoin charts (both public and intermediate) are off by default

@@ -5,8 +5,27 @@
 //!
 //! Composed from two intermediate charts:
 //! - `Delta` over the f099 burn-actor balance (`burn_actor_balance`) —
-//!   per-day base-fee + over-estimation burn;
+//!   per-day base-fee + over-estimation burn, floored at zero via
+//!   [`ClampNonNegative`] (see the comment at the composition below);
 //! - the per-day FEVM miner-tip sum (`fevm_fee_tips`).
+//!
+//! ## Boundary behavior on truncated balance history
+//!
+//! The very first daily point equals the whole f099 balance at the first
+//! indexed day: `Delta` has no prior row and uses `prev_value = 0`. On an
+//! instance whose balance history starts long after genesis (Filecoin
+//! mainnet indexes from the FEVM launch, and f099 balance rows begin later
+//! still, already at tens of millions of FIL) the first point is therefore
+//! a large, one-off, *visible* spike — not missing data. It is
+//! intentionally not suppressed: that same value is exactly what makes
+//! `filecoin_chain_fees_growth` (a running sum of this chart) report the
+//! correct cumulative total of chain fees to date; zeroing or dropping it
+//! would undercount that total by the whole pre-index burn. The spike also
+//! lands in the first bucket of the weekly/monthly/yearly resolutions.
+//!
+//! A negative day-over-day move of the balance, by contrast, carries no
+//! information (the burn actor only accumulates FIL) and *is* clamped —
+//! see the composition below.
 
 use std::fmt::Debug;
 
@@ -80,8 +99,29 @@ define_and_impl_resolution_properties!(
     base_impl: Properties
 );
 
+// the burn delta is floored at zero: the f099 balance is monotonic
+// on-chain, so a negative delta can only be a data artifact (indexer
+// reorg/backfill, or a future hardfork/manual reset of f099) — the network
+// never earns negative revenue, and such a day contributes 0 instead of
+// pulling the public chart below zero and breaking the growth chart's
+// monotonicity. Tips need no clamp — they are already floored at zero per
+// transaction in the `fevm_fee_tips` SQL. The clamp does not affect the
+// first-point spike described in the module docs (a first delta is a
+// balance, hence non-negative).
+// TODO: under anomalies a finer-grained burn would sum only the *upward*
+// block-to-block moves of the f099 balance; needs the heavy per-block
+// `address_coin_balances` table — tracked separately (`.ai/issues/`,
+// burn-delta block-level accumulation)
 pub type FilecoinNewChainFees = DirectVecLocalDbChartSource<
-    MapToString<Map<(Delta<BurnActorBalanceFloat>, FevmFeeTipsFloat), AddBurnAndTips>>,
+    MapToString<
+        Map<
+            (
+                ClampNonNegative<Delta<BurnActorBalanceFloat>>,
+                FevmFeeTipsFloat,
+            ),
+            AddBurnAndTips,
+        >,
+    >,
     BatchMaxDays,
     Properties,
 >;

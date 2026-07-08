@@ -17,9 +17,7 @@
 
 use std::{collections::HashSet, ops::Range};
 
-use crate::chart_prelude::*;
-
-use super::ETHER;
+use crate::{chart_prelude::*, utils::ETHER};
 
 pub struct FevmFeeTipsStatement;
 impl_db_choice!(FevmFeeTipsStatement, UsePrimaryDB);
@@ -43,6 +41,7 @@ impl StatementFromRange for FevmFeeTipsStatement {
         // fabricated zero-fee day; see
         // `mixed_day_value_characterizes_the_undercount`
         if completed_migrations.denormalization {
+            // TODO: consider supporting such case in macro ?
             let mut args = vec![ETHER.into()];
             let (tx_filter, new_args) =
                 produce_filter_and_values(range.clone(), "t.block_timestamp", args.len() + 1);

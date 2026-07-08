@@ -33,7 +33,8 @@ pub mod chart_prelude {
                     filter_deducible::FilterDeducible,
                     last_point::LastPoint,
                     map::{
-                        Map, MapDivide, MapFunction, MapParseTo, MapToString, StripExt, UnwrapOr,
+                        ClampNonNegative, Map, MapDivide, MapFunction, MapParseTo, MapToString,
+                        StripExt, UnwrapOr,
                     },
                     resolutions::{
                         average::AverageLowerResolution, last_value::LastValueLowerResolution,
@@ -86,7 +87,9 @@ pub mod chart_prelude {
         data_source::kinds::remote_db::query::{
             calculate_yesterday, query_yesterday_data, query_yesterday_data_cached,
         },
-        utils::{produce_filter_and_values, sql_with_range_filter_opt},
+        utils::{
+            produce_day_filter_and_values, produce_filter_and_values, sql_with_range_filter_opt,
+        },
     };
 
     pub use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, TimeDelta, Utc};

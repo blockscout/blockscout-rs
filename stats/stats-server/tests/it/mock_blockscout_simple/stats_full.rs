@@ -53,6 +53,7 @@ pub async fn run_fully_initialized_stats_tests() {
             blockscout_indexed,
             user_ops_indexed,
             zetachain_indexed,
+            false,
         )
         .boxed(),
         test_counters_ok(
