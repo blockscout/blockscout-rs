@@ -104,7 +104,10 @@ pub async fn test_lines_ok(
         ]);
     }
     if filecoin_enabled {
-        expected_lines.extend(["filecoinNewChainFees", "filecoinChainFeesGrowth"]);
+        // the flag adds one public id; `txnsFee` is already in the base
+        // `blockscout_indexed` list and is served with the
+        // `filecoinNewChainFees` implementation under the remap
+        expected_lines.extend(["filecoinChainFeesGrowth"]);
     }
 
     for line_name in expected_lines {
@@ -155,9 +158,15 @@ pub async fn test_lines_ok(
     assert_eq!(enabled_resolutions, HashMap::new());
 
     if filecoin_enabled {
-        // even with the flag on, the intermediates must never be served;
-        // the names mirror `assert_filecoin_charts_disabled_by_default`
-        assert_lines_not_served(&base, &["burnActorBalance", "fevmFeeTips"]).await;
+        // even with the flag on, the intermediates must never be served, and
+        // `filecoinNewChainFees` stays hidden as well — it is only the
+        // implementation behind the public `txnsFee` id; the names mirror
+        // `assert_filecoin_charts_disabled_by_default`
+        assert_lines_not_served(
+            &base,
+            &["filecoinNewChainFees", "burnActorBalance", "fevmFeeTips"],
+        )
+        .await;
     } else {
         assert_filecoin_charts_disabled_by_default(&base).await;
     }
