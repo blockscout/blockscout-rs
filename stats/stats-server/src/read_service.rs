@@ -442,7 +442,7 @@ impl ReadService {
                 Status::not_found(format!(
                     "resolution '{}' for line chart '{}' was not found",
                     String::from(resolution),
-                    &name,
+                    name,
                 ))
             })?;
 
