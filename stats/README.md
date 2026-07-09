@@ -191,6 +191,8 @@ The service will periodically check the enabled start conditions and start updat
 | `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__TITLE`              |                          | Displayed name of `<LINE_CHART_NAME>`, e.g. `"Some line chart title"`                                                                                                                          | `null`        |
 | `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__UNITS`              |                          | Measurement units, e.g. `"{{<variable_name>}}"`                                                                                                                                                | `null`        |
 | `STATS_CHARTS__TEMPLATE_VALUES__<VARIABLE_NAME>`                   |                          | Value to substitute instead of `{{<variable_name>}}`, e.g. `STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL="some_value"`. See full list of variables in charts config file (`charts.json`). | `null`        |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__IMPLEMENTATION`           |                          | Serve counter `<COUNTER_NAME>` with the implementation of another registered counter; the value is a chart id in snake_case, e.g. `"total_txns"`                                               | `null`        |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__IMPLEMENTATION`     |                          | Serve `<LINE_CHART_NAME>` with the implementation of another registered line chart; the value is a chart id in snake_case, e.g. `"filecoin_new_chain_fees"`                                    | `null`        |
 
 [anchor]: <> (anchors.envs.end.charts)
 
