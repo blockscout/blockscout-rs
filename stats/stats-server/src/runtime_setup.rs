@@ -186,9 +186,13 @@ impl RuntimeSetup {
 
         for (name, settings) in charts_settings {
             if let Some(enabled_chart_settings) = settings.clone().into_enabled() {
+                // an entry with `implementation` set is served with the handles
+                // of the referenced chart, under the entry's own (public) name;
+                // the mapping is checked by `validate_implementation_mappings`
+                let internal_name = settings.implementation.unwrap_or_else(|| name.clone());
                 let mut enabled_resolutions_properties = HashMap::new();
                 for (resolution, resolution_setting) in settings.resolutions.into_list() {
-                    let key = ChartKey::new(name.clone(), resolution);
+                    let key = ChartKey::new(internal_name.clone(), resolution);
                     let resolution_properties = match available_resolutions.entry(key.clone()) {
                         Entry::Occupied(o)
                             if o.get().type_specifics.as_chart_type() == settings_chart_type =>
@@ -226,11 +230,117 @@ impl RuntimeSetup {
         }
     }
 
+    /// Validate the `implementation` mappings of enabled entries, with errors
+    /// naming both sides of a broken mapping.
+    ///
+    /// The matching loop in [`Self::charts_info_from_settings`] enforces the
+    /// same invariants mechanically (each registered chart is consumed at most
+    /// once), but failures there surface as a generic "non-existent
+    /// charts+resolutions" error that never names the mapped entry.
+    ///
+    /// Both sections are checked in one pass because implementations are
+    /// claimed from the shared registry map. Unknown-name and wrong-type
+    /// checks must precede the resolution check: the latter derives the
+    /// implementation's available resolutions, which look empty for a
+    /// misspelled or wrong-type implementation.
+    fn validate_implementation_mappings(
+        counters_settings: &BTreeMap<String, AllChartSettings>,
+        line_charts_settings: &BTreeMap<String, AllChartSettings>,
+        all_members: &BTreeMap<ChartKey, ChartObject>,
+    ) -> anyhow::Result<()> {
+        let member_types: HashMap<&str, ChartType> = all_members
+            .iter()
+            .map(|(key, object)| (key.name(), object.type_specifics.as_chart_type()))
+            .collect();
+        let sections = [
+            (ChartType::Counter, counters_settings),
+            (ChartType::Line, line_charts_settings),
+        ];
+        // implementation name -> public entry that claimed it
+        let mut claims: HashMap<&str, &str> = HashMap::new();
+        for (entry_type, settings) in sections {
+            for (public_name, entry_settings) in settings.iter() {
+                // `implementation` on a disabled entry is inert, consistent
+                // with the `into_enabled` gate of the matching loop
+                if !entry_settings.enabled {
+                    continue;
+                }
+                let Some(implementation) = entry_settings.implementation.as_deref() else {
+                    continue;
+                };
+                if implementation == public_name {
+                    anyhow::bail!(
+                        "chart '{public_name}': `implementation` must reference another \
+                        chart, not the chart itself"
+                    );
+                }
+                let Some(implementation_type) = member_types.get(implementation) else {
+                    anyhow::bail!(
+                        "chart '{public_name}': `implementation` references unknown \
+                        chart '{implementation}'"
+                    );
+                };
+                if *implementation_type != entry_type {
+                    anyhow::bail!(
+                        "chart '{public_name}' is a {entry_type:?} chart, but its \
+                        `implementation` '{implementation}' is a {implementation_type:?} chart"
+                    );
+                }
+                if let Some(also_claimed_by) = claims.insert(implementation, public_name) {
+                    anyhow::bail!(
+                        "charts '{also_claimed_by}' and '{public_name}' both reference \
+                        '{implementation}' in `implementation`"
+                    );
+                }
+                let implementation_own_entry_enabled = counters_settings
+                    .get(implementation)
+                    .or_else(|| line_charts_settings.get(implementation))
+                    .is_some_and(|settings| settings.enabled);
+                if implementation_own_entry_enabled {
+                    anyhow::bail!(
+                        "chart '{public_name}' references '{implementation}' in \
+                        `implementation`, but chart '{implementation}' is also enabled \
+                        under its own name; disable one of them"
+                    );
+                }
+                // resolution compatibility is checked only for explicitly
+                // requested resolutions; a default `None` ("enable if present")
+                // on a missing resolution stays silently skipped, exactly as
+                // for non-remapped charts
+                let implementation_resolutions: HashSet<ResolutionKind> = all_members
+                    .keys()
+                    .filter(|key| key.name() == implementation)
+                    .map(|key| *key.resolution())
+                    .collect();
+                if implementation_resolutions.is_empty() {
+                    // defer to the more specific errors above
+                    continue;
+                }
+                if let Err(missing) = entry_settings
+                    .resolutions
+                    .clone()
+                    .into_enabled(&implementation_resolutions)
+                {
+                    anyhow::bail!(
+                        "chart '{public_name}' explicitly requests resolutions {missing:?} \
+                        that its `implementation` '{implementation}' does not have"
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn all_charts_info_from_settings(
         counters_settings: BTreeMap<String, AllChartSettings>,
         line_charts_settings: BTreeMap<String, AllChartSettings>,
-    ) -> Result<AllChartsInfo, Vec<ChartKey>> {
+    ) -> anyhow::Result<AllChartsInfo> {
         let mut available_resolutions = Self::all_members();
+        Self::validate_implementation_mappings(
+            &counters_settings,
+            &line_charts_settings,
+            &available_resolutions,
+        )?;
         let counters_info = Self::charts_info_from_settings(
             &mut available_resolutions,
             counters_settings,
@@ -254,7 +364,9 @@ impl RuntimeSetup {
                 if let Err(l) = lines_result {
                     unknown_charts.extend(l);
                 }
-                Err(unknown_charts)
+                Err(anyhow::anyhow!(
+                    "non-existent charts+resolutions are present in settings: {unknown_charts:?}",
+                ))
             }
         }
     }
@@ -265,12 +377,7 @@ impl RuntimeSetup {
         let AllChartsInfo {
             counters,
             line_charts,
-        } = Self::all_charts_info_from_settings(charts_config.counters, charts_config.lines)
-            .map_err(|unknown_charts| {
-                anyhow::anyhow!(
-                    "non-existent charts+resolutions are present in settings: {unknown_charts:?}",
-                )
-            })?;
+        } = Self::all_charts_info_from_settings(charts_config.counters, charts_config.lines)?;
 
         combine_disjoint_maps(counters, line_charts)
             .map_err(|duplicate_name| anyhow::anyhow!("duplicate chart name: {duplicate_name:?}",))
@@ -670,5 +777,261 @@ impl RuntimeSetup {
             .into_iter()
             .filter(|(chart, _req)| enabled_charts.contains(chart))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::types::ResolutionsSettings;
+    use stats::{
+        ChartProperties,
+        counters::TotalTxns,
+        lines::{AverageTxnFee, FilecoinNewChainFees, NewTxnsWindow, TxnsFee},
+    };
+
+    // these tests operate on post-load configs, where chart ids are already
+    // camelCase, so they are always spelled via `key().name()`
+
+    fn chart_settings(enabled: bool, implementation: Option<String>) -> AllChartSettings {
+        AllChartSettings {
+            enabled,
+            implementation,
+            ..Default::default()
+        }
+    }
+
+    fn line_charts_config(
+        lines: impl IntoIterator<Item = (String, AllChartSettings)>,
+    ) -> config::charts::Config<AllChartSettings> {
+        config::charts::Config {
+            counters: BTreeMap::new(),
+            lines: lines.into_iter().collect(),
+        }
+    }
+
+    fn runtime_setup(
+        charts: config::charts::Config<AllChartSettings>,
+    ) -> anyhow::Result<RuntimeSetup> {
+        RuntimeSetup::new(
+            charts,
+            config::layout::Config::default(),
+            config::update_groups::Config::default(),
+        )
+    }
+
+    fn startup_error(charts: config::charts::Config<AllChartSettings>) -> String {
+        match runtime_setup(charts) {
+            Ok(_) => panic!("invalid mapping must fail startup"),
+            Err(e) => e.to_string(),
+        }
+    }
+
+    #[test]
+    fn remapped_chart_is_served_under_public_name_with_implementation_handles() {
+        let public_name = TxnsFee::key().into_name();
+        let implementation_name = FilecoinNewChainFees::key().into_name();
+        // distinct sentinels on both sides pin the metadata source: the
+        // public entry's settings must win for all three fields
+        let public_settings = AllChartSettings {
+            enabled: true,
+            title: "PUBLIC_TITLE".to_owned(),
+            description: "PUBLIC_DESC".to_owned(),
+            units: Some("PUBLIC_UNITS".to_owned()),
+            implementation: Some(implementation_name.clone()),
+            ..Default::default()
+        };
+        let implementation_settings = AllChartSettings {
+            enabled: false,
+            title: "IMPL_TITLE".to_owned(),
+            description: "IMPL_DESC".to_owned(),
+            units: Some("IMPL_UNITS".to_owned()),
+            ..Default::default()
+        };
+        let setup = runtime_setup(line_charts_config([
+            (public_name.clone(), public_settings),
+            (implementation_name.clone(), implementation_settings),
+        ]))
+        .expect("valid remapping must not fail startup");
+
+        let entry = setup
+            .charts_info
+            .get(&public_name)
+            .expect("public name must be present in charts info");
+        assert!(
+            !setup.charts_info.contains_key(&implementation_name),
+            "implementation must not be served under its own name"
+        );
+
+        assert_eq!(entry.settings.title, "PUBLIC_TITLE");
+        assert_eq!(entry.settings.description, "PUBLIC_DESC");
+        assert_eq!(entry.settings.units.as_deref(), Some("PUBLIC_UNITS"));
+
+        // per-resolution handles carry the implementation's internal name
+        let expected_keys: HashSet<ChartKey> = [
+            ResolutionKind::Day,
+            ResolutionKind::Week,
+            ResolutionKind::Month,
+            ResolutionKind::Year,
+        ]
+        .map(|resolution| ChartKey::new(implementation_name.clone(), resolution))
+        .into();
+        for resolution_entry in entry.resolutions.values() {
+            assert_eq!(resolution_entry.name, implementation_name);
+        }
+        let keys: HashSet<ChartKey> = entry.get_keys().into_iter().collect();
+        assert_eq!(keys, expected_keys);
+
+        // update scheduling follows the implementation identity (Phase 2):
+        // the implementation's group updates the entry, the replaced chart's
+        // group has nothing to do
+        assert_eq!(
+            setup.update_groups["FilecoinChainFeesGroup"].enabled_members,
+            expected_keys
+        );
+        assert!(
+            setup.update_groups["TxnsFeeGroup"]
+                .enabled_members
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn unknown_implementation_fails_startup() {
+        let public_name = TxnsFee::key().into_name();
+        let err = startup_error(line_charts_config([(
+            public_name.clone(),
+            chart_settings(true, Some("definitelyUnknownChart".to_owned())),
+        )]));
+        assert!(err.contains(&public_name), "{err}");
+        assert!(err.contains("definitelyUnknownChart"), "{err}");
+    }
+
+    #[test]
+    fn implementation_chart_type_mismatch_fails_startup() {
+        let public_name = TxnsFee::key().into_name();
+        let implementation_name = TotalTxns::key().into_name();
+        let err = startup_error(line_charts_config([(
+            public_name.clone(),
+            chart_settings(true, Some(implementation_name.clone())),
+        )]));
+        assert!(err.contains(&public_name), "{err}");
+        assert!(err.contains(&implementation_name), "{err}");
+        assert!(err.contains("Counter"), "{err}");
+    }
+
+    #[test]
+    fn implementation_claimed_by_two_mapped_entries_fails_startup() {
+        let implementation_name = FilecoinNewChainFees::key().into_name();
+        let err = startup_error(line_charts_config([
+            (
+                TxnsFee::key().into_name(),
+                chart_settings(true, Some(implementation_name.clone())),
+            ),
+            (
+                AverageTxnFee::key().into_name(),
+                chart_settings(true, Some(implementation_name.clone())),
+            ),
+        ]));
+        assert!(err.contains(&TxnsFee::key().into_name()), "{err}");
+        assert!(err.contains(&AverageTxnFee::key().into_name()), "{err}");
+        assert!(err.contains(&implementation_name), "{err}");
+    }
+
+    #[test]
+    fn implementation_enabled_under_own_name_fails_startup() {
+        let public_name = TxnsFee::key().into_name();
+        let implementation_name = FilecoinNewChainFees::key().into_name();
+        let err = startup_error(line_charts_config([
+            (
+                public_name.clone(),
+                chart_settings(true, Some(implementation_name.clone())),
+            ),
+            (implementation_name.clone(), chart_settings(true, None)),
+        ]));
+        assert!(err.contains(&public_name), "{err}");
+        assert!(err.contains(&implementation_name), "{err}");
+        assert!(err.contains("also enabled"), "{err}");
+    }
+
+    #[test]
+    fn self_referencing_implementation_fails_startup() {
+        let public_name = TxnsFee::key().into_name();
+        let err = startup_error(line_charts_config([(
+            public_name.clone(),
+            chart_settings(true, Some(public_name.clone())),
+        )]));
+        assert!(err.contains(&public_name), "{err}");
+        assert!(err.contains("the chart itself"), "{err}");
+    }
+
+    #[test]
+    fn explicitly_requested_resolution_missing_from_implementation_fails_startup() {
+        // `newTxnsWindow` has only the day resolution
+        let public_name = TxnsFee::key().into_name();
+        let implementation_name = NewTxnsWindow::key().into_name();
+        let mut settings = chart_settings(true, Some(implementation_name.clone()));
+        settings.resolutions = ResolutionsSettings {
+            week: Some(true),
+            ..Default::default()
+        };
+        let err = startup_error(line_charts_config([(public_name.clone(), settings)]));
+        assert!(err.contains(&public_name), "{err}");
+        assert!(err.contains(&implementation_name), "{err}");
+        assert!(err.contains("Week"), "{err}");
+    }
+
+    #[test]
+    fn resolution_missing_from_implementation_with_default_setting_is_skipped() {
+        // parity with non-remapped behavior: a `None` resolution setting means
+        // "enable if present", so nothing fails and only day is enabled
+        let public_name = TxnsFee::key().into_name();
+        let implementation_name = NewTxnsWindow::key().into_name();
+        let setup = runtime_setup(line_charts_config([(
+            public_name.clone(),
+            chart_settings(true, Some(implementation_name.clone())),
+        )]))
+        .expect("default resolution settings must not fail startup");
+        let entry = &setup.charts_info[&public_name];
+        assert_eq!(
+            entry.resolutions.keys().collect_vec(),
+            vec![&ResolutionKind::Day]
+        );
+        assert_eq!(
+            entry.resolutions[&ResolutionKind::Day].name,
+            implementation_name
+        );
+    }
+
+    #[test]
+    fn unknown_implementation_takes_precedence_over_resolution_mismatch() {
+        let mut settings = chart_settings(true, Some("definitelyUnknownChart".to_owned()));
+        settings.resolutions = ResolutionsSettings {
+            week: Some(true),
+            ..Default::default()
+        };
+        let err = startup_error(line_charts_config([(TxnsFee::key().into_name(), settings)]));
+        assert!(err.contains("unknown chart"), "{err}");
+    }
+
+    #[test]
+    fn type_mismatch_takes_precedence_over_resolution_mismatch() {
+        let mut settings = chart_settings(true, Some(TotalTxns::key().into_name()));
+        settings.resolutions = ResolutionsSettings {
+            week: Some(true),
+            ..Default::default()
+        };
+        let err = startup_error(line_charts_config([(TxnsFee::key().into_name(), settings)]));
+        assert!(err.contains("Counter"), "{err}");
+    }
+
+    #[test]
+    fn implementation_on_disabled_entry_is_inert() {
+        let setup = runtime_setup(line_charts_config([(
+            TxnsFee::key().into_name(),
+            chart_settings(false, Some(FilecoinNewChainFees::key().into_name())),
+        )]))
+        .expect("disabled entry with `implementation` must not fail startup");
+        assert!(setup.charts_info.is_empty());
     }
 }
