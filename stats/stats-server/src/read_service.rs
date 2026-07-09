@@ -28,7 +28,7 @@ use futures::{StreamExt, stream::FuturesOrdered};
 use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
-    ChartError, ChartKey, Named, RequestedPointsLimit, ResolutionKind,
+    ChartError, Named, RequestedPointsLimit, ResolutionKind,
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
         ArbitrumYesterdayOperationalTxns, AverageBlockTime, AverageTxnFee24h, NewContracts24h,
@@ -508,7 +508,6 @@ impl ReadService {
     async fn enabled_and_not_waiting_for_starting_condition_charts_info(
         &self,
     ) -> BTreeMap<String, EnabledChartEntry> {
-        let all_enabled = self.charts.charts_info.clone();
         let waiting_for_starting_condition = self
             .update_service
             .initial_update_tracker()
@@ -516,22 +515,16 @@ impl ReadService {
                 &proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition,
             )
             .await;
-        let mut enabled_and_not_waiting_for_starting_condition = BTreeMap::new();
-        for (chart_id, mut entry) in all_enabled {
-            let not_waiting_resolutions = entry
-                .resolutions
-                .into_iter()
-                .filter(|(resolution, _)| {
-                    let chart_res_key = ChartKey::new(chart_id.clone(), *resolution);
-                    !waiting_for_starting_condition.contains(&chart_res_key)
-                })
-                .collect();
-            entry.resolutions = not_waiting_resolutions;
-            if !entry.resolutions.is_empty() {
-                enabled_and_not_waiting_for_starting_condition.insert(chart_id, entry);
-            }
-        }
-        enabled_and_not_waiting_for_starting_condition
+        self.charts
+            .charts_info
+            .clone()
+            .into_iter()
+            .filter_map(|(chart_id, entry)| {
+                let entry =
+                    entry.filter_out_waiting_resolutions(&waiting_for_starting_condition)?;
+                Some((chart_id, entry))
+            })
+            .collect()
     }
 }
 

@@ -69,6 +69,19 @@ impl EnabledChartEntry {
             .map(|(res, entry)| ChartKey::new(entry.name.clone(), *res))
             .collect()
     }
+
+    /// Retains only the resolutions whose `ChartKey` is not in `waiting`;
+    /// `None` when no resolution remains.
+    ///
+    /// The keys are built from the internal chart names (like in
+    /// [`Self::get_keys`]), matching how the update tracker is keyed;
+    /// under a remap they differ from the entry's public map key.
+    pub fn filter_out_waiting_resolutions(mut self, waiting: &HashSet<ChartKey>) -> Option<Self> {
+        self.resolutions.retain(|resolution, entry| {
+            !waiting.contains(&ChartKey::new(entry.name.clone(), *resolution))
+        });
+        (!self.resolutions.is_empty()).then_some(self)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1033,5 +1046,79 @@ mod tests {
         )]))
         .expect("disabled entry with `implementation` must not fail startup");
         assert!(setup.charts_info.is_empty());
+    }
+
+    fn single_chart_entry(implementation: Option<String>) -> EnabledChartEntry {
+        let public_name = TxnsFee::key().into_name();
+        let setup = runtime_setup(line_charts_config([(
+            public_name.clone(),
+            chart_settings(true, implementation),
+        )]))
+        .expect("config must be valid");
+        setup.charts_info[&public_name].clone()
+    }
+
+    #[test]
+    fn waiting_resolutions_of_remapped_entry_are_filtered_by_internal_name() {
+        let implementation_name = FilecoinNewChainFees::key().into_name();
+        let entry = single_chart_entry(Some(implementation_name.clone()));
+
+        // an empty waiting set keeps the entry unchanged
+        let unchanged = entry
+            .clone()
+            .filter_out_waiting_resolutions(&HashSet::new())
+            .expect("entry must survive an empty waiting set");
+        assert_eq!(unchanged.resolutions.len(), 4);
+
+        // the tracker is keyed by internal names, so a waiting internal key
+        // must hide the resolution even though the public name differs
+        let waiting_day = HashSet::from([ChartKey::new(
+            implementation_name.clone(),
+            ResolutionKind::Day,
+        )]);
+        let filtered = entry
+            .clone()
+            .filter_out_waiting_resolutions(&waiting_day)
+            .expect("other resolutions must survive");
+        assert!(!filtered.resolutions.contains_key(&ResolutionKind::Day));
+        assert_eq!(filtered.resolutions.len(), 3);
+
+        // ...and a public-name key must not match anything
+        let waiting_public_day = HashSet::from([ChartKey::new(
+            TxnsFee::key().into_name(),
+            ResolutionKind::Day,
+        )]);
+        let unaffected = entry
+            .clone()
+            .filter_out_waiting_resolutions(&waiting_public_day)
+            .expect("public-name keys must not match internal ones");
+        assert_eq!(unaffected.resolutions.len(), 4);
+
+        // the whole entry is dropped when all resolutions are waiting
+        let waiting_all: HashSet<ChartKey> = entry.get_keys().into_iter().collect();
+        assert!(entry.filter_out_waiting_resolutions(&waiting_all).is_none());
+    }
+
+    #[test]
+    fn waiting_resolutions_of_non_remapped_entry_are_filtered_as_before() {
+        let public_name = TxnsFee::key().into_name();
+        let entry = single_chart_entry(None);
+
+        let waiting_day = HashSet::from([ChartKey::new(public_name, ResolutionKind::Day)]);
+        let filtered = entry
+            .clone()
+            .filter_out_waiting_resolutions(&waiting_day)
+            .expect("other resolutions must survive");
+        assert!(!filtered.resolutions.contains_key(&ResolutionKind::Day));
+        assert_eq!(filtered.resolutions.len(), 3);
+
+        let non_waiting = HashSet::from([ChartKey::new(
+            "someOtherChart".to_owned(),
+            ResolutionKind::Day,
+        )]);
+        let unchanged = entry
+            .filter_out_waiting_resolutions(&non_waiting)
+            .expect("entry must survive unrelated waiting keys");
+        assert_eq!(unchanged.resolutions.len(), 4);
     }
 }
