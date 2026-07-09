@@ -23,7 +23,7 @@ use stats::{
         ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, FilecoinChainFeesGrowth,
         FilecoinNewChainFees, NewEip7702Auths, NewZetachainCrossChainTxns,
         OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
-        ZetachainCrossChainTxnsGrowth,
+        TxnsFee, ZetachainCrossChainTxnsGrowth,
     },
 };
 use std::{
@@ -84,7 +84,11 @@ pub struct Settings {
     pub enable_all_op_stack: bool,
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
-    /// Enable filecoin-specific charts
+    /// Enable the Filecoin-specific API surface: `filecoinChainFeesGrowth`
+    /// is enabled under its own id, and the public `txnsFee` id is
+    /// force-enabled and served with the `filecoinNewChainFees`
+    /// implementation (chain-wide fees); `filecoinNewChainFees` is never
+    /// exposed as a public chart id.
     pub enable_all_filecoin: bool,
     /// Filter by chain ids for multichain mode.
     /// TODO: recalculate statistics data when multichain_filter has been changed
@@ -342,7 +346,11 @@ pub fn handle_enable_all_eip_7702(
     }
 }
 
-/// Enables only the two public charts (with all their resolutions).
+/// Switches the whole Filecoin API surface with one flag: enables
+/// `filecoinChainFeesGrowth` under its own id and force-enables the public
+/// `txnsFee` id, serving it with the `filecoinNewChainFees` implementation
+/// (chain-wide REV-style fees) unless an explicit `implementation` is already
+/// configured. `filecoinNewChainFees` is never exposed as a public chart id.
 /// The intermediate charts (`burnActorBalance`, `fevmFeeTips`) stay
 /// disabled — hidden from the API — and are updated transitively as
 /// dependencies of the public charts.
@@ -351,14 +359,21 @@ pub fn handle_enable_all_filecoin(
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
     if enable_all {
+        // force-enabling `txnsFee` keeps the single-env-var promise even for
+        // configs that disable the entry; `enable_charts` warns and continues
+        // if an entry is absent
         enable_charts(
-            &[
-                FilecoinNewChainFees::key().name(),
-                FilecoinChainFeesGrowth::key().name(),
-            ],
+            &[FilecoinChainFeesGrowth::key().name(), TxnsFee::key().name()],
             charts,
             "filecoin",
-        )
+        );
+        // config keys are camelCase at this point (post config load)
+        if let Some(txns_fee) = charts.lines.get_mut(TxnsFee::key().name()) {
+            // an explicit operator-provided mapping wins over the flag
+            if txns_fee.implementation.is_none() {
+                txns_fee.implementation = Some(FilecoinNewChainFees::key().into_name());
+            }
+        }
     }
 }
 
@@ -639,6 +654,99 @@ mod tests {
                 .enabled,
             true
         );
+    }
+
+    // post-load config: entries are keyed via `key().name()` (camelCase),
+    // matching the state after config load
+    fn filecoin_charts_config(
+        txns_fee_settings: config::types::AllChartSettings,
+    ) -> config::charts::Config<AllChartSettings> {
+        let disabled = config::types::AllChartSettings {
+            enabled: false,
+            ..Default::default()
+        };
+        config::charts::Config {
+            counters: Default::default(),
+            lines: [
+                (FilecoinChainFeesGrowth::key().into_name(), disabled.clone()),
+                (FilecoinNewChainFees::key().into_name(), disabled),
+                (TxnsFee::key().into_name(), txns_fee_settings),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+
+    #[test]
+    fn enable_all_filecoin_enables_and_remaps_charts() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings {
+            enabled: true,
+            ..Default::default()
+        });
+
+        handle_enable_all_filecoin(true, &mut charts);
+
+        assert!(charts.lines[FilecoinChainFeesGrowth::key().name()].enabled);
+        let txns_fee = &charts.lines[TxnsFee::key().name()];
+        assert!(txns_fee.enabled);
+        assert_eq!(
+            txns_fee.implementation,
+            Some(FilecoinNewChainFees::key().into_name())
+        );
+        // the implementation must never become a public id
+        assert!(!charts.lines[FilecoinNewChainFees::key().name()].enabled);
+    }
+
+    #[test]
+    fn enable_all_filecoin_force_enables_disabled_txns_fee() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings {
+            enabled: false,
+            ..Default::default()
+        });
+
+        handle_enable_all_filecoin(true, &mut charts);
+
+        let txns_fee = &charts.lines[TxnsFee::key().name()];
+        assert!(txns_fee.enabled);
+        assert_eq!(
+            txns_fee.implementation,
+            Some(FilecoinNewChainFees::key().into_name())
+        );
+    }
+
+    #[test]
+    fn enable_all_filecoin_does_not_overwrite_explicit_implementation() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings {
+            enabled: false,
+            implementation: Some("someOtherImplementation".to_owned()),
+            ..Default::default()
+        });
+
+        handle_enable_all_filecoin(true, &mut charts);
+
+        let txns_fee = &charts.lines[TxnsFee::key().name()];
+        // enablement is still forced, the operator-provided mapping wins
+        assert!(txns_fee.enabled);
+        assert_eq!(
+            txns_fee.implementation.as_deref(),
+            Some("someOtherImplementation")
+        );
+    }
+
+    #[test]
+    fn disabled_enable_all_filecoin_changes_nothing() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings {
+            enabled: true,
+            ..Default::default()
+        });
+
+        handle_enable_all_filecoin(false, &mut charts);
+
+        assert!(!charts.lines[FilecoinChainFeesGrowth::key().name()].enabled);
+        assert!(!charts.lines[FilecoinNewChainFees::key().name()].enabled);
+        let txns_fee = &charts.lines[TxnsFee::key().name()];
+        assert!(txns_fee.enabled);
+        assert_eq!(txns_fee.implementation, None);
     }
 
     #[test]
