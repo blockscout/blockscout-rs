@@ -568,6 +568,14 @@ impl RuntimeSetup {
         Self::verify_groups_config(&update_groups, &groups_config)?;
         Self::warn_non_member_charts(&update_groups);
 
+        // key by `ChartKey` (internal names) so that scheduling follows the
+        // implementation identity of every enabled entry, even when it is
+        // served under a different public name
+        let enabled_keys: HashSet<ChartKey> = charts_info
+            .values()
+            .flat_map(|entry| entry.get_keys())
+            .collect();
+
         for (name, group) in update_groups {
             let update_schedule = groups_config
                 .schedules
@@ -576,11 +584,7 @@ impl RuntimeSetup {
             let enabled_members = group
                 .list_charts()
                 .into_iter()
-                .filter(|m| {
-                    charts_info
-                        .get(m.properties.key.name())
-                        .is_some_and(|a| a.resolutions.contains_key(m.properties.key.resolution()))
-                })
+                .filter(|m| enabled_keys.contains(&m.properties.key))
                 .map(|m| m.properties.key)
                 .collect();
             let sync_group = SyncUpdateGroup::new(&dep_mutexes, group)?;
