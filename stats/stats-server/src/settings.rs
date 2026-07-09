@@ -244,23 +244,15 @@ pub fn handle_disable_internal_transactions(
                 .map(|(k, _req)| k.into_name());
         let to_disable: BTreeSet<_> = charts_dependant_on_internal_transactions.collect();
 
-        for disable_name in to_disable {
-            let settings = match (
-                charts.lines.get_mut(&disable_name),
-                charts.counters.get_mut(&disable_name),
-            ) {
-                (Some(settings), _) => settings,
-                (_, Some(settings)) => settings,
-                _ => {
-                    warn!(
-                        "Could not disable internal transactions related chart {}: chart not found in settings. \
-                        This should not be a problem for running the service.",
-                        disable_name
-                    );
-                    continue;
-                }
-            };
-            settings.enabled = false;
+        // an entry is disabled based on the chart it actually serves — its
+        // `implementation` when remapped, its own name otherwise — so that
+        // a remapped entry serving an internal-transactions-dependent chart
+        // is caught, and a mere name collision with one is not
+        for (name, settings) in charts.lines.iter_mut().chain(charts.counters.iter_mut()) {
+            let served_chart = settings.implementation.as_deref().unwrap_or(name);
+            if to_disable.contains(served_chart) {
+                settings.enabled = false;
+            }
         }
     }
 }
@@ -654,6 +646,51 @@ mod tests {
                 .enabled,
             true
         );
+    }
+
+    #[test]
+    fn disable_internal_transactions_follows_implementation_remap() {
+        let mut settings = Settings::default();
+        // `txnsFee` itself is not internal-transactions-dependent but is
+        // remapped onto `contractsGrowth`, which is; the entry named
+        // `contractsGrowth` serves an independent chart instead
+        let mut charts = config::charts::Config {
+            counters: Default::default(),
+            lines: [
+                (
+                    TxnsFee::key().into_name(),
+                    config::types::AllChartSettings {
+                        enabled: true,
+                        implementation: Some(ContractsGrowth::key().into_name()),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    ContractsGrowth::key().into_name(),
+                    config::types::AllChartSettings {
+                        enabled: true,
+                        implementation: Some(FilecoinNewChainFees::key().into_name()),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        settings.disable_internal_transactions = true;
+        handle_disable_internal_transactions(
+            settings.disable_internal_transactions,
+            &mut settings.conditional_start,
+            &mut charts,
+        );
+
+        // the entry serving the internal-transactions-dependent chart must
+        // be disabled even though its own name is not in the dependent set
+        assert!(!charts.lines[TxnsFee::key().name()].enabled);
+        // ...while a name collision with a dependent chart must not disable
+        // an entry that actually serves an independent one
+        assert!(charts.lines[ContractsGrowth::key().name()].enabled);
     }
 
     // post-load config: entries are keyed via `key().name()` (camelCase),

@@ -256,6 +256,10 @@ impl RuntimeSetup {
     /// checks must precede the resolution check: the latter derives the
     /// implementation's available resolutions, which look empty for a
     /// misspelled or wrong-type implementation.
+    ///
+    /// `implementation` always names a registered chart, never another
+    /// config entry: remap chains (a mapping onto an entry that is itself
+    /// remapped) are deliberately rejected by the also-enabled check.
     fn validate_implementation_mappings(
         counters_settings: &BTreeMap<String, AllChartSettings>,
         line_charts_settings: &BTreeMap<String, AllChartSettings>,
@@ -290,7 +294,8 @@ impl RuntimeSetup {
                 let Some(implementation_type) = member_types.get(implementation) else {
                     anyhow::bail!(
                         "chart '{public_name}': `implementation` references unknown \
-                        chart '{implementation}'"
+                        chart '{implementation}' (note: ids are configured in \
+                        snake_case and are shown here normalized to camelCase)"
                     );
                 };
                 if *implementation_type != entry_type {
@@ -312,8 +317,9 @@ impl RuntimeSetup {
                 if implementation_own_entry_enabled {
                     anyhow::bail!(
                         "chart '{public_name}' references '{implementation}' in \
-                        `implementation`, but chart '{implementation}' is also enabled \
-                        under its own name; disable one of them"
+                        `implementation`, but '{implementation}' is also enabled as \
+                        its own config entry; a remap target must not itself be \
+                        enabled (remap chains are unsupported); disable one of them"
                     );
                 }
                 // resolution compatibility is checked only for explicitly
