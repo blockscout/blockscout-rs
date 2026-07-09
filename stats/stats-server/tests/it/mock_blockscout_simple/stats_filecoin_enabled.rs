@@ -18,6 +18,7 @@ use stats::{ResolutionKind, tests::init_db::init_db};
 use stats_server::stats;
 use url::Url;
 
+use super::common_tests::test_lines_ok;
 use crate::{
     common::{
         ChartSubset, assert_lines_not_served, get_test_stats_settings, sorted_vec,
@@ -44,6 +45,10 @@ pub async fn run_tests_with_filecoin_charts_enabled() {
 
     wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
+    // the shared exhaustive list check also pins that enabling the filecoin
+    // flag adds exactly the two public charts and breaks nothing else
+    // (blockscout & user ops indexed, zetachain off, filecoin on)
+    test_lines_ok(base.clone(), true, true, false, true).await;
     test_filecoin_charts_are_listed(&base).await;
     test_filecoin_new_chain_fees_data(&base).await;
     test_filecoin_chain_fees_growth_data(&base).await;
