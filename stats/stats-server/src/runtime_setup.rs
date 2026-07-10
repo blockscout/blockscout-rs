@@ -323,7 +323,7 @@ impl RuntimeSetup {
                     );
                 }
                 // resolution compatibility is checked only for explicitly
-                // requested resolutions; a default `None` ("enable if present")
+                // configured resolutions; a default `None` ("enable if present")
                 // on a missing resolution stays silently skipped, exactly as
                 // for non-remapped charts
                 let implementation_resolutions: HashSet<ResolutionKind> = all_members
@@ -341,7 +341,7 @@ impl RuntimeSetup {
                     .into_enabled(&implementation_resolutions)
                 {
                     anyhow::bail!(
-                        "chart '{public_name}' explicitly requests resolutions {missing:?} \
+                        "chart '{public_name}' explicitly configures resolutions {missing:?} \
                         that its `implementation` '{implementation}' does not have"
                     );
                 }
@@ -805,7 +805,7 @@ mod tests {
     use crate::config::types::ResolutionsSettings;
     use stats::{
         ChartProperties,
-        counters::TotalTxns,
+        counters::{TotalAddresses, TotalTxns},
         lines::{AverageTxnFee, FilecoinNewChainFees, NewTxnsWindow, TxnsFee},
     };
 
@@ -826,6 +826,15 @@ mod tests {
         config::charts::Config {
             counters: BTreeMap::new(),
             lines: lines.into_iter().collect(),
+        }
+    }
+
+    fn counters_config(
+        counters: impl IntoIterator<Item = (String, AllChartSettings)>,
+    ) -> config::charts::Config<AllChartSettings> {
+        config::charts::Config {
+            counters: counters.into_iter().collect(),
+            lines: BTreeMap::new(),
         }
     }
 
@@ -910,6 +919,48 @@ mod tests {
         );
         assert!(
             setup.update_groups["TxnsFeeGroup"]
+                .enabled_members
+                .is_empty()
+        );
+    }
+
+    // the shared remap behavior — metadata taken from the public entry, and
+    // the startup validation of `implementation` — is type-agnostic and
+    // already proven by the line-chart test above; this only pins that a
+    // counter flows through the same generic code with its single Day
+    // resolution and singleton update group
+    #[test]
+    fn remapped_counter_is_served_with_implementation_handle() {
+        let public_name = TotalTxns::key().into_name();
+        let implementation_name = TotalAddresses::key().into_name();
+        let setup = runtime_setup(counters_config([(
+            public_name.clone(),
+            chart_settings(true, Some(implementation_name.clone())),
+        )]))
+        .expect("valid counter remap must not fail startup");
+
+        let entry = &setup.charts_info[&public_name];
+        assert!(
+            !setup.charts_info.contains_key(&implementation_name),
+            "implementation must not be served under its own name"
+        );
+
+        // counters have only the Day resolution
+        let day_key = ChartKey::new(implementation_name.clone(), ResolutionKind::Day);
+        assert_eq!(entry.get_keys(), vec![day_key.clone()]);
+        assert_eq!(
+            entry.resolutions[&ResolutionKind::Day].name,
+            implementation_name
+        );
+
+        // scheduling follows the implementation identity (singleton counter
+        // groups, one member vs. none)
+        assert_eq!(
+            setup.update_groups["TotalAddressesGroup"].enabled_members,
+            HashSet::from([day_key])
+        );
+        assert!(
+            setup.update_groups["TotalTxnsGroup"]
                 .enabled_members
                 .is_empty()
         );

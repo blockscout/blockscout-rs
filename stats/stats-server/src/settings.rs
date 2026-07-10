@@ -33,7 +33,7 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     RuntimeSetup,
@@ -248,11 +248,23 @@ pub fn handle_disable_internal_transactions(
         // `implementation` when remapped, its own name otherwise — so that
         // a remapped entry serving an internal-transactions-dependent chart
         // is caught, and a mere name collision with one is not
+        let mut unserved = to_disable.clone();
         for (name, settings) in charts.lines.iter_mut().chain(charts.counters.iter_mut()) {
             let served_chart = settings.implementation.as_deref().unwrap_or(name);
             if to_disable.contains(served_chart) {
                 settings.enabled = false;
+                unserved.remove(served_chart);
             }
+        }
+        // a leftover name means the binary registers an
+        // internal-transactions-dependent chart that no config entry serves,
+        // so there was nothing to disable
+        if !unserved.is_empty() {
+            debug!(
+                "Could not disable internal transactions related charts \
+                {unserved:?}: not served by any config entry. \
+                This should not be a problem for running the service.",
+            );
         }
     }
 }
