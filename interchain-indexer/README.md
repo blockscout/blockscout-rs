@@ -142,7 +142,10 @@ typed parse for numeric fields.
   the entry. Entry values must be JSON objects.
 - The merged result goes through the same strict validation as the files —
   unknown fields, missing required fields, or type mismatches fail startup.
-  Every applied override is logged at startup (`applied … config env override`).
+  Every applied override is logged at startup (`applied config env override`);
+  when an override **replaces an existing value**, the old and new values are
+  logged too (`config env override replaced an existing value`). Newly added
+  fields/entries are logged without values.
 
 **Examples:**
 
