@@ -373,10 +373,7 @@ fn load_chains_impl<P: AsRef<Path>>(
         vars,
         &env_merge::CHAINS_RULES,
     )?;
-    for o in &applied {
-        // No values at info level: RPC URLs may embed API keys.
-        tracing::info!(var = %o.var, path = %o.json_path, "applied chains config env override");
-    }
+    log_applied_overrides(&applied, "chains");
 
     serde_json::from_value(value).with_context(|| {
         format!(
@@ -404,10 +401,7 @@ fn load_bridges_impl<P: AsRef<Path>>(
         vars,
         &env_merge::BRIDGES_RULES,
     )?;
-    for o in &applied {
-        // No values at info level: URLs may embed API keys.
-        tracing::info!(var = %o.var, path = %o.json_path, "applied bridges config env override");
-    }
+    log_applied_overrides(&applied, "bridges");
 
     serde_json::from_value(value).with_context(|| {
         format!(
@@ -415,6 +409,25 @@ fn load_bridges_impl<P: AsRef<Path>>(
             path.as_ref()
         )
     })
+}
+
+fn log_applied_overrides(applied: &[env_merge::AppliedOverride], kind: &str) {
+    for o in applied {
+        // New fields/entries are logged without values: RPC URLs may embed
+        // API keys. Replacements of existing values log old/new by design,
+        // so operators can see exactly what an override changed.
+        tracing::info!(var = %o.var, path = %o.json_path, kind, "applied config env override");
+        for overwrite in &o.overwrites {
+            tracing::info!(
+                var = %o.var,
+                path = %overwrite.path,
+                old = %overwrite.old,
+                new = %overwrite.new,
+                kind,
+                "config env override replaced an existing value"
+            );
+        }
+    }
 }
 
 fn read_config_array(path: &Path, kind: &str) -> Result<serde_json::Value> {

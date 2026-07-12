@@ -63,6 +63,15 @@ pub(crate) const BRIDGES_RULES: ArrayRules = ArrayRules(&[
 pub(crate) struct AppliedOverride {
     pub var: String,
     pub json_path: String,
+    /// Existing values this patch replaced (new fields/entries are not listed).
+    pub overwrites: Vec<FieldOverwrite>,
+}
+
+#[derive(Debug)]
+pub(crate) struct FieldOverwrite {
+    pub path: String,
+    pub old: Value,
+    pub new: Value,
 }
 
 struct Patch {
@@ -121,11 +130,28 @@ pub(crate) fn apply_env_overrides(
     patches
         .into_iter()
         .map(|patch| {
-            let json_path =
-                apply_patch(root, &patch.segments, patch.value, &[], rules, &patch.var)?;
+            let mut overwrites = Vec::new();
+            let json_path = apply_patch(
+                root,
+                &patch.segments,
+                patch.value,
+                &[],
+                rules,
+                &patch.var,
+                &mut overwrites,
+            )?;
+            // Overwrite paths are recorded relative to the patch application
+            // point; prefix them with the patch's own path.
+            for overwrite in &mut overwrites {
+                overwrite.path = match overwrite.path.is_empty() {
+                    true => json_path.clone(),
+                    false => join_path(&json_path, &overwrite.path),
+                };
+            }
             Ok(AppliedOverride {
                 var: patch.var,
                 json_path,
+                overwrites,
             })
         })
         .collect()
@@ -141,6 +167,7 @@ fn apply_patch(
     rule_path: &[String],
     rules: &ArrayRules,
     var: &str,
+    overwrites: &mut Vec<FieldOverwrite>,
 ) -> Result<String> {
     if segments.is_empty() {
         // Bare-prefix whole-config patch: keyed upsert into the root array.
@@ -150,7 +177,7 @@ fn apply_patch(
         let Value::Array(items) = node else {
             bail!("env var {var}: root config must be a JSON array");
         };
-        upsert_root_array(items, value, fields, var)?;
+        upsert_root_array(items, value, fields, var, overwrites)?;
         return Ok("$".to_string());
     }
 
@@ -163,18 +190,24 @@ fn apply_patch(
                 )
             })?;
             match rule {
-                ArrayRule::Keyed(fields) => {
-                    apply_to_keyed_array(items, segments, value, fields, rule_path, rules, var)
-                }
-                ArrayRule::NamedMap => {
-                    apply_to_named_map_array(items, segments, value, rule_path, rules, var)
-                }
+                ArrayRule::Keyed(fields) => apply_to_keyed_array(
+                    items, segments, value, fields, rule_path, rules, var, overwrites,
+                ),
+                ArrayRule::NamedMap => apply_to_named_map_array(
+                    items, segments, value, rule_path, rules, var, overwrites,
+                ),
             }
         }
         Value::Object(map) => {
             let field = segments[0].clone();
             if segments.len() == 1 {
-                merge_into(map.entry(field.clone()).or_insert(Value::Null), value);
+                match map.get_mut(&field) {
+                    // Only replacements of existing values are tracked.
+                    Some(existing) => merge_into(existing, value, "", overwrites),
+                    None => {
+                        map.insert(field.clone(), value);
+                    }
+                }
                 return Ok(field);
             }
             let child_rule_path: Vec<String> = rule_path
@@ -189,7 +222,15 @@ fn apply_patch(
                     None => Value::Object(Map::new()),
                 };
             }
-            let sub = apply_patch(child, &segments[1..], value, &child_rule_path, rules, var)?;
+            let sub = apply_patch(
+                child,
+                &segments[1..],
+                value,
+                &child_rule_path,
+                rules,
+                var,
+                overwrites,
+            )?;
             Ok(join_path(&field, &sub))
         }
         _ => bail!(
@@ -201,6 +242,7 @@ fn apply_patch(
 
 /// Address one element of a keyed array by consuming `fields.len()` key
 /// segments; descend into (or append) the matching element.
+#[allow(clippy::too_many_arguments)]
 fn apply_to_keyed_array(
     items: &mut Vec<Value>,
     segments: &[String],
@@ -209,6 +251,7 @@ fn apply_to_keyed_array(
     rule_path: &[String],
     rules: &ArrayRules,
     var: &str,
+    overwrites: &mut Vec<FieldOverwrite>,
 ) -> Result<String> {
     ensure!(
         segments.len() >= fields.len(),
@@ -266,7 +309,7 @@ fn apply_to_keyed_array(
             "env var {var}: entry override for {path_seg} must be a JSON object"
         );
         ensure_fragment_keys_consistent(&value, fields, &keys, var, &path_seg)?;
-        merge_into(&mut items[idx], value);
+        merge_into(&mut items[idx], value, "", overwrites);
         return Ok(path_seg);
     }
     // A patch may target a key field directly only with the value the element
@@ -283,7 +326,15 @@ fn apply_to_keyed_array(
             rest[0]
         );
     }
-    let sub = apply_patch(&mut items[idx], rest, value, rule_path, rules, var)?;
+    let sub = apply_patch(
+        &mut items[idx],
+        rest,
+        value,
+        rule_path,
+        rules,
+        var,
+        overwrites,
+    )?;
     Ok(join_path(&path_seg, &sub))
 }
 
@@ -320,6 +371,7 @@ fn apply_to_named_map_array(
     rule_path: &[String],
     rules: &ArrayRules,
     var: &str,
+    overwrites: &mut Vec<FieldOverwrite>,
 ) -> Result<String> {
     let key = &segments[0];
     let mut found: Vec<(usize, String)> = Vec::new();
@@ -336,8 +388,10 @@ fn apply_to_named_map_array(
                 .map(|existing| (index, existing.clone())),
         );
     }
+    let mut created = false;
     let (map_idx, actual_key) = match found.as_slice() {
         [] => {
+            created = true;
             if items.is_empty() {
                 items.push(Value::Object(Map::new()));
             }
@@ -369,13 +423,18 @@ fn apply_to_named_map_array(
             !value.is_null(),
             "env var {var}: null is not a valid entry override (deletion is not supported)"
         );
-        merge_into(entry, value);
+        match created {
+            // A just-inserted entry holds the placeholder null — plain
+            // assignment, nothing pre-existing is replaced.
+            true => *entry = value,
+            false => merge_into(entry, value, "", overwrites),
+        }
         return Ok(path_seg);
     }
     if !entry.is_object() && !entry.is_array() {
         *entry = Value::Object(Map::new());
     }
-    let sub = apply_patch(entry, rest, value, rule_path, rules, var)?;
+    let sub = apply_patch(entry, rest, value, rule_path, rules, var, overwrites)?;
     Ok(join_path(&path_seg, &sub))
 }
 
@@ -386,6 +445,7 @@ fn upsert_root_array(
     value: Value,
     fields: &[&str],
     var: &str,
+    overwrites: &mut Vec<FieldOverwrite>,
 ) -> Result<()> {
     let Value::Array(patch_items) = value else {
         bail!("env var {var}: whole-config patch must be a JSON array");
@@ -416,7 +476,18 @@ fn upsert_root_array(
             .collect();
         match matches.as_slice() {
             [] => items.push(element),
-            [index] => merge_into(&mut items[*index], element),
+            [index] => {
+                let element_path = format!(
+                    "[{}]",
+                    fields
+                        .iter()
+                        .zip(&keys)
+                        .map(|(field, key)| format!("{field}={}", key_display(key)))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
+                merge_into(&mut items[*index], element, &element_path, overwrites);
+            }
             _ => bail!(
                 "env var {var}: multiple existing elements match id fields ({})",
                 keys.iter().map(key_display).collect::<Vec<_>>().join(",")
@@ -430,20 +501,42 @@ fn upsert_root_array(
 /// `null` replaces the value but keeps the key: several config fields are
 /// `Option` without `#[serde(default)]`, so key removal would surface as
 /// `missing field` errors from the typed parse.
-fn merge_into(target: &mut Value, value: Value) {
+///
+/// Every replacement of an existing, different value is recorded in
+/// `overwrites` (with `rel_path` relative to the patch application point);
+/// newly inserted fields are not.
+fn merge_into(
+    target: &mut Value,
+    value: Value,
+    rel_path: &str,
+    overwrites: &mut Vec<FieldOverwrite>,
+) {
     match value {
         Value::Object(fragment) if target.is_object() => {
             let map = target.as_object_mut().expect("checked is_object above");
             for (key, val) in fragment {
+                let child_path = match rel_path.is_empty() {
+                    true => key.clone(),
+                    false => join_path(rel_path, &key),
+                };
                 match map.get_mut(&key) {
-                    Some(existing) => merge_into(existing, val),
+                    Some(existing) => merge_into(existing, val, &child_path, overwrites),
                     None => {
                         map.insert(key, val);
                     }
                 }
             }
         }
-        value => *target = value,
+        value => {
+            if *target != value {
+                overwrites.push(FieldOverwrite {
+                    path: rel_path.to_string(),
+                    old: target.clone(),
+                    new: value.clone(),
+                });
+            }
+            *target = value;
+        }
     }
 }
 
@@ -546,6 +639,12 @@ mod tests {
         assert_eq!(root[0]["name"], json!("Mainnet"));
         assert_eq!(applied.len(), 1);
         assert_eq!(applied[0].json_path, "[chain_id=1].name");
+        // Replacing an existing value is reported with old/new.
+        assert_eq!(applied[0].overwrites.len(), 1);
+        let overwrite = &applied[0].overwrites[0];
+        assert_eq!(overwrite.path, "[chain_id=1].name");
+        assert_eq!(overwrite.old, json!("Ethereum"));
+        assert_eq!(overwrite.new, json!("Mainnet"));
     }
 
     #[test]
@@ -860,6 +959,90 @@ mod tests {
         assert_eq!(drpc["url"], json!("https://new.drpc.org"));
         assert_eq!(root[0]["icon"], json!("0xABCDEF"));
         assert_eq!(root[0]["name"], json!("123"));
+    }
+
+    #[test]
+    fn test_apply_overwrites_not_reported_for_new_fields_and_entries() {
+        let mut root = chains_fixture();
+        let applied = apply(
+            &mut root,
+            CHAINS,
+            &[
+                // New entry built field-by-field.
+                ("INTERCHAIN_INDEXER_CHAINS__137__NAME", "Polygon"),
+                ("INTERCHAIN_INDEXER_CHAINS__137__RPCS__MYNODE__URL", "u"),
+                // New provider on an existing chain.
+                (
+                    "INTERCHAIN_INDEXER_CHAINS__1__RPCS__MYNODE",
+                    r#"{"url":"https://my.node"}"#,
+                ),
+                // Same value as the file: not an overwrite.
+                ("INTERCHAIN_INDEXER_CHAINS__1__NAME", "Ethereum"),
+            ],
+            &CHAINS_RULES,
+        )
+        .unwrap();
+
+        for o in &applied {
+            assert!(
+                o.overwrites.is_empty(),
+                "unexpected overwrites for {}: {:?}",
+                o.var,
+                o.overwrites
+            );
+        }
+    }
+
+    #[test]
+    fn test_apply_overwrites_reported_for_null_and_fragment_replacements() {
+        let mut root = bridges_fixture();
+        let applied = apply(
+            &mut root,
+            BRIDGES,
+            &[(
+                "INTERCHAIN_INDEXER_BRIDGES__1",
+                // `name` replaces an existing value, `docs_url` is new.
+                r#"{"name":"AMB v2","docs_url":"https://docs.example","api_url":null}"#,
+            )],
+            &BRIDGES_RULES,
+        )
+        .unwrap();
+
+        let overwrites = &applied[0].overwrites;
+        assert_eq!(overwrites.len(), 2, "unexpected: {overwrites:?}");
+        let by_path = |p: &str| {
+            overwrites
+                .iter()
+                .find(|o| o.path == p)
+                .unwrap_or_else(|| panic!("no overwrite at {p}: {overwrites:?}"))
+        };
+        let name = by_path("[bridge_id=1].name");
+        assert_eq!(name.old, json!("AMB"));
+        assert_eq!(name.new, json!("AMB v2"));
+        let api_url = by_path("[bridge_id=1].api_url");
+        assert_eq!(api_url.old, json!("https://api.example"));
+        assert_eq!(api_url.new, Value::Null);
+    }
+
+    #[test]
+    fn test_apply_root_bulk_patch_reports_overwrites_with_element_path() {
+        let mut root = chains_fixture();
+        let applied = apply(
+            &mut root,
+            CHAINS,
+            &[(
+                CHAINS,
+                r#"[{"chain_id":1,"name":"Renamed"},{"chain_id":137,"name":"Polygon"}]"#,
+            )],
+            &CHAINS_RULES,
+        )
+        .unwrap();
+
+        let overwrites = &applied[0].overwrites;
+        assert_eq!(overwrites.len(), 1, "appended entry must not report");
+        assert_eq!(overwrites[0].path, "$[chain_id=1].name");
+        assert_eq!(overwrites[0].old, json!("Ethereum"));
+        assert_eq!(overwrites[0].new, json!("Renamed"));
     }
 
     #[test]

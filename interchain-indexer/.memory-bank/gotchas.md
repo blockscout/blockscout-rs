@@ -392,7 +392,10 @@ segments* like `…__CONTRACTS__100__<addr>__06` are more forgiving — they are
 coerced with integer parsing — but don't rely on it.)
 
 Debugging tip: serde errors after merging reference the merged JSON, not the
-offending env var. The `applied … config env override` info logs printed
-before deserialization list every applied var and its JSON path.
+offending env var. The `applied config env override` info logs printed before
+deserialization list every applied var and its JSON path; overrides that
+replace an existing value additionally log the old and new values
+(`config env override replaced an existing value`). Newly added fields/entries
+are deliberately logged without values (RPC URLs may embed API keys).
 
 ---
