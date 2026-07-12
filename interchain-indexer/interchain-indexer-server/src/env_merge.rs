@@ -261,11 +261,54 @@ fn apply_to_keyed_array(
             !value.is_null(),
             "env var {var}: null is not a valid entry override (deletion is not supported)"
         );
+        ensure!(
+            value.is_object(),
+            "env var {var}: entry override for {path_seg} must be a JSON object"
+        );
+        ensure_fragment_keys_consistent(&value, fields, &keys, var, &path_seg)?;
         merge_into(&mut items[idx], value);
         return Ok(path_seg);
     }
+    // A patch may target a key field directly only with the value the element
+    // is addressed by; anything else would silently retarget the entry.
+    if let Some(position) = fields.iter().position(|field| *field == rest[0]) {
+        ensure!(
+            rest.len() == 1,
+            "env var {var}: cannot descend into key field '{}' of {path_seg}",
+            rest[0]
+        );
+        ensure!(
+            json_key_eq(&value, &keys[position]),
+            "env var {var}: key field '{}' value conflicts with the addressed entry {path_seg}",
+            rest[0]
+        );
+    }
     let sub = apply_patch(&mut items[idx], rest, value, rule_path, rules, var)?;
     Ok(join_path(&path_seg, &sub))
+}
+
+/// Reject an entry fragment whose id fields contradict the key the entry is
+/// addressed by (omitting them is fine — they are injected from the path).
+fn ensure_fragment_keys_consistent(
+    fragment: &Value,
+    fields: &[&str],
+    keys: &[Value],
+    var: &str,
+    path_seg: &str,
+) -> Result<()> {
+    let Value::Object(map) = fragment else {
+        return Ok(());
+    };
+    for (field, key) in fields.iter().zip(keys) {
+        if let Some(present) = map.get(*field) {
+            ensure!(
+                json_key_eq(present, key),
+                "env var {var}: fragment field '{field}' ({}) conflicts with the addressed entry {path_seg}",
+                key_display(present)
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Address one entry of a `Vec<Map<name, _>>` array by map key, searched
@@ -817,6 +860,127 @@ mod tests {
         assert_eq!(drpc["url"], json!("https://new.drpc.org"));
         assert_eq!(root[0]["icon"], json!("0xABCDEF"));
         assert_eq!(root[0]["name"], json!("123"));
+    }
+
+    #[test]
+    fn test_apply_fragment_with_conflicting_id_errors() {
+        // Both against an existing entry and a to-be-created one.
+        for chain_id in ["1", "137"] {
+            let mut root = chains_fixture();
+            let var = format!("INTERCHAIN_INDEXER_CHAINS__{chain_id}");
+            let err = apply(
+                &mut root,
+                CHAINS,
+                &[(&var, r#"{"chain_id":2,"name":"Retargeted"}"#)],
+                &CHAINS_RULES,
+            )
+            .unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("conflicts with the addressed entry"),
+                "unexpected: {err:#}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_apply_fragment_with_matching_id_is_allowed() {
+        let mut root = chains_fixture();
+        apply(
+            &mut root,
+            CHAINS,
+            &[(
+                "INTERCHAIN_INDEXER_CHAINS__137",
+                r#"{"chain_id":137,"name":"Polygon"}"#,
+            )],
+            &CHAINS_RULES,
+        )
+        .unwrap();
+
+        assert_eq!(root[1]["chain_id"], json!(137));
+        assert_eq!(root[1]["name"], json!("Polygon"));
+    }
+
+    #[test]
+    fn test_apply_contract_fragment_with_conflicting_key_field_errors() {
+        let mut root = bridges_fixture();
+        let err = apply(
+            &mut root,
+            BRIDGES,
+            &[(
+                "INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d__6",
+                r#"{"version":8,"started_at_block":99}"#,
+            )],
+            &BRIDGES_RULES,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("'version'"), "unexpected: {err:#}");
+    }
+
+    #[test]
+    fn test_apply_direct_key_field_var_conflicting_value_errors() {
+        let mut root = chains_fixture();
+        let err = apply(
+            &mut root,
+            CHAINS,
+            &[("INTERCHAIN_INDEXER_CHAINS__137__CHAIN_ID", "1")],
+            &CHAINS_RULES,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("conflicts with the addressed entry"),
+            "unexpected: {err:#}"
+        );
+
+        // A redundant-but-consistent id set is allowed.
+        let mut root = chains_fixture();
+        apply(
+            &mut root,
+            CHAINS,
+            &[
+                ("INTERCHAIN_INDEXER_CHAINS__137__CHAIN_ID", "137"),
+                ("INTERCHAIN_INDEXER_CHAINS__137__NAME", "Polygon"),
+            ],
+            &CHAINS_RULES,
+        )
+        .unwrap();
+        assert_eq!(root[1]["chain_id"], json!(137));
+    }
+
+    #[test]
+    fn test_apply_descending_into_key_field_errors() {
+        let mut root = chains_fixture();
+        let err = apply(
+            &mut root,
+            CHAINS,
+            &[("INTERCHAIN_INDEXER_CHAINS__1__CHAIN_ID__FOO", "1")],
+            &CHAINS_RULES,
+        )
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("cannot descend into key field"),
+            "unexpected: {err:#}"
+        );
+    }
+
+    #[test]
+    fn test_apply_non_object_entry_value_errors() {
+        let mut root = chains_fixture();
+        let err = apply(
+            &mut root,
+            CHAINS,
+            &[("INTERCHAIN_INDEXER_CHAINS__137", "42")],
+            &CHAINS_RULES,
+        )
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("must be a JSON object"),
+            "unexpected: {err:#}"
+        );
     }
 
     #[test]

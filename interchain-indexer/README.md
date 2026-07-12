@@ -136,6 +136,10 @@ typed parse for numeric fields.
   and is upserted (merged into the matching entry, or appended).
 - Missing intermediate containers are created on demand, so a brand-new entry
   can be built entirely from field-level vars.
+- Id fields inside an entry fragment (or a direct id-field var like
+  `…__137__CHAIN_ID=…`) must match the key the entry is addressed by, or be
+  omitted — a conflicting value fails startup instead of silently retargeting
+  the entry. Entry values must be JSON objects.
 - The merged result goes through the same strict validation as the files —
   unknown fields, missing required fields, or type mismatches fail startup.
   Every applied override is logged at startup (`applied … config env override`).
