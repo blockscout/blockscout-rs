@@ -40,6 +40,7 @@ blockscout-service-launcher = { workspace = true, features = [
 ] }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
+tempfile = { workspace = true }
 tracing-subscriber = { workspace = true }
 # # Uncomment if needed
 # mockall = { workspace = true }

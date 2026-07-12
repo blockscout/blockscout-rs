@@ -13,20 +13,25 @@ semantics (see `avalanche-bridge-filtering.md`), stats projection, API serving.
 
 Configuration flows through two disconnected channels that converge in
 `server.rs::run()`. Runtime settings use the `config` crate with env-var
-layering (`INTERCHAIN_INDEXER__*`). Chain/bridge topology uses raw JSON file
-reads with no env-override capability. Both channels feed serde deserialization,
-but only the settings path benefits from `deny_unknown_fields` across the full
-struct tree. After deserialization, config is seeded into the database via
+layering (`INTERCHAIN_INDEXER__*`). Chain/bridge topology is read from JSON
+files and then patched by a dedicated env-override layer
+(`INTERCHAIN_INDEXER_CHAINS*` / `INTERCHAIN_INDEXER_BRIDGES*`, single
+underscore after the service name) implemented in
+`interchain-indexer-server/src/env_merge.rs`: vars are parsed as JSON fragments
+and deep-merged into the file's `serde_json::Value` before typed
+deserialization, with arrays addressed element-wise by DB-aligned id keys.
+Both channels feed serde deserialization with `deny_unknown_fields` across the
+full struct tree. After deserialization, config is seeded into the database via
 upserts; semantic validation happens late, at indexer construction time rather
 than at load time.
 
 ## Why This Matters
 
-- A typo in an env var causes a hard startup failure (good). A typo in certain
-  JSON config structs is silently ignored (bad).
-- JSON configs cannot be patched via env vars, making development iteration
-  slower than it needs to be. The sibling `stats` service has a reusable pattern
-  for this.
+- A typo in an env var or in a JSON config file causes a hard startup failure —
+  all JSON config structs now carry `deny_unknown_fields`.
+- JSON configs can be patched (and extended with whole new entries) via env
+  vars — see the README section "Overriding chains.json / bridges.json via
+  environment" for the operator surface.
 - Semantic validation (e.g., `home_chain_id` must be a configured chain) happens
   after DB seeding, so invalid config can be partially committed before the error
   surfaces.
@@ -39,6 +44,7 @@ than at load time.
 |------|------|
 | `interchain-indexer-server/src/settings.rs` | Top-level `Settings` struct, `ConfigSettings` impl |
 | `interchain-indexer-server/src/config.rs` | JSON config models, loaders, `From` impls for DB seeding |
+| `interchain-indexer-server/src/env_merge.rs` | Generic env-override deep-merge into config JSON (`ArrayRules`, `apply_env_overrides`) |
 | `interchain-indexer-server/src/server.rs` | Startup orchestration (`run()`) |
 | `interchain-indexer-server/src/indexers.rs` | Bridge-to-indexer wiring, late validation |
 | `interchain-indexer-server/src/bin/interchain-indexer-server.rs` | Process entrypoint |
@@ -83,14 +89,20 @@ Settings                              (deny_unknown_fields)
 BridgeConfig          (deny_unknown_fields)
   ├─ bridge_id, name, bridge_type, indexer_type, enabled
   ├─ process_unknown_chains, home_chain_id
-  └─ contracts: Vec<BridgeContractConfig>     (NO deny_unknown_fields)
+  └─ contracts: Vec<BridgeContractConfig>     (deny_unknown_fields)
+       └─ abi: dual-form deserializer (JSON string or inline JSON)
 
-ChainConfig           (NO deny_unknown_fields)
+ChainConfig           (deny_unknown_fields)
   ├─ chain_id, name, icon
-  ├─ explorer: ExplorerConfig                 (NO deny_unknown_fields)
-  ├─ pool_config: PoolConfig
-  └─ rpcs: Vec<HashMap<String, RpcProviderConfig>>  (NO deny_unknown_fields)
+  ├─ explorer: ExplorerConfig                 (deny_unknown_fields)
+  ├─ pool_config: PoolConfig                  (deny_unknown_fields)
+  └─ rpcs: Vec<HashMap<String, RpcProviderConfig>>  (deny_unknown_fields)
+       └─ api_key: ApiKeyConfig               (deny_unknown_fields)
 ```
+
+A repo-level test (`test_all_repo_config_files_parse_through_strict_structs`)
+deserializes every `config/**/*.json` and `docker/config/*.json` through the
+strict structs.
 
 ### Database Tables Seeded from Config
 
@@ -123,15 +135,23 @@ validation occurs at this stage.
 
 ### 3. JSON Config Loading
 
-`load_chains_from_file` and `load_bridges_from_file` in `config.rs` use
-`std::fs::read_to_string` + `serde_json::from_str`. This path is completely
-separate from the `config` crate — no env-var override is possible for
-individual JSON fields. You can only change the file path via
-`INTERCHAIN_INDEXER__CHAINS_CONFIG` / `INTERCHAIN_INDEXER__BRIDGES_CONFIG`.
+`load_chains_from_file` and `load_bridges_from_file` in `config.rs` read the
+file into a `serde_json::Value`, apply the env-override layer
+(`env_merge::apply_env_overrides` with the `INTERCHAIN_INDEXER_CHAINS` /
+`INTERCHAIN_INDEXER_BRIDGES` prefixes and the chains/bridges `ArrayRules`),
+log every applied override at info level (var name + JSON path, no values —
+RPC URLs may embed API keys), and only then run the typed serde parse. The
+file path itself is still set via `INTERCHAIN_INDEXER__CHAINS_CONFIG` /
+`INTERCHAIN_INDEXER__BRIDGES_CONFIG`. This path remains separate from the
+`config` crate: the env collection is hand-rolled to preserve key casing.
+Testable impls (`load_chains_impl` / `load_bridges_impl`) take an injectable
+vars iterator so tests never mutate process env.
 
 Custom deserializers:
 - `deserialize_bridge_type` — maps JSON string to `BridgeType` via SeaORM `ActiveEnum`
 - `deserialize_address` — parses hex string (with or without `0x`) to `Vec<u8>`
+- `deserialize_abi` — accepts a JSON string (file form) or inline JSON
+  (env-fragment form), normalizing to `Option<String>`
 
 ### 4. Provider Pool Construction
 
@@ -182,13 +202,17 @@ spawned. `launcher::launch()` runs the servers until shutdown.
 
 1. **Env vars override file settings** — the `config` crate env layer always
    wins over the file layer for `Settings`
-2. **JSON configs have no env override** — they are file-only
+2. **JSON configs have their own env-override layer** — `INTERCHAIN_INDEXER_CHAINS*`
+   / `INTERCHAIN_INDEXER_BRIDGES*` (single underscore — cannot collide with the
+   `INTERCHAIN_INDEXER__*` settings prefix, whose prefix separator is `__`);
+   env always wins over the file, merge keys equal DB uniqueness keys
 3. **`deny_unknown_fields` is pervasive on Settings** — every settings struct in
    the tree has it; a typo in any env var mapping to these structs causes hard
    startup failure
-4. **`deny_unknown_fields` is partial on JSON structs** — `BridgeConfig` has it;
-   `ChainConfig`, `ExplorerConfig`, `BridgeContractConfig`, `RpcProviderConfig`
-   do not
+4. **`deny_unknown_fields` is complete on JSON structs** — `BridgeConfig`,
+   `BridgeContractConfig`, `ChainConfig`, `ExplorerConfig`, `RpcProviderConfig`,
+   `ApiKeyConfig`, `PoolConfig` all have it; stray keys in files or env paths
+   fail startup
 5. **DB seeding is unconditional** — every startup overwrites chain/bridge/
    contract rows; config is the source of truth, not the database
 6. **Bridge name-conflict guard** — `upsert_bridges` fails if an existing bridge
@@ -201,8 +225,9 @@ spawned. `launcher::launch()` runs the servers until shutdown.
 | Failure | When | Severity | Observable |
 |---------|------|----------|------------|
 | Unknown field in Settings env var | `Settings::build()` | Fatal — process won't start | Startup panic with serde error |
-| Unknown field in `BridgeConfig` JSON | `load_bridges_from_file()` | Fatal — process won't start | Startup panic with serde error |
-| Unknown field in `ChainConfig` JSON | `load_chains_from_file()` | **Silent** — ignored | No signal |
+| Unknown field in any chains/bridges JSON struct (file or env path) | `load_*_from_file()` | Fatal — process won't start | Startup panic with serde error |
+| Invalid env-override path/value (ambiguous duplicate path, multi-match key, null entry, malformed root patch) | `env_merge::apply_env_overrides()` | Fatal | anyhow error naming the env var |
+| Env-built entry missing a required field | `load_*_from_file()` typed parse | Fatal | serde error (references the merged JSON; per-override info logs printed beforehand are the breadcrumb) |
 | Missing JSON config file | `load_*_from_file()` | Fatal | anyhow context with file path |
 | Invalid address format in JSON | `deserialize_address` | Fatal (whole file fails) | serde error |
 | Duplicate `chain_id` in chains config | `create_provider_pools_from_chains` | Fatal | anyhow bail |
@@ -213,12 +238,12 @@ spawned. `launcher::launch()` runs the servers until shutdown.
 
 ## Edge Cases / Gotchas
 
-1. **`deny_unknown_fields` coverage gap**: `ChainConfig` and its children lack
-   `deny_unknown_fields`. A typo like `"chain_Id"` instead of `"chain_id"` in
-   `chains.json` will silently produce a deserialization error or default,
-   depending on whether the field has a `#[serde(default)]`. Since `chain_id`
-   has no default, this would actually fail — but optional fields like
-   `custom_tx_route` in `ExplorerConfig` would be silently lost.
+1. **`deny_unknown_fields` is now complete** (closed 2026-07): all chains/
+   bridges JSON structs reject unknown keys, so a typo like `"chain_Id"` in
+   `chains.json` — or a typo'd field segment in an override env var — fails
+   startup. Flip side: external deployments with stray keys in their JSONs now
+   fail at startup too (behavior change; the repo's own files are guarded by
+   the all-files parse test).
 
 2. **DB seeding happens before validation**: if `home_chain_id` is invalid, the
    bridge is already upserted into the database before `AvalancheIndexer::new()`
@@ -228,10 +253,12 @@ spawned. `launcher::launch()` runs the servers until shutdown.
 3. **No centralized cross-field validation**: the `ConfigSettings::validate()`
    hook is never overridden. Semantic checks are scattered across constructors.
 
-4. **JSON configs can't be patched via env vars**: unlike the `stats` service
-   which uses `config` crate `File` source + env overlay + custom merge
-   functions, interchain-indexer uses raw file I/O. During development, any
-   topology change requires editing JSON files directly.
+4. **JSON configs are patched via env vars** (adopted 2026-07): the
+   `env_merge` layer supports field overrides, whole-entry fragments, root
+   bulk patches, and building brand-new entries from scratch. Semantics worth
+   remembering: `null` replaces a value but never removes the key; nested
+   whole-array values replace wholesale; a literal string that is valid JSON
+   needs JSON-string quoting (see `gotchas.md`).
 
 5. **Two separate provider pools**: `create_provider_pools_from_chains` is
    called twice in `run()` — once for `TokenInfoService` and once for indexers.
@@ -250,15 +277,13 @@ JSON-env patching problem with `read_json_override_from_env_config`:
 Each config domain gets its own prefix (`STATS_CHARTS__`, `STATS_LAYOUT__`,
 `STATS_UPDATE_GROUPS__`), separate from the main `STATS__` settings prefix.
 
-**Applicability to interchain-indexer:**
-- Leaf fields like `enabled`, `process_unknown_chains`, `home_chain_id`,
-  `started_at_block`, explorer URLs, and RPC tuning knobs map well to env
-  overrides
-- Deeply nested array structures (`contracts`, `rpcs`) are harder — stats uses
-  named keys with order fields for arrays, but bridge contracts have compound
-  keys
-- Adoption requires writing parallel JSON/env struct pairs and merge functions
-  per config domain — meaningful but bounded effort
+**Outcome for interchain-indexer (2026-07):** the operator surface (dedicated
+per-domain prefixes, env wins over file) was adopted, but the mechanism was
+not: instead of parallel JSON/env struct pairs and per-domain merge functions,
+`env_merge.rs` deep-merges untyped `serde_json::Value` fragments guided by a
+small id-key rule table (`ArrayRules`), and the existing strict structs do all
+validation. Compound array keys (`contracts` by `(chain_id, address, version)`)
+and named-map arrays (`rpcs`) are handled by the rule table.
 
 ## Change Triggers
 
@@ -272,12 +297,12 @@ Update this note when:
 
 ## Open Questions
 
-1. Should `ChainConfig`, `ExplorerConfig`, `BridgeContractConfig`, and
-   `RpcProviderConfig` gain `deny_unknown_fields` for parity with `BridgeConfig`
-   and `Settings`?
+1. ~~Should `ChainConfig`, `ExplorerConfig`, `BridgeContractConfig`, and
+   `RpcProviderConfig` gain `deny_unknown_fields`?~~ Done (2026-07), plus
+   `ApiKeyConfig`.
 2. Should semantic validation (like `home_chain_id` check) move earlier — either
    into `ConfigSettings::validate()` or immediately after JSON loading — so it
    runs before DB seeding?
-3. Is the stats-style `read_json_override_from_env_config` pattern worth
-   adopting for `chains.json` / `bridges.json` to improve development ergonomics?
-   If so, which fields should be patchable first?
+3. ~~Is the stats-style env-patching pattern worth adopting?~~ Resolved
+   (2026-07) with the `env_merge` value-level deep-merge instead — see the
+   outcome note above. All fields are patchable, including whole new entries.

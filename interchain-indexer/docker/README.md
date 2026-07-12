@@ -39,7 +39,6 @@ Defines the blockchains the indexer knows about. Each entry describes one chain:
 | ------------ | ----------- |
 | `chain_id`   | Numeric chain identifier (e.g. 43114 for Avalanche C-Chain). |
 | `name`       | Human-readable chain name. |
-| `native_id`  | Chain’s native/subnet id (hex), used for interchain routing. |
 | `icon`       | Optional URL to chain icon. |
 | `explorer`   | Optional explorer base URL and routes: `url`, `custom_tx_route`, `custom_address_route`, `custom_token_route`. |
 | `rpcs`       | RPC config per chain. |

@@ -26,7 +26,9 @@ Current implementation resolves in this order:
 Intended behavior established during research is broader than current code:
 
 1. in-memory cache
-2. static configured `native_id` mappings from `chains.json`
+2. static configured `native_id` mappings from `chains.json` — **no longer
+   available**: the dead `native_id` field was removed from the chains config
+   files in 2026-07 (the hex mappings remain recoverable from git history)
 3. persisted DB mapping table
 4. Avalanche Data API
 
@@ -204,13 +206,17 @@ chains.
 
 ### Static `native_id` Config Should Be Consulted Before the Data API
 
-`config/avalanche/chains.json` already contains `native_id` values for known
-Avalanche chains. The resolver should consult those static mappings before
-making an external Avalanche Data API call.
+**Superseded (2026-07):** the static `native_id` mappings were removed from
+`config/avalanche/chains.json` / `docker/config/chains.json`. They were dead
+config — `ChainConfig` never deserialized the field, and with
+`deny_unknown_fields` now on `ChainConfig` a stray `native_id` key would fail
+startup. The removed hex values are recoverable from git history (or via the
+Avalanche Data API).
 
-Current code does not do this. More specifically, the current config model does
-not even deserialize `native_id` into `ChainConfig`, so these mappings are not
-available to runtime code today.
+Reviving this improvement idea would require reintroducing the data source
+(e.g. a dedicated config field or table). Runtime resolution via
+`avalanche_icm_blockchain_ids` and `load_native_id_map()` is unaffected by the
+removal.
 
 ### In-Memory Cache Should Be Prewarmed From Postgres
 
@@ -227,16 +233,11 @@ Current runtime does not call `load_native_id_map()`.
 
 ### Missing Static Config Lookup
 
-The resolver does not currently consult configured `native_id` mappings from
-`chains.json` before calling the Avalanche Data API.
-
-This means the service may call the external API for chains that are already
-fully known in static config.
-
-The gap starts earlier than the resolver itself: `native_id` values exist in
-the JSON files, but `interchain-indexer-server/src/config.rs` defines
-`ChainConfig` without a `native_id` field, so `load_chains_from_file(...)`
-drops these values during deserialization.
+The resolver does not consult any static `native_id` mappings before calling
+the Avalanche Data API — and since 2026-07 there is no static data source: the
+dead `native_id` field was removed from the chains config files entirely
+(`ChainConfig` never deserialized it). The hex mappings are recoverable from
+git history if a config-first lookup is ever implemented.
 
 ### Missing DB Cache Prewarm
 
@@ -287,9 +288,10 @@ Useful places to inspect:
 
 - Resolution can happen even for messages that are later filtered out by bridge
   policy, because resolution occurs before `should_process_message(...)`.
-- Chain-level `native_id` values currently exist only in static JSON config.
-  They are not represented in the runtime `ChainConfig` model or the `chains`
-  table schema, so they cannot currently participate in runtime resolution.
+- Chain-level `native_id` values no longer exist anywhere in the repo: they
+  were removed from the static JSON config in 2026-07 (recoverable from git
+  history) and were never represented in the runtime `ChainConfig` model or
+  the `chains` table schema, so they cannot participate in runtime resolution.
 - Without config-first lookup and DB cache prewarm, repeated observations of the
   same native blockchain ID can cause avoidable Data API traffic.
 - Current implementation mixes bridge-local unknown-chain policy with global

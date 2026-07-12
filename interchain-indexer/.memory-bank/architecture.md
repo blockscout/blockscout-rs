@@ -98,7 +98,7 @@ Resolves token metadata (symbol, decimals, icon) via on-chain calls and Blocksco
 ## Database Schema
 
 ```text
-chains (chain_id, name, native_id, explorer_url)
+chains (id, name, icon, explorer, custom_routes)
     ↑
 bridges (bridge_id, name, indexer, status)
     ↑
