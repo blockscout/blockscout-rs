@@ -143,9 +143,10 @@ typed parse for numeric fields.
 - The merged result goes through the same strict validation as the files —
   unknown fields, missing required fields, or type mismatches fail startup.
   Every applied override is logged at startup (`applied config env override`);
-  when an override **replaces an existing value**, the old and new values are
-  logged too (`config env override replaced an existing value`). Newly added
-  fields/entries are logged without values.
+  when an override **replaces an existing value**, an additional info line
+  identifies the replaced path (`config env override replaced an existing
+  value`). Raw config values are never logged at info level — RPC URLs may
+  embed API keys; the old/new values are available at debug level.
 
 **Examples:**
 

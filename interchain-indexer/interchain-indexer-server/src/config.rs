@@ -413,18 +413,24 @@ fn load_bridges_impl<P: AsRef<Path>>(
 
 fn log_applied_overrides(applied: &[env_merge::AppliedOverride], kind: &str) {
     for o in applied {
-        // New fields/entries are logged without values: RPC URLs may embed
-        // API keys. Replacements of existing values log old/new by design,
-        // so operators can see exactly what an override changed.
+        // No raw config values at info level: RPC URLs and similar fields may
+        // embed API keys. Replaced fields are identified by path at info;
+        // the old/new values are available at debug for troubleshooting.
         tracing::info!(var = %o.var, path = %o.json_path, kind, "applied config env override");
         for overwrite in &o.overwrites {
             tracing::info!(
                 var = %o.var,
                 path = %overwrite.path,
+                kind,
+                "config env override replaced an existing value"
+            );
+            tracing::debug!(
+                var = %o.var,
+                path = %overwrite.path,
                 old = %overwrite.old,
                 new = %overwrite.new,
                 kind,
-                "config env override replaced an existing value"
+                "config env override replacement values"
             );
         }
     }

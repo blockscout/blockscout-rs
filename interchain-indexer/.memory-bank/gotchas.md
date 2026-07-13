@@ -394,8 +394,9 @@ coerced with integer parsing — but don't rely on it.)
 Debugging tip: serde errors after merging reference the merged JSON, not the
 offending env var. The `applied config env override` info logs printed before
 deserialization list every applied var and its JSON path; overrides that
-replace an existing value additionally log the old and new values
-(`config env override replaced an existing value`). Newly added fields/entries
-are deliberately logged without values (RPC URLs may embed API keys).
+replace an existing value emit an additional info line identifying the
+replaced path (`config env override replaced an existing value`). Raw config
+values never appear at info level (RPC URLs may embed API keys); enable debug
+logging to see the old/new values of replacements.
 
 ---

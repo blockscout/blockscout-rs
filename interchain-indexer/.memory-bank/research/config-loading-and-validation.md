@@ -19,7 +19,11 @@ files and then patched by a dedicated env-override layer
 underscore after the service name) implemented in
 `interchain-indexer-server/src/env_merge.rs`: vars are parsed as JSON fragments
 and deep-merged into the file's `serde_json::Value` before typed
-deserialization, with arrays addressed element-wise by DB-aligned id keys.
+deserialization. Arrays are addressed element-wise via per-array `ArrayRules`:
+the top-level chains/bridges arrays and `bridges[].contracts` use DB-aligned id
+keys (`chain_id`, `bridge_id`, and `chain_id`+`address`+`version` respectively),
+while `chains[].rpcs` is a named map keyed by provider name (not persisted, so
+no DB key exists for it).
 Both channels feed serde deserialization with `deny_unknown_fields` across the
 full struct tree. After deserialization, config is seeded into the database via
 upserts; semantic validation happens late, at indexer construction time rather
@@ -139,8 +143,10 @@ validation occurs at this stage.
 file into a `serde_json::Value`, apply the env-override layer
 (`env_merge::apply_env_overrides` with the `INTERCHAIN_INDEXER_CHAINS` /
 `INTERCHAIN_INDEXER_BRIDGES` prefixes and the chains/bridges `ArrayRules`),
-log every applied override at info level (var name + JSON path, no values —
-RPC URLs may embed API keys), and only then run the typed serde parse. The
+log every applied override at info level (var name + JSON path — no raw config
+values at info, since RPC URLs may embed API keys; replaced fields emit an
+additional info line identifying the path, with old/new values available only
+at debug level), and only then run the typed serde parse. The
 file path itself is still set via `INTERCHAIN_INDEXER__CHAINS_CONFIG` /
 `INTERCHAIN_INDEXER__BRIDGES_CONFIG`. This path remains separate from the
 `config` crate: the env collection is hand-rolled to preserve key casing.
