@@ -69,7 +69,7 @@ jobs:
         env:
           TAG: ${{ steps.get_image_tag.outputs.tag }}
         run: |
-          TOKEN=$(echo ${{ secrets.GITHUB_TOKEN }} | base64)
+          TOKEN=$(echo -n "${{ secrets.GITHUB_TOKEN }}" | base64 -w 0)
           TAGS_RESPONSE=$(curl -H "Authorization: Bearer ${TOKEN}" https://ghcr.io/v2/${IMAGE_NAME}/tags/list)
           
           # E.g, {"name":"blockscout/services-base","tags":["latest","chef-0.1.62-rust-1.75-buster-protoc-25.2-openapi-2.19.0"]}
