@@ -47,7 +47,6 @@ Defines the blockchains the indexer knows about. Each entry describes one chain:
 | ------------ | ----------- |
 | `chain_id`   | Numeric chain identifier (e.g. 43114 for Avalanche C-Chain). |
 | `name`       | Human-readable chain name. |
-| `native_id`  | Chain’s native/subnet id (hex), used for interchain routing. |
 | `icon`       | Optional URL to chain icon. |
 | `explorer`   | Optional explorer base URL and routes: `url`, `custom_tx_route`, `custom_address_route`, `custom_token_route`. |
 | `rpcs`       | RPC config per chain. |
@@ -78,6 +77,104 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 | `true` | `Some(h)` | Process messages where at least one endpoint is `h` (unknown chains allowed). |
 
 **`started_at_block`** — indexer starts scanning from this block on associated chain; set it to reduce initial sync time or to start from a specific deployment block.
+
+### Overriding `chains.json` / `bridges.json` via environment
+
+At startup, environment variables under two dedicated prefixes are deep-merged
+into the JSON read from the config files, **before** validation. Env always wins
+over the file. Both single-field overrides and whole new entries (a new chain,
+bridge, RPC provider, or contract version) are supported. With no such vars set,
+behavior is unchanged.
+
+Note the single underscore after `INTERCHAIN_INDEXER` — these prefixes are
+separate from the main `INTERCHAIN_INDEXER__*` settings:
+
+- `INTERCHAIN_INDEXER_CHAINS…` patches the chains config
+- `INTERCHAIN_INDEXER_BRIDGES…` patches the bridges config
+
+**Path grammar** (segments are separated by `__` and are case-insensitive):
+
+```
+<PREFIX>                                  = whole-config array patch (value must be a JSON array)
+<PREFIX>__<ID>                            = one entry (value: JSON object fragment)
+<PREFIX>__<ID>__<FIELD>[__<FIELD>…]       = one field (value: scalar or JSON fragment)
+```
+
+**Array addressing** — arrays are addressed by id key(s), aligned with the DB
+uniqueness keys, so entries that merge together are exactly the entries that
+upsert to the same DB row:
+
+| JSON location | Key | Env key segments |
+|---|---|---|
+| chains top-level array | `chain_id` | `INTERCHAIN_INDEXER_CHAINS__<CHAIN_ID>` |
+| bridges top-level array | `bridge_id` | `INTERCHAIN_INDEXER_BRIDGES__<BRIDGE_ID>` |
+| `bridges[].contracts` | `(chain_id, address, version)` | `…__CONTRACTS__<CHAIN_ID>__<ADDRESS>__<VERSION>` |
+| `chains[].rpcs` | provider name (map key) | `…__RPCS__<PROVIDER_NAME>` |
+
+Matching is exact: numbers numerically, strings (addresses) case-insensitively.
+No match appends a new element with the key fields injected; more than one match
+fails startup.
+
+**Values** are parsed as JSON first, falling back to a plain string. So `true`,
+`123`, `null`, `{…}`, `[…]` are JSON; `Polygon`, URLs, and `0x…` hex stay
+strings. A *literal string* that happens to be valid JSON needs JSON-string
+quoting: `NAME='"123"'` sets the string `123`. Beware zero-padded numbers:
+`VERSION_FIELD=06` is not valid JSON, becomes the string `"06"`, and fails the
+typed parse for numeric fields.
+
+**Merge semantics:**
+
+- Patches apply shallow-first: an entry fragment lands before deeper
+  field-level vars, so the more specific var always wins.
+- Objects deep-merge recursively; `null` **replaces** a field value but never
+  removes the key (`"api_url": null` stays in the JSON).
+- `null` for a whole entry (`…_CHAINS__137=null`) is an error — deletion via
+  env is not supported.
+- A nested whole-array value (`…__RPCS='[…]'`, `…__CONTRACTS='[…]'`) **replaces**
+  the array wholesale (escape hatch).
+- The bare prefix takes a JSON array; each element must contain the id field
+  and is upserted (merged into the matching entry, or appended).
+- Missing intermediate containers are created on demand, so a brand-new entry
+  can be built entirely from field-level vars.
+- Id fields inside an entry fragment (or a direct id-field var like
+  `…__137__CHAIN_ID=…`) must match the key the entry is addressed by, or be
+  omitted — a conflicting value fails startup instead of silently retargeting
+  the entry. Entry values must be JSON objects.
+- The merged result goes through the same strict validation as the files —
+  unknown fields, missing required fields, or type mismatches fail startup.
+  Every applied override is logged at startup (`applied config env override`);
+  when an override **replaces an existing value**, an additional info line
+  identifies the replaced path (`config env override replaced an existing
+  value`). Raw config values are never logged at info level — RPC URLs may
+  embed API keys; the old/new values are available at debug level.
+
+**Examples:**
+
+```bash
+# Disable bridge 1
+INTERCHAIN_INDEXER_BRIDGES__1__ENABLED=false
+
+# Null out an optional field (key is kept, value becomes null)
+INTERCHAIN_INDEXER_BRIDGES__1__API_URL=null
+
+# Add a new chain field-by-field
+INTERCHAIN_INDEXER_CHAINS__137__NAME=Polygon
+INTERCHAIN_INDEXER_CHAINS__137__ICON=https://example.com/polygon.svg
+INTERCHAIN_INDEXER_CHAINS__137__RPCS__MYNODE__URL=https://my.polygon.node
+
+# …or as one JSON fragment (chain_id is injected from the path)
+INTERCHAIN_INDEXER_CHAINS__137='{"name":"Polygon","icon":"https://example.com/polygon.svg","rpcs":[{"mynode":{"url":"https://my.polygon.node"}}]}'
+
+# Tune an existing RPC provider / add a new one
+INTERCHAIN_INDEXER_CHAINS__1__RPCS__DRPC__MAX_RPS=5
+INTERCHAIN_INDEXER_CHAINS__1__RPCS__MYNODE='{"url":"https://my.eth.node","max_rps":2}'
+
+# Tune an existing contract by (chain_id, address, version)…
+INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d__6__STARTED_AT_BLOCK=18588922
+
+# …or add a new contract *version* for the same chain+address (appends a new entry)
+INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d__8__STARTED_AT_BLOCK=19000000
+```
 
 ## Envs
 

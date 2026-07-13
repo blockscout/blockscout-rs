@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+use crate::env_merge;
 use alloy::{
     network::Ethereum,
     primitives::{Address, ChainId},
@@ -52,6 +53,7 @@ pub struct BridgeConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct BridgeContractConfig {
     pub chain_id: i64,
     #[serde(deserialize_with = "deserialize_address")]
@@ -59,6 +61,7 @@ pub struct BridgeContractConfig {
     pub version: i16,
     pub started_at_block: u64,
     pub kind: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_abi")]
     pub abi: Option<String>,
 }
 
@@ -69,6 +72,20 @@ where
 {
     let s: String = Deserialize::deserialize(deserializer)?;
     BridgeType::try_from_value(&s).map_err(serde::de::Error::custom)
+}
+
+/// Deserialize an ABI from either a JSON string (file form) or inline JSON
+/// (env-override form), normalizing both to the string representation.
+fn deserialize_abi<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: serde_json::Value = Deserialize::deserialize(deserializer)?;
+    Ok(match value {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(s) => Some(s),
+        other => Some(other.to_string()),
+    })
 }
 
 /// Deserialize an Ethereum address from a hex string to Vec<u8>
@@ -260,6 +277,7 @@ impl From<chains::Model> for ChainConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ExplorerConfig {
     #[serde(default)]
     pub url: String,
@@ -269,6 +287,7 @@ pub struct ExplorerConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct ChainConfig {
     pub chain_id: i64,
     pub name: String,
@@ -281,6 +300,7 @@ pub struct ChainConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct RpcProviderConfig {
     pub url: String,
     #[serde(default = "default_rpc_enabled")]
@@ -324,31 +344,108 @@ fn default_multicall_batching_us() -> u64 {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct ApiKeyConfig {
     pub location: String,
     pub name: String,
 }
 
-/// Load and deserialize chains from a JSON file
+/// Env var prefix for overriding/extending the chains config (see README).
+const CHAINS_ENV_PREFIX: &str = "INTERCHAIN_INDEXER_CHAINS";
+/// Env var prefix for overriding/extending the bridges config (see README).
+const BRIDGES_ENV_PREFIX: &str = "INTERCHAIN_INDEXER_BRIDGES";
+
+/// Load and deserialize chains from a JSON file, with
+/// `INTERCHAIN_INDEXER_CHAINS*` env overrides deep-merged on top.
 pub fn load_chains_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<ChainConfig>> {
-    let content = std::fs::read_to_string(path.as_ref())
-        .with_context(|| format!("Failed to read chains config file: {:?}", path.as_ref()))?;
-
-    let chains: Vec<ChainConfig> = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse chains config JSON: {:?}", path.as_ref()))?;
-
-    Ok(chains)
+    load_chains_impl(path, std::env::vars())
 }
 
-/// Load and deserialize bridges from a JSON file
+fn load_chains_impl<P: AsRef<Path>>(
+    path: P,
+    vars: impl Iterator<Item = (String, String)>,
+) -> Result<Vec<ChainConfig>> {
+    let mut value = read_config_array(path.as_ref(), "chains")?;
+
+    let applied = env_merge::apply_env_overrides(
+        &mut value,
+        CHAINS_ENV_PREFIX,
+        vars,
+        &env_merge::CHAINS_RULES,
+    )?;
+    log_applied_overrides(&applied, "chains");
+
+    serde_json::from_value(value).with_context(|| {
+        format!(
+            "Failed to parse chains config JSON (after env overrides): {:?}",
+            path.as_ref()
+        )
+    })
+}
+
+/// Load and deserialize bridges from a JSON file, with
+/// `INTERCHAIN_INDEXER_BRIDGES*` env overrides deep-merged on top.
 pub fn load_bridges_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<BridgeConfig>> {
-    let content = std::fs::read_to_string(path.as_ref())
-        .with_context(|| format!("Failed to read bridges config file: {:?}", path.as_ref()))?;
+    load_bridges_impl(path, std::env::vars())
+}
 
-    let bridges: Vec<BridgeConfig> = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse bridges config JSON: {:?}", path.as_ref()))?;
+fn load_bridges_impl<P: AsRef<Path>>(
+    path: P,
+    vars: impl Iterator<Item = (String, String)>,
+) -> Result<Vec<BridgeConfig>> {
+    let mut value = read_config_array(path.as_ref(), "bridges")?;
 
-    Ok(bridges)
+    let applied = env_merge::apply_env_overrides(
+        &mut value,
+        BRIDGES_ENV_PREFIX,
+        vars,
+        &env_merge::BRIDGES_RULES,
+    )?;
+    log_applied_overrides(&applied, "bridges");
+
+    serde_json::from_value(value).with_context(|| {
+        format!(
+            "Failed to parse bridges config JSON (after env overrides): {:?}",
+            path.as_ref()
+        )
+    })
+}
+
+fn log_applied_overrides(applied: &[env_merge::AppliedOverride], kind: &str) {
+    for o in applied {
+        // No raw config values at info level: RPC URLs and similar fields may
+        // embed API keys. Replaced fields are identified by path at info;
+        // the old/new values are available at debug for troubleshooting.
+        tracing::info!(var = %o.var, path = %o.json_path, kind, "applied config env override");
+        for overwrite in &o.overwrites {
+            tracing::info!(
+                var = %o.var,
+                path = %overwrite.path,
+                kind,
+                "config env override replaced an existing value"
+            );
+            tracing::debug!(
+                var = %o.var,
+                path = %overwrite.path,
+                old = %overwrite.old,
+                new = %overwrite.new,
+                kind,
+                "config env override replacement values"
+            );
+        }
+    }
+}
+
+fn read_config_array(path: &Path, kind: &str) -> Result<serde_json::Value> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {kind} config file: {path:?}"))?;
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .with_context(|| format!("Failed to parse {kind} config JSON: {path:?}"))?;
+    anyhow::ensure!(
+        value.is_array(),
+        "{kind} config must be a JSON array: {path:?}"
+    );
+    Ok(value)
 }
 
 /// Create layered Alloy providers from ChainConfig definitions.
@@ -718,5 +815,260 @@ mod tests {
         assert_eq!(config.explorer.custom_token_route, None);
         // rpcs are lost in conversion (not stored in DB)
         assert_eq!(config.rpcs, vec![]);
+    }
+
+    #[test]
+    fn test_deserialize_abi_accepts_string_and_inline_json_forms() {
+        let file_form = r#"
+        {
+            "chain_id": 1,
+            "address": "0x4C36d2919e407f0Cc2Ee3c993ccF8ac26d9CE64e",
+            "version": 6,
+            "started_at_block": 1,
+            "kind": null,
+            "abi": "[{\"name\":\"RelayedMessage\",\"type\":\"event\"}]"
+        }
+        "#;
+        let env_form = r#"
+        {
+            "chain_id": 1,
+            "address": "0x4C36d2919e407f0Cc2Ee3c993ccF8ac26d9CE64e",
+            "version": 6,
+            "started_at_block": 1,
+            "kind": null,
+            "abi": [{"name":"RelayedMessage","type":"event"}]
+        }
+        "#;
+
+        let from_file: BridgeContractConfig = serde_json::from_str(file_form).unwrap();
+        let from_env: BridgeContractConfig = serde_json::from_str(env_form).unwrap();
+
+        assert_eq!(
+            from_file.abi,
+            Some(r#"[{"name":"RelayedMessage","type":"event"}]"#.to_string())
+        );
+        assert_eq!(from_file.abi, from_env.abi);
+
+        let null_form = file_form.replace(
+            r#""abi": "[{\"name\":\"RelayedMessage\",\"type\":\"event\"}]""#,
+            r#""abi": null"#,
+        );
+        let from_null: BridgeContractConfig = serde_json::from_str(&null_form).unwrap();
+        assert_eq!(from_null.abi, None);
+    }
+
+    fn write_temp_json(content: &str) -> tempfile::NamedTempFile {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        file
+    }
+
+    fn fixture_vars(vars: &[(&str, &str)]) -> impl Iterator<Item = (String, String)> {
+        vars.iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    const CHAINS_FILE: &str = r#"
+    [
+        {
+            "chain_id": 1,
+            "name": "Ethereum",
+            "icon": "https://icon.example/eth.svg",
+            "rpcs": [ { "drpc": { "url": "https://eth.drpc.org" } } ]
+        }
+    ]
+    "#;
+
+    const BRIDGES_FILE: &str = r#"
+    [
+        {
+            "bridge_id": 1,
+            "name": "AMB",
+            "type": "amb",
+            "indexer_type": "amb",
+            "enabled": true,
+            "api_url": "https://api.example",
+            "ui_url": null,
+            "docs_url": null,
+            "contracts": [
+                {
+                    "chain_id": 100,
+                    "address": "0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d",
+                    "version": 6,
+                    "started_at_block": 10
+                }
+            ]
+        }
+    ]
+    "#;
+
+    #[test]
+    fn test_load_chains_impl_without_override_vars_matches_file() {
+        let file = write_temp_json(CHAINS_FILE);
+        let chains = load_chains_impl(file.path(), fixture_vars(&[])).unwrap();
+        assert_eq!(chains.len(), 1);
+        assert_eq!(chains[0].chain_id, 1);
+        assert_eq!(chains[0].name, "Ethereum");
+    }
+
+    #[test]
+    fn test_load_chains_impl_new_chain_field_by_field_parses_typed() {
+        let file = write_temp_json(CHAINS_FILE);
+        let chains = load_chains_impl(
+            file.path(),
+            fixture_vars(&[
+                ("INTERCHAIN_INDEXER_CHAINS__137__NAME", "Polygon"),
+                (
+                    "INTERCHAIN_INDEXER_CHAINS__137__ICON",
+                    "https://icon.example/poly.svg",
+                ),
+                (
+                    "INTERCHAIN_INDEXER_CHAINS__137__RPCS__MYNODE__URL",
+                    "https://my.node",
+                ),
+            ]),
+        )
+        .unwrap();
+
+        assert_eq!(chains.len(), 2);
+        let polygon = &chains[1];
+        assert_eq!(polygon.chain_id, 137);
+        assert_eq!(polygon.name, "Polygon");
+        assert_eq!(polygon.rpcs[0]["mynode"].url, "https://my.node");
+    }
+
+    #[test]
+    fn test_load_bridges_impl_null_api_url_parses_as_none() {
+        let file = write_temp_json(BRIDGES_FILE);
+        let bridges = load_bridges_impl(
+            file.path(),
+            fixture_vars(&[("INTERCHAIN_INDEXER_BRIDGES__1__API_URL", "null")]),
+        )
+        .unwrap();
+
+        assert_eq!(bridges[0].api_url, None);
+    }
+
+    #[test]
+    fn test_load_bridges_impl_new_bridge_fragment_parses_typed() {
+        let file = write_temp_json(BRIDGES_FILE);
+        let bridges = load_bridges_impl(
+            file.path(),
+            fixture_vars(&[(
+                "INTERCHAIN_INDEXER_BRIDGES__2",
+                r#"{
+                    "name": "Avalanche ICTT",
+                    "type": "avalanche_native",
+                    "indexer_type": "icm_ictt",
+                    "enabled": false,
+                    "api_url": null,
+                    "ui_url": null,
+                    "docs_url": null,
+                    "contracts": [
+                        {
+                            "chain_id": 43114,
+                            "address": "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf",
+                            "version": 1,
+                            "started_at_block": 42526120
+                        }
+                    ]
+                }"#,
+            )]),
+        )
+        .unwrap();
+
+        assert_eq!(bridges.len(), 2);
+        let new_bridge = &bridges[1];
+        assert_eq!(new_bridge.bridge_id, 2);
+        assert_eq!(new_bridge.indexer_type, IndexerType::IcmIctt);
+        assert!(!new_bridge.enabled);
+        assert_eq!(new_bridge.contracts.len(), 1);
+        assert_eq!(new_bridge.contracts[0].chain_id, 43114);
+    }
+
+    #[test]
+    fn test_load_chains_impl_env_built_chain_missing_name_errors() {
+        let file = write_temp_json(CHAINS_FILE);
+        let err = load_chains_impl(
+            file.path(),
+            fixture_vars(&[(
+                "INTERCHAIN_INDEXER_CHAINS__137__ICON",
+                "https://icon.example/poly.svg",
+            )]),
+        )
+        .unwrap_err();
+
+        assert!(format!("{err:#}").contains("name"), "unexpected: {err:#}");
+    }
+
+    #[test]
+    fn test_load_chains_impl_unknown_field_in_env_path_errors() {
+        let file = write_temp_json(CHAINS_FILE);
+        let err = load_chains_impl(
+            file.path(),
+            fixture_vars(&[("INTERCHAIN_INDEXER_CHAINS__1__NAME_TYPO", "X")]),
+        )
+        .unwrap_err();
+
+        assert!(
+            format!("{err:#}").contains("name_typo"),
+            "unexpected: {err:#}"
+        );
+    }
+
+    #[test]
+    fn test_load_bridges_impl_inline_json_abi_from_env_parses() {
+        let file = write_temp_json(BRIDGES_FILE);
+        let bridges = load_bridges_impl(
+            file.path(),
+            fixture_vars(&[(
+                "INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xF6A78083CA3E2A662D6DD1703C939C8ACE2E268D__6__ABI",
+                r#"[{"name":"RelayedMessage","type":"event"}]"#,
+            )]),
+        )
+        .unwrap();
+
+        assert_eq!(
+            bridges[0].contracts[0].abi,
+            Some(r#"[{"name":"RelayedMessage","type":"event"}]"#.to_string())
+        );
+    }
+
+    /// Collect all `.json` files under a directory, recursively.
+    fn collect_json_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                collect_json_files(&path, out);
+            } else if path.extension().is_some_and(|ext| ext == "json") {
+                out.push(path);
+            }
+        }
+    }
+
+    #[test]
+    fn test_all_repo_config_files_parse_through_strict_structs() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut files = Vec::new();
+        collect_json_files(&repo_root.join("config"), &mut files);
+        collect_json_files(&repo_root.join("docker/config"), &mut files);
+        assert!(!files.is_empty(), "no config JSON files found");
+
+        for path in files {
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let content = std::fs::read_to_string(&path).unwrap();
+            if name.starts_with("chains") {
+                serde_json::from_str::<Vec<ChainConfig>>(&content)
+                    .unwrap_or_else(|e| panic!("failed to parse {path:?} as chains config: {e}"));
+            } else if name.starts_with("bridges") {
+                serde_json::from_str::<Vec<BridgeConfig>>(&content)
+                    .unwrap_or_else(|e| panic!("failed to parse {path:?} as bridges config: {e}"));
+            } else {
+                panic!("unexpected config file {path:?}: neither chains* nor bridges*");
+            }
+        }
     }
 }

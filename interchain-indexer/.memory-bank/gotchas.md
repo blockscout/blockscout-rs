@@ -364,3 +364,39 @@ state. Check provider config, `onchain_retry_interval`, and
 **Key insight:** Don't try to incrementally upgrade partial messages. Clean delete + fresh re-index is simpler and safer.
 
 ---
+
+## Config Env Overrides: Null Replaces, JSON Quoting, Zero-Padded Numbers
+
+Traps in the `INTERCHAIN_INDEXER_CHAINS*` / `INTERCHAIN_INDEXER_BRIDGES*`
+env-override layer (`env_merge.rs`, see the README section "Overriding
+chains.json / bridges.json via environment"):
+
+**`null` replaces the value, never removes the key.**
+`INTERCHAIN_INDEXER_BRIDGES__1__API_URL=null` yields `"api_url": null` in the
+merged JSON — the key stays. This is deliberate: fields like `api_url` are
+`Option` without `#[serde(default)]`, so key removal would cause
+`missing field` errors. `null` for a whole entry
+(`INTERCHAIN_INDEXER_CHAINS__137=null`) is a startup error — deletion via env
+is not supported.
+
+**A literal string that is valid JSON needs JSON-string quoting.**
+Values are parsed as JSON first, falling back to a plain string. `NAME=123`
+injects the *number* 123 and fails the typed parse for a string field; use
+`NAME='"123"'` for the string `123`. Same for literal `true`/`false`/`null`
+strings.
+
+**Zero-padded numbers fall back to strings.**
+`06` is not valid JSON (leading zero), so a value of `06` becomes the string
+`"06"` and fails the typed parse for numeric fields. Write `6`. (Key *path
+segments* like `…__CONTRACTS__100__<addr>__06` are more forgiving — they are
+coerced with integer parsing — but don't rely on it.)
+
+Debugging tip: serde errors after merging reference the merged JSON, not the
+offending env var. The `applied config env override` info logs printed before
+deserialization list every applied var and its JSON path; overrides that
+replace an existing value emit an additional info line identifying the
+replaced path (`config env override replaced an existing value`). Raw config
+values never appear at info level (RPC URLs may embed API keys); enable debug
+logging to see the old/new values of replacements.
+
+---
