@@ -15,7 +15,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::{chart_prelude::*, utils::ETHER};
 
 /// Hex of the 20-byte EVM representation of the Filecoin burn actor (f099).
-pub(crate) const BURN_ACTOR_HASH_HEX: &str = "ff00000000000000000000000000000000000063";
+pub const BURN_ACTOR_HASH_HEX: &str = "ff00000000000000000000000000000000000063";
 
 pub struct BurnActorBalanceStatement;
 impl_db_choice!(BurnActorBalanceStatement, UsePrimaryDB);

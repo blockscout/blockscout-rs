@@ -178,7 +178,8 @@ pub use verified_contracts_growth::{
     VerifiedContractsGrowthYearly,
 };
 
-pub(crate) use burn_actor_balance::{BURN_ACTOR_HASH_HEX, BurnActorBalance};
+pub use burn_actor_balance::BURN_ACTOR_HASH_HEX;
+pub(crate) use burn_actor_balance::BurnActorBalance;
 pub(crate) use fevm_fee_tips::FevmFeeTips;
 pub(crate) use native_coin_holders_growth::NativeCoinHoldersGrowthInt;
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
