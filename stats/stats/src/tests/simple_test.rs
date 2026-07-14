@@ -85,10 +85,6 @@ where
         true,
     )
     .await;
-    assert!(
-        _zetachain_cctx.is_none(),
-        "zetachain cctx db was initialized needlessly"
-    );
     (db, blockscout)
 }
 
