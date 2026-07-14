@@ -110,11 +110,11 @@ pub async fn test_lines_ok(
     for line_name in expected_lines {
         let line_resolutions = enabled_resolutions
             .remove(line_name)
-            .unwrap_or_else(|| panic!("must return chart info for {}", &line_name));
+            .unwrap_or_else(|| panic!("must return chart info for {}", line_name));
         assert!(
             line_resolutions.contains(&ResolutionKind::Day.into()),
             "At least day resolution must be enabled for enabled chart `{}`. Enabled resolutions: {:?}",
-            &line_name,
+            line_name,
             line_resolutions
         );
         for resolution in line_resolutions {
