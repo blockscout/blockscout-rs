@@ -47,6 +47,12 @@ If non-default config files are used, respective environment variables (e.g. `ST
 
 To disable unnecessary charts, open the `charts.json` file and set `enabled: false` for them. Other parameters can also be set/modified there.
 
+##### Serving a chart with another chart's implementation
+
+An entry may set an optional `implementation` field so the public id keeps its own metadata (title, description, units) while its data comes from a *different* registered chart. Example: the Filecoin deployment serves `txnsFee` with the `filecoinNewChainFees` implementation (see `STATS__ENABLE_ALL_FILECOIN`).
+
+The value is a chart id in **snake_case**, e.g. `"filecoin_new_chain_fees"`. Startup fails if the target is unknown, of a different type, maps to itself, or is claimed by two entries. It also fails if the target is enabled under its own entry — a target must be an implementation-only id, so to reuse an already-enabled one, disable it too (`enabled: false`); serving one implementation under two ids is rejected, not resolved silently. Remap chains are unsupported. Via env (`STATS_CHARTS__*__IMPLEMENTATION`) a value can set or replace a mapping but not clear one from `charts.json`.
+
 #### Layout configuration
 
 Categories for line charts, category metadata, and chart order within category are set in `layout.json`.
