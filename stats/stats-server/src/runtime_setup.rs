@@ -319,7 +319,8 @@ impl RuntimeSetup {
                         "chart '{public_name}' references '{implementation}' in \
                         `implementation`, but '{implementation}' is also enabled as \
                         its own config entry; a remap target must not itself be \
-                        enabled (remap chains are unsupported); disable one of them"
+                        enabled (remap chains are unsupported); disable the \
+                        '{implementation}' entry instead"
                     );
                 }
                 // resolution compatibility is checked only for explicitly
