@@ -330,6 +330,18 @@ state. Check provider config, `onchain_retry_interval`, and
 
 **Root cause:** Messages from unknown chains are indexed with `init_timestamp = last_update_timestamp` and no `src_tx_hash`. Re-indexing the source chain alone won't "upgrade" existing messages — the upsert would overwrite destination-side data with incomplete source-only data.
 
+**Update (2026-07-15):** The "upsert would overwrite" claim describes the old
+blind `update_columns` policy. Since #1692 (70bb8505),
+`crosschain_messages_on_conflict()` in `message_buffer/persistence.rs` is a
+**non-regressing merge**: terminal status wins, per-side `COALESCE`,
+`LEAST(init_timestamp)` — explicitly designed for out-of-order
+source/destination flushes. Incremental upgrade (add chain X to the same
+bridge; X's fresh catchup enriches stored partial rows) is therefore plausible,
+but not yet e2e-verified, and stats projected from partial rows are NOT
+retroactively corrected (`stats_processed` is not reset on conflict). The
+delete + fresh re-index procedure below remains the conservative, verified
+path. See `tmp/tasks/add-chain-historical-backfill/` for the full analysis.
+
 **Procedure:**
 
 1. **Create a new bridge** for the chain pair (e.g., A ↔ C) with proper contracts config
