@@ -47,6 +47,12 @@ If non-default config files are used, respective environment variables (e.g. `ST
 
 To disable unnecessary charts, open the `charts.json` file and set `enabled: false` for them. Other parameters can also be set/modified there.
 
+##### Serving a chart with another chart's implementation
+
+An entry may set an optional `implementation` field so the public id keeps its own metadata (title, description, units) while its data comes from a *different* registered chart. Example: the Filecoin deployment serves `txnsFee` with the `filecoinNewChainFees` implementation (see `STATS__ENABLE_ALL_FILECOIN`).
+
+The value is a chart id in **snake_case**, e.g. `"filecoin_new_chain_fees"`. Startup fails if the target is unknown, of a different type, maps to itself, or is claimed by two entries. It also fails if the target is enabled under its own entry — a target must be an implementation-only id, so to reuse an already-enabled one, disable it too (`enabled: false`); serving one implementation under two ids is rejected, not resolved silently. Remap chains are unsupported. Via env (`STATS_CHARTS__*__IMPLEMENTATION`) a value can set or replace a mapping but not clear one from `charts.json`.
+
 #### Layout configuration
 
 Categories for line charts, category metadata, and chart order within category are set in `layout.json`.
@@ -99,7 +105,7 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__ENABLE_ALL_ARBITRUM`                                         |                          | Enable Arbitrum-specific charts. Variable for convenience only, the same charts can be enabled one-by-one.                                                                                                                                                                                   | `false`                                         |
 | `STATS__ENABLE_ALL_OP_STACK`                                         |                          | Enable OP-Stack-specific charts. Variable for convenience only, the same charts can be enabled one-by-one.                                                                                                                                                                                   | `false`                                         |
 | `STATS__ENABLE_ALL_EIP_7702`                                         |                          | Enable EIP-7702-specific charts. Variable for convenience only, the same charts can be enabled one-by-one.                                                                                                                                                                                   | `false`                                         |
-| `STATS__ENABLE_ALL_FILECOIN`                                         |                          | Enable Filecoin-specific charts. Variable for convenience only, the same charts can be enabled one-by-one.                                                                                                                                                                                   | `false`                                         |
+| `STATS__ENABLE_ALL_FILECOIN`                                         |                          | Enable the Filecoin-specific API surface: `filecoinChainFeesGrowth` is enabled under its own id, and the public `txnsFee` id is force-enabled and served with the `filecoinNewChainFees` implementation (chain-wide fees); `filecoinNewChainFees` is never exposed as a public chart id.     | `false`                                         |
 | `STATS__API_KEYS__<KEY_NAME>`                                        |                          | E.g. `very_secure_key_value`. Allows access to key-protected functinoality                                                                                                                                                                                                                   | `null`                                          |
 
 [anchor]: <> (anchors.envs.end.service)
@@ -191,6 +197,8 @@ The service will periodically check the enabled start conditions and start updat
 | `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__TITLE`              |                          | Displayed name of `<LINE_CHART_NAME>`, e.g. `"Some line chart title"`                                                                                                                          | `null`        |
 | `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__UNITS`              |                          | Measurement units, e.g. `"{{<variable_name>}}"`                                                                                                                                                | `null`        |
 | `STATS_CHARTS__TEMPLATE_VALUES__<VARIABLE_NAME>`                   |                          | Value to substitute instead of `{{<variable_name>}}`, e.g. `STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL="some_value"`. See full list of variables in charts config file (`charts.json`). | `null`        |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__IMPLEMENTATION`           |                          | Serve counter `<COUNTER_NAME>` with the implementation of another registered counter; the value is a chart id in snake_case, e.g. `"total_txns"`. The env value can set or replace a mapping but cannot clear one defined in `charts.json` (remove `implementation` from the JSON entry instead)         | `null`        |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__IMPLEMENTATION`     |                          | Serve `<LINE_CHART_NAME>` with the implementation of another registered line chart; the value is a chart id in snake_case, e.g. `"filecoin_new_chain_fees"`. The env value can set or replace a mapping but cannot clear one defined in `charts.json` (remove `implementation` from the JSON entry instead) | `null`        |
 
 [anchor]: <> (anchors.envs.end.charts)
 

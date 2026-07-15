@@ -121,6 +121,11 @@ pub struct AllChartSettings {
     pub units: Option<String>,
     #[serde(default = "Default::default")]
     pub resolutions: ResolutionsSettings,
+    /// Name of the registered chart implementation to serve this chart with.
+    ///
+    /// Snake_case in config/env input; the canonical in-memory form is camelCase
+    /// (normalized on config load).
+    pub implementation: Option<String>,
 }
 
 fn enabled_default() -> bool {

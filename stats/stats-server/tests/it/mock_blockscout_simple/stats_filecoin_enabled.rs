@@ -4,8 +4,10 @@
 //! - blockscout is fully indexed with the Filecoin fixture layer applied
 //! - stats server is initialized with `enable_all_filecoin = true`
 //!
-//! The two public Filecoin charts must be served with all resolutions,
-//! while the intermediate charts stay hidden from the API.
+//! `filecoinChainFeesGrowth` must be served under its own id with all
+//! resolutions, and the public `txnsFee` id must serve the
+//! `filecoinNewChainFees` implementation (chain-wide fees); the
+//! implementation id and the intermediate charts stay hidden from the API.
 
 use std::collections::HashMap;
 
@@ -18,7 +20,7 @@ use stats::{ResolutionKind, tests::init_db::init_db};
 use stats_server::stats;
 use url::Url;
 
-use super::common_tests::test_lines_ok;
+use super::common_tests::{test_counters_ok, test_lines_ok};
 use crate::{
     common::{
         ChartSubset, assert_lines_not_served, get_test_stats_settings, sorted_vec,
@@ -46,11 +48,15 @@ pub async fn run_tests_with_filecoin_charts_enabled() {
     wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     // the shared exhaustive list check also pins that enabling the filecoin
-    // flag adds exactly the two public charts and breaks nothing else
+    // flag adds exactly one new public id (`filecoinChainFeesGrowth`) and
+    // remaps the existing `txnsFee` instead of adding a second one
     // (blockscout & user ops indexed, zetachain off, filecoin on)
     test_lines_ok(base.clone(), true, true, false, true).await;
+    // counters remain the normal set under the flag: fee counters stay,
+    // no filecoin counter appears (same indexing booleans as above)
+    test_counters_ok(base.clone(), true, true, false).await;
     test_filecoin_charts_are_listed(&base).await;
-    test_filecoin_new_chain_fees_data(&base).await;
+    test_txns_fee_serves_filecoin_chain_fees_data(&base).await;
     test_filecoin_chain_fees_growth_data(&base).await;
     test_filecoin_intermediates_are_hidden(&base).await;
 
@@ -66,12 +72,15 @@ async fn test_filecoin_charts_are_listed(base: &Url) {
         .iter()
         .find(|sec| sec.id == "transactions")
         .expect("transactions section must be present");
-    for chart_name in ["filecoinNewChainFees", "filecoinChainFeesGrowth"] {
+    // `txnsFee` is the public id of the remapped chain-fees chart; its
+    // metadata comes from the `txns_fee` config entry
+    for chart_name in ["txnsFee", "filecoinChainFeesGrowth"] {
         let chart = transactions_section
             .charts
             .iter()
             .find(|chart| chart.id == chart_name)
             .unwrap_or_else(|| panic!("{chart_name} must be in the transactions section"));
+        assert!(!chart.title.is_empty());
         assert!(!chart.description.is_empty());
         assert!(!chart.units().is_empty());
         let expected_resolutions: Vec<String> = [
@@ -88,6 +97,16 @@ async fn test_filecoin_charts_are_listed(base: &Url) {
             "wrong resolutions for {chart_name}"
         );
     }
+    // the implementation id must not be listed anywhere
+    let listed_charts: Vec<&str> = line_charts
+        .sections
+        .iter()
+        .flat_map(|sec| sec.charts.iter().map(|chart| chart.id.as_str()))
+        .collect();
+    assert!(
+        !listed_charts.contains(&"filecoinNewChainFees"),
+        "filecoinNewChainFees must not be listed as a public id"
+    );
 }
 
 /// The HTTP API reads with `fill_missing_dates = true`, so gap days
@@ -103,8 +122,27 @@ async fn get_filled_daily_data(base: &Url, chart_name: &str) -> HashMap<String, 
         .collect()
 }
 
-async fn test_filecoin_new_chain_fees_data(base: &Url) {
-    let data = get_filled_daily_data(base, "filecoinNewChainFees").await;
+/// The remap is proven end-to-end by observing the filecoin-computed numbers
+/// under the public `txnsFee` id: the fixture DB also contains regular
+/// transactions, so the replaced fee computation would yield *different*
+/// numbers — matching the filecoin ones shows the implementation chart was
+/// both served and updated through its own update group.
+async fn test_txns_fee_serves_filecoin_chain_fees_data(base: &Url) {
+    let chart: stats_proto::blockscout::stats::v1::LineChart =
+        send_get_request(base, "/api/v1/lines/txnsFee").await;
+    let info = chart.info.as_ref().expect("chart info must be present");
+    assert_eq!(
+        info.id, "txnsFee",
+        "returned chart id (left) doesn't match requested (right)",
+    );
+    assert!(!info.title.is_empty());
+    assert!(!info.description.is_empty());
+    assert!(!info.units().is_empty());
+    let data: HashMap<String, String> = chart
+        .chart
+        .into_iter()
+        .map(|point| (point.date, point.value))
+        .collect();
     // spot-check single points computed from the Filecoin fixture layer
     // (burn delta + fevm tips)
     let expected_points = [
@@ -125,7 +163,7 @@ async fn test_filecoin_new_chain_fees_data(base: &Url) {
         assert_eq!(
             data.get(date).map(String::as_str),
             Some(value),
-            "unexpected filecoinNewChainFees value for {date}"
+            "unexpected txnsFee value for {date}"
         );
     }
 }
