@@ -57,6 +57,8 @@
                 "operational_txns_growth",
                 "new_zetachain_cross_chain_txns",
                 "zetachain_cross_chain_txns_growth",
+                "filecoin_new_chain_fees",
+                "filecoin_chain_fees_growth",
                 "txns_success_rate",
                 "new_eip_7702_auths",
                 "eip_7702_auths_growth"

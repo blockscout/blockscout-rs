@@ -290,6 +290,144 @@ mod tests {
         assert_eq!(overridden_config, expected_config)
     }
 
+    #[test]
+    fn implementation_overridden_correctly() {
+        const CHART_CONFIG_WITH_IMPLEMENTATIONS: &str = r#"{
+            "counters": {},
+            "line_charts": {
+                "average_txn_fee": {
+                    "title": "Average transaction fee",
+                    "description": "The average amount spent per transaction",
+                    "implementation": "some_other_chart"
+                },
+                "txns_fee": {
+                    "title": "Transactions fees",
+                    "description": "Amount of tokens paid as fees",
+                    "implementation": "overridden_by_env"
+                }
+            },
+            "template_values": {}
+        }"#;
+        let mut json_config: json::charts::Config =
+            serde_json::from_str(CHART_CONFIG_WITH_IMPLEMENTATIONS).unwrap();
+
+        let env_override: env::charts::Config = config_from_env(
+            "STATS_CHARTS",
+            HashMap::from_iter(
+                [(
+                    "STATS_CHARTS__LINE_CHARTS__TXNS_FEE__IMPLEMENTATION",
+                    "filecoin_new_chain_fees",
+                )]
+                .map(|(a, b)| (a.to_owned(), b.to_owned())),
+            ),
+        )
+        .unwrap();
+
+        override_charts(&mut json_config, env_override).unwrap();
+        let overridden_config = serde_json::to_value(json_config).unwrap();
+
+        // env value wins; a JSON-provided value survives when no env is set
+        let expected_config: json::charts::Config = serde_json::from_str(
+            r#"{
+                "counters": {},
+                "line_charts": {
+                    "average_txn_fee": {
+                        "title": "Average transaction fee",
+                        "description": "The average amount spent per transaction",
+                        "implementation": "some_other_chart"
+                    },
+                    "txns_fee": {
+                        "title": "Transactions fees",
+                        "description": "Amount of tokens paid as fees",
+                        "implementation": "filecoin_new_chain_fees"
+                    }
+                },
+                "template_values": {}
+            }"#,
+        )
+        .unwrap();
+        let expected_config = serde_json::to_value(expected_config).unwrap();
+
+        assert_eq!(overridden_config, expected_config)
+    }
+
+    #[test]
+    fn env_created_entry_with_implementation_added_correctly() {
+        let mut json_config: json::charts::Config =
+            serde_json::from_str(EXAMPLE_CHART_CONFIG).unwrap();
+
+        let env_override: env::charts::Config = config_from_env(
+            "STATS_CHARTS",
+            HashMap::from_iter(
+                [
+                    ("STATS_CHARTS__LINE_CHARTS__NEW_CHAIN_FEES__ENABLED", "true"),
+                    (
+                        "STATS_CHARTS__LINE_CHARTS__NEW_CHAIN_FEES__TITLE",
+                        "New chain fees",
+                    ),
+                    (
+                        "STATS_CHARTS__LINE_CHARTS__NEW_CHAIN_FEES__DESCRIPTION",
+                        "Chain fees description",
+                    ),
+                    (
+                        "STATS_CHARTS__LINE_CHARTS__NEW_CHAIN_FEES__IMPLEMENTATION",
+                        "filecoin_new_chain_fees",
+                    ),
+                ]
+                .map(|(a, b)| (a.to_owned(), b.to_owned())),
+            ),
+        )
+        .unwrap();
+
+        override_charts(&mut json_config, env_override).unwrap();
+        let overridden_config = serde_json::to_value(json_config).unwrap();
+
+        // the entry is created from env alone; `implementation` stays snake_case here
+        // (the camelCase conversion happens later, in the read-layer `From` impl)
+        let expected_config: json::charts::Config = serde_json::from_str(
+            r#"{
+                "counters": {
+                    "total_blocks": {
+                        "title": "Total Blocks",
+                        "description": "Number of all blocks in the network",
+                        "units": "blocks"
+                    },
+                    "total_txns": {
+                        "enabled": false,
+                        "title": "Total txns",
+                        "description": "All transactions including pending, dropped, replaced, failed transactions"
+                    }
+                },
+                "line_charts": {
+                    "average_txn_fee": {
+                        "enabled": false,
+                        "title": "Average transaction fee",
+                        "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+                        "units": "{{native_coin_symbol}}"
+                    },
+                    "txns_fee": {
+                        "title": "Transactions fees",
+                        "description": "Amount of tokens paid as fees",
+                        "units": "{{native_coin_symbol}}"
+                    },
+                    "new_chain_fees": {
+                        "enabled": true,
+                        "title": "New chain fees",
+                        "description": "Chain fees description",
+                        "implementation": "filecoin_new_chain_fees"
+                    }
+                },
+                "template_values": {
+                    "native_coin_symbol": "USDT"
+                }
+            }"#,
+        )
+        .unwrap();
+        let expected_config = serde_json::to_value(expected_config).unwrap();
+
+        assert_eq!(overridden_config, expected_config)
+    }
+
     const EXAMPLE_LAYOUT_CONFIG: &str = r#"{
         "counters_order": [
             "total_blocks",

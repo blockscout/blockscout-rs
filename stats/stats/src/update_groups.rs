@@ -345,6 +345,26 @@ construct_update_group!(ZetachainCrossChainTxnsGroup {
     ],
 });
 
+// The intermediate charts (`BurnActorBalance`, `FevmFeeTips`) are listed as
+// members even though they stay disabled: it silences the
+// `Group has dependencies that are not members` startup warning and allows
+// scheduling them standalone later. They are updated transitively via the
+// public charts regardless.
+construct_update_group!(FilecoinChainFeesGroup {
+    charts: [
+        BurnActorBalance,
+        FevmFeeTips,
+        FilecoinNewChainFees,
+        FilecoinNewChainFeesWeekly,
+        FilecoinNewChainFeesMonthly,
+        FilecoinNewChainFeesYearly,
+        FilecoinChainFeesGrowth,
+        FilecoinChainFeesGrowthWeekly,
+        FilecoinChainFeesGrowthMonthly,
+        FilecoinChainFeesGrowthYearly,
+    ],
+});
+
 // Charts returned in contracts endpoint.
 //
 // They don't depend on each other, but single group

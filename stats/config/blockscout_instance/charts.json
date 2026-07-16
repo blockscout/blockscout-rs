@@ -248,6 +248,30 @@
             "title": "Number of CCTXs",
             "description": "Cumulative Zetachain cross-chain transactions growth"
         },
+        "filecoin_new_chain_fees": {
+            "enabled": false,
+            "title": "New chain fees",
+            "description": "Total {{native_coin_symbol}} spent on chain-wide fees: base-fee burn + over-estimation burn (captured via the f099 burn-actor balance change) + FEVM miner tips",
+            "units": "{{native_coin_symbol}}"
+        },
+        "filecoin_chain_fees_growth": {
+            "enabled": false,
+            "title": "Chain fees growth",
+            "description": "Cumulative {{native_coin_symbol}} spent on chain-wide fees: base-fee burn + over-estimation burn (captured via the f099 burn-actor balance change) + FEVM miner tips",
+            "units": "{{native_coin_symbol}}"
+        },
+        "burn_actor_balance": {
+            "enabled": false,
+            "title": "Burn actor balance",
+            "description": "Balance of the f099 burn actor; internal source for the chain fees charts",
+            "units": "{{native_coin_symbol}}"
+        },
+        "fevm_fee_tips": {
+            "enabled": false,
+            "title": "FEVM fee tips",
+            "description": "Sum of miner tips of FEVM transactions; internal source for the chain fees charts",
+            "units": "{{native_coin_symbol}}"
+        },
         "txns_success_rate": {
             "title": "Transaction success rate",
             "description": "Success rate for all included transactions"

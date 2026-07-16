@@ -42,6 +42,27 @@ pub(crate) async fn response_panic_message(response: Response) -> String {
     format!("Invalid status code (success expected). Status: {status}. Message: {message}")
 }
 
+/// Asserts that none of the line charts in `names` is served by the
+/// line-chart endpoint (404); used for disabled and for internal
+/// (never-exposed) charts.
+pub async fn assert_lines_not_served(base: &Url, names: &[&str]) {
+    for name in names {
+        let response = reqwest::Client::new()
+            .request(
+                reqwest::Method::GET,
+                base.join(&format!("/api/v1/lines/{name}")).unwrap(),
+            )
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            reqwest::StatusCode::NOT_FOUND,
+            "line chart {name} must not be served"
+        );
+    }
+}
+
 pub enum ChartSubset {
     Independent,
     #[allow(unused)]

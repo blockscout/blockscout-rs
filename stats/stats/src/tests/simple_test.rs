@@ -5,6 +5,7 @@ use super::{
         init_db_all, init_db_all_interchain, init_db_all_multichain, init_db_zetachain_cctx,
     },
     mock_blockscout::fill_mock_blockscout_data,
+    mock_blockscout_filecoin::fill_mock_blockscout_filecoin_data,
     mock_interchain::fill_mock_interchain_data,
     mock_zetachain_cctx::fill_mock_zetachain_cctx_data,
 };
@@ -53,6 +54,7 @@ where
         Mode::Blockscout,
         None,
         None,
+        false,
     )
     .await;
     assert!(
@@ -60,6 +62,55 @@ where
         "zetachain cctx db was initialized needlessly"
     );
     (db, blockscout)
+}
+
+/// Same as [`simple_test_chart`], but the indexer database is additionally
+/// filled with the Filecoin layer
+/// ([`fill_mock_blockscout_filecoin_data`]) on top of the shared fixture.
+pub async fn simple_test_chart_filecoin<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+) -> (TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let (db, blockscout, _zetachain_cctx) = simple_test_chart_inner::<C>(
+        test_name,
+        expected,
+        IndexerMigrations::latest(),
+        Mode::Blockscout,
+        None,
+        None,
+        true,
+    )
+    .await;
+    (db, blockscout)
+}
+
+/// Same as [`simple_test_chart_with_migration_variants`], but the indexer
+/// database is additionally filled with the Filecoin layer
+/// ([`fill_mock_blockscout_filecoin_data`]) on top of the shared fixture.
+pub async fn simple_test_chart_filecoin_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: Vec<(&str, &str)>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        simple_test_chart_inner::<C>(
+            &test_name,
+            expected.clone(),
+            migrations,
+            Mode::Blockscout,
+            None,
+            None,
+            true,
+        )
+        .await;
+    }
 }
 
 pub async fn simple_test_chart_multichain<C>(
@@ -78,6 +129,7 @@ where
         Mode::MultichainAggregator,
         multichain_filter,
         None,
+        false,
     )
     .await
 }
@@ -99,6 +151,7 @@ where
         Mode::Interchain,
         None,
         interchain_primary_id,
+        false,
     )
     .await
 }
@@ -126,6 +179,7 @@ pub async fn simple_test_chart_with_migration_variants<C>(
             Mode::Blockscout,
             None,
             None,
+            false,
         )
         .await;
     }
@@ -149,6 +203,7 @@ where
         Mode::Zetachain,
         None,
         None,
+        false,
     )
     .await;
     (
@@ -169,6 +224,7 @@ async fn simple_test_chart_inner<C>(
     mode: Mode,
     multichain_filter: Option<Vec<u64>>,
     interchain_primary_id: Option<u64>,
+    fill_filecoin: bool,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
@@ -180,6 +236,7 @@ where
         None,
         DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap(),
         mode,
+        fill_filecoin,
     )
     .await;
 
@@ -338,7 +395,8 @@ async fn ranged_test_chart_inner<C>(
 
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let (init_time, db, blockscout, _) =
-        prepare_simple_any_test::<C>(test_name, update_time, max_time, Mode::Blockscout).await;
+        prepare_simple_any_test::<C>(test_name, update_time, max_time, Mode::Blockscout, false)
+            .await;
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
@@ -508,7 +566,7 @@ where
 {
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let (init_time, db, indexer, zetachain_cctx) =
-        prepare_simple_any_test::<C>(test_name, update_time, max_time, mode).await;
+        prepare_simple_any_test::<C>(test_name, update_time, max_time, mode, false).await;
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
@@ -546,6 +604,7 @@ where
         Some(init_time.naive_utc()),
         init_time,
         Mode::Blockscout,
+        false,
     )
     .await;
 
@@ -618,12 +677,20 @@ async fn prepare_chart_test_inner<C: DataSource + ChartProperties>(
 
 /// Both for counters and line charts
 ///
+/// `fill_filecoin` applies the Filecoin fixture layer *on top of* the shared
+/// fixture data. It is deliberately a plain bool and not a [`Mode`] variant:
+/// `Mode` is a production setting, while this is a test-only data layer.
+/// Should a second additive fixture layer ever appear, replace the bool with
+/// a set/struct of flags (not an enum — layers stack and may combine) set
+/// once here.
+///
 /// returns `(init_time, db, indexer, zetachain_cctx)`
 async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
     test_name: &str,
     update_time: Option<NaiveDateTime>,
     max_time: DateTime<Utc>,
     mode: Mode,
+    fill_filecoin: bool,
 ) -> (DateTime<Utc>, TestDbGuard, TestDbGuard, Option<TestDbGuard>) {
     let init_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
     let max_date = max_time.date_naive();
@@ -632,7 +699,12 @@ async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
     match mode {
         Mode::Interchain => fill_mock_interchain_data(&indexer, max_date).await,
         Mode::MultichainAggregator => fill_mock_multichain_data(&indexer, max_date).await,
-        Mode::Blockscout | Mode::Zetachain => fill_mock_blockscout_data(&indexer, max_date).await,
+        Mode::Blockscout | Mode::Zetachain => {
+            fill_mock_blockscout_data(&indexer, max_date).await;
+            if fill_filecoin {
+                fill_mock_blockscout_filecoin_data(&indexer, max_date).await;
+            }
+        }
     }
     if let Some(zetachain_cctx) = &zetachain_cctx {
         fill_mock_zetachain_cctx_data(zetachain_cctx, max_date, true).await;

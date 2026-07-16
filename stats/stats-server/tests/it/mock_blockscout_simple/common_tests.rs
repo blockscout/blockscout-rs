@@ -16,7 +16,7 @@ use url::Url;
 
 use crate::{
     array_of_variables_with_names,
-    common::{enabled_resolutions, sorted_vec},
+    common::{assert_lines_not_served, enabled_resolutions, sorted_vec},
 };
 
 pub async fn test_lines_ok(
@@ -24,6 +24,7 @@ pub async fn test_lines_ok(
     blockscout_indexed: bool,
     user_ops_indexed: bool,
     zetachain_indexed: bool,
+    filecoin_enabled: bool,
 ) {
     let line_charts: stats_proto::blockscout::stats::v1::LineCharts =
         send_get_request(&base, "/api/v1/lines").await;
@@ -102,15 +103,21 @@ pub async fn test_lines_ok(
             "zetachainCrossChainTxnsGrowth",
         ]);
     }
+    if filecoin_enabled {
+        // the flag adds one public id; `txnsFee` is already in the base
+        // `blockscout_indexed` list and is served with the
+        // `filecoinNewChainFees` implementation under the remap
+        expected_lines.extend(["filecoinChainFeesGrowth"]);
+    }
 
     for line_name in expected_lines {
         let line_resolutions = enabled_resolutions
             .remove(line_name)
-            .unwrap_or_else(|| panic!("must return chart info for {}", &line_name));
+            .unwrap_or_else(|| panic!("must return chart info for {}", line_name));
         assert!(
             line_resolutions.contains(&ResolutionKind::Day.into()),
             "At least day resolution must be enabled for enabled chart `{}`. Enabled resolutions: {:?}",
-            &line_name,
+            line_name,
             line_resolutions
         );
         for resolution in line_resolutions {
@@ -149,6 +156,37 @@ pub async fn test_lines_ok(
 
     // should not return charts that are disabled or waiting for indexing
     assert_eq!(enabled_resolutions, HashMap::new());
+
+    if filecoin_enabled {
+        // even with the flag on, the intermediates must never be served, and
+        // `filecoinNewChainFees` stays hidden as well — it is only the
+        // implementation behind the public `txnsFee` id; the names mirror
+        // `assert_filecoin_charts_disabled_by_default`
+        assert_lines_not_served(
+            &base,
+            &["filecoinNewChainFees", "burnActorBalance", "fevmFeeTips"],
+        )
+        .await;
+    } else {
+        assert_filecoin_charts_disabled_by_default(&base).await;
+    }
+}
+
+/// Filecoin charts (both public and intermediate) are off by default
+/// (`enable_all_filecoin = false`), so every scenario booting with default
+/// settings must not serve them; their positive counterparts live in
+/// `stats_filecoin_enabled.rs`.
+async fn assert_filecoin_charts_disabled_by_default(base: &Url) {
+    assert_lines_not_served(
+        base,
+        &[
+            "filecoinNewChainFees",
+            "filecoinChainFeesGrowth",
+            "burnActorBalance",
+            "fevmFeeTips",
+        ],
+    )
+    .await;
 }
 
 pub async fn test_counters_ok(

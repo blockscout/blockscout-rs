@@ -3,6 +3,7 @@
 mod accounts;
 mod blocks;
 mod contracts;
+mod filecoin;
 mod gas;
 mod tokens;
 mod transactions;
@@ -12,6 +13,7 @@ mod zetachain_cctx;
 use accounts::*;
 use blocks::*;
 use contracts::*;
+use filecoin::*;
 use gas::*;
 use tokens::*;
 use transactions::*;
@@ -108,6 +110,14 @@ pub use eip_7702_auths_growth::{
     Eip7702AuthsGrowth, Eip7702AuthsGrowthMonthly, Eip7702AuthsGrowthWeekly,
     Eip7702AuthsGrowthYearly,
 };
+pub use filecoin_chain_fees_growth::{
+    FilecoinChainFeesGrowth, FilecoinChainFeesGrowthMonthly, FilecoinChainFeesGrowthWeekly,
+    FilecoinChainFeesGrowthYearly,
+};
+pub use filecoin_new_chain_fees::{
+    FilecoinNewChainFees, FilecoinNewChainFeesMonthly, FilecoinNewChainFeesWeekly,
+    FilecoinNewChainFeesYearly,
+};
 pub use gas_used_growth::{
     GasUsedGrowth, GasUsedGrowthMonthly, GasUsedGrowthWeekly, GasUsedGrowthYearly,
 };
@@ -168,6 +178,9 @@ pub use verified_contracts_growth::{
     VerifiedContractsGrowthYearly,
 };
 
+pub use burn_actor_balance::BURN_ACTOR_HASH_HEX;
+pub(crate) use burn_actor_balance::BurnActorBalance;
+pub(crate) use fevm_fee_tips::FevmFeeTips;
 pub(crate) use native_coin_holders_growth::NativeCoinHoldersGrowthInt;
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub(crate) use new_blocks::{NewBlocksInt, NewBlocksMonthlyInt, NewBlocksStatement};

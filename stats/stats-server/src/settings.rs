@@ -20,9 +20,10 @@ use stats::{
     indexing_status::BlockscoutIndexingStatus,
     lines::{
         ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
-        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
-        NewZetachainCrossChainTxns, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow,
-        OpStackOperationalTxnsGrowth, ZetachainCrossChainTxnsGrowth,
+        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, FilecoinChainFeesGrowth,
+        FilecoinNewChainFees, NewEip7702Auths, NewZetachainCrossChainTxns,
+        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
+        TxnsFee, ZetachainCrossChainTxnsGrowth,
     },
 };
 use std::{
@@ -32,7 +33,7 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     RuntimeSetup,
@@ -83,6 +84,12 @@ pub struct Settings {
     pub enable_all_op_stack: bool,
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
+    /// Enable the Filecoin-specific API surface: `filecoinChainFeesGrowth`
+    /// is enabled under its own id, and the public `txnsFee` id is
+    /// force-enabled and served with the `filecoinNewChainFees`
+    /// implementation (chain-wide fees); `filecoinNewChainFees` is never
+    /// exposed as a public chart id.
+    pub enable_all_filecoin: bool,
     /// Filter by chain ids for multichain mode.
     /// TODO: recalculate statistics data when multichain_filter has been changed
     ///       most likely it's need to implement in conjunction with 3D charts
@@ -205,6 +212,7 @@ impl Default for Settings {
             enable_all_arbitrum: false,
             enable_all_op_stack: false,
             enable_all_eip_7702: false,
+            enable_all_filecoin: false,
             multichain_filter: Default::default(),
             interchain_primary_id: Default::default(),
             create_database: Default::default(),
@@ -236,23 +244,27 @@ pub fn handle_disable_internal_transactions(
                 .map(|(k, _req)| k.into_name());
         let to_disable: BTreeSet<_> = charts_dependant_on_internal_transactions.collect();
 
-        for disable_name in to_disable {
-            let settings = match (
-                charts.lines.get_mut(&disable_name),
-                charts.counters.get_mut(&disable_name),
-            ) {
-                (Some(settings), _) => settings,
-                (_, Some(settings)) => settings,
-                _ => {
-                    warn!(
-                        "Could not disable internal transactions related chart {}: chart not found in settings. \
-                        This should not be a problem for running the service.",
-                        disable_name
-                    );
-                    continue;
-                }
-            };
-            settings.enabled = false;
+        // an entry is disabled based on the chart it actually serves — its
+        // `implementation` when remapped, its own name otherwise — so that
+        // a remapped entry serving an internal-transactions-dependent chart
+        // is caught, and a mere name collision with one is not
+        let mut unserved = to_disable.clone();
+        for (name, settings) in charts.lines.iter_mut().chain(charts.counters.iter_mut()) {
+            let served_chart = settings.implementation.as_deref().unwrap_or(name);
+            if to_disable.contains(served_chart) {
+                settings.enabled = false;
+                unserved.remove(served_chart);
+            }
+        }
+        // a leftover name means the binary registers an
+        // internal-transactions-dependent chart that no config entry serves,
+        // so there was nothing to disable
+        if !unserved.is_empty() {
+            debug!(
+                "Could not disable internal transactions related charts \
+                {unserved:?}: not served by any config entry. \
+                This should not be a problem for running the service.",
+            );
         }
     }
 }
@@ -335,6 +347,37 @@ pub fn handle_enable_all_eip_7702(
             charts,
             "eip-7702",
         )
+    }
+}
+
+/// Switches the whole Filecoin API surface with one flag: enables
+/// `filecoinChainFeesGrowth` under its own id and force-enables the public
+/// `txnsFee` id, serving it with the `filecoinNewChainFees` implementation
+/// (chain-wide REV-style fees) unless an explicit `implementation` is already
+/// configured. `filecoinNewChainFees` is never exposed as a public chart id.
+/// The intermediate charts (`burnActorBalance`, `fevmFeeTips`) stay
+/// disabled — hidden from the API — and are updated transitively as
+/// dependencies of the public charts.
+pub fn handle_enable_all_filecoin(
+    enable_all: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all {
+        // force-enabling `txnsFee` keeps the single-env-var promise even for
+        // configs that disable the entry; `enable_charts` warns and continues
+        // if an entry is absent
+        enable_charts(
+            &[FilecoinChainFeesGrowth::key().name(), TxnsFee::key().name()],
+            charts,
+            "filecoin",
+        );
+        // config keys are camelCase at this point (post config load)
+        if let Some(txns_fee) = charts.lines.get_mut(TxnsFee::key().name()) {
+            // an explicit operator-provided mapping wins over the flag
+            if txns_fee.implementation.is_none() {
+                txns_fee.implementation = Some(FilecoinNewChainFees::key().into_name());
+            }
+        }
     }
 }
 
@@ -615,6 +658,144 @@ mod tests {
                 .enabled,
             true
         );
+    }
+
+    #[test]
+    fn disable_internal_transactions_follows_implementation_remap() {
+        let mut settings = Settings::default();
+        // `txnsFee` itself is not internal-transactions-dependent but is
+        // remapped onto `contractsGrowth`, which is; the entry named
+        // `contractsGrowth` serves an independent chart instead
+        let mut charts = config::charts::Config {
+            counters: Default::default(),
+            lines: [
+                (
+                    TxnsFee::key().into_name(),
+                    config::types::AllChartSettings {
+                        enabled: true,
+                        implementation: Some(ContractsGrowth::key().into_name()),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    ContractsGrowth::key().into_name(),
+                    config::types::AllChartSettings {
+                        enabled: true,
+                        implementation: Some(FilecoinNewChainFees::key().into_name()),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        settings.disable_internal_transactions = true;
+        handle_disable_internal_transactions(
+            settings.disable_internal_transactions,
+            &mut settings.conditional_start,
+            &mut charts,
+        );
+
+        // the entry serving the internal-transactions-dependent chart must
+        // be disabled even though its own name is not in the dependent set
+        assert!(!charts.lines[TxnsFee::key().name()].enabled);
+        // ...while a name collision with a dependent chart must not disable
+        // an entry that actually serves an independent one
+        assert!(charts.lines[ContractsGrowth::key().name()].enabled);
+    }
+
+    // post-load config: entries are keyed via `key().name()` (camelCase),
+    // matching the state after config load
+    fn filecoin_charts_config(
+        txns_fee_settings: config::types::AllChartSettings,
+    ) -> config::charts::Config<AllChartSettings> {
+        let disabled = config::types::AllChartSettings {
+            enabled: false,
+            ..Default::default()
+        };
+        config::charts::Config {
+            counters: Default::default(),
+            lines: [
+                (FilecoinChainFeesGrowth::key().into_name(), disabled.clone()),
+                (FilecoinNewChainFees::key().into_name(), disabled),
+                (TxnsFee::key().into_name(), txns_fee_settings),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    }
+
+    #[test]
+    fn enable_all_filecoin_enables_and_remaps_charts() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings {
+            enabled: true,
+            ..Default::default()
+        });
+
+        handle_enable_all_filecoin(true, &mut charts);
+
+        assert!(charts.lines[FilecoinChainFeesGrowth::key().name()].enabled);
+        let txns_fee = &charts.lines[TxnsFee::key().name()];
+        assert!(txns_fee.enabled);
+        assert_eq!(
+            txns_fee.implementation,
+            Some(FilecoinNewChainFees::key().into_name())
+        );
+        // the implementation must never become a public id
+        assert!(!charts.lines[FilecoinNewChainFees::key().name()].enabled);
+    }
+
+    #[test]
+    fn enable_all_filecoin_force_enables_disabled_txns_fee() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings {
+            enabled: false,
+            ..Default::default()
+        });
+
+        handle_enable_all_filecoin(true, &mut charts);
+
+        let txns_fee = &charts.lines[TxnsFee::key().name()];
+        assert!(txns_fee.enabled);
+        assert_eq!(
+            txns_fee.implementation,
+            Some(FilecoinNewChainFees::key().into_name())
+        );
+    }
+
+    #[test]
+    fn enable_all_filecoin_does_not_overwrite_explicit_implementation() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings {
+            enabled: false,
+            implementation: Some("someOtherImplementation".to_owned()),
+            ..Default::default()
+        });
+
+        handle_enable_all_filecoin(true, &mut charts);
+
+        let txns_fee = &charts.lines[TxnsFee::key().name()];
+        // enablement is still forced, the operator-provided mapping wins
+        assert!(txns_fee.enabled);
+        assert_eq!(
+            txns_fee.implementation.as_deref(),
+            Some("someOtherImplementation")
+        );
+    }
+
+    #[test]
+    fn disabled_enable_all_filecoin_changes_nothing() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings {
+            enabled: true,
+            ..Default::default()
+        });
+
+        handle_enable_all_filecoin(false, &mut charts);
+
+        assert!(!charts.lines[FilecoinChainFeesGrowth::key().name()].enabled);
+        assert!(!charts.lines[FilecoinNewChainFees::key().name()].enabled);
+        let txns_fee = &charts.lines[TxnsFee::key().name()];
+        assert!(txns_fee.enabled);
+        assert_eq!(txns_fee.implementation, None);
     }
 
     #[test]

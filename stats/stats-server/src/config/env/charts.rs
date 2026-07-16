@@ -41,6 +41,7 @@ pub struct ChartSettingsOverwrite {
     pub description: Option<String>,
     pub units: Option<String>,
     pub resolutions: ResolutionsEnabledOverwrite,
+    pub implementation: Option<String>,
 }
 
 macro_rules! overwrite_fields {
@@ -71,6 +72,7 @@ impl ChartSettingsOverwrite {
             }
         );
         target.units = self.units.or(target.units.take());
+        target.implementation = self.implementation.or(target.implementation.take());
         target.resolutions.day = self.resolutions.day.or(target.resolutions.day);
         target.resolutions.week = self.resolutions.week.or(target.resolutions.week);
         target.resolutions.month = self.resolutions.month.or(target.resolutions.month);
@@ -89,12 +91,14 @@ impl TryFrom<ChartSettingsOverwrite> for AllChartSettings {
                 description: Some(description),
                 units,
                 resolutions,
+                implementation,
             } => Ok(AllChartSettings {
                 enabled,
                 title,
                 description,
                 units,
                 resolutions: resolutions.into(),
+                implementation,
             }),
             _ => {
                 let mut missing_fields = vec![];
@@ -169,6 +173,7 @@ mod tests {
                         description: Some("Some runtime-overwritten description".to_owned()),
                         units: None,
                         resolutions: ResolutionsEnabledOverwrite::default(),
+                        implementation: None,
                     },
                 )]),
                 template_values: BTreeMap::new(),
@@ -193,6 +198,7 @@ mod tests {
                         description: None,
                         units: None,
                         resolutions: ResolutionsEnabledOverwrite::default(),
+                        implementation: None,
                     },
                 )]),
                 template_values: BTreeMap::new(),
@@ -222,6 +228,32 @@ mod tests {
                             month: None,
                             year: None,
                         },
+                        implementation: None,
+                    },
+                )]),
+                template_values: BTreeMap::new(),
+            },
+        )
+        .unwrap();
+
+        check_envs_parsed_to(
+            "STATS_CHARTS",
+            [(
+                "STATS_CHARTS__LINE_CHARTS__TXNS_FEE__IMPLEMENTATION".to_owned(),
+                "filecoin_new_chain_fees".to_owned(),
+            )]
+            .into(),
+            Config {
+                counters: BTreeMap::new(),
+                line_charts: BTreeMap::from([(
+                    "txns_fee".to_owned(),
+                    ChartSettingsOverwrite {
+                        enabled: None,
+                        title: None,
+                        description: None,
+                        units: None,
+                        resolutions: ResolutionsEnabledOverwrite::default(),
+                        implementation: Some("filecoin_new_chain_fees".to_owned()),
                     },
                 )]),
                 template_values: BTreeMap::new(),
@@ -248,6 +280,7 @@ mod tests {
                         description: None,
                         units: None,
                         resolutions: ResolutionsEnabledOverwrite::default(),
+                        implementation: None,
                     },
                 )]),
                 line_charts: BTreeMap::new(),
@@ -292,6 +325,7 @@ mod tests {
             description: Some("Some description kek".to_owned()),
             units: Some("s".to_owned()),
             resolutions: ResolutionsEnabledOverwrite::default(),
+            implementation: None,
         };
         let expected_line_category = ChartSettingsOverwrite {
             enabled: Some(false),
@@ -300,6 +334,7 @@ mod tests {
             units: None,
 
             resolutions: ResolutionsEnabledOverwrite::default(),
+            implementation: None,
         };
 
         check_envs_parsed_to(
