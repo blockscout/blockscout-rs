@@ -20,6 +20,7 @@ import {
 } from '../generated/schema';
 
 const ZERO_NODE = '0x0000000000000000000000000000000000000000000000000000000000000000';
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 function accountId(address: Address): string {
   return address.toHexString().toLowerCase();
@@ -55,12 +56,14 @@ function loadOrCreateDomain(node: Bytes, label: string, name: string, timestamp:
   const id = nodeId(node);
   let domain = Domain.load(id);
   if (domain == null) {
+    const fallbackOwner = loadOrCreateAccount(Address.fromString(ZERO_ADDRESS));
     domain = new Domain(id);
     domain.subdomainCount = 0;
     domain.isMigrated = false;
     domain.createdAt = timestamp;
     domain.storedOffchain = false;
     domain.resolvedWithWildcard = false;
+    domain.owner = fallbackOwner.id;
   }
   domain.name = name;
   domain.labelName = label;

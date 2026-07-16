@@ -29,7 +29,7 @@ Do not deploy with the placeholder zero address.
 ## Build locally
 
 ```bash
-cd /Users/rasta/hoodid-contracts/subgraph
+cd blockscout-ens/graph-node/subgraphs/hoodid-subgraph
 npm install
 npm run codegen
 npm run build

@@ -36,7 +36,7 @@ function run(args, opts = {}) {
 
 if (!nodeUrl || !ipfsUrl) {
   console.error('Missing graph-node deployment config.');
-  console.error('Create /Users/rasta/hoodid-contracts/subgraph/.env with:');
+  console.error('Create a .env file in this subgraph directory with:');
   console.error('SUBGRAPH_NAME=hoodid/hoodid-bens');
   console.error('GRAPH_NODE_NETWORK_NAME=hood');
   console.error('GRAPH_NODE_VERSION_LABEL=0.0.1');
