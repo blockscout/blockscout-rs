@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use alloy::primitives::address;
+use chrono::{Duration, NaiveDateTime, Utc};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
     sea_orm_active_enums::{MessageStatus, TransferType},
@@ -10,6 +11,12 @@ use sea_orm::{
     DatabaseConnection, EntityTrait,
     prelude::{BigDecimal, Decimal},
 };
+
+/// Distinct past timestamps so filter ordering / pagination tests stay stable.
+/// Existing rows keep DB `DEFAULT now()` via `..Default::default()`.
+fn mock_init_ts(secs_ago: i64) -> NaiveDateTime {
+    (Utc::now() - Duration::seconds(secs_ago)).naive_utc()
+}
 
 pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
     chains::Entity::insert_many([
@@ -23,16 +30,28 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             name: Set("Gnosis".to_string()),
             ..Default::default()
         },
+        chains::ActiveModel {
+            id: Set(250),
+            name: Set("Fantom".to_string()),
+            ..Default::default()
+        },
     ])
     .exec(db)
     .await
     .unwrap();
 
-    bridges::Entity::insert_many([bridges::ActiveModel {
-        id: Set(1),
-        name: Set("OmniBridge".to_string()),
-        ..Default::default()
-    }])
+    bridges::Entity::insert_many([
+        bridges::ActiveModel {
+            id: Set(1),
+            name: Set("OmniBridge".to_string()),
+            ..Default::default()
+        },
+        bridges::ActiveModel {
+            id: Set(2),
+            name: Set("Teleporter".to_string()),
+            ..Default::default()
+        },
+    ])
     .exec(db)
     .await
     .unwrap();
@@ -52,6 +71,24 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             bridge_id: Set(1),
             chain_id: Set(100),
             address: Set(address!("0x75Df5AF045d91108662D8080fD1FEFAd6aA0bb59")
+                .as_slice()
+                .to_vec()),
+            ..Default::default()
+        },
+        bridge_contracts::ActiveModel {
+            id: Set(3),
+            bridge_id: Set(2),
+            chain_id: Set(1),
+            address: Set(address!("0x00000000000000000000000000000000000000A1")
+                .as_slice()
+                .to_vec()),
+            ..Default::default()
+        },
+        bridge_contracts::ActiveModel {
+            id: Set(4),
+            bridge_id: Set(2),
+            chain_id: Set(250),
+            address: Set(address!("0x00000000000000000000000000000000000000A2")
                 .as_slice()
                 .to_vec()),
             ..Default::default()
@@ -156,6 +193,79 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                     .to_vec(),
             )),
             payload: Set(Some(vec![100, 200, 255])),
+            ..Default::default()
+        },
+    ])
+    .exec(db)
+    .await
+    .unwrap();
+
+    // Separate insert: SeaORM insert_many cannot mix Set(init_timestamp) with
+    // NotSet (DB DEFAULT) in one batch — NotSet becomes NULL and violates NOT NULL.
+    crosschain_messages::Entity::insert_many([
+        // Bridge 2: 1 → 250
+        crosschain_messages::ActiveModel {
+            id: Set(1005),
+            bridge_id: Set(2),
+            status: Set(MessageStatus::Completed),
+            init_timestamp: Set(mock_init_ts(30)),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(250)),
+            src_tx_hash: Set(Some(vec![0x33; 32])),
+            dst_tx_hash: Set(Some(vec![0x44; 32])),
+            sender_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000B1")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            recipient_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000B2")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            payload: Set(Some(vec![1])),
+            ..Default::default()
+        },
+        // Bridge 1: NULL destination (unknown peer)
+        crosschain_messages::ActiveModel {
+            id: Set(1006),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(mock_init_ts(20)),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(None),
+            src_tx_hash: Set(Some(vec![0x55; 32])),
+            dst_tx_hash: Set(None),
+            sender_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000C1")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            recipient_address: Set(None),
+            payload: Set(None),
+            ..Default::default()
+        },
+        // Bridge 1: loopback 100 → 100
+        crosschain_messages::ActiveModel {
+            id: Set(1007),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Completed),
+            init_timestamp: Set(mock_init_ts(10)),
+            src_chain_id: Set(100),
+            dst_chain_id: Set(Some(100)),
+            src_tx_hash: Set(Some(vec![0x66; 32])),
+            dst_tx_hash: Set(Some(vec![0x77; 32])),
+            sender_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000D1")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            recipient_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000D2")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            payload: Set(Some(vec![7])),
             ..Default::default()
         },
     ])
@@ -325,6 +435,74 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                 Decimal::new(2, 0),
                 Decimal::new(3, 0),
             ])), // Multiple token IDs
+            ..Default::default()
+        },
+        // Mirrors message 1005: bridge 2, token 1 → 250
+        crosschain_transfers::ActiveModel {
+            id: Set(6),
+            message_id: Set(1005),
+            bridge_id: Set(2),
+            index: Set(0),
+            r#type: Set(Some(TransferType::Erc20)),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(250),
+            src_amount: Set(Some(BigDecimal::from(42u32))),
+            dst_amount: Set(Some(BigDecimal::from(42u32))),
+            token_src_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000E1")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            token_dst_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000E2")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            sender_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000B1")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            recipient_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000B2")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            token_ids: Set(None),
+            ..Default::default()
+        },
+        // Mirrors message 1007: loopback token 100 → 100
+        crosschain_transfers::ActiveModel {
+            id: Set(7),
+            message_id: Set(1007),
+            bridge_id: Set(1),
+            index: Set(0),
+            r#type: Set(Some(TransferType::Erc20)),
+            token_src_chain_id: Set(100),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(Some(BigDecimal::from(7u32))),
+            dst_amount: Set(Some(BigDecimal::from(7u32))),
+            token_src_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000F1")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            token_dst_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000F2")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            sender_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000D1")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            recipient_address: Set(Some(
+                address!("0x00000000000000000000000000000000000000D2")
+                    .as_slice()
+                    .to_vec(),
+            )),
+            token_ids: Set(None),
             ..Default::default()
         },
     ])

@@ -8,6 +8,9 @@ http:
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetChains
       get: /api/v1/interchain/chains
 
+    - selector: blockscout.interchainIndexer.v1.InterchainService.GetBridges
+      get: /api/v1/interchain/bridges
+
     - selector: blockscout.interchainIndexer.v1.InterchainService.GetMessages
       get: /api/v1/interchain/messages
 

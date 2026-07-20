@@ -32,10 +32,14 @@ message StatsChainsListPagination {
 }
 
 message GetMessagePathsRequest {
+  // The home (focal) chain.
   int64 chain_id = 1;
   optional string from_date = 2; // YYYY-MM-DD
   optional string to_date = 3;   // YYYY-MM-DD
   optional string counterparty_chain_ids = 4;
+  // Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
+  // with a non-blank value are rejected with InvalidArgument.
+  optional string bridge_ids = 5;
 }
 
 message MessagePathRow {
@@ -69,6 +73,7 @@ enum StatsChainsSort {
 }
 
 message GetBridgedTokensRequest {
+  // The home (focal) chain.
   int64 chain_id = 1;
   optional uint32 page_size = 2;
   optional bool last_page = 3;
@@ -87,6 +92,12 @@ message GetBridgedTokensRequest {
   optional uint64 count = 11;
   // Case-insensitive substring filter on the row display name (`stats_assets.name`).
   optional string q = 12;
+  // Comma-separated chain ids. Restricts counterparty chains of the edges
+  // aggregated for `{chain_id}`.
+  optional string counterparty_chain_ids = 13;
+  // Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
+  // with a non-blank value are rejected with InvalidArgument.
+  optional string bridge_ids = 14;
 }
 
 message GetChainsStatsRequest {
@@ -94,6 +105,7 @@ message GetChainsStatsRequest {
   optional bool last_page = 2;
   // Optional comma-separated chain ids filter, for example `123,456`.
   // When absent or empty, statistics are returned for all known chains.
+  // Selects subject rows (chains listed), not counterparties.
   optional string chain_ids = 3;
   // Sort order: DESC[default] / ASC
   SortOrder order = 4;
@@ -109,6 +121,12 @@ message GetChainsStatsRequest {
   optional string q = 9;
   // Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]
   StatsChainsSort sort = 10;
+  // Comma-separated chain ids. DECLARED BUT NOT SUPPORTED YET — requests
+  // with a non-blank value are rejected with InvalidArgument.
+  optional string counterparty_chain_ids = 11;
+  // Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
+  // with a non-blank value are rejected with InvalidArgument.
+  optional string bridge_ids = 12;
 }
 
 message StatsBridgedTokenItem {
@@ -153,9 +171,27 @@ message GetChainsStatsResponse {
 
 message GetCommonStatisticsRequest {
   optional uint64 timestamp = 1;
+  // Filter: only messages/transfers touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 2;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 3;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 4;
 }
 message GetDailyStatisticsRequest {
   optional uint64 timestamp = 1;
+  // Filter: only messages/transfers touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 2;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 3;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 4;
 }
 
 message GetCommonStatisticsResponse {

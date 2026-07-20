@@ -566,11 +566,43 @@ Useful operational signals:
 - backfill should be treated as a catch-up tool, not a permanent operational
   default
 
+## Read-Time Filterability Constraints (verified 2026-07-18)
+
+Discovered while designing per-frontend API filtering
+(`tmp/tasks/api-per-frontend-chain-filtering/`); constrains what filters the
+stats endpoints can honor without projection rework:
+
+- **No stats table carries `bridge_id`.** `stats_messages (src,dst)`,
+  `stats_messages_days (date,src,dst)`, `stats_asset_edges
+  (asset,src,dst)`, and `stats_chains (chain_id)` all collapse the bridge
+  dimension at projection time. Any bridge-filtered variant of
+  message-paths / bridged-tokens / chains stats requires either a projection
+  PK migration + full rebuild, or raw-table aggregation at read time.
+- **Chain/counterparty filters are cheap exactly where aggregation happens
+  at query time**: `/stats/common` and `/stats/daily` count canonical tables
+  per request (WHERE-clause change); bridged-tokens aggregates
+  `stats_asset_edges` per request, so a counterparty (src/dst set)
+  condition is read-side only; message-paths already accepts `chain_id` +
+  `counterparty_chain_ids`.
+- **Unique-user counts are non-additive.** `stats_chains` values cannot be
+  re-aggregated for bridge or counterparty subsets from any exact
+  pre-aggregation — the same address would fall into many cells. Exact
+  filtered uniques require raw `COUNT(DISTINCT ...)` at read time;
+  mergeable HyperLogLog sketches per `(chain, role, bridge, counterparty)`
+  cell are the standard approximate alternative; keying `stats_chains` by
+  `(chain_id, bridge_id)` is exact for single-bridge filters only.
+
+Candidate designs and the phased delivery decision are recorded in
+`tmp/tasks/api-per-frontend-chain-filtering/task.md` ("Follow-Up Scope").
+
 ## Change Triggers
 
 Update this note when:
 
 - new `/stats/*` endpoints are added
+- read-time filter capabilities of stats endpoints change (chain /
+  counterparty / bridge filters, or a bridge dimension is added to
+  projections)
 - calculation rules for `stats_messages*`, `stats_asset*`, or `stats_chains`
   change
 - `stats_processed` semantics change

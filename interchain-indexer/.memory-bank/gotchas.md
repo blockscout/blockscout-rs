@@ -400,3 +400,54 @@ values never appear at info level (RPC URLs may embed API keys); enable debug
 logging to see the old/new values of replacements.
 
 ---
+
+## Filter Params Must Not Reuse Pagination Cursor Field Names
+
+List requests (`GetMessagesRequest`, `GetTransfersRequest`, and their
+byTx/byAddress variants) already use `bridge_id` as a **raw pagination
+cursor** field (proto field 7), and `GetChainsStatsRequest` uses `chain_id`
+(field 8) the same way. A read *filter* with either name would collide with
+cursor semantics for `api.use_pagination_token=false` clients.
+
+The unified read-filter vocabulary avoids both by construction:
+`home_chain_id`, `counterparty_chain_ids`, `bridge_ids` (design record:
+`tmp/tasks/api-per-frontend-chain-filtering/task.md`, "Filter Vocabulary").
+Never add request fields named `bridge_id`/`chain_id` to these messages for
+non-cursor purposes.
+
+---
+
+## Unknown Query Params Are Silently Ignored by Generated HTTP Routes
+
+`#[actix_prost_macros::serde]` expands to a plain
+`#[derive(serde::Serialize, serde::Deserialize)]` **without**
+`deny_unknown_fields` (verified in actix-prost-macros 0.3.1), so the
+generated HTTP routes drop query parameters that are not declared proto
+fields. Consequence: an endpoint cannot reject a filter it does not declare —
+clients passing an unsupported filter would silently receive *unfiltered*
+data, which for per-frontend slicing means leaking other bridges'/chains'
+rows.
+
+Pattern for the read-API filters: declare the field in proto even when the
+endpoint cannot honor it yet, and return
+`Status::invalid_argument("<param> is not supported by this endpoint yet")`
+for non-blank values (see `tmp/tasks/api-per-frontend-chain-filtering/`).
+
+---
+
+## SeaORM `insert_many` Cannot Mix Set and NotSet for the Same Column
+
+**Symptom:** Mock DB seed fails with `null value in column "init_timestamp"
+violates not-null constraint` even though some ActiveModels use
+`..Default::default()` (expecting the PostgreSQL `DEFAULT now()`).
+
+**Root cause:** In a single `Entity::insert_many([...])` batch, if any model
+has `Set(init_timestamp)`, SeaORM includes that column for every row. Models
+that left it `NotSet` then insert SQL `NULL` instead of omitting the column
+(so the DB default never applies).
+
+**Fix:** Split into separate inserts — one batch that relies on DB defaults,
+another that explicitly `Set`s timestamps — or set the column on every model
+in the batch.
+
+---

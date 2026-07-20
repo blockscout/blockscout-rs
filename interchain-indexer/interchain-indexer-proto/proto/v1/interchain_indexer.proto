@@ -40,6 +40,7 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 
 service InterchainService {
   rpc GetChains(GetChainsRequest) returns (GetChainsResponse) {}
+  rpc GetBridges(GetBridgesRequest) returns (GetBridgesResponse) {}
   rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse) {}
   rpc GetMessageDetails(GetMessageDetailsRequest) returns (InterchainMessage) {}
   rpc GetMessagesByTransaction(GetMessagesByTransactionRequest) returns (GetMessagesResponse) {}
@@ -76,6 +77,16 @@ message GetMessagesRequest {
   optional string message_id = 6; // Raw pagination field
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional string direction = 8;  // Raw pagination field
+
+  // Filter: only messages touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 9;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 10;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 11;
 }
 
 message GetMessageDetailsRequest {
@@ -98,6 +109,16 @@ message GetMessagesByTransactionRequest {
   optional string message_id = 6; // Raw pagination field
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional string direction = 8;  // Raw pagination field
+
+  // Filter: only messages touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 9;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 10;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 11;
 }
 
 message GetMessagesByAddressRequest {
@@ -116,6 +137,16 @@ message GetMessagesByAddressRequest {
   optional string message_id = 6; // Raw pagination field
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional string direction = 8;  // Raw pagination field
+
+  // Filter: only messages touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 9;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 10;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 11;
 }
 
 message AddressInfo {
@@ -127,6 +158,8 @@ message BridgeInfo {
   string name = 1;
   optional string ui_url = 2;
   optional string docs_url = 3;
+  // Bridge id usable in bridge_ids filters.
+  optional uint32 id = 4;
 }
 
 message ChainInfo {
@@ -143,6 +176,22 @@ message GetChainsRequest {}
 
 message GetChainsResponse {
   repeated ChainInfo items = 1;
+}
+
+message GetBridgesRequest {}
+
+message Bridge {
+  uint32 id = 1;
+  string name = 2;
+  // "lockmint" | "avalanche_native" | "amb"
+  optional string type = 3;
+  bool enabled = 4;
+  optional string ui_url = 5;
+  optional string docs_url = 6;
+}
+
+message GetBridgesResponse {
+  repeated Bridge items = 1;
 }
 
 enum MessageStatus {
@@ -196,6 +245,16 @@ message GetTransfersRequest {
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
+
+  // Filter: only transfers touching this chain (token_src = N OR token_dst = N).
+  // Matched by the transfer's own source/destination chains.
+  optional int64 home_chain_id = 10;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Matched by the transfer's own source/destination chains.
+  optional string counterparty_chain_ids = 11;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 12;
 }
 
 message GetTransfersByTransactionRequest {
@@ -215,6 +274,16 @@ message GetTransfersByTransactionRequest {
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
+
+  // Filter: only transfers touching this chain (token_src = N OR token_dst = N).
+  // Matched by the transfer's own source/destination chains.
+  optional int64 home_chain_id = 10;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Matched by the transfer's own source/destination chains.
+  optional string counterparty_chain_ids = 11;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 12;
 }
 
 message GetTransfersByAddressRequest {
@@ -234,6 +303,16 @@ message GetTransfersByAddressRequest {
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
+
+  // Filter: only transfers touching this chain (token_src = N OR token_dst = N).
+  // Matched by the transfer's own source/destination chains.
+  optional int64 home_chain_id = 10;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Matched by the transfer's own source/destination chains.
+  optional string counterparty_chain_ids = 11;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 12;
 }
 
 message TokenInfo {

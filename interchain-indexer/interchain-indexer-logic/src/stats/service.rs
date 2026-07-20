@@ -158,6 +158,7 @@ impl StatsService {
     pub async fn get_bridged_tokens_for_chain(
         &self,
         chain_id: i64,
+        counterparty_chain_ids: Option<&[i64]>,
         params: StatsListQuery<'_, BridgedTokensSortField, BridgedTokensPaginationLogic>,
     ) -> anyhow::Result<(
         Vec<BridgedTokenListRow>,
@@ -165,7 +166,7 @@ impl StatsService {
     )> {
         let (rows, pagination) = self
             .db
-            .list_bridged_token_stats_for_chain(chain_id, params)
+            .list_bridged_token_stats_for_chain(chain_id, counterparty_chain_ids, params)
             .await?;
 
         let ids: Vec<i64> = rows.iter().map(|r| r.stats_asset_id).collect();

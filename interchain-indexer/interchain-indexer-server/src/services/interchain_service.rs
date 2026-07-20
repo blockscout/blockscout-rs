@@ -12,12 +12,13 @@ use interchain_indexer_entity::{
     sea_orm_active_enums::MessageStatus as DbMessageStatus, tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
-    ChainInfoService, InterchainDatabase, JoinedTransfer, TokenInfoService,
+    ChainBridgeFilter, ChainInfoService, InterchainDatabase, JoinedTransfer, TokenInfoService,
     pagination::{
         ListMarker, MessagesPaginationLogic, PaginationDirection, TransfersPaginationLogic,
     },
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
+use sea_orm::ActiveEnum;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -26,7 +27,9 @@ use tonic::{Request, Response, Status};
 
 use super::{
     chain_info_proto::chain_model_to_proto,
-    utils::{db_datetime_to_string, map_db_error},
+    utils::{
+        db_datetime_to_string, map_db_error, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv,
+    },
 };
 
 macro_rules! messages_pagination_params {
@@ -167,6 +170,7 @@ impl InterchainServiceImpl {
                             name: b.name,
                             ui_url: b.ui_url,
                             docs_url: b.docs_url,
+                            id: u32::try_from(b.bridge_id).ok(),
                         },
                     )
                 })
@@ -312,6 +316,7 @@ impl InterchainServiceImpl {
                 name: "Unknown".to_string(),
                 ui_url: None,
                 docs_url: None,
+                id: u32::try_from(bridge_id).ok(),
             })
     }
 
@@ -384,12 +389,27 @@ impl InterchainService for InterchainServiceImpl {
         &self,
         request: Request<GetMessagesRequest>,
     ) -> Result<Response<GetMessagesResponse>, Status> {
-        let (_inner, input_pagination, page_size, is_last_page) =
+        let (inner, input_pagination, page_size, is_last_page) =
             messages_pagination_params!(self, request)?;
+
+        let filter = ChainBridgeFilter {
+            home_chain_id: inner.home_chain_id,
+            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                inner.counterparty_chain_ids.as_deref(),
+            )?),
+            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
+        };
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_messages(None, None, page_size, is_last_page, input_pagination)
+            .get_crosschain_messages(
+                None,
+                None,
+                filter,
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
             .await
             .map_err(map_db_error)?;
 
@@ -437,11 +457,20 @@ impl InterchainService for InterchainServiceImpl {
 
         let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(map_db_error)?;
 
+        let filter = ChainBridgeFilter {
+            home_chain_id: inner.home_chain_id,
+            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                inner.counterparty_chain_ids.as_deref(),
+            )?),
+            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
+        };
+
         let (items, output_pagination) = self
             .db
             .get_crosschain_messages(
                 Some(tx_hash),
                 None,
+                filter,
                 page_size,
                 is_last_page,
                 input_pagination,
@@ -472,11 +501,20 @@ impl InterchainService for InterchainServiceImpl {
 
         let address = vec_from_hex_prefixed(&inner.address).map_err(map_db_error)?;
 
+        let filter = ChainBridgeFilter {
+            home_chain_id: inner.home_chain_id,
+            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                inner.counterparty_chain_ids.as_deref(),
+            )?),
+            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
+        };
+
         let (items, output_pagination) = self
             .db
             .get_crosschain_messages(
                 None,
                 Some(address),
+                filter,
                 page_size,
                 is_last_page,
                 input_pagination,
@@ -502,12 +540,27 @@ impl InterchainService for InterchainServiceImpl {
         &self,
         request: Request<GetTransfersRequest>,
     ) -> Result<Response<GetTransfersResponse>, Status> {
-        let (_inner, input_pagination, page_size, is_last_page) =
+        let (inner, input_pagination, page_size, is_last_page) =
             transfers_pagination_params!(self, request)?;
+
+        let filter = ChainBridgeFilter {
+            home_chain_id: inner.home_chain_id,
+            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                inner.counterparty_chain_ids.as_deref(),
+            )?),
+            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
+        };
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_transfers(None, None, page_size, is_last_page, input_pagination)
+            .get_crosschain_transfers(
+                None,
+                None,
+                filter,
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
             .await
             .map_err(map_db_error)?;
 
@@ -534,11 +587,20 @@ impl InterchainService for InterchainServiceImpl {
 
         let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(map_db_error)?;
 
+        let filter = ChainBridgeFilter {
+            home_chain_id: inner.home_chain_id,
+            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                inner.counterparty_chain_ids.as_deref(),
+            )?),
+            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
+        };
+
         let (items, output_pagination) = self
             .db
             .get_crosschain_transfers(
                 Some(tx_hash),
                 None,
+                filter,
                 page_size,
                 is_last_page,
                 input_pagination,
@@ -569,11 +631,20 @@ impl InterchainService for InterchainServiceImpl {
 
         let address = vec_from_hex_prefixed(&inner.address).map_err(map_db_error)?;
 
+        let filter = ChainBridgeFilter {
+            home_chain_id: inner.home_chain_id,
+            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                inner.counterparty_chain_ids.as_deref(),
+            )?),
+            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
+        };
+
         let (items, output_pagination) = self
             .db
             .get_crosschain_transfers(
                 None,
                 Some(address),
+                filter,
                 page_size,
                 is_last_page,
                 input_pagination,
@@ -606,6 +677,29 @@ impl InterchainService for InterchainServiceImpl {
             .map_err(map_db_error)?;
         let items = models.into_iter().map(chain_model_to_proto).collect();
         Ok(Response::new(GetChainsResponse { items }))
+    }
+
+    async fn get_bridges(
+        &self,
+        _request: Request<GetBridgesRequest>,
+    ) -> Result<Response<GetBridgesResponse>, Status> {
+        let rows = self.db.get_all_bridges().await.map_err(map_db_error)?;
+        let items = rows
+            .into_iter()
+            .map(|m| {
+                let id = u32::try_from(m.id)
+                    .map_err(|_| map_db_error(anyhow!("bridge id out of range")))?;
+                Ok(Bridge {
+                    id,
+                    name: m.name,
+                    r#type: m.r#type.map(|t| ActiveEnum::to_value(&t)),
+                    enabled: m.enabled,
+                    ui_url: m.ui_url,
+                    docs_url: m.docs_url,
+                })
+            })
+            .collect::<Result<Vec<_>, Status>>()?;
+        Ok(Response::new(GetBridgesResponse { items }))
     }
 }
 
