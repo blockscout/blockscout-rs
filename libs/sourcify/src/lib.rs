@@ -2,12 +2,14 @@
 
 mod client;
 mod types;
+mod v2;
 
-pub use client::{Client, ClientBuilder};
+pub use client::{Client, ClientBuilder, DEFAULT_MAX_POLL_ATTEMPTS, DEFAULT_POLL_INTERVAL};
 pub use types::{
     EmptyCustomError, GetSourceFilesResponse, MatchType, VerifyFromEtherscanError,
     VerifyFromEtherscanResponse,
 };
+pub use v2::{JobContract, JobError, VerificationJob, VerifiedContract};
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SourcifyError<E: std::error::Error> {
@@ -15,6 +17,11 @@ pub enum SourcifyError<E: std::error::Error> {
     InternalServerError(String),
     #[error("Chain is not supported: {0}")]
     ChainNotSupported(String),
+    /// An asynchronous (v2) verification job completed, but the contract could
+    /// not be verified (e.g. the recompiled bytecode did not match). This is a
+    /// terminal verification outcome rather than a transport or server error.
+    #[error("Verification failed: {0}")]
+    VerificationFailure(String),
     #[error("'Not Found': {0}")]
     NotFound(String),
     #[error("'Bad Request': {0}")]
