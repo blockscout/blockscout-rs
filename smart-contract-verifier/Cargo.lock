@@ -5426,7 +5426,7 @@ dependencies = [
 [[package]]
 name = "sourcify"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=c4261d0#c4261d0f7bec3c250a979b416ed48ab13853c9d6"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=766cc32#766cc321026d1cbd8f3d35915567148e26fc3acf"
 dependencies = [
  "anyhow",
  "blockscout-display-bytes",
@@ -5437,6 +5437,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.63",
+ "tokio",
  "tracing",
  "url",
 ]

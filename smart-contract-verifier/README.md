@@ -32,6 +32,8 @@ Here, we describe variables specific to this service. Variables common to all se
 | `SMART_CONTRACT_VERIFIER__SOURCIFY__API_URL`                   |          | Sourcify API url                                                        | `https://sourcify.dev/server/`                                               |
 | `SMART_CONTRACT_VERIFIER__SOURCIFY__VERIFICATION_ATTEMPTS`     |          | Number of attempts the server makes to Sourcify API. Must be at least 1 | `3`                                                                          |
 | `SMART_CONTRACT_VERIFIER__SOURCIFY__REQUEST_TIMEOUT`           |          | Timeout in seconds for a single request to Sourcify API                 | `15`                                                                         |
+| `SMART_CONTRACT_VERIFIER__SOURCIFY__POLL_INTERVAL_MS`          |          | Interval in milliseconds between polls of an async Sourcify (v2) verification job | `1000`                                                             |
+| `SMART_CONTRACT_VERIFIER__SOURCIFY__MAX_POLL_ATTEMPTS`         |          | Max number of polls of an async Sourcify (v2) verification job before giving up. Must be at least 1 | `120`                                            |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__MAX_THREADS`              |          | Maximum number of concurrent compilations                               | `8`                                                                          |
 
 [anchor]: <> (anchors.envs.end)

@@ -59,7 +59,7 @@ serde_path_to_error = { version = "0.1.16" }
 serde_with = { version = "3" }
 sha2 = { version = "0.10" }
 solidity-metadata = { version = "1.1.0" }
-sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "c4261d0" }
+sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "766cc32" }
 sscanf = { version = "0.3" }
 tempfile = { version = "3.19" }
 thiserror = { version = "1.0" }

@@ -27,6 +27,8 @@ impl SourcifyVerifierService {
                 settings.api_url,
                 settings.request_timeout,
                 settings.verification_attempts,
+                std::time::Duration::from_millis(settings.poll_interval_ms),
+                settings.max_poll_attempts,
             )
             .expect("failed to build sourcify client")
         };
