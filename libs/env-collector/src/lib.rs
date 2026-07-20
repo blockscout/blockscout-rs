@@ -856,7 +856,7 @@ mod tests {
         let markdown = default_markdown_content();
         let mut vars = Envs::from_markdown(markdown, Some("cool_postfix".to_string())).unwrap();
         // purge indices for correct comparison
-        for (_, var) in vars.vars.iter_mut() {
+        for var in vars.vars.values_mut() {
             var.table_index = None;
         }
         let expected = default_envs();

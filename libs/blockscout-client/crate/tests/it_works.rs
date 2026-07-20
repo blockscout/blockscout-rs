@@ -56,7 +56,7 @@ async fn health(#[future] api_client: ApiClient) {
     let health_api = api_client.health_api();
     let health = health_api.health().await.expect("Failed to get health");
     let success = health.try_as_success().cloned().unwrap_or_else(|| {
-        panic!("failed to get health: {:?}", &health.entity);
+        panic!("failed to get health: {:?}", health.entity);
     });
     assert_eq!(success.healthy, Some(true));
     assert!(success
@@ -72,7 +72,7 @@ async fn health(#[future] api_client: ApiClient) {
         .all(|c| c.is_ascii_digit()),);
     let health_v1 = health_api.health_v1().await.expect("Failed to get health");
     let success = health_v1.try_as_success().cloned().unwrap_or_else(|| {
-        panic!("failed to get health: {:?}", &health_v1.entity);
+        panic!("failed to get health: {:?}", health_v1.entity);
     });
     assert_eq!(success.healthy, Some(true));
     assert_eq!(

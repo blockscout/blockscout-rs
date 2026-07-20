@@ -29,6 +29,16 @@ mod custom_error {
         fn handle_status_code(_status_code: reqwest::StatusCode, _text: &str) -> Option<Self> {
             None
         }
+
+        /// Maps a Sourcify API v2 error `customCode` (and its message) onto an
+        /// endpoint-specific custom error. The same `customCode` may carry a
+        /// different meaning depending on the endpoint (e.g. `unsupported_chain`
+        /// is a verification failure for the Etherscan import endpoint, but a
+        /// generic bad request elsewhere), so the interpretation is delegated to
+        /// the concrete custom error type of the calling flow.
+        fn handle_custom_code(_custom_code: &str, _message: &str) -> Option<Self> {
+            None
+        }
     }
 
     impl CustomError for super::EmptyCustomError {}
@@ -337,6 +347,35 @@ mod verify_from_etherscan {
             }
 
             None
+        }
+
+        // Sourcify API v2 reports Etherscan-import outcomes via `customCode`.
+        // Preserve the v1 semantics: chain/verification issues surface as
+        // verification failures, while rate limits and upstream API errors are
+        // internal (retryable) errors.
+        fn handle_custom_code(custom_code: &str, message: &str) -> Option<Self> {
+            let message = message.to_string();
+            match custom_code {
+                "unsupported_chain" => Some(VerifyFromEtherscanError::ChainNotSupported(message)),
+                // The recompiled bytecode did not match, or the contract is not
+                // verified on the upstream Etherscan instance.
+                "no_match" | "not_verified" | "contract_not_verified" => {
+                    Some(VerifyFromEtherscanError::ContractNotVerified(message))
+                }
+                "compiler_error" | "verified_with_errors" => {
+                    Some(VerifyFromEtherscanError::VerifiedWithErrors(message))
+                }
+                "cannot_generate_std_json_input" | "cannot_generate_solc_json_input" => Some(
+                    VerifyFromEtherscanError::CannotGenerateSolcJsonInput(message),
+                ),
+                "too_many_requests" | "etherscan_limit" => {
+                    Some(VerifyFromEtherscanError::TooManyRequests(message))
+                }
+                "etherscan_api_error" | "api_response_error" => {
+                    Some(VerifyFromEtherscanError::ApiResponseError(message))
+                }
+                _ => None,
+            }
         }
     }
 
