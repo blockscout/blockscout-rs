@@ -109,6 +109,14 @@ pub struct SourcifySettings {
     /// Should be at least one. Set to `3` by default.
     pub verification_attempts: NonZeroU32,
     pub request_timeout: u64,
+    /// Interval, in milliseconds, between polls of an asynchronous Sourcify
+    /// (API v2) verification job. Set to `1000` by default.
+    pub poll_interval_ms: u64,
+    /// Maximum number of times an asynchronous Sourcify (API v2) verification
+    /// job is polled before giving up. Combined with `poll_interval_ms` this
+    /// bounds the total time spent waiting for a verification to complete.
+    /// Set to `120` by default (~120 seconds).
+    pub max_poll_attempts: NonZeroU32,
 }
 
 impl Default for SourcifySettings {
@@ -118,6 +126,8 @@ impl Default for SourcifySettings {
             api_url: Url::try_from(DEFAULT_SOURCIFY_HOST).expect("valid url"),
             verification_attempts: NonZeroU32::new(3).expect("Is not zero"),
             request_timeout: 15,
+            poll_interval_ms: 1000,
+            max_poll_attempts: NonZeroU32::new(120).expect("Is not zero"),
         }
     }
 }
