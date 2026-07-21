@@ -143,7 +143,7 @@ fn validate_verification_response<T: TestCase>(
             serde_json::from_str(&source.compiler_settings).unwrap_or_else(|_| {
                 panic!(
                     "Compiler Settings deserialization failed: {}",
-                    &source.compiler_settings
+                    source.compiler_settings
                 )
             });
         assert_eq!(

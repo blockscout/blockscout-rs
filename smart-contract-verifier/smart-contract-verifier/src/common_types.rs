@@ -56,7 +56,7 @@ impl FullyQualifiedName {
     }
 
     pub fn fully_qualified_name(&self) -> String {
-        format!("{}:{}", &self.file_name, &self.contract_name)
+        format!("{}:{}", self.file_name, self.contract_name)
     }
 
     pub fn file_name(&self) -> String {
