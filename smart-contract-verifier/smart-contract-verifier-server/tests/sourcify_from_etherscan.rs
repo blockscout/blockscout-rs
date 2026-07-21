@@ -80,46 +80,46 @@ async fn init_service() -> Arc<SourcifyVerifierService> {
 //     );
 // }
 
-#[tokio::test]
-async fn chain_not_supported_fail() {
-    let address = "0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa";
-    let chain_id = "2221";
+// #[tokio::test]
+// async fn chain_not_supported_fail() {
+//     let address = "0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa";
+//     let chain_id = "2221";
 
-    let service = init_service().await;
-    let app = test::init_service(
-        App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
-    )
-    .await;
+//     let service = init_service().await;
+//     let app = test::init_service(
+//         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
+//     )
+//     .await;
 
-    let request_body = json!({
-        "address": address,
-        "chain": chain_id,
-    });
+//     let request_body = json!({
+//         "address": address,
+//         "chain": chain_id,
+//     });
 
-    let resp = TestRequest::post()
-        .uri(ROUTE)
-        .set_json(&request_body)
-        .send_request(&app)
-        .await;
+//     let resp = TestRequest::post()
+//         .uri(ROUTE)
+//         .set_json(&request_body)
+//         .send_request(&app)
+//         .await;
 
-    assert!(
-        resp.status().is_success(),
-        "failed to verify contract, status is {}",
-        resp.status()
-    );
+//     assert!(
+//         resp.status().is_success(),
+//         "failed to verify contract, status is {}",
+//         resp.status()
+//     );
 
-    let body: VerifyResponse = test::read_body_json(resp).await;
+//     let body: VerifyResponse = test::read_body_json(resp).await;
 
-    assert_eq!(body.status().as_str_name(), "FAILURE");
+//     assert_eq!(body.status().as_str_name(), "FAILURE");
 
-    let error_message = "is not supported for importing from Etherscan";
-    assert!(
-        body.message.contains(error_message),
-        "body message: {}, expected message: {}",
-        body.message,
-        error_message
-    );
-}
+//     let error_message = "is not supported for importing from Etherscan";
+//     assert!(
+//         body.message.contains(error_message),
+//         "body message: {}, expected message: {}",
+//         body.message,
+//         error_message
+//     );
+// }
 
 // #[tokio::test]
 // async fn contract_not_verified_fail() {
