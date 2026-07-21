@@ -7,7 +7,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install curl wget unzip
+        sudo apt-get install -y curl wget unzip
     - id: install-protoc
       shell: bash
       run: |
