@@ -52,6 +52,10 @@ service InterchainService {
 }
 
 
+// Cursor for list pagination (request input and next/prev response params).
+// Page tokens and raw cursor fields are only valid within the same filter
+// combination (`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`, and
+// any tx_hash/address scope). Changing filters mid-pagination is a client error.
 message Pagination {
   optional string page_token = 1;
   optional uint64 timestamp = 2;

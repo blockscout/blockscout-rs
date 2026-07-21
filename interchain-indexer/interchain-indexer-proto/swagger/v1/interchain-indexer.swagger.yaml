@@ -1089,6 +1089,8 @@ definitions:
     description: |-
       Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
       Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
+      Tokens are only valid with the same `counterparty_chain_ids` and `q` as the
+      request that produced them.
   v1BridgedTokensSort:
     type: string
     enum:
@@ -1340,6 +1342,11 @@ definitions:
         format: uint64
       direction:
         type: string
+    description: |-
+      Cursor for list pagination (request input and next/prev response params).
+      Page tokens and raw cursor fields are only valid within the same filter
+      combination (`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`, and
+      any tx_hash/address scope). Changing filters mid-pagination is a client error.
   v1SortOrder:
     type: string
     enum:

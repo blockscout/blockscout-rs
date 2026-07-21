@@ -32,7 +32,7 @@ pub fn sort_json_value(value: JsonValue) -> JsonValue {
     }
 }
 
-pub fn parse_chain_ids_csv(input: Option<&str>) -> Result<Vec<i64>, Status> {
+pub fn parse_chain_ids_csv(param: &str, input: Option<&str>) -> Result<Vec<i64>, Status> {
     let Some(input) = input.map(str::trim) else {
         return Ok(Vec::new());
     };
@@ -47,7 +47,7 @@ pub fn parse_chain_ids_csv(input: Option<&str>) -> Result<Vec<i64>, Status> {
         .map(|part| {
             part.parse::<i64>().map_err(|_| {
                 Status::invalid_argument(format!(
-                    "invalid chain_ids value `{part}`: expected comma-separated int64 ids"
+                    "invalid {param} value `{part}`: expected comma-separated int64 ids"
                 ))
             })
         })
@@ -95,24 +95,37 @@ mod tests {
 
     #[test]
     fn parse_chain_ids_csv_accepts_missing_and_empty() {
-        assert_eq!(parse_chain_ids_csv(None).unwrap(), Vec::<i64>::new());
-        assert_eq!(parse_chain_ids_csv(Some("")).unwrap(), Vec::<i64>::new());
-        assert_eq!(parse_chain_ids_csv(Some("   ")).unwrap(), Vec::<i64>::new());
+        assert_eq!(
+            parse_chain_ids_csv("chain_ids", None).unwrap(),
+            Vec::<i64>::new()
+        );
+        assert_eq!(
+            parse_chain_ids_csv("chain_ids", Some("")).unwrap(),
+            Vec::<i64>::new()
+        );
+        assert_eq!(
+            parse_chain_ids_csv("chain_ids", Some("   ")).unwrap(),
+            Vec::<i64>::new()
+        );
     }
 
     #[test]
     fn parse_chain_ids_csv_parses_comma_separated_ids() {
         assert_eq!(
-            parse_chain_ids_csv(Some("123,456, 789")).unwrap(),
+            parse_chain_ids_csv("chain_ids", Some("123,456, 789")).unwrap(),
             vec![123, 456, 789]
         );
     }
 
     #[test]
-    fn parse_chain_ids_csv_rejects_invalid_values() {
-        let err = parse_chain_ids_csv(Some("123,abc")).expect_err("must reject invalid id");
+    fn parse_chain_ids_csv_rejects_invalid_values_with_param_label() {
+        let err = parse_chain_ids_csv("counterparty_chain_ids", Some("123,abc"))
+            .expect_err("must reject invalid id");
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
-        assert!(err.message().contains("invalid chain_ids value `abc`"));
+        assert!(
+            err.message()
+                .contains("invalid counterparty_chain_ids value `abc`")
+        );
     }
 
     #[test]

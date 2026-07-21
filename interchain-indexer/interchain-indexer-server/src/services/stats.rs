@@ -52,6 +52,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
@@ -85,6 +86,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
@@ -144,6 +146,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         let last_page = inner.last_page.unwrap_or(false);
         let q = normalize_stats_q(inner.q.as_deref());
         let counterparty = non_empty(parse_chain_ids_csv(
+            "counterparty_chain_ids",
             inner.counterparty_chain_ids.as_deref(),
         )?);
 
@@ -187,7 +190,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.counterparty_chain_ids.as_deref(),
         )?;
         reject_unsupported("bridge_ids", inner.bridge_ids.as_deref())?;
-        let chain_ids = parse_chain_ids_csv(inner.chain_ids.as_deref())?;
+        let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
         let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -273,7 +276,10 @@ impl InterchainStatisticsServiceImpl {
         reject_unsupported("bridge_ids", inner.bridge_ids.as_deref())?;
         let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
         let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
-        let counterparty_ids = parse_chain_ids_csv(inner.counterparty_chain_ids.as_deref())?;
+        let counterparty_ids = parse_chain_ids_csv(
+            "counterparty_chain_ids",
+            inner.counterparty_chain_ids.as_deref(),
+        )?;
         let counterparty = (!counterparty_ids.is_empty()).then_some(counterparty_ids.as_slice());
 
         let rows = if outgoing {

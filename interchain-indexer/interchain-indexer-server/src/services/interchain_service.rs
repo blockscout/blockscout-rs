@@ -395,6 +395,7 @@ impl InterchainService for InterchainServiceImpl {
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
@@ -460,6 +461,7 @@ impl InterchainService for InterchainServiceImpl {
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
@@ -504,6 +506,7 @@ impl InterchainService for InterchainServiceImpl {
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
@@ -546,6 +549,7 @@ impl InterchainService for InterchainServiceImpl {
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
@@ -590,6 +594,7 @@ impl InterchainService for InterchainServiceImpl {
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
@@ -634,6 +639,7 @@ impl InterchainService for InterchainServiceImpl {
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+                "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),

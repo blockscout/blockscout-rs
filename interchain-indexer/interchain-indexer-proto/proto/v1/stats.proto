@@ -14,6 +14,8 @@ enum SortOrder {
 
 // Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
 // Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
+// Tokens are only valid with the same `counterparty_chain_ids` and `q` as the
+// request that produced them.
 message BridgedTokensListPagination {
   optional string page_token = 1;
   optional string direction = 2;
