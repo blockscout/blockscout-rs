@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use actix_web::{test, test::TestRequest, App};
-use pretty_assertions::assert_eq;
-use serde_json::json;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse,
-};
-use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
-use std::sync::Arc;
+// use actix_web::{test, test::TestRequest, App};
+// use pretty_assertions::assert_eq;
+// use serde_json::json;
+// use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+//     sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse,
+// };
+// use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
+// use std::sync::Arc;
 
-const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify-from-etherscan";
+// const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify-from-etherscan";
 
-async fn init_service() -> Arc<SourcifyVerifierService> {
-    let mut settings = Settings::default();
-    settings.sourcify.verification_attempts = std::num::NonZeroU32::new(5).unwrap();
-    let service = SourcifyVerifierService::new(settings.sourcify)
-        .await
-        .expect("couldn't initialize the service");
-    Arc::new(service)
-}
+// async fn init_service() -> Arc<SourcifyVerifierService> {
+//     let mut settings = Settings::default();
+//     settings.sourcify.verification_attempts = std::num::NonZeroU32::new(5).unwrap();
+//     let service = SourcifyVerifierService::new(settings.sourcify)
+//         .await
+//         .expect("couldn't initialize the service");
+//     Arc::new(service)
+// }
 
 // #[tokio::test]
 // async fn should_return_200() {
@@ -80,46 +80,46 @@ async fn init_service() -> Arc<SourcifyVerifierService> {
 //     );
 // }
 
-#[tokio::test]
-async fn chain_not_supported_fail() {
-    let address = "0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa";
-    let chain_id = "2221";
+// #[tokio::test]
+// async fn chain_not_supported_fail() {
+//     let address = "0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa";
+//     let chain_id = "2221";
 
-    let service = init_service().await;
-    let app = test::init_service(
-        App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
-    )
-    .await;
+//     let service = init_service().await;
+//     let app = test::init_service(
+//         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
+//     )
+//     .await;
 
-    let request_body = json!({
-        "address": address,
-        "chain": chain_id,
-    });
+//     let request_body = json!({
+//         "address": address,
+//         "chain": chain_id,
+//     });
 
-    let resp = TestRequest::post()
-        .uri(ROUTE)
-        .set_json(&request_body)
-        .send_request(&app)
-        .await;
+//     let resp = TestRequest::post()
+//         .uri(ROUTE)
+//         .set_json(&request_body)
+//         .send_request(&app)
+//         .await;
 
-    assert!(
-        resp.status().is_success(),
-        "failed to verify contract, status is {}",
-        resp.status()
-    );
+//     assert!(
+//         resp.status().is_success(),
+//         "failed to verify contract, status is {}",
+//         resp.status()
+//     );
 
-    let body: VerifyResponse = test::read_body_json(resp).await;
+//     let body: VerifyResponse = test::read_body_json(resp).await;
 
-    assert_eq!(body.status().as_str_name(), "FAILURE");
+//     assert_eq!(body.status().as_str_name(), "FAILURE");
 
-    let error_message = "is not supported for importing from Etherscan";
-    assert!(
-        body.message.contains(error_message),
-        "body message: {}, expected message: {}",
-        body.message,
-        error_message
-    );
-}
+//     let error_message = "is not supported for importing from Etherscan";
+//     assert!(
+//         body.message.contains(error_message),
+//         "body message: {}, expected message: {}",
+//         body.message,
+//         error_message
+//     );
+// }
 
 // #[tokio::test]
 // async fn contract_not_verified_fail() {

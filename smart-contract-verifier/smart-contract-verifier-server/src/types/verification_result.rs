@@ -210,12 +210,8 @@ fn parse_abi(compilation_artifacts: &CompilationArtifacts) -> Option<String> {
 }
 
 fn parse_constructor_arguments(creation_match: &Option<Match>) -> Option<String> {
-    let creation_match = match creation_match {
-        Some(creation_match) => creation_match,
-        None => return None,
-    };
-
     creation_match
+        .as_ref()?
         .values
         .constructor_arguments
         .as_ref()

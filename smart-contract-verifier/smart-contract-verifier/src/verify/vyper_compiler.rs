@@ -53,7 +53,7 @@ impl evm_compilers::CompilerInput for VyperInput {
         }
         // v0.3.10 was the latest release prior to v0.4.0 pre-releases
         if version > &semver::Version::new(0, 3, 10) {
-            for (_key, value) in self.settings.output_selection.iter_mut() {
+            for value in self.settings.output_selection.values_mut() {
                 value.clone_from(&default_output_selection);
             }
         } else {

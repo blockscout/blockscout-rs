@@ -67,7 +67,7 @@ impl SourcifyApiClient {
     ) -> Result<ApiFilesResponse, anyhow::Error> {
         let url = self
             .host
-            .join(format!("files/any/{}/{}", &params.chain, &params.address).as_str())
+            .join(format!("files/any/{}/{}", params.chain, params.address).as_str())
             .expect("should be valid url");
         self.reqwest_client
             .get(url)
