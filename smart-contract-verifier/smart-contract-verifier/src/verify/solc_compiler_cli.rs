@@ -139,16 +139,7 @@ mod types {
                     tempfile::tempdir().map_err(|e| SolcError::Message(e.to_string()))?;
                 let mut file_names = Vec::new();
                 for (name, source) in input.sources.iter() {
-                    let file_path = files_dir.path().join(name);
-
-                    // we don't allow any parent dir components,
-                    // as otherwise user may create something outside temporary files_dir
-                    if Self::contains_parent_dir(&file_path) {
-                        return Err(SolcError::Message(format!(
-                            "{} contains parent dir component",
-                            file_path.to_string_lossy()
-                        )));
-                    }
+                    let file_path = Self::source_file_path(files_dir.path(), name)?;
 
                     // name itself may contain some paths inside
                     let prefix = file_path.parent();
@@ -185,9 +176,38 @@ mod types {
                 })
         }
 
-        fn contains_parent_dir(path: &Path) -> bool {
-            path.components()
-                .any(|comp| matches!(comp, Component::ParentDir))
+        pub(super) fn source_file_path(
+            files_dir: &Path,
+            name: &Path,
+        ) -> Result<PathBuf, SolcError> {
+            let reject = |reason: &str| {
+                Err(SolcError::Message(format!(
+                    "invalid source file name \"{}\": {reason}",
+                    name.display()
+                )))
+            };
+
+            for component in name.components() {
+                match component {
+                    // `.` is a no-op, `Path` normalizes it away on comparison
+                    Component::Normal(_) | Component::CurDir => {}
+                    Component::ParentDir => return reject("contains a parent dir component"),
+                    // a leading `/` makes the name
+                    // absolute, which would discard `files_dir`
+                    Component::RootDir | Component::Prefix(_) => {
+                        return reject("must be a relative path")
+                    }
+                }
+            }
+
+            // a name made up solely of `.` components (including "") resolves to
+            // `files_dir` itself, which is a directory and not a source file.
+            // `Components` drops trailing `.`, so a valid name must end in `Normal`
+            if !matches!(name.components().next_back(), Some(Component::Normal(_))) {
+                return reject("does not name a file");
+            }
+
+            Ok(files_dir.join(name))
         }
     }
 
@@ -491,6 +511,47 @@ mod tests {
         types::InputFiles::try_from_compiler_input(&input.0)
             .await
             .expect_err("should fail");
+    }
+
+    #[test]
+    fn source_file_path_accepts_relative_names() {
+        let dir = PathBuf::from("/files_dir");
+        for (name, expected) in [
+            ("a.sol", "/files_dir/a.sol"),
+            ("./a.sol", "/files_dir/a.sol"),
+            ("sub/a.sol", "/files_dir/sub/a.sol"),
+            ("sub/./deep/a.sol", "/files_dir/sub/deep/a.sol"),
+            ("..a.sol", "/files_dir/..a.sol"),
+        ] {
+            let path = types::InputFiles::source_file_path(&dir, Path::new(name))
+                .unwrap_or_else(|err| panic!("{name:?} should be accepted, got: {err}"));
+            assert_eq!(path, PathBuf::from(expected), "wrong path for {name:?}");
+            assert!(path.starts_with(&dir), "{name:?} escaped the files dir");
+        }
+    }
+
+    #[test]
+    fn source_file_path_rejects_escaping_names() {
+        let dir = PathBuf::from("/files_dir");
+        for name in [
+            "/etc/passwd",
+            "/files_dir/../etc/passwd",
+            "..",
+            "../a.sol",
+            "a/../../a.sol",
+            "sub/../../../../../etc/passwd",
+            "",
+            ".",
+            "./",
+            "././",
+        ] {
+            let result = types::InputFiles::source_file_path(&dir, Path::new(name));
+            assert!(
+                result.is_err(),
+                "{name:?} should be rejected, got: {:?}",
+                result.unwrap()
+            );
+        }
     }
 
     #[test]
