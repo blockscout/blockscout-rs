@@ -250,6 +250,27 @@ state. Check provider config, `onchain_retry_interval`, and
 
 ---
 
+## Stats Transfer Backfill Does Not Match Failed AMB Projection Eligibility
+
+**Symptom:** After clearing stats projections, resetting `stats_processed`, and
+running startup backfill, bridged-token stats previously produced for terminal
+failed AMB messages are missing.
+
+**Root cause:** Live `project_transfers_batch()` uses
+`finalized_message_stats_condition()`, which accepts completed messages for all
+bridges and failed messages for AMB. The transfer candidate query in
+`backfill_stats_projection_round()` currently filters the parent message to
+`Completed` only. Therefore failed AMB transfers can be projected inline but
+cannot be selected again by backfill.
+
+**Fix:** Before relying on startup backfill for a full stats rebuild, align the
+transfer candidate predicate with the production projection eligibility
+(including failed AMB) and cover the rebuild case with a regression test. Do
+not reset all transfer markers and clear `stats_asset_edges` until this mismatch
+is fixed, or the rebuild will silently lose those aggregates.
+
+---
+
 ## Bridge Name Cache Has No Negative Caching
 
 **Symptom:** Repeated DB queries for non-existent bridge IDs.
