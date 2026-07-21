@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use actix_web::{test, test::TestRequest, App};
-use pretty_assertions::assert_eq;
-use serde_json::json;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse,
-};
-use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
-use std::sync::Arc;
+// use actix_web::{test, test::TestRequest, App};
+// use pretty_assertions::assert_eq;
+// use serde_json::json;
+// use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+//     sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse,
+// };
+// use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
+// use std::sync::Arc;
 
-const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify-from-etherscan";
+// const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify-from-etherscan";
 
-async fn init_service() -> Arc<SourcifyVerifierService> {
-    let mut settings = Settings::default();
-    settings.sourcify.verification_attempts = std::num::NonZeroU32::new(5).unwrap();
-    let service = SourcifyVerifierService::new(settings.sourcify)
-        .await
-        .expect("couldn't initialize the service");
-    Arc::new(service)
-}
+// async fn init_service() -> Arc<SourcifyVerifierService> {
+//     let mut settings = Settings::default();
+//     settings.sourcify.verification_attempts = std::num::NonZeroU32::new(5).unwrap();
+//     let service = SourcifyVerifierService::new(settings.sourcify)
+//         .await
+//         .expect("couldn't initialize the service");
+//     Arc::new(service)
+// }
 
 // #[tokio::test]
 // async fn should_return_200() {
