@@ -469,7 +469,9 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             messages_pagination_params!(self, request)?;
 
-        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(map_db_error)?;
+        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(|_| {
+            Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
+        })?;
 
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
@@ -514,7 +516,9 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             messages_pagination_params!(self, request)?;
 
-        let address = vec_from_hex_prefixed(&inner.address).map_err(map_db_error)?;
+        let address = vec_from_hex_prefixed(&inner.address).map_err(|_| {
+            Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
+        })?;
 
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
@@ -602,7 +606,9 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             transfers_pagination_params!(self, request)?;
 
-        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(map_db_error)?;
+        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(|_| {
+            Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
+        })?;
 
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
@@ -647,7 +653,9 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             transfers_pagination_params!(self, request)?;
 
-        let address = vec_from_hex_prefixed(&inner.address).map_err(map_db_error)?;
+        let address = vec_from_hex_prefixed(&inner.address).map_err(|_| {
+            Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
+        })?;
 
         let filter = ChainBridgeFilter {
             home_chain_id: inner.home_chain_id,
