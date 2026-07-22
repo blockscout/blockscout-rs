@@ -19,10 +19,20 @@ pub struct Model {
     pub amount_side: EdgeAmountSide,
     pub created_at: DateTime,
     pub updated_at: DateTime,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub bridge_id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::bridges::Entity",
+        from = "Column::BridgeId",
+        to = "super::bridges::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Bridges,
     #[sea_orm(
         belongs_to = "super::chains::Entity",
         from = "Column::DstChainId",
@@ -47,6 +57,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     StatsAssets,
+}
+
+impl Related<super::bridges::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Bridges.def()
+    }
 }
 
 impl Related<super::stats_assets::Entity> for Entity {

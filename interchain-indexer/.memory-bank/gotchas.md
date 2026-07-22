@@ -250,24 +250,31 @@ state. Check provider config, `onchain_retry_interval`, and
 
 ---
 
-## Stats Transfer Backfill Does Not Match Failed AMB Projection Eligibility
+## Stats Transfer Backfill Matches Failed AMB Projection Eligibility (RESOLVED)
 
-**Symptom:** After clearing stats projections, resetting `stats_processed`, and
-running startup backfill, bridged-token stats previously produced for terminal
-failed AMB messages are missing.
+**Status:** Resolved by the bridge-filtered projected-stats work
+(`m20260720_120000_add_read_filters_and_bridge_stats`).
 
-**Root cause:** Live `project_transfers_batch()` uses
-`finalized_message_stats_condition()`, which accepts completed messages for all
-bridges and failed messages for AMB. The transfer candidate query in
-`backfill_stats_projection_round()` currently filters the parent message to
-`Completed` only. Therefore failed AMB transfers can be projected inline but
-cannot be selected again by backfill.
+**Previous symptom:** After clearing stats projections, resetting
+`stats_processed`, and running startup backfill, bridged-token stats previously
+produced for terminal failed AMB messages went missing, because the transfer
+candidate query in `backfill_stats_projection_round()` filtered the parent
+message to `Completed` only while live `project_transfers_batch()` also accepts
+failed AMB.
 
-**Fix:** Before relying on startup backfill for a full stats rebuild, align the
-transfer candidate predicate with the production projection eligibility
-(including failed AMB) and cover the rebuild case with a regression test. Do
-not reset all transfer markers and clear `stats_asset_edges` until this mismatch
-is fixed, or the rebuild will silently lose those aggregates.
+**Invariant now enforced:** Live projection and historical backfill share a
+single eligibility predicate — `finalized_message_stats_condition()` in
+`stats/projection.rs`, exposed as `pub(crate)`. Both the message backfill query
+and the transfer backfill query in `database.rs` call it, and the transfer query
+joins `crosschain_transfers -> crosschain_messages -> bridges` before applying
+it (still requiring the parent's `stats_processed > 0` and the transfer's own
+marker to be zero). A message/transfer counts when its (parent) message is
+`Completed` (any bridge) or `Failed` on an AMB bridge; failed non-AMB rows stay
+excluded on both paths. Regression tests
+(`stats_backfill_failed_amb_included_non_amb_excluded_idempotent` and
+`stats_projection_excluded_rows_still_excluded_from_daily_and_all_time`) cover
+this. A full rebuild after a projection-invalidating migration therefore no
+longer silently drops failed-AMB aggregates.
 
 ---
 

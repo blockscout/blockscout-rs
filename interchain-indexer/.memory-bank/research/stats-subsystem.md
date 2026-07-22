@@ -570,30 +570,46 @@ Useful operational signals:
 
 Discovered while designing per-frontend API filtering
 (`tmp/tasks/api-per-frontend-chain-filtering/`); constrains what filters the
-stats endpoints can honor without projection rework:
+stats endpoints can honor without projection rework.
 
-- **No stats table carries `bridge_id`.** `stats_messages (src,dst)`,
-  `stats_messages_days (date,src,dst)`, `stats_asset_edges
-  (asset,src,dst)`, and `stats_chains (chain_id)` all collapse the bridge
-  dimension at projection time. Any bridge-filtered variant of
-  message-paths / bridged-tokens / chains stats requires either a projection
-  PK migration + full rebuild, or raw-table aggregation at read time.
+Filterability matrix (as of the bridge-qualified stats rebuild,
+`m20260720_120000_add_read_filters_and_bridge_stats`):
+
+| Endpoint | chain / counterparty | bridge | notes |
+| --- | --- | --- | --- |
+| `/stats/common`, `/stats/daily` | yes (canonical WHERE) | yes (canonical WHERE) | counted per request from canonical tables |
+| message-paths (sent/received) | yes | **yes** | bridge filter + collapse over `stats_messages` / `stats_messages_days` |
+| bridged-tokens | yes | **yes** | bridge filter inside the `stats_asset_edges` aggregate, collapsed per asset |
+| `/stats/chains` | subject-row `chain_ids` only | no | global unique-user snapshots; no counterparty/bridge filter |
+
+- **The three additive aggregates now carry `bridge_id`.** `stats_messages
+  (bridge_id, src, dst)`, `stats_messages_days (date, bridge_id, src, dst)`, and
+  `stats_asset_edges (asset, bridge_id, src, dst)` are bridge-qualified: message
+  paths and bridged tokens accept an optional `bridge_ids` filter and collapse
+  the bridge dimension (SUM) before ordering/pagination. An absent/blank filter
+  reproduces the prior bridge-collapsed response. `stats_assets` /
+  `stats_asset_tokens` remain global (asset identity is not bridge-specific);
+  only the movement/count edges are bridge-qualified. `stats_chains
+  (chain_id)` still has no bridge dimension.
 - **Chain/counterparty filters are cheap exactly where aggregation happens
   at query time**: `/stats/common` and `/stats/daily` count canonical tables
   per request (WHERE-clause change); bridged-tokens aggregates
-  `stats_asset_edges` per request, so a counterparty (src/dst set)
-  condition is read-side only; message-paths already accepts `chain_id` +
-  `counterparty_chain_ids`.
+  `stats_asset_edges` per request, so a counterparty (src/dst set) and bridge
+  condition is read-side only; message-paths accepts `chain_id` +
+  `counterparty_chain_ids` + `bridge_ids`, composed through `AND`.
 - **Unique-user counts are non-additive.** `stats_chains` values cannot be
   re-aggregated for bridge or counterparty subsets from any exact
   pre-aggregation — the same address would fall into many cells. Exact
   filtered uniques require raw `COUNT(DISTINCT ...)` at read time;
   mergeable HyperLogLog sketches per `(chain, role, bridge, counterparty)`
   cell are the standard approximate alternative; keying `stats_chains` by
-  `(chain_id, bridge_id)` is exact for single-bridge filters only.
+  `(chain_id, bridge_id)` is exact for single-bridge filters only. This is why
+  `/stats/chains` remains bridge-unaware.
 
 Candidate designs and the phased delivery decision are recorded in
-`tmp/tasks/api-per-frontend-chain-filtering/task.md` ("Follow-Up Scope").
+`tmp/tasks/api-per-frontend-chain-filtering/task.md` ("Follow-Up Scope"). The
+bridge dimension on message-paths / bridged-tokens was delivered by
+`tmp/tasks/api-bridge-filtered-projected-stats/`.
 
 ## Change Triggers
 

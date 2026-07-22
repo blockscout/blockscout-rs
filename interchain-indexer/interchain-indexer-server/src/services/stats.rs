@@ -2,7 +2,7 @@
 
 use super::{
     chain_info_proto::chain_model_to_proto,
-    utils::{non_empty, parse_bridge_ids_csv, parse_chain_ids_csv, reject_unsupported},
+    utils::{non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
 };
 use crate::{
     proto::{interchain_statistics_service_server::*, *},
@@ -153,8 +153,6 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
                 .map_err(|e| Status::invalid_argument(e.to_string()))?
         };
 
-        reject_unsupported("bridge_ids", inner.bridge_ids.as_deref())?;
-
         let page_size = inner
             .page_size
             .unwrap_or(self.api_settings.default_page_size)
@@ -165,12 +163,14 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             "counterparty_chain_ids",
             inner.counterparty_chain_ids.as_deref(),
         )?);
+        let bridges = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
 
         let (rows, pagination) = self
             .stats
             .get_bridged_tokens_for_chain(
                 inner.chain_id,
                 counterparty.as_deref(),
+                bridges.as_deref(),
                 StatsListQuery {
                     sort,
                     order,
@@ -201,11 +201,6 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         request: Request<GetChainsStatsRequest>,
     ) -> Result<Response<GetChainsStatsResponse>, Status> {
         let inner = request.into_inner();
-        reject_unsupported(
-            "counterparty_chain_ids",
-            inner.counterparty_chain_ids.as_deref(),
-        )?;
-        reject_unsupported("bridge_ids", inner.bridge_ids.as_deref())?;
         let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
         let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
@@ -289,7 +284,6 @@ impl InterchainStatisticsServiceImpl {
         inner: GetMessagePathsRequest,
         outgoing: bool,
     ) -> Result<Response<GetMessagePathsResponse>, Status> {
-        reject_unsupported("bridge_ids", inner.bridge_ids.as_deref())?;
         let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
         let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
         let counterparty_ids = parse_chain_ids_csv(
@@ -297,14 +291,28 @@ impl InterchainStatisticsServiceImpl {
             inner.counterparty_chain_ids.as_deref(),
         )?;
         let counterparty = (!counterparty_ids.is_empty()).then_some(counterparty_ids.as_slice());
+        let bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
+        let bridges = (!bridge_ids.is_empty()).then_some(bridge_ids.as_slice());
 
         let rows = if outgoing {
             self.stats
-                .get_outgoing_message_paths(inner.chain_id, from_date, to_date, counterparty)
+                .get_outgoing_message_paths(
+                    inner.chain_id,
+                    from_date,
+                    to_date,
+                    counterparty,
+                    bridges,
+                )
                 .await
         } else {
             self.stats
-                .get_incoming_message_paths(inner.chain_id, from_date, to_date, counterparty)
+                .get_incoming_message_paths(
+                    inner.chain_id,
+                    from_date,
+                    to_date,
+                    counterparty,
+                    bridges,
+                )
                 .await
         }
         .map_err(map_stats_error)?;

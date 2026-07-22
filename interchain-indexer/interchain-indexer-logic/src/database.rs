@@ -4,7 +4,7 @@ use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, pending_messages,
-    sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferType},
+    sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
 };
 use parking_lot::RwLock;
@@ -192,61 +192,36 @@ enum MessagePathDirection {
     Incoming,
 }
 
+/// Appends an `IN (...)` predicate over `column` for `ids` to `where_parts`,
+/// pushing one bind value per id (via `to_value`) and advancing `*placeholder`.
+/// No-op for an absent/empty set (an absent bridge/counterparty set is "all").
+fn push_in_predicate<T: Copy>(
+    where_parts: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    placeholder: &mut usize,
+    column: &str,
+    ids: Option<&[T]>,
+    to_value: impl Fn(T) -> Value,
+) {
+    if let Some(ids) = ids.filter(|s| !s.is_empty()) {
+        let placeholders: Vec<String> = (0..ids.len())
+            .map(|i| format!("${}", *placeholder + i))
+            .collect();
+        where_parts.push(format!("{column} IN ({})", placeholders.join(", ")));
+        for &id in ids {
+            values.push(to_value(id));
+        }
+        *placeholder += ids.len();
+    }
+}
+
 fn build_all_time_message_paths_query(
     chain_id: i64,
     direction: MessagePathDirection,
     counterparty_chain_ids: Option<&[i64]>,
+    bridge_ids: Option<&[i32]>,
     include_zero_chains: bool,
 ) -> (String, Vec<Value>) {
-    if include_zero_chains {
-        let mut values = vec![Value::BigInt(Some(chain_id))];
-        let mut where_parts = vec![
-            "c.id <> $1".to_string(),
-            "EXISTS (SELECT 1 FROM chains WHERE id = $1)".to_string(),
-        ];
-
-        if let Some(ids) = counterparty_chain_ids.filter(|chain_ids| !chain_ids.is_empty()) {
-            let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("${}", i + 2)).collect();
-            where_parts.push(format!("c.id IN ({})", placeholders.join(", ")));
-            for &id in ids {
-                values.push(Value::BigInt(Some(id)));
-            }
-        }
-
-        let sql = match direction {
-            MessagePathDirection::Outgoing => format!(
-                r#"
-SELECT $1::bigint AS src_chain_id,
-       c.id AS dst_chain_id,
-       COALESCE(sm.messages_count, 0)::bigint AS messages_count
-FROM chains c
-LEFT JOIN stats_messages sm
-    ON sm.src_chain_id = $1
-   AND sm.dst_chain_id = c.id
-WHERE {}
-ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
-"#,
-                where_parts.join("\n  AND ")
-            ),
-            MessagePathDirection::Incoming => format!(
-                r#"
-SELECT c.id AS src_chain_id,
-       $1::bigint AS dst_chain_id,
-       COALESCE(sm.messages_count, 0)::bigint AS messages_count
-FROM chains c
-LEFT JOIN stats_messages sm
-    ON sm.src_chain_id = c.id
-   AND sm.dst_chain_id = $1
-WHERE {}
-ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
-"#,
-                where_parts.join("\n  AND ")
-            ),
-        };
-
-        return (sql, values);
-    }
-
     let filter_column = match direction {
         MessagePathDirection::Outgoing => "src_chain_id",
         MessagePathDirection::Incoming => "dst_chain_id",
@@ -256,26 +231,115 @@ ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
         MessagePathDirection::Incoming => "src_chain_id",
     };
 
-    let mut values = vec![Value::BigInt(Some(chain_id))];
-    let mut sql = format!(
-        r#"
-SELECT src_chain_id, dst_chain_id, messages_count
-FROM stats_messages
-WHERE {filter_column} = $1"#
-    );
+    if include_zero_chains {
+        // Aggregate bridge rows for the focal chain before left-joining known
+        // chains, so a configured counterparty with no matching bridge row is
+        // still reported as zero. The bridge filter belongs inside the aggregate.
+        let mut aggregate_where_parts = vec![format!("{filter_column} = $1")];
+        let mut values = vec![Value::BigInt(Some(chain_id))];
+        let mut placeholder = 2;
 
-    if let Some(ids) = counterparty_chain_ids.filter(|c| !c.is_empty()) {
-        let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("${}", i + 2)).collect();
-        sql.push_str(&format!(
-            " AND {counterparty_column} IN ({})",
-            placeholders.join(", ")
-        ));
-        for &id in ids {
-            values.push(Value::BigInt(Some(id)));
-        }
+        push_in_predicate(
+            &mut aggregate_where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            bridge_ids,
+            |id| Value::Int(Some(id)),
+        );
+
+        let mut where_parts = vec![
+            "c.id <> $1".to_string(),
+            "EXISTS (SELECT 1 FROM chains WHERE id = $1)".to_string(),
+        ];
+        push_in_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            "c.id",
+            counterparty_chain_ids,
+            |id| Value::BigInt(Some(id)),
+        );
+
+        let sql = match direction {
+            MessagePathDirection::Outgoing => format!(
+                r#"
+SELECT $1::bigint AS src_chain_id,
+       c.id AS dst_chain_id,
+       COALESCE(sm.messages_count, 0)::bigint AS messages_count
+FROM chains c
+LEFT JOIN (
+    SELECT dst_chain_id,
+           SUM(messages_count)::bigint AS messages_count
+    FROM stats_messages
+    WHERE {}
+    GROUP BY dst_chain_id
+) sm ON sm.dst_chain_id = c.id
+WHERE {}
+ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
+"#,
+                aggregate_where_parts.join(" AND "),
+                where_parts.join("\n  AND ")
+            ),
+            MessagePathDirection::Incoming => format!(
+                r#"
+SELECT c.id AS src_chain_id,
+       $1::bigint AS dst_chain_id,
+       COALESCE(sm.messages_count, 0)::bigint AS messages_count
+FROM chains c
+LEFT JOIN (
+    SELECT src_chain_id,
+           SUM(messages_count)::bigint AS messages_count
+    FROM stats_messages
+    WHERE {}
+    GROUP BY src_chain_id
+) sm ON sm.src_chain_id = c.id
+WHERE {}
+ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
+"#,
+                aggregate_where_parts.join(" AND "),
+                where_parts.join("\n  AND ")
+            ),
+        };
+
+        return (sql, values);
     }
 
-    sql.push_str("\nORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC\n");
+    let mut where_parts = vec![format!("{filter_column} = $1")];
+    let mut values = vec![Value::BigInt(Some(chain_id))];
+    let mut placeholder = 2;
+
+    // Counterparty and bridge restrictions compose through AND.
+    push_in_predicate(
+        &mut where_parts,
+        &mut values,
+        &mut placeholder,
+        counterparty_column,
+        counterparty_chain_ids,
+        |id| Value::BigInt(Some(id)),
+    );
+    push_in_predicate(
+        &mut where_parts,
+        &mut values,
+        &mut placeholder,
+        "bridge_id",
+        bridge_ids,
+        |id| Value::Int(Some(id)),
+    );
+
+    // Collapse bridge rows into one row per directional edge before ordering.
+    let sql = format!(
+        r#"
+SELECT src_chain_id,
+       dst_chain_id,
+       SUM(messages_count)::bigint AS messages_count
+FROM stats_messages
+WHERE {}
+GROUP BY src_chain_id, dst_chain_id
+ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
+"#,
+        where_parts.join(" AND ")
+    );
 
     (sql, values)
 }
@@ -286,13 +350,20 @@ fn build_bounded_message_paths_query(
     to_date: Option<NaiveDate>,
     direction: MessagePathDirection,
     counterparty_chain_ids: Option<&[i64]>,
+    bridge_ids: Option<&[i32]>,
     include_zero_chains: bool,
 ) -> (String, Vec<Value>) {
+    let filter_column = match direction {
+        MessagePathDirection::Outgoing => "src_chain_id",
+        MessagePathDirection::Incoming => "dst_chain_id",
+    };
+    let counterparty_column = match direction {
+        MessagePathDirection::Outgoing => "dst_chain_id",
+        MessagePathDirection::Incoming => "src_chain_id",
+    };
+
     if include_zero_chains {
-        let mut aggregate_where_parts = vec![match direction {
-            MessagePathDirection::Outgoing => "src_chain_id = $1".to_string(),
-            MessagePathDirection::Incoming => "dst_chain_id = $1".to_string(),
-        }];
+        let mut aggregate_where_parts = vec![format!("{filter_column} = $1")];
         let mut values = vec![Value::BigInt(Some(chain_id))];
         let mut placeholder = 2;
 
@@ -308,26 +379,28 @@ fn build_bounded_message_paths_query(
             placeholder += 1;
         }
 
+        // Bridge restriction lives inside the daily aggregate.
+        push_in_predicate(
+            &mut aggregate_where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            bridge_ids,
+            |id| Value::Int(Some(id)),
+        );
+
         let mut where_parts = vec![
             "c.id <> $1".to_string(),
             "EXISTS (SELECT 1 FROM chains WHERE id = $1)".to_string(),
         ];
-
-        if let Some(ids) = counterparty_chain_ids.filter(|chain_ids| !chain_ids.is_empty()) {
-            let placeholders: Vec<String> = (0..ids.len())
-                .map(|i| format!("${}", placeholder + i))
-                .collect();
-            let placeholders = placeholders.join(", ");
-            let counterparty_column = match direction {
-                MessagePathDirection::Outgoing => "dst_chain_id",
-                MessagePathDirection::Incoming => "src_chain_id",
-            };
-            aggregate_where_parts.push(format!("{counterparty_column} IN ({placeholders})"));
-            where_parts.push(format!("c.id IN ({placeholders})"));
-            for &id in ids {
-                values.push(Value::BigInt(Some(id)));
-            }
-        }
+        push_in_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            "c.id",
+            counterparty_chain_ids,
+            |id| Value::BigInt(Some(id)),
+        );
 
         let sql = match direction {
             MessagePathDirection::Outgoing => format!(
@@ -373,15 +446,6 @@ ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
         return (sql, values);
     }
 
-    let filter_column = match direction {
-        MessagePathDirection::Outgoing => "src_chain_id",
-        MessagePathDirection::Incoming => "dst_chain_id",
-    };
-    let counterparty_column = match direction {
-        MessagePathDirection::Outgoing => "dst_chain_id",
-        MessagePathDirection::Incoming => "src_chain_id",
-    };
-
     let mut where_parts = vec![format!("{filter_column} = $1")];
     let mut values = vec![Value::BigInt(Some(chain_id))];
     let mut placeholder = 2;
@@ -398,18 +462,23 @@ ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
         placeholder += 1;
     }
 
-    if let Some(ids) = counterparty_chain_ids.filter(|c| !c.is_empty()) {
-        let placeholders: Vec<String> = (0..ids.len())
-            .map(|i| format!("${}", placeholder + i))
-            .collect();
-        where_parts.push(format!(
-            "{counterparty_column} IN ({})",
-            placeholders.join(", ")
-        ));
-        for &id in ids {
-            values.push(Value::BigInt(Some(id)));
-        }
-    }
+    // Counterparty and bridge restrictions compose through AND.
+    push_in_predicate(
+        &mut where_parts,
+        &mut values,
+        &mut placeholder,
+        counterparty_column,
+        counterparty_chain_ids,
+        |id| Value::BigInt(Some(id)),
+    );
+    push_in_predicate(
+        &mut where_parts,
+        &mut values,
+        &mut placeholder,
+        "bridge_id",
+        bridge_ids,
+        |id| Value::Int(Some(id)),
+    );
 
     (
         format!(
@@ -877,19 +946,25 @@ impl InterchainDatabase {
 
     /// Creates or updates a stats asset edge: on insert sets transfers_count=1 and cumulative_amount;
     /// on conflict increments transfers_count and adds to cumulative_amount. Preserves `amount_side`.
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_or_update_stats_asset_edge(
         &self,
         stats_asset_id: i64,
+        bridge_id: i32,
         src_chain_id: i64,
         dst_chain_id: i64,
         amount: sea_orm::prelude::BigDecimal,
         amount_side: EdgeAmountSide,
         decimals: Option<i16>,
     ) -> anyhow::Result<()> {
-        let existing =
-            stats_asset_edges::Entity::find_by_id((stats_asset_id, src_chain_id, dst_chain_id))
-                .one(self.db.as_ref())
-                .await?;
+        let existing = stats_asset_edges::Entity::find_by_id((
+            stats_asset_id,
+            src_chain_id,
+            dst_chain_id,
+            bridge_id,
+        ))
+        .one(self.db.as_ref())
+        .await?;
 
         if existing.is_some() {
             stats_asset_edges::Entity::update_many()
@@ -906,6 +981,7 @@ impl InterchainDatabase {
                     Expr::current_timestamp().into(),
                 )
                 .filter(stats_asset_edges::Column::StatsAssetId.eq(stats_asset_id))
+                .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
                 .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
                 .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id))
                 .exec(self.db.as_ref())
@@ -914,6 +990,7 @@ impl InterchainDatabase {
                     tracing::error!(
                         err = ?e,
                         stats_asset_id,
+                        bridge_id,
                         src_chain_id,
                         dst_chain_id,
                         "Failed to update stats asset edge"
@@ -923,6 +1000,7 @@ impl InterchainDatabase {
         } else {
             let model = stats_asset_edges::ActiveModel {
                 stats_asset_id: ActiveValue::Set(stats_asset_id),
+                bridge_id: ActiveValue::Set(bridge_id),
                 src_chain_id: ActiveValue::Set(src_chain_id),
                 dst_chain_id: ActiveValue::Set(dst_chain_id),
                 transfers_count: ActiveValue::Set(1),
@@ -938,6 +1016,7 @@ impl InterchainDatabase {
                     tracing::error!(
                         err = ?e,
                         stats_asset_id,
+                        bridge_id,
                         src_chain_id,
                         dst_chain_id,
                         "Failed to insert stats asset edge"
@@ -952,6 +1031,7 @@ impl InterchainDatabase {
     pub async fn update_edge_decimals(
         &self,
         stats_asset_id: i64,
+        bridge_id: i32,
         src_chain_id: i64,
         dst_chain_id: i64,
         decimals: i16,
@@ -963,6 +1043,7 @@ impl InterchainDatabase {
                 Expr::current_timestamp().into(),
             )
             .filter(stats_asset_edges::Column::StatsAssetId.eq(stats_asset_id))
+            .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
             .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
             .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id))
             .exec(self.db.as_ref())
@@ -971,6 +1052,7 @@ impl InterchainDatabase {
                 tracing::error!(
                     err = ?e,
                     stats_asset_id,
+                    bridge_id,
                     src_chain_id,
                     dst_chain_id,
                     "Failed to update edge decimals"
@@ -980,6 +1062,7 @@ impl InterchainDatabase {
         if res.rows_affected == 0 {
             tracing::warn!(
                 stats_asset_id,
+                bridge_id,
                 src_chain_id,
                 dst_chain_id,
                 "update_edge_decimals: no row updated"
@@ -1101,11 +1184,13 @@ impl InterchainDatabase {
     /// Insert with messages_count=1; on conflict increment messages_count and update updated_at.
     pub async fn create_or_update_stats_messages(
         &self,
+        bridge_id: i32,
         src_chain_id: i64,
         dst_chain_id: i64,
         messages_delta: i64,
     ) -> anyhow::Result<()> {
         let model = stats_messages::ActiveModel {
+            bridge_id: ActiveValue::Set(bridge_id),
             src_chain_id: ActiveValue::Set(src_chain_id),
             dst_chain_id: ActiveValue::Set(dst_chain_id),
             messages_count: ActiveValue::Set(messages_delta),
@@ -1114,6 +1199,7 @@ impl InterchainDatabase {
         match stats_messages::Entity::insert(model)
             .on_conflict(
                 OnConflict::columns([
+                    stats_messages::Column::BridgeId,
                     stats_messages::Column::SrcChainId,
                     stats_messages::Column::DstChainId,
                 ])
@@ -1135,6 +1221,7 @@ impl InterchainDatabase {
             Err(e) => {
                 tracing::error!(
                     err = ?e,
+                    bridge_id,
                     src_chain_id,
                     dst_chain_id,
                     "Failed to create or update stats_messages"
@@ -1144,13 +1231,14 @@ impl InterchainDatabase {
         }
     }
 
-    /// Returns the stats_messages row for the given (src_chain_id, dst_chain_id), if any.
+    /// Returns the stats_messages row for the given (bridge_id, src_chain_id, dst_chain_id), if any.
     pub async fn get_stats_messages_row(
         &self,
+        bridge_id: i32,
         src_chain_id: i64,
         dst_chain_id: i64,
     ) -> anyhow::Result<Option<stats_messages::Model>> {
-        match stats_messages::Entity::find_by_id((src_chain_id, dst_chain_id))
+        match stats_messages::Entity::find_by_id((src_chain_id, dst_chain_id, bridge_id))
             .one(self.db.as_ref())
             .await
         {
@@ -1158,6 +1246,7 @@ impl InterchainDatabase {
             Err(e) => {
                 tracing::error!(
                     err = ?e,
+                    bridge_id,
                     src_chain_id,
                     dst_chain_id,
                     "Failed to fetch stats_messages row"
@@ -1173,6 +1262,7 @@ impl InterchainDatabase {
         from_date: Option<NaiveDate>,
         to_date: Option<NaiveDate>,
         counterparty_chain_ids: Option<&[i64]>,
+        bridge_ids: Option<&[i32]>,
         include_zero_chains: bool,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
         self.get_message_paths(
@@ -1181,6 +1271,7 @@ impl InterchainDatabase {
             to_date,
             MessagePathDirection::Outgoing,
             counterparty_chain_ids,
+            bridge_ids,
             include_zero_chains,
         )
         .await
@@ -1192,6 +1283,7 @@ impl InterchainDatabase {
         from_date: Option<NaiveDate>,
         to_date: Option<NaiveDate>,
         counterparty_chain_ids: Option<&[i64]>,
+        bridge_ids: Option<&[i32]>,
         include_zero_chains: bool,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
         self.get_message_paths(
@@ -1200,11 +1292,13 @@ impl InterchainDatabase {
             to_date,
             MessagePathDirection::Incoming,
             counterparty_chain_ids,
+            bridge_ids,
             include_zero_chains,
         )
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn get_message_paths(
         &self,
         chain_id: i64,
@@ -1212,6 +1306,7 @@ impl InterchainDatabase {
         to_date: Option<NaiveDate>,
         direction: MessagePathDirection,
         counterparty_chain_ids: Option<&[i64]>,
+        bridge_ids: Option<&[i32]>,
         include_zero_chains: bool,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
         if let (Some(from_date), Some(to_date)) = (from_date, to_date)
@@ -1225,6 +1320,7 @@ impl InterchainDatabase {
                 chain_id,
                 direction,
                 counterparty_chain_ids,
+                bridge_ids,
                 include_zero_chains,
             ),
             _ => build_bounded_message_paths_query(
@@ -1233,6 +1329,7 @@ impl InterchainDatabase {
                 to_date,
                 direction,
                 counterparty_chain_ids,
+                bridge_ids,
                 include_zero_chains,
             ),
         };
@@ -1363,16 +1460,9 @@ impl InterchainDatabase {
                 crosschain_messages::Relation::Bridges.def(),
             )
             .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
-            // Failed is only terminal for bridge types whose `Consolidate` impl flags it as final.
-            .filter(
-                Condition::any()
-                    .add(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
-                    .add(
-                        Condition::all()
-                            .add(crosschain_messages::Column::Status.eq(MessageStatus::Failed))
-                            .add(bridges::Column::Type.eq(BridgeType::Amb)),
-                    ),
-            )
+            // Same completed-or-failed-AMB eligibility as live projection: the
+            // single shared predicate governs both paths so they cannot diverge.
+            .filter(crate::stats::projection::finalized_message_stats_condition())
             .filter(crosschain_messages::Column::DstChainId.is_not_null())
             .order_by_asc(crosschain_messages::Column::Id)
             .limit(message_limit)
@@ -1409,7 +1499,15 @@ impl InterchainDatabase {
                 JoinType::InnerJoin,
                 crosschain_transfers::Relation::CrosschainMessages.def(),
             )
-            .filter(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
+            .join(
+                JoinType::InnerJoin,
+                crosschain_messages::Relation::Bridges.def(),
+            )
+            // Same completed-or-failed-AMB eligibility as live transfer
+            // projection (parent message joined to its bridge). `stats_processed
+            // > 0` on the parent keeps message projection strictly before
+            // transfer projection, and the transfer marker must still be zero.
+            .filter(crate::stats::projection::finalized_message_stats_condition())
             .filter(crosschain_messages::Column::StatsProcessed.gt(0i16))
             .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
             .order_by_asc(crosschain_transfers::Column::Id)
@@ -2300,6 +2398,7 @@ impl InterchainDatabase {
                                 Expr::current_timestamp().into(),
                             )
                             .filter(stats_asset_edges::Column::StatsAssetId.eq(edge.stats_asset_id))
+                            .filter(stats_asset_edges::Column::BridgeId.eq(edge.bridge_id))
                             .filter(stats_asset_edges::Column::SrcChainId.eq(edge.src_chain_id))
                             .filter(stats_asset_edges::Column::DstChainId.eq(edge.dst_chain_id))
                             .exec(self.db.as_ref())
@@ -2514,6 +2613,7 @@ impl InterchainDatabase {
         &self,
         chain_id: i64,
         counterparty_chain_ids: Option<&[i64]>,
+        bridge_ids: Option<&[i32]>,
         params: crate::stats::StatsListQuery<
             '_,
             crate::pagination::BridgedTokensSortField,
@@ -2527,6 +2627,7 @@ impl InterchainDatabase {
             self.db.as_ref(),
             chain_id,
             counterparty_chain_ids,
+            bridge_ids,
             params,
         )
         .await
@@ -3205,6 +3306,18 @@ mod tests {
         let mut ids: Vec<i64> = rows.iter().map(|t| t.id).collect();
         ids.sort_unstable();
         ids
+    }
+
+    /// Ensures a `bridges` row exists so bridge-qualified stats rows can satisfy
+    /// their FK. Idempotent (ignores an already-present id).
+    async fn seed_bridge_row(db: &sea_orm::DatabaseConnection, id: i32) {
+        let _ = bridges::Entity::insert(bridges::ActiveModel {
+            id: Set(id),
+            name: Set(format!("test-bridge-{id}")),
+            ..Default::default()
+        })
+        .exec(db)
+        .await;
     }
 
     #[tokio::test]
@@ -4057,6 +4170,7 @@ mod tests {
     async fn stats_edge_insert_and_upsert() {
         let _db = init_db("stats_edge_insert_and_upsert").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -4072,6 +4186,7 @@ mod tests {
             ])
             .await
             .unwrap();
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         let asset = interchain_db
             .create_stats_asset(Some("E".to_string()), None, None)
             .await
@@ -4081,6 +4196,7 @@ mod tests {
             .create_or_update_stats_asset_edge(
                 asset.id,
                 1,
+                1,
                 2,
                 amount.clone(),
                 EdgeAmountSide::Source,
@@ -4088,7 +4204,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64))
+        let edge = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -4102,6 +4218,7 @@ mod tests {
             .create_or_update_stats_asset_edge(
                 asset.id,
                 1,
+                1,
                 2,
                 BigDecimal::from(500u64),
                 EdgeAmountSide::Source,
@@ -4109,7 +4226,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let edge2 = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64))
+        let edge2 = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -4124,6 +4241,7 @@ mod tests {
     async fn stats_edge_decimals_null_and_update() {
         let _db = init_db("stats_edge_decimals_null_and_update").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -4139,6 +4257,7 @@ mod tests {
             ])
             .await
             .unwrap();
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         let asset = interchain_db
             .create_stats_asset(Some("D".to_string()), None, None)
             .await
@@ -4147,6 +4266,7 @@ mod tests {
             .create_or_update_stats_asset_edge(
                 asset.id,
                 1,
+                1,
                 2,
                 BigDecimal::from(1u64),
                 EdgeAmountSide::Destination,
@@ -4154,7 +4274,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64))
+        let edge = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -4163,10 +4283,10 @@ mod tests {
         assert_eq!(edge.amount_side, EdgeAmountSide::Destination);
 
         interchain_db
-            .update_edge_decimals(asset.id, 1, 2, 6)
+            .update_edge_decimals(asset.id, 1, 1, 2, 6)
             .await
             .unwrap();
-        let edge2 = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64))
+        let edge2 = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -4777,7 +4897,7 @@ mod tests {
         .await
         .unwrap();
 
-        let row = stats_messages::Entity::find_by_id((1i64, 100i64))
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -4819,14 +4939,14 @@ mod tests {
         .await
         .unwrap();
 
-        let all_time = stats_messages::Entity::find_by_id((1i64, 100i64))
+        let all_time = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(all_time.messages_count, 1);
 
-        let daily = stats_messages_days::Entity::find_by_id((day, 1i64, 100i64))
+        let daily = stats_messages_days::Entity::find_by_id((day, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -4857,7 +4977,7 @@ mod tests {
             .await
             .unwrap();
         }
-        let row = stats_messages::Entity::find_by_id((1i64, 100i64))
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -4988,12 +5108,12 @@ mod tests {
         .await
         .unwrap();
 
-        let forward = stats_messages_days::Entity::find_by_id((day, 1i64, 100i64))
+        let forward = stats_messages_days::Entity::find_by_id((day, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
             .unwrap();
-        let reverse = stats_messages_days::Entity::find_by_id((day, 100i64, 1i64))
+        let reverse = stats_messages_days::Entity::find_by_id((day, 100i64, 1i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -5107,6 +5227,7 @@ mod tests {
     async fn stats_messages_days_chain_delete_cascades() {
         let _db = init_db("stats_messages_days_chain_delete_cascades").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -5127,10 +5248,12 @@ mod tests {
             ])
             .await
             .unwrap();
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         let day = NaiveDate::from_ymd_opt(2026, 3, 6).unwrap();
 
         stats_messages_days::Entity::insert_many([
             stats_messages_days::ActiveModel {
+                bridge_id: Set(1),
                 date: Set(day),
                 src_chain_id: Set(1),
                 dst_chain_id: Set(2),
@@ -5138,6 +5261,7 @@ mod tests {
                 ..Default::default()
             },
             stats_messages_days::ActiveModel {
+                bridge_id: Set(1),
                 date: Set(day),
                 src_chain_id: Set(2),
                 dst_chain_id: Set(1),
@@ -5145,6 +5269,7 @@ mod tests {
                 ..Default::default()
             },
             stats_messages_days::ActiveModel {
+                bridge_id: Set(1),
                 date: Set(day),
                 src_chain_id: Set(1),
                 dst_chain_id: Set(3),
@@ -5162,20 +5287,20 @@ mod tests {
             .unwrap();
 
         assert!(
-            stats_messages_days::Entity::find_by_id((day, 1i64, 2i64))
+            stats_messages_days::Entity::find_by_id((day, 1i64, 2i64, 1i32))
                 .one(interchain_db.db.as_ref())
                 .await
                 .unwrap()
                 .is_none()
         );
         assert!(
-            stats_messages_days::Entity::find_by_id((day, 2i64, 1i64))
+            stats_messages_days::Entity::find_by_id((day, 2i64, 1i64, 1i32))
                 .one(interchain_db.db.as_ref())
                 .await
                 .unwrap()
                 .is_none()
         );
-        let survivor = stats_messages_days::Entity::find_by_id((day, 1i64, 3i64))
+        let survivor = stats_messages_days::Entity::find_by_id((day, 1i64, 3i64, 1i32))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -5231,7 +5356,7 @@ mod tests {
         assert_eq!(t.stats_processed, 1);
         assert!(t.stats_asset_id.is_some());
         let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -5399,7 +5524,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -5465,7 +5590,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -5563,7 +5688,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -5632,7 +5757,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -5707,7 +5832,7 @@ mod tests {
         assert_eq!(t2.stats_processed, 1);
         let aid = t1.stats_asset_id.unwrap();
         assert_eq!(t2.stats_asset_id, Some(aid));
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -5765,6 +5890,7 @@ mod tests {
 
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
             stats_asset_id: Set(aid),
+            bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(100),
             transfers_count: Set(0),
@@ -6075,6 +6201,7 @@ mod tests {
 
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
             stats_asset_id: Set(aid),
+            bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(100),
             transfers_count: Set(0),
@@ -6119,7 +6246,7 @@ mod tests {
         assert_eq!(asset.name.as_deref(), Some("Bridged"));
         assert_eq!(asset.symbol.as_deref(), Some("BRG"));
 
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -6164,6 +6291,7 @@ mod tests {
 
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
             stats_asset_id: Set(aid),
+            bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(200i64),
             transfers_count: Set(0),
@@ -6200,7 +6328,7 @@ mod tests {
             .await
             .unwrap();
 
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 200i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 200i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -6240,6 +6368,7 @@ mod tests {
 
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
             stats_asset_id: Set(aid),
+            bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(100),
             transfers_count: Set(0),
@@ -6276,7 +6405,7 @@ mod tests {
             .await
             .unwrap();
 
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -6394,7 +6523,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64))
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -6505,7 +6634,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_processed, 1);
-        let row = stats_messages::Entity::find_by_id((1i64, 100i64))
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
             .one(db)
             .await
             .unwrap()
@@ -6543,7 +6672,7 @@ mod tests {
             .unwrap();
         assert_eq!(m.stats_processed, 0);
         assert!(
-            stats_messages::Entity::find_by_id((1i64, 100i64))
+            stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
                 .one(db)
                 .await
                 .unwrap()
@@ -6569,6 +6698,7 @@ mod tests {
         interchain_db
             .create_or_update_stats_asset_edge(
                 asset.id,
+                1,
                 1,
                 100,
                 BigDecimal::from(1u64),
@@ -6597,7 +6727,7 @@ mod tests {
                 .is_none()
         );
         assert!(
-            stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 100i64))
+            stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 100i64, 1i32))
                 .one(interchain_db.db.as_ref())
                 .await
                 .unwrap()
@@ -6618,6 +6748,7 @@ mod tests {
     async fn stats_messages_insert_first_row() {
         let _db = init_db("stats_messages_insert_first_row").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -6635,12 +6766,12 @@ mod tests {
             .unwrap();
 
         interchain_db
-            .create_or_update_stats_messages(1, 2, 1)
+            .create_or_update_stats_messages(1, 1, 2, 1)
             .await
             .unwrap();
 
         let row = interchain_db
-            .get_stats_messages_row(1, 2)
+            .get_stats_messages_row(1, 1, 2)
             .await
             .unwrap()
             .unwrap();
@@ -6654,6 +6785,7 @@ mod tests {
     async fn stats_messages_upsert_increments_count() {
         let _db = init_db("stats_messages_upsert_increments_count").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -6671,26 +6803,26 @@ mod tests {
             .unwrap();
 
         interchain_db
-            .create_or_update_stats_messages(10, 20, 1)
+            .create_or_update_stats_messages(1, 10, 20, 1)
             .await
             .unwrap();
         let r1 = interchain_db
-            .get_stats_messages_row(10, 20)
+            .get_stats_messages_row(1, 10, 20)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(r1.messages_count, 1);
 
         interchain_db
-            .create_or_update_stats_messages(10, 20, 1)
+            .create_or_update_stats_messages(1, 10, 20, 1)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(10, 20, 1)
+            .create_or_update_stats_messages(1, 10, 20, 1)
             .await
             .unwrap();
         let r2 = interchain_db
-            .get_stats_messages_row(10, 20)
+            .get_stats_messages_row(1, 10, 20)
             .await
             .unwrap()
             .unwrap();
@@ -6702,6 +6834,7 @@ mod tests {
     async fn stats_messages_reversed_direction_separate_row() {
         let _db = init_db("stats_messages_reversed_direction_separate_row").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -6719,25 +6852,25 @@ mod tests {
             .unwrap();
 
         interchain_db
-            .create_or_update_stats_messages(100, 200, 1)
+            .create_or_update_stats_messages(1, 100, 200, 1)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(200, 100, 1)
+            .create_or_update_stats_messages(1, 200, 100, 1)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(200, 100, 1)
+            .create_or_update_stats_messages(1, 200, 100, 1)
             .await
             .unwrap();
 
         let ab = interchain_db
-            .get_stats_messages_row(100, 200)
+            .get_stats_messages_row(1, 100, 200)
             .await
             .unwrap()
             .unwrap();
         let ba = interchain_db
-            .get_stats_messages_row(200, 100)
+            .get_stats_messages_row(1, 200, 100)
             .await
             .unwrap()
             .unwrap();
@@ -6750,6 +6883,7 @@ mod tests {
     async fn stats_messages_chain_delete_cascades() {
         let _db = init_db("stats_messages_chain_delete_cascades").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -6772,15 +6906,15 @@ mod tests {
             .unwrap();
 
         interchain_db
-            .create_or_update_stats_messages(1, 2, 1)
+            .create_or_update_stats_messages(1, 1, 2, 1)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(2, 1, 1)
+            .create_or_update_stats_messages(1, 2, 1, 1)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 3, 1)
+            .create_or_update_stats_messages(1, 1, 3, 1)
             .await
             .unwrap();
 
@@ -6791,20 +6925,20 @@ mod tests {
 
         assert!(
             interchain_db
-                .get_stats_messages_row(1, 2)
+                .get_stats_messages_row(1, 1, 2)
                 .await
                 .unwrap()
                 .is_none()
         );
         assert!(
             interchain_db
-                .get_stats_messages_row(2, 1)
+                .get_stats_messages_row(1, 2, 1)
                 .await
                 .unwrap()
                 .is_none()
         );
         let row_1_3 = interchain_db
-            .get_stats_messages_row(1, 3)
+            .get_stats_messages_row(1, 1, 3)
             .await
             .unwrap()
             .unwrap();
@@ -6816,6 +6950,7 @@ mod tests {
     async fn stats_messages_migration_and_db_layer() {
         let _db = init_db("stats_messages_migration_and_db_layer").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -6833,15 +6968,15 @@ mod tests {
             .unwrap();
 
         interchain_db
-            .create_or_update_stats_messages(1, 2, 1)
+            .create_or_update_stats_messages(1, 1, 2, 1)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 2, 1)
+            .create_or_update_stats_messages(1, 1, 2, 1)
             .await
             .unwrap();
 
-        let row = stats_messages::Entity::find_by_id((1i64, 2i64))
+        let row = stats_messages::Entity::find_by_id((1i64, 2i64, 1i32))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -6856,6 +6991,7 @@ mod tests {
     async fn message_paths_outgoing_all_time_reads_stats_messages() {
         let _db = init_db("message_paths_outgoing_all_time").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -6877,14 +7013,15 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 2, 5)
+            .create_or_update_stats_messages(1, 1, 2, 5)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 3, 2)
+            .create_or_update_stats_messages(1, 1, 3, 2)
             .await
             .unwrap();
         stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+            bridge_id: Set(1),
             date: Set(NaiveDate::from_ymd_opt(2026, 3, 7).unwrap()),
             src_chain_id: Set(1),
             dst_chain_id: Set(2),
@@ -6896,7 +7033,7 @@ mod tests {
         .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, false)
+            .get_outgoing_message_paths(1, None, None, None, None, false)
             .await
             .unwrap();
         assert_eq!(
@@ -6921,6 +7058,7 @@ mod tests {
     async fn message_paths_incoming_all_time_reads_stats_messages() {
         let _db = init_db("message_paths_incoming_all_time").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -6942,16 +7080,16 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 3, 4)
+            .create_or_update_stats_messages(1, 1, 3, 4)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(2, 3, 6)
+            .create_or_update_stats_messages(1, 2, 3, 6)
             .await
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(3, None, None, None, false)
+            .get_incoming_message_paths(3, None, None, None, None, false)
             .await
             .unwrap();
         assert_eq!(
@@ -6976,6 +7114,7 @@ mod tests {
     async fn message_paths_include_zero_outgoing_all_time_expands_known_chains() {
         let _db = init_db("message_paths_include_zero_outgoing_all_time").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7002,16 +7141,16 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 2, 5)
+            .create_or_update_stats_messages(1, 1, 2, 5)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 4, 2)
+            .create_or_update_stats_messages(1, 1, 4, 2)
             .await
             .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, true)
+            .get_outgoing_message_paths(1, None, None, None, None, true)
             .await
             .unwrap();
         assert_eq!(
@@ -7042,6 +7181,7 @@ mod tests {
     async fn message_paths_include_zero_incoming_all_time_expands_known_chains() {
         let _db = init_db("message_paths_include_zero_incoming_all_time").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7068,16 +7208,16 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 4, 4)
+            .create_or_update_stats_messages(1, 1, 4, 4)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(3, 4, 6)
+            .create_or_update_stats_messages(1, 3, 4, 6)
             .await
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(4, None, None, None, true)
+            .get_incoming_message_paths(4, None, None, None, None, true)
             .await
             .unwrap();
         assert_eq!(
@@ -7108,6 +7248,7 @@ mod tests {
     async fn message_paths_bounded_queries_sum_daily_rows_and_order_deterministically() {
         let _db = init_db("message_paths_bounded_queries").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7143,6 +7284,7 @@ mod tests {
             (NaiveDate::from_ymd_opt(2026, 3, 12).unwrap(), 3, 1, 1),
         ] {
             stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+                bridge_id: Set(1),
                 date: Set(date),
                 src_chain_id: Set(src),
                 dst_chain_id: Set(dst),
@@ -7159,6 +7301,7 @@ mod tests {
                 1,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 8).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 11).unwrap()),
+                None,
                 None,
                 false,
             )
@@ -7191,6 +7334,7 @@ mod tests {
                 Some(NaiveDate::from_ymd_opt(2026, 3, 11).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 13).unwrap()),
                 None,
+                None,
                 false,
             )
             .await
@@ -7217,6 +7361,7 @@ mod tests {
     async fn message_paths_bounded_queries_apply_open_and_half_open_ranges() {
         let _db = init_db("message_paths_bounded_ranges").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7245,6 +7390,7 @@ mod tests {
             (NaiveDate::from_ymd_opt(2026, 3, 4).unwrap(), 2, 1, 4),
         ] {
             stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+                bridge_id: Set(1),
                 date: Set(date),
                 src_chain_id: Set(src),
                 dst_chain_id: Set(dst),
@@ -7260,6 +7406,7 @@ mod tests {
             .get_outgoing_message_paths(
                 1,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                None,
                 None,
                 None,
                 false,
@@ -7288,6 +7435,7 @@ mod tests {
                 None,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()),
                 None,
+                None,
                 false,
             )
             .await
@@ -7306,6 +7454,7 @@ mod tests {
                 1,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()),
+                None,
                 None,
                 false,
             )
@@ -7326,6 +7475,7 @@ mod tests {
     async fn message_paths_include_zero_bounded_queries_expand_known_chains() {
         let _db = init_db("message_paths_include_zero_bounded").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7358,6 +7508,7 @@ mod tests {
             (NaiveDate::from_ymd_opt(2026, 3, 9).unwrap(), 1, 4, 1),
         ] {
             stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+                bridge_id: Set(1),
                 date: Set(date),
                 src_chain_id: Set(src),
                 dst_chain_id: Set(dst),
@@ -7374,6 +7525,7 @@ mod tests {
                 1,
                 Some(NaiveDate::from_ymd_opt(2026, 3, 8).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 10).unwrap()),
+                None,
                 None,
                 true,
             )
@@ -7415,6 +7567,7 @@ mod tests {
                     Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
                     Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
                     None,
+                    None,
                     true,
                 )
                 .await
@@ -7427,6 +7580,7 @@ mod tests {
                     1,
                     Some(NaiveDate::from_ymd_opt(2026, 3, 3).unwrap()),
                     Some(NaiveDate::from_ymd_opt(2026, 3, 2).unwrap()),
+                    None,
                     None,
                     true,
                 )
@@ -7441,6 +7595,7 @@ mod tests {
     async fn message_paths_outgoing_counterparty_filters_destinations() {
         let _db = init_db("message_paths_outgoing_counterparty").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7462,16 +7617,16 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 2, 5)
+            .create_or_update_stats_messages(1, 1, 2, 5)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 3, 2)
+            .create_or_update_stats_messages(1, 1, 3, 2)
             .await
             .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, Some(&[3]), true)
+            .get_outgoing_message_paths(1, None, None, Some(&[3]), None, true)
             .await
             .unwrap();
         assert_eq!(
@@ -7489,6 +7644,7 @@ mod tests {
     async fn message_paths_include_zero_counterparty_expands_requested_known_rows_only() {
         let _db = init_db("message_paths_include_zero_counterparty_expand").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7515,16 +7671,16 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 2, 5)
+            .create_or_update_stats_messages(1, 1, 2, 5)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 4, 7)
+            .create_or_update_stats_messages(1, 1, 4, 7)
             .await
             .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, Some(&[1, 3, 4, 999]), true)
+            .get_outgoing_message_paths(1, None, None, Some(&[1, 3, 4, 999]), None, true)
             .await
             .unwrap();
         assert_eq!(
@@ -7550,6 +7706,7 @@ mod tests {
     async fn message_paths_incoming_counterparty_filters_sources() {
         let _db = init_db("message_paths_incoming_counterparty").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7571,16 +7728,16 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 3, 4)
+            .create_or_update_stats_messages(1, 1, 3, 4)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(2, 3, 6)
+            .create_or_update_stats_messages(1, 2, 3, 6)
             .await
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(3, None, None, Some(&[1]), true)
+            .get_incoming_message_paths(3, None, None, Some(&[1]), None, true)
             .await
             .unwrap();
         assert_eq!(
@@ -7598,6 +7755,7 @@ mod tests {
     async fn message_paths_include_zero_incoming_counterparty_expands_requested_known_rows_only() {
         let _db = init_db("message_paths_include_zero_incoming_counterparty_expand").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7624,16 +7782,16 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 3, 4)
+            .create_or_update_stats_messages(1, 1, 3, 4)
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(4, 3, 8)
+            .create_or_update_stats_messages(1, 4, 3, 8)
             .await
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(3, None, None, Some(&[2, 3, 4, 999]), true)
+            .get_incoming_message_paths(3, None, None, Some(&[2, 3, 4, 999]), None, true)
             .await
             .unwrap();
         assert_eq!(
@@ -7659,6 +7817,7 @@ mod tests {
     async fn message_paths_include_zero_bounded_counterparty_expands_requested_known_rows_only() {
         let _db = init_db("message_paths_include_zero_bounded_counterparty").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7690,6 +7849,7 @@ mod tests {
             (NaiveDate::from_ymd_opt(2026, 3, 8).unwrap(), 1, 4, 7),
         ] {
             stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+                bridge_id: Set(1),
                 date: Set(date),
                 src_chain_id: Set(src),
                 dst_chain_id: Set(dst),
@@ -7707,6 +7867,7 @@ mod tests {
                 Some(NaiveDate::from_ymd_opt(2026, 3, 8).unwrap()),
                 Some(NaiveDate::from_ymd_opt(2026, 3, 9).unwrap()),
                 Some(&[1, 2, 3, 999]),
+                None,
                 true,
             )
             .await
@@ -7734,6 +7895,7 @@ mod tests {
     async fn message_paths_omit_zero_mode_keeps_stats_only_behavior() {
         let _db = init_db("message_paths_omit_zero_mode").await;
         let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
         interchain_db
             .upsert_chains(vec![
                 chains::ActiveModel {
@@ -7755,12 +7917,12 @@ mod tests {
             .await
             .unwrap();
         interchain_db
-            .create_or_update_stats_messages(1, 2, 5)
+            .create_or_update_stats_messages(1, 1, 2, 5)
             .await
             .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, false)
+            .get_outgoing_message_paths(1, None, None, None, None, false)
             .await
             .unwrap();
         assert_eq!(
@@ -7771,5 +7933,347 @@ mod tests {
                 messages_count: 5
             }]
         );
+    }
+
+    // --- bridge-qualified projection / filtering regressions ---
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_two_bridges_same_edge_create_separate_rows() {
+        let _db = init_db("stats_projection_two_bridges_same_edge").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await; // chains 1, 100 + bridge 1
+        seed_bridge_row(db, 2).await;
+
+        crosschain_messages::Entity::insert_many([
+            completed_message(93001, 1, 100),
+            crosschain_messages::ActiveModel {
+                bridge_id: Set(2),
+                ..completed_message(93001, 1, 100)
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(93001i64, 1i32), (93001i64, 2i32)],
+                )
+                .await
+                .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        // The same directional edge on two bridges must not be merged.
+        let b1 = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let b2 = stats_messages::Entity::find_by_id((1i64, 100i64, 2i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(b1.messages_count, 1);
+        assert_eq!(b2.messages_count, 1);
+        assert_eq!(stats_messages::Entity::find().count(db).await.unwrap(), 2);
+        assert_eq!(
+            stats_messages_days::Entity::find().count(db).await.unwrap(),
+            2
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_sum_across_bridges_filter_and_compose_counterparty() {
+        let _db = init_db("message_paths_bridge_filter_compose").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
+        seed_bridge_row(interchain_db.db.as_ref(), 2).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(3),
+                    name: Set("C".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        // Edge 1->2 on bridge 1 (5) and bridge 2 (3); edge 1->3 on bridge 1 (2).
+        interchain_db
+            .create_or_update_stats_messages(1, 1, 2, 5)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(2, 1, 2, 3)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 1, 3, 2)
+            .await
+            .unwrap();
+
+        let counts = |rows: Vec<MessagePathStatsRow>| {
+            rows.into_iter()
+                .map(|r| (r.src_chain_id, r.dst_chain_id, r.messages_count))
+                .collect::<Vec<_>>()
+        };
+
+        // Unfiltered collapses both bridges of edge 1->2 into 8.
+        let all = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, None, false)
+            .await
+            .unwrap();
+        assert_eq!(counts(all), vec![(1, 2, 8), (1, 3, 2)]);
+
+        let only_1 = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, Some(&[1]), false)
+            .await
+            .unwrap();
+        assert_eq!(counts(only_1), vec![(1, 2, 5), (1, 3, 2)]);
+
+        let only_2 = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, Some(&[2]), false)
+            .await
+            .unwrap();
+        assert_eq!(counts(only_2), vec![(1, 2, 3)]);
+
+        let both = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, Some(&[1, 2]), false)
+            .await
+            .unwrap();
+        assert_eq!(counts(both), vec![(1, 2, 8), (1, 3, 2)]);
+
+        // Counterparty AND bridge compose: counterparty {2} + bridge {1} -> only 1->2 on bridge 1.
+        let composed = interchain_db
+            .get_outgoing_message_paths(1, None, None, Some(&[2]), Some(&[1]), false)
+            .await
+            .unwrap();
+        assert_eq!(counts(composed), vec![(1, 2, 5)]);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_bridge_delete_cascades_projection_rows() {
+        let _db = init_db("stats_bridge_delete_cascades").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        let db = interchain_db.db.as_ref();
+        seed_bridge_row(db, 1).await;
+        seed_bridge_row(db, 2).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(2),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        interchain_db
+            .create_or_update_stats_messages(1, 1, 2, 4)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(2, 1, 2, 7)
+            .await
+            .unwrap();
+        let asset = interchain_db
+            .create_stats_asset(Some("Cascade".into()), None, None)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_asset_edge(
+                asset.id,
+                1,
+                1,
+                2,
+                BigDecimal::from(1u64),
+                EdgeAmountSide::Source,
+                None,
+            )
+            .await
+            .unwrap();
+
+        interchain_indexer_entity::bridges::Entity::delete_by_id(1)
+            .exec(db)
+            .await
+            .unwrap();
+
+        // Bridge 1 rows cascade away; bridge 2 message row survives.
+        assert!(
+            stats_messages::Entity::find_by_id((1i64, 2i64, 1i32))
+                .one(db)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            stats_messages::Entity::find_by_id((1i64, 2i64, 2i32))
+                .one(db)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
+                .one(db)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_backfill_failed_amb_included_non_amb_excluded_idempotent() {
+        let _db = init_db("stats_backfill_failed_amb").await;
+        let ic = InterchainDatabase::new(_db.client());
+        let db = ic.db.as_ref();
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(1),
+                name: Set("A".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(100),
+                name: Set("B".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+        // Bridge 1 is AMB (failed is terminal); bridge 2 is not.
+        bridges::Entity::insert(bridges::ActiveModel {
+            id: Set(1),
+            name: Set("Amb".into()),
+            r#type: Set(Some(BridgeType::Amb)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        bridges::Entity::insert(bridges::ActiveModel {
+            id: Set(2),
+            name: Set("NonAmb".into()),
+            r#type: Set(Some(BridgeType::Lockmint)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let msg = |id: i64, bridge: i32, status: MessageStatus| crosschain_messages::ActiveModel {
+            id: Set(id),
+            bridge_id: Set(bridge),
+            status: Set(status),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(100)),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        };
+        crosschain_messages::Entity::insert_many([
+            msg(94001, 1, MessageStatus::Completed),
+            msg(94002, 1, MessageStatus::Failed), // eligible: failed AMB
+            msg(94003, 2, MessageStatus::Failed), // excluded: failed non-AMB
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let xfer = |id: i64, bridge: i32, tok: u8| crosschain_transfers::ActiveModel {
+            id: Set(id),
+            message_id: Set(id),
+            bridge_id: Set(bridge),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(vec![tok; 20])),
+            token_dst_address: Set(Some(vec![tok.wrapping_add(1); 20])),
+            stats_processed: Set(0),
+            ..Default::default()
+        };
+        crosschain_transfers::Entity::insert_many([
+            xfer(94001, 1, 0x10),
+            xfer(94002, 1, 0x20),
+            xfer(94003, 2, 0x30),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        ic.backfill_stats_until_idle().await.unwrap();
+
+        // Completed + failed AMB messages projected on bridge 1 (count 2); the
+        // failed non-AMB message is left unprocessed.
+        let bridge1 = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(bridge1.messages_count, 2);
+        assert!(
+            stats_messages::Entity::find_by_id((1i64, 100i64, 2i32))
+                .one(db)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let excluded = crosschain_messages::Entity::find_by_id((94003i64, 2i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(excluded.stats_processed, 0, "failed non-AMB not projected");
+        let excluded_xfer = crosschain_transfers::Entity::find_by_id(94003i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            excluded_xfer.stats_processed, 0,
+            "non-AMB transfer not projected"
+        );
+
+        // Only the two eligible transfers produced edge rows on bridge 1.
+        let edge_rows = stats_asset_edges::Entity::find().all(db).await.unwrap();
+        assert_eq!(edge_rows.len(), 2);
+        assert!(edge_rows.iter().all(|e| e.bridge_id == 1));
+
+        // A second idle pass finds nothing eligible (no double counting).
+        let again = ic.backfill_stats_projection_round(50, 50).await.unwrap();
+        assert_eq!(again.messages_processed, 0);
+        assert_eq!(again.transfers_processed, 0);
     }
 }

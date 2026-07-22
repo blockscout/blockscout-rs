@@ -90,20 +90,9 @@ pub fn checked_bridge_id(bridge_id: Option<u32>) -> Result<Option<i32>, Status> 
         .map_err(|_| Status::invalid_argument("bridge_id exceeds the supported int32 range"))
 }
 
-pub fn reject_unsupported(param: &str, value: Option<&str>) -> Result<(), Status> {
-    match value.map(str::trim) {
-        Some(v) if !v.is_empty() => Err(Status::invalid_argument(format!(
-            "{param} is not supported by this endpoint yet"
-        ))),
-        _ => Ok(()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        checked_bridge_id, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv, reject_unsupported,
-    };
+    use super::{checked_bridge_id, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv};
 
     #[test]
     fn parse_chain_ids_csv_accepts_missing_and_empty() {
@@ -199,24 +188,5 @@ mod tests {
     fn non_empty_maps_empty_to_none() {
         assert_eq!(non_empty(Vec::<i32>::new()), None);
         assert_eq!(non_empty(vec![1i32]), Some(vec![1]));
-    }
-
-    #[test]
-    fn reject_unsupported_rejects_non_blank() {
-        let err = reject_unsupported("bridge_ids", Some("1")).expect_err("must reject");
-        assert_eq!(err.code(), tonic::Code::InvalidArgument);
-        assert!(
-            err.message()
-                .contains("bridge_ids is not supported by this endpoint yet")
-        );
-        let err = reject_unsupported("bridge_ids", Some("  1  ")).expect_err("must reject");
-        assert_eq!(err.code(), tonic::Code::InvalidArgument);
-    }
-
-    #[test]
-    fn reject_unsupported_allows_blank_and_none() {
-        reject_unsupported("bridge_ids", None).unwrap();
-        reject_unsupported("bridge_ids", Some("")).unwrap();
-        reject_unsupported("bridge_ids", Some("   ")).unwrap();
     }
 }

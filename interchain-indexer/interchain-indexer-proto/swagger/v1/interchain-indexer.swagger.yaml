@@ -791,8 +791,12 @@ paths:
           type: string
         - name: bridge_ids
           description: |-
-            Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
-            with a non-blank value are rejected with InvalidArgument.
+            Comma-separated bridge ids (see GET /api/v1/interchain/bridges). Restricts
+            the aggregated edges to the selected bridges; bridge rows are summed per
+            asset before pagination. Absent or blank means all bridges. Composes with
+            `counterparty_chain_ids` through AND. Malformed/out-of-range values are
+            rejected with InvalidArgument. Page tokens are scoped to the same bridge
+            and counterparty filters that produced them.
           in: query
           required: false
           type: string
@@ -833,8 +837,11 @@ paths:
           type: string
         - name: bridge_ids
           description: |-
-            Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
-            with a non-blank value are rejected with InvalidArgument.
+            Comma-separated bridge ids (see GET /api/v1/interchain/bridges). Restricts
+            the message paths to the selected bridges; bridge rows are summed per
+            directional edge. Absent or blank means all bridges. Composes with
+            `counterparty_chain_ids` through AND. Malformed/out-of-range values are
+            rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -875,8 +882,11 @@ paths:
           type: string
         - name: bridge_ids
           description: |-
-            Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
-            with a non-blank value are rejected with InvalidArgument.
+            Comma-separated bridge ids (see GET /api/v1/interchain/bridges). Restricts
+            the message paths to the selected bridges; bridge rows are summed per
+            directional edge. Absent or blank means all bridges. Composes with
+            `counterparty_chain_ids` through AND. Malformed/out-of-range values are
+            rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -954,20 +964,6 @@ paths:
           enum:
             - UNIQUE_TRANSFER_USERS_COUNT
           default: UNIQUE_TRANSFER_USERS_COUNT
-        - name: counterparty_chain_ids
-          description: |-
-            Comma-separated chain ids. DECLARED BUT NOT SUPPORTED YET — requests
-            with a non-blank value are rejected with InvalidArgument.
-          in: query
-          required: false
-          type: string
-        - name: bridge_ids
-          description: |-
-            Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
-            with a non-blank value are rejected with InvalidArgument.
-          in: query
-          required: false
-          type: string
       tags:
         - InterchainStatisticsService
   /api/v1/stats/common:
@@ -1239,8 +1235,8 @@ definitions:
     description: |-
       Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
       Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
-      Tokens are only valid with the same `counterparty_chain_ids` and `q` as the
-      request that produced them.
+      Tokens are only valid with the same `counterparty_chain_ids`, `bridge_ids`,
+      `q`, `sort`, and `order` as the request that produced them.
   v1BridgedTokensSort:
     type: string
     enum:
