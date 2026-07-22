@@ -435,7 +435,9 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetMessageDetailsRequest>,
     ) -> Result<Response<InterchainMessage>, Status> {
         let inner = request.into_inner();
-        let message_id = vec_from_hex_prefixed(&inner.message_id).map_err(map_db_error)?;
+        let message_id = vec_from_hex_prefixed(&inner.message_id).map_err(|_| {
+            Status::invalid_argument("invalid message_id: expected a 0x-prefixed hex string")
+        })?;
         let bridge_id = checked_bridge_id(inner.bridge_id)?;
 
         let response = match self

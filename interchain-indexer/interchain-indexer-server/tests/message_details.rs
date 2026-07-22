@@ -166,4 +166,18 @@ async fn message_details_bridge_qualifier_contract() {
             .contains("bridge_id exceeds the supported int32 range"),
         "unexpected invalid-argument message: {body}"
     );
+
+    // 5. Malformed (non-hex) message_id -> HTTP 400, tonic code 3
+    //    (InvalidArgument), rejected before any DB lookup rather than surfacing
+    //    a generic internal error.
+    let (status, body) = get_raw(&base, "/api/v1/interchain/messages/not-hex").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], serde_json::json!(3));
+    assert!(
+        body["message"]
+            .as_str()
+            .unwrap()
+            .contains("invalid message_id"),
+        "unexpected invalid-argument message: {body}"
+    );
 }
