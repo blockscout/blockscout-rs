@@ -53,9 +53,10 @@ service InterchainService {
 
 
 // Cursor for list pagination (request input and next/prev response params).
-// Page tokens and raw cursor fields are only valid within the same filter
-// combination (`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`, and
-// any tx_hash/address scope). Changing filters mid-pagination is a client error.
+// Page tokens and raw cursor fields are only valid within the same complete
+// filter combination (`home_chain_id`, `counterparty_chain_ids`,
+// `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, and any tx_hash/address
+// scope). Changing any of those filters mid-pagination is a client error.
 message Pagination {
   optional string page_token = 1;
   optional uint64 timestamp = 2;
@@ -91,6 +92,16 @@ message GetMessagesRequest {
   optional string counterparty_chain_ids = 10;
   // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
   optional string bridge_ids = 11;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 12;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // dst_chain_id is in this set). A destination filter excludes messages with a
+  // NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 13;
 }
 
 message GetMessageDetailsRequest {
@@ -123,6 +134,16 @@ message GetMessagesByTransactionRequest {
   optional string counterparty_chain_ids = 10;
   // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
   optional string bridge_ids = 11;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 12;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // dst_chain_id is in this set). A destination filter excludes messages with a
+  // NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 13;
 }
 
 message GetMessagesByAddressRequest {
@@ -151,6 +172,16 @@ message GetMessagesByAddressRequest {
   optional string counterparty_chain_ids = 10;
   // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
   optional string bridge_ids = 11;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 12;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // dst_chain_id is in this set). A destination filter excludes messages with a
+  // NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 13;
 }
 
 message AddressInfo {
@@ -259,6 +290,15 @@ message GetTransfersRequest {
   optional string counterparty_chain_ids = 11;
   // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
   optional string bridge_ids = 12;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 13;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // destination chain (token_dst_chain_id).
+  optional string dst_chain_ids = 14;
 }
 
 message GetTransfersByTransactionRequest {
@@ -288,6 +328,15 @@ message GetTransfersByTransactionRequest {
   optional string counterparty_chain_ids = 11;
   // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
   optional string bridge_ids = 12;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 13;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // destination chain (token_dst_chain_id).
+  optional string dst_chain_ids = 14;
 }
 
 message GetTransfersByAddressRequest {
@@ -317,6 +366,15 @@ message GetTransfersByAddressRequest {
   optional string counterparty_chain_ids = 11;
   // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
   optional string bridge_ids = 12;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 13;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // destination chain (token_dst_chain_id).
+  optional string dst_chain_ids = 14;
 }
 
 message TokenInfo {

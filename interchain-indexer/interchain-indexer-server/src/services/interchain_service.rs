@@ -398,6 +398,14 @@ impl InterchainService for InterchainServiceImpl {
                 "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
+            src_chain_ids: non_empty(parse_chain_ids_csv(
+                "src_chain_ids",
+                inner.src_chain_ids.as_deref(),
+            )?),
+            dst_chain_ids: non_empty(parse_chain_ids_csv(
+                "dst_chain_ids",
+                inner.dst_chain_ids.as_deref(),
+            )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
         };
 
@@ -464,6 +472,14 @@ impl InterchainService for InterchainServiceImpl {
                 "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
+            src_chain_ids: non_empty(parse_chain_ids_csv(
+                "src_chain_ids",
+                inner.src_chain_ids.as_deref(),
+            )?),
+            dst_chain_ids: non_empty(parse_chain_ids_csv(
+                "dst_chain_ids",
+                inner.dst_chain_ids.as_deref(),
+            )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
         };
 
@@ -509,6 +525,14 @@ impl InterchainService for InterchainServiceImpl {
                 "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
+            src_chain_ids: non_empty(parse_chain_ids_csv(
+                "src_chain_ids",
+                inner.src_chain_ids.as_deref(),
+            )?),
+            dst_chain_ids: non_empty(parse_chain_ids_csv(
+                "dst_chain_ids",
+                inner.dst_chain_ids.as_deref(),
+            )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
         };
 
@@ -551,6 +575,14 @@ impl InterchainService for InterchainServiceImpl {
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
                 "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
+            )?),
+            src_chain_ids: non_empty(parse_chain_ids_csv(
+                "src_chain_ids",
+                inner.src_chain_ids.as_deref(),
+            )?),
+            dst_chain_ids: non_empty(parse_chain_ids_csv(
+                "dst_chain_ids",
+                inner.dst_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
         };
@@ -597,6 +629,14 @@ impl InterchainService for InterchainServiceImpl {
                 "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
             )?),
+            src_chain_ids: non_empty(parse_chain_ids_csv(
+                "src_chain_ids",
+                inner.src_chain_ids.as_deref(),
+            )?),
+            dst_chain_ids: non_empty(parse_chain_ids_csv(
+                "dst_chain_ids",
+                inner.dst_chain_ids.as_deref(),
+            )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
         };
 
@@ -641,6 +681,14 @@ impl InterchainService for InterchainServiceImpl {
             counterparty_chain_ids: non_empty(parse_chain_ids_csv(
                 "counterparty_chain_ids",
                 inner.counterparty_chain_ids.as_deref(),
+            )?),
+            src_chain_ids: non_empty(parse_chain_ids_csv(
+                "src_chain_ids",
+                inner.src_chain_ids.as_deref(),
+            )?),
+            dst_chain_ids: non_empty(parse_chain_ids_csv(
+                "dst_chain_ids",
+                inner.dst_chain_ids.as_deref(),
             )?),
             bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
         };
