@@ -139,6 +139,11 @@
       "subgraph_path": "../subgraphs/infinityname-subgraph",
       "subgraph_name": "infinityname-soneium-subgraph",
       "network": "soneium-mainnet"
+    },
+    "hood": {
+      "subgraph_path": "../subgraphs/hood-subgraph",
+      "subgraph_name": "hood-subgraph",
+      "network": "robinhood-mainnet"
     }
   }
 }
