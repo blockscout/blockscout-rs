@@ -182,6 +182,16 @@ message GetCommonStatisticsRequest {
   optional string counterparty_chain_ids = 3;
   // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
   optional string bridge_ids = 4;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. src_chain_ids and dst_chain_ids
+  // are independent direction sets; both apply when both are present. The
+  // message counter matches message src/dst chains; the transfer counter
+  // matches the transfer's own token src/dst chains.
+  optional string src_chain_ids = 5;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. A destination filter excludes
+  // messages with a NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 6;
 }
 message GetDailyStatisticsRequest {
   optional uint64 timestamp = 1;
@@ -194,6 +204,16 @@ message GetDailyStatisticsRequest {
   optional string counterparty_chain_ids = 3;
   // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
   optional string bridge_ids = 4;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. src_chain_ids and dst_chain_ids
+  // are independent direction sets; both apply when both are present. The
+  // message counter matches message src/dst chains; the transfer counter
+  // matches the transfer's own token src/dst chains.
+  optional string src_chain_ids = 5;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. A destination filter excludes
+  // messages with a NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 6;
 }
 
 message GetCommonStatisticsResponse {

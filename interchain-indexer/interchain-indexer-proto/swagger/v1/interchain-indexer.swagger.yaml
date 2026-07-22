@@ -129,6 +129,24 @@ paths:
           in: query
           required: false
           type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Independent directional filter that
+            narrows the focal predicate through AND (matches messages whose
+            src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+            independent direction sets; both apply when both are present.
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Independent directional filter that
+            narrows the focal predicate through AND (matches messages whose
+            dst_chain_id is in this set). A destination filter excludes messages with a
+            NULL destination through normal SQL semantics.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainService
   /api/v1/interchain/messages/{message_id}:
@@ -240,6 +258,24 @@ paths:
           in: query
           required: false
           type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Independent directional filter that
+            narrows the focal predicate through AND (matches messages whose
+            src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+            independent direction sets; both apply when both are present.
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Independent directional filter that
+            narrows the focal predicate through AND (matches messages whose
+            dst_chain_id is in this set). A destination filter excludes messages with a
+            NULL destination through normal SQL semantics.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainService
   /api/v1/interchain/messages:byTx/{tx_hash}:
@@ -320,6 +356,24 @@ paths:
           type: string
         - name: bridge_ids
           description: Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Independent directional filter that
+            narrows the focal predicate through AND (matches messages whose
+            src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+            independent direction sets; both apply when both are present.
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Independent directional filter that
+            narrows the focal predicate through AND (matches messages whose
+            dst_chain_id is in this set). A destination filter excludes messages with a
+            NULL destination through normal SQL semantics.
           in: query
           required: false
           type: string
@@ -414,6 +468,23 @@ paths:
           in: query
           required: false
           type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Independent directional filter that
+            narrows the focal predicate through AND. Matched by the transfer's own token
+            source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+            independent direction sets; both apply when both are present.
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Independent directional filter that
+            narrows the focal predicate through AND. Matched by the transfer's own token
+            destination chain (token_dst_chain_id).
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainService
   /api/v1/interchain/transfers:byAddress/{address}:
@@ -504,6 +575,23 @@ paths:
           in: query
           required: false
           type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Independent directional filter that
+            narrows the focal predicate through AND. Matched by the transfer's own token
+            source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+            independent direction sets; both apply when both are present.
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Independent directional filter that
+            narrows the focal predicate through AND. Matched by the transfer's own token
+            destination chain (token_dst_chain_id).
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainService
   /api/v1/interchain/transfers:byTx/{tx_hash}:
@@ -591,6 +679,23 @@ paths:
           type: string
         - name: bridge_ids
           description: Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Independent directional filter that
+            narrows the focal predicate through AND. Matched by the transfer's own token
+            source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+            independent direction sets; both apply when both are present.
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Independent directional filter that
+            narrows the focal predicate through AND. Matched by the transfer's own token
+            destination chain (token_dst_chain_id).
           in: query
           required: false
           type: string
@@ -903,6 +1008,24 @@ paths:
           in: query
           required: false
           type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Independent directional filter that
+            narrows the focal predicate through AND. src_chain_ids and dst_chain_ids
+            are independent direction sets; both apply when both are present. The
+            message counter matches message src/dst chains; the transfer counter
+            matches the transfer's own token src/dst chains.
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Independent directional filter that
+            narrows the focal predicate through AND. A destination filter excludes
+            messages with a NULL destination through normal SQL semantics.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainStatisticsService
   /api/v1/stats/daily:
@@ -940,6 +1063,24 @@ paths:
           type: string
         - name: bridge_ids
           description: Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Independent directional filter that
+            narrows the focal predicate through AND. src_chain_ids and dst_chain_ids
+            are independent direction sets; both apply when both are present. The
+            message counter matches message src/dst chains; the transfer counter
+            matches the transfer's own token src/dst chains.
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Independent directional filter that
+            narrows the focal predicate through AND. A destination filter excludes
+            messages with a NULL destination through normal SQL semantics.
           in: query
           required: false
           type: string
@@ -1353,9 +1494,10 @@ definitions:
         type: string
     description: |-
       Cursor for list pagination (request input and next/prev response params).
-      Page tokens and raw cursor fields are only valid within the same filter
-      combination (`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`, and
-      any tx_hash/address scope). Changing filters mid-pagination is a client error.
+      Page tokens and raw cursor fields are only valid within the same complete
+      filter combination (`home_chain_id`, `counterparty_chain_ids`,
+      `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, and any tx_hash/address
+      scope). Changing any of those filters mid-pagination is a client error.
   v1SortOrder:
     type: string
     enum:
