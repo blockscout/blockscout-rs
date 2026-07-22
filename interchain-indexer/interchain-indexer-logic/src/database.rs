@@ -29,6 +29,22 @@ use crate::{
     },
 };
 
+/// Outcome of a public message-details lookup.
+///
+/// Ambiguity (the same public message ID under more than one bridge) is a valid
+/// data outcome, not a database failure — it stays in the `Ok` variant so the
+/// API boundary can map it to `FailedPrecondition` rather than an internal error.
+// The `Found` variant is intentionally unboxed: this outcome is produced once
+// per single-message read and immediately destructured at the call site, so the
+// size difference does not matter here.
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
+pub enum CrosschainMessageLookup {
+    Found(crosschain_messages::Model, Vec<crosschain_transfers::Model>),
+    NotFound,
+    Ambiguous,
+}
+
 pub struct InterchainTotalCounters {
     pub timestamp: NaiveDateTime,
     pub total_messages: u64,
@@ -1749,11 +1765,20 @@ impl InterchainDatabase {
         Ok((items, pagination))
     }
 
+    /// Looks up a single logical message by its public ID, optionally qualified
+    /// by `bridge_id`.
+    ///
+    /// The same public ID can exist under multiple bridges. When `bridge_id` is
+    /// `None` the query is bounded to two candidate rows so a second match can be
+    /// reported as [`CrosschainMessageLookup::Ambiguous`] without loading an
+    /// unbounded result set or picking an arbitrary winner. When `bridge_id` is
+    /// `Some`, the bridge predicate is applied to whichever public-ID predicate
+    /// is used, so a native/long ID is qualified as safely as a numeric ID.
     pub async fn get_crosschain_message(
         &self,
         message_id: Vec<u8>,
-    ) -> anyhow::Result<Option<(crosschain_messages::Model, Vec<crosschain_transfers::Model>)>>
-    {
+        bridge_id: Option<i32>,
+    ) -> anyhow::Result<CrosschainMessageLookup> {
         self.db
             .transaction(|tx| {
                 Box::pin(async move {
@@ -1769,25 +1794,42 @@ impl InterchainDatabase {
                         Expr::col(crosschain_messages::Column::Id).eq(i64::from_be_bytes(buf))
                     };
 
-                    let query = crosschain_messages::Entity::find().filter(f);
-
-                    match query.one(tx).await {
-                        Ok(Some(msg)) => {
-                            let transfers = crosschain_transfers::Entity::find()
-                                .filter(crosschain_transfers::Column::MessageId.eq(msg.id))
-                                .filter(crosschain_transfers::Column::BridgeId.eq(msg.bridge_id))
-                                .all(tx)
-                                .await?;
-
-                            Ok(Some((msg, transfers)))
-                        }
-                        Ok(None) => Ok(None),
-                        Err(e) => Err(e),
+                    let mut query = crosschain_messages::Entity::find().filter(f);
+                    if let Some(bridge_id) = bridge_id {
+                        query = query.filter(crosschain_messages::Column::BridgeId.eq(bridge_id));
                     }
+
+                    // Select the single message row. Without a bridge qualifier the
+                    // public ID may match more than one bridge; fetch at most two
+                    // candidates to detect ambiguity without an unbounded scan or an
+                    // arbitrary `.one()` winner.
+                    let message = if bridge_id.is_some() {
+                        query.one(tx).await?
+                    } else {
+                        let mut candidates = query.limit(2).all(tx).await?;
+                        if candidates.len() > 1 {
+                            return Ok(CrosschainMessageLookup::Ambiguous);
+                        }
+                        candidates.pop()
+                    };
+
+                    let Some(msg) = message else {
+                        return Ok(CrosschainMessageLookup::NotFound);
+                    };
+
+                    // Load transfers by the selected row's composite key so a
+                    // qualified response never mixes another bridge's transfers.
+                    let transfers = crosschain_transfers::Entity::find()
+                        .filter(crosschain_transfers::Column::MessageId.eq(msg.id))
+                        .filter(crosschain_transfers::Column::BridgeId.eq(msg.bridge_id))
+                        .all(tx)
+                        .await?;
+
+                    Ok(CrosschainMessageLookup::Found(msg, transfers))
                 })
             })
             .await
-            .map_err(|e| e.into())
+            .map_err(|e: sea_orm::TransactionError<DbErr>| e.into())
     }
 
     // VIEW TABLE: crosschain_transfers
@@ -2625,11 +2667,21 @@ mod tests {
         TransactionTrait, prelude::BigDecimal,
     };
 
-    use super::JoinedTransfer;
+    use super::{CrosschainMessageLookup, JoinedTransfer};
     use crate::{
         ChainBridgeFilter, InterchainDatabase, MessagePathStatsRow,
         test_utils::{init_db, mock_db::fill_mock_interchain_database},
     };
+
+    /// Unwraps a [`CrosschainMessageLookup::Found`] or panics with the actual variant.
+    fn expect_found(
+        lookup: CrosschainMessageLookup,
+    ) -> (crosschain_messages::Model, Vec<crosschain_transfers::Model>) {
+        match lookup {
+            CrosschainMessageLookup::Found(msg, transfers) => (msg, transfers),
+            other => panic!("expected Found, got {other:?}"),
+        }
+    }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -2822,20 +2874,24 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn get_crosschain_message_handles_pk_and_native_ids() {
-        let db = init_db("get_crosschain_message_handles_pk_and_native_ids").await;
+    async fn get_crosschain_message_unique_ids_return_found() {
+        let db = init_db("get_crosschain_message_unique_ids_return_found").await;
         fill_mock_interchain_database(&db).await;
 
         let interchain_db = InterchainDatabase::new(db.client());
 
-        let (msg, transfers) = interchain_db
-            .get_crosschain_message(1001i64.to_be_bytes().to_vec())
-            .await
-            .unwrap()
-            .unwrap();
+        // Unique numeric ID, unqualified -> Found.
+        let (msg, transfers) = expect_found(
+            interchain_db
+                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), None)
+                .await
+                .unwrap(),
+        );
         assert_eq!(msg.id, 1001);
+        assert_eq!(msg.bridge_id, 1);
         assert_eq!(transfers.len(), 1);
 
+        // Unique long/native ID, unqualified -> Found.
         let native_id = vec![9u8; 16];
         crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
             id: Set(2001),
@@ -2850,13 +2906,246 @@ mod tests {
         .await
         .unwrap();
 
-        let (msg, transfers) = interchain_db
-            .get_crosschain_message(native_id.clone())
-            .await
-            .unwrap()
-            .unwrap();
+        let (msg, transfers) = expect_found(
+            interchain_db
+                .get_crosschain_message(native_id.clone(), None)
+                .await
+                .unwrap(),
+        );
         assert_eq!(msg.native_id, Some(native_id));
         assert!(transfers.is_empty());
+
+        // In-range but nonexistent qualifier -> NotFound. (Numeric ID 1001 exists
+        // only under bridge 1.)
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), Some(2))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::NotFound
+        ));
+
+        // Wholly nonexistent numeric ID, unqualified -> NotFound.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(9999i64.to_be_bytes().to_vec(), None)
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::NotFound
+        ));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_crosschain_message_numeric_collision_is_ambiguous_until_qualified() {
+        let db =
+            init_db("get_crosschain_message_numeric_collision_is_ambiguous_until_qualified").await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        // Same numeric id (3001) under bridge 1 and bridge 2, with distinct
+        // payloads so a wrong-bridge selection cannot pass silently.
+        crosschain_messages::Entity::insert_many([
+            crosschain_messages::ActiveModel {
+                id: Set(3001),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                payload: Set(Some(vec![0xB1])),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(3001),
+                bridge_id: Set(2),
+                status: Set(MessageStatus::Completed),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(250)),
+                payload: Set(Some(vec![0xB2])),
+                ..Default::default()
+            },
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        crosschain_transfers::Entity::insert_many([
+            crosschain_transfers::ActiveModel {
+                id: Set(101),
+                message_id: Set(3001),
+                bridge_id: Set(1),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(100),
+                src_amount: Set(Some(BigDecimal::from(11u32))),
+                dst_amount: Set(Some(BigDecimal::from(11u32))),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+            crosschain_transfers::ActiveModel {
+                id: Set(102),
+                message_id: Set(3001),
+                bridge_id: Set(2),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(250),
+                src_amount: Set(Some(BigDecimal::from(22u32))),
+                dst_amount: Set(Some(BigDecimal::from(22u32))),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let id_bytes = 3001i64.to_be_bytes().to_vec();
+
+        // Unqualified numeric collision -> Ambiguous.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id_bytes.clone(), None)
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::Ambiguous
+        ));
+
+        // Qualified with bridge 1 -> that distinct row and only its transfers.
+        let (msg, transfers) = expect_found(
+            interchain_db
+                .get_crosschain_message(id_bytes.clone(), Some(1))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(msg.bridge_id, 1);
+        assert_eq!(msg.payload, Some(vec![0xB1]));
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(transfers[0].id, 101);
+        assert_eq!(transfers[0].bridge_id, 1);
+
+        // Qualified with bridge 2 -> the other distinct row and only its transfers.
+        let (msg, transfers) = expect_found(
+            interchain_db
+                .get_crosschain_message(id_bytes, Some(2))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(msg.bridge_id, 2);
+        assert_eq!(msg.payload, Some(vec![0xB2]));
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(transfers[0].id, 102);
+        assert_eq!(transfers[0].bridge_id, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_crosschain_message_native_collision_is_ambiguous_until_qualified() {
+        let db =
+            init_db("get_crosschain_message_native_collision_is_ambiguous_until_qualified").await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        // Same long/native ID under bridge 1 and bridge 2 (distinct PK ids and
+        // payloads).
+        let native_id = vec![7u8; 16];
+        crosschain_messages::Entity::insert_many([
+            crosschain_messages::ActiveModel {
+                id: Set(4001),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                native_id: Set(Some(native_id.clone())),
+                payload: Set(Some(vec![0xC1])),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(4002),
+                bridge_id: Set(2),
+                status: Set(MessageStatus::Completed),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(250)),
+                native_id: Set(Some(native_id.clone())),
+                payload: Set(Some(vec![0xC2])),
+                ..Default::default()
+            },
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        crosschain_transfers::Entity::insert_many([
+            crosschain_transfers::ActiveModel {
+                id: Set(103),
+                message_id: Set(4001),
+                bridge_id: Set(1),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(100),
+                src_amount: Set(Some(BigDecimal::from(33u32))),
+                dst_amount: Set(Some(BigDecimal::from(33u32))),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+            crosschain_transfers::ActiveModel {
+                id: Set(104),
+                message_id: Set(4002),
+                bridge_id: Set(2),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(250),
+                src_amount: Set(Some(BigDecimal::from(44u32))),
+                dst_amount: Set(Some(BigDecimal::from(44u32))),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        // Unqualified native collision -> Ambiguous.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(native_id.clone(), None)
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::Ambiguous
+        ));
+
+        // Qualified with bridge 1 -> that distinct row and only its transfers.
+        let (msg, transfers) = expect_found(
+            interchain_db
+                .get_crosschain_message(native_id.clone(), Some(1))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(msg.id, 4001);
+        assert_eq!(msg.bridge_id, 1);
+        assert_eq!(msg.payload, Some(vec![0xC1]));
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(transfers[0].id, 103);
+        assert_eq!(transfers[0].bridge_id, 1);
+
+        // Qualified with bridge 2 -> the other distinct row and only its transfers.
+        let (msg, transfers) = expect_found(
+            interchain_db
+                .get_crosschain_message(native_id, Some(2))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(msg.id, 4002);
+        assert_eq!(msg.bridge_id, 2);
+        assert_eq!(msg.payload, Some(vec![0xC2]));
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(transfers[0].id, 104);
+        assert_eq!(transfers[0].bridge_id, 2);
     }
 
     #[tokio::test]
