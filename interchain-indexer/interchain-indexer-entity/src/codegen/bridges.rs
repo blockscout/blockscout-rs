@@ -34,6 +34,12 @@ pub enum Relation {
     IndexerFailures,
     #[sea_orm(has_many = "super::pending_messages::Entity")]
     PendingMessages,
+    #[sea_orm(has_many = "super::stats_asset_edges::Entity")]
+    StatsAssetEdges,
+    #[sea_orm(has_many = "super::stats_messages::Entity")]
+    StatsMessages,
+    #[sea_orm(has_many = "super::stats_messages_days::Entity")]
+    StatsMessagesDays,
 }
 
 impl Related<super::bridge_contracts::Entity> for Entity {
@@ -63,6 +69,24 @@ impl Related<super::indexer_failures::Entity> for Entity {
 impl Related<super::pending_messages::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::PendingMessages.def()
+    }
+}
+
+impl Related<super::stats_asset_edges::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::StatsAssetEdges.def()
+    }
+}
+
+impl Related<super::stats_messages::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::StatsMessages.def()
+    }
+}
+
+impl Related<super::stats_messages_days::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::StatsMessagesDays.def()
     }
 }
 

@@ -14,8 +14,8 @@ enum SortOrder {
 
 // Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
 // Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
-// Tokens are only valid with the same `counterparty_chain_ids` and `q` as the
-// request that produced them.
+// Tokens are only valid with the same `counterparty_chain_ids`, `bridge_ids`,
+// `q`, `sort`, and `order` as the request that produced them.
 message BridgedTokensListPagination {
   optional string page_token = 1;
   optional string direction = 2;
@@ -39,8 +39,11 @@ message GetMessagePathsRequest {
   optional string from_date = 2; // YYYY-MM-DD
   optional string to_date = 3;   // YYYY-MM-DD
   optional string counterparty_chain_ids = 4;
-  // Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
-  // with a non-blank value are rejected with InvalidArgument.
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges). Restricts
+  // the message paths to the selected bridges; bridge rows are summed per
+  // directional edge. Absent or blank means all bridges. Composes with
+  // `counterparty_chain_ids` through AND. Malformed/out-of-range values are
+  // rejected with InvalidArgument.
   optional string bridge_ids = 5;
 }
 
@@ -97,8 +100,12 @@ message GetBridgedTokensRequest {
   // Comma-separated chain ids. Restricts counterparty chains of the edges
   // aggregated for `{chain_id}`.
   optional string counterparty_chain_ids = 13;
-  // Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
-  // with a non-blank value are rejected with InvalidArgument.
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges). Restricts
+  // the aggregated edges to the selected bridges; bridge rows are summed per
+  // asset before pagination. Absent or blank means all bridges. Composes with
+  // `counterparty_chain_ids` through AND. Malformed/out-of-range values are
+  // rejected with InvalidArgument. Page tokens are scoped to the same bridge
+  // and counterparty filters that produced them.
   optional string bridge_ids = 14;
 }
 
@@ -123,12 +130,6 @@ message GetChainsStatsRequest {
   optional string q = 9;
   // Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]
   StatsChainsSort sort = 10;
-  // Comma-separated chain ids. DECLARED BUT NOT SUPPORTED YET — requests
-  // with a non-blank value are rejected with InvalidArgument.
-  optional string counterparty_chain_ids = 11;
-  // Comma-separated bridge ids. DECLARED BUT NOT SUPPORTED YET — requests
-  // with a non-blank value are rejected with InvalidArgument.
-  optional string bridge_ids = 12;
 }
 
 message StatsBridgedTokenItem {

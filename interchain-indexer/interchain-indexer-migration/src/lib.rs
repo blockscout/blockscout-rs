@@ -5,7 +5,7 @@ pub use sea_orm_migration::prelude::*;
 mod m20251030_000001_initial;
 mod m20260312_175120_add_stats_tables;
 mod m20260508_082944_add_amb_indexer;
-mod m20260720_120000_add_read_filter_indexes;
+mod m20260720_120000_add_read_filters_and_bridge_stats;
 
 pub struct Migrator;
 
@@ -16,7 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20251030_000001_initial::Migration),
             Box::new(m20260312_175120_add_stats_tables::Migration),
             Box::new(m20260508_082944_add_amb_indexer::Migration),
-            Box::new(m20260720_120000_add_read_filter_indexes::Migration),
+            Box::new(m20260720_120000_add_read_filters_and_bridge_stats::Migration),
         ]
     }
 }

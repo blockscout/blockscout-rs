@@ -280,6 +280,7 @@ pub async fn list_bridged_token_stats_for_chain(
     db: &impl ConnectionTrait,
     chain_id: i64,
     counterparty_chain_ids: Option<&[i64]>,
+    bridge_ids: Option<&[i32]>,
     params: StatsListQuery<'_, BridgedTokensSortField, BridgedTokensPaginationLogic>,
 ) -> Result<
     (
@@ -321,7 +322,7 @@ pub async fn list_bridged_token_stats_for_chain(
 
     let mut all_values = vec![Value::BigInt(Some(chain_id))];
 
-    let edges_where = match counterparty_chain_ids.filter(|s| !s.is_empty()) {
+    let focal_counterparty = match counterparty_chain_ids.filter(|s| !s.is_empty()) {
         Some(s) => {
             let start = all_values.len() + 1;
             let in_list = (0..s.len())
@@ -337,6 +338,24 @@ pub async fn list_bridged_token_stats_for_chain(
         }
         None => "src_chain_id = $1 OR dst_chain_id = $1".to_string(),
     };
+
+    // Parenthesize the focal/counterparty OR before AND-ing the optional bridge
+    // predicate; otherwise SQL precedence would admit edges from unselected
+    // bridges. The bridge filter stays inside the per-asset aggregate so that
+    // multiple bridge rows collapse into one asset row before search, cursor
+    // predicates, ordering, and LIMIT are applied.
+    let mut edges_where = format!("({focal_counterparty})");
+    if let Some(b) = bridge_ids.filter(|s| !s.is_empty()) {
+        let start = all_values.len() + 1;
+        let in_list = (0..b.len())
+            .map(|i| format!("${}", start + i))
+            .collect::<Vec<_>>()
+            .join(", ");
+        for &id in b {
+            all_values.push(Value::Int(Some(id)));
+        }
+        edges_where.push_str(&format!(" AND bridge_id IN ({in_list})"));
+    }
 
     let mut name_filter_sql = String::new();
     if let Some(pat) = q_pattern {
@@ -503,8 +522,8 @@ ORDER BY sat.stats_asset_id, sat.chain_id, sat.token_address
 mod tests {
     use super::*;
     use interchain_indexer_entity::{
-        chains, sea_orm_active_enums::EdgeAmountSide, stats_asset_edges, stats_asset_tokens,
-        stats_assets, tokens,
+        bridges, chains, sea_orm_active_enums::EdgeAmountSide, stats_asset_edges,
+        stats_asset_tokens, stats_assets, tokens,
     };
     use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait, prelude::BigDecimal};
 
@@ -525,11 +544,33 @@ mod tests {
         chains::Entity::insert_many(models).exec(db).await.unwrap();
     }
 
+    /// Ensures a `bridges` row exists (edges now carry a non-null bridge FK).
+    async fn seed_bridge(db: &DatabaseConnection, id: i32) {
+        let _ = bridges::Entity::insert(bridges::ActiveModel {
+            id: Set(id),
+            name: Set(format!("bridge-{id}")),
+            ..Default::default()
+        })
+        .exec(db)
+        .await;
+    }
+
     async fn seed_asset_edges(
         db: &DatabaseConnection,
         name: Option<String>,
         edges: Vec<(i64, i64, i64)>,
     ) -> i64 {
+        seed_asset_edges_on_bridge(db, name, 1, edges).await
+    }
+
+    /// Like [`seed_asset_edges`] but attributes every edge to `bridge_id`.
+    async fn seed_asset_edges_on_bridge(
+        db: &DatabaseConnection,
+        name: Option<String>,
+        bridge_id: i32,
+        edges: Vec<(i64, i64, i64)>,
+    ) -> i64 {
+        seed_bridge(db, bridge_id).await;
         let id = stats_assets::Entity::insert(stats_assets::ActiveModel {
             name: Set(name),
             ..Default::default()
@@ -538,9 +579,22 @@ mod tests {
         .await
         .unwrap()
         .id;
+        add_asset_edges_on_bridge(db, id, bridge_id, edges).await;
+        id
+    }
+
+    /// Adds edges on `bridge_id` to an existing stats asset.
+    async fn add_asset_edges_on_bridge(
+        db: &DatabaseConnection,
+        stats_asset_id: i64,
+        bridge_id: i32,
+        edges: Vec<(i64, i64, i64)>,
+    ) {
+        seed_bridge(db, bridge_id).await;
         for (src, dst, cnt) in edges {
             stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-                stats_asset_id: Set(id),
+                stats_asset_id: Set(stats_asset_id),
+                bridge_id: Set(bridge_id),
                 src_chain_id: Set(src),
                 dst_chain_id: Set(dst),
                 transfers_count: Set(cnt),
@@ -552,7 +606,6 @@ mod tests {
             .await
             .unwrap();
         }
-        id
     }
 
     #[tokio::test]
@@ -576,6 +629,7 @@ mod tests {
         let (rows, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
+            None,
             None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
@@ -620,6 +674,7 @@ mod tests {
             db.as_ref(),
             1,
             None,
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::OutputTransfers,
                 order: StatsSortOrder::Desc,
@@ -650,6 +705,7 @@ mod tests {
         let (rows, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
+            None,
             None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
@@ -684,6 +740,7 @@ mod tests {
             db.as_ref(),
             1,
             None,
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -704,6 +761,7 @@ mod tests {
             db.as_ref(),
             1,
             None,
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -722,6 +780,7 @@ mod tests {
         let (p1b, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
+            None,
             None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
@@ -750,6 +809,7 @@ mod tests {
         let (rows, pag) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
+            None,
             None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
@@ -836,6 +896,7 @@ mod tests {
             .get_bridged_tokens_for_chain(
                 1,
                 None,
+                None,
                 StatsListQuery {
                     sort: BridgedTokensSortField::Name,
                     order: StatsSortOrder::Asc,
@@ -864,6 +925,7 @@ mod tests {
         let (rows, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
+            None,
             None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
@@ -912,6 +974,7 @@ mod tests {
             db.as_ref(),
             1,
             None,
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -929,6 +992,7 @@ mod tests {
         let (rows, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
+            None,
             None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
@@ -959,6 +1023,7 @@ mod tests {
             db.as_ref(),
             1,
             None,
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -988,6 +1053,7 @@ mod tests {
             db.as_ref(),
             1,
             None,
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -1007,6 +1073,7 @@ mod tests {
             db.as_ref(),
             1,
             None,
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -1024,6 +1091,7 @@ mod tests {
         let (p1b, _) = list_bridged_token_stats_for_chain(
             db.as_ref(),
             1,
+            None,
             None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
@@ -1059,6 +1127,7 @@ mod tests {
             db.as_ref(),
             1,
             Some(&[2, 3]),
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -1095,6 +1164,7 @@ mod tests {
             db.as_ref(),
             1,
             Some(&[1]),
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -1132,6 +1202,7 @@ mod tests {
             db.as_ref(),
             1,
             Some(&counterparties),
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -1152,6 +1223,7 @@ mod tests {
             db.as_ref(),
             1,
             Some(&counterparties),
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -1170,6 +1242,7 @@ mod tests {
             db.as_ref(),
             1,
             Some(&counterparties),
+            None,
             StatsListQuery {
                 sort: BridgedTokensSortField::Name,
                 order: StatsSortOrder::Asc,
@@ -1183,5 +1256,126 @@ mod tests {
         .unwrap();
         assert_eq!(p1b[0].name.as_deref(), Some("CpA"));
         assert_eq!(p1b[0].stats_asset_id, p1[0].stats_asset_id);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_two_bridges_same_edge_separate_rows_collapse_and_filter() {
+        let g = init_db("bridged_tokens_two_bridges_same_edge").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        seed_bridge(db.as_ref(), 1).await;
+        seed_bridge(db.as_ref(), 2).await;
+
+        // Same logical asset on the same chain edge over two different bridges:
+        // two distinct edge rows.
+        let aid =
+            seed_asset_edges_on_bridge(db.as_ref(), Some("Multi".into()), 1, vec![(1, 2, 3)]).await;
+        add_asset_edges_on_bridge(db.as_ref(), aid, 2, vec![(1, 2, 5)]).await;
+
+        let row_count = stats_asset_edges::Entity::find()
+            .all(db.as_ref())
+            .await
+            .unwrap()
+            .len();
+        assert_eq!(row_count, 2, "two bridge rows for one asset/edge");
+
+        let query = |bridges: Option<&'static [i32]>| {
+            let db = db.clone();
+            async move {
+                list_bridged_token_stats_for_chain(
+                    db.as_ref(),
+                    1,
+                    None,
+                    bridges,
+                    StatsListQuery {
+                        sort: BridgedTokensSortField::Name,
+                        order: StatsSortOrder::Asc,
+                        page_size: 50,
+                        last_page: false,
+                        input_pagination: None,
+                        q: None,
+                    },
+                )
+                .await
+                .unwrap()
+                .0
+            }
+        };
+
+        // Unfiltered collapses both bridge rows into one asset row.
+        let all = query(None).await;
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].output_transfers_count, 8);
+
+        let only_1 = query(Some(&[1])).await;
+        assert_eq!(only_1.len(), 1);
+        assert_eq!(only_1[0].output_transfers_count, 3);
+
+        let only_2 = query(Some(&[2])).await;
+        assert_eq!(only_2.len(), 1);
+        assert_eq!(only_2[0].output_transfers_count, 5);
+
+        let both = query(Some(&[1, 2])).await;
+        assert_eq!(both.len(), 1);
+        assert_eq!(both[0].output_transfers_count, 8);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_pagination_after_bridge_collapse() {
+        let g = init_db("bridged_tokens_page_after_collapse").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        seed_bridge(db.as_ref(), 1).await;
+        seed_bridge(db.as_ref(), 2).await;
+
+        // Two assets, each moving over the same edge on two bridges. After
+        // collapse there must be exactly two paginated asset rows, not four.
+        for nm in ["A", "B"] {
+            let aid =
+                seed_asset_edges_on_bridge(db.as_ref(), Some(nm.into()), 1, vec![(1, 2, 1)]).await;
+            add_asset_edges_on_bridge(db.as_ref(), aid, 2, vec![(1, 2, 1)]).await;
+        }
+
+        let (p1, pag1) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            None,
+            None,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(p1.len(), 1);
+        assert_eq!(p1[0].name.as_deref(), Some("A"));
+        assert_eq!(p1[0].total_transfers_count, 2, "collapsed across bridges");
+        let next_tok = pag1.next_marker.expect("next");
+
+        let (p2, _) = list_bridged_token_stats_for_chain(
+            db.as_ref(),
+            1,
+            None,
+            None,
+            StatsListQuery {
+                sort: BridgedTokensSortField::Name,
+                order: StatsSortOrder::Asc,
+                page_size: 1,
+                last_page: false,
+                input_pagination: Some(next_tok),
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(p2.len(), 1);
+        assert_eq!(p2[0].name.as_deref(), Some("B"));
     }
 }

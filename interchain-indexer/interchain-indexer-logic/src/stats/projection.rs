@@ -39,7 +39,14 @@ pub fn token_keys_for_stats_enrichment_from_transfer_models(
     s.into_iter().collect()
 }
 
-fn finalized_message_stats_condition() -> Condition {
+/// Shared stats-eligibility predicate over a `crosschain_messages` row joined to
+/// its `bridges` row: a message (or a transfer's parent message) contributes to
+/// stats when it is `Completed` (any bridge) or `Failed` on an AMB bridge.
+///
+/// This is the single source of truth for finality: live projection here and
+/// historical backfill candidate selection in `database.rs` both reuse it so
+/// they can never diverge (e.g. backfill silently dropping failed AMB rows).
+pub(crate) fn finalized_message_stats_condition() -> Condition {
     Condition::any()
         .add(crosschain_messages::Column::Status.eq(MessageStatus::Completed))
         .add(
@@ -102,18 +109,23 @@ pub async fn project_messages_batch(
         return Ok(0);
     }
 
-    let mut by_edge: HashMap<(i64, i64), i64> = HashMap::new();
-    let mut by_edge_day: HashMap<(chrono::NaiveDate, i64, i64), i64> = HashMap::new();
+    // Aggregate deltas are bridge-qualified: the same directional chain edge on
+    // two different bridges must never be merged into one stats row.
+    let mut by_edge: HashMap<(i32, i64, i64), i64> = HashMap::new();
+    let mut by_edge_day: HashMap<(chrono::NaiveDate, i32, i64, i64), i64> = HashMap::new();
     for m in &rows {
         let dst = m.dst_chain_id.expect("filtered is_not_null");
-        *by_edge.entry((m.src_chain_id, dst)).or_insert(0) += 1;
+        *by_edge
+            .entry((m.bridge_id, m.src_chain_id, dst))
+            .or_insert(0) += 1;
         *by_edge_day
-            .entry((m.init_timestamp.date(), m.src_chain_id, dst))
+            .entry((m.init_timestamp.date(), m.bridge_id, m.src_chain_id, dst))
             .or_insert(0) += 1;
     }
 
-    for ((src_chain_id, dst_chain_id), messages_delta) in by_edge {
+    for ((bridge_id, src_chain_id, dst_chain_id), messages_delta) in by_edge {
         let model = stats_messages::ActiveModel {
+            bridge_id: Set(bridge_id),
             src_chain_id: Set(src_chain_id),
             dst_chain_id: Set(dst_chain_id),
             messages_count: Set(messages_delta),
@@ -122,6 +134,7 @@ pub async fn project_messages_batch(
         stats_messages::Entity::insert(model)
             .on_conflict(
                 OnConflict::columns([
+                    stats_messages::Column::BridgeId,
                     stats_messages::Column::SrcChainId,
                     stats_messages::Column::DstChainId,
                 ])
@@ -140,9 +153,10 @@ pub async fn project_messages_batch(
             .await?;
     }
 
-    for ((date, src_chain_id, dst_chain_id), messages_delta) in by_edge_day {
+    for ((date, bridge_id, src_chain_id, dst_chain_id), messages_delta) in by_edge_day {
         let model = stats_messages_days::ActiveModel {
             date: Set(date),
+            bridge_id: Set(bridge_id),
             src_chain_id: Set(src_chain_id),
             dst_chain_id: Set(dst_chain_id),
             messages_count: Set(messages_delta),
@@ -152,6 +166,7 @@ pub async fn project_messages_batch(
             .on_conflict(
                 OnConflict::columns([
                     stats_messages_days::Column::Date,
+                    stats_messages_days::Column::BridgeId,
                     stats_messages_days::Column::SrcChainId,
                     stats_messages_days::Column::DstChainId,
                 ])
@@ -609,7 +624,10 @@ fn transfer_amount_for_side(
         .unwrap_or_else(|| BigDecimal::from(0u64))
 }
 
-type EdgeKey = (i64, i64, i64);
+// `(stats_asset_id, bridge_id, src_chain_id, dst_chain_id)` — edges are
+// bridge-qualified: the same logical asset moving over the same chain edge on
+// two different bridges is two distinct rows.
+type EdgeKey = (i64, i32, i64, i64);
 
 async fn load_stats_asset_edges_for_keys(
     tx: &DatabaseTransaction,
@@ -623,13 +641,15 @@ async fn load_stats_asset_edges_for_keys(
         uniq.insert(*k);
     }
     let list: Vec<EdgeKey> = uniq.into_iter().collect();
-    let batch_size = (crate::bulk::PG_BIND_PARAM_LIMIT / 3).max(1);
+    // Four bind params per tuple now that the key carries bridge_id.
+    let batch_size = (crate::bulk::PG_BIND_PARAM_LIMIT / 4).max(1);
     let mut out = HashMap::new();
     for batch in list.chunks(batch_size) {
         let rows = stats_asset_edges::Entity::find()
             .filter(
                 Expr::tuple([
                     Expr::col(stats_asset_edges::Column::StatsAssetId).into(),
+                    Expr::col(stats_asset_edges::Column::BridgeId).into(),
                     Expr::col(stats_asset_edges::Column::SrcChainId).into(),
                     Expr::col(stats_asset_edges::Column::DstChainId).into(),
                 ])
@@ -638,7 +658,15 @@ async fn load_stats_asset_edges_for_keys(
             .all(tx)
             .await?;
         for r in rows {
-            out.insert((r.stats_asset_id, r.src_chain_id, r.dst_chain_id), r);
+            out.insert(
+                (
+                    r.stats_asset_id,
+                    r.bridge_id,
+                    r.src_chain_id,
+                    r.dst_chain_id,
+                ),
+                r,
+            );
         }
     }
     Ok(out)
@@ -646,6 +674,7 @@ async fn load_stats_asset_edges_for_keys(
 
 fn reject_edge_decimals_mismatch(
     stats_asset_id: i64,
+    bridge_id: i32,
     src_chain_id: i64,
     dst_chain_id: i64,
     stored: i16,
@@ -653,6 +682,7 @@ fn reject_edge_decimals_mismatch(
 ) -> DbErr {
     tracing::warn!(
         stats_asset_id,
+        bridge_id,
         src_chain_id,
         dst_chain_id,
         stored,
@@ -660,7 +690,7 @@ fn reject_edge_decimals_mismatch(
         "stats projection: rejecting stats_asset_edges update due to decimals mismatch"
     );
     DbErr::Custom(format!(
-        "stats_asset_edges ({stats_asset_id},{src_chain_id},{dst_chain_id}): conflicting decimals (stored {stored}, incoming {inc})"
+        "stats_asset_edges ({stats_asset_id},{bridge_id},{src_chain_id},{dst_chain_id}): conflicting decimals (stored {stored}, incoming {inc})"
     ))
 }
 
@@ -683,6 +713,7 @@ fn edge_transfer_amount_for_side(
     {
         return Err(reject_edge_decimals_mismatch(
             stats_asset_id,
+            transfer.bridge_id,
             transfer.token_src_chain_id,
             transfer.token_dst_chain_id,
             stored,
@@ -843,7 +874,12 @@ pub async fn project_transfers_batch(
     for t in &transfers {
         match ensure_asset_for_transfer(tx, t, &mut token_to_asset).await? {
             Some(asset_id) => {
-                edge_key_per_transfer.push((asset_id, t.token_src_chain_id, t.token_dst_chain_id));
+                edge_key_per_transfer.push((
+                    asset_id,
+                    t.bridge_id,
+                    t.token_src_chain_id,
+                    t.token_dst_chain_id,
+                ));
                 asset_ids.push(asset_id);
                 proj_transfers.push(t.clone());
             }
@@ -856,7 +892,12 @@ pub async fn project_transfers_batch(
     let mut edge_acc: HashMap<EdgeKey, EdgeAccum> = HashMap::new();
 
     for (t, &asset_id) in transfers.iter().zip(&asset_ids) {
-        let edge_key: EdgeKey = (asset_id, t.token_src_chain_id, t.token_dst_chain_id);
+        let edge_key: EdgeKey = (
+            asset_id,
+            t.bridge_id,
+            t.token_src_chain_id,
+            t.token_dst_chain_id,
+        );
         let src_dec = t
             .token_src_address
             .as_ref()
@@ -911,7 +952,7 @@ pub async fn project_transfers_batch(
                 delta_amount,
                 ..
             } => {
-                let (stats_asset_id, src_chain_id, dst_chain_id) = key;
+                let (stats_asset_id, bridge_id, src_chain_id, dst_chain_id) = key;
                 let mut ub = stats_asset_edges::Entity::update_many()
                     .col_expr(
                         stats_asset_edges::Column::TransfersCount,
@@ -926,6 +967,7 @@ pub async fn project_transfers_batch(
                         Expr::current_timestamp().into(),
                     )
                     .filter(stats_asset_edges::Column::StatsAssetId.eq(stats_asset_id))
+                    .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
                     .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
                     .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id));
                 if db_decimals.is_none()
@@ -941,9 +983,10 @@ pub async fn project_transfers_batch(
                 count,
                 cumulative,
             } => {
-                let (stats_asset_id, src_chain_id, dst_chain_id) = key;
+                let (stats_asset_id, bridge_id, src_chain_id, dst_chain_id) = key;
                 stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
                     stats_asset_id: Set(stats_asset_id),
+                    bridge_id: Set(bridge_id),
                     src_chain_id: Set(src_chain_id),
                     dst_chain_id: Set(dst_chain_id),
                     transfers_count: Set(count),
