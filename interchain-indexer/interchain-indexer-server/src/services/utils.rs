@@ -80,6 +80,16 @@ pub fn non_empty<T>(v: Vec<T>) -> Option<Vec<T>> {
     if v.is_empty() { None } else { Some(v) }
 }
 
+/// Checked conversion of an optional request `bridge_id` (`u32`) to the storage
+/// `i32`. Values above `i32::MAX` are client input errors and are rejected with
+/// `InvalidArgument` rather than silently wrapping via `as`.
+pub fn checked_bridge_id(bridge_id: Option<u32>) -> Result<Option<i32>, Status> {
+    bridge_id
+        .map(i32::try_from)
+        .transpose()
+        .map_err(|_| Status::invalid_argument("bridge_id exceeds the supported int32 range"))
+}
+
 pub fn reject_unsupported(param: &str, value: Option<&str>) -> Result<(), Status> {
     match value.map(str::trim) {
         Some(v) if !v.is_empty() => Err(Status::invalid_argument(format!(
@@ -91,7 +101,9 @@ pub fn reject_unsupported(param: &str, value: Option<&str>) -> Result<(), Status
 
 #[cfg(test)]
 mod tests {
-    use super::{non_empty, parse_bridge_ids_csv, parse_chain_ids_csv, reject_unsupported};
+    use super::{
+        checked_bridge_id, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv, reject_unsupported,
+    };
 
     #[test]
     fn parse_chain_ids_csv_accepts_missing_and_empty() {
@@ -158,6 +170,29 @@ mod tests {
             err.message()
                 .contains("invalid bridge_ids value `3000000000`")
         );
+    }
+
+    #[test]
+    fn checked_bridge_id_passes_none_and_in_range() {
+        assert_eq!(checked_bridge_id(None).unwrap(), None);
+        assert_eq!(checked_bridge_id(Some(0)).unwrap(), Some(0));
+        assert_eq!(checked_bridge_id(Some(1)).unwrap(), Some(1));
+        assert_eq!(
+            checked_bridge_id(Some(i32::MAX as u32)).unwrap(),
+            Some(i32::MAX)
+        );
+    }
+
+    #[test]
+    fn checked_bridge_id_rejects_above_i32_max() {
+        let err = checked_bridge_id(Some(i32::MAX as u32 + 1)).expect_err("must reject overflow");
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(
+            err.message()
+                .contains("bridge_id exceeds the supported int32 range")
+        );
+        let err = checked_bridge_id(Some(u32::MAX)).expect_err("must reject overflow");
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 
     #[test]

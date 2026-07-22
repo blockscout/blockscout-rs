@@ -148,6 +148,15 @@ paths:
           in: path
           required: true
           type: string
+        - name: bridge_id
+          description: |-
+            Optional bridge qualifier. Required when message_id exists in more than one
+            bridge. An ambiguous unqualified lookup returns gRPC FailedPrecondition
+            (HTTP 400) with instruction to provide bridge_id.
+          in: query
+          required: false
+          type: integer
+          format: int64
       tags:
         - InterchainService
   /api/v1/interchain/messages:byAddress/{address}:
