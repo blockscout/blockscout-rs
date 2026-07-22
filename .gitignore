@@ -30,3 +30,4 @@ libs/Cargo.lock
 **.decrypted~**
 **.dec**
 /tac-operation-lifecycle/database/
+/.claude/settings.local.json

@@ -1,7 +1,7 @@
 ---
 name: task-to-code
 description: Apply code changes from an existing task handoff under `tmp/tasks/<task-name>/coding-task-X.md`. Use when Claude receives a task name and coding-task index and must implement that prepared coding task strictly, without inventing missing scope or design details.
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Task To Code Skill
