@@ -40,6 +40,7 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 
 service InterchainService {
   rpc GetChains(GetChainsRequest) returns (GetChainsResponse) {}
+  rpc GetBridges(GetBridgesRequest) returns (GetBridgesResponse) {}
   rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse) {}
   rpc GetMessageDetails(GetMessageDetailsRequest) returns (InterchainMessage) {}
   rpc GetMessagesByTransaction(GetMessagesByTransactionRequest) returns (GetMessagesResponse) {}
@@ -51,6 +52,13 @@ service InterchainService {
 }
 
 
+// Cursor for list pagination (request input and next/prev response params).
+// Page tokens and raw cursor fields are only valid within the same complete
+// filter combination (`home_chain_id`, `counterparty_chain_ids`,
+// `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, and any tx_hash/address
+// scope). The cursor does not encode these filters and is not re-validated
+// against them, so changing any filter mid-pagination is unsupported and
+// yields undefined results; callers must restart pagination when filters change.
 message Pagination {
   optional string page_token = 1;
   optional uint64 timestamp = 2;
@@ -76,10 +84,34 @@ message GetMessagesRequest {
   optional string message_id = 6; // Raw pagination field
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional string direction = 8;  // Raw pagination field
+
+  // Filter: only messages touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 9;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 10;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 11;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 12;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // dst_chain_id is in this set). A destination filter excludes messages with a
+  // NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 13;
 }
 
 message GetMessageDetailsRequest {
   string message_id = 1;
+  // Optional bridge qualifier. Required when message_id exists in more than one
+  // bridge. An ambiguous unqualified lookup returns gRPC FailedPrecondition
+  // (HTTP 400) with instruction to provide bridge_id.
+  optional uint32 bridge_id = 2;
 }
 
 message GetMessagesByTransactionRequest {
@@ -98,6 +130,26 @@ message GetMessagesByTransactionRequest {
   optional string message_id = 6; // Raw pagination field
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional string direction = 8;  // Raw pagination field
+
+  // Filter: only messages touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 9;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 10;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 11;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 12;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // dst_chain_id is in this set). A destination filter excludes messages with a
+  // NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 13;
 }
 
 message GetMessagesByAddressRequest {
@@ -116,6 +168,26 @@ message GetMessagesByAddressRequest {
   optional string message_id = 6; // Raw pagination field
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional string direction = 8;  // Raw pagination field
+
+  // Filter: only messages touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 9;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 10;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 11;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // src_chain_id is in this set). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 12;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND (matches messages whose
+  // dst_chain_id is in this set). A destination filter excludes messages with a
+  // NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 13;
 }
 
 message AddressInfo {
@@ -127,6 +199,8 @@ message BridgeInfo {
   string name = 1;
   optional string ui_url = 2;
   optional string docs_url = 3;
+  // Bridge id usable in bridge_ids filters.
+  optional uint32 id = 4;
 }
 
 message ChainInfo {
@@ -143,6 +217,22 @@ message GetChainsRequest {}
 
 message GetChainsResponse {
   repeated ChainInfo items = 1;
+}
+
+message GetBridgesRequest {}
+
+message Bridge {
+  uint32 id = 1;
+  string name = 2;
+  // "lockmint" | "avalanche_native" | "amb"
+  optional string type = 3;
+  bool enabled = 4;
+  optional string ui_url = 5;
+  optional string docs_url = 6;
+}
+
+message GetBridgesResponse {
+  repeated Bridge items = 1;
 }
 
 enum MessageStatus {
@@ -196,6 +286,25 @@ message GetTransfersRequest {
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
+
+  // Filter: only transfers touching this chain (token_src = N OR token_dst = N).
+  // Matched by the transfer's own source/destination chains.
+  optional int64 home_chain_id = 10;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Matched by the transfer's own source/destination chains.
+  optional string counterparty_chain_ids = 11;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 12;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 13;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // destination chain (token_dst_chain_id).
+  optional string dst_chain_ids = 14;
 }
 
 message GetTransfersByTransactionRequest {
@@ -215,6 +324,25 @@ message GetTransfersByTransactionRequest {
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
+
+  // Filter: only transfers touching this chain (token_src = N OR token_dst = N).
+  // Matched by the transfer's own source/destination chains.
+  optional int64 home_chain_id = 10;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Matched by the transfer's own source/destination chains.
+  optional string counterparty_chain_ids = 11;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 12;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 13;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // destination chain (token_dst_chain_id).
+  optional string dst_chain_ids = 14;
 }
 
 message GetTransfersByAddressRequest {
@@ -234,6 +362,25 @@ message GetTransfersByAddressRequest {
   optional uint32 bridge_id = 7;  // Raw pagination field
   optional uint64 index = 8;      // Raw pagination field
   optional string direction = 9;  // Raw pagination field
+
+  // Filter: only transfers touching this chain (token_src = N OR token_dst = N).
+  // Matched by the transfer's own source/destination chains.
+  optional int64 home_chain_id = 10;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Matched by the transfer's own source/destination chains.
+  optional string counterparty_chain_ids = 11;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 12;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // source chain (token_src_chain_id). src_chain_ids and dst_chain_ids are
+  // independent direction sets; both apply when both are present.
+  optional string src_chain_ids = 13;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. Matched by the transfer's own token
+  // destination chain (token_dst_chain_id).
+  optional string dst_chain_ids = 14;
 }
 
 message TokenInfo {

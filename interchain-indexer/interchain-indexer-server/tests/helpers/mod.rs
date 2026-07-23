@@ -35,3 +35,17 @@ where
     test_server::init_server(|| interchain_indexer_server::run(settings), &base).await;
     base
 }
+
+/// Issues a raw GET and returns the HTTP status and JSON body, without the
+/// success-only assertion baked into `test_server::send_get_request`.
+#[allow(dead_code)]
+pub async fn get_raw(base: &Url, route: &str) -> (reqwest::StatusCode, serde_json::Value) {
+    let response = reqwest::Client::new()
+        .get(base.join(route).unwrap())
+        .send()
+        .await
+        .expect("request failed");
+    let status = response.status();
+    let body = response.json().await.expect("body is not JSON");
+    (status, body)
+}

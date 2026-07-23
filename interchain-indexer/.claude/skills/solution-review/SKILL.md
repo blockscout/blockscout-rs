@@ -1,7 +1,7 @@
 ---
 name: solution-review
 description: Review already-applied code changes against the original task statement or task folder artifacts under `tmp/tasks/<task-name>/`. Use when implementation work is done and Claude must verify scope coverage, detect mismatches or regressions, assess verification gaps, and write a review summary before handoff or merge.
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Solution Review Skill

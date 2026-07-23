@@ -199,7 +199,7 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 | `INTERCHAIN_INDEXER__CHAIN_INFO__COOLDOWN_INTERVAL`                     |                          | If the chain name is unknown, do not retry DB query during this interval. Unit: `seconds`                                                                                                                                                                                                                                                                                                                                                                                   | `60`          |
 | `INTERCHAIN_INDEXER__BUFFER_SETTINGS__HOT_TTL`                          |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `10`          |
 | `INTERCHAIN_INDEXER__BUFFER_SETTINGS__MAINTENANCE_INTERVAL`             |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `500`         |
-| `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START`                          |                          | Recalculate the statistics tables for messages and transfers (`stats_messages`, `stats_asset*`) on service startup. This is needed only after the first application of the `m20260312_175120_add_stats_tables` migration, and only if there are existing DB records before it. This option should normally be disabled after the migration to reduce service startup time.                                                                                                  | `false`       |
+| `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START`                          |                          | Recalculate the statistics tables for messages and transfers (`stats_messages`, `stats_messages_days`, `stats_asset_edges`) on service startup, before indexers and the API start. Required as the catch-up mechanism after any projection-invalidating migration — not only the original `m20260312_175120_add_stats_tables` — for example the bridge-qualified `m20260720_120000_add_read_filters_and_bridge_stats` rebuild, which clears the additive aggregates and resets the canonical `stats_processed` markers. Such a deployment MUST run once with this flag enabled and MUST block until backfill reaches idle before serving (see the maintenance runbook below). This option should normally be disabled for steady-state operation to reduce service startup time.                                                                                                  | `false`       |
 | `INTERCHAIN_INDEXER__STATS__CHAINS_RECALCULATION_PERIOD_SECS`           |                          | Interval in seconds between full recomputations of per-chain distinct user counters in `stats_chains` (from `crosschain_messages` / `crosschain_transfers`, any status). Only chains with at least one counted user address keep a row; stale rows are deleted. Set to `0` to disable the background task.                                                                                                                                                                  | `3600`        |
 | `INTERCHAIN_INDEXER__STATS__INCLUDE_ZERO_CHAINS`                        |                          | When `true`, stats endpoints (`/api/v1/stats/chains` and `/api/v1/stats/chain/{chain_id}/messages-paths/*`) include known chains from `chains` even when the aggregated stats row is missing or has a zero value. For message paths with `counterparty_chain_ids`, zero rows are still returned for the explicitly requested counterparties that exist in `chains`, and no other counterparties are added. Disable it to return only chains with positive aggregated stats. | `true`        |
 
@@ -289,6 +289,67 @@ Expose the metrics port (default `6060`) when running in Docker (see docker-comp
 
 </p>
 </details>
+
+## Stats projection maintenance rebuilds
+
+The additive stats aggregates (`stats_messages`, `stats_messages_days`,
+`stats_asset_edges`) are projected incrementally from canonical
+`crosschain_messages` / `crosschain_transfers` rows and guarded by the
+`stats_processed` markers. Some migrations are **projection-invalidating**: they
+clear these aggregates and reset the markers so the projections can be rebuilt
+in a new shape. The bridge-qualified stats migration
+(`m20260720_120000_add_read_filters_and_bridge_stats`) is one such migration —
+it adds a non-null `bridge_id` to all three aggregates, and existing rows cannot
+be attributed to a bridge after the fact.
+
+Clearing the aggregates and resetting the markers are **inseparable** and happen
+in the single migration transaction. Reversing or partially performing them
+causes either lost historical stats or double counting. After such a migration
+the historical projections are empty until startup backfill rebuilds them.
+
+### Deployment runbook (projection-invalidating migration)
+
+1. **Baseline.** Record unfiltered endpoint totals, eligible canonical counts by
+   bridge/status, current marker distributions, DB size, and take a recoverable
+   backup/snapshot.
+2. **Stop everything.** Stop every API and indexer instance that shares the
+   database. Never run this migration as a rolling deployment: the old code is
+   schema-incompatible and can race the rebuild.
+3. **One maintenance instance.** Start exactly one new-version instance with
+   migrations enabled and `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START=true`.
+4. **Block on backfill.** Let the atomic migration commit, then let startup
+   backfill run to idle. Startup blocks on backfill before spawning indexers or
+   launching HTTP/gRPC, so no API or indexer serves until the rebuild is
+   complete. If a batch fails the process exits rather than serving empty
+   projections.
+5. **Resume on failure.** On failure, fix the cause and restart the same version
+   with the flag still `true`. Already-committed batches are skipped by their
+   markers; the failed batch rolled back. Do not manually clear one table or
+   reset one marker family.
+6. **Validate.** Confirm marker exhaustion (no eligible zero-marker rows remain),
+   per-bridge rows exist, unfiltered totals match the baseline (subject to
+   legitimate failed-AMB corrections — see below), and representative filtered
+   responses look correct.
+7. **Return to normal.** Start the normal fleet. Keeping the flag `true` for the
+   first fleet start is safe but redundant; disable it in the subsequent config
+   rollout to avoid routine startup scans.
+
+### Rollback
+
+The down migration is symmetrical: it clears the aggregates, resets the markers,
+and restores the bridge-collapsed schema (truncating before dropping `bridge_id`
+so rows from different bridges cannot collide under the restored keys). To roll
+back: stop the fleet, run the down migration, deploy the old binary with startup
+backfill enabled, wait for the bridge-collapsed rebuild to reach idle, validate
+against the recorded baseline, and only then restore traffic.
+
+### Note on failed-AMB corrections
+
+Live and backfill projection share one eligibility predicate: a message (or a
+transfer's parent message) counts when it is `Completed` (any bridge) or
+`Failed` on an AMB bridge. Failed AMB rows that an earlier incomplete backfill
+missed may legitimately increase post-rebuild totals. Reconcile any measured
+delta against canonical eligibility, not against stale aggregates.
 
 ## Dev
 

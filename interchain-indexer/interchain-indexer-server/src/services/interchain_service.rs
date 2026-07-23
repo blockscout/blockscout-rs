@@ -12,12 +12,14 @@ use interchain_indexer_entity::{
     sea_orm_active_enums::MessageStatus as DbMessageStatus, tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
-    ChainInfoService, InterchainDatabase, JoinedTransfer, TokenInfoService,
+    ChainInfoService, CrosschainMessageLookup, InterchainDatabase, JoinedTransfer,
+    TokenInfoService,
     pagination::{
         ListMarker, MessagesPaginationLogic, PaginationDirection, TransfersPaginationLogic,
     },
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
+use sea_orm::ActiveEnum;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -26,7 +28,7 @@ use tonic::{Request, Response, Status};
 
 use super::{
     chain_info_proto::chain_model_to_proto,
-    utils::{db_datetime_to_string, map_db_error},
+    utils::{build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, map_db_error},
 };
 
 macro_rules! messages_pagination_params {
@@ -167,6 +169,7 @@ impl InterchainServiceImpl {
                             name: b.name,
                             ui_url: b.ui_url,
                             docs_url: b.docs_url,
+                            id: u32::try_from(b.bridge_id).ok(),
                         },
                     )
                 })
@@ -312,6 +315,7 @@ impl InterchainServiceImpl {
                 name: "Unknown".to_string(),
                 ui_url: None,
                 docs_url: None,
+                id: u32::try_from(bridge_id).ok(),
             })
     }
 
@@ -384,12 +388,27 @@ impl InterchainService for InterchainServiceImpl {
         &self,
         request: Request<GetMessagesRequest>,
     ) -> Result<Response<GetMessagesResponse>, Status> {
-        let (_inner, input_pagination, page_size, is_last_page) =
+        let (inner, input_pagination, page_size, is_last_page) =
             messages_pagination_params!(self, request)?;
+
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_messages(None, None, page_size, is_last_page, input_pagination)
+            .get_crosschain_messages(
+                None,
+                None,
+                filter,
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
             .await
             .map_err(map_db_error)?;
 
@@ -412,18 +431,29 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetMessageDetailsRequest>,
     ) -> Result<Response<InterchainMessage>, Status> {
         let inner = request.into_inner();
+        let message_id = vec_from_hex_prefixed(&inner.message_id).map_err(|_| {
+            Status::invalid_argument("invalid message_id: expected a 0x-prefixed hex string")
+        })?;
+        let bridge_id = checked_bridge_id(inner.bridge_id)?;
+
         let response = match self
             .db
-            .get_crosschain_message(vec_from_hex_prefixed(&inner.message_id).map_err(map_db_error)?)
+            .get_crosschain_message(message_id, bridge_id)
             .await
+            .map_err(map_db_error)?
         {
-            Ok(Some((message, transfers))) => {
-                let message = self.message_model_to_proto(message, transfers).await;
-                Ok(message)
+            CrosschainMessageLookup::Found(message, transfers) => {
+                self.message_model_to_proto(message, transfers).await
             }
-            Ok(None) => Err(tonic::Status::not_found("Message not found")),
-            Err(e) => Err(map_db_error(e)),
-        }?;
+            CrosschainMessageLookup::NotFound => {
+                return Err(Status::not_found("Message not found"));
+            }
+            CrosschainMessageLookup::Ambiguous => {
+                return Err(Status::failed_precondition(
+                    "Message ID matches multiple bridges; provide bridge_id",
+                ));
+            }
+        };
 
         Ok(Response::new(response))
     }
@@ -435,13 +465,24 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             messages_pagination_params!(self, request)?;
 
-        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(map_db_error)?;
+        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(|_| {
+            Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
+        })?;
+
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
             .get_crosschain_messages(
                 Some(tx_hash),
                 None,
+                filter,
                 page_size,
                 is_last_page,
                 input_pagination,
@@ -470,13 +511,24 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             messages_pagination_params!(self, request)?;
 
-        let address = vec_from_hex_prefixed(&inner.address).map_err(map_db_error)?;
+        let address = vec_from_hex_prefixed(&inner.address).map_err(|_| {
+            Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
+        })?;
+
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
             .get_crosschain_messages(
                 None,
                 Some(address),
+                filter,
                 page_size,
                 is_last_page,
                 input_pagination,
@@ -502,12 +554,27 @@ impl InterchainService for InterchainServiceImpl {
         &self,
         request: Request<GetTransfersRequest>,
     ) -> Result<Response<GetTransfersResponse>, Status> {
-        let (_inner, input_pagination, page_size, is_last_page) =
+        let (inner, input_pagination, page_size, is_last_page) =
             transfers_pagination_params!(self, request)?;
+
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
-            .get_crosschain_transfers(None, None, page_size, is_last_page, input_pagination)
+            .get_crosschain_transfers(
+                None,
+                None,
+                filter,
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
             .await
             .map_err(map_db_error)?;
 
@@ -532,13 +599,24 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             transfers_pagination_params!(self, request)?;
 
-        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(map_db_error)?;
+        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(|_| {
+            Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
+        })?;
+
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
             .get_crosschain_transfers(
                 Some(tx_hash),
                 None,
+                filter,
                 page_size,
                 is_last_page,
                 input_pagination,
@@ -567,13 +645,24 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             transfers_pagination_params!(self, request)?;
 
-        let address = vec_from_hex_prefixed(&inner.address).map_err(map_db_error)?;
+        let address = vec_from_hex_prefixed(&inner.address).map_err(|_| {
+            Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
+        })?;
+
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
             .get_crosschain_transfers(
                 None,
                 Some(address),
+                filter,
                 page_size,
                 is_last_page,
                 input_pagination,
@@ -606,6 +695,29 @@ impl InterchainService for InterchainServiceImpl {
             .map_err(map_db_error)?;
         let items = models.into_iter().map(chain_model_to_proto).collect();
         Ok(Response::new(GetChainsResponse { items }))
+    }
+
+    async fn get_bridges(
+        &self,
+        _request: Request<GetBridgesRequest>,
+    ) -> Result<Response<GetBridgesResponse>, Status> {
+        let rows = self.db.get_all_bridges().await.map_err(map_db_error)?;
+        let items = rows
+            .into_iter()
+            .map(|m| {
+                let id = u32::try_from(m.id)
+                    .map_err(|_| map_db_error(anyhow!("bridge id out of range")))?;
+                Ok(Bridge {
+                    id,
+                    name: m.name,
+                    r#type: m.r#type.map(|t| ActiveEnum::to_value(&t)),
+                    enabled: m.enabled,
+                    ui_url: m.ui_url,
+                    docs_url: m.docs_url,
+                })
+            })
+            .collect::<Result<Vec<_>, Status>>()?;
+        Ok(Response::new(GetBridgesResponse { items }))
     }
 }
 

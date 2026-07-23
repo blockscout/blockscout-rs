@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use super::chain_info_proto::chain_model_to_proto;
+use super::{
+    chain_info_proto::chain_model_to_proto,
+    utils::{build_chain_bridge_filter, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
+};
 use crate::{
     proto::{interchain_statistics_service_server::*, *},
     settings::ApiSettings,
@@ -46,10 +49,18 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
             .unwrap_or_else(|| Utc::now().naive_utc());
 
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
+
         let counters = self
             .stats
             .interchain_db()
-            .get_total_counters(timestamp, None, None)
+            .get_total_counters(timestamp, &filter)
             .await
             .map_err(map_stats_error)?;
 
@@ -71,10 +82,18 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
             .unwrap_or_else(|| Utc::now().naive_utc());
 
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
+
         let counters = self
             .stats
             .interchain_db()
-            .get_daily_counters(timestamp, None, None)
+            .get_daily_counters(timestamp, &filter)
             .await
             .map_err(map_stats_error)?;
 
@@ -122,11 +141,18 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .clamp(1, self.api_settings.max_page_size) as usize;
         let last_page = inner.last_page.unwrap_or(false);
         let q = normalize_stats_q(inner.q.as_deref());
+        let counterparty = non_empty(parse_chain_ids_csv(
+            "counterparty_chain_ids",
+            inner.counterparty_chain_ids.as_deref(),
+        )?);
+        let bridges = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
 
         let (rows, pagination) = self
             .stats
             .get_bridged_tokens_for_chain(
                 inner.chain_id,
+                counterparty.as_deref(),
+                bridges.as_deref(),
                 StatsListQuery {
                     sort,
                     order,
@@ -157,7 +183,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         request: Request<GetChainsStatsRequest>,
     ) -> Result<Response<GetChainsStatsResponse>, Status> {
         let inner = request.into_inner();
-        let chain_ids = parse_chain_ids_csv(inner.chain_ids.as_deref())?;
+        let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
         let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -242,16 +268,33 @@ impl InterchainStatisticsServiceImpl {
     ) -> Result<Response<GetMessagePathsResponse>, Status> {
         let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
         let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
-        let counterparty_ids = parse_chain_ids_csv(inner.counterparty_chain_ids.as_deref())?;
+        let counterparty_ids = parse_chain_ids_csv(
+            "counterparty_chain_ids",
+            inner.counterparty_chain_ids.as_deref(),
+        )?;
         let counterparty = (!counterparty_ids.is_empty()).then_some(counterparty_ids.as_slice());
+        let bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
+        let bridges = (!bridge_ids.is_empty()).then_some(bridge_ids.as_slice());
 
         let rows = if outgoing {
             self.stats
-                .get_outgoing_message_paths(inner.chain_id, from_date, to_date, counterparty)
+                .get_outgoing_message_paths(
+                    inner.chain_id,
+                    from_date,
+                    to_date,
+                    counterparty,
+                    bridges,
+                )
                 .await
         } else {
             self.stats
-                .get_incoming_message_paths(inner.chain_id, from_date, to_date, counterparty)
+                .get_incoming_message_paths(
+                    inner.chain_id,
+                    from_date,
+                    to_date,
+                    counterparty,
+                    bridges,
+                )
                 .await
         }
         .map_err(map_stats_error)?;
@@ -293,28 +336,6 @@ fn parse_optional_utc_date(s: Option<&str>) -> Result<Option<NaiveDate>, Status>
 fn normalize_stats_q(input: Option<&str>) -> Option<&str> {
     let s = input?.trim();
     if s.is_empty() { None } else { Some(s) }
-}
-
-fn parse_chain_ids_csv(input: Option<&str>) -> Result<Vec<i64>, Status> {
-    let Some(input) = input.map(str::trim) else {
-        return Ok(Vec::new());
-    };
-    if input.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    input
-        .split(',')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            part.parse::<i64>().map_err(|_| {
-                Status::invalid_argument(format!(
-                    "invalid chain_ids value `{part}`: expected comma-separated int64 ids"
-                ))
-            })
-        })
-        .collect()
 }
 
 fn stats_chain_row_to_proto(row: StatsChainListRow) -> StatsChainRow {
@@ -371,29 +392,7 @@ fn map_stats_error(err: anyhow::Error) -> Status {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_stats_q, parse_chain_ids_csv, parse_optional_utc_date};
-
-    #[test]
-    fn parse_chain_ids_csv_accepts_missing_and_empty() {
-        assert_eq!(parse_chain_ids_csv(None).unwrap(), Vec::<i64>::new());
-        assert_eq!(parse_chain_ids_csv(Some("")).unwrap(), Vec::<i64>::new());
-        assert_eq!(parse_chain_ids_csv(Some("   ")).unwrap(), Vec::<i64>::new());
-    }
-
-    #[test]
-    fn parse_chain_ids_csv_parses_comma_separated_ids() {
-        assert_eq!(
-            parse_chain_ids_csv(Some("123,456, 789")).unwrap(),
-            vec![123, 456, 789]
-        );
-    }
-
-    #[test]
-    fn parse_chain_ids_csv_rejects_invalid_values() {
-        let err = parse_chain_ids_csv(Some("123,abc")).expect_err("must reject invalid id");
-        assert_eq!(err.code(), tonic::Code::InvalidArgument);
-        assert!(err.message().contains("invalid chain_ids value `abc`"));
-    }
+    use super::{normalize_stats_q, parse_optional_utc_date};
 
     #[test]
     fn parse_optional_utc_date_accepts_valid_yyyy_mm_dd() {

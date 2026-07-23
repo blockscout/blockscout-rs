@@ -158,6 +158,8 @@ impl StatsService {
     pub async fn get_bridged_tokens_for_chain(
         &self,
         chain_id: i64,
+        counterparty_chain_ids: Option<&[i64]>,
+        bridge_ids: Option<&[i32]>,
         params: StatsListQuery<'_, BridgedTokensSortField, BridgedTokensPaginationLogic>,
     ) -> anyhow::Result<(
         Vec<BridgedTokenListRow>,
@@ -165,7 +167,12 @@ impl StatsService {
     )> {
         let (rows, pagination) = self
             .db
-            .list_bridged_token_stats_for_chain(chain_id, params)
+            .list_bridged_token_stats_for_chain(
+                chain_id,
+                counterparty_chain_ids,
+                bridge_ids,
+                params,
+            )
             .await?;
 
         let ids: Vec<i64> = rows.iter().map(|r| r.stats_asset_id).collect();
@@ -212,6 +219,7 @@ impl StatsService {
         from_date: Option<chrono::NaiveDate>,
         to_date: Option<chrono::NaiveDate>,
         counterparty_chain_ids: Option<&[i64]>,
+        bridge_ids: Option<&[i32]>,
     ) -> anyhow::Result<Vec<crate::MessagePathStatsRow>> {
         self.db
             .get_outgoing_message_paths(
@@ -219,6 +227,7 @@ impl StatsService {
                 from_date,
                 to_date,
                 counterparty_chain_ids,
+                bridge_ids,
                 self.read_settings.include_zero_chains,
             )
             .await
@@ -230,6 +239,7 @@ impl StatsService {
         from_date: Option<chrono::NaiveDate>,
         to_date: Option<chrono::NaiveDate>,
         counterparty_chain_ids: Option<&[i64]>,
+        bridge_ids: Option<&[i32]>,
     ) -> anyhow::Result<Vec<crate::MessagePathStatsRow>> {
         self.db
             .get_incoming_message_paths(
@@ -237,6 +247,7 @@ impl StatsService {
                 from_date,
                 to_date,
                 counterparty_chain_ids,
+                bridge_ids,
                 self.read_settings.include_zero_chains,
             )
             .await

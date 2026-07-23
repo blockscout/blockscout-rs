@@ -77,8 +77,20 @@ fn default_stats_include_zero_chains() -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct StatsSettings {
-    /// When true, project all rows with `stats_processed = 0` into stats tables at startup
-    /// (after migrations), before indexers start.
+    /// When true, run the stats backfill at startup (after migrations, before
+    /// indexers or the API start): it scans canonical rows with
+    /// `stats_processed = 0` and projects only the eligible ones — finalized
+    /// (completed on any bridge, or failed on an AMB bridge) and, for messages,
+    /// with a non-null destination chain. Ineligible rows are left unprojected.
+    ///
+    /// This is the required catch-up mechanism after any projection-invalidating
+    /// migration (for example the bridge-qualified stats rebuild), not only the
+    /// original stats-table introduction: such a migration clears the additive
+    /// aggregates and resets the canonical markers, so the maintenance
+    /// deployment MUST run once with this flag enabled and MUST block until
+    /// backfill reaches idle before serving. Starting with the flag false on
+    /// such a database would serve empty historical projections. Keep it
+    /// default-false for steady-state operation to avoid routine startup scans.
     /// Env: `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START`.
     pub backfill_on_start: bool,
 

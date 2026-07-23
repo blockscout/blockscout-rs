@@ -1,7 +1,7 @@
 ---
 name: research-scope
 description: Investigate and document the intended scope of a codebase topic through interactive discussion, then persist a durable research note under .memory-bank/research/ once the human confirms the framing
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Scope Research Skill

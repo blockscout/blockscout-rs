@@ -14,6 +14,8 @@ enum SortOrder {
 
 // Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
 // Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
+// Tokens are only valid with the same `counterparty_chain_ids`, `bridge_ids`,
+// `q`, `sort`, and `order` as the request that produced them.
 message BridgedTokensListPagination {
   optional string page_token = 1;
   optional string direction = 2;
@@ -32,10 +34,17 @@ message StatsChainsListPagination {
 }
 
 message GetMessagePathsRequest {
+  // The home (focal) chain.
   int64 chain_id = 1;
   optional string from_date = 2; // YYYY-MM-DD
   optional string to_date = 3;   // YYYY-MM-DD
   optional string counterparty_chain_ids = 4;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges). Restricts
+  // the message paths to the selected bridges; bridge rows are summed per
+  // directional edge. Absent or blank means all bridges. Composes with
+  // `counterparty_chain_ids` through AND. Malformed/out-of-range values are
+  // rejected with InvalidArgument.
+  optional string bridge_ids = 5;
 }
 
 message MessagePathRow {
@@ -69,6 +78,7 @@ enum StatsChainsSort {
 }
 
 message GetBridgedTokensRequest {
+  // The home (focal) chain.
   int64 chain_id = 1;
   optional uint32 page_size = 2;
   optional bool last_page = 3;
@@ -87,6 +97,16 @@ message GetBridgedTokensRequest {
   optional uint64 count = 11;
   // Case-insensitive substring filter on the row display name (`stats_assets.name`).
   optional string q = 12;
+  // Comma-separated chain ids. Restricts counterparty chains of the edges
+  // aggregated for `{chain_id}`.
+  optional string counterparty_chain_ids = 13;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges). Restricts
+  // the aggregated edges to the selected bridges; bridge rows are summed per
+  // asset before pagination. Absent or blank means all bridges. Composes with
+  // `counterparty_chain_ids` through AND. Malformed/out-of-range values are
+  // rejected with InvalidArgument. Page tokens are scoped to the same bridge
+  // and counterparty filters that produced them.
+  optional string bridge_ids = 14;
 }
 
 message GetChainsStatsRequest {
@@ -94,6 +114,7 @@ message GetChainsStatsRequest {
   optional bool last_page = 2;
   // Optional comma-separated chain ids filter, for example `123,456`.
   // When absent or empty, statistics are returned for all known chains.
+  // Selects subject rows (chains listed), not counterparties.
   optional string chain_ids = 3;
   // Sort order: DESC[default] / ASC
   SortOrder order = 4;
@@ -153,9 +174,47 @@ message GetChainsStatsResponse {
 
 message GetCommonStatisticsRequest {
   optional uint64 timestamp = 1;
+  // Filter: only messages/transfers touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 2;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 3;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 4;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. src_chain_ids and dst_chain_ids
+  // are independent direction sets; both apply when both are present. The
+  // message counter matches message src/dst chains; the transfer counter
+  // matches the transfer's own token src/dst chains.
+  optional string src_chain_ids = 5;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. A destination filter excludes
+  // messages with a NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 6;
 }
 message GetDailyStatisticsRequest {
   optional uint64 timestamp = 1;
+  // Filter: only messages/transfers touching this chain (src = N OR dst = N).
+  optional int64 home_chain_id = 2;
+  // Comma-separated chain ids. With home_chain_id: restricts the other
+  // endpoint (peer) to this set. Without home_chain_id: both endpoints
+  // must be within the set. Messages with unknown (NULL) destination are
+  // excluded whenever this set is present.
+  optional string counterparty_chain_ids = 3;
+  // Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
+  optional string bridge_ids = 4;
+  // Comma-separated source chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. src_chain_ids and dst_chain_ids
+  // are independent direction sets; both apply when both are present. The
+  // message counter matches message src/dst chains; the transfer counter
+  // matches the transfer's own token src/dst chains.
+  optional string src_chain_ids = 5;
+  // Comma-separated destination chain ids. Independent directional filter that
+  // narrows the focal predicate through AND. A destination filter excludes
+  // messages with a NULL destination through normal SQL semantics.
+  optional string dst_chain_ids = 6;
 }
 
 message GetCommonStatisticsResponse {

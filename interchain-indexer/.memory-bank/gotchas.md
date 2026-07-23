@@ -250,6 +250,34 @@ state. Check provider config, `onchain_retry_interval`, and
 
 ---
 
+## Stats Transfer Backfill Matches Failed AMB Projection Eligibility (RESOLVED)
+
+**Status:** Resolved by the bridge-filtered projected-stats work
+(`m20260720_120000_add_read_filters_and_bridge_stats`).
+
+**Previous symptom:** After clearing stats projections, resetting
+`stats_processed`, and running startup backfill, bridged-token stats previously
+produced for terminal failed AMB messages went missing, because the transfer
+candidate query in `backfill_stats_projection_round()` filtered the parent
+message to `Completed` only while live `project_transfers_batch()` also accepts
+failed AMB.
+
+**Invariant now enforced:** Live projection and historical backfill share a
+single eligibility predicate — `finalized_message_stats_condition()` in
+`stats/projection.rs`, exposed as `pub(crate)`. Both the message backfill query
+and the transfer backfill query in `database.rs` call it, and the transfer query
+joins `crosschain_transfers -> crosschain_messages -> bridges` before applying
+it (still requiring the parent's `stats_processed > 0` and the transfer's own
+marker to be zero). A message/transfer counts when its (parent) message is
+`Completed` (any bridge) or `Failed` on an AMB bridge; failed non-AMB rows stay
+excluded on both paths. Regression tests
+(`stats_backfill_failed_amb_included_non_amb_excluded_idempotent` and
+`stats_projection_excluded_rows_still_excluded_from_daily_and_all_time`) cover
+this. A full rebuild after a projection-invalidating migration therefore no
+longer silently drops failed-AMB aggregates.
+
+---
+
 ## Bridge Name Cache Has No Negative Caching
 
 **Symptom:** Repeated DB queries for non-existent bridge IDs.
@@ -398,5 +426,56 @@ replace an existing value emit an additional info line identifying the
 replaced path (`config env override replaced an existing value`). Raw config
 values never appear at info level (RPC URLs may embed API keys); enable debug
 logging to see the old/new values of replacements.
+
+---
+
+## Filter Params Must Not Reuse Pagination Cursor Field Names
+
+List requests (`GetMessagesRequest`, `GetTransfersRequest`, and their
+byTx/byAddress variants) already use `bridge_id` as a **raw pagination
+cursor** field (proto field 7), and `GetChainsStatsRequest` uses `chain_id`
+(field 8) the same way. A read *filter* with either name would collide with
+cursor semantics for `api.use_pagination_token=false` clients.
+
+The unified read-filter vocabulary avoids both by construction:
+`home_chain_id`, `counterparty_chain_ids`, `bridge_ids` (design record:
+`tmp/tasks/api-per-frontend-chain-filtering/task.md`, "Filter Vocabulary").
+Never add request fields named `bridge_id`/`chain_id` to these messages for
+non-cursor purposes.
+
+---
+
+## Unknown Query Params Are Silently Ignored by Generated HTTP Routes
+
+`#[actix_prost_macros::serde]` expands to a plain
+`#[derive(serde::Serialize, serde::Deserialize)]` **without**
+`deny_unknown_fields` (verified in actix-prost-macros 0.3.1), so the
+generated HTTP routes drop query parameters that are not declared proto
+fields. Consequence: an endpoint cannot reject a filter it does not declare —
+clients passing an unsupported filter would silently receive *unfiltered*
+data, which for per-frontend slicing means leaking other bridges'/chains'
+rows.
+
+Pattern for the read-API filters: declare the field in proto even when the
+endpoint cannot honor it yet, and return
+`Status::invalid_argument("<param> is not supported by this endpoint yet")`
+for non-blank values (see `tmp/tasks/api-per-frontend-chain-filtering/`).
+
+---
+
+## SeaORM `insert_many` Cannot Mix Set and NotSet for the Same Column
+
+**Symptom:** Mock DB seed fails with `null value in column "init_timestamp"
+violates not-null constraint` even though some ActiveModels use
+`..Default::default()` (expecting the PostgreSQL `DEFAULT now()`).
+
+**Root cause:** In a single `Entity::insert_many([...])` batch, if any model
+has `Set(init_timestamp)`, SeaORM includes that column for every row. Models
+that left it `NotSet` then insert SQL `NULL` instead of omitting the column
+(so the DB default never applies).
+
+**Fix:** Split into separate inserts — one batch that relies on DB defaults,
+another that explicitly `Set`s timestamps — or set the column on every model
+in the batch.
 
 ---

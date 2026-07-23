@@ -1,7 +1,7 @@
 ---
 name: implementation-plan
 description: Turn an approved task-analysis result into a shared technical design and coding-ready implementation handoff; use when Claude has an existing task folder under `tmp/tasks/`, plus a selected solution and related codebase research, and needs to produce `implementation-plan.md` and `coding-task.md` before writing code
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Implementation Plan Skill

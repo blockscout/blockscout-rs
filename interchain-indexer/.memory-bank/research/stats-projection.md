@@ -67,17 +67,25 @@ Primary code paths:
 projection reads canonical `crosschain_messages` rows and projects eligible
 rows into aggregate tables.
 
-`stats_messages` is a directional aggregate keyed by:
+`stats_messages` is a bridge-qualified directional aggregate keyed by:
 
+- `bridge_id`
 - `src_chain_id`
 - `dst_chain_id`
 
-Each row stores a count of finalized completed messages for that directional
-edge.
+Each row stores a count of finalized messages for that `(bridge, src, dst)`
+edge. The same directional chain edge on two different bridges is two distinct
+rows; read queries that do not filter by bridge `SUM` over the bridge dimension
+to reproduce the bridge-collapsed totals.
 
-Related table:
+Related tables (all three additive aggregates are bridge-qualified since
+`m20260720_120000_add_read_filters_and_bridge_stats`):
 
-- `stats_messages_days` stores the same directional count split by day
+- `stats_messages_days` — keyed by `(date, bridge_id, src_chain_id,
+  dst_chain_id)`, the same directional count split by day
+- `stats_asset_edges` — keyed by `(stats_asset_id, bridge_id, src_chain_id,
+  dst_chain_id)`; `stats_assets` / `stats_asset_tokens` stay global (only the
+  movement/count edges gain the bridge dimension)
 
 The schema is introduced in:
 
@@ -90,7 +98,11 @@ batch. `project_messages_batch(...)` reloads the canonical message rows for the
 flushed primary keys and filters to rows that are:
 
 - `stats_processed = 0`
-- `status = completed`
+- eligible per the shared finality predicate: `status = completed` (any bridge)
+  **or** `status = failed` on an AMB bridge — `finalized_message_stats_condition()`
+  in `stats/projection.rs`, exposed `pub(crate)` and reused by the startup
+  backfill candidate queries in `database.rs` so live and backfill can never
+  diverge
 - `dst_chain_id IS NOT NULL`
 
 Primary code paths:
@@ -100,7 +112,9 @@ Primary code paths:
 
 ### 4. Projection groups eligible rows into aggregate deltas
 
-Eligible rows are grouped by directional edge and by `(date, edge)`. Projection
+Eligible rows are grouped by bridge-qualified directional edge —
+`(bridge_id, src_chain_id, dst_chain_id)` and, for the daily table,
+`(date, bridge_id, src_chain_id, dst_chain_id)`. Projection
 then upserts those deltas into `stats_messages` and `stats_messages_days`, and
 increments `crosschain_messages.stats_processed` for the counted rows.
 
@@ -136,12 +150,14 @@ Ordering note:
 - total inbound messages per destination chain
 - top directional edges by message volume
 - graph-like directional traffic views
+- per-bridge directional counts (filter by `bridge_id`; unfiltered reads `SUM`
+  over the bridge dimension to reproduce bridge-collapsed totals)
 
 `stats_messages` alone does not answer:
 
 - time-series beyond the available day bucket table
 - unique user counts
-- bridge- or protocol-segmented counts
+- protocol-segmented counts
 - initiated vs completed vs failed breakdowns
 - latency metrics
 - token value / volume questions
@@ -153,11 +169,23 @@ Those require either canonical-table queries or additional stats tables.
 - stats are derived from canonical tables, not raw logs
 - `stats_processed` is the guard against double counting
 - a message row is counted only when it is in the projection batch,
-  `stats_processed = 0`, `status = completed`, and `dst_chain_id` is not null
-- only completed messages contribute to `stats_messages`
-- projection is batch-oriented and transaction-scoped
+  `stats_processed = 0`, eligible (completed on any bridge, or failed on an AMB
+  bridge), and `dst_chain_id` is not null
+- the three additive aggregates are bridge-qualified; projection never merges
+  identical edges from different bridges, and it sets `bridge_id` in every active
+  model / `ON CONFLICT` target / exact-row update (message counts and
+  `stats_asset_edges`, including token-metadata propagation)
+- projection is batch-oriented and transaction-scoped (aggregate deltas and the
+  matching `stats_processed` increment commit together, so a crash is safe to
+  resume)
 - the startup backfill path applies the same eligibility and aggregation rules
-  as the maintenance-triggered projection path
+  as the maintenance-triggered projection path (one shared finality predicate)
+- **projection-invalidating migrations** (e.g. the bridge-qualified rebuild) are
+  atomic: they clear the three aggregates and reset `stats_processed` for both
+  canonical tables together, then rely on `BACKFILL_ON_START=true` to rebuild
+  the projections. Never clear the aggregates without resetting the markers
+  (loses stats) or reset the markers without clearing (double counts). See the
+  README "Stats projection maintenance rebuilds" runbook.
 
 ## Failure Modes / Observability
 
