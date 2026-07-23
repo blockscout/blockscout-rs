@@ -12,8 +12,8 @@ use interchain_indexer_entity::{
     sea_orm_active_enums::MessageStatus as DbMessageStatus, tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
-    ChainBridgeFilter, ChainInfoService, CrosschainMessageLookup, InterchainDatabase,
-    JoinedTransfer, TokenInfoService,
+    ChainInfoService, CrosschainMessageLookup, InterchainDatabase, JoinedTransfer,
+    TokenInfoService,
     pagination::{
         ListMarker, MessagesPaginationLogic, PaginationDirection, TransfersPaginationLogic,
     },
@@ -28,10 +28,7 @@ use tonic::{Request, Response, Status};
 
 use super::{
     chain_info_proto::chain_model_to_proto,
-    utils::{
-        checked_bridge_id, db_datetime_to_string, map_db_error, non_empty, parse_bridge_ids_csv,
-        parse_chain_ids_csv,
-    },
+    utils::{build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, map_db_error},
 };
 
 macro_rules! messages_pagination_params {
@@ -394,22 +391,13 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             messages_pagination_params!(self, request)?;
 
-        let filter = ChainBridgeFilter {
-            home_chain_id: inner.home_chain_id,
-            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-                "counterparty_chain_ids",
-                inner.counterparty_chain_ids.as_deref(),
-            )?),
-            src_chain_ids: non_empty(parse_chain_ids_csv(
-                "src_chain_ids",
-                inner.src_chain_ids.as_deref(),
-            )?),
-            dst_chain_ids: non_empty(parse_chain_ids_csv(
-                "dst_chain_ids",
-                inner.dst_chain_ids.as_deref(),
-            )?),
-            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
-        };
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
@@ -481,22 +469,13 @@ impl InterchainService for InterchainServiceImpl {
             Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
         })?;
 
-        let filter = ChainBridgeFilter {
-            home_chain_id: inner.home_chain_id,
-            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-                "counterparty_chain_ids",
-                inner.counterparty_chain_ids.as_deref(),
-            )?),
-            src_chain_ids: non_empty(parse_chain_ids_csv(
-                "src_chain_ids",
-                inner.src_chain_ids.as_deref(),
-            )?),
-            dst_chain_ids: non_empty(parse_chain_ids_csv(
-                "dst_chain_ids",
-                inner.dst_chain_ids.as_deref(),
-            )?),
-            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
-        };
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
@@ -536,22 +515,13 @@ impl InterchainService for InterchainServiceImpl {
             Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
         })?;
 
-        let filter = ChainBridgeFilter {
-            home_chain_id: inner.home_chain_id,
-            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-                "counterparty_chain_ids",
-                inner.counterparty_chain_ids.as_deref(),
-            )?),
-            src_chain_ids: non_empty(parse_chain_ids_csv(
-                "src_chain_ids",
-                inner.src_chain_ids.as_deref(),
-            )?),
-            dst_chain_ids: non_empty(parse_chain_ids_csv(
-                "dst_chain_ids",
-                inner.dst_chain_ids.as_deref(),
-            )?),
-            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
-        };
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
@@ -587,22 +557,13 @@ impl InterchainService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             transfers_pagination_params!(self, request)?;
 
-        let filter = ChainBridgeFilter {
-            home_chain_id: inner.home_chain_id,
-            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-                "counterparty_chain_ids",
-                inner.counterparty_chain_ids.as_deref(),
-            )?),
-            src_chain_ids: non_empty(parse_chain_ids_csv(
-                "src_chain_ids",
-                inner.src_chain_ids.as_deref(),
-            )?),
-            dst_chain_ids: non_empty(parse_chain_ids_csv(
-                "dst_chain_ids",
-                inner.dst_chain_ids.as_deref(),
-            )?),
-            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
-        };
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
@@ -642,22 +603,13 @@ impl InterchainService for InterchainServiceImpl {
             Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
         })?;
 
-        let filter = ChainBridgeFilter {
-            home_chain_id: inner.home_chain_id,
-            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-                "counterparty_chain_ids",
-                inner.counterparty_chain_ids.as_deref(),
-            )?),
-            src_chain_ids: non_empty(parse_chain_ids_csv(
-                "src_chain_ids",
-                inner.src_chain_ids.as_deref(),
-            )?),
-            dst_chain_ids: non_empty(parse_chain_ids_csv(
-                "dst_chain_ids",
-                inner.dst_chain_ids.as_deref(),
-            )?),
-            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
-        };
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db
@@ -697,22 +649,13 @@ impl InterchainService for InterchainServiceImpl {
             Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
         })?;
 
-        let filter = ChainBridgeFilter {
-            home_chain_id: inner.home_chain_id,
-            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-                "counterparty_chain_ids",
-                inner.counterparty_chain_ids.as_deref(),
-            )?),
-            src_chain_ids: non_empty(parse_chain_ids_csv(
-                "src_chain_ids",
-                inner.src_chain_ids.as_deref(),
-            )?),
-            dst_chain_ids: non_empty(parse_chain_ids_csv(
-                "dst_chain_ids",
-                inner.dst_chain_ids.as_deref(),
-            )?),
-            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
-        };
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let (items, output_pagination) = self
             .db

@@ -112,7 +112,9 @@ Primary code paths:
 
 ### 4. Projection groups eligible rows into aggregate deltas
 
-Eligible rows are grouped by directional edge and by `(date, edge)`. Projection
+Eligible rows are grouped by bridge-qualified directional edge —
+`(bridge_id, src_chain_id, dst_chain_id)` and, for the daily table,
+`(date, bridge_id, src_chain_id, dst_chain_id)`. Projection
 then upserts those deltas into `stats_messages` and `stats_messages_days`, and
 increments `crosschain_messages.stats_processed` for the counted rows.
 
@@ -148,12 +150,14 @@ Ordering note:
 - total inbound messages per destination chain
 - top directional edges by message volume
 - graph-like directional traffic views
+- per-bridge directional counts (filter by `bridge_id`; unfiltered reads `SUM`
+  over the bridge dimension to reproduce bridge-collapsed totals)
 
 `stats_messages` alone does not answer:
 
 - time-series beyond the available day bucket table
 - unique user counts
-- bridge- or protocol-segmented counts
+- protocol-segmented counts
 - initiated vs completed vs failed breakdowns
 - latency metrics
 - token value / volume questions

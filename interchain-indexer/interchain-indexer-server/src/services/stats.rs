@@ -2,7 +2,7 @@
 
 use super::{
     chain_info_proto::chain_model_to_proto,
-    utils::{non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
+    utils::{build_chain_bridge_filter, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
 };
 use crate::{
     proto::{interchain_statistics_service_server::*, *},
@@ -10,9 +10,9 @@ use crate::{
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
-    BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainBridgeFilter,
-    ChainInfoService, StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField,
-    StatsListQuery, StatsService, StatsSortOrder, utils::to_hex_prefixed,
+    BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
+    StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField, StatsListQuery,
+    StatsService, StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -49,22 +49,13 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
             .unwrap_or_else(|| Utc::now().naive_utc());
 
-        let filter = ChainBridgeFilter {
-            home_chain_id: inner.home_chain_id,
-            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-                "counterparty_chain_ids",
-                inner.counterparty_chain_ids.as_deref(),
-            )?),
-            src_chain_ids: non_empty(parse_chain_ids_csv(
-                "src_chain_ids",
-                inner.src_chain_ids.as_deref(),
-            )?),
-            dst_chain_ids: non_empty(parse_chain_ids_csv(
-                "dst_chain_ids",
-                inner.dst_chain_ids.as_deref(),
-            )?),
-            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
-        };
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let counters = self
             .stats
@@ -91,22 +82,13 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
             .unwrap_or_else(|| Utc::now().naive_utc());
 
-        let filter = ChainBridgeFilter {
-            home_chain_id: inner.home_chain_id,
-            counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-                "counterparty_chain_ids",
-                inner.counterparty_chain_ids.as_deref(),
-            )?),
-            src_chain_ids: non_empty(parse_chain_ids_csv(
-                "src_chain_ids",
-                inner.src_chain_ids.as_deref(),
-            )?),
-            dst_chain_ids: non_empty(parse_chain_ids_csv(
-                "dst_chain_ids",
-                inner.dst_chain_ids.as_deref(),
-            )?),
-            bridge_ids: non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?),
-        };
+        let filter = build_chain_bridge_filter(
+            inner.home_chain_id,
+            inner.counterparty_chain_ids.as_deref(),
+            inner.src_chain_ids.as_deref(),
+            inner.dst_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+        )?;
 
         let counters = self
             .stats

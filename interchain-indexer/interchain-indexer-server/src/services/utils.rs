@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use chrono::NaiveDateTime;
+use interchain_indexer_logic::ChainBridgeFilter;
 use sea_orm::JsonValue;
 use tonic::Status;
 
@@ -78,6 +79,29 @@ pub fn parse_bridge_ids_csv(input: Option<&str>) -> Result<Vec<i32>, Status> {
 
 pub fn non_empty<T>(v: Vec<T>) -> Option<Vec<T>> {
     if v.is_empty() { None } else { Some(v) }
+}
+
+/// Builds the shared `ChainBridgeFilter` from the CSV request fields common to
+/// every filtered list/counter endpoint. Parsing and empty-to-`None`
+/// normalization for all five fields live here so a new filter dimension is
+/// maintained in one place. Malformed values return labeled `InvalidArgument`.
+pub fn build_chain_bridge_filter(
+    home_chain_id: Option<i64>,
+    counterparty_chain_ids: Option<&str>,
+    src_chain_ids: Option<&str>,
+    dst_chain_ids: Option<&str>,
+    bridge_ids: Option<&str>,
+) -> Result<ChainBridgeFilter, Status> {
+    Ok(ChainBridgeFilter {
+        home_chain_id,
+        counterparty_chain_ids: non_empty(parse_chain_ids_csv(
+            "counterparty_chain_ids",
+            counterparty_chain_ids,
+        )?),
+        src_chain_ids: non_empty(parse_chain_ids_csv("src_chain_ids", src_chain_ids)?),
+        dst_chain_ids: non_empty(parse_chain_ids_csv("dst_chain_ids", dst_chain_ids)?),
+        bridge_ids: non_empty(parse_bridge_ids_csv(bridge_ids)?),
+    })
 }
 
 /// Checked conversion of an optional request `bridge_id` (`u32`) to the storage

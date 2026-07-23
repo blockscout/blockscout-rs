@@ -13,7 +13,7 @@ use interchain_indexer_entity::{
     sea_orm_active_enums::{MessageStatus, TransferType},
 };
 use pretty_assertions::assert_eq;
-use reqwest::{StatusCode, Url};
+use reqwest::StatusCode;
 use sea_orm::{ActiveValue::Set, EntityTrait, prelude::BigDecimal};
 
 /// Public numeric message ID that intentionally collides across two bridges.
@@ -99,19 +99,6 @@ async fn seed_bridge_collision(db: &TestDbGuard) {
     .unwrap();
 }
 
-/// Issues a raw GET and returns the HTTP status and JSON body, without the
-/// success-only assertion baked into `test_server::send_get_request`.
-async fn get_raw(base: &Url, route: &str) -> (StatusCode, serde_json::Value) {
-    let response = reqwest::Client::new()
-        .get(base.join(route).unwrap())
-        .send()
-        .await
-        .expect("request failed");
-    let status = response.status();
-    let body = response.json().await.expect("body is not JSON");
-    (status, body)
-}
-
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn message_details_bridge_qualifier_contract() {
@@ -123,7 +110,7 @@ async fn message_details_bridge_qualifier_contract() {
 
     // 1. Unqualified collision -> HTTP 400, tonic code 9, "provide bridge_id".
     let route = format!("/api/v1/interchain/messages/{COLLIDING_MESSAGE_HEX}");
-    let (status, body) = get_raw(&base, &route).await;
+    let (status, body) = helpers::get_raw(&base, &route).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], serde_json::json!(9));
     assert!(
@@ -156,7 +143,7 @@ async fn message_details_bridge_qualifier_contract() {
 
     // 4. bridge_id above i32::MAX (but within u32) -> HTTP 400, tonic code 3
     //    (InvalidArgument), rejected by the checked conversion.
-    let (status, body) = get_raw(&base, &format!("{route}?bridge_id={}", u32::MAX)).await;
+    let (status, body) = helpers::get_raw(&base, &format!("{route}?bridge_id={}", u32::MAX)).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], serde_json::json!(3));
     assert!(
@@ -170,7 +157,7 @@ async fn message_details_bridge_qualifier_contract() {
     // 5. Malformed (non-hex) message_id -> HTTP 400, tonic code 3
     //    (InvalidArgument), rejected before any DB lookup rather than surfacing
     //    a generic internal error.
-    let (status, body) = get_raw(&base, "/api/v1/interchain/messages/not-hex").await;
+    let (status, body) = helpers::get_raw(&base, "/api/v1/interchain/messages/not-hex").await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], serde_json::json!(3));
     assert!(

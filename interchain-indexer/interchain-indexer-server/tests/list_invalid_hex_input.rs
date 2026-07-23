@@ -7,19 +7,7 @@
 
 mod helpers;
 
-use reqwest::{StatusCode, Url};
-
-/// Issues a raw GET and returns the HTTP status and JSON body.
-async fn get_raw(base: &Url, route: &str) -> (StatusCode, serde_json::Value) {
-    let response = reqwest::Client::new()
-        .get(base.join(route).unwrap())
-        .send()
-        .await
-        .expect("request failed");
-    let status = response.status();
-    let body = response.json().await.expect("body is not JSON");
-    (status, body)
-}
+use reqwest::StatusCode;
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
@@ -48,7 +36,7 @@ async fn list_endpoints_reject_malformed_hex_path_with_400() {
     ];
 
     for (route, expected_msg) in cases {
-        let (status, body) = get_raw(&base, route).await;
+        let (status, body) = helpers::get_raw(&base, route).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "route {route}: {body}");
         // tonic InvalidArgument == code 3.
         assert_eq!(body["code"], serde_json::json!(3), "route {route}: {body}");

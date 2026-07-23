@@ -566,7 +566,7 @@ Useful operational signals:
 - backfill should be treated as a catch-up tool, not a permanent operational
   default
 
-## Read-Time Filterability Constraints (verified 2026-07-18)
+## Read-Time Filterability Constraints (verified 2026-07-20)
 
 Discovered while designing per-frontend API filtering
 (`tmp/tasks/api-per-frontend-chain-filtering/`); constrains what filters the

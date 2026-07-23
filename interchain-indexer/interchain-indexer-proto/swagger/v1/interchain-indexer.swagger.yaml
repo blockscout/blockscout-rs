@@ -1493,7 +1493,9 @@ definitions:
       Page tokens and raw cursor fields are only valid within the same complete
       filter combination (`home_chain_id`, `counterparty_chain_ids`,
       `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, and any tx_hash/address
-      scope). Changing any of those filters mid-pagination is a client error.
+      scope). The cursor does not encode these filters and is not re-validated
+      against them, so changing any filter mid-pagination is unsupported and
+      yields undefined results; callers must restart pagination when filters change.
   v1SortOrder:
     type: string
     enum:
