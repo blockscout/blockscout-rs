@@ -2771,7 +2771,10 @@ mod tests {
     use super::{CrosschainMessageLookup, JoinedTransfer};
     use crate::{
         ChainBridgeFilter, InterchainDatabase, MessagePathStatsRow,
-        test_utils::{init_db, mock_db::fill_mock_interchain_database},
+        test_utils::{
+            init_db,
+            mock_db::{fill_mock_interchain_database, mock_base_ts},
+        },
     };
 
     /// Unwraps a [`CrosschainMessageLookup::Found`] or panics with the actual variant.
@@ -3256,7 +3259,7 @@ mod tests {
         fill_mock_interchain_database(&db).await;
 
         let interchain_db = InterchainDatabase::new(db.client());
-        let ts = (Utc::now() + chrono::Duration::seconds(1)).naive_utc();
+        let ts = mock_base_ts() + chrono::Duration::seconds(1);
 
         // Unfiltered: 7 messages + 7 transfers (extended fixtures).
         let totals = interchain_db
@@ -3604,7 +3607,7 @@ mod tests {
         let db = init_db("test_counters_filter_parity_with_filtered_lists").await;
         fill_mock_interchain_database(&db).await;
         let interchain_db = InterchainDatabase::new(db.client());
-        let ts = (Utc::now() + chrono::Duration::seconds(1)).naive_utc();
+        let ts = mock_base_ts() + chrono::Duration::seconds(1);
 
         let filter = ChainBridgeFilter {
             home_chain_id: Some(1),
@@ -3850,7 +3853,7 @@ mod tests {
         assert!(message_ids(&messages).is_empty());
 
         // Counters use token endpoints too: transfer count equals filtered list length.
-        let ts = (Utc::now() + chrono::Duration::seconds(1)).naive_utc();
+        let ts = mock_base_ts() + chrono::Duration::seconds(1);
         let totals = interchain_db.get_total_counters(ts, &dir).await.unwrap();
         assert_eq!(totals.total_transfers, transfers.len() as u64);
         assert_eq!(totals.total_messages, messages.len() as u64);
@@ -3866,7 +3869,7 @@ mod tests {
         let db = init_db("test_counters_parity_with_focal_direction_bridge_filter").await;
         fill_mock_interchain_database(&db).await;
         let interchain_db = InterchainDatabase::new(db.client());
-        let ts = (Utc::now() + chrono::Duration::seconds(1)).naive_utc();
+        let ts = mock_base_ts() + chrono::Duration::seconds(1);
 
         let filter = ChainBridgeFilter {
             home_chain_id: Some(1),

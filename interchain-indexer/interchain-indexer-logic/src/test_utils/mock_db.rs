@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use alloy::primitives::address;
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
     sea_orm_active_enums::{MessageStatus, TransferType},
@@ -12,10 +12,23 @@ use sea_orm::{
     prelude::{BigDecimal, Decimal},
 };
 
-/// Distinct past timestamps so filter ordering / pagination tests stay stable.
-/// Existing rows keep DB `DEFAULT now()` via `..Default::default()`.
+/// Fixed, date-safe base timestamp for all mock fixtures.
+///
+/// Using a constant mid-day timestamp (not `Utc::now()`) keeps daily-stat
+/// grouping deterministic: every seeded message and the counter-test `ts` share
+/// one UTC date, so the fixture time window can never straddle a midnight
+/// boundary (which previously made the daily-counter assertions flaky).
+pub fn mock_base_ts() -> NaiveDateTime {
+    NaiveDate::from_ymd_opt(2025, 6, 15)
+        .expect("valid date")
+        .and_hms_opt(12, 0, 0)
+        .expect("valid time")
+}
+
+/// Distinct timestamps relative to [`mock_base_ts`] so filter ordering /
+/// pagination tests stay stable. All fixtures share `mock_base_ts`'s date.
 fn mock_init_ts(secs_ago: i64) -> NaiveDateTime {
-    (Utc::now() - Duration::seconds(secs_ago)).naive_utc()
+    mock_base_ts() - Duration::seconds(secs_ago)
 }
 
 pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
@@ -103,6 +116,7 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             id: Set(1001),
             bridge_id: Set(1),
             status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(mock_base_ts()),
             src_chain_id: Set(1),
             dst_chain_id: Set(Some(100)),
             src_tx_hash: Set(Some(vec![
@@ -128,6 +142,7 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             id: Set(1002),
             bridge_id: Set(1),
             status: Set(MessageStatus::Completed),
+            init_timestamp: Set(mock_base_ts()),
             src_chain_id: Set(1),
             dst_chain_id: Set(Some(100)),
             src_tx_hash: Set(Some(vec![
@@ -157,6 +172,7 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             id: Set(1003),
             bridge_id: Set(1),
             status: Set(MessageStatus::Failed),
+            init_timestamp: Set(mock_base_ts()),
             src_chain_id: Set(100),
             dst_chain_id: Set(Some(1)),
             src_tx_hash: Set(Some(vec![0x11; 32])),
@@ -178,6 +194,7 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             id: Set(1004),
             bridge_id: Set(1),
             status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(mock_base_ts()),
             src_chain_id: Set(100),
             dst_chain_id: Set(Some(1)),
             src_tx_hash: Set(Some(vec![0x22; 32])),
@@ -200,8 +217,10 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
     .await
     .unwrap();
 
-    // Separate insert: SeaORM insert_many cannot mix Set(init_timestamp) with
-    // NotSet (DB DEFAULT) in one batch — NotSet becomes NULL and violates NOT NULL.
+    // Second message batch (bridge/edge-case rows). Kept as a separate insert
+    // for readability; like the first batch, every row sets `init_timestamp`
+    // explicitly (relative to `mock_base_ts`) so daily-stat grouping is
+    // deterministic.
     crosschain_messages::Entity::insert_many([
         // Bridge 2: 1 → 250
         crosschain_messages::ActiveModel {
