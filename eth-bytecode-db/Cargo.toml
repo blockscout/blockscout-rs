@@ -64,7 +64,7 @@ sha2 = { version = "0.10.8" }
 sha3 = { version = "0.10.8" }
 smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "232bee4" }
 solidity-metadata = { version = "1.0" }
-sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "457af68" }
+sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "48a84ac" }
 strum = { version = "0.27", default-features = false, features = ["derive"] }
 test-log = { version = "0.2.16" }
 thiserror = { version = "1" }
