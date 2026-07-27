@@ -63,8 +63,14 @@ mod verify_from_etherscan {
             match custom_code {
                 "unsupported_chain" => Some(VerifyFromEtherscanError::ChainNotSupported(message)),
                 // The recompiled bytecode did not match, or the contract is not
-                // verified on the upstream Etherscan instance.
-                "no_match" | "not_verified" | "contract_not_verified" => {
+                // verified on the upstream Etherscan instance. `not_etherscan_verified`
+                // is the code Sourcify actually returns for the latter (a `404`),
+                // which must map to a verification failure rather than fall through
+                // to the generic `404 -> NotFound` handling.
+                "no_match"
+                | "not_verified"
+                | "contract_not_verified"
+                | "not_etherscan_verified" => {
                     Some(VerifyFromEtherscanError::ContractNotVerified(message))
                 }
                 "compiler_error" | "verified_with_errors" => {

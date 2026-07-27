@@ -507,6 +507,25 @@ mod tests {
         );
     }
 
+    // Sourcify reports "contract not verified on Etherscan" via a `404` with
+    // `customCode: not_etherscan_verified`. The Etherscan-import flow must map it
+    // to a verification failure (-> HTTP 200 + FAILURE downstream), not let the
+    // `404` fall through to `NotFound` (-> a spurious 400).
+    #[test]
+    fn etherscan_not_verified_maps_to_contract_not_verified() {
+        let body = r#"{"customCode":"not_etherscan_verified","message":"This contract is not verified on Etherscan."}"#;
+        let error = map_error_response::<VerifyFromEtherscanError>(StatusCode::NOT_FOUND, body);
+        assert!(
+            matches!(
+                error,
+                Error::Sourcify(SourcifyError::Custom(
+                    VerifyFromEtherscanError::ContractNotVerified(_)
+                ))
+            ),
+            "expected Custom(ContractNotVerified), got: {error:?}"
+        );
+    }
+
     // A well-formed `GenericErrorResponse` is still interpreted via its
     // `customCode`, not the HTTP-status fallback.
     #[test]
