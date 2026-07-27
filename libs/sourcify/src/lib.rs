@@ -5,10 +5,7 @@ mod types;
 mod v2;
 
 pub use client::{Client, ClientBuilder, DEFAULT_MAX_POLL_ATTEMPTS, DEFAULT_POLL_INTERVAL};
-pub use types::{
-    EmptyCustomError, GetSourceFilesResponse, MatchType, VerifyFromEtherscanError,
-    VerifyFromEtherscanResponse,
-};
+pub use types::{EmptyCustomError, MatchType, VerifyFromEtherscanError};
 pub use v2::{JobContract, JobError, VerificationJob, VerifiedContract};
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
