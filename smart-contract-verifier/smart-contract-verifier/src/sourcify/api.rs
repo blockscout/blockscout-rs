@@ -2,10 +2,10 @@
 
 use super::{
     api_client::SourcifyApiClient,
-    types::{ApiRequest, ApiVerificationResponse, Error, Files, ResultItem, Success},
+    types::{Error, Success},
 };
-use crate::MatchType;
 use anyhow::anyhow;
+use blockscout_display_bytes::decode_hex;
 use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,64 +13,33 @@ pub struct VerificationRequest {
     pub address: String,
     pub chain: String,
     pub files: BTreeMap<String, String>,
+    /// Retained for API compatibility. The Sourcify v2 metadata endpoint infers
+    /// the target contract from the supplied metadata, so this is unused.
     pub chosen_contract: Option<usize>,
-}
-
-impl From<VerificationRequest> for ApiRequest {
-    fn from(value: VerificationRequest) -> Self {
-        Self {
-            address: value.address,
-            chain: value.chain,
-            files: Files(value.files),
-            chosen_contract: value.chosen_contract.map(|v| v.to_string()),
-        }
-    }
 }
 
 pub async fn verify(
     sourcify_client: Arc<SourcifyApiClient>,
     request: VerificationRequest,
 ) -> Result<Success, Error> {
-    let params = request.into();
-    let response = sourcify_client
-        .verification_request(&params)
-        .await
+    let address = decode_hex(&request.address)
         .map_err(|err| {
-            anyhow!(
-                "error while making verification request to Sourcify: {}",
-                err
-            )
-        })
-        .map_err(Error::Internal)?;
+            Error::BadRequest(anyhow!(
+                "invalid contract address '{}': {err}",
+                request.address
+            ))
+        })?
+        .into();
 
-    match response {
-        ApiVerificationResponse::Verified { result } => {
-            let match_type = validate_verification_result(result)?;
+    let (sources, metadata) = split_metadata_and_sources(request.files)?;
 
-            let api_files_response = sourcify_client
-                .source_files_request(&params)
-                .await
-                .map_err(|err| {
-                    anyhow!(
-                        "error while making source files request to Sourcify: {}",
-                        err
-                    )
-                })
-                .map_err(Error::Internal)?;
-            let files = Files::try_from((api_files_response, &params.chain, &params.address))
-                .map_err(|err| anyhow!("error while parsing Sourcify files response: {}", err))
-                .map_err(Error::Internal)?;
-            let success = Success::try_from((files, match_type))
-                .map_err(|err| Error::Validation(err.to_string()))?;
+    let verified_contract = sourcify_client
+        .lib_client()
+        .verify_via_metadata_v2(request.chain.as_str(), address, sources, metadata, None)
+        .await
+        .map_err(error_handler::process_sourcify_error)?;
 
-            Ok(success)
-        }
-        ApiVerificationResponse::Error { error } => Err(Error::Verification(error)),
-        ApiVerificationResponse::ValidationErrors { message, errors } => {
-            let error_message = format!("{message}: {errors:?}");
-            Err(Error::Validation(error_message))
-        }
-    }
+    Success::try_from(verified_contract)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,45 +52,49 @@ pub async fn verify_from_etherscan(
     sourcify_client: Arc<SourcifyApiClient>,
     request: VerifyFromEtherscanRequest,
 ) -> Result<Success, Error> {
-    let lib_client = sourcify_client.lib_client();
-
-    let verification_result = lib_client
-        .verify_from_etherscan(request.chain.as_str(), request.address.clone())
-        .await;
-
-    match verification_result {
-        Ok(_) => {}
-        Err(sourcify::Error::Sourcify(sourcify::SourcifyError::InternalServerError(err)))
-            if err.contains("directory already has entry by that name") => {}
-        Err(error) => return Err(error_handler::process_sourcify_error(error)),
-    }
-
-    let source_files = lib_client
-        .get_source_files_any(request.chain.as_str(), request.address)
+    let verified_contract = sourcify_client
+        .lib_client()
+        .verify_from_etherscan_v2(request.chain.as_str(), request.address, None)
         .await
         .map_err(error_handler::process_sourcify_error)?;
 
-    let success = Success::try_from(source_files)?;
-
-    Ok(success)
+    Success::try_from(verified_contract)
 }
 
-/// Validates verification result.
-/// In case of success returns corresponding match type.
-fn validate_verification_result(result: Vec<ResultItem>) -> Result<MatchType, Error> {
-    let item = result
-        .first()
-        .ok_or_else(|| {
-            anyhow::anyhow!("invalid number of result items returned while verification succeeded")
-        })
-        .map_err(Error::Internal)?;
-    match item.status.as_deref() {
-        Some("partial") => Ok(MatchType::Partial),
-        Some("perfect") => Ok(MatchType::Full),
-        _ => Err(Error::Verification(
-            item.message.clone().unwrap_or_default(),
-        )),
+/// Splits the uploaded files into the Solidity metadata document and the
+/// remaining source files, as required by the Sourcify v2 metadata endpoint.
+///
+/// The metadata file is identified by its content (a JSON object carrying the
+/// `compiler`, `settings` and `output` keys) rather than by a fixed file name,
+/// mirroring how Sourcify itself detected it under the v1 file-upload flow.
+fn split_metadata_and_sources(
+    files: BTreeMap<String, String>,
+) -> Result<(BTreeMap<String, String>, serde_json::Value), Error> {
+    let mut sources = BTreeMap::new();
+    let mut metadata = None;
+
+    for (name, content) in files {
+        if metadata.is_none() {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
+                let looks_like_metadata = value.get("compiler").is_some()
+                    && value.get("settings").is_some()
+                    && value.get("output").is_some();
+                if looks_like_metadata {
+                    metadata = Some(value);
+                    continue;
+                }
+            }
+        }
+        sources.insert(name, content);
     }
+
+    let metadata = metadata.ok_or_else(|| {
+        Error::BadRequest(anyhow!(
+            "no contract metadata was found among the provided files"
+        ))
+    })?;
+
+    Ok((sources, metadata))
 }
 
 mod error_handler {
@@ -177,6 +150,9 @@ mod error_handler {
             }
             sourcify::Error::Sourcify(sourcify::SourcifyError::ChainNotSupported(msg)) => {
                 Error::BadRequest(anyhow::anyhow!("{msg}"))
+            }
+            sourcify::Error::Sourcify(sourcify::SourcifyError::VerificationFailure(msg)) => {
+                Error::Verification(msg)
             }
             sourcify::Error::Sourcify(sourcify::SourcifyError::BadRequest(_)) => {
                 tracing::error!(target: "sourcify", "{error}");
