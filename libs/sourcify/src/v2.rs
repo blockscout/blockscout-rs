@@ -150,7 +150,7 @@ impl Client {
 
         // The contract is already verified — return the stored result.
         if response.status() == StatusCode::CONFLICT {
-            return self.get_contract_v2(chain_id, contract_address).await;
+            return self.fetch_contract(chain_id, contract_address).await;
         }
 
         let submitted: SubmitResponse = process_v2_response(response).await?;
@@ -202,7 +202,7 @@ impl Client {
             .as_ref()
             .is_some_and(|contract| contract.match_type.is_some());
         if is_matched {
-            return self.get_contract_v2(chain_id, contract_address).await;
+            return self.fetch_contract(chain_id, contract_address).await;
         }
 
         if let Some(error) = job.error {
@@ -211,7 +211,7 @@ impl Client {
             // instead of an error, mirroring the 409 handling on the metadata
             // endpoint (`verify_via_metadata_v2`).
             if error.custom_code == "already_verified" {
-                return self.get_contract_v2(chain_id, contract_address).await;
+                return self.fetch_contract(chain_id, contract_address).await;
             }
             return Err(map_v2_error::<E>(error.custom_code, error.message, None));
         }
@@ -221,9 +221,30 @@ impl Client {
         )))
     }
 
+    /// Fetches an already-verified contract from Sourcify (`GET
+    /// /v2/contract/{chain}/{address}`) without triggering a (re)verification.
+    ///
+    /// This is the v2 replacement for the (sunset) v1 `GET /files/any/...`
+    /// lookup: it returns the stored sources and metadata for a contract that
+    /// Sourcify has already verified, or a [`SourcifyError::NotFound`] when it
+    /// has not.
+    pub async fn get_contract_v2(
+        &self,
+        chain_id: &str,
+        contract_address: Bytes,
+    ) -> Result<VerifiedContract, Error<EmptyCustomError>> {
+        self.fetch_contract(chain_id, contract_address).await
+    }
+
     /// Fetches a verified contract (`GET /v2/contract/{chain}/{address}`),
     /// requesting only the fields required to reconstruct a verification success.
-    async fn get_contract_v2<E: CustomError>(
+    ///
+    /// Generic over the custom error type so the verification flows can reuse it
+    /// while surfacing their own endpoint-specific errors; [`get_contract_v2`]
+    /// is the public, concretely-typed entry point.
+    ///
+    /// [`get_contract_v2`]: Client::get_contract_v2
+    async fn fetch_contract<E: CustomError>(
         &self,
         chain_id: &str,
         contract_address: Bytes,
