@@ -206,6 +206,13 @@ impl Client {
         }
 
         if let Some(error) = job.error {
+            // The contract is already verified and this job produced no *better*
+            // match. It is nonetheless verified, so return the stored result
+            // instead of an error, mirroring the 409 handling on the metadata
+            // endpoint (`verify_via_metadata_v2`).
+            if error.custom_code == "already_verified" {
+                return self.get_contract_v2(chain_id, contract_address).await;
+            }
             return Err(map_v2_error::<E>(error.custom_code, error.message, None));
         }
 
