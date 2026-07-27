@@ -383,9 +383,9 @@ fn map_middleware_error<E: CustomError>(error: reqwest_middleware::Error) -> Err
     }
 }
 
-/// Deserializes a successful (`2xx`) v2 response, or maps an error response
-/// (`GenericErrorResponse`) onto the appropriate [`Error`], giving the flow's
-/// custom error type first crack at interpreting the `customCode`.
+/// Deserializes a successful (`2xx`) v2 response, or maps an error response onto
+/// the appropriate [`Error`], giving the flow's custom error type first crack at
+/// interpreting the `customCode`.
 async fn process_v2_response<T: DeserializeOwned, E: CustomError>(
     response: Response,
 ) -> Result<T, Error<E>> {
@@ -394,12 +394,24 @@ async fn process_v2_response<T: DeserializeOwned, E: CustomError>(
         return Ok(response.json::<T>().await?);
     }
 
-    let error = response.json::<V2ErrorResponse>().await?;
-    Err(map_v2_error::<E>(
-        error.custom_code,
-        error.message,
-        Some(status),
-    ))
+    let body = response.text().await?;
+    Err(map_error_response::<E>(status, &body))
+}
+
+/// Maps a non-success v2 response body onto an [`Error`].
+///
+/// Error responses are *usually* the `GenericErrorResponse` shape
+/// (`{customCode, message, errorId}`), but not always: the contract endpoint
+/// answers a not-found lookup with `404` and a *contract-shaped* body that
+/// carries no `customCode`, and gateways sitting in front of Sourcify may return
+/// their own error payloads. When the body isn't a `GenericErrorResponse`, fall
+/// back to mapping purely by HTTP status (keeping the raw body as the message)
+/// rather than surfacing a confusing "missing field `customCode`" decode error.
+fn map_error_response<E: CustomError>(status: StatusCode, body: &str) -> Error<E> {
+    match serde_json::from_str::<V2ErrorResponse>(body) {
+        Ok(error) => map_v2_error::<E>(error.custom_code, error.message, Some(status)),
+        Err(_) => map_v2_error::<E>(String::new(), Some(body.to_string()), Some(status)),
+    }
 }
 
 /// Maps a v2 `customCode` (with optional HTTP status for the fallback) onto an
@@ -478,6 +490,32 @@ mod tests {
                 )) if message.contains("is not supported for importing from Etherscan")
             ),
             "expected Custom(ChainNotSupported) with etherscan message, got: {result:?}"
+        );
+    }
+
+    // `GET /v2/contract` answers a not-found lookup with `404` and a
+    // contract-shaped body that carries no `customCode`. It must still map to
+    // `NotFound` (so eth-bytecode-db's lookup returns "no source") rather than
+    // failing to decode with "missing field `customCode`".
+    #[test]
+    fn not_found_contract_body_without_custom_code_maps_to_not_found() {
+        let body = r#"{"match":null,"creationMatch":null,"runtimeMatch":null,"chainId":"11155111","address":"0x00000000000000000000000000000000DeaDBeef"}"#;
+        let error = map_error_response::<EmptyCustomError>(StatusCode::NOT_FOUND, body);
+        assert!(
+            matches!(error, Error::Sourcify(SourcifyError::NotFound(_))),
+            "expected NotFound, got: {error:?}"
+        );
+    }
+
+    // A well-formed `GenericErrorResponse` is still interpreted via its
+    // `customCode`, not the HTTP-status fallback.
+    #[test]
+    fn generic_error_body_is_mapped_by_custom_code() {
+        let body = r#"{"customCode":"unsupported_chain","message":"Requested chain 2221 is not supported"}"#;
+        let error = map_error_response::<EmptyCustomError>(StatusCode::BAD_REQUEST, body);
+        assert!(
+            matches!(error, Error::Sourcify(SourcifyError::ChainNotSupported(_))),
+            "expected ChainNotSupported, got: {error:?}"
         );
     }
 }
