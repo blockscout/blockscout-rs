@@ -326,7 +326,7 @@ impl DatabaseService {
 
         let sourcify_result = self
             .sourcify_client
-            .get_source_files_any(chain_id, contract_address)
+            .get_contract_v2(chain_id, contract_address)
             .await
             .map_err(process_sourcify_error);
 
@@ -385,6 +385,13 @@ fn process_sourcify_error(
             ))
         }
         sourcify::Error::Sourcify(sourcify::SourcifyError::InternalServerError(_)) => {
+            tracing::error!(target: "sourcify", "{error}");
+            Some(tonic::Status::internal("sourcify responded with error"))
+        }
+        // A plain contract lookup never runs a verification job, so this
+        // terminal-outcome variant is not expected here; treat it defensively as
+        // a server-side error.
+        sourcify::Error::Sourcify(sourcify::SourcifyError::VerificationFailure(_)) => {
             tracing::error!(target: "sourcify", "{error}");
             Some(tonic::Status::internal("sourcify responded with error"))
         }
