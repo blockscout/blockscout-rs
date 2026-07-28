@@ -169,11 +169,20 @@ impl StatsService {
     }
 
     /// Bridged-token stats table for a chain: aggregated edges + full token list per asset.
+    ///
+    /// `indexed_pairs` / `indexed_union` are taken as parameters rather than read
+    /// off `self.indexed_chains()`: the read-side default-hide filter is a
+    /// per-request opt-in (`include_unindexed_chains`), not a property of the
+    /// service. Callers pass `None` for both to apply no restriction (opt-in
+    /// requested, or an `AllIndexed` configuration).
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_bridged_tokens_for_chain(
         &self,
         chain_id: i64,
         counterparty_chain_ids: Option<&[i64]>,
         bridge_ids: Option<&[i32]>,
+        indexed_pairs: Option<&[(i32, Vec<i64>)]>,
+        indexed_union: Option<&[i64]>,
         params: StatsListQuery<'_, BridgedTokensSortField, BridgedTokensPaginationLogic>,
     ) -> anyhow::Result<(
         Vec<BridgedTokenListRow>,
@@ -185,12 +194,16 @@ impl StatsService {
                 chain_id,
                 counterparty_chain_ids,
                 bridge_ids,
+                indexed_pairs,
                 params,
             )
             .await?;
 
         let ids: Vec<i64> = rows.iter().map(|r| r.stats_asset_id).collect();
-        let by_asset = self.db.fetch_bridged_token_items_for_assets(&ids).await?;
+        let by_asset = self
+            .db
+            .fetch_bridged_token_items_for_assets(&ids, indexed_union)
+            .await?;
 
         let out = rows
             .into_iter()
@@ -210,9 +223,13 @@ impl StatsService {
     }
 
     /// Known chains with `unique_transfer_users_count` from `stats_chains` (0 when missing).
+    ///
+    /// `indexed_chain_ids` is a per-request parameter, not read off
+    /// `self.indexed_chains()` — see [`Self::get_bridged_tokens_for_chain`].
     pub async fn get_stats_chains(
         &self,
         chain_ids: Vec<i64>,
+        indexed_chain_ids: Option<&[i64]>,
         params: StatsListQuery<'_, StatsChainsSortField, StatsChainsPaginationLogic>,
     ) -> anyhow::Result<(
         Vec<StatsChainListRow>,
@@ -222,11 +239,13 @@ impl StatsService {
             .list_stats_chains(
                 chain_ids.as_slice(),
                 self.read_settings.include_zero_chains,
+                indexed_chain_ids,
                 params,
             )
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_outgoing_message_paths(
         &self,
         chain_id: i64,
@@ -234,6 +253,8 @@ impl StatsService {
         to_date: Option<chrono::NaiveDate>,
         counterparty_chain_ids: Option<&[i64]>,
         bridge_ids: Option<&[i32]>,
+        indexed_pairs: Option<&[(i32, Vec<i64>)]>,
+        indexed_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<Vec<crate::MessagePathStatsRow>> {
         self.db
             .get_outgoing_message_paths(
@@ -243,10 +264,13 @@ impl StatsService {
                 counterparty_chain_ids,
                 bridge_ids,
                 self.read_settings.include_zero_chains,
+                indexed_pairs,
+                indexed_chain_ids,
             )
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_incoming_message_paths(
         &self,
         chain_id: i64,
@@ -254,6 +278,8 @@ impl StatsService {
         to_date: Option<chrono::NaiveDate>,
         counterparty_chain_ids: Option<&[i64]>,
         bridge_ids: Option<&[i32]>,
+        indexed_pairs: Option<&[(i32, Vec<i64>)]>,
+        indexed_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<Vec<crate::MessagePathStatsRow>> {
         self.db
             .get_incoming_message_paths(
@@ -263,6 +289,8 @@ impl StatsService {
                 counterparty_chain_ids,
                 bridge_ids,
                 self.read_settings.include_zero_chains,
+                indexed_pairs,
+                indexed_chain_ids,
             )
             .await
     }

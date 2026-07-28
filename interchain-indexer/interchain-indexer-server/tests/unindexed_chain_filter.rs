@@ -128,19 +128,16 @@ async fn get_chains_default_omits_chain_no_bridge_indexes() {
     );
 }
 
-/// The three raw-SQL stats endpoints `coding-task-2b` owns declare
-/// `include_unindexed_chains` (so the parameter is never silently ignored) but
-/// cannot honor it yet, so `true` is temporarily rejected with
-/// `InvalidArgument` rather than being dropped unfiltered. `coding-task-2b`
-/// removes these rejections.
+/// `coding-task-2b` removes the temporary `InvalidArgument` rejections
+/// `coding-task-2a` installed on the three raw-SQL stats endpoints and wires
+/// `include_unindexed_chains` to the real `IndexedChains`-derived restriction.
+/// None of the four routes below reject `include_unindexed_chains=true` any
+/// more, and `/stats/chains` now honors the default-hide / opt-in contract the
+/// same way `GetChains` already does.
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn stats_endpoints_temporarily_reject_include_unindexed_chains_true() {
-    let db = helpers::init_db(
-        "test",
-        "stats_endpoints_temporarily_reject_include_unindexed_chains_true",
-    )
-    .await;
+async fn stats_endpoints_reject_nothing_after_2b() {
+    let db = helpers::init_db("test", "stats_endpoints_reject_nothing_after_2b").await;
     let base = helpers::init_interchain_indexer_server(db.db_url(), |x| x).await;
 
     let cases = [
@@ -151,22 +148,75 @@ async fn stats_endpoints_temporarily_reject_include_unindexed_chains_true() {
     ];
     for route in cases {
         let (status, body) = helpers::get_raw(&base, route).await;
-        assert_eq!(
-            status,
-            reqwest::StatusCode::BAD_REQUEST,
-            "route {route}: {body}"
-        );
-        assert_eq!(body["code"], serde_json::json!(3), "route {route}: {body}");
-        assert!(
-            body["message"]
-                .as_str()
-                .unwrap()
-                .contains("not supported by this endpoint yet"),
-            "route {route}: unexpected message: {body}"
-        );
+        assert_eq!(status, reqwest::StatusCode::OK, "route {route}: {body}");
     }
 
-    // Absent / false keeps today's (unfiltered) behavior — no rejection.
+    // Absent / false keeps working too.
     let (status, _) = helpers::get_raw(&base, "/api/v1/stats/chains").await;
     assert_eq!(status, reqwest::StatusCode::OK);
+}
+
+/// `/stats/chains` gains the same default-hide + opt-in contract as `GetChains`
+/// (`coding-task-2b` item 1/2), both derived from `IndexedChains::configured_union()`
+/// so the two directory views cannot drift apart.
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn stats_chains_default_omits_chain_no_bridge_indexes_and_agrees_with_get_chains() {
+    let db = helpers::init_db(
+        "test",
+        "stats_chains_default_omits_chain_no_bridge_indexes_and_agrees_with_get_chains",
+    )
+    .await;
+    let base = helpers::init_interchain_indexer_server(db.db_url(), |x| x).await;
+
+    let conn = db.client();
+    chains::Entity::insert(chains::ActiveModel {
+        id: Set(UNINDEXED_CHAIN_ID),
+        name: Set("Unindexed".to_string()),
+        ..Default::default()
+    })
+    .exec(conn.as_ref())
+    .await
+    .unwrap();
+
+    let ids_from = |body: &serde_json::Value| -> Vec<String> {
+        body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["id"].as_str().unwrap().to_string())
+            .collect()
+    };
+
+    let stats_default: serde_json::Value =
+        test_server::send_get_request(&base, "/api/v1/stats/chains").await;
+    let stats_default_ids = ids_from(&stats_default);
+    assert!(
+        !stats_default_ids.contains(&UNINDEXED_CHAIN_ID.to_string()),
+        "default /stats/chains must omit a chain no configured bridge indexes; got {stats_default_ids:?}"
+    );
+    assert!(stats_default_ids.contains(&"1".to_string()));
+
+    let stats_opt_in: serde_json::Value =
+        test_server::send_get_request(&base, "/api/v1/stats/chains?include_unindexed_chains=true")
+            .await;
+    let stats_opt_in_ids = ids_from(&stats_opt_in);
+    assert!(
+        stats_opt_in_ids.contains(&UNINDEXED_CHAIN_ID.to_string()),
+        "opt-in /stats/chains must include the unindexed chain; got {stats_opt_in_ids:?}"
+    );
+
+    // Both directory views are keyed by chain alone and derive their
+    // restriction from the same `configured_union()`, so their default id
+    // sets must agree exactly.
+    let get_chains_default: serde_json::Value =
+        test_server::send_get_request(&base, "/api/v1/interchain/chains").await;
+    let mut get_chains_ids = ids_from(&get_chains_default);
+    let mut stats_ids_sorted = stats_default_ids.clone();
+    get_chains_ids.sort();
+    stats_ids_sorted.sort();
+    assert_eq!(
+        get_chains_ids, stats_ids_sorted,
+        "/stats/chains and GetChains must agree on the default chain set"
+    );
 }

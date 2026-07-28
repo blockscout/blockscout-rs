@@ -862,6 +862,13 @@ paths:
             bridge indexes. Default (absent or false) hides them. Currently returns no
             additional rows — the aggregates for unindexed chain pairs are not written
             yet.
+
+            The per-asset token list can only be restricted by the union across all
+            bridges (the underlying table carries no bridge id), while the edges
+            aggregate above is restricted per the edge's own bridge. So by default an
+            asset's token list omits tokens on chains no bridge indexes at all, but may
+            still list a token on a chain indexed only by a *different* bridge than the
+            one whose edges produced the asset.
           in: query
           required: false
           type: boolean

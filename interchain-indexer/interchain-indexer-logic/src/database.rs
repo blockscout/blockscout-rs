@@ -231,12 +231,101 @@ fn push_in_predicate<T: Copy>(
     }
 }
 
+/// Appends a parenthesized per-bridge indexed-chain restriction over
+/// `bridge_col` / `src_col` / `dst_col`:
+///
+/// ```sql
+/// (   bridge_id NOT IN ($7, $10)
+///  OR (bridge_id = $7 AND src_chain_id IN ($8, $9) AND dst_chain_id IN ($8, $9))
+///  OR (bridge_id = $10 AND src_chain_id IN ($11) AND dst_chain_id IN ($11)) )
+/// ```
+///
+/// The first arm is the **permissive** one: a bridge missing from the current
+/// config is not restricted, because deleting a bridge from `bridges.json` must
+/// not hide history it did fully observe (ADR-004 Decision 5). It is not a leak.
+/// A bridge that *is* listed but has an empty chain set gets the opposite
+/// treatment: its `IN` lists render `FALSE`, and the `NOT IN` arm excludes it too.
+///
+/// No-op when `pairs` is `None`, and **also a no-op for `Some(&[])`** — with no
+/// bridge configured every bridge is "absent", so nothing is restricted
+/// (defensive only; the startup guard rejects an empty config).
+///
+/// The outer parentheses are mandatory. `where_parts` is joined with ` AND `, so
+/// an unparenthesized `OR` would bind loosely and admit rows the caller did not
+/// select. With the permissive arm present this is sharper than a plain `IN`
+/// filter would be: unparenthesized, a single `bridge_col NOT IN (..)` disjunct
+/// would satisfy the whole `WHERE` for any row of a decommissioned bridge,
+/// disabling every other predicate in the same clause for that row.
+///
+/// All three tables this is used on (`stats_asset_edges`, `stats_messages`,
+/// `stats_messages_days`) have NOT NULL chain columns, so no `IS NOT NULL` guard
+/// is needed on the permissive arm. That guard exists only in
+/// `ChainBridgeFilter::messages_condition()`, over the nullable
+/// `crosschain_messages.dst_chain_id`.
+pub(crate) fn push_indexed_pairs_predicate(
+    where_parts: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    placeholder: &mut usize,
+    bridge_col: &str,
+    src_col: &str,
+    dst_col: &str,
+    pairs: Option<&[(i32, Vec<i64>)]>,
+) {
+    let Some(pairs) = pairs.filter(|p| !p.is_empty()) else {
+        return;
+    };
+
+    let mut bridge_placeholders: Vec<String> = Vec::with_capacity(pairs.len());
+    let mut disjuncts: Vec<String> = Vec::with_capacity(pairs.len());
+
+    for (bridge_id, chains) in pairs {
+        let bridge_ph = format!("${}", *placeholder);
+        values.push(Value::Int(Some(*bridge_id)));
+        *placeholder += 1;
+        bridge_placeholders.push(bridge_ph.clone());
+
+        if chains.is_empty() {
+            // Present with an empty set: this bridge observes nothing, so its
+            // `IN` lists must render `FALSE` rather than the invalid `IN ()`.
+            disjuncts.push(format!("({bridge_col} = {bridge_ph} AND FALSE)"));
+            continue;
+        }
+
+        let chain_placeholders: Vec<String> = chains
+            .iter()
+            .map(|chain_id| {
+                let ph = format!("${}", *placeholder);
+                values.push(Value::BigInt(Some(*chain_id)));
+                *placeholder += 1;
+                ph
+            })
+            .collect();
+        // The same placeholders are reused for both the src and dst `IN`
+        // lists: bind each chain once, reference its placeholder twice.
+        let chain_list = chain_placeholders.join(", ");
+        disjuncts.push(format!(
+            "({bridge_col} = {bridge_ph} AND {src_col} IN ({chain_list}) AND {dst_col} IN ({chain_list}))"
+        ));
+    }
+
+    // The permissive arm: a bridge not in `pairs` is absent from the config and
+    // stays unrestricted (ADR-004 Decision 5) — this is the decision, not a leak.
+    let not_in = bridge_placeholders.join(", ");
+    where_parts.push(format!(
+        "({bridge_col} NOT IN ({not_in}) OR {})",
+        disjuncts.join(" OR ")
+    ));
+}
+
+#[allow(clippy::too_many_arguments)]
 fn build_all_time_message_paths_query(
     chain_id: i64,
     direction: MessagePathDirection,
     counterparty_chain_ids: Option<&[i64]>,
     bridge_ids: Option<&[i32]>,
     include_zero_chains: bool,
+    indexed_pairs: Option<&[(i32, Vec<i64>)]>,
+    indexed_chain_ids: Option<&[i64]>,
 ) -> (String, Vec<Value>) {
     let filter_column = match direction {
         MessagePathDirection::Outgoing => "src_chain_id",
@@ -263,6 +352,15 @@ fn build_all_time_message_paths_query(
             bridge_ids,
             |id| Value::Int(Some(id)),
         );
+        push_indexed_pairs_predicate(
+            &mut aggregate_where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            "src_chain_id",
+            "dst_chain_id",
+            indexed_pairs,
+        );
 
         let mut where_parts = vec![
             "c.id <> $1".to_string(),
@@ -276,6 +374,26 @@ fn build_all_time_message_paths_query(
             counterparty_chain_ids,
             |id| Value::BigInt(Some(id)),
         );
+        // Restricts the *invented zero rows* to the union over bridges in
+        // scope, without deleting a real non-zero row that a removed bridge
+        // (permissive in the aggregate above) still contributes. Without the
+        // `sm.messages_count IS NOT NULL` escape, a bare `c.id IN (..)` would
+        // delete that row outright instead of merely denying it a zero row —
+        // see coding-task-2b item 5. No-op when `indexed_chain_ids` is `None`
+        // or empty (`push_in_predicate`'s existing "absent set is 'all'" rule
+        // covers the empty case for free).
+        if let Some(ids) = indexed_chain_ids.filter(|ids| !ids.is_empty()) {
+            let start = placeholder;
+            let placeholders: Vec<String> =
+                (0..ids.len()).map(|i| format!("${}", start + i)).collect();
+            for id in ids {
+                values.push(Value::BigInt(Some(*id)));
+            }
+            where_parts.push(format!(
+                "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
+                placeholders.join(", ")
+            ));
+        }
 
         let sql = match direction {
             MessagePathDirection::Outgoing => format!(
@@ -342,6 +460,15 @@ ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
         bridge_ids,
         |id| Value::Int(Some(id)),
     );
+    push_indexed_pairs_predicate(
+        &mut where_parts,
+        &mut values,
+        &mut placeholder,
+        "bridge_id",
+        "src_chain_id",
+        "dst_chain_id",
+        indexed_pairs,
+    );
 
     // Collapse bridge rows into one row per directional edge before ordering.
     let sql = format!(
@@ -360,6 +487,7 @@ ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
     (sql, values)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_bounded_message_paths_query(
     chain_id: i64,
     from_date: Option<NaiveDate>,
@@ -368,6 +496,8 @@ fn build_bounded_message_paths_query(
     counterparty_chain_ids: Option<&[i64]>,
     bridge_ids: Option<&[i32]>,
     include_zero_chains: bool,
+    indexed_pairs: Option<&[(i32, Vec<i64>)]>,
+    indexed_chain_ids: Option<&[i64]>,
 ) -> (String, Vec<Value>) {
     let filter_column = match direction {
         MessagePathDirection::Outgoing => "src_chain_id",
@@ -404,6 +534,15 @@ fn build_bounded_message_paths_query(
             bridge_ids,
             |id| Value::Int(Some(id)),
         );
+        push_indexed_pairs_predicate(
+            &mut aggregate_where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            "src_chain_id",
+            "dst_chain_id",
+            indexed_pairs,
+        );
 
         let mut where_parts = vec![
             "c.id <> $1".to_string(),
@@ -417,6 +556,21 @@ fn build_bounded_message_paths_query(
             counterparty_chain_ids,
             |id| Value::BigInt(Some(id)),
         );
+        // See the identical block in `build_all_time_message_paths_query`: the
+        // `sm.messages_count IS NOT NULL` escape keeps a real non-zero row of a
+        // permissively-included removed bridge from being deleted outright.
+        if let Some(ids) = indexed_chain_ids.filter(|ids| !ids.is_empty()) {
+            let start = placeholder;
+            let placeholders: Vec<String> =
+                (0..ids.len()).map(|i| format!("${}", start + i)).collect();
+            for id in ids {
+                values.push(Value::BigInt(Some(*id)));
+            }
+            where_parts.push(format!(
+                "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
+                placeholders.join(", ")
+            ));
+        }
 
         let sql = match direction {
             MessagePathDirection::Outgoing => format!(
@@ -494,6 +648,15 @@ ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
         "bridge_id",
         bridge_ids,
         |id| Value::Int(Some(id)),
+    );
+    push_indexed_pairs_predicate(
+        &mut where_parts,
+        &mut values,
+        &mut placeholder,
+        "bridge_id",
+        "src_chain_id",
+        "dst_chain_id",
+        indexed_pairs,
     );
 
     (
@@ -1272,6 +1435,7 @@ impl InterchainDatabase {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_outgoing_message_paths(
         &self,
         chain_id: i64,
@@ -1280,6 +1444,8 @@ impl InterchainDatabase {
         counterparty_chain_ids: Option<&[i64]>,
         bridge_ids: Option<&[i32]>,
         include_zero_chains: bool,
+        indexed_pairs: Option<&[(i32, Vec<i64>)]>,
+        indexed_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
         self.get_message_paths(
             chain_id,
@@ -1289,10 +1455,13 @@ impl InterchainDatabase {
             counterparty_chain_ids,
             bridge_ids,
             include_zero_chains,
+            indexed_pairs,
+            indexed_chain_ids,
         )
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_incoming_message_paths(
         &self,
         chain_id: i64,
@@ -1301,6 +1470,8 @@ impl InterchainDatabase {
         counterparty_chain_ids: Option<&[i64]>,
         bridge_ids: Option<&[i32]>,
         include_zero_chains: bool,
+        indexed_pairs: Option<&[(i32, Vec<i64>)]>,
+        indexed_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
         self.get_message_paths(
             chain_id,
@@ -1310,6 +1481,8 @@ impl InterchainDatabase {
             counterparty_chain_ids,
             bridge_ids,
             include_zero_chains,
+            indexed_pairs,
+            indexed_chain_ids,
         )
         .await
     }
@@ -1324,6 +1497,8 @@ impl InterchainDatabase {
         counterparty_chain_ids: Option<&[i64]>,
         bridge_ids: Option<&[i32]>,
         include_zero_chains: bool,
+        indexed_pairs: Option<&[(i32, Vec<i64>)]>,
+        indexed_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<Vec<MessagePathStatsRow>> {
         if let (Some(from_date), Some(to_date)) = (from_date, to_date)
             && from_date >= to_date
@@ -1338,6 +1513,8 @@ impl InterchainDatabase {
                 counterparty_chain_ids,
                 bridge_ids,
                 include_zero_chains,
+                indexed_pairs,
+                indexed_chain_ids,
             ),
             _ => build_bounded_message_paths_query(
                 chain_id,
@@ -1347,6 +1524,8 @@ impl InterchainDatabase {
                 counterparty_chain_ids,
                 bridge_ids,
                 include_zero_chains,
+                indexed_pairs,
+                indexed_chain_ids,
             ),
         };
         let stmt = Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, values);
@@ -2719,11 +2898,13 @@ impl InterchainDatabase {
     }
 
     /// Paginated bridged-token statistics for `chain_id` (aggregated per `stats_asset`).
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_bridged_token_stats_for_chain(
         &self,
         chain_id: i64,
         counterparty_chain_ids: Option<&[i64]>,
         bridge_ids: Option<&[i32]>,
+        indexed_pairs: Option<&[(i32, Vec<i64>)]>,
         params: crate::stats::StatsListQuery<
             '_,
             crate::pagination::BridgedTokensSortField,
@@ -2738,6 +2919,7 @@ impl InterchainDatabase {
             chain_id,
             counterparty_chain_ids,
             bridge_ids,
+            indexed_pairs,
             params,
         )
         .await
@@ -2748,6 +2930,7 @@ impl InterchainDatabase {
         &self,
         chain_ids: &[i64],
         include_zero_chains: bool,
+        indexed_chain_ids: Option<&[i64]>,
         params: crate::stats::StatsListQuery<
             '_,
             crate::pagination::StatsChainsSortField,
@@ -2761,6 +2944,7 @@ impl InterchainDatabase {
             self.db.as_ref(),
             chain_ids,
             include_zero_chains,
+            indexed_chain_ids,
             params,
         )
         .await
@@ -2770,12 +2954,14 @@ impl InterchainDatabase {
     pub async fn fetch_bridged_token_items_for_assets(
         &self,
         asset_ids: &[i64],
+        indexed_chain_ids: Option<&[i64]>,
     ) -> anyhow::Result<
         std::collections::HashMap<i64, Vec<crate::bridged_tokens_query::BridgedTokenLinkEnriched>>,
     > {
         crate::bridged_tokens_query::fetch_bridged_token_items_for_assets(
             self.db.as_ref(),
             asset_ids,
+            indexed_chain_ids,
         )
         .await
         .map_err(|e| anyhow::anyhow!(e.to_string()))
@@ -2875,10 +3061,10 @@ mod tests {
     };
     use sea_orm::{
         ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
-        QueryOrder, TransactionTrait, prelude::BigDecimal,
+        QueryOrder, TransactionTrait, Value, prelude::BigDecimal,
     };
 
-    use super::{CrosschainMessageLookup, JoinedTransfer};
+    use super::{CrosschainMessageLookup, JoinedTransfer, push_indexed_pairs_predicate};
     use crate::{
         ChainBridgeFilter, IndexedChains, InterchainDatabase, MessagePathStatsRow,
         STATS_BACKFILL_BATCH,
@@ -2896,6 +3082,149 @@ mod tests {
             CrosschainMessageLookup::Found(msg, transfers) => (msg, transfers),
             other => panic!("expected Found, got {other:?}"),
         }
+    }
+
+    // --- push_indexed_pairs_predicate (coding-task-2b item 1, no DB) ---
+
+    #[test]
+    fn test_push_indexed_pairs_predicate_none_is_noop() {
+        let mut where_parts = vec!["existing = $1".to_string()];
+        let mut values = vec![Value::BigInt(Some(1))];
+        let mut placeholder = 2usize;
+
+        push_indexed_pairs_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            "src_chain_id",
+            "dst_chain_id",
+            None,
+        );
+
+        assert_eq!(where_parts, vec!["existing = $1".to_string()]);
+        assert_eq!(values.len(), 1);
+        assert_eq!(placeholder, 2, "placeholder must stay untouched for None");
+    }
+
+    #[test]
+    fn test_push_indexed_pairs_predicate_empty_pairs_is_noop() {
+        // Inverted 2026-07-28: `Some(&[])` used to render `FALSE`; with no
+        // bridge configured every bridge is "absent", so nothing is restricted.
+        let mut where_parts: Vec<String> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        let mut placeholder = 1usize;
+
+        push_indexed_pairs_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            "src_chain_id",
+            "dst_chain_id",
+            Some(&[]),
+        );
+
+        assert!(where_parts.is_empty());
+        assert!(values.is_empty());
+        assert_eq!(placeholder, 1);
+        assert!(!where_parts.iter().any(|p| p.contains("FALSE")));
+    }
+
+    #[test]
+    fn test_push_indexed_pairs_predicate_two_bridges_renders_not_in_and_disjuncts() {
+        let mut where_parts: Vec<String> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        let mut placeholder = 1usize;
+
+        push_indexed_pairs_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            "src_chain_id",
+            "dst_chain_id",
+            Some(&[(1, vec![1, 100]), (2, vec![250])]),
+        );
+
+        assert_eq!(where_parts.len(), 1);
+        let sql = &where_parts[0];
+        assert!(sql.starts_with('('), "must be outer-parenthesized: {sql}");
+        assert!(sql.ends_with(')'), "must be outer-parenthesized: {sql}");
+        assert!(sql.contains("bridge_id NOT IN ($1, $4)"), "sql was: {sql}");
+        assert!(
+            sql.contains(
+                "(bridge_id = $1 AND src_chain_id IN ($2, $3) AND dst_chain_id IN ($2, $3))"
+            ),
+            "sql was: {sql}"
+        );
+        assert!(
+            sql.contains("(bridge_id = $4 AND src_chain_id IN ($5) AND dst_chain_id IN ($5))"),
+            "sql was: {sql}"
+        );
+        // Exactly one top-level OR joining the NOT-IN arm and the two disjuncts.
+        assert_eq!(sql.matches(" OR ").count(), 2, "sql was: {sql}");
+
+        // 2 bridge placeholders + 2 chains (bridge 1) + 1 chain (bridge 2) = 5 values.
+        assert_eq!(values.len(), 5);
+        assert_eq!(placeholder, 6, "placeholder must advance by exactly 5");
+    }
+
+    #[test]
+    fn test_push_indexed_pairs_predicate_empty_chain_set_bridge_in_not_in_and_false_conjunct() {
+        let mut where_parts: Vec<String> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        let mut placeholder = 1usize;
+
+        push_indexed_pairs_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            "src_chain_id",
+            "dst_chain_id",
+            Some(&[(1, vec![])]),
+        );
+
+        assert_eq!(where_parts.len(), 1);
+        let sql = &where_parts[0];
+        assert!(sql.contains("bridge_id NOT IN ($1)"), "sql was: {sql}");
+        assert!(
+            sql.contains("(bridge_id = $1 AND FALSE)"),
+            "empty chain set must render a FALSE conjunct, not an invalid IN (): {sql}"
+        );
+        // Only the bridge id itself is bound; no chain values.
+        assert_eq!(values.len(), 1);
+        assert_eq!(placeholder, 2);
+    }
+
+    #[test]
+    fn test_push_indexed_pairs_predicate_contiguous_after_prior_predicates() {
+        // Simulates being called after counterparty/bridge push_in_predicate
+        // calls have already consumed $1..$3.
+        let mut where_parts = vec!["dst_chain_id IN ($1, $2)".to_string()];
+        let mut values = vec![Value::BigInt(Some(1)), Value::BigInt(Some(2))];
+        let mut placeholder = 3usize;
+
+        push_indexed_pairs_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            "bridge_id",
+            "src_chain_id",
+            "dst_chain_id",
+            Some(&[(9, vec![42])]),
+        );
+
+        assert_eq!(where_parts.len(), 2);
+        let sql = &where_parts[1];
+        assert!(sql.contains("bridge_id NOT IN ($3)"), "sql was: {sql}");
+        assert!(
+            sql.contains("(bridge_id = $3 AND src_chain_id IN ($4) AND dst_chain_id IN ($4))"),
+            "sql was: {sql}"
+        );
+        assert_eq!(values.len(), 4);
+        assert_eq!(placeholder, 5);
     }
 
     #[tokio::test]
@@ -7301,7 +7630,7 @@ mod tests {
         .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, None, false)
+            .get_outgoing_message_paths(1, None, None, None, None, false, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -7357,7 +7686,7 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(3, None, None, None, None, false)
+            .get_incoming_message_paths(3, None, None, None, None, false, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -7418,7 +7747,7 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, None, true)
+            .get_outgoing_message_paths(1, None, None, None, None, true, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -7485,7 +7814,7 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(4, None, None, None, None, true)
+            .get_incoming_message_paths(4, None, None, None, None, true, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -7572,6 +7901,8 @@ mod tests {
                 None,
                 None,
                 false,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -7604,6 +7935,8 @@ mod tests {
                 None,
                 None,
                 false,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -7678,6 +8011,8 @@ mod tests {
                 None,
                 None,
                 false,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -7705,6 +8040,8 @@ mod tests {
                 None,
                 None,
                 false,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -7725,6 +8062,8 @@ mod tests {
                 None,
                 None,
                 false,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -7796,6 +8135,8 @@ mod tests {
                 None,
                 None,
                 true,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -7837,6 +8178,8 @@ mod tests {
                     None,
                     None,
                     true,
+                    None,
+                    None,
                 )
                 .await
                 .unwrap()
@@ -7851,6 +8194,8 @@ mod tests {
                     None,
                     None,
                     true,
+                    None,
+                    None,
                 )
                 .await
                 .unwrap()
@@ -7894,7 +8239,7 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, Some(&[3]), None, true)
+            .get_outgoing_message_paths(1, None, None, Some(&[3]), None, true, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -7948,7 +8293,16 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, Some(&[1, 3, 4, 999]), None, true)
+            .get_outgoing_message_paths(
+                1,
+                None,
+                None,
+                Some(&[1, 3, 4, 999]),
+                None,
+                true,
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -8005,7 +8359,7 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(3, None, None, Some(&[1]), None, true)
+            .get_incoming_message_paths(3, None, None, Some(&[1]), None, true, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -8059,7 +8413,16 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_incoming_message_paths(3, None, None, Some(&[2, 3, 4, 999]), None, true)
+            .get_incoming_message_paths(
+                3,
+                None,
+                None,
+                Some(&[2, 3, 4, 999]),
+                None,
+                true,
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -8137,6 +8500,8 @@ mod tests {
                 Some(&[1, 2, 3, 999]),
                 None,
                 true,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -8190,7 +8555,7 @@ mod tests {
             .unwrap();
 
         let rows = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, None, false)
+            .get_outgoing_message_paths(1, None, None, None, None, false, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -8309,35 +8674,537 @@ mod tests {
 
         // Unfiltered collapses both bridges of edge 1->2 into 8.
         let all = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, None, false)
+            .get_outgoing_message_paths(1, None, None, None, None, false, None, None)
             .await
             .unwrap();
         assert_eq!(counts(all), vec![(1, 2, 8), (1, 3, 2)]);
 
         let only_1 = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, Some(&[1]), false)
+            .get_outgoing_message_paths(1, None, None, None, Some(&[1]), false, None, None)
             .await
             .unwrap();
         assert_eq!(counts(only_1), vec![(1, 2, 5), (1, 3, 2)]);
 
         let only_2 = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, Some(&[2]), false)
+            .get_outgoing_message_paths(1, None, None, None, Some(&[2]), false, None, None)
             .await
             .unwrap();
         assert_eq!(counts(only_2), vec![(1, 2, 3)]);
 
         let both = interchain_db
-            .get_outgoing_message_paths(1, None, None, None, Some(&[1, 2]), false)
+            .get_outgoing_message_paths(1, None, None, None, Some(&[1, 2]), false, None, None)
             .await
             .unwrap();
         assert_eq!(counts(both), vec![(1, 2, 8), (1, 3, 2)]);
 
         // Counterparty AND bridge compose: counterparty {2} + bridge {1} -> only 1->2 on bridge 1.
         let composed = interchain_db
-            .get_outgoing_message_paths(1, None, None, Some(&[2]), Some(&[1]), false)
+            .get_outgoing_message_paths(1, None, None, Some(&[2]), Some(&[1]), false, None, None)
             .await
             .unwrap();
         assert_eq!(counts(composed), vec![(1, 2, 5)]);
+    }
+
+    // --- indexed-chain restriction (coding-task-2b item 5, hazards 1/2, item 12/13) ---
+
+    /// Bridge 1 indexes `{1, 100}`, bridge 2 indexes `{1, 250}` -- the fixture
+    /// `coding-task-2b`'s Verification section prescribes.
+    fn two_bridge_indexed_chains() -> IndexedChains {
+        IndexedChains::from_pairs([(1, 1), (1, 100), (2, 1), (2, 250)])
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_default_excludes_pair_unindexed_for_its_bridge() {
+        let _db = init_db("message_paths_default_excludes_unindexed_for_bridge").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
+        seed_bridge_row(interchain_db.db.as_ref(), 2).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(250),
+                    name: Set("Z".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        // Bridge 1 does not index 250: this all-time row must be hidden by default.
+        interchain_db
+            .create_or_update_stats_messages(1, 1, 250, 9)
+            .await
+            .unwrap();
+        // Bridge 2 does index 250: this row must stay visible.
+        interchain_db
+            .create_or_update_stats_messages(2, 1, 250, 4)
+            .await
+            .unwrap();
+
+        let indexed = two_bridge_indexed_chains();
+        let pairs = indexed.configured_pairs(None);
+
+        let outgoing = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, None, false, pairs.as_deref(), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            outgoing,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 250,
+                messages_count: 4
+            }],
+            "only bridge 2's indexed row must be counted by default"
+        );
+
+        let incoming = interchain_db
+            .get_incoming_message_paths(250, None, None, None, None, false, pairs.as_deref(), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            incoming,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 250,
+                messages_count: 4
+            }]
+        );
+
+        // Bounded (stats_messages_days) shape: same restriction applies.
+        stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+            bridge_id: Set(1),
+            date: Set(NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(250),
+            messages_count: Set(9),
+            ..Default::default()
+        })
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+        stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+            bridge_id: Set(2),
+            date: Set(NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(250),
+            messages_count: Set(4),
+            ..Default::default()
+        })
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let bounded_outgoing = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                Some(NaiveDate::from_ymd_opt(2026, 2, 1).unwrap()),
+                Some(NaiveDate::from_ymd_opt(2026, 4, 1).unwrap()),
+                None,
+                None,
+                false,
+                pairs.as_deref(),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            bounded_outgoing,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 250,
+                messages_count: 4
+            }]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_zero_chains_omits_chain_no_in_scope_bridge_indexes() {
+        let _db = init_db("message_paths_zero_chains_omits_out_of_scope").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
+        seed_bridge_row(interchain_db.db.as_ref(), 2).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("Focal".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(100),
+                    name: Set("Bridge1Only".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(250),
+                    name: Set("Bridge2Only".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(999),
+                    name: Set("NoBridge".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        let indexed = two_bridge_indexed_chains();
+        // Union over all bridges in scope (no bridge_ids filter): {1, 100, 250}.
+        let all_union = indexed.configured_union();
+        let all_pairs = indexed.configured_pairs(None);
+
+        let rows = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                None,
+                None,
+                None,
+                None,
+                true,
+                all_pairs.as_deref(),
+                all_union.as_deref(),
+            )
+            .await
+            .unwrap();
+        let dsts: Vec<i64> = rows.iter().map(|r| r.dst_chain_id).collect();
+        assert!(
+            dsts.contains(&100),
+            "in-scope chain must still be enumerated: {dsts:?}"
+        );
+        assert!(
+            dsts.contains(&250),
+            "in-scope chain must still be enumerated: {dsts:?}"
+        );
+        assert!(
+            !dsts.contains(&999),
+            "chain no in-scope bridge indexes must get no zero row: {dsts:?}"
+        );
+        assert!(
+            !dsts.contains(&1),
+            "the focal chain is never enumerated as its own counterparty"
+        );
+
+        // With bridge_ids=[1], the union in scope narrows to bridge 1's set {1, 100}.
+        let scoped_pairs = indexed.configured_pairs(Some(&[1]));
+        let scoped_union = scoped_pairs.as_ref().map(|p| {
+            let mut ids: Vec<i64> = p.iter().flat_map(|(_, c)| c.iter().copied()).collect();
+            ids.sort_unstable();
+            ids.dedup();
+            ids
+        });
+        let scoped_rows = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                None,
+                None,
+                None,
+                Some(&[1]),
+                true,
+                scoped_pairs.as_deref(),
+                scoped_union.as_deref(),
+            )
+            .await
+            .unwrap();
+        let scoped_dsts: Vec<i64> = scoped_rows.iter().map(|r| r.dst_chain_id).collect();
+        assert!(scoped_dsts.contains(&100));
+        assert!(
+            !scoped_dsts.contains(&250),
+            "chain only bridge 2 indexes must get no zero row when scope is bridge 1: {scoped_dsts:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_zero_chains_keeps_nonzero_row_for_unlisted_chain() {
+        // Regression guard for the `sm.messages_count IS NOT NULL` disjunct
+        // (coding-task-2b item 5 / hazard 1): a bare `c.id IN (union)` would
+        // delete a chain's row outright when a *removed* bridge still
+        // contributes non-zero counts for it, instead of merely denying it an
+        // invented zero row.
+        let _db = init_db("message_paths_zero_chains_keeps_nonzero_for_unlisted").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
+        seed_bridge_row(interchain_db.db.as_ref(), 5).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("Focal".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(999),
+                    name: Set("RemovedBridgeCounterparty".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(1000),
+                    name: Set("NoCounts".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        // Bridge 5 is absent from the config (removed) but still has real,
+        // permissively-counted rows against chain 999.
+        interchain_db
+            .create_or_update_stats_messages(5, 1, 999, 7)
+            .await
+            .unwrap();
+
+        // `IndexedChains` only knows about bridge 1; bridge 5 is absent.
+        let indexed = IndexedChains::from_pairs([(1, 1)]);
+        let pairs = indexed.configured_pairs(None);
+        let union = indexed.configured_union();
+
+        let rows = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                None,
+                None,
+                None,
+                None,
+                true,
+                pairs.as_deref(),
+                union.as_deref(),
+            )
+            .await
+            .unwrap();
+
+        let row_999 = rows.iter().find(|r| r.dst_chain_id == 999);
+        assert_eq!(
+            row_999,
+            Some(&MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 999,
+                messages_count: 7
+            }),
+            "a removed bridge's real non-zero row must survive, not be deleted: {rows:?}"
+        );
+        assert!(
+            !rows.iter().any(|r| r.dst_chain_id == 1000),
+            "a chain outside the union with no counts must get no zero row: {rows:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_removed_bridge_included_present_but_empty_excluded() {
+        let _db = init_db("message_paths_removed_bridge_vs_present_empty").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 5).await;
+        seed_bridge_row(interchain_db.db.as_ref(), 6).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(999),
+                    name: Set("Z".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        // Bridge 5 is absent from the config: permissive, stays counted even
+        // though 999 is not indexed by anyone.
+        interchain_db
+            .create_or_update_stats_messages(5, 1, 999, 3)
+            .await
+            .unwrap();
+        // Bridge 6 is present with an empty chain set: restrictive, excluded.
+        interchain_db
+            .create_or_update_stats_messages(6, 1, 999, 3)
+            .await
+            .unwrap();
+
+        let indexed = IndexedChains::from_bridges([(6, vec![])]);
+        let pairs = indexed.configured_pairs(None);
+
+        let rows = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, None, false, pairs.as_deref(), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![MessagePathStatsRow {
+                src_chain_id: 1,
+                dst_chain_id: 999,
+                messages_count: 3
+            }],
+            "bridge 5 (absent) must be counted; bridge 6 (present-but-empty) must not: {rows:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_empty_configured_pairs_restricts_nothing() {
+        let _db = init_db("message_paths_empty_configured_pairs_restricts_nothing").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(999),
+                    name: Set("Z".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 1, 999, 5)
+            .await
+            .unwrap();
+
+        let with_none = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, None, false, None, None)
+            .await
+            .unwrap();
+        let with_empty = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, None, false, Some(&[]), None)
+            .await
+            .unwrap();
+
+        assert_eq!(with_none, with_empty);
+        assert!(!with_none.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_pruning_bridge_ids_disjunction_no_result_change() {
+        let _db = init_db("message_paths_pruning_bridge_ids_no_change").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
+        seed_bridge_row(interchain_db.db.as_ref(), 2).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(100),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(250),
+                    name: Set("Z".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 1, 100, 5)
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(2, 1, 250, 7)
+            .await
+            .unwrap();
+
+        let indexed = two_bridge_indexed_chains();
+        let bridge_ids = [1i32];
+        let pruned_pairs = indexed.configured_pairs(Some(&bridge_ids));
+        let full_pairs = indexed.configured_pairs(None);
+        assert_ne!(pruned_pairs, full_pairs, "fixture must exercise pruning");
+
+        let with_pruned = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                None,
+                None,
+                None,
+                Some(&bridge_ids),
+                false,
+                pruned_pairs.as_deref(),
+                None,
+            )
+            .await
+            .unwrap();
+        let with_full = interchain_db
+            .get_outgoing_message_paths(
+                1,
+                None,
+                None,
+                None,
+                Some(&bridge_ids),
+                false,
+                full_pairs.as_deref(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(with_pruned, with_full);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_opt_in_returns_same_rows_until_projection_widens() {
+        // Same rationale as `bridged_tokens_opt_in_returns_same_rows_until_projection_widens`:
+        // `stats_messages`/`stats_messages_days` rows are only ever written
+        // today for chain pairs the row's own bridge indexes, so restricting by
+        // `IndexedChains` is a no-op over today's data. Tighten to "opt-in
+        // returns strictly more rows" once `prevent-split-stats-assets` lands.
+        let _db = init_db("message_paths_opt_in_same_until_projection_widens").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 1).await;
+        interchain_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: Set(1),
+                    name: Set("A".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: Set(100),
+                    name: Set("B".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(1, 1, 100, 5)
+            .await
+            .unwrap();
+
+        let indexed = two_bridge_indexed_chains();
+        let pairs = indexed.configured_pairs(None);
+
+        let restricted = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, None, false, pairs.as_deref(), None)
+            .await
+            .unwrap();
+        let opt_in = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, None, false, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(restricted, opt_in);
     }
 
     #[tokio::test]

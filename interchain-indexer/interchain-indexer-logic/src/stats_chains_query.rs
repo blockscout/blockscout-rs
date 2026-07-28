@@ -121,6 +121,7 @@ pub async fn list_stats_chains(
     db: &impl ConnectionTrait,
     chain_ids: &[i64],
     include_zero_chains: bool,
+    indexed_chain_ids: Option<&[i64]>,
     params: StatsListQuery<'_, StatsChainsSortField, StatsChainsPaginationLogic>,
 ) -> Result<
     (
@@ -190,6 +191,21 @@ pub async fn list_stats_chains(
             "(COALESCE(sc.unique_transfer_users_count, 0) > 0 OR COALESCE(sc.unique_message_users_count, 0) > 0)"
                 .to_string(),
         );
+    }
+
+    // An empty union means no bridge is configured at all. Restrict nothing in
+    // that case: emptying the chain directory because `bridges.json` was emptied
+    // is exactly the retroactive reinterpretation ADR-004 Decision 5 forbids, and
+    // the startup guard already rejects that config.
+    if let Some(ids) = indexed_chain_ids.filter(|ids| !ids.is_empty()) {
+        // ANDed with the caller's own `chain_ids` filter: the intersection is
+        // the intended semantics.
+        let start = values.len() + 1;
+        let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("${}", start + i)).collect();
+        for id in ids {
+            values.push(Value::BigInt(Some(*id)));
+        }
+        inner_conditions.push(format!("c.id IN ({})", placeholders.join(", ")));
     }
 
     let inner_where = if inner_conditions.is_empty() {
@@ -320,6 +336,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -353,6 +370,7 @@ mod tests {
             db.as_ref(),
             &[],
             false,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -387,6 +405,7 @@ mod tests {
             db.as_ref(),
             &[],
             false,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -407,6 +426,7 @@ mod tests {
             db.as_ref(),
             &[],
             false,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -439,6 +459,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -471,6 +492,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Asc,
@@ -502,6 +524,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -535,6 +558,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -555,6 +579,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -585,6 +610,7 @@ mod tests {
             db.as_ref(),
             &[3, 1],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -625,6 +651,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -653,6 +680,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -680,6 +708,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -712,6 +741,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -731,6 +761,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::default(),
                 order: StatsSortOrder::Desc,
@@ -761,6 +792,7 @@ mod tests {
             db.as_ref(),
             &[],
             true,
+            None,
             StatsListQuery {
                 sort: StatsChainsSortField::UniqueTransferUsersCount,
                 order: StatsSortOrder::Desc,
@@ -777,5 +809,129 @@ mod tests {
             rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
             vec![20, 30, 10]
         );
+    }
+
+    // --- indexed_chain_ids (coding-task-2b item 2) ---
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_indexed_union_omits_chain_outside_union() {
+        let g = init_db("stats_chains_indexed_union_omit").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 100, 999]).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            true,
+            Some(&[1, 100]),
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let ids: Vec<i64> = rows.iter().map(|r| r.chain_id).collect();
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&100));
+        assert!(
+            !ids.contains(&999),
+            "unindexed chain must be omitted: {ids:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_indexed_union_none_restricts_nothing() {
+        let g = init_db("stats_chains_indexed_union_none").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 999]).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            true,
+            None,
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let ids: Vec<i64> = rows.iter().map(|r| r.chain_id).collect();
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&999));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_indexed_union_empty_restricts_nothing() {
+        // `Some(&[])` means no bridge is configured at all, which the
+        // permissive-absent-bridge rule (ADR-004 Decision 5) says must restrict
+        // nothing -- inverted 2026-07-28, this used to render `FALSE`.
+        let g = init_db("stats_chains_indexed_union_empty").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 999]).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[],
+            true,
+            Some(&[]),
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let ids: Vec<i64> = rows.iter().map(|r| r.chain_id).collect();
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&999));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_indexed_union_intersects_request_chain_ids() {
+        let g = init_db("stats_chains_indexed_union_intersect").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 100, 250]).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            &[1, 250],
+            true,
+            Some(&[1, 100]),
+            StatsListQuery {
+                sort: StatsChainsSortField::default(),
+                order: StatsSortOrder::Desc,
+                page_size: 50,
+                last_page: false,
+                input_pagination: None,
+                q: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // Intersection of request chain_ids {1, 250} and union {1, 100} is {1}.
+        assert_eq!(rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(), vec![1]);
     }
 }
