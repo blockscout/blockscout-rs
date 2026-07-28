@@ -1639,6 +1639,18 @@ impl InterchainDatabase {
                     0,
                 )
                 .await?;
+            // Deliberately `scanned == 0`, not `processed == 0` (coding-task-4a.md
+            // item 5b / AC6 asked for the latter). The candidate query and
+            // `project_messages_batch` both call `message_countable_condition`, so
+            // `processed == 0 ⟺ scanned == 0` by construction (AC5); if that ever
+            // drifts, breaking on `processed == 0` while `scanned > 0` would stop
+            // the backfill early and silently strand a backlog unprojected, which
+            // is worse than the alternative. Breaking on `scanned == 0` just walks
+            // the id space via `min_id` below and terminates regardless. AC6's
+            // "break on projected" wording predates this cursor: without it,
+            // candidates that are never projected would be rescanned forever,
+            // which is the infinite loop AC6 exists to prevent — the cursor closes
+            // that hole on its own, making the two fixes partly redundant.
             if r.messages_scanned == 0 {
                 break;
             }
@@ -1664,6 +1676,7 @@ impl InterchainDatabase {
                     STATS_BACKFILL_BATCH,
                 )
                 .await?;
+            // Same `scanned`-vs-`processed` rationale as the message loop above.
             if r.transfers_scanned == 0 {
                 break;
             }
@@ -2868,6 +2881,7 @@ mod tests {
     use super::{CrosschainMessageLookup, JoinedTransfer};
     use crate::{
         ChainBridgeFilter, IndexedChains, InterchainDatabase, MessagePathStatsRow,
+        STATS_BACKFILL_BATCH,
         test_utils::{
             init_db,
             mock_db::{fill_mock_interchain_database, mock_base_ts},
@@ -9355,5 +9369,378 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(row.messages_count, 2);
+    }
+
+    /// Regression guard for coding-task-4a item 5c (the `min_id` cursor).
+    ///
+    /// `test_backfill_terminates_with_permanently_deferred_rows` and
+    /// `test_backfill_and_live_projection_agree` use 2-3 row fixtures that
+    /// finish in a single round per phase, so they cannot exercise cursor
+    /// advancement at all. This test seeds enough eligible rows (> 2 *
+    /// `STATS_BACKFILL_BATCH`) to force multiple rounds per phase, and pins
+    /// down the round primitive's cursor contract directly — feeding each
+    /// round's own `*_highest_candidate_id` into the next call and asserting
+    /// the exact, non-overlapping row set each round returns — rather than
+    /// only inferring correctness from final row counts.
+    ///
+    /// Note on what this can and cannot prove: `message_countable_condition`
+    /// / `transfer_identity_ready_condition` are baked into the candidate
+    /// SELECT itself (predicate parity, item 5a), and every row selected by
+    /// that SELECT does get marked processed by `project_*_batch` today —
+    /// including conflict-skipped transfers (`projection.rs:1084-1104`
+    /// marks them processed too, "so the maintenance loop does not
+    /// reprocess and re-skip them every cycle"). So in the *current* code, a
+    /// row that never becomes eligible is simply absent from every round's
+    /// candidate set (it costs nothing) and a row that does become eligible
+    /// is always resolved in the round that finds it; pinning `min_id` would
+    /// not, by itself, produce a different final outcome, only a more
+    /// expensive scan of an ever-growing already-processed prefix each
+    /// round. What this test *can* and does pin down: (a) the round
+    /// primitive's `min_id`/`*_highest_candidate_id` contract is exactly
+    /// "strictly greater than", with no gap or overlap across rounds, which
+    /// is the mechanism `backfill_stats_until_idle_with_token_enrichment`
+    /// relies on; (b) permanently-ineligible rows at low ids never enter any
+    /// round's candidate set, at any point across the whole multi-round run,
+    /// so they cannot be mistaken for progress; and (c) message-phase /
+    /// transfer-phase separation holds even when the transfer phase's
+    /// cheapest-to-reach row depends on the message phase's *last* round.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_backfill_multi_round_advances_cursor_without_skipping_or_double_counting() {
+        let _db = init_db(
+            "test_backfill_multi_round_advances_cursor_without_skipping_or_double_counting",
+        )
+        .await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        // Both chains indexed for bridge 1, so a missing transfer endpoint
+        // defers permanently instead of ever becoming countable.
+        let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+
+        let deferred_message = |id: i64| crosschain_messages::ActiveModel {
+            id: Set(id),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(100)),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        };
+
+        // --- Messages: 3 permanently-ineligible rows at the lowest ids
+        // (never finalize; dst chain 100 is indexed for bridge 1, so per the
+        // truth table in coding-task-4a.md item 1 they must wait for
+        // completion forever, which in this fixture never happens) below
+        // 104 countable rows. `message_countable_condition` is part of the
+        // candidate SELECT's WHERE clause (item 5a), so the 3 ineligible
+        // rows are never returned by any round's query at all — they must
+        // not be mistaken for "scanned" capacity. 104 countable rows need
+        // two full batches of 50 plus a 4-row tail, forcing 3 non-empty
+        // message rounds (2 driven manually below, the tail through the
+        // production loop). Each countable message hosts exactly one
+        // transfer (`crosschain_transfers` has a unique `(message_id,
+        // bridge_id, index)`), so there must be at least as many countable
+        // messages as transfers that need a *distinct*, already-countable
+        // parent: 1 special + 3 deferred + 100 regular = 104.
+        const MSG_BASE: i64 = 700_000;
+        const DEFERRED_MSG_COUNT: i64 = 3;
+        const COUNTABLE_MSG_COUNT: i64 = 104;
+        let last_msg_id = MSG_BASE + DEFERRED_MSG_COUNT + COUNTABLE_MSG_COUNT - 1;
+
+        crosschain_messages::Entity::insert_many(
+            (0..DEFERRED_MSG_COUNT).map(|i| deferred_message(MSG_BASE + i)),
+        )
+        .exec(db)
+        .await
+        .unwrap();
+        crosschain_messages::Entity::insert_many(
+            (0..COUNTABLE_MSG_COUNT)
+                .map(|i| completed_message(MSG_BASE + DEFERRED_MSG_COUNT + i, 1, 100)),
+        )
+        .exec(db)
+        .await
+        .unwrap();
+
+        // --- Transfers: one countable transfer (`special_xfer_id`, the
+        // lowest transfer id of all) whose parent message is `last_msg_id`
+        // — the *last* message id, only projected in the message phase's
+        // final round. This is only reachable at all because the message
+        // phase fully drains to idle before the transfer phase's first
+        // round runs (item 5c's mandatory phase separation): the transfer
+        // candidate query requires `crosschain_messages.stats_processed >
+        // 0` on the parent, so if the phases were interleaved (a transfer
+        // round run before the message phase reaches `last_msg_id`), this
+        // specific transfer — despite having the *lowest* transfer id of
+        // all, so it would otherwise be first in line — would not be a
+        // candidate yet and would only be picked up if a later transfer
+        // round revisits it. 3 permanently-ineligible transfers (missing
+        // source, source chain 1 indexed) referencing early
+        // already-countable parents, plus 100 more countable transfers
+        // sharing one token pair so the aggregate edge count below pins
+        // exact-once counting. 101 eligible transfers over 2 batches of 50
+        // forces at least 2 non-empty transfer rounds.
+        const XFER_BASE: i64 = 800_000;
+        let special_xfer_id = XFER_BASE;
+        const DEFERRED_XFER_COUNT: i64 = 3;
+        const COUNTABLE_XFER_COUNT: i64 = 100;
+
+        let shared_src_tok = vec![0xB1u8; 20];
+        let shared_dst_tok = vec![0xB2u8; 20];
+
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            special_xfer_id,
+            last_msg_id,
+            1,
+            1,
+            100,
+            Some(shared_src_tok.clone()),
+            Some(shared_dst_tok.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Deferred: destination-only, source chain (1) indexed -> can never
+        // become countable. Parents are early messages, already countable
+        // well before the transfer phase starts.
+        crosschain_transfers::Entity::insert_many((0..DEFERRED_XFER_COUNT).map(|i| {
+            transfer_active_model(
+                XFER_BASE + 1 + i,
+                MSG_BASE + DEFERRED_MSG_COUNT + i,
+                1,
+                1,
+                100,
+                None,
+                Some([0xC1u8; 20].to_vec()),
+            )
+        }))
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_transfers::Entity::insert_many((0..COUNTABLE_XFER_COUNT).map(|i| {
+            transfer_active_model(
+                XFER_BASE + 1 + DEFERRED_XFER_COUNT + i,
+                // Each transfer needs its own parent (unique `(message_id,
+                // bridge_id, index)`), so use the countable messages that
+                // are not already claimed by the deferred transfers'
+                // parents (offsets 0..3) or by `last_msg_id` (reserved for
+                // the special transfer above): offsets 3..103.
+                MSG_BASE + DEFERRED_MSG_COUNT + DEFERRED_XFER_COUNT + i,
+                1,
+                1,
+                100,
+                Some(shared_src_tok.clone()),
+                Some(shared_dst_tok.clone()),
+            )
+        }))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let ic = InterchainDatabase::new(conn.clone());
+
+        // Drive the message phase's two rounds manually (the exact
+        // primitive `backfill_stats_until_idle_with_token_enrichment` calls
+        // internally) to pin down the cursor contract explicitly, round by
+        // round, rather than only inferring it from final row counts. The 3
+        // deferred messages never satisfy `message_countable_condition`, so
+        // they are never part of either round's result — both rounds are
+        // 100% countable rows, first the lower 50 ids then the upper 50.
+        let round1 = ic
+            .backfill_stats_projection_round(&indexed, i64::MIN, STATS_BACKFILL_BATCH, i64::MIN, 0)
+            .await
+            .unwrap();
+        assert_eq!(
+            round1.messages_scanned, 50,
+            "round 1 must scan exactly one batch of countable rows; the 3 deferred ones never match \
+             message_countable_condition, so they are absent from the candidate set, not merely unprocessed"
+        );
+        assert_eq!(
+            round1.messages_processed, 50,
+            "every row round 1 selects is countable, so all of it gets projected"
+        );
+        let round1_highest = round1
+            .messages_highest_candidate_id
+            .expect("round 1 scanned rows, so it must report a highest candidate id");
+        assert_eq!(round1_highest, MSG_BASE + DEFERRED_MSG_COUNT + 49);
+
+        let round2 = ic
+            .backfill_stats_projection_round(
+                &indexed,
+                round1_highest,
+                STATS_BACKFILL_BATCH,
+                i64::MIN,
+                0,
+            )
+            .await
+            .unwrap();
+        assert!(
+            round2.messages_scanned > 0,
+            "the cursor must have advanced past round 1's rows, or round 2 would be empty"
+        );
+        assert_eq!(
+            round2.messages_scanned, 50,
+            "round 2 must scan exactly the next batch, none of it overlapping round 1's \
+             (id > round1_highest is the whole point of passing the cursor forward)"
+        );
+        assert_eq!(
+            round2.messages_processed, 50,
+            "round 2's batch is entirely countable rows too"
+        );
+        let round2_highest = round2
+            .messages_highest_candidate_id
+            .expect("round 2 scanned rows, so it must report a highest candidate id");
+        assert!(
+            round2_highest > round1_highest,
+            "cursor must strictly advance between consecutive non-empty rounds: {round2_highest} vs {round1_highest}"
+        );
+        assert_eq!(round2_highest, round1_highest + 50);
+        assert!(
+            round2_highest < last_msg_id,
+            "rounds 1 and 2 cover only 100 of the 104 countable messages; \
+             last_msg_id ({last_msg_id}) is in the 4-row tail, deliberately left \
+             for the production loop below to prove it drives a 3rd round on its own"
+        );
+
+        // Finish the rest (the message phase's 4-row tail — including
+        // `last_msg_id`, deliberately left undrained above — then the
+        // entire transfer phase, which depends on `last_msg_id` already
+        // being countable) through the real production entry point.
+        // Wrapped in a timeout as a blunt but real backstop: if the cursor
+        // ever regressed to pinning `min_id`, or a future change
+        // reintroduced a genuinely stuck-but-selected row (e.g. by
+        // weakening predicate parity between the candidate query and
+        // `project_*_batch`), this would be the first thing to turn a
+        // silent slow-down or an accidental infinite loop into a hard test
+        // failure instead of a hang.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            ic.backfill_stats_until_idle(&indexed),
+        )
+        .await
+        .expect("backfill must terminate")
+        .unwrap();
+
+        // Fully idle now: a fresh round covering the whole id range on both
+        // phases must scan nothing. This is also the direct proof that the
+        // 3 deferred messages and 3 deferred transfers never became
+        // candidates at any point — if they had been silently mis-marked
+        // processed instead of staying correctly excluded, this round would
+        // still read 0 (they're gone either way), but the per-row
+        // `stats_processed == 0` assertions below distinguish the two.
+        let idle = ic
+            .backfill_stats_projection_round(&indexed, i64::MIN, 10_000, i64::MIN, 10_000)
+            .await
+            .unwrap();
+        assert_eq!(idle.messages_scanned, 0, "message phase must be fully idle");
+        assert_eq!(
+            idle.transfers_scanned, 0,
+            "transfer phase must be fully idle"
+        );
+
+        // Every countable message is projected exactly once; every
+        // permanently-deferred message is untouched.
+        for i in 0..COUNTABLE_MSG_COUNT {
+            let id = MSG_BASE + DEFERRED_MSG_COUNT + i;
+            let m = crosschain_messages::Entity::find_by_id((id, 1i32))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                m.stats_processed, 1,
+                "countable message {id} must be projected"
+            );
+        }
+        for i in 0..DEFERRED_MSG_COUNT {
+            let id = MSG_BASE + i;
+            let m = crosschain_messages::Entity::find_by_id((id, 1i32))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                m.stats_processed, 0,
+                "deferred message {id} must stay unprocessed"
+            );
+        }
+
+        // The load-bearing case: the transfer with the lowest id but the
+        // latest-maturing parent must still be projected — it is exactly the
+        // row a broken cursor (or interleaved phases) would strand.
+        let special = crosschain_transfers::Entity::find_by_id(special_xfer_id)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            special.stats_processed, 1,
+            "the lowest-id transfer, whose parent is the last message to become countable, \
+             must not be permanently skipped by the cursor"
+        );
+
+        for i in 0..COUNTABLE_XFER_COUNT {
+            let id = XFER_BASE + 1 + DEFERRED_XFER_COUNT + i;
+            let t = crosschain_transfers::Entity::find_by_id(id)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                t.stats_processed, 1,
+                "countable transfer {id} must be projected"
+            );
+        }
+        for i in 0..DEFERRED_XFER_COUNT {
+            let id = XFER_BASE + 1 + i;
+            let t = crosschain_transfers::Entity::find_by_id(id)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                t.stats_processed, 0,
+                "deferred transfer {id} must stay unprocessed"
+            );
+        }
+
+        // No double counting at the aggregate level: all 101 countable
+        // transfers (the special one + the 100 regular ones) share one
+        // token pair, so the edge's `transfers_count` must be exactly 101 —
+        // not more (double projection) and not less (a skipped row).
+        let special_after = crosschain_transfers::Entity::find_by_id(special_xfer_id)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let asset_id = special_after
+            .stats_asset_id
+            .expect("special transfer must have resolved an asset");
+        let edge = stats_asset_edges::Entity::find_by_id((asset_id, 1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            edge.transfers_count,
+            1 + COUNTABLE_XFER_COUNT,
+            "exactly the special transfer plus the 100 regular countable transfers, once each"
+        );
+
+        // The 104 countable messages share one (src, dst, bridge) key too.
+        let msg_row = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            msg_row.messages_count, COUNTABLE_MSG_COUNT,
+            "exactly the 104 countable messages, once each"
+        );
     }
 }
