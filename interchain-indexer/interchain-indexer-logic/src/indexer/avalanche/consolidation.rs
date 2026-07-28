@@ -215,23 +215,33 @@ fn build_transfer(
     let token_src_chain_id = ActiveValue::Set(send.source_chain_id);
     let token_dst_chain_id = ActiveValue::Set(send.destination_chain_id);
 
+    // token_dst_address: the transferrer this hop actually delivers to.
+    // `TeleporterMessage.destinationAddress` is the `ITeleporterReceiver` the
+    // ICM message targets, i.e. the transferrer on `send.destination_chain_id`.
+    // `SendTokensInput.destinationTokenTransferrerAddress` is the *final*
+    // recipient transferrer, which differs from it on a multi-hop first leg —
+    // a `TokenRemote` can only address its `TokenHome`, so hop 1's ICM
+    // destination is `Home` while `SendTokensInput` names the final chain
+    // `R2`. Deriving it from the ICM message keeps `token_dst_chain_id` /
+    // `token_dst_address` internally consistent by construction (see
+    // task.md `prevent-split-stats-assets`, coding-task-4b.md item 5b).
+    let dst_token_addr = send.event.message.destinationAddress;
+
     match transfer {
         TokenTransfer::Sent(src, dest) => {
             // This should never happen because we cannot call this function without a
             // send event. And if there were sent event, src must be Some.
             let src = src.as_ref().context("missing source side of a transfer")?;
-            let (sender, amount, dst_token_addr, recipient, src_token_addr) = match src {
+            let (sender, amount, recipient, src_token_addr) = match src {
                 SentOrRouted::Sent(e) => (
                     e.event.sender,
                     e.event.amount,
-                    e.event.input.destinationTokenTransferrerAddress,
                     e.event.input.recipient,
                     e.contract_address,
                 ),
                 SentOrRouted::Routed(e) => (
                     alloy::primitives::Address::ZERO, // Routed doesn't have sender
                     e.event.amount,
-                    e.event.input.destinationTokenTransferrerAddress,
                     e.event.input.recipient,
                     e.contract_address,
                 ),
@@ -262,11 +272,10 @@ fn build_transfer(
         TokenTransfer::SentAndCalled(src, dest) => {
             let src = src.as_ref().context("missing source side of a transfer")?;
             // Fill from source event
-            let (sender, amount, dst_token_addr, recipient, fallback, src_token_addr) = match src {
+            let (sender, amount, recipient, fallback, src_token_addr) = match src {
                 SentOrRoutedAndCalled::Sent(e) => (
                     e.event.sender,
                     e.event.amount,
-                    e.event.input.destinationTokenTransferrerAddress,
                     e.event.input.recipientContract,
                     e.event.input.fallbackRecipient,
                     e.contract_address,
@@ -274,7 +283,6 @@ fn build_transfer(
                 SentOrRoutedAndCalled::Routed(e) => (
                     alloy::primitives::Address::ZERO,
                     e.event.amount,
-                    e.event.input.destinationTokenTransferrerAddress,
                     e.event.input.recipientContract,
                     e.event.input.fallbackRecipient,
                     e.contract_address,
@@ -305,5 +313,150 @@ fn build_transfer(
 
             Ok(model)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::{B256, U256};
+
+    use super::*;
+    use crate::indexer::avalanche::abi::{
+        ITeleporterMessenger, ITokenTransferrer, SendTokensInput, TeleporterFeeInfo,
+        TeleporterMessage,
+    };
+
+    fn addr(byte: u8) -> Address {
+        Address::from([byte; 20])
+    }
+
+    fn key() -> Key {
+        Key::new(1, 1)
+    }
+
+    /// Builds a `send` event whose ICM destination address (`message.destinationAddress`)
+    /// and ICTT `SendTokensInput.destinationTokenTransferrerAddress` can be set
+    /// independently, so tests can construct both single-hop (equal) and
+    /// multi-hop first-leg (different) scenarios.
+    fn send_event(
+        icm_destination_address: Address,
+    ) -> AnnotatedEvent<ITeleporterMessenger::SendCrossChainMessage> {
+        AnnotatedEvent {
+            event: ITeleporterMessenger::SendCrossChainMessage {
+                messageID: B256::from([0x01u8; 32]),
+                destinationBlockchainID: B256::from([0x02u8; 32]),
+                message: TeleporterMessage {
+                    messageNonce: U256::from(1u64),
+                    originSenderAddress: addr(0x01),
+                    destinationBlockchainID: B256::from([0x02u8; 32]),
+                    destinationAddress: icm_destination_address,
+                    requiredGasLimit: U256::from(100_000u64),
+                    allowedRelayerAddresses: vec![],
+                    receipts: vec![],
+                    message: Bytes::new(),
+                },
+                feeInfo: TeleporterFeeInfo {
+                    feeTokenAddress: Address::ZERO,
+                    amount: U256::ZERO,
+                },
+            },
+            transaction_hash: B256::from([0x03u8; 32]),
+            block_number: 100,
+            block_timestamp: chrono::Utc::now().naive_utc(),
+            source_chain_id: 1,
+            destination_chain_id: 100,
+        }
+    }
+
+    fn tokens_sent_transfer(
+        destination_token_transferrer_address: Address,
+        sender: Address,
+        recipient: Address,
+        src_token_contract: Address,
+        amount: u64,
+    ) -> TokenTransfer {
+        TokenTransfer::Sent(
+            Some(SentOrRouted::Sent(
+                super::super::types::AnnotatedICTTSource {
+                    event: ITokenTransferrer::TokensSent {
+                        teleporterMessageID: B256::from([0x01u8; 32]),
+                        sender,
+                        input: SendTokensInput {
+                            destinationBlockchainID: B256::from([0x02u8; 32]),
+                            destinationTokenTransferrerAddress:
+                                destination_token_transferrer_address,
+                            recipient,
+                            primaryFeeTokenAddress: Address::ZERO,
+                            primaryFee: U256::ZERO,
+                            secondaryFee: U256::ZERO,
+                            requiredGasLimit: U256::from(100_000u64),
+                            multiHopFallback: Address::ZERO,
+                        },
+                        amount: U256::from(amount),
+                    },
+                    contract_address: src_token_contract,
+                },
+            )),
+            None,
+        )
+    }
+
+    fn dst_token_address(model: &crosschain_transfers::ActiveModel) -> Option<Vec<u8>> {
+        match &model.token_dst_address {
+            ActiveValue::Set(v) | ActiveValue::Unchanged(v) => v.clone(),
+            ActiveValue::NotSet => panic!("token_dst_address must be set"),
+        }
+    }
+
+    /// Single-hop send: the ICM destination and the ICTT transferrer agree
+    /// (the normal case for 100% of today's traffic). The fix must be a
+    /// provable no-op here.
+    #[test]
+    fn test_build_transfer_single_hop_dst_address_unchanged() {
+        let icm_and_ictt_transferrer = addr(0xaa);
+        let send = send_event(icm_and_ictt_transferrer);
+        let transfer = tokens_sent_transfer(
+            icm_and_ictt_transferrer,
+            addr(0x11),
+            addr(0x22),
+            addr(0x33),
+            1_000,
+        );
+
+        let model = build_transfer(&transfer, &key(), &send).unwrap();
+
+        assert_eq!(
+            dst_token_address(&model),
+            Some(icm_and_ictt_transferrer.as_slice().to_vec())
+        );
+    }
+
+    /// Synthetic multi-hop first leg: `message.destinationAddress` (Home's
+    /// ICM receiver) differs from `SendTokensInput.destinationTokenTransferrerAddress`
+    /// (the final R2 transferrer). `token_dst_address` must follow the ICM
+    /// message (i.e. `token_dst_chain_id`'s own chain), not the ICTT input.
+    #[test]
+    fn test_build_transfer_multi_hop_dst_address_follows_icm_message() {
+        let icm_destination_on_home = addr(0xaa);
+        let final_hop_transferrer_on_r2 = addr(0xbb);
+        assert_ne!(icm_destination_on_home, final_hop_transferrer_on_r2);
+
+        let send = send_event(icm_destination_on_home);
+        let transfer = tokens_sent_transfer(
+            final_hop_transferrer_on_r2,
+            addr(0x11),
+            addr(0x22),
+            addr(0x33),
+            1_000,
+        );
+
+        let model = build_transfer(&transfer, &key(), &send).unwrap();
+
+        assert_eq!(
+            dst_token_address(&model),
+            Some(icm_destination_on_home.as_slice().to_vec()),
+            "token_dst_address must follow token_dst_chain_id's chain (the ICM hop \
+             destination), not the ICTT input's final transferrer"
+        );
     }
 }

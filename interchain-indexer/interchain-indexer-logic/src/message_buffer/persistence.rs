@@ -293,15 +293,17 @@ pub(super) async fn flush_to_final_storage(
     Ok(())
 }
 
-/// Distinct `(chain_id, token_address)` from finalized transfers for async token enrichment.
-pub(super) fn token_keys_from_finalized_for_enrichment(
-    finalized: &[ConsolidatedMessage],
+/// Distinct `(chain_id, token_address)` from flushed transfers for async token
+/// enrichment. Covers **all** flushed entries, not only finalized ones: a
+/// transfer to a chain unindexed for its bridge is never `is_final` (the
+/// destination-side events can never arrive) but is now countable and
+/// asset-linked, so its known-side token must still be eligible for
+/// enrichment (task.md Success Criteria).
+pub(super) fn token_keys_from_flushed_for_enrichment(
+    flushed: &[ConsolidatedMessage],
 ) -> Vec<(i64, Vec<u8>)> {
     let mut out = HashSet::new();
-    for c in finalized {
-        if !c.is_final {
-            continue;
-        }
+    for c in flushed {
         for t in &c.transfers {
             if let (ActiveValue::Set(sc), ActiveValue::Set(Some(sa))) =
                 (&t.token_src_chain_id, &t.token_src_address)

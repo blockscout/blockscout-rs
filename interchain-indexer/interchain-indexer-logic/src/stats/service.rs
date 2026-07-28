@@ -5,14 +5,12 @@
 use std::sync::Arc;
 
 use interchain_indexer_entity::crosschain_transfers;
-use sea_orm::{
-    ActiveValue, ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, sea_query::Expr,
-};
+use sea_orm::{ActiveValue, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, sea_query::Expr};
 
 use super::{IndexedChains, StatsListQuery};
 use crate::{
     BridgedTokenAggDbRow, BridgedTokenLinkEnriched, InterchainDatabase, TokenInfoService,
-    message_buffer::{ConsolidatedMessage, token_keys_from_finalized_for_enrichment},
+    message_buffer::{ConsolidatedMessage, token_keys_from_flushed_for_enrichment},
     pagination::{
         BridgedTokensPaginationLogic, BridgedTokensSortField, OutputPagination,
         StatsChainsPaginationLogic, StatsChainsSortField,
@@ -91,22 +89,30 @@ impl StatsService {
         &self.indexed_chains
     }
 
-    /// Inline stats projection for finalized batches (same DB transaction as flush).
-    pub async fn apply_stats_for_finalized_batch(
+    /// Inline stats projection for a flushed batch (same DB transaction as the
+    /// flush itself). Takes **all** flushed entries — final and `Partial` —
+    /// not only finalized ones: identity maintenance (linking a newly known
+    /// token endpoint, merging two asset components) must run for every
+    /// flushed canonical key so a later relink is not silently missed, while
+    /// counting stays gated on [`super::projection::project_transfers_batch`]'s
+    /// own `stats_processed` / eligibility rule. See
+    /// `.memory-bank/gotchas.md` "Stats Eligibility Is About Observability,
+    /// Not Protocol Terminality".
+    pub async fn apply_stats_for_flushed_batch(
         &self,
         tx: &DatabaseTransaction,
-        finalized: &[ConsolidatedMessage],
+        flushed: &[ConsolidatedMessage],
     ) -> Result<(), DbErr> {
-        if finalized.is_empty() {
+        if flushed.is_empty() {
             return Ok(());
         }
-        let mut msg_pks = Vec::with_capacity(finalized.len());
-        for c in finalized {
+        let mut msg_pks = Vec::with_capacity(flushed.len());
+        for c in flushed {
             let (mid, brid) = match (&c.message.id, &c.message.bridge_id) {
                 (ActiveValue::Set(mid), ActiveValue::Set(brid)) => (*mid, *brid),
                 _ => {
                     return Err(DbErr::Custom(
-                        "finalized consolidated message must have id and bridge_id set".into(),
+                        "flushed consolidated message must have id and bridge_id set".into(),
                     ));
                 }
             };
@@ -115,6 +121,9 @@ impl StatsService {
 
         super::projection::project_messages_batch(tx, &msg_pks, &self.indexed_chains).await?;
 
+        // No `stats_processed = 0` filter here: an already-counted transfer of
+        // a flushed key must still reach `project_transfers_batch`, which
+        // itself decides identity-maintenance-only (repair) vs. counting.
         let transfer_ids: Vec<i64> = crosschain_transfers::Entity::find()
             .filter(
                 Expr::tuple([
@@ -123,7 +132,6 @@ impl StatsService {
                 ])
                 .in_tuples(msg_pks.iter().copied()),
             )
-            .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
             .all(tx)
             .await?
             .into_iter()
@@ -163,8 +171,14 @@ impl StatsService {
         }
     }
 
-    pub fn kickoff_token_enrichment_for_finalized(&self, finalized: &[ConsolidatedMessage]) {
-        let keys = token_keys_from_finalized_for_enrichment(finalized);
+    /// Kicks off token metadata fetch for every consolidated entry in the
+    /// batch, not only finalized ones — a transfer to an unindexed chain is
+    /// never `is_final` but is now countable and asset-linked, so it must
+    /// still be eligible for enrichment (task.md Success Criteria: "assets
+    /// created from unindexed-counterpart transfers are eligible for token
+    /// metadata enrichment").
+    pub fn kickoff_token_enrichment_for_flushed(&self, flushed: &[ConsolidatedMessage]) {
+        let keys = token_keys_from_flushed_for_enrichment(flushed);
         self.kickoff_token_enrichment_for_keys(keys);
     }
 
@@ -298,6 +312,11 @@ impl StatsService {
 
 #[cfg(test)]
 mod tests {
+    use interchain_indexer_entity::{
+        bridges, chains, crosschain_messages, sea_orm_active_enums::MessageStatus,
+    };
+    use sea_orm::TransactionTrait;
+
     use super::*;
     use crate::test_utils::init_db;
 
@@ -313,5 +332,101 @@ mod tests {
             IndexedChains::AllIndexed,
         );
         stats.kickoff_token_enrichment_for_keys(vec![(1, vec![0xab; 20])]);
+    }
+
+    /// coding-task-4b work item 1: a non-final (`Partial`) consolidation must
+    /// still reach the stats hook. A message to a chain unindexed for its
+    /// bridge is countable per `message_countable_condition` regardless of
+    /// `is_final` (that flag is an ICTT-completion detail the stats layer
+    /// does not consult), so this is the scenario the old `is_final`-only
+    /// filter used to silently drop forever.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_partial_flush_reaches_stats_hook_without_counting() {
+        let guard = init_db("stats_service_partial_flush_reaches_hook").await;
+        let conn = guard.client();
+
+        let raw_db = InterchainDatabase::new(conn.clone());
+        raw_db
+            .upsert_bridges(vec![bridges::ActiveModel {
+                id: ActiveValue::Set(1),
+                name: ActiveValue::Set("test_bridge".into()),
+                enabled: ActiveValue::Set(true),
+                ..Default::default()
+            }])
+            .await
+            .unwrap();
+        raw_db
+            .upsert_chains(vec![
+                chains::ActiveModel {
+                    id: ActiveValue::Set(1),
+                    name: ActiveValue::Set("src".into()),
+                    ..Default::default()
+                },
+                chains::ActiveModel {
+                    id: ActiveValue::Set(900),
+                    name: ActiveValue::Set("unindexed_dst".into()),
+                    ..Default::default()
+                },
+            ])
+            .await
+            .unwrap();
+
+        // Seed the canonical row as if a Partial flush had already written it
+        // (mirroring what `flush_to_final_storage` does before the stats hook
+        // runs in the same transaction).
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: ActiveValue::Set(1),
+            bridge_id: ActiveValue::Set(1),
+            status: ActiveValue::Set(MessageStatus::Initiated),
+            init_timestamp: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+            src_chain_id: ActiveValue::Set(1),
+            dst_chain_id: ActiveValue::Set(Some(900)),
+            src_tx_hash: ActiveValue::Set(Some(vec![0xab; 32])),
+            stats_processed: ActiveValue::Set(0),
+            ..Default::default()
+        })
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        // Chain 900 is unindexed for bridge 1 (present in the map, absent
+        // from its set) -> the message is countable despite being `Initiated`.
+        let stats = Arc::new(StatsService::new(
+            Arc::new(InterchainDatabase::new(conn.clone())),
+            None,
+            StatsReadSettings::default(),
+            IndexedChains::from_pairs([(1, 1)]),
+        ));
+
+        let partial = ConsolidatedMessage {
+            is_final: false,
+            replace_existing: false,
+            message: crosschain_messages::ActiveModel {
+                id: ActiveValue::Set(1),
+                bridge_id: ActiveValue::Set(1),
+                ..Default::default()
+            },
+            transfers: vec![],
+            amb_confirmations: vec![],
+            amb_anomalies: vec![],
+        };
+
+        conn.transaction::<_, (), DbErr>(|tx| {
+            let stats = stats.clone();
+            Box::pin(async move { stats.apply_stats_for_flushed_batch(tx, &[partial]).await })
+        })
+        .await
+        .unwrap();
+
+        let row = crosschain_messages::Entity::find_by_id((1i64, 1i32))
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.stats_processed, 1,
+            "a Partial entry to an unindexed destination must still reach the stats hook and count"
+        );
     }
 }

@@ -6490,10 +6490,18 @@ mod tests {
         assert_eq!(edge.cumulative_amount, BigDecimal::from(1887u64));
     }
 
+    // task Decision 7: a `decimals` mismatch on the non-merge counting path is
+    // still anomalous (warned + metric-tracked), but must no longer abort the
+    // shared maintenance transaction — that would roll back cursor writes
+    // every cycle from one bad pair of edge rows. Supersedes the old
+    // `stats_projection_rejects_conflicting_edge_decimals`, which pinned the
+    // now-removed abort behaviour.
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn stats_projection_rejects_conflicting_edge_decimals() {
-        let _db = init_db("stats_projection_rejects_conflicting_edge_decimals").await;
+    async fn test_decimals_conflict_on_counting_path_skips_transfer_without_aborting() {
+        let _db =
+            init_db("test_decimals_conflict_on_counting_path_skips_transfer_without_aborting")
+                .await;
         let conn = _db.client();
         let db = conn.as_ref();
         seed_minimal_bridge(db).await;
@@ -6541,8 +6549,8 @@ mod tests {
             bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(100),
-            transfers_count: Set(0),
-            cumulative_amount: Set(BigDecimal::from(0u64)),
+            transfers_count: Set(3),
+            cumulative_amount: Set(BigDecimal::from(300u64)),
             decimals: Set(Some(17)),
             amount_side: Set(EdgeAmountSide::Source),
             ..Default::default()
@@ -6572,55 +6580,113 @@ mod tests {
         .await
         .unwrap();
 
-        let res = db
-            .transaction(|tx| {
-                Box::pin(async move {
-                    crate::stats::projection::project_messages_batch(
-                        tx,
-                        &[(92023i64, 1i32)],
-                        &IndexedChains::AllIndexed,
-                    )
-                    .await?;
-                    crate::stats::projection::project_transfers_batch(
-                        tx,
-                        &[92023i64],
-                        &IndexedChains::AllIndexed,
-                    )
-                    .await?;
-                    Ok::<(), sea_orm::DbErr>(())
+        let before = crate::stats::metrics::STATS_EDGE_DECIMALS_CONFLICT_TOTAL.get();
+
+        // The transaction also carries a cursor-like write, mirroring the
+        // shared maintenance transaction's cursor upserts: it must survive the
+        // skip, proving this is no longer a poison pill.
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92023i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92023i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                indexer_checkpoints::Entity::insert(indexer_checkpoints::ActiveModel {
+                    bridge_id: Set(1),
+                    chain_id: Set(1),
+                    catchup_min_cursor: Set(0),
+                    catchup_max_cursor: Set(42),
+                    finality_cursor: Set(0),
+                    realtime_cursor: Set(42),
+                    ..Default::default()
                 })
+                .exec(tx)
+                .await?;
+                Ok::<(), sea_orm::DbErr>(())
             })
-            .await;
-        assert!(res.is_err(), "expected decimals conflict");
+        })
+        .await
+        .expect("decimals conflict must not abort the transaction");
+
+        let after = crate::stats::metrics::STATS_EDGE_DECIMALS_CONFLICT_TOTAL.get();
+        assert_eq!(
+            after - before,
+            1,
+            "decimals conflict metric must be incremented exactly once"
+        );
+
         let t = crosschain_transfers::Entity::find_by_id(92023i64)
             .one(db)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(t.stats_processed, 0);
+        assert_eq!(
+            t.stats_processed, 1,
+            "transfer must be marked processed despite the conflict"
+        );
+        assert!(
+            t.stats_asset_id.is_none(),
+            "conflict-skipped transfer keeps no stats asset link, same shape as a mapping conflict"
+        );
+
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.transfers_count, 3, "edge aggregate must be unchanged");
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(300u64));
+        assert_eq!(edge.decimals, Some(17));
+
+        let cursor = indexer_checkpoints::Entity::find_by_id((1i32, 1i64))
+            .one(db)
+            .await
+            .unwrap();
+        assert!(
+            cursor.is_some(),
+            "the cursor write inside the same transaction must survive (no poison pill)"
+        );
     }
 
     // A transfer whose two endpoints are already mapped to *different* stats
-    // assets cannot be reconciled. It is skipped (and marked processed) rather
-    // than aborting the batch, so the shared maintenance transaction commits.
+    // assets is no longer an unresolvable conflict (coding-task-4b): asset
+    // identity is a union-find problem, and the two components are merged
+    // (weighted union: more linked tokens wins, ties go to the lower id).
+    // Supersedes the old `stats_projection_skips_transfer_with_conflicting_asset_mappings`,
+    // which pinned the now-removed warn-and-skip behaviour.
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn stats_projection_skips_transfer_with_conflicting_asset_mappings() {
-        let _db = init_db("stats_projection_skips_conflicting_asset_mappings").await;
+    async fn test_merge_winner_is_larger_component_ties_to_lower_id() {
+        let _db = init_db("test_merge_winner_is_larger_component_ties_to_lower_id").await;
         let conn = _db.client();
         let db = conn.as_ref();
         seed_minimal_bridge(db).await;
-        let addr_a = [0xe1u8; 20].to_vec();
-        let addr_b = [0xe2u8; 20].to_vec();
-
-        let aid_a = stats_assets::Entity::insert(stats_assets::ActiveModel {
+        chains::Entity::insert_many((501..=506).map(|id| chains::ActiveModel {
+            id: Set(id),
+            name: Set(format!("chain{id}")),
             ..Default::default()
-        })
-        .exec_with_returning(db)
+        }))
+        .exec(db)
         .await
-        .unwrap()
-        .id;
-        let aid_b = stats_assets::Entity::insert(stats_assets::ActiveModel {
+        .unwrap();
+
+        // --- Part 1: size beats id. The smaller (1-token) component is
+        // created FIRST (lower id); the larger (3-token) component is created
+        // SECOND (higher id). The larger one must still win.
+        let addr_small = [0xf1u8; 20].to_vec();
+        let addr_big1 = [0xf2u8; 20].to_vec();
+        let addr_big2 = [0xf3u8; 20].to_vec();
+        let addr_big3 = [0xf4u8; 20].to_vec();
+
+        let aid_small = stats_assets::Entity::insert(stats_assets::ActiveModel {
             ..Default::default()
         })
         .exec_with_returning(db)
@@ -6628,25 +6694,51 @@ mod tests {
         .unwrap()
         .id;
         stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
-            stats_asset_id: Set(aid_a),
-            chain_id: Set(1),
-            token_address: Set(addr_a.clone()),
-            ..Default::default()
-        })
-        .exec(db)
-        .await
-        .unwrap();
-        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
-            stats_asset_id: Set(aid_b),
-            chain_id: Set(100),
-            token_address: Set(addr_b.clone()),
+            stats_asset_id: Set(aid_small),
+            chain_id: Set(501),
+            token_address: Set(addr_small.clone()),
             ..Default::default()
         })
         .exec(db)
         .await
         .unwrap();
 
-        crosschain_messages::Entity::insert(completed_message(92024, 1, 100))
+        let aid_big = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        assert!(
+            aid_big > aid_small,
+            "the larger component must be created with the HIGHER id to prove size, not id, decides"
+        );
+        stats_asset_tokens::Entity::insert_many([
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(aid_big),
+                chain_id: Set(502),
+                token_address: Set(addr_big1.clone()),
+                ..Default::default()
+            },
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(aid_big),
+                chain_id: Set(503),
+                token_address: Set(addr_big2.clone()),
+                ..Default::default()
+            },
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(aid_big),
+                chain_id: Set(504),
+                token_address: Set(addr_big3.clone()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message(92024, 501, 502))
             .exec(db)
             .await
             .unwrap();
@@ -6655,19 +6747,18 @@ mod tests {
             message_id: Set(92024),
             bridge_id: Set(1),
             index: Set(0),
-            token_src_chain_id: Set(1),
-            token_dst_chain_id: Set(100),
+            token_src_chain_id: Set(501),
+            token_dst_chain_id: Set(502),
             src_amount: Set(Some(BigDecimal::from(1u64))),
             dst_amount: Set(Some(BigDecimal::from(1u64))),
-            token_src_address: Set(Some(addr_a.clone())),
-            token_dst_address: Set(Some(addr_b.clone())),
+            token_src_address: Set(Some(addr_small.clone())),
+            token_dst_address: Set(Some(addr_big1.clone())),
             ..Default::default()
         })
         .exec(db)
         .await
         .unwrap();
 
-        // Must commit: the unreconcilable transfer is skipped, not fatal.
         db.transaction(|tx| {
             Box::pin(async move {
                 crate::stats::projection::project_messages_batch(
@@ -6688,21 +6779,126 @@ mod tests {
         .await
         .unwrap();
 
+        assert!(
+            stats_assets::Entity::find_by_id(aid_small)
+                .one(db)
+                .await
+                .unwrap()
+                .is_none(),
+            "the smaller component must be the loser and be deleted"
+        );
+        assert!(
+            stats_assets::Entity::find_by_id(aid_big)
+                .one(db)
+                .await
+                .unwrap()
+                .is_some(),
+            "the larger component must survive as the winner"
+        );
         let t = crosschain_transfers::Entity::find_by_id(92024i64)
             .one(db)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(
-            t.stats_processed, 1,
-            "skipped transfer marked processed so it is not retried every cycle"
-        );
+        assert_eq!(t.stats_asset_id, Some(aid_big));
+
+        // --- Part 2: an exact tie (1 token each) breaks to the lower id.
+        let addr_c = [0xf5u8; 20].to_vec();
+        let addr_d = [0xf6u8; 20].to_vec();
+
+        let aid_c = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid_c),
+            chain_id: Set(505),
+            token_address: Set(addr_c.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        let aid_d = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        assert!(aid_d > aid_c);
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid_d),
+            chain_id: Set(506),
+            token_address: Set(addr_d.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_messages::Entity::insert(completed_message(92025, 505, 506))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92025),
+            message_id: Set(92025),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(505),
+            token_dst_chain_id: Set(506),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(addr_c.clone())),
+            token_dst_address: Set(Some(addr_d.clone())),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92025i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92025i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
         assert!(
-            t.stats_asset_id.is_none(),
-            "skipped transfer is left without a stats asset"
+            stats_assets::Entity::find_by_id(aid_d)
+                .one(db)
+                .await
+                .unwrap()
+                .is_none(),
+            "on a tie the higher id must be the loser"
         );
-        // The conflicting endpoints keep their original, distinct mappings.
-        assert_ne!(aid_a, aid_b);
+        let t2 = crosschain_transfers::Entity::find_by_id(92025i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            t2.stats_asset_id,
+            Some(aid_c),
+            "on a tie the lower id must win"
+        );
     }
 
     #[tokio::test]
@@ -11300,5 +11496,1586 @@ mod tests {
                 "{case}: hide (shown={shown}) must be the exact negation of flag (flagged={flagged})"
             );
         }
+    }
+
+    // --- coding-task-4b: union-find asset merge, identity vs counting ---
+
+    /// Two complete transfers on fully indexed chains form two disjoint
+    /// components (`{A,B}` and `{C,D}`); a later transfer bridging `B->C`
+    /// must join them into one asset instead of being skipped forever.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_joins_three_chain_components() {
+        let _db = init_db("test_merge_joins_three_chain_components").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await; // chains 1, 100 + bridge 1
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(200),
+                name: Set("C".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(300),
+                name: Set("D".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let indexed = IndexedChains::AllIndexed;
+        let addr_a = [0xa1u8; 20].to_vec();
+        let addr_b = [0xb1u8; 20].to_vec();
+        let addr_c = [0xc1u8; 20].to_vec();
+        let addr_d = [0xd1u8; 20].to_vec();
+
+        // Transfer 1: A(1) -> B(100).
+        crosschain_messages::Entity::insert(completed_message(97001, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            97001,
+            97001,
+            1,
+            1,
+            100,
+            Some(addr_a.clone()),
+            Some(addr_b.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+        db.transaction(|tx| {
+            let indexed = indexed.clone();
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(tx, &[(97001i64, 1i32)], &indexed)
+                    .await?;
+                crate::stats::projection::project_transfers_batch(tx, &[97001i64], &indexed)
+                    .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        // Transfer 2: C(200) -> D(300).
+        crosschain_messages::Entity::insert(completed_message(97002, 200, 300))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            97002,
+            97002,
+            1,
+            200,
+            300,
+            Some(addr_c.clone()),
+            Some(addr_d.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+        db.transaction(|tx| {
+            let indexed = indexed.clone();
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(tx, &[(97002i64, 1i32)], &indexed)
+                    .await?;
+                crate::stats::projection::project_transfers_batch(tx, &[97002i64], &indexed)
+                    .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t1 = crosschain_transfers::Entity::find_by_id(97001i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let t2 = crosschain_transfers::Entity::find_by_id(97002i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let asset_x = t1.stats_asset_id.unwrap();
+        let asset_y = t2.stats_asset_id.unwrap();
+        assert_ne!(asset_x, asset_y, "must start as two disjoint components");
+
+        // Transfer 3: B(100) -> C(200), bridging the two components.
+        crosschain_messages::Entity::insert(completed_message(97003, 100, 200))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            97003,
+            97003,
+            1,
+            100,
+            200,
+            Some(addr_b.clone()),
+            Some(addr_c.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+        db.transaction(|tx| {
+            let indexed = indexed.clone();
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(tx, &[(97003i64, 1i32)], &indexed)
+                    .await?;
+                crate::stats::projection::project_transfers_batch(tx, &[97003i64], &indexed)
+                    .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let winner = asset_x.min(asset_y);
+        let loser = asset_x.max(asset_y);
+
+        assert!(
+            stats_assets::Entity::find_by_id(loser)
+                .one(db)
+                .await
+                .unwrap()
+                .is_none(),
+            "the losing asset row must be gone"
+        );
+        assert!(
+            stats_assets::Entity::find_by_id(winner)
+                .one(db)
+                .await
+                .unwrap()
+                .is_some(),
+            "the winning asset row must survive"
+        );
+
+        let tokens = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::StatsAssetId.eq(winner))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(
+            tokens.len(),
+            4,
+            "all four token mappings must end up on the surviving asset"
+        );
+        let mut chain_ids: Vec<i64> = tokens.iter().map(|t| t.chain_id).collect();
+        chain_ids.sort_unstable();
+        assert_eq!(chain_ids, vec![1, 100, 200, 300]);
+
+        for (transfer_id, src, dst) in [
+            (97001i64, 1i64, 100i64),
+            (97002i64, 200i64, 300i64),
+            (97003i64, 100i64, 200i64),
+        ] {
+            let edge = stats_asset_edges::Entity::find_by_id((winner, src, dst, 1i32))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap_or_else(|| panic!("edge for transfer {transfer_id} must exist"));
+            assert_eq!(
+                edge.transfers_count, 1,
+                "edge for transfer {transfer_id} must not be double counted"
+            );
+        }
+
+        for transfer_id in [97001i64, 97002i64, 97003i64] {
+            let t = crosschain_transfers::Entity::find_by_id(transfer_id)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                t.stats_asset_id,
+                Some(winner),
+                "transfer {transfer_id} must be repointed to the surviving asset"
+            );
+        }
+    }
+
+    /// Seeds a stand-alone stats asset with exactly one linked token, for
+    /// constructing pre-merge fixtures directly (bypassing normal projection).
+    #[allow(clippy::too_many_arguments)]
+    async fn seed_singleton_asset_with_edge(
+        db: &sea_orm::DatabaseConnection,
+        chain_id: i64,
+        token_address: Vec<u8>,
+        bridge_id: i32,
+        edge_src_chain_id: i64,
+        edge_dst_chain_id: i64,
+        transfers_count: i64,
+        cumulative_amount: BigDecimal,
+        decimals: Option<i16>,
+        amount_side: EdgeAmountSide,
+    ) -> i64 {
+        let aid = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(chain_id),
+            token_address: Set(token_address),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            stats_asset_id: Set(aid),
+            bridge_id: Set(bridge_id),
+            src_chain_id: Set(edge_src_chain_id),
+            dst_chain_id: Set(edge_dst_chain_id),
+            transfers_count: Set(transfers_count),
+            cumulative_amount: Set(cumulative_amount),
+            decimals: Set(decimals),
+            amount_side: Set(amount_side),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        aid
+    }
+
+    /// Inserts an already-processed (`stats_processed = 1`) transfer whose two
+    /// endpoints are already linked to two different pre-seeded assets. This
+    /// is the repair path's trigger: `ensure_asset_for_transfer` still runs
+    /// (identity maintenance is not gated on `stats_processed`), so it merges
+    /// the two components without contributing any edge delta of its own
+    /// (repair-path rows are excluded from `edge_acc` entirely) — letting a
+    /// test observe a *pure* fold of the two pre-seeded edges.
+    #[allow(clippy::too_many_arguments)]
+    async fn insert_already_processed_bridging_transfer(
+        db: &sea_orm::DatabaseConnection,
+        id: i64,
+        bridge_id: i32,
+        src_chain_id: i64,
+        dst_chain_id: i64,
+        src_address: Vec<u8>,
+        dst_address: Vec<u8>,
+    ) {
+        crosschain_messages::Entity::insert(completed_message(id, src_chain_id, dst_chain_id))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(id),
+            message_id: Set(id),
+            bridge_id: Set(bridge_id),
+            index: Set(0),
+            token_src_chain_id: Set(src_chain_id),
+            token_dst_chain_id: Set(dst_chain_id),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(src_address)),
+            token_dst_address: Set(Some(dst_address)),
+            stats_processed: Set(1),
+            stats_asset_id: Set(None),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_folds_shared_edge_key() {
+        let _db = init_db("test_merge_folds_shared_edge_key").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(601),
+                name: Set("only_src_known".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(602),
+                name: Set("only_dst_known".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_w = [0x60u8; 20].to_vec();
+        let tok_l = [0x61u8; 20].to_vec();
+
+        // W: dst-known-only component (its src_chain_id=601 is stored on the
+        // edge but W holds no token there). Created FIRST -> lower id -> wins
+        // the token-count tie against L below.
+        let w_id = seed_singleton_asset_with_edge(
+            db,
+            602,
+            tok_w.clone(),
+            1,
+            601,
+            602,
+            3,
+            BigDecimal::from(1000u64),
+            Some(18),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        // L: src-known-only component, same edge chain pair, same decimals.
+        let l_id = seed_singleton_asset_with_edge(
+            db,
+            601,
+            tok_l.clone(),
+            1,
+            601,
+            602,
+            2,
+            BigDecimal::from(500u64),
+            Some(18),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        assert!(w_id < l_id, "W must be created first to win the tie");
+
+        insert_already_processed_bridging_transfer(db, 92100, 1, 601, 602, tok_l, tok_w).await;
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92100i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+            })
+        })
+        .await
+        .unwrap();
+
+        assert!(
+            stats_assets::Entity::find_by_id(l_id)
+                .one(db)
+                .await
+                .unwrap()
+                .is_none(),
+            "the loser must be gone"
+        );
+        let edge = stats_asset_edges::Entity::find_by_id((w_id, 601i64, 602i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            edge.transfers_count, 5,
+            "folded transfers_count must be the sum (3 + 2)"
+        );
+        assert_eq!(
+            edge.cumulative_amount,
+            BigDecimal::from(1500u64),
+            "folded cumulative_amount must be the sum (1000 + 500)"
+        );
+        assert_eq!(edge.decimals, Some(18));
+
+        let t = crosschain_transfers::Entity::find_by_id(92100i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            t.stats_asset_id,
+            Some(w_id),
+            "the repair-path trigger must be linked to the winner"
+        );
+        assert_eq!(
+            t.stats_processed, 1,
+            "the repair path must never touch stats_processed"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_mixed_amount_side_keeps_winner_side_and_adds() {
+        let _db = init_db("test_merge_mixed_amount_side_keeps_winner_side_and_adds").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(611),
+                name: Set("only_src_known".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(612),
+                name: Set("only_dst_known".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_w = [0x62u8; 20].to_vec();
+        let tok_l = [0x63u8; 20].to_vec();
+
+        let before = crate::stats::metrics::STATS_EDGE_MIXED_AMOUNT_SIDE_TOTAL.get();
+
+        let w_id = seed_singleton_asset_with_edge(
+            db,
+            612,
+            tok_w.clone(),
+            1,
+            611,
+            612,
+            1,
+            BigDecimal::from(100u64),
+            Some(18),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        let l_id = seed_singleton_asset_with_edge(
+            db,
+            611,
+            tok_l.clone(),
+            1,
+            611,
+            612,
+            1,
+            BigDecimal::from(50u64),
+            Some(18),
+            EdgeAmountSide::Destination,
+        )
+        .await;
+        assert!(w_id < l_id);
+
+        insert_already_processed_bridging_transfer(db, 92110, 1, 611, 612, tok_l, tok_w).await;
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92110i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+            })
+        })
+        .await
+        .unwrap();
+
+        let edge = stats_asset_edges::Entity::find_by_id((w_id, 611i64, 612i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            edge.amount_side,
+            EdgeAmountSide::Source,
+            "the winner's amount_side must be retained"
+        );
+        assert_eq!(edge.cumulative_amount, BigDecimal::from(150u64));
+        assert_eq!(edge.transfers_count, 2);
+
+        let after = crate::stats::metrics::STATS_EDGE_MIXED_AMOUNT_SIDE_TOTAL.get();
+        assert_eq!(after - before, 1, "mixed-side metric must be incremented");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_rescales_loser_amount_to_winner_decimals_scaled_up() {
+        let _db = init_db("test_merge_rescales_loser_amount_to_winner_decimals_scaled_up").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(621),
+                name: Set("only_src_known".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(622),
+                name: Set("only_dst_known".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_w = [0x64u8; 20].to_vec();
+        let tok_l = [0x65u8; 20].to_vec();
+
+        let before = crate::stats::metrics::STATS_EDGE_RESCALED_FOLD_TOTAL
+            .with_label_values(&["scaled_up"])
+            .get();
+
+        // Winner: decimals = 18. Loser: decimals = 6 (a factor of 10^12 apart).
+        let w_id = seed_singleton_asset_with_edge(
+            db,
+            622,
+            tok_w.clone(),
+            1,
+            621,
+            622,
+            1,
+            BigDecimal::from(1_000u64),
+            Some(18),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        let l_id = seed_singleton_asset_with_edge(
+            db,
+            621,
+            tok_l.clone(),
+            1,
+            621,
+            622,
+            1,
+            BigDecimal::from(3u64),
+            Some(6),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        assert!(w_id < l_id);
+
+        insert_already_processed_bridging_transfer(db, 92120, 1, 621, 622, tok_l, tok_w).await;
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92120i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+            })
+        })
+        .await
+        .unwrap();
+
+        let edge = stats_asset_edges::Entity::find_by_id((w_id, 621i64, 622i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        // winner(1000) + loser(3) * 10^(18-6) = 1000 + 3_000_000_000_000
+        assert_eq!(
+            edge.cumulative_amount,
+            BigDecimal::from(3_000_000_001_000u64)
+        );
+        assert_eq!(edge.decimals, Some(18), "the winner's decimals survive");
+        assert_eq!(edge.amount_side, EdgeAmountSide::Source);
+
+        let after = crate::stats::metrics::STATS_EDGE_RESCALED_FOLD_TOTAL
+            .with_label_values(&["scaled_up"])
+            .get();
+        assert_eq!(after - before, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_rescales_loser_amount_to_winner_decimals_scaled_down() {
+        let _db = init_db("test_merge_rescales_loser_amount_to_winner_decimals_scaled_down").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(631),
+                name: Set("only_src_known".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(632),
+                name: Set("only_dst_known".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_w = [0x66u8; 20].to_vec();
+        let tok_l = [0x67u8; 20].to_vec();
+
+        let before = crate::stats::metrics::STATS_EDGE_RESCALED_FOLD_TOTAL
+            .with_label_values(&["scaled_down"])
+            .get();
+
+        // Winner: decimals = 6. Loser: decimals = 18. Loser amount
+        // 2_500_000_000_000 (2.5 * 10^12) truncates to 2 at the winner's scale.
+        let w_id = seed_singleton_asset_with_edge(
+            db,
+            632,
+            tok_w.clone(),
+            1,
+            631,
+            632,
+            1,
+            BigDecimal::from(1_000u64),
+            Some(6),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        let l_id = seed_singleton_asset_with_edge(
+            db,
+            631,
+            tok_l.clone(),
+            1,
+            631,
+            632,
+            1,
+            BigDecimal::from(2_500_000_000_000u64),
+            Some(18),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        assert!(w_id < l_id);
+
+        insert_already_processed_bridging_transfer(db, 92130, 1, 631, 632, tok_l, tok_w).await;
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92130i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+            })
+        })
+        .await
+        .unwrap();
+
+        let edge = stats_asset_edges::Entity::find_by_id((w_id, 631i64, 632i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        // winner(1000) + floor(2_500_000_000_000 / 10^12) = 1000 + 2 = 1002
+        assert_eq!(
+            edge.cumulative_amount,
+            BigDecimal::from(1_002u64),
+            "integer division must truncate, not round"
+        );
+        assert_eq!(edge.decimals, Some(6));
+
+        let after = crate::stats::metrics::STATS_EDGE_RESCALED_FOLD_TOTAL
+            .with_label_values(&["scaled_down"])
+            .get();
+        assert_eq!(after - before, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_unknown_decimals_adds_unscaled() {
+        let _db = init_db("test_merge_unknown_decimals_adds_unscaled").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(641),
+                name: Set("only_src_known".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(642),
+                name: Set("only_dst_known".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_w = [0x68u8; 20].to_vec();
+        let tok_l = [0x69u8; 20].to_vec();
+
+        let before = crate::stats::metrics::STATS_EDGE_RESCALED_FOLD_TOTAL
+            .with_label_values(&["unscaled_unknown_decimals"])
+            .get();
+
+        let w_id = seed_singleton_asset_with_edge(
+            db,
+            642,
+            tok_w.clone(),
+            1,
+            641,
+            642,
+            1,
+            BigDecimal::from(1_000u64),
+            Some(9),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        let l_id = seed_singleton_asset_with_edge(
+            db,
+            641,
+            tok_l.clone(),
+            1,
+            641,
+            642,
+            1,
+            BigDecimal::from(500u64),
+            None,
+            EdgeAmountSide::Source,
+        )
+        .await;
+        assert!(w_id < l_id);
+
+        insert_already_processed_bridging_transfer(db, 92140, 1, 641, 642, tok_l, tok_w).await;
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92140i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+            })
+        })
+        .await
+        .unwrap();
+
+        let edge = stats_asset_edges::Entity::find_by_id((w_id, 641i64, 642i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            edge.cumulative_amount,
+            BigDecimal::from(1_500u64),
+            "unknown-scale sum is added raw"
+        );
+        assert_eq!(edge.decimals, Some(9), "the known decimals must be adopted");
+
+        let after = crate::stats::metrics::STATS_EDGE_RESCALED_FOLD_TOTAL
+            .with_label_values(&["unscaled_unknown_decimals"])
+            .get();
+        assert_eq!(after - before, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_overflow_guard_falls_back_to_unscaled() {
+        let _db = init_db("test_merge_overflow_guard_falls_back_to_unscaled").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(651),
+                name: Set("only_src_known".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(652),
+                name: Set("only_dst_known".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_w = [0x6au8; 20].to_vec();
+        let tok_l = [0x6bu8; 20].to_vec();
+
+        let before = crate::stats::metrics::STATS_EDGE_RESCALED_FOLD_TOTAL
+            .with_label_values(&["unscaled_overflow"])
+            .get();
+
+        // diff = 78 - 1 = 77; loser (99, two digits) scaled up would be a
+        // 79-digit number, which overflows NUMERIC(78,0).
+        let w_id = seed_singleton_asset_with_edge(
+            db,
+            652,
+            tok_w.clone(),
+            1,
+            651,
+            652,
+            1,
+            BigDecimal::from(1_000u64),
+            Some(78),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        let l_id = seed_singleton_asset_with_edge(
+            db,
+            651,
+            tok_l.clone(),
+            1,
+            651,
+            652,
+            1,
+            BigDecimal::from(99u64),
+            Some(1),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        assert!(w_id < l_id);
+
+        insert_already_processed_bridging_transfer(db, 92150, 1, 651, 652, tok_l, tok_w).await;
+
+        let res = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &[92150i64],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
+                })
+            })
+            .await;
+        assert!(
+            res.is_ok(),
+            "an overflow must fall back to an unscaled add, never fail"
+        );
+
+        let edge = stats_asset_edges::Entity::find_by_id((w_id, 651i64, 652i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            edge.cumulative_amount,
+            BigDecimal::from(1_099u64),
+            "the overflow guard must add the loser's raw value unscaled"
+        );
+        assert_eq!(edge.decimals, Some(78));
+
+        let after = crate::stats::metrics::STATS_EDGE_RESCALED_FOLD_TOTAL
+            .with_label_values(&["unscaled_overflow"])
+            .get();
+        assert_eq!(after - before, 1);
+    }
+
+    /// Two assets that each hold a *different* token on the same chain can
+    /// never be merged: doing so would place two tokens on one chain in one
+    /// asset. The refusal must leave the database byte-identical to the
+    /// pre-merge state.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_refused_on_chain_collision_leaves_no_partial_mutation() {
+        let _db = init_db("test_merge_refused_on_chain_collision_leaves_no_partial_mutation").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([700, 701, 702].map(|id| chains::ActiveModel {
+            id: Set(id),
+            name: Set(format!("chain{id}")),
+            ..Default::default()
+        }))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_x1 = [0x70u8; 20].to_vec();
+        let tok_x2 = [0x71u8; 20].to_vec();
+        let tok_y1 = [0x72u8; 20].to_vec(); // different token, same chain 700 as tok_x1
+        let tok_y2 = [0x73u8; 20].to_vec();
+
+        let x_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert_many([
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(x_id),
+                chain_id: Set(700),
+                token_address: Set(tok_x1.clone()),
+                ..Default::default()
+            },
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(x_id),
+                chain_id: Set(701),
+                token_address: Set(tok_x2.clone()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            stats_asset_id: Set(x_id),
+            bridge_id: Set(1),
+            src_chain_id: Set(700),
+            dst_chain_id: Set(701),
+            transfers_count: Set(1),
+            cumulative_amount: Set(BigDecimal::from(10u64)),
+            decimals: Set(None),
+            amount_side: Set(EdgeAmountSide::Source),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let y_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert_many([
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(y_id),
+                chain_id: Set(700),
+                token_address: Set(tok_y1.clone()),
+                ..Default::default()
+            },
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(y_id),
+                chain_id: Set(702),
+                token_address: Set(tok_y2.clone()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            stats_asset_id: Set(y_id),
+            bridge_id: Set(1),
+            src_chain_id: Set(700),
+            dst_chain_id: Set(702),
+            transfers_count: Set(1),
+            cumulative_amount: Set(BigDecimal::from(20u64)),
+            decimals: Set(None),
+            amount_side: Set(EdgeAmountSide::Source),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let before = crate::stats::metrics::STATS_ASSET_MERGES_TOTAL
+            .with_label_values(&["refused_chain_collision"])
+            .get();
+
+        crosschain_messages::Entity::insert(completed_message(92160, 701, 702))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            92160,
+            92160,
+            1,
+            701,
+            702,
+            Some(tok_x2.clone()),
+            Some(tok_y2.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let processed = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &[92160i64],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(processed, 1, "the refused transfer is still marked handled");
+
+        let after = crate::stats::metrics::STATS_ASSET_MERGES_TOTAL
+            .with_label_values(&["refused_chain_collision"])
+            .get();
+        assert_eq!(after - before, 1);
+
+        // Nothing about either pre-existing component changed.
+        assert!(
+            stats_assets::Entity::find_by_id(x_id)
+                .one(db)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            stats_assets::Entity::find_by_id(y_id)
+                .one(db)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let x_tokens = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::StatsAssetId.eq(x_id))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(x_tokens.len(), 2);
+        let y_tokens = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::StatsAssetId.eq(y_id))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(y_tokens.len(), 2);
+        assert_eq!(
+            stats_asset_edges::Entity::find().count(db).await.unwrap(),
+            2,
+            "no new edge row may have been created for the refused transfer"
+        );
+        let x_edge = stats_asset_edges::Entity::find_by_id((x_id, 700i64, 701i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(x_edge.transfers_count, 1);
+        assert_eq!(x_edge.cumulative_amount, BigDecimal::from(10u64));
+        let y_edge = stats_asset_edges::Entity::find_by_id((y_id, 700i64, 702i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(y_edge.transfers_count, 1);
+        assert_eq!(y_edge.cumulative_amount, BigDecimal::from(20u64));
+
+        let t = crosschain_transfers::Entity::find_by_id(92160i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 1, "refused transfer marked processed");
+        assert!(
+            t.stats_asset_id.is_none(),
+            "refused transfer keeps no stats asset link"
+        );
+    }
+
+    /// One `project_transfers_batch` call whose transfers trigger `a∪b` then
+    /// `b∪c` (transitively, `a` also ends up merged into `c`). Regression
+    /// guard for the `merged_away` remap: without it, transfer 1's already
+    /// resolved (and since-merged-away) asset id would dangle.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_transitive_within_one_batch() {
+        let _db = init_db("test_merge_transitive_within_one_batch").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([801, 802, 803, 804, 805].map(|id| chains::ActiveModel {
+            id: Set(id),
+            name: Set(format!("chain{id}")),
+            ..Default::default()
+        }))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_a = [0x80u8; 20].to_vec();
+        let tok_b = [0x81u8; 20].to_vec();
+        let tok_c1 = [0x82u8; 20].to_vec();
+        let tok_c2 = [0x83u8; 20].to_vec();
+        let tok_c3 = [0x84u8; 20].to_vec();
+
+        // A: singleton (chain 801). Created FIRST -> lowest id.
+        let a_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(a_id),
+            chain_id: Set(801),
+            token_address: Set(tok_a.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        // B: singleton (chain 802). Created SECOND.
+        let b_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(b_id),
+            chain_id: Set(802),
+            token_address: Set(tok_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        // C: three tokens (chains 803-805). Created THIRD, but bigger than
+        // the merged A+B component, so C must win the second merge even
+        // though it does not have the lowest id.
+        let c_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert_many([
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(c_id),
+                chain_id: Set(803),
+                token_address: Set(tok_c1.clone()),
+                ..Default::default()
+            },
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(c_id),
+                chain_id: Set(804),
+                token_address: Set(tok_c2.clone()),
+                ..Default::default()
+            },
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(c_id),
+                chain_id: Set(805),
+                token_address: Set(tok_c3.clone()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        assert!(a_id < b_id && b_id < c_id);
+
+        // Transfer 1 (lower id, processed first): a <-> b. Tie on token count
+        // -> lower id (a) wins.
+        crosschain_messages::Entity::insert(completed_message(92170, 801, 802))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            92170,
+            92170,
+            1,
+            801,
+            802,
+            Some(tok_a.clone()),
+            Some(tok_b.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Transfer 2 (higher id, processed second): b <-> c1. `b` resolves
+        // via the in-batch cache to whatever transfer 1 left it as (a, after
+        // remap). `a` (2 tokens) vs `c` (3 tokens) -> c wins, so `a` (the
+        // winner of merge 1) becomes the loser of merge 2 -- the transitive
+        // case.
+        crosschain_messages::Entity::insert(completed_message(92171, 802, 803))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            92171,
+            92171,
+            1,
+            802,
+            803,
+            Some(tok_b.clone()),
+            Some(tok_c1.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92170i64, 1i32), (92171i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92170i64, 92171i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        assert!(
+            stats_assets::Entity::find_by_id(a_id)
+                .one(db)
+                .await
+                .unwrap()
+                .is_none(),
+            "a must have been merged away (transitively) into c"
+        );
+        assert!(
+            stats_assets::Entity::find_by_id(b_id)
+                .one(db)
+                .await
+                .unwrap()
+                .is_none(),
+            "b must have been merged away into a, then transitively into c"
+        );
+        assert!(
+            stats_assets::Entity::find_by_id(c_id)
+                .one(db)
+                .await
+                .unwrap()
+                .is_some(),
+            "c must be the sole surviving asset"
+        );
+
+        let tokens = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::StatsAssetId.eq(c_id))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(tokens.len(), 5, "all five tokens must end up on c");
+
+        // The critical regression guard: neither transfer may reference the
+        // now-deleted `a`.
+        let t1 = crosschain_transfers::Entity::find_by_id(92170i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let t2 = crosschain_transfers::Entity::find_by_id(92171i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            t1.stats_asset_id,
+            Some(c_id),
+            "transfer 1's asset id must be resolved through the transitive remap, not dangle at `a`"
+        );
+        assert_eq!(t2.stats_asset_id, Some(c_id));
+
+        let edge1 = stats_asset_edges::Entity::find_by_id((c_id, 801i64, 802i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge1.transfers_count, 1);
+        let edge2 = stats_asset_edges::Entity::find_by_id((c_id, 802i64, 803i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge2.transfers_count, 1);
+    }
+
+    /// A late upsert that fills a previously missing token endpoint on an
+    /// already-counted transfer links that token into the existing asset
+    /// without recounting the transfer.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_late_endpoint_relinks_without_recounting() {
+        let _db = init_db("test_late_endpoint_relinks_without_recounting").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert(chains::ActiveModel {
+            id: Set(900),
+            name: Set("unindexed_dst".into()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Chain 900 is unindexed for bridge 1 (present in the map, not in its set).
+        let indexed = IndexedChains::from_pairs([(1, 1)]);
+
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: Set(92180),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(900)),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        let addr_src = [0x77u8; 20].to_vec();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            92180,
+            92180,
+            1,
+            1,
+            900,
+            Some(addr_src.clone()),
+            None,
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let n = db
+            .transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(tx, &[92180i64], &indexed)
+                        .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            n, 1,
+            "single-known-side transfer to an unindexed chain counts now"
+        );
+
+        let t = crosschain_transfers::Entity::find_by_id(92180i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 1);
+        let aid = t.stats_asset_id.unwrap();
+        let tokens_before = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::StatsAssetId.eq(aid))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(
+            tokens_before.len(),
+            1,
+            "only the known side is linked initially"
+        );
+        let edge_before = stats_asset_edges::Entity::find_by_id((aid, 1i64, 900i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge_before.transfers_count, 1);
+
+        // Late upsert fills the previously-unknown destination token address
+        // (mirrors what `crosschain_transfers_on_conflict`'s `COALESCE` would
+        // produce on a later flush of the same canonical key).
+        let addr_dst = [0x88u8; 20].to_vec();
+        crosschain_transfers::Entity::update(crosschain_transfers::ActiveModel {
+            id: Set(92180),
+            token_dst_address: Set(Some(addr_dst.clone())),
+            dst_amount: Set(Some(BigDecimal::from(10u64))),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let n2 = db
+            .transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(tx, &[92180i64], &indexed)
+                        .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(n2, 0, "the repair path is not counted as newly processed");
+
+        let t2 = crosschain_transfers::Entity::find_by_id(92180i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t2.stats_processed, 1, "marker must not change");
+        assert_eq!(
+            t2.stats_asset_id,
+            Some(aid),
+            "stays linked to the same asset"
+        );
+
+        let tokens_after = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::StatsAssetId.eq(aid))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(
+            tokens_after.len(),
+            2,
+            "the newly known side must now be linked too"
+        );
+        assert!(
+            tokens_after
+                .iter()
+                .any(|t| t.chain_id == 900 && t.token_address == addr_dst)
+        );
+
+        let edge_after = stats_asset_edges::Entity::find_by_id((aid, 1i64, 900i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            edge_after.transfers_count, 1,
+            "additive aggregate must not double count"
+        );
+        assert_eq!(
+            edge_after.cumulative_amount, edge_before.cumulative_amount,
+            "cumulative amount must be unchanged by the repair"
+        );
+    }
+
+    /// coding-task-4b work item 5b: after `build_transfer` derives
+    /// `token_dst_address` from the ICM message, a synthetic two-hop pair
+    /// (`R1 -> Home -> R2`) must project as ONE asset with three token
+    /// mappings, not two assets permanently refused on a chain collision.
+    /// Hop 1's `token_dst_address` here is the Home *transferrer* address
+    /// (the fixed value), which is exactly what hop 2's `token_src_address`
+    /// also uses — so the two hops share a single token row on Home and
+    /// never even need a merge.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_avalanche_multihop_pair_projects_as_one_asset_via_fixed_dst_address() {
+        let _db =
+            init_db("test_avalanche_multihop_pair_projects_as_one_asset_via_fixed_dst_address")
+                .await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([1001, 1002, 1003].map(|id| chains::ActiveModel {
+            id: Set(id),
+            name: Set(format!("chain{id}")),
+            ..Default::default()
+        }))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_r1 = [0xd1u8; 20].to_vec();
+        let tok_home = [0xd2u8; 20].to_vec(); // Home's transferrer address
+        let tok_r2 = [0xd3u8; 20].to_vec();
+
+        // Hop 1: R1(1001) -> Home(1002). token_dst_address = tok_home, the
+        // Home transferrer -- exactly what the fixed `build_transfer` derives
+        // from `TeleporterMessage.destinationAddress` for this hop.
+        crosschain_messages::Entity::insert(completed_message(97010, 1001, 1002))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            97010,
+            97010,
+            1,
+            1001,
+            1002,
+            Some(tok_r1.clone()),
+            Some(tok_home.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Hop 2: Home(1002) -> R2(1003). token_src_address = tok_home, the
+        // SAME address hop 1 linked -- so this hop extends the same asset
+        // instead of forming (and later needing to merge) a second one.
+        crosschain_messages::Entity::insert(completed_message(97011, 1002, 1003))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            97011,
+            97011,
+            1,
+            1002,
+            1003,
+            Some(tok_home.clone()),
+            Some(tok_r2.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let indexed = IndexedChains::AllIndexed;
+        for (mid, tid) in [(97010i64, 97010i64), (97011i64, 97011i64)] {
+            db.transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_messages_batch(tx, &[(mid, 1i32)], &indexed)
+                        .await?;
+                    crate::stats::projection::project_transfers_batch(tx, &[tid], &indexed).await?;
+                    Ok::<(), sea_orm::DbErr>(())
+                })
+            })
+            .await
+            .unwrap();
+        }
+
+        let t1 = crosschain_transfers::Entity::find_by_id(97010i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let t2 = crosschain_transfers::Entity::find_by_id(97011i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            t1.stats_asset_id, t2.stats_asset_id,
+            "both hops must resolve to ONE asset, not two"
+        );
+        let aid = t1.stats_asset_id.unwrap();
+
+        let tokens = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::StatsAssetId.eq(aid))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(
+            tokens.len(),
+            3,
+            "the single surviving asset must hold all three token mappings (R1, Home, R2)"
+        );
+        assert_eq!(stats_assets::Entity::find().count(db).await.unwrap(), 1);
+
+        // Per task Decision 8, multi-hop is counted per hop: two edges, each
+        // with transfers_count = 1, not one collapsed edge.
+        let edge1 = stats_asset_edges::Entity::find_by_id((aid, 1001i64, 1002i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge1.transfers_count, 1);
+        let edge2 = stats_asset_edges::Entity::find_by_id((aid, 1002i64, 1003i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge2.transfers_count, 1);
     }
 }

@@ -290,13 +290,18 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
         let finalized_keys = plan.finalized_keys.clone();
         let cursor_builder = plan.cursor_builder.clone();
 
-        let finalized_entries: Vec<ConsolidatedMessage> = consolidated_entries
-            .iter()
-            .filter(|c| c.is_final)
-            .cloned()
-            .collect();
+        // Widened per coding-task-4b item 1: the stats hook and token
+        // enrichment now run for **every** flushed entry, final and `Partial`
+        // — a non-final consolidation is already flushed to
+        // `crosschain_messages`/`crosschain_transfers`
+        // (`ConsolidationOutcome::Partial`), so identity maintenance must see
+        // its canonical row too, not only finalized ones. `is_final` stays
+        // load-bearing everywhere else below: `finalized_keys` (pending
+        // cleanup), `hot_evictions` (eviction), and `BridgeCounts` metrics are
+        // all computed from `plan` directly and untouched by this change.
+        let flushed_for_stats = consolidated_entries.clone();
+        let flushed_for_enrichment = consolidated_entries.clone();
 
-        let finalized_for_stats = finalized_entries.clone();
         let stats = self.stats.clone();
         let new = self
             .stats
@@ -308,7 +313,7 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
                     persistence::offload_stale_to_pending(tx, &stale_entries).await?;
                     persistence::flush_to_final_storage(tx, consolidated_entries).await?;
                     stats
-                        .apply_stats_for_finalized_batch(tx, &finalized_for_stats)
+                        .apply_stats_for_flushed_batch(tx, &flushed_for_stats)
                         .await?;
                     persistence::remove_finalized_from_pending(tx, &finalized_keys).await?;
 
@@ -324,7 +329,7 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
             .context("maintenance transaction failed")?;
 
         self.stats
-            .kickoff_token_enrichment_for_finalized(&finalized_entries);
+            .kickoff_token_enrichment_for_flushed(&flushed_for_enrichment);
 
         for ((bridge_id, chain_id), cursor) in &new {
             let bridge_label = bridge_id.to_string();
@@ -367,5 +372,215 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
                 bridge_stats.hot_entries += 1;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{sync::Arc, time::Duration};
+
+    use chrono::Utc;
+    use interchain_indexer_entity::{
+        bridges, chains, crosschain_messages, crosschain_transfers, pending_messages,
+        sea_orm_active_enums::MessageStatus,
+    };
+    use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter, prelude::BigDecimal};
+    use serde::{Deserialize, Serialize};
+
+    use super::{BufferItem, Consolidate, ConsolidatedMessage, Key, MessageBuffer};
+    use crate::{
+        InterchainDatabase, StatsReadSettings, StatsService, settings::MessageBufferSettings,
+        stats::IndexedChains, test_utils::init_db,
+    };
+
+    /// Minimal `Consolidate` impl carrying one transfer, used only to drive
+    /// `MessageBuffer::run()` end to end (offload/restore/flush/stats hook)
+    /// without pulling in a real protocol indexer.
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    struct TransferDummyMessage {
+        consolidatable: bool,
+        is_final: bool,
+    }
+
+    impl Consolidate for TransferDummyMessage {
+        fn consolidate(&self, key: &Key) -> anyhow::Result<Option<ConsolidatedMessage>> {
+            if !self.consolidatable {
+                return Ok(None);
+            }
+            Ok(Some(ConsolidatedMessage {
+                is_final: self.is_final,
+                replace_existing: false,
+                message: crosschain_messages::ActiveModel {
+                    id: ActiveValue::Set(key.message_id),
+                    bridge_id: ActiveValue::Set(key.bridge_id as i32),
+                    status: ActiveValue::Set(MessageStatus::Initiated),
+                    init_timestamp: ActiveValue::Set(Utc::now().naive_utc()),
+                    src_chain_id: ActiveValue::Set(1),
+                    dst_chain_id: ActiveValue::Set(Some(100)),
+                    src_tx_hash: ActiveValue::Set(Some(vec![0xabu8; 32])),
+                    stats_processed: ActiveValue::Set(0),
+                    ..Default::default()
+                },
+                transfers: vec![crosschain_transfers::ActiveModel {
+                    message_id: ActiveValue::Set(key.message_id),
+                    bridge_id: ActiveValue::Set(key.bridge_id as i32),
+                    index: ActiveValue::Set(0),
+                    token_src_chain_id: ActiveValue::Set(1),
+                    token_dst_chain_id: ActiveValue::Set(100),
+                    src_amount: ActiveValue::Set(Some(BigDecimal::from(10u64))),
+                    dst_amount: ActiveValue::Set(Some(BigDecimal::from(10u64))),
+                    token_src_address: ActiveValue::Set(Some(vec![0x11u8; 20])),
+                    token_dst_address: ActiveValue::Set(Some(vec![0x22u8; 20])),
+                    stats_processed: ActiveValue::Set(0),
+                    ..Default::default()
+                }],
+                amb_confirmations: vec![],
+                amb_anomalies: vec![],
+            }))
+        }
+    }
+
+    fn test_buffer_settings() -> MessageBufferSettings {
+        MessageBufferSettings {
+            hot_ttl: Duration::from_secs(60),
+            maintenance_interval: Duration::from_secs(60),
+        }
+    }
+
+    /// coding-task-4b: a `Partial` (non-final) flush must reach the stats
+    /// hook and count exactly once; a later finalizing flush of the *same*
+    /// canonical key must not recount it. Also exercises the cold-tier path
+    /// (offloaded to `pending_messages`, restored via `alter`) end to end
+    /// through the real `MessageBuffer::run()` maintenance cycle.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_cold_tier_restore_projects_exactly_once() {
+        let test_db = init_db("maintenance_cold_tier_restore_projects_once").await;
+        let db = InterchainDatabase::new(test_db.client());
+
+        let key = Key::new(9001, 1);
+
+        db.upsert_bridges(vec![bridges::ActiveModel {
+            id: ActiveValue::Set(key.bridge_id as i32),
+            name: ActiveValue::Set("test_bridge".to_string()),
+            enabled: ActiveValue::Set(true),
+            ..Default::default()
+        }])
+        .await
+        .unwrap();
+        db.upsert_chains(vec![
+            chains::ActiveModel {
+                id: ActiveValue::Set(1),
+                name: ActiveValue::Set("src".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: ActiveValue::Set(100),
+                name: ActiveValue::Set("unindexed_dst".to_string()),
+                ..Default::default()
+            },
+        ])
+        .await
+        .unwrap();
+
+        // Chain 100 is unindexed for bridge 1, so the `Initiated` (never
+        // `Completed`) message/transfer this dummy produces is countable via
+        // the "destination confirmation can never arrive" branch — without
+        // this, nothing here would ever become countable regardless of
+        // `is_final`, and the test would not exercise the widened trigger.
+        let stats = Arc::new(StatsService::new(
+            Arc::new(db.clone()),
+            None,
+            StatsReadSettings::default(),
+            IndexedChains::from_pairs([(1, 1)]),
+        ));
+        let buffer =
+            MessageBuffer::<TransferDummyMessage>::new_with_stats(stats, test_buffer_settings());
+
+        // Seed the cold tier as if this entry had been offloaded while still
+        // NotReady (not yet consolidatable).
+        let cold_entry = BufferItem::new(TransferDummyMessage {
+            consolidatable: false,
+            is_final: false,
+        });
+        db.upsert_pending_message(pending_messages::ActiveModel {
+            message_id: ActiveValue::Set(key.message_id),
+            bridge_id: ActiveValue::Set(key.bridge_id as i32),
+            payload: ActiveValue::Set(serde_json::to_value(&cold_entry).unwrap()),
+            created_at: ActiveValue::Set(Some(Utc::now().naive_utc())),
+        })
+        .await
+        .unwrap();
+        assert!(
+            buffer.inner.get(&key).is_none(),
+            "must start cold, not in the hot tier"
+        );
+
+        // Restore from cold tier (via `alter`) and make it Partial-ready.
+        buffer
+            .alter(key, 1, 1, |m: &mut TransferDummyMessage| {
+                m.consolidatable = true;
+                m.is_final = false;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert!(
+            buffer.inner.get(&key).is_some(),
+            "restore must promote the entry to the hot tier"
+        );
+
+        buffer.run().await.unwrap();
+
+        let load_transfer = || {
+            crosschain_transfers::Entity::find()
+                .filter(crosschain_transfers::Column::MessageId.eq(key.message_id))
+                .filter(crosschain_transfers::Column::BridgeId.eq(key.bridge_id as i32))
+                .one(db.db.as_ref())
+        };
+        let t = load_transfer()
+            .await
+            .unwrap()
+            .expect("the Partial flush must have written the transfer row");
+        assert_eq!(
+            t.stats_processed, 1,
+            "a Partial entry must still reach the stats hook and count"
+        );
+        assert!(t.stats_asset_id.is_some());
+
+        assert!(
+            buffer.inner.get(&key).is_some(),
+            "a non-final entry stays in the hot tier after maintenance"
+        );
+
+        // Finalize and run maintenance again.
+        buffer
+            .alter(key, 1, 2, |m: &mut TransferDummyMessage| {
+                m.is_final = true;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        buffer.run().await.unwrap();
+
+        let t2 = load_transfer().await.unwrap().unwrap();
+        assert_eq!(
+            t2.stats_processed, 1,
+            "the finalizing flush of the same canonical key must not recount it"
+        );
+        let msg = crosschain_messages::Entity::find_by_id((key.message_id, key.bridge_id as i32))
+            .one(db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            msg.stats_processed, 1,
+            "the message side must not be recounted either"
+        );
+
+        assert!(
+            buffer.inner.get(&key).is_none(),
+            "the finalized entry must be evicted from the hot tier"
+        );
     }
 }
