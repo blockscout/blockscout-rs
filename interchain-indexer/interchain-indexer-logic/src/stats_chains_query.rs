@@ -934,4 +934,93 @@ mod tests {
         // Intersection of request chain_ids {1, 250} and union {1, 100} is {1}.
         assert_eq!(rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(), vec![1]);
     }
+
+    // Closes acceptance criterion 9 (review-2b follow-up 2): `bridged-tokens`
+    // already has `bridged_tokens_pagination_unaffected_by_indexed_predicate`;
+    // this is the `/stats/chains` analogue, with `indexed_chain_ids` active
+    // rather than `None`, mirroring `stats_chains_pagination_across_ties`'s
+    // dense-page shape but round-tripping forward twice and back twice to the
+    // same first page.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_pagination_round_trip_with_indexed_union_active() {
+        let g = init_db("stats_chains_pagination_round_trip_indexed_union").await;
+        let db = g.client();
+        // 999 is seeded but deliberately left out of the union below: it must
+        // never surface on any page of the round trip.
+        seed_chains(db.as_ref(), &[100, 101, 102, 999]).await;
+        let idb = crate::InterchainDatabase::new(db.clone());
+        idb.upsert_stats_chains(100, 10, 0).await.unwrap();
+        idb.upsert_stats_chains(101, 10, 0).await.unwrap();
+        idb.upsert_stats_chains(102, 99, 0).await.unwrap();
+        idb.upsert_stats_chains(999, 99, 0).await.unwrap();
+
+        let union = Some([100i64, 101, 102]);
+
+        let query = |input_pagination| {
+            let db = db.clone();
+            async move {
+                list_stats_chains(
+                    db.as_ref(),
+                    &[],
+                    true,
+                    union.as_ref().map(|u| u.as_slice()),
+                    StatsListQuery {
+                        sort: StatsChainsSortField::default(),
+                        order: StatsSortOrder::Desc,
+                        page_size: 1,
+                        last_page: false,
+                        input_pagination,
+                        q: None,
+                    },
+                )
+                .await
+                .unwrap()
+            }
+        };
+
+        // Dense pages, one row apiece, ordered desc by count with chain_id-asc
+        // tie-break: 102 (99), then 100 and 101 (tied at 10).
+        let (p1, pag1) = query(None).await;
+        assert_eq!(p1.len(), 1);
+        assert_eq!(p1[0].chain_id, 102);
+        let next1 = pag1.next_marker.expect("page 1 has a next page");
+
+        let (p2, pag2) = query(Some(next1)).await;
+        assert_eq!(p2.len(), 1);
+        assert_eq!(p2[0].chain_id, 100);
+        let next2 = pag2.next_marker.expect("page 2 has a next page");
+
+        let (p3, pag3) = query(Some(next2)).await;
+        assert_eq!(p3.len(), 1);
+        assert_eq!(p3[0].chain_id, 101);
+        assert!(
+            pag3.next_marker.is_none(),
+            "page 3 must be the last page: {:?}",
+            pag3.next_marker
+        );
+        let prev3 = pag3.prev_marker.expect("page 3 has a prev page");
+
+        // Walk back: page 3 -> page 2 -> page 1, landing on the same first row.
+        let (p2b, pag2b) = query(Some(prev3)).await;
+        assert_eq!(p2b.len(), 1);
+        assert_eq!(p2b[0].chain_id, 100);
+        let prev2 = pag2b.prev_marker.expect("page 2 has a prev page");
+
+        let (p1b, _) = query(Some(prev2)).await;
+        assert_eq!(p1b.len(), 1);
+        assert_eq!(
+            p1b[0].chain_id, p1[0].chain_id,
+            "prev/next round trip must return to the same first page"
+        );
+
+        // The unindexed chain 999 (same count as 102, so it would otherwise tie
+        // for first place) must never appear across any page of the round trip.
+        for page in [&p1, &p2, &p3, &p2b, &p1b] {
+            assert!(
+                !page.iter().any(|r| r.chain_id == 999),
+                "chain 999 is outside the indexed union and must stay hidden: {page:?}"
+            );
+        }
+    }
 }

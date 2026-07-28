@@ -317,6 +317,41 @@ pub(crate) fn push_indexed_pairs_predicate(
     ));
 }
 
+/// Appends the `(c.id IN (...) OR sm.messages_count IS NOT NULL)` guard shared
+/// by the `include_zero_chains` branches of `build_all_time_message_paths_query`
+/// and `build_bounded_message_paths_query`.
+///
+/// Restricts the *invented zero rows* to the union over bridges in scope,
+/// without deleting a real non-zero row that a removed bridge (permissive in
+/// the aggregate above) still contributes. Without the `sm.messages_count IS
+/// NOT NULL` escape, a bare `c.id IN (..)` would delete that row outright
+/// instead of merely denying it a zero row — see coding-task-2b item 5.
+///
+/// No-op when `ids` is `None` or empty, mirroring `push_in_predicate`.
+/// Advances `*placeholder` by `ids.len()`, same as every other predicate-
+/// pushing block in this file — this is the last predicate built in both call
+/// sites today, but the counter must stay correct regardless of what a future
+/// change appends afterward.
+fn push_zero_chains_guard_predicate(
+    where_parts: &mut Vec<String>,
+    values: &mut Vec<Value>,
+    placeholder: &mut usize,
+    ids: Option<&[i64]>,
+) {
+    if let Some(ids) = ids.filter(|ids| !ids.is_empty()) {
+        let start = *placeholder;
+        let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("${}", start + i)).collect();
+        for id in ids {
+            values.push(Value::BigInt(Some(*id)));
+        }
+        where_parts.push(format!(
+            "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
+            placeholders.join(", ")
+        ));
+        *placeholder += ids.len();
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_all_time_message_paths_query(
     chain_id: i64,
@@ -374,26 +409,12 @@ fn build_all_time_message_paths_query(
             counterparty_chain_ids,
             |id| Value::BigInt(Some(id)),
         );
-        // Restricts the *invented zero rows* to the union over bridges in
-        // scope, without deleting a real non-zero row that a removed bridge
-        // (permissive in the aggregate above) still contributes. Without the
-        // `sm.messages_count IS NOT NULL` escape, a bare `c.id IN (..)` would
-        // delete that row outright instead of merely denying it a zero row —
-        // see coding-task-2b item 5. No-op when `indexed_chain_ids` is `None`
-        // or empty (`push_in_predicate`'s existing "absent set is 'all'" rule
-        // covers the empty case for free).
-        if let Some(ids) = indexed_chain_ids.filter(|ids| !ids.is_empty()) {
-            let start = placeholder;
-            let placeholders: Vec<String> =
-                (0..ids.len()).map(|i| format!("${}", start + i)).collect();
-            for id in ids {
-                values.push(Value::BigInt(Some(*id)));
-            }
-            where_parts.push(format!(
-                "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
-                placeholders.join(", ")
-            ));
-        }
+        push_zero_chains_guard_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            indexed_chain_ids,
+        );
 
         let sql = match direction {
             MessagePathDirection::Outgoing => format!(
@@ -556,21 +577,12 @@ fn build_bounded_message_paths_query(
             counterparty_chain_ids,
             |id| Value::BigInt(Some(id)),
         );
-        // See the identical block in `build_all_time_message_paths_query`: the
-        // `sm.messages_count IS NOT NULL` escape keeps a real non-zero row of a
-        // permissively-included removed bridge from being deleted outright.
-        if let Some(ids) = indexed_chain_ids.filter(|ids| !ids.is_empty()) {
-            let start = placeholder;
-            let placeholders: Vec<String> =
-                (0..ids.len()).map(|i| format!("${}", start + i)).collect();
-            for id in ids {
-                values.push(Value::BigInt(Some(*id)));
-            }
-            where_parts.push(format!(
-                "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
-                placeholders.join(", ")
-            ));
-        }
+        push_zero_chains_guard_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            indexed_chain_ids,
+        );
 
         let sql = match direction {
             MessagePathDirection::Outgoing => format!(
@@ -3064,7 +3076,10 @@ mod tests {
         QueryOrder, TransactionTrait, Value, prelude::BigDecimal,
     };
 
-    use super::{CrosschainMessageLookup, JoinedTransfer, push_indexed_pairs_predicate};
+    use super::{
+        CrosschainMessageLookup, JoinedTransfer, push_indexed_pairs_predicate,
+        push_zero_chains_guard_predicate,
+    };
     use crate::{
         ChainBridgeFilter, IndexedChains, InterchainDatabase, MessagePathStatsRow,
         STATS_BACKFILL_BATCH,
@@ -3223,6 +3238,104 @@ mod tests {
             sql.contains("(bridge_id = $3 AND src_chain_id IN ($4) AND dst_chain_id IN ($4))"),
             "sql was: {sql}"
         );
+        assert_eq!(values.len(), 4);
+        assert_eq!(placeholder, 5);
+    }
+
+    // --- push_zero_chains_guard_predicate (follow-up to coding-task-2b review-2b,
+    // "advance the placeholder counter" item, no DB) ---
+
+    #[test]
+    fn test_push_zero_chains_guard_predicate_none_is_noop() {
+        let mut where_parts = vec!["existing = $1".to_string()];
+        let mut values = vec![Value::BigInt(Some(1))];
+        let mut placeholder = 2usize;
+
+        push_zero_chains_guard_predicate(&mut where_parts, &mut values, &mut placeholder, None);
+
+        assert_eq!(where_parts, vec!["existing = $1".to_string()]);
+        assert_eq!(values.len(), 1);
+        assert_eq!(placeholder, 2, "placeholder must stay untouched for None");
+    }
+
+    #[test]
+    fn test_push_zero_chains_guard_predicate_empty_ids_is_noop() {
+        let mut where_parts: Vec<String> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        let mut placeholder = 1usize;
+
+        push_zero_chains_guard_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            Some(&[]),
+        );
+
+        assert!(where_parts.is_empty());
+        assert!(values.is_empty());
+        assert_eq!(placeholder, 1);
+    }
+
+    #[test]
+    fn test_push_zero_chains_guard_predicate_renders_guard_and_advances_placeholder() {
+        let mut where_parts: Vec<String> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+        let mut placeholder = 1usize;
+
+        push_zero_chains_guard_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            Some(&[10, 20]),
+        );
+
+        assert_eq!(
+            where_parts,
+            vec!["(c.id IN ($1, $2) OR sm.messages_count IS NOT NULL)".to_string()]
+        );
+        assert_eq!(values.len(), 2);
+        assert_eq!(placeholder, 3, "placeholder must advance by exactly 2");
+    }
+
+    #[test]
+    fn test_push_zero_chains_guard_predicate_contiguous_with_predicate_appended_after() {
+        // This is the case review-2b flagged: the guard used to leave
+        // `placeholder` stale, which was invisible only because nothing was
+        // ever built after it. Simulate a future predicate appended right
+        // after the guard and assert its placeholder numbering is contiguous
+        // — this is the test that would have caught the original omission.
+        let mut where_parts = vec!["dst_chain_id IN ($1, $2)".to_string()];
+        let mut values = vec![Value::BigInt(Some(1)), Value::BigInt(Some(2))];
+        let mut placeholder = 3usize;
+
+        push_zero_chains_guard_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            Some(&[42]),
+        );
+
+        assert_eq!(where_parts.len(), 2);
+        assert_eq!(
+            where_parts[1],
+            "(c.id IN ($3) OR sm.messages_count IS NOT NULL)"
+        );
+        assert_eq!(values.len(), 3);
+        assert_eq!(
+            placeholder, 4,
+            "placeholder must advance past the guard's one chain id"
+        );
+
+        // A dummy predicate appended after the guard, using the shared
+        // counter exactly as every other predicate-pushing block in this file
+        // does. With the pre-fix code (no `*placeholder += ids.len()`), this
+        // would render `dummy_col = $3`, colliding with the guard's own `$3`
+        // placeholder instead of continuing at `$4`.
+        where_parts.push(format!("dummy_col = ${placeholder}"));
+        values.push(Value::BigInt(Some(999)));
+        placeholder += 1;
+
+        assert_eq!(where_parts[2], "dummy_col = $4");
         assert_eq!(values.len(), 4);
         assert_eq!(placeholder, 5);
     }
