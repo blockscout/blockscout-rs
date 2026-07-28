@@ -9,5 +9,7 @@ Knowledge base for the TAC Operation Lifecycle microservice, collected from sour
 | [operation-lifecycle.md](operation-lifecycle.md) | **Operation status machine, terminal-state detection, interpretation of PENDING / ROLLBACK / failed states** |
 | [api-surface.md](api-surface.md) | Upstream TAC API (client side) and the served gRPC/REST API |
 | [gotchas-and-edge-cases.md](gotchas-and-edge-cases.md) | Known gaps, limbo states, doc/code discrepancies |
+| [research/stage-profiler-v2-lifecycle-model.md](research/stage-profiler-v2-lifecycle-model.md) | Stage Profiler v2 lifecycle model and its integration boundary |
+| [workflows/](workflows/) | Reusable research, analysis, planning, implementation, review, and PR-description workflows |
 
 Last updated: 2026-07-15 (branch `evgenkor/tac/staging-v2`).
