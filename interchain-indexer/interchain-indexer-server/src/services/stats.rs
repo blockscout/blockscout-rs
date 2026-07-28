@@ -11,8 +11,8 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
-    StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField, StatsListQuery,
-    StatsService, StatsSortOrder, utils::to_hex_prefixed,
+    IndexedChains, StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField,
+    StatsListQuery, StatsService, StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -21,6 +21,7 @@ pub struct InterchainStatisticsServiceImpl {
     pub stats: Arc<StatsService>,
     pub api_settings: ApiSettings,
     pub chain_info: Arc<ChainInfoService>,
+    pub indexed_chains: Arc<IndexedChains>,
 }
 
 impl InterchainStatisticsServiceImpl {
@@ -28,11 +29,13 @@ impl InterchainStatisticsServiceImpl {
         stats: Arc<StatsService>,
         api_settings: ApiSettings,
         chain_info: Arc<ChainInfoService>,
+        indexed_chains: Arc<IndexedChains>,
     ) -> Self {
         Self {
             stats,
             api_settings,
             chain_info,
+            indexed_chains,
         }
     }
 }
@@ -55,6 +58,8 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let counters = self
@@ -88,6 +93,8 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let counters = self
@@ -110,6 +117,12 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         request: Request<GetBridgedTokensRequest>,
     ) -> Result<Response<GetBridgedTokensResponse>, Status> {
         let inner = request.into_inner();
+        // TODO(coding-task-2b): remove — implemented there
+        if inner.include_unindexed_chains == Some(true) {
+            return Err(Status::invalid_argument(
+                "include_unindexed_chains is not supported by this endpoint yet",
+            ));
+        }
         let sort = BridgedTokensSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -183,6 +196,12 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         request: Request<GetChainsStatsRequest>,
     ) -> Result<Response<GetChainsStatsResponse>, Status> {
         let inner = request.into_inner();
+        // TODO(coding-task-2b): remove — implemented there
+        if inner.include_unindexed_chains == Some(true) {
+            return Err(Status::invalid_argument(
+                "include_unindexed_chains is not supported by this endpoint yet",
+            ));
+        }
         let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
         let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
@@ -266,6 +285,12 @@ impl InterchainStatisticsServiceImpl {
         inner: GetMessagePathsRequest,
         outgoing: bool,
     ) -> Result<Response<GetMessagePathsResponse>, Status> {
+        // TODO(coding-task-2b): remove — implemented there
+        if inner.include_unindexed_chains == Some(true) {
+            return Err(Status::invalid_argument(
+                "include_unindexed_chains is not supported by this endpoint yet",
+            ));
+        }
         let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
         let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
         let counterparty_ids = parse_chain_ids_csv(

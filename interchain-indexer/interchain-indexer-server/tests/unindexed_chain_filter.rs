@@ -1,0 +1,172 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
+//! DB-backed HTTP contract tests for the read-side unindexed-chain default-hide
+//! behavior on endpoints that need the running server (bridge config wiring and
+//! `IndexedChains` injection), rather than the bare SeaORM/`ChainBridgeFilter`
+//! layer already covered in `interchain-indexer-logic/src/database.rs`.
+//!
+//! `helpers::init_interchain_indexer_server` boots the server from
+//! `config/omnibridge/{chains,bridges}.json`: bridge 1 has contracts on chains
+//! `{1, 100}`, so `IndexedChains` is `PerBridge({1: {1, 100}})`.
+
+mod helpers;
+
+use blockscout_service_launcher::test_server;
+use chrono::Utc;
+use interchain_indexer_entity::{chains, crosschain_messages, sea_orm_active_enums::MessageStatus};
+use sea_orm::{ActiveValue::Set, EntityTrait};
+
+/// Public numeric message ID for the seeded NULL-destination message.
+/// `8888 == 0x22b8`.
+const HIDDEN_MESSAGE_ID: i64 = 8888;
+const HIDDEN_MESSAGE_HEX: &str = "0x22b8";
+
+/// A chain outside `config/omnibridge/chains.json` (`{1, 100}`) and outside
+/// bridge 1's contract set, so it is not in `IndexedChains::configured_union()`.
+const UNINDEXED_CHAIN_ID: i64 = 999;
+
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn get_message_details_returns_hidden_row_with_flag() {
+    let db = helpers::init_db("test", "get_message_details_returns_hidden_row_with_flag").await;
+    let base = helpers::init_interchain_indexer_server(db.db_url(), |x| x).await;
+
+    let conn = db.client();
+    crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+        id: Set(HIDDEN_MESSAGE_ID),
+        bridge_id: Set(1),
+        status: Set(MessageStatus::Initiated),
+        init_timestamp: Set(Utc::now().naive_utc()),
+        src_chain_id: Set(1),
+        dst_chain_id: Set(None),
+        ..Default::default()
+    })
+    .exec(conn.as_ref())
+    .await
+    .unwrap();
+
+    // `GetMessageDetails` bypasses the default-hide filter entirely and still
+    // sets the flag.
+    let route = format!("/api/v1/interchain/messages/{HIDDEN_MESSAGE_HEX}");
+    let details: serde_json::Value = test_server::send_get_request(&base, &route).await;
+    assert_eq!(details["has_unindexed_chain"], serde_json::json!(true));
+
+    // The same row is excluded from the default list view.
+    let list: serde_json::Value =
+        test_server::send_get_request(&base, "/api/v1/interchain/messages").await;
+    let ids: Vec<&str> = list["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["message_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        !ids.contains(&HIDDEN_MESSAGE_HEX),
+        "NULL-dst message must be hidden from the default list; got {ids:?}"
+    );
+
+    // The opt-in list includes it, still flagged.
+    let opt_in: serde_json::Value = test_server::send_get_request(
+        &base,
+        "/api/v1/interchain/messages?include_unindexed_chains=true",
+    )
+    .await;
+    let hidden_item = opt_in["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["message_id"] == serde_json::json!(HIDDEN_MESSAGE_HEX))
+        .expect("opt-in list must include the NULL-dst message");
+    assert_eq!(hidden_item["has_unindexed_chain"], serde_json::json!(true));
+}
+
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn get_chains_default_omits_chain_no_bridge_indexes() {
+    let db = helpers::init_db("test", "get_chains_default_omits_chain_no_bridge_indexes").await;
+    let base = helpers::init_interchain_indexer_server(db.db_url(), |x| x).await;
+
+    let conn = db.client();
+    chains::Entity::insert(chains::ActiveModel {
+        id: Set(UNINDEXED_CHAIN_ID),
+        name: Set("Unindexed".to_string()),
+        ..Default::default()
+    })
+    .exec(conn.as_ref())
+    .await
+    .unwrap();
+
+    let default_resp: serde_json::Value =
+        test_server::send_get_request(&base, "/api/v1/interchain/chains").await;
+    let default_ids: Vec<&str> = default_resp["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap())
+        .collect();
+    assert!(
+        !default_ids.contains(&UNINDEXED_CHAIN_ID.to_string().as_str()),
+        "default chain directory must omit a chain no configured bridge indexes; got {default_ids:?}"
+    );
+    // Chain 1 is covered by bridge 1's contracts, so it stays visible.
+    assert!(default_ids.contains(&"1"));
+
+    let opt_in: serde_json::Value = test_server::send_get_request(
+        &base,
+        "/api/v1/interchain/chains?include_unindexed_chains=true",
+    )
+    .await;
+    let opt_in_ids: Vec<&str> = opt_in["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap())
+        .collect();
+    assert!(
+        opt_in_ids.contains(&UNINDEXED_CHAIN_ID.to_string().as_str()),
+        "opt-in chain directory must include the unindexed chain; got {opt_in_ids:?}"
+    );
+}
+
+/// The three raw-SQL stats endpoints `coding-task-2b` owns declare
+/// `include_unindexed_chains` (so the parameter is never silently ignored) but
+/// cannot honor it yet, so `true` is temporarily rejected with
+/// `InvalidArgument` rather than being dropped unfiltered. `coding-task-2b`
+/// removes these rejections.
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn stats_endpoints_temporarily_reject_include_unindexed_chains_true() {
+    let db = helpers::init_db(
+        "test",
+        "stats_endpoints_temporarily_reject_include_unindexed_chains_true",
+    )
+    .await;
+    let base = helpers::init_interchain_indexer_server(db.db_url(), |x| x).await;
+
+    let cases = [
+        "/api/v1/stats/chains?include_unindexed_chains=true",
+        "/api/v1/stats/chain/1/bridged-tokens?include_unindexed_chains=true",
+        "/api/v1/stats/chain/1/messages-paths/sent?include_unindexed_chains=true",
+        "/api/v1/stats/chain/1/messages-paths/received?include_unindexed_chains=true",
+    ];
+    for route in cases {
+        let (status, body) = helpers::get_raw(&base, route).await;
+        assert_eq!(
+            status,
+            reqwest::StatusCode::BAD_REQUEST,
+            "route {route}: {body}"
+        );
+        assert_eq!(body["code"], serde_json::json!(3), "route {route}: {body}");
+        assert!(
+            body["message"]
+                .as_str()
+                .unwrap()
+                .contains("not supported by this endpoint yet"),
+            "route {route}: unexpected message: {body}"
+        );
+    }
+
+    // Absent / false keeps today's (unfiltered) behavior — no rejection.
+    let (status, _) = helpers::get_raw(&base, "/api/v1/stats/chains").await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+}

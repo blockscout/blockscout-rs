@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use chrono::NaiveDateTime;
-use interchain_indexer_logic::ChainBridgeFilter;
+use interchain_indexer_logic::{ChainBridgeFilter, IndexedChains};
 use sea_orm::JsonValue;
 use tonic::Status;
 
@@ -83,15 +83,28 @@ pub fn non_empty<T>(v: Vec<T>) -> Option<Vec<T>> {
 
 /// Builds the shared `ChainBridgeFilter` from the CSV request fields common to
 /// every filtered list/counter endpoint. Parsing and empty-to-`None`
-/// normalization for all five fields live here so a new filter dimension is
+/// normalization for all five CSV fields live here so a new filter dimension is
 /// maintained in one place. Malformed values return labeled `InvalidArgument`.
+///
+/// `indexed_chains` and `include_unindexed` add the sixth dimension: by default
+/// (`include_unindexed = false`) results are restricted to rows their own bridge
+/// could have fully observed (see [`ChainBridgeFilter::only_indexed_by_bridge`]);
+/// `include_unindexed = true` or an `AllIndexed` configuration disables the
+/// restriction entirely.
 pub fn build_chain_bridge_filter(
     home_chain_id: Option<i64>,
     counterparty_chain_ids: Option<&str>,
     src_chain_ids: Option<&str>,
     dst_chain_ids: Option<&str>,
     bridge_ids: Option<&str>,
+    indexed_chains: &IndexedChains,
+    include_unindexed: bool,
 ) -> Result<ChainBridgeFilter, Status> {
+    let bridge_ids = non_empty(parse_bridge_ids_csv(bridge_ids)?);
+    let only_indexed_by_bridge = (!include_unindexed)
+        .then(|| indexed_chains.configured_pairs(bridge_ids.as_deref()))
+        .flatten();
+
     Ok(ChainBridgeFilter {
         home_chain_id,
         counterparty_chain_ids: non_empty(parse_chain_ids_csv(
@@ -100,7 +113,8 @@ pub fn build_chain_bridge_filter(
         )?),
         src_chain_ids: non_empty(parse_chain_ids_csv("src_chain_ids", src_chain_ids)?),
         dst_chain_ids: non_empty(parse_chain_ids_csv("dst_chain_ids", dst_chain_ids)?),
-        bridge_ids: non_empty(parse_bridge_ids_csv(bridge_ids)?),
+        bridge_ids,
+        only_indexed_by_bridge,
     })
 }
 
@@ -116,7 +130,11 @@ pub fn checked_bridge_id(bridge_id: Option<u32>) -> Result<Option<i32>, Status> 
 
 #[cfg(test)]
 mod tests {
-    use super::{checked_bridge_id, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv};
+    use super::{
+        build_chain_bridge_filter, checked_bridge_id, non_empty, parse_bridge_ids_csv,
+        parse_chain_ids_csv,
+    };
+    use interchain_indexer_logic::IndexedChains;
 
     #[test]
     fn parse_chain_ids_csv_accepts_missing_and_empty() {
@@ -212,5 +230,48 @@ mod tests {
     fn non_empty_maps_empty_to_none() {
         assert_eq!(non_empty(Vec::<i32>::new()), None);
         assert_eq!(non_empty(vec![1i32]), Some(vec![1]));
+    }
+
+    #[test]
+    fn build_chain_bridge_filter_include_unindexed_true_clears_restriction() {
+        let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+        let filter =
+            build_chain_bridge_filter(None, None, None, None, None, &indexed, true).unwrap();
+        assert_eq!(filter.only_indexed_by_bridge, None);
+    }
+
+    #[test]
+    fn build_chain_bridge_filter_default_sets_sorted_pairs() {
+        let indexed = IndexedChains::from_pairs([(2, 250), (1, 100), (1, 1)]);
+        let filter =
+            build_chain_bridge_filter(None, None, None, None, None, &indexed, false).unwrap();
+        assert_eq!(
+            filter.only_indexed_by_bridge,
+            Some(vec![(1, vec![1, 100]), (2, vec![250])])
+        );
+    }
+
+    #[test]
+    fn build_chain_bridge_filter_all_indexed_is_none_even_without_opt_in() {
+        let filter = build_chain_bridge_filter(
+            None,
+            None,
+            None,
+            None,
+            None,
+            &IndexedChains::AllIndexed,
+            false,
+        )
+        .unwrap();
+        assert_eq!(filter.only_indexed_by_bridge, None);
+    }
+
+    #[test]
+    fn build_chain_bridge_filter_prunes_pairs_to_requested_bridge_ids() {
+        let indexed = IndexedChains::from_pairs([(1, 1), (2, 250), (3, 999)]);
+        let filter =
+            build_chain_bridge_filter(None, None, None, None, Some("2"), &indexed, false).unwrap();
+        assert_eq!(filter.bridge_ids, Some(vec![2]));
+        assert_eq!(filter.only_indexed_by_bridge, Some(vec![(2, vec![250])]));
     }
 }

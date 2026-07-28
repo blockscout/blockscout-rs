@@ -142,6 +142,76 @@ impl IndexedChains {
                 .set(chain_count as f64);
         }
     }
+
+    /// Per-bridge pairs for the read predicate, sorted by bridge id then chain id so
+    /// the rendered SQL is deterministic.
+    ///
+    /// Every bridge **present** in the map contributes an entry, including one whose
+    /// chain set is empty — `(b, vec![])`. Dropping such an entry would silently
+    /// promote that bridge to the permissive "absent" case, which is the opposite
+    /// treatment (see [`IndexedChains::may_observe`]).
+    ///
+    /// `None` means "no restriction" (`AllIndexed`). `Some(vec![])` means "no bridge
+    /// is configured", which under the permissive absent-bridge rule restricts
+    /// **nothing** — defensive only; the startup guard rejects an empty config.
+    /// `restrict_to` prunes the disjunction to the request's `bridge_ids`; that is a
+    /// pure size optimisation because the caller separately ANDs
+    /// `bridge_id IN (restrict_to)` — but the pruned ids must also leave the
+    /// permissive arm's `NOT IN` list, or a pruned bridge would be treated as absent.
+    pub fn configured_pairs(&self, restrict_to: Option<&[i32]>) -> Option<Vec<(i32, Vec<i64>)>> {
+        let map = match self {
+            IndexedChains::AllIndexed => return None,
+            IndexedChains::PerBridge(map) => map,
+        };
+
+        let mut pairs: Vec<(i32, Vec<i64>)> = map
+            .iter()
+            .filter(|(bridge_id, _)| restrict_to.is_none_or(|allowed| allowed.contains(bridge_id)))
+            .map(|(&bridge_id, chains)| {
+                let mut chains: Vec<i64> = chains.iter().copied().collect();
+                chains.sort_unstable();
+                (bridge_id, chains)
+            })
+            .collect();
+        pairs.sort_by_key(|(bridge_id, _)| *bridge_id);
+        Some(pairs)
+    }
+
+    /// Union of every bridge's chain set, deduplicated and sorted ascending.
+    /// `None` means "no restriction" (`AllIndexed`); so does `Some(vec![])`, which
+    /// can only arise from a config with no bridges at all — see the renderer note
+    /// in item 8 and `coding-task-2b.md` item 2.
+    ///
+    /// Only for the chain-*directory* views (`GetChains`, `/stats/chains`) and the
+    /// per-asset token list, which are keyed by chain alone and carry no bridge
+    /// linkage. Never use it where a bridge is available.
+    pub fn configured_union(&self) -> Option<Vec<i64>> {
+        let map = match self {
+            IndexedChains::AllIndexed => return None,
+            IndexedChains::PerBridge(map) => map,
+        };
+
+        let mut union: Vec<i64> = map
+            .values()
+            .flat_map(|chains| chains.iter().copied())
+            .collect::<HashSet<i64>>()
+            .into_iter()
+            .collect();
+        union.sort_unstable();
+        Some(union)
+    }
+
+    /// `has_unindexed_chain` for a message. An unknown (NULL) destination always
+    /// counts as unindexed. Built on `may_observe`, the same method stats projection
+    /// uses, so the flag and the eligibility rule cannot disagree.
+    pub fn message_has_unindexed(&self, bridge_id: i32, src: i64, dst: Option<i64>) -> bool {
+        !(self.may_observe(bridge_id, src) && dst.is_some_and(|d| self.may_observe(bridge_id, d)))
+    }
+
+    /// `has_unindexed_chain` for a transfer. Both token chain columns are NOT NULL.
+    pub fn transfer_has_unindexed(&self, bridge_id: i32, src: i64, dst: i64) -> bool {
+        !(self.may_observe(bridge_id, src) && self.may_observe(bridge_id, dst))
+    }
 }
 
 /// `NOT indexed(bridge_col, chain_col)`: true only when the chain id is known,
@@ -416,5 +486,132 @@ mod tests {
         assert!(sql.contains("IS NOT NULL"), "sql was: {sql}");
         assert!(sql.contains("\"bridge_id\" = 1"), "sql was: {sql}");
         assert!(sql.contains("NOT IN"), "sql was: {sql}");
+    }
+
+    // --- configured_pairs ---
+
+    #[test]
+    fn test_configured_pairs_all_indexed_is_none() {
+        assert_eq!(IndexedChains::AllIndexed.configured_pairs(None), None);
+    }
+
+    #[test]
+    fn test_configured_pairs_no_bridges_is_some_empty() {
+        let indexed = IndexedChains::from_pairs(std::iter::empty());
+        assert_eq!(indexed.configured_pairs(None), Some(Vec::new()));
+    }
+
+    #[test]
+    fn test_configured_pairs_present_but_empty_bridge_is_not_dropped() {
+        let indexed = IndexedChains::from_bridges([(1, vec![]), (2, vec![200, 100])]);
+        assert_eq!(
+            indexed.configured_pairs(None),
+            Some(vec![(1, vec![]), (2, vec![100, 200])])
+        );
+    }
+
+    #[test]
+    fn test_configured_pairs_sorted_by_bridge_then_chain() {
+        let indexed = IndexedChains::from_pairs([(2, 300), (1, 200), (2, 100), (1, 100)]);
+        assert_eq!(
+            indexed.configured_pairs(None),
+            Some(vec![(1, vec![100, 200]), (2, vec![100, 300])])
+        );
+    }
+
+    #[test]
+    fn test_configured_pairs_restrict_to_keeps_only_listed_bridges() {
+        let indexed = IndexedChains::from_pairs([(1, 100), (2, 250), (3, 999)]);
+        assert_eq!(
+            indexed.configured_pairs(Some(&[2])),
+            Some(vec![(2, vec![250])])
+        );
+    }
+
+    #[test]
+    fn test_configured_pairs_restrict_to_none_keeps_all() {
+        let indexed = IndexedChains::from_pairs([(1, 100), (2, 250)]);
+        assert_eq!(
+            indexed.configured_pairs(None),
+            Some(vec![(1, vec![100]), (2, vec![250])])
+        );
+    }
+
+    // --- configured_union ---
+
+    #[test]
+    fn test_configured_union_all_indexed_is_none() {
+        assert_eq!(IndexedChains::AllIndexed.configured_union(), None);
+    }
+
+    #[test]
+    fn test_configured_union_deduplicated_and_sorted() {
+        let indexed = IndexedChains::from_pairs([(1, 250), (1, 100), (2, 100), (2, 1)]);
+        assert_eq!(indexed.configured_union(), Some(vec![1, 100, 250]));
+    }
+
+    #[test]
+    fn test_configured_union_no_bridges_is_some_empty() {
+        let indexed = IndexedChains::from_pairs(std::iter::empty());
+        assert_eq!(indexed.configured_union(), Some(Vec::new()));
+    }
+
+    // --- flag helpers ---
+
+    #[test]
+    fn test_message_has_unindexed_both_endpoints_in_set_is_false() {
+        let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+        assert!(!indexed.message_has_unindexed(1, 1, Some(100)));
+    }
+
+    #[test]
+    fn test_message_has_unindexed_src_out_is_true() {
+        let indexed = IndexedChains::from_pairs([(1, 100)]);
+        assert!(indexed.message_has_unindexed(1, 1, Some(100)));
+    }
+
+    #[test]
+    fn test_message_has_unindexed_dst_out_is_true() {
+        let indexed = IndexedChains::from_pairs([(1, 1)]);
+        assert!(indexed.message_has_unindexed(1, 1, Some(100)));
+    }
+
+    #[test]
+    fn test_message_has_unindexed_null_dst_is_true_under_all_indexed_and_per_bridge() {
+        assert!(IndexedChains::AllIndexed.message_has_unindexed(1, 1, None));
+        let indexed = IndexedChains::from_pairs([(1, 1)]);
+        assert!(indexed.message_has_unindexed(1, 1, None));
+    }
+
+    #[test]
+    fn test_transfer_has_unindexed_both_endpoints_in_set_is_false() {
+        let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+        assert!(!indexed.transfer_has_unindexed(1, 1, 100));
+    }
+
+    #[test]
+    fn test_transfer_has_unindexed_src_out_is_true() {
+        let indexed = IndexedChains::from_pairs([(1, 100)]);
+        assert!(indexed.transfer_has_unindexed(1, 1, 100));
+    }
+
+    #[test]
+    fn test_transfer_has_unindexed_dst_out_is_true() {
+        let indexed = IndexedChains::from_pairs([(1, 1)]);
+        assert!(indexed.transfer_has_unindexed(1, 1, 100));
+    }
+
+    /// The asymmetry a future reader is most likely to "simplify" away: an absent
+    /// bridge with a real destination is unflagged, while a present-but-empty
+    /// bridge is flagged, for the same (src, dst) pair.
+    #[test]
+    fn test_message_has_unindexed_absent_vs_present_but_empty_bridge_are_opposite() {
+        // Bridge 1 is absent from the map entirely: permissive, unflagged.
+        let absent = IndexedChains::from_pairs([(2, 1)]);
+        assert!(!absent.message_has_unindexed(1, 1, Some(100)));
+
+        // Bridge 1 is present but declared with zero contracts: restrictive, flagged.
+        let present_but_empty = IndexedChains::from_bridges([(1, vec![]), (2, vec![1])]);
+        assert!(present_but_empty.message_has_unindexed(1, 1, Some(100)));
     }
 }

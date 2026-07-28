@@ -165,13 +165,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.bridges_config.display()
     );
 
+    // Shared by both API services below so the SQL predicate and the response
+    // flag are computed from the exact same value.
+    let indexed_chains = Arc::new(indexed_chains);
+
     let stats = Arc::new(StatsService::new(
         db.clone(),
         Some(token_info_service.clone()),
         StatsReadSettings {
             include_zero_chains: settings.stats.include_zero_chains,
         },
-        indexed_chains,
+        (*indexed_chains).clone(),
     ));
 
     if settings.stats.backfill_on_start {
@@ -261,11 +265,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         chain_info_service.clone(),
         bridges,
         api_settings.clone(),
+        indexed_chains.clone(),
     ));
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(
         stats.clone(),
         api_settings,
         chain_info_service.clone(),
+        indexed_chains.clone(),
     ));
     let status_service = Arc::new(StatusServiceImpl::new(indexers.clone()));
     let router = Router {

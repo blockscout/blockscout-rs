@@ -3988,6 +3988,7 @@ mod tests {
             src_chain_ids: Some(vec![1]),
             dst_chain_ids: Some(vec![100]),
             bridge_ids: Some(vec![1]),
+            ..Default::default()
         };
 
         let (messages, _) = interchain_db
@@ -9742,5 +9743,582 @@ mod tests {
             msg_row.messages_count, COUNTABLE_MSG_COUNT,
             "exactly the 104 countable messages, once each"
         );
+    }
+
+    // --- Read-side unindexed-chain default-hide filter (coding-task-2a) ---
+    //
+    // `fill_mock_interchain_database` gives bridge 1 contracts on {1, 100} and
+    // bridge 2 contracts on {1, 250}, so `IndexedChains::from_pairs([(1, 1),
+    // (1, 100), (2, 1), (2, 250)])` mirrors it exactly. The cases the mock
+    // fixture cannot express (an absent bridge, and a present-but-empty
+    // bridge) are seeded here on top of it.
+
+    /// Extra rows covering the per-row cases the base fixture cannot express:
+    /// a bridge-1 row touching bridge-2's exclusive chain (250) and vice versa,
+    /// a bridge whose id is absent from `IndexedChains` (bridge 3, "removed from
+    /// config"), and a bridge present in `IndexedChains` with an empty chain set
+    /// (bridge 4, "declared with no contracts"). Both extra bridge ids are only
+    /// seeded into the `bridges` table to satisfy the FK — `IndexedChains` never
+    /// reads that table.
+    async fn seed_unindexed_chain_fixture_rows(db: &sea_orm::DatabaseConnection) {
+        seed_bridge_row(db, 3).await;
+        seed_bridge_row(db, 4).await;
+
+        let ts = |secs_ago: i64| mock_base_ts() - chrono::Duration::seconds(secs_ago);
+
+        crosschain_messages::Entity::insert_many([
+            // Case 5: bridge 1, src in its set, dst known but outside its set
+            // (chain 250 is bridge 2's exclusive chain).
+            crosschain_messages::ActiveModel {
+                id: Set(2001),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Completed),
+                init_timestamp: Set(ts(40)),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(250)),
+                ..Default::default()
+            },
+            // Mirrored case 5: bridge 2, dst known but outside its set (chain
+            // 100 is bridge 1's exclusive chain).
+            crosschain_messages::ActiveModel {
+                id: Set(2002),
+                bridge_id: Set(2),
+                status: Set(MessageStatus::Completed),
+                init_timestamp: Set(ts(41)),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                ..Default::default()
+            },
+            // Case 1: bridge 3 is absent from `IndexedChains` (removed from
+            // config); a real destination must still be shown, unflagged.
+            crosschain_messages::ActiveModel {
+                id: Set(2003),
+                bridge_id: Set(3),
+                status: Set(MessageStatus::Completed),
+                init_timestamp: Set(ts(42)),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(250)),
+                ..Default::default()
+            },
+            // Case 2: bridge 3 absent, but the destination is unknown (NULL) —
+            // stays hidden and flagged even for an absent bridge.
+            crosschain_messages::ActiveModel {
+                id: Set(2004),
+                bridge_id: Set(3),
+                status: Set(MessageStatus::Initiated),
+                init_timestamp: Set(ts(43)),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(None),
+                ..Default::default()
+            },
+            // Case 7: bridge 4 is present in `IndexedChains` with an empty
+            // chain set (declared with no contracts) — hidden and flagged.
+            crosschain_messages::ActiveModel {
+                id: Set(2005),
+                bridge_id: Set(4),
+                status: Set(MessageStatus::Completed),
+                init_timestamp: Set(ts(44)),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                ..Default::default()
+            },
+            // Case 4: bridge 1, src outside its set ({1, 100}); dst value is
+            // irrelevant to this case.
+            crosschain_messages::ActiveModel {
+                id: Set(2006),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Completed),
+                init_timestamp: Set(ts(45)),
+                src_chain_id: Set(250),
+                dst_chain_id: Set(Some(1)),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        crosschain_transfers::Entity::insert_many([
+            crosschain_transfers::ActiveModel {
+                id: Set(3001),
+                message_id: Set(2001),
+                bridge_id: Set(1),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(250),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+            crosschain_transfers::ActiveModel {
+                id: Set(3002),
+                message_id: Set(2002),
+                bridge_id: Set(2),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(100),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+            crosschain_transfers::ActiveModel {
+                id: Set(3003),
+                message_id: Set(2003),
+                bridge_id: Set(3),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(250),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+            crosschain_transfers::ActiveModel {
+                id: Set(3005),
+                message_id: Set(2005),
+                bridge_id: Set(4),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(100),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+            crosschain_transfers::ActiveModel {
+                id: Set(3006),
+                message_id: Set(2006),
+                bridge_id: Set(1),
+                index: Set(0),
+                r#type: Set(Some(TransferType::Erc20)),
+                token_src_chain_id: Set(250),
+                token_dst_chain_id: Set(1),
+                token_ids: Set(None),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
+    /// Mirrors `fill_mock_interchain_database`'s bridge/contract layout, plus
+    /// bridge 4 present with zero contracts. Bridge 3 is intentionally absent.
+    fn mock_indexed_chains() -> IndexedChains {
+        IndexedChains::from_bridges([(1, vec![1, 100]), (2, vec![1, 250]), (4, vec![])])
+    }
+
+    fn default_filter(indexed: &IndexedChains) -> ChainBridgeFilter {
+        ChainBridgeFilter {
+            only_indexed_by_bridge: indexed.configured_pairs(None),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_messages_default_hides_chain_not_indexed_by_own_bridge() {
+        let db = init_db("test_messages_default_hides_chain_not_indexed_by_own_bridge").await;
+        fill_mock_interchain_database(&db).await;
+        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        let indexed = mock_indexed_chains();
+
+        let (messages, _) = interchain_db
+            .get_crosschain_messages(None, None, default_filter(&indexed), 100, false, None)
+            .await
+            .unwrap();
+        let ids = message_ids(&messages);
+
+        // Bridge 2's 1 -> 250 row is visible; bridge 1's 1 -> 250 row is not.
+        assert!(ids.contains(&1005), "bridge-2 1->250 row must be visible");
+        assert!(
+            !ids.contains(&2001),
+            "bridge-1 row touching chain 250 (not indexed by bridge 1) must be hidden"
+        );
+
+        // Mirrored: bridge 1's 1 -> 100 rows are visible; bridge 2's is not.
+        assert!(ids.contains(&1001), "bridge-1 1->100 row must be visible");
+        assert!(
+            !ids.contains(&2002),
+            "bridge-2 row touching chain 100 (not indexed by bridge 2) must be hidden"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_messages_default_hides_null_destination() {
+        let db = init_db("test_messages_default_hides_null_destination").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        let indexed = mock_indexed_chains();
+
+        let (messages, _) = interchain_db
+            .get_crosschain_messages(None, None, default_filter(&indexed), 100, false, None)
+            .await
+            .unwrap();
+        assert!(
+            !message_ids(&messages).contains(&1006),
+            "NULL-destination message must be hidden by default"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_messages_opt_in_includes_unindexed() {
+        let db = init_db("test_messages_opt_in_includes_unindexed").await;
+        fill_mock_interchain_database(&db).await;
+        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        // `include_unindexed_chains=true` translates to a `None` field.
+        let filter = ChainBridgeFilter::default();
+        let (messages, _) = interchain_db
+            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .await
+            .unwrap();
+        let ids = message_ids(&messages);
+
+        for id in [1006, 2001, 2002, 2004, 2005, 2006] {
+            assert!(
+                ids.contains(&id),
+                "opt-in must include row {id}; got {ids:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_transfers_default_hides_unindexed_by_own_bridge() {
+        let db = init_db("test_transfers_default_hides_unindexed_by_own_bridge").await;
+        fill_mock_interchain_database(&db).await;
+        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        let indexed = mock_indexed_chains();
+
+        let (transfers, _) = interchain_db
+            .get_crosschain_transfers(None, None, default_filter(&indexed), 100, false, None)
+            .await
+            .unwrap();
+        let ids = transfer_ids(&transfers);
+
+        assert!(
+            ids.contains(&6),
+            "bridge-2 token 1->250 transfer must be visible"
+        );
+        assert!(
+            !ids.contains(&3001),
+            "bridge-1 transfer touching token chain 250 must be hidden"
+        );
+        assert!(
+            ids.contains(&1),
+            "bridge-1 token 1->100 transfer must be visible"
+        );
+        assert!(
+            !ids.contains(&3002),
+            "bridge-2 transfer touching token chain 100 must be hidden"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_removed_bridge_rows_visible_and_unflagged() {
+        let db = init_db("test_removed_bridge_rows_visible_and_unflagged").await;
+        fill_mock_interchain_database(&db).await;
+        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        let indexed = mock_indexed_chains();
+
+        let (messages, _) = interchain_db
+            .get_crosschain_messages(None, None, default_filter(&indexed), 100, false, None)
+            .await
+            .unwrap();
+        let ids = message_ids(&messages);
+
+        // Bridge 3 is absent from `IndexedChains`: a real destination is shown...
+        assert!(
+            ids.contains(&2003),
+            "row of a bridge removed from config must remain visible"
+        );
+        assert!(!indexed.message_has_unindexed(3, 1, Some(250)));
+
+        // ...but a NULL destination on that same absent bridge is still hidden
+        // and flagged (an unobserved destination, regardless of who indexes it).
+        assert!(
+            !ids.contains(&2004),
+            "NULL-dst row of an absent bridge must still be hidden"
+        );
+        assert!(indexed.message_has_unindexed(3, 1, None));
+
+        // Bridge 4 is present with an empty chain set: hidden and flagged,
+        // the opposite treatment of the absent bridge above.
+        assert!(
+            !ids.contains(&2005),
+            "row of a present-but-empty bridge must be hidden"
+        );
+        assert!(indexed.message_has_unindexed(4, 1, Some(100)));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_hide_equals_flag_under_per_bridge() {
+        let db = init_db("test_hide_equals_flag_under_per_bridge").await;
+        fill_mock_interchain_database(&db).await;
+        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        let indexed = mock_indexed_chains();
+
+        let (all_messages, _) = interchain_db
+            .get_crosschain_messages(None, None, ChainBridgeFilter::default(), 1000, false, None)
+            .await
+            .unwrap();
+        let mut unflagged_message_ids: Vec<i64> = all_messages
+            .iter()
+            .filter(|(m, _)| {
+                !indexed.message_has_unindexed(m.bridge_id, m.src_chain_id, m.dst_chain_id)
+            })
+            .map(|(m, _)| m.id)
+            .collect();
+        unflagged_message_ids.sort_unstable();
+
+        let (shown_messages, _) = interchain_db
+            .get_crosschain_messages(None, None, default_filter(&indexed), 1000, false, None)
+            .await
+            .unwrap();
+        assert_eq!(message_ids(&shown_messages), unflagged_message_ids);
+
+        let (all_transfers, _) = interchain_db
+            .get_crosschain_transfers(None, None, ChainBridgeFilter::default(), 1000, false, None)
+            .await
+            .unwrap();
+        let mut unflagged_transfer_ids: Vec<i64> = all_transfers
+            .iter()
+            .filter(|t| {
+                !indexed.transfer_has_unindexed(
+                    t.bridge_id,
+                    t.token_src_chain_id,
+                    t.token_dst_chain_id,
+                )
+            })
+            .map(|t| t.id)
+            .collect();
+        unflagged_transfer_ids.sort_unstable();
+
+        let (shown_transfers, _) = interchain_db
+            .get_crosschain_transfers(None, None, default_filter(&indexed), 1000, false, None)
+            .await
+            .unwrap();
+        assert_eq!(transfer_ids(&shown_transfers), unflagged_transfer_ids);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_counters_parity_with_default_filtered_lists() {
+        let db = init_db("test_counters_parity_with_default_filtered_lists").await;
+        fill_mock_interchain_database(&db).await;
+        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        let indexed = mock_indexed_chains();
+        let filter = default_filter(&indexed);
+        let ts = mock_base_ts() + chrono::Duration::seconds(1);
+
+        let (messages, _) = interchain_db
+            .get_crosschain_messages(None, None, filter.clone(), 1000, false, None)
+            .await
+            .unwrap();
+        let (transfers, _) = interchain_db
+            .get_crosschain_transfers(None, None, filter.clone(), 1000, false, None)
+            .await
+            .unwrap();
+
+        let totals = interchain_db.get_total_counters(ts, &filter).await.unwrap();
+        assert_eq!(totals.total_messages, messages.len() as u64);
+        assert_eq!(totals.total_transfers, transfers.len() as u64);
+
+        let daily = interchain_db.get_daily_counters(ts, &filter).await.unwrap();
+        assert_eq!(daily.daily_messages, messages.len() as u64);
+        assert_eq!(daily.daily_transfers, transfers.len() as u64);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_reclassification_flips_only_that_bridges_rows() {
+        let db = init_db("test_reclassification_flips_only_that_bridges_rows").await;
+        fill_mock_interchain_database(&db).await;
+        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        let before = mock_indexed_chains();
+        let (before_messages, _) = interchain_db
+            .get_crosschain_messages(None, None, default_filter(&before), 1000, false, None)
+            .await
+            .unwrap();
+        assert!(!message_ids(&before_messages).contains(&2001));
+
+        // Chain 250 becomes indexed by bridge 1 too (config-only change; no row
+        // is written or migrated).
+        let after =
+            IndexedChains::from_bridges([(1, vec![1, 100, 250]), (2, vec![1, 250]), (4, vec![])]);
+        let (after_messages, _) = interchain_db
+            .get_crosschain_messages(None, None, default_filter(&after), 1000, false, None)
+            .await
+            .unwrap();
+        let after_ids = message_ids(&after_messages);
+        assert!(
+            after_ids.contains(&2001),
+            "bridge-1 row touching chain 250 must flip visible once bridge 1 indexes it"
+        );
+
+        // Bridge 2's rows are unaffected by bridge 1's reclassification.
+        assert!(after_ids.contains(&1005));
+        assert!(
+            !after_ids.contains(&2002),
+            "bridge 2's exclusion of chain 100 is unrelated to bridge 1's config change"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_keyset_pagination_dense_under_indexed_filter() {
+        let db = init_db("test_keyset_pagination_dense_under_indexed_filter").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        let indexed = mock_indexed_chains();
+        let filter = default_filter(&indexed);
+
+        // Default-filtered set here: 1001,1002,1003,1004,1005,1007 (1006 is the
+        // hidden NULL-dst row).
+        let full = interchain_db
+            .get_crosschain_messages(None, None, filter.clone(), 100, false, None)
+            .await
+            .unwrap()
+            .0;
+        let full_ids = message_ids(&full);
+        assert!(!full_ids.contains(&1006));
+        assert_eq!(full_ids.len(), 6);
+
+        let (page1, pag1) = interchain_db
+            .get_crosschain_messages(None, None, filter.clone(), 2, false, None)
+            .await
+            .unwrap();
+        assert_eq!(page1.len(), 2, "first page must be dense under the filter");
+        let next = pag1.next_marker.expect("next marker");
+
+        let (page2, pag2) = interchain_db
+            .get_crosschain_messages(None, None, filter.clone(), 2, false, Some(next))
+            .await
+            .unwrap();
+        assert_eq!(page2.len(), 2, "second page must be dense under the filter");
+
+        let p1: Vec<i64> = page1.iter().map(|(m, _)| m.id).collect();
+        let p2: Vec<i64> = page2.iter().map(|(m, _)| m.id).collect();
+        assert!(
+            p1.iter().all(|id| !p2.contains(id)),
+            "no row may repeat across pages"
+        );
+
+        // Marker round-trip: paging back from page 2 reproduces page 1 exactly,
+        // under the same active predicate.
+        let prev = pag2.prev_marker.expect("prev marker");
+        let (page1b, _) = interchain_db
+            .get_crosschain_messages(None, None, filter.clone(), 2, false, Some(prev))
+            .await
+            .unwrap();
+        let p1b: Vec<i64> = page1b.iter().map(|(m, _)| m.id).collect();
+        assert_eq!(p1b, p1, "prev marker must reproduce the first page");
+
+        // Newest-first ordering is unchanged by the predicate.
+        let ts_seq: Vec<_> = full.iter().map(|(m, _)| m.init_timestamp).collect();
+        let mut sorted = ts_seq.clone();
+        sorted.sort_by(|a, b| b.cmp(a));
+        assert_eq!(
+            ts_seq, sorted,
+            "list must remain newest-first under the filter"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_empty_per_bridge_restricts_nothing() {
+        use sea_orm::QueryTrait;
+
+        let db = init_db("test_empty_per_bridge_restricts_nothing").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        // Degenerate config: no bridge at all. Defensive only (the startup
+        // `bail!` rejects this when bridges are configured), but must fail
+        // open, not hide everything.
+        let indexed = IndexedChains::from_pairs(std::iter::empty());
+        assert_eq!(indexed.configured_pairs(None), Some(Vec::new()));
+
+        let filter = default_filter(&indexed);
+        let sql = crosschain_messages::Entity::find()
+            .filter(filter.messages_condition())
+            .build(sea_orm::DatabaseBackend::Postgres)
+            .to_string();
+        assert!(
+            sql.to_ascii_lowercase().contains("is not null"),
+            "empty PerBridge must render the permissive arm, not FALSE; got: {sql}"
+        );
+        assert!(
+            !sql.to_ascii_lowercase().contains("false"),
+            "empty PerBridge must not hide everything; got: {sql}"
+        );
+
+        let (messages, _) = interchain_db
+            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .await
+            .unwrap();
+        let ids = message_ids(&messages);
+        assert!(!ids.contains(&1006), "NULL-dst row is still excluded");
+        assert_eq!(ids.len(), 6, "every non-NULL-dst row must be returned");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_hide_equals_flag_covers_all_predicate_cases() {
+        let db = init_db("test_hide_equals_flag_covers_all_predicate_cases").await;
+        fill_mock_interchain_database(&db).await;
+        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        let indexed = mock_indexed_chains();
+
+        let (all_messages, _) = interchain_db
+            .get_crosschain_messages(None, None, ChainBridgeFilter::default(), 1000, false, None)
+            .await
+            .unwrap();
+        let (shown_messages, _) = interchain_db
+            .get_crosschain_messages(None, None, default_filter(&indexed), 1000, false, None)
+            .await
+            .unwrap();
+        let shown_ids = message_ids(&shown_messages);
+        let by_id: std::collections::HashMap<i64, &crosschain_messages::Model> =
+            all_messages.iter().map(|(m, _)| (m.id, m)).collect();
+
+        // (row id, bridge, src, dst, case description)
+        let cases: [(i64, i32, i64, Option<i64>, &str); 7] = [
+            (2003, 3, 1, Some(250), "case 1: absent bridge, real dst"),
+            (2004, 3, 1, None, "case 2: absent bridge, NULL dst"),
+            (1001, 1, 1, Some(100), "case 3: both endpoints indexed"),
+            (2006, 1, 250, Some(1), "case 4: src not indexed"),
+            (2001, 1, 1, Some(250), "case 5: dst known but not indexed"),
+            (1006, 1, 1, None, "case 6: dst unknown (NULL)"),
+            (2005, 4, 1, Some(100), "case 7: present-but-empty bridge"),
+        ];
+
+        for (id, bridge_id, src, dst, case) in cases {
+            let model = by_id
+                .get(&id)
+                .unwrap_or_else(|| panic!("{case}: row {id} must exist"));
+            assert_eq!(model.bridge_id, bridge_id, "{case}: unexpected bridge_id");
+            assert_eq!(model.src_chain_id, src, "{case}: unexpected src_chain_id");
+            assert_eq!(model.dst_chain_id, dst, "{case}: unexpected dst_chain_id");
+
+            let flagged = indexed.message_has_unindexed(bridge_id, src, dst);
+            let shown = shown_ids.contains(&id);
+            assert_eq!(
+                shown, !flagged,
+                "{case}: hide (shown={shown}) must be the exact negation of flag (flagged={flagged})"
+            );
+        }
     }
 }

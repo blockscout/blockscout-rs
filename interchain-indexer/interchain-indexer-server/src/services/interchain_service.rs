@@ -12,7 +12,7 @@ use interchain_indexer_entity::{
     sea_orm_active_enums::MessageStatus as DbMessageStatus, tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
-    ChainInfoService, CrosschainMessageLookup, InterchainDatabase, JoinedTransfer,
+    ChainInfoService, CrosschainMessageLookup, IndexedChains, InterchainDatabase, JoinedTransfer,
     TokenInfoService,
     pagination::{
         ListMarker, MessagesPaginationLogic, PaginationDirection, TransfersPaginationLogic,
@@ -146,6 +146,7 @@ pub struct InterchainServiceImpl {
     pub chain_info_service: Arc<ChainInfoService>,
     pub bridges_map: HashMap<i32, BridgeInfo>,
     pub api_settings: ApiSettings,
+    pub indexed_chains: Arc<IndexedChains>,
 }
 
 impl InterchainServiceImpl {
@@ -155,6 +156,7 @@ impl InterchainServiceImpl {
         chain_info_service: Arc<ChainInfoService>,
         bridges: Vec<BridgeConfig>,
         api_settings: ApiSettings,
+        indexed_chains: Arc<IndexedChains>,
     ) -> Self {
         Self {
             db,
@@ -175,6 +177,7 @@ impl InterchainServiceImpl {
                 })
                 .collect(),
             api_settings,
+            indexed_chains,
         }
     }
 
@@ -200,6 +203,12 @@ impl InterchainServiceImpl {
             None => None,
         };
 
+        let has_unindexed_chain = self.indexed_chains.message_has_unindexed(
+            message.bridge_id,
+            message.src_chain_id,
+            message.dst_chain_id,
+        );
+
         InterchainMessage {
             bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(&message),
@@ -215,6 +224,7 @@ impl InterchainServiceImpl {
             payload,
             extra: BTreeMap::new(),
             transfers,
+            has_unindexed_chain: Some(has_unindexed_chain),
         }
     }
 
@@ -245,6 +255,12 @@ impl InterchainServiceImpl {
         transfer: &CrosschainTransferModel,
         message: &CrosschainMessageModel,
     ) -> InterchainTransfer {
+        let has_unindexed_chain = self.indexed_chains.transfer_has_unindexed(
+            message.bridge_id,
+            transfer.token_src_chain_id,
+            transfer.token_dst_chain_id,
+        );
+
         InterchainTransfer {
             bridge: self.get_bridge_info(message.bridge_id).into(),
             message_id: self.get_message_id_from_message(message),
@@ -271,6 +287,7 @@ impl InterchainServiceImpl {
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash.clone()),
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: message.last_update_timestamp.map(db_datetime_to_string),
+            has_unindexed_chain: Some(has_unindexed_chain),
         }
     }
 
@@ -278,6 +295,12 @@ impl InterchainServiceImpl {
         &self,
         transfer: &JoinedTransfer,
     ) -> InterchainTransfer {
+        let has_unindexed_chain = self.indexed_chains.transfer_has_unindexed(
+            transfer.bridge_id,
+            transfer.token_src_chain_id,
+            transfer.token_dst_chain_id,
+        );
+
         InterchainTransfer {
             bridge: self.get_bridge_info(transfer.bridge_id).into(),
             message_id: self.get_message_id_from_joined_transfer(transfer),
@@ -304,6 +327,7 @@ impl InterchainServiceImpl {
             destination_transaction_hash: hex_string_opt(transfer.dst_tx_hash.clone()),
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: transfer.last_update_timestamp.map(db_datetime_to_string),
+            has_unindexed_chain: Some(has_unindexed_chain),
         }
     }
 
@@ -397,6 +421,8 @@ impl InterchainService for InterchainServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let (items, output_pagination) = self
@@ -475,6 +501,8 @@ impl InterchainService for InterchainServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let (items, output_pagination) = self
@@ -521,6 +549,8 @@ impl InterchainService for InterchainServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let (items, output_pagination) = self
@@ -563,6 +593,8 @@ impl InterchainService for InterchainServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let (items, output_pagination) = self
@@ -609,6 +641,8 @@ impl InterchainService for InterchainServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let (items, output_pagination) = self
@@ -655,6 +689,8 @@ impl InterchainService for InterchainServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let (items, output_pagination) = self
@@ -686,13 +722,30 @@ impl InterchainService for InterchainServiceImpl {
 
     async fn get_chains(
         &self,
-        _request: Request<GetChainsRequest>,
+        request: Request<GetChainsRequest>,
     ) -> Result<Response<GetChainsResponse>, Status> {
+        let inner = request.into_inner();
         let models = self
             .chain_info_service
             .get_all_chains_info()
             .await
             .map_err(map_db_error)?;
+
+        let models = if inner.include_unindexed_chains.unwrap_or(false) {
+            models
+        } else {
+            match self.indexed_chains.configured_union() {
+                // An empty union can only mean no bridge is configured at all;
+                // emptying the chain directory in that case would be exactly the
+                // retroactive reinterpretation ADR-004 Decision 5 forbids.
+                Some(union) if !union.is_empty() => models
+                    .into_iter()
+                    .filter(|m| union.contains(&m.id))
+                    .collect(),
+                _ => models,
+            }
+        };
+
         let items = models.into_iter().map(chain_model_to_proto).collect();
         Ok(Response::new(GetChainsResponse { items }))
     }

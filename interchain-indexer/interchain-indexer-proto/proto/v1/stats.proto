@@ -45,6 +45,11 @@ message GetMessagePathsRequest {
   // `counterparty_chain_ids` through AND. Malformed/out-of-range values are
   // rejected with InvalidArgument.
   optional string bridge_ids = 5;
+  // When true, also include message paths touching a chain that no configured
+  // bridge indexes. Default (absent or false) hides them. Currently returns no
+  // additional rows — the aggregates for unindexed chain pairs are not written
+  // yet.
+  optional bool include_unindexed_chains = 6;
 }
 
 message MessagePathRow {
@@ -107,6 +112,11 @@ message GetBridgedTokensRequest {
   // rejected with InvalidArgument. Page tokens are scoped to the same bridge
   // and counterparty filters that produced them.
   optional string bridge_ids = 14;
+  // When true, also include tokens/edges touching a chain that no configured
+  // bridge indexes. Default (absent or false) hides them. Currently returns no
+  // additional rows — the aggregates for unindexed chain pairs are not written
+  // yet.
+  optional bool include_unindexed_chains = 15;
 }
 
 message GetChainsStatsRequest {
@@ -130,6 +140,9 @@ message GetChainsStatsRequest {
   optional string q = 9;
   // Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]
   StatsChainsSort sort = 10;
+  // When true, also return chains that no configured bridge indexes. Default
+  // (absent or false) omits them.
+  optional bool include_unindexed_chains = 11;
 }
 
 message StatsBridgedTokenItem {
@@ -193,6 +206,9 @@ message GetCommonStatisticsRequest {
   // narrows the focal predicate through AND. A destination filter excludes
   // messages with a NULL destination through normal SQL semantics.
   optional string dst_chain_ids = 6;
+  // When true, also count messages/transfers touching a chain that this
+  // record's own bridge does not index. Default (absent or false) hides them.
+  optional bool include_unindexed_chains = 7;
 }
 message GetDailyStatisticsRequest {
   optional uint64 timestamp = 1;
@@ -215,6 +231,9 @@ message GetDailyStatisticsRequest {
   // narrows the focal predicate through AND. A destination filter excludes
   // messages with a NULL destination through normal SQL semantics.
   optional string dst_chain_ids = 6;
+  // When true, also count messages/transfers touching a chain that this
+  // record's own bridge does not index. Default (absent or false) hides them.
+  optional bool include_unindexed_chains = 7;
 }
 
 message GetCommonStatisticsResponse {
