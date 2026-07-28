@@ -350,6 +350,84 @@ longer silently drops failed-AMB aggregates.
 
 **Fix:** Treat as a data repair problem. Verify the two assets really represent the same bridged token, then merge their `stats_asset_tokens`, `stats_asset_edges`, and affected `crosschain_transfers` consistently before resetting skipped transfer stats for re-projection. For local development, a fresh reindex may be simpler.
 
+**Note:** this describes current behavior. Asset identity is an incrementally
+discovered connected-component problem — two complete transfers on fully indexed
+chains can form disjoint components (`{A,B}` and `{C,D}`) that a later `B→C`
+must join — so the planned direction is to turn this skip into an automatic
+merge. See the observability gotcha below.
+
+---
+
+## Stats Eligibility Is About Observability, Not Protocol Terminality
+
+**Symptom:** A bridged token appears as two one-token `stats_assets` (one per
+chain); or a processed transfer is later found with both token endpoints while
+its assigned asset contains only one of them; or a whole chain pair is missing
+from bridged-token and message-path stats even though canonical rows exist.
+
+**Root cause:** two different kinds of incompleteness get conflated.
+
+- *Protocol terminality* — AMB destination execution is terminal even when the
+  source-chain request has not been observed yet. Accepting that
+  destination-only transfer creates a singleton asset and marks the transfer
+  processed; a later source-side upsert fills the nullable canonical columns but
+  preserves `stats_processed` / `stats_asset_id`, so stats never reconsiders the
+  now-complete pair.
+- *Observability* — a message whose counterpart chain is not configured for its
+  bridge can never be confirmed. Judging it by `status = Completed` defers it
+  forever, so its data disappears from stats instead of being available as an
+  opt-in slice.
+
+**Invariant:** the stats layer decides eligibility from one question — *can the
+missing evidence still arrive?* It can exactly when the chain that would produce
+it is indexed **by that bridge** (it has a configured contract there). Nothing in
+this rule may branch on bridge type. The full rationale, the indexer contract it
+depends on, and the rejected alternatives are in
+`adr/004-stats-observability-horizon-and-asset-union-find.md`.
+
+- missing token endpoint, counterpart chain indexed → defer;
+- missing token endpoint, counterpart chain unindexed → commit to what is known;
+- missing destination confirmation, destination chain indexed → defer;
+- missing destination confirmation, destination chain unindexed → count now.
+
+The indexed-chain set comes from the **in-memory config**, per bridge. Do not
+read it from `bridge_contracts`: startup backfill runs before
+`upsert_bridge_contracts`, so a DB-derived set is stale exactly when backfill
+needs it. The same set must reach live projection and both backfill candidate
+queries — a divergence either loses rows or makes backfill loop forever.
+
+**A bridge removed from the config is not the same as a bridge with no
+contracts** (added 2026-07-28). `may_observe` answers `true` for a bridge *absent*
+from the set (permissive: defer, and keep showing its rows) and `false` for a
+bridge *present* with an empty set (restrictive: count now, hide its rows).
+Removing a bridge from `bridges.json` must therefore commit nothing and hide
+nothing — `upsert_bridges` never deletes the `bridges` row and nothing filters on
+`bridges.enabled`, so the rows stay joinable and only their classification could
+change. The branch is unreachable on the live path (no indexer ⇒ no flushes) but
+**reachable on startup backfill**, which scans every `stats_processed = 0` row
+regardless of which indexers run. `map.get(&bridge_id).is_some_and(..)` is the
+plausible-looking bug here; it must be `map_or(true, ..)`.
+
+**Counting and identity are separate concerns.** `stats_processed` guards
+counting only: additive, exactly once, never reversed. Asset identity — linking a
+newly known token endpoint, merging two asset components — is idempotent
+maintenance that may re-run for an already-counted transfer. Filling a missing
+side always requires a flush of that canonical key, so the live path must run
+identity maintenance for every flushed key, not only for entries whose incoming
+buffer item is `is_final`.
+
+**Warning:** never reset `stats_processed` after enrichment. `stats_asset_edges`
+updates are additive and would double count the previous projection. Late repair
+must go through identity maintenance, never through re-counting.
+
+**Consequence to expect:** a transfer counted while its destination chain was
+unindexed stays counted after that chain is added, even if it turns out the
+movement never completed. That is an accepted inaccuracy for the opt-in
+unindexed slice, not a bug. A transfer whose counterpart chain *is* indexed but
+whose evidence is permanently lost (AMB `messageId` collision, history older than
+the configured start block) stays deferred forever by design — a marker-zero row
+with a NULL endpoint is not a backfill backlog.
+
 ---
 
 ## Upgrading Unknown Chains to Proper Bridges
