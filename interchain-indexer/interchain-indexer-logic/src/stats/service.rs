@@ -9,7 +9,7 @@ use sea_orm::{
     ActiveValue, ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, sea_query::Expr,
 };
 
-use super::StatsListQuery;
+use super::{IndexedChains, StatsListQuery};
 use crate::{
     BridgedTokenAggDbRow, BridgedTokenLinkEnriched, InterchainDatabase, TokenInfoService,
     message_buffer::{ConsolidatedMessage, token_keys_from_finalized_for_enrichment},
@@ -51,6 +51,7 @@ pub struct StatsService {
     db: Arc<InterchainDatabase>,
     token_info: Option<Arc<TokenInfoService>>,
     read_settings: StatsReadSettings,
+    indexed_chains: IndexedChains,
 }
 
 impl StatsService {
@@ -58,11 +59,13 @@ impl StatsService {
         db: Arc<InterchainDatabase>,
         token_info: Option<Arc<TokenInfoService>>,
         read_settings: StatsReadSettings,
+        indexed_chains: IndexedChains,
     ) -> Self {
         Self {
             db,
             token_info,
             read_settings,
+            indexed_chains,
         }
     }
 
@@ -80,6 +83,12 @@ impl StatsService {
 
     pub fn read_settings(&self) -> StatsReadSettings {
         self.read_settings
+    }
+
+    /// The stats layer's single observability-horizon input: which chains are
+    /// indexed per bridge. See [`IndexedChains::may_observe`].
+    pub fn indexed_chains(&self) -> &IndexedChains {
+        &self.indexed_chains
     }
 
     /// Inline stats projection for finalized batches (same DB transaction as flush).
@@ -104,7 +113,7 @@ impl StatsService {
             msg_pks.push((mid, brid));
         }
 
-        super::projection::project_messages_batch(tx, &msg_pks).await?;
+        super::projection::project_messages_batch(tx, &msg_pks, &self.indexed_chains).await?;
 
         let transfer_ids: Vec<i64> = crosschain_transfers::Entity::find()
             .filter(
@@ -121,7 +130,7 @@ impl StatsService {
             .map(|t| t.id)
             .collect();
 
-        super::projection::project_transfers_batch(tx, &transfer_ids).await?;
+        super::projection::project_transfers_batch(tx, &transfer_ids, &self.indexed_chains).await?;
         Ok(())
     }
 
@@ -130,12 +139,17 @@ impl StatsService {
     }
 
     pub async fn backfill_stats_until_idle(&self) -> anyhow::Result<()> {
-        self.db.backfill_stats_until_idle().await
+        self.db
+            .backfill_stats_until_idle(&self.indexed_chains)
+            .await
     }
 
     pub async fn backfill_stats_until_idle_with_token_enrichment(&self) -> anyhow::Result<()> {
         self.db
-            .backfill_stats_until_idle_with_token_enrichment(self.token_info.clone())
+            .backfill_stats_until_idle_with_token_enrichment(
+                &self.indexed_chains,
+                self.token_info.clone(),
+            )
             .await
     }
 
@@ -264,7 +278,12 @@ mod tests {
     async fn kickoff_enrichment_no_token_service_is_noop() {
         let guard = init_db("stats_service_kickoff_no_token").await;
         let db = Arc::new(InterchainDatabase::new(guard.client()));
-        let stats = StatsService::new(db, None, StatsReadSettings::default());
+        let stats = StatsService::new(
+            db,
+            None,
+            StatsReadSettings::default(),
+            IndexedChains::AllIndexed,
+        );
         stats.kickoff_token_enrichment_for_keys(vec![(1, vec![0xab; 20])]);
     }
 }

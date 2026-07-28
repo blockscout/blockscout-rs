@@ -21,7 +21,8 @@ use blockscout_service_launcher::{
 };
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
 use interchain_indexer_logic::{
-    ChainInfoService, InterchainDatabase, StatsReadSettings, StatsService, TokenInfoService,
+    ChainInfoService, IndexedChains, InterchainDatabase, StatsReadSettings, StatsService,
+    TokenInfoService,
 };
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     interchain_statistics_service_actix::route_interchain_statistics_service,
@@ -120,12 +121,57 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         chain_providers.clone(),
         settings.token_info.clone(),
     ));
+    // `load_bridges_from_file` is pure file IO and is hoisted above stats
+    // wiring so the indexed-chain set below can be built from it. Nothing else
+    // moves: the startup backfill a few lines down still runs before
+    // `upsert_chains` / `upsert_bridges` / `upsert_bridge_contracts`, because a
+    // DB-derived indexed-chain set would be stale exactly when backfill needs
+    // it (the DB has no bridge_contracts rows yet on a fresh deployment).
+    let bridges = load_bridges_from_file(&settings.bridges_config)?;
+
+    // Stats eligibility ("can missing evidence still arrive?") is derived from
+    // this in-memory set, never from `bridge_contracts`. Include *all*
+    // declared bridges, even disabled ones: `enabled` is an operational
+    // switch, not a statement about observability, and a contract-less bridge
+    // must end up present in the map with an empty set (restrictive), not
+    // omitted (permissive) — see `IndexedChains::may_observe`.
+    let indexed_chains = IndexedChains::from_bridges(bridges.iter().map(|b| {
+        (
+            b.bridge_id,
+            b.contracts.iter().map(|c| c.chain_id).collect(),
+        )
+    }));
+    // Iterate the map (not the config) so a `chain_count = 0` line proves the
+    // bridge is *present* in the map, not merely declared in the config file.
+    for (bridge_id, chain_count) in indexed_chains.bridge_chain_counts() {
+        tracing::info!(bridge_id, chain_count, "stats indexed-chain set");
+        if chain_count == 0 {
+            tracing::warn!(
+                bridge_id,
+                "bridge declared with no configured contracts; every chain counts as unindexed for it and its partial data will be committed to stats"
+            );
+        }
+    }
+    indexed_chains.record_metrics();
+    // Misconfiguration guard, not a safety net: with bridges configured but
+    // zero total pairs, every bridge in the map has an empty set, so every
+    // chain is unindexed and every pending transfer becomes countable.
+    anyhow::ensure!(
+        bridges.is_empty() || indexed_chains.pair_count() > 0,
+        "stats indexed-chain set is empty while {} bridge(s) are configured in {}: every \
+         chain would be treated as unindexed for every bridge and every pending transfer \
+         would become countable",
+        bridges.len(),
+        settings.bridges_config.display()
+    );
+
     let stats = Arc::new(StatsService::new(
         db.clone(),
         Some(token_info_service.clone()),
         StatsReadSettings {
             include_zero_chains: settings.stats.include_zero_chains,
         },
+        indexed_chains,
     ));
 
     if settings.stats.backfill_on_start {
@@ -136,8 +182,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .backfill_stats_until_idle_with_token_enrichment()
             .await?;
     }
-
-    let bridges = load_bridges_from_file(&settings.bridges_config)?;
 
     // Populate database with the chains, bridges and bridge contracts
     db.upsert_chains(

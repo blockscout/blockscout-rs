@@ -22,11 +22,12 @@ use std::{
 };
 
 use crate::{
-    TokenInfoService,
+    IndexedChains, TokenInfoService,
     filters::ChainBridgeFilter,
     pagination::{
         MessagesPaginationLogic, OutputPagination, PaginationDirection, TransfersPaginationLogic,
     },
+    stats::indexed_chains::{message_countable_condition, transfer_identity_ready_condition},
 };
 
 /// Outcome of a public message-details lookup.
@@ -97,7 +98,22 @@ pub const STATS_BACKFILL_BATCH: u64 = 50;
 #[derive(Debug, Default, Clone)]
 pub struct BackfillStatsReport {
     pub messages_processed: usize,
+    /// Candidate rows the message query selected this round, before
+    /// projection. Deferred rows are permanently eligible-but-not-yet-final, so
+    /// this (not `messages_processed`) is what tells the caller whether the
+    /// message cursor should advance.
+    pub messages_scanned: usize,
+    /// Highest `id` among scanned message candidates this round (`None` when
+    /// none were scanned). Feeds the next round's `min_id` so permanently
+    /// deferred rows are not rescanned forever.
+    pub messages_highest_candidate_id: Option<i64>,
     pub transfers_processed: usize,
+    /// Candidate rows the transfer query selected this round, before
+    /// projection. See [`Self::messages_scanned`].
+    pub transfers_scanned: usize,
+    /// Highest `id` among scanned transfer candidates this round. See
+    /// [`Self::messages_highest_candidate_id`].
+    pub transfers_highest_candidate_id: Option<i64>,
     /// Src/dst token keys from transfers projected this round (kickoff enrichment **after** tx).
     pub token_keys_for_enrichment: Vec<(i64, Vec<u8>)>,
 }
@@ -1444,104 +1460,140 @@ impl InterchainDatabase {
         Ok(())
     }
 
-    /// One backfill pass: process up to `message_limit` completed messages and
-    /// `transfer_limit` transfers with `stats_processed = 0`. Uses the same projection
-    /// as inline processing; each batch is one transaction.
+    /// One backfill pass: process up to `message_limit` messages with `id >
+    /// message_min_id` and up to `transfer_limit` transfers with `id >
+    /// transfer_min_id`, both with `stats_processed = 0`. Uses the same
+    /// projection as inline processing; each batch is one transaction. Pass
+    /// `0` for a phase's limit to skip its query entirely — used to drain
+    /// messages and transfers as two independent phases (see
+    /// [`Self::backfill_stats_until_idle_with_token_enrichment`]).
+    ///
+    /// Deferred rows (permanently eligible-but-not-yet-final) are never
+    /// re-scanned within the same phase because the caller advances `min_id`
+    /// to [`BackfillStatsReport::messages_highest_candidate_id`] /
+    /// [`BackfillStatsReport::transfers_highest_candidate_id`] — the highest
+    /// candidate *scanned*, not the highest *projected* — every round.
     pub async fn backfill_stats_projection_round(
         &self,
+        indexed: &IndexedChains,
+        message_min_id: i64,
         message_limit: u64,
+        transfer_min_id: i64,
         transfer_limit: u64,
     ) -> anyhow::Result<BackfillStatsReport> {
         let mut report = BackfillStatsReport::default();
 
-        let msg_rows = crosschain_messages::Entity::find()
-            .join(
-                JoinType::InnerJoin,
-                crosschain_messages::Relation::Bridges.def(),
-            )
-            .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
-            // Same completed-or-failed-AMB eligibility as live projection: the
-            // single shared predicate governs both paths so they cannot diverge.
-            .filter(crate::stats::projection::finalized_message_stats_condition())
-            .filter(crosschain_messages::Column::DstChainId.is_not_null())
-            .order_by_asc(crosschain_messages::Column::Id)
-            .limit(message_limit)
-            .all(self.db.as_ref())
-            .await
-            .map_err(|e| {
-                tracing::error!(err = ?e, "backfill_stats: list messages");
-                e
-            })?;
-
-        if !msg_rows.is_empty() {
-            let pks: Vec<(i64, i32)> = msg_rows.iter().map(|m| (m.id, m.bridge_id)).collect();
-            let n = msg_rows.len();
-            self.db
-                .as_ref()
-                .transaction(|tx| {
-                    let pks = pks.clone();
-                    Box::pin(async move {
-                        crate::stats::projection::project_messages_batch(tx, &pks)
-                            .await
-                            .map(|_| ())
-                    })
-                })
+        if message_limit > 0 {
+            let msg_rows = crosschain_messages::Entity::find()
+                .join(
+                    JoinType::InnerJoin,
+                    crosschain_messages::Relation::Bridges.def(),
+                )
+                .filter(crosschain_messages::Column::StatsProcessed.eq(0i16))
+                .filter(crosschain_messages::Column::Id.gt(message_min_id))
+                // Same eligibility as live projection: the single shared
+                // condition builder governs both paths so they cannot diverge.
+                .filter(message_countable_condition(indexed))
+                .filter(crosschain_messages::Column::DstChainId.is_not_null())
+                .order_by_asc(crosschain_messages::Column::Id)
+                .limit(message_limit)
+                .all(self.db.as_ref())
                 .await
                 .map_err(|e| {
-                    tracing::error!(err = ?e, "backfill_stats: message transaction");
-                    anyhow::anyhow!("{}", e)
+                    tracing::error!(err = ?e, "backfill_stats: list messages");
+                    e
                 })?;
-            report.messages_processed = n;
+
+            report.messages_scanned = msg_rows.len();
+            report.messages_highest_candidate_id = msg_rows.iter().map(|m| m.id).max();
+
+            if !msg_rows.is_empty() {
+                let pks: Vec<(i64, i32)> = msg_rows.iter().map(|m| (m.id, m.bridge_id)).collect();
+                let indexed_for_tx = indexed.clone();
+                let processed = self
+                    .db
+                    .as_ref()
+                    .transaction(|tx| {
+                        let pks = pks.clone();
+                        let indexed_for_tx = indexed_for_tx.clone();
+                        Box::pin(async move {
+                            crate::stats::projection::project_messages_batch(
+                                tx,
+                                &pks,
+                                &indexed_for_tx,
+                            )
+                            .await
+                        })
+                    })
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(err = ?e, "backfill_stats: message transaction");
+                        anyhow::anyhow!("{}", e)
+                    })?;
+                report.messages_processed = processed;
+            }
         }
 
-        let xfer_rows = crosschain_transfers::Entity::find()
-            .join(
-                JoinType::InnerJoin,
-                crosschain_transfers::Relation::CrosschainMessages.def(),
-            )
-            .join(
-                JoinType::InnerJoin,
-                crosschain_messages::Relation::Bridges.def(),
-            )
-            // Same completed-or-failed-AMB eligibility as live transfer
-            // projection (parent message joined to its bridge). `stats_processed
-            // > 0` on the parent keeps message projection strictly before
-            // transfer projection, and the transfer marker must still be zero.
-            .filter(crate::stats::projection::finalized_message_stats_condition())
-            .filter(crosschain_messages::Column::StatsProcessed.gt(0i16))
-            .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
-            .order_by_asc(crosschain_transfers::Column::Id)
-            .limit(transfer_limit)
-            .all(self.db.as_ref())
-            .await
-            .map_err(|e| {
-                tracing::error!(err = ?e, "backfill_stats: list transfers");
-                e
-            })?;
-
-        if !xfer_rows.is_empty() {
-            let ids: Vec<i64> = xfer_rows.iter().map(|t| t.id).collect();
-            let n = xfer_rows.len();
-            self.db
-                .as_ref()
-                .transaction(|tx| {
-                    let ids = ids.clone();
-                    Box::pin(async move {
-                        crate::stats::projection::project_transfers_batch(tx, &ids)
-                            .await
-                            .map(|_| ())
-                    })
-                })
+        if transfer_limit > 0 {
+            let xfer_rows = crosschain_transfers::Entity::find()
+                .join(
+                    JoinType::InnerJoin,
+                    crosschain_transfers::Relation::CrosschainMessages.def(),
+                )
+                .join(
+                    JoinType::InnerJoin,
+                    crosschain_messages::Relation::Bridges.def(),
+                )
+                // Same eligibility as live transfer projection (parent message
+                // joined to its bridge). `stats_processed > 0` on the parent
+                // keeps message projection strictly before transfer
+                // projection, and the transfer marker must still be zero.
+                .filter(message_countable_condition(indexed))
+                .filter(transfer_identity_ready_condition(indexed))
+                .filter(crosschain_messages::Column::StatsProcessed.gt(0i16))
+                .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
+                .filter(crosschain_transfers::Column::Id.gt(transfer_min_id))
+                .order_by_asc(crosschain_transfers::Column::Id)
+                .limit(transfer_limit)
+                .all(self.db.as_ref())
                 .await
                 .map_err(|e| {
-                    tracing::error!(err = ?e, "backfill_stats: transfer transaction");
-                    anyhow::anyhow!("{}", e)
+                    tracing::error!(err = ?e, "backfill_stats: list transfers");
+                    e
                 })?;
-            report.transfers_processed = n;
-            report.token_keys_for_enrichment =
-                crate::stats::projection::token_keys_for_stats_enrichment_from_transfer_models(
-                    &xfer_rows,
-                );
+
+            report.transfers_scanned = xfer_rows.len();
+            report.transfers_highest_candidate_id = xfer_rows.iter().map(|t| t.id).max();
+
+            if !xfer_rows.is_empty() {
+                let ids: Vec<i64> = xfer_rows.iter().map(|t| t.id).collect();
+                let indexed_for_tx = indexed.clone();
+                let processed = self
+                    .db
+                    .as_ref()
+                    .transaction(|tx| {
+                        let ids = ids.clone();
+                        let indexed_for_tx = indexed_for_tx.clone();
+                        Box::pin(async move {
+                            crate::stats::projection::project_transfers_batch(
+                                tx,
+                                &ids,
+                                &indexed_for_tx,
+                            )
+                            .await
+                        })
+                    })
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(err = ?e, "backfill_stats: transfer transaction");
+                        anyhow::anyhow!("{}", e)
+                    })?;
+                report.transfers_processed = processed;
+                report.token_keys_for_enrichment =
+                    crate::stats::projection::token_keys_for_stats_enrichment_from_transfer_models(
+                        &xfer_rows,
+                    );
+            }
         }
 
         Ok(report)
@@ -1549,35 +1601,79 @@ impl InterchainDatabase {
 
     /// Runs [`Self::backfill_stats_projection_round`] until no eligible rows remain.
     /// Uses a fixed batch size per round (see [`STATS_BACKFILL_BATCH`]).
-    pub async fn backfill_stats_until_idle(&self) -> anyhow::Result<()> {
-        self.backfill_stats_until_idle_with_token_enrichment(None)
+    pub async fn backfill_stats_until_idle(&self, indexed: &IndexedChains) -> anyhow::Result<()> {
+        self.backfill_stats_until_idle_with_token_enrichment(indexed, None)
             .await
     }
 
     /// Like [`Self::backfill_stats_until_idle`], but after each successful transfer-projection
     /// batch (outside the DB transaction), kicks off non-blocking token fetches for missing
     /// metadata — same path as inline buffer flush.
+    ///
+    /// Runs as **two sequential phases with independent monotonic id cursors**:
+    /// messages are drained to idle first, then transfers. This is mandatory,
+    /// not cosmetic — the transfer candidate query requires the parent
+    /// message to already be counted (`crosschain_messages.stats_processed >
+    /// 0`), so interleaving the two cursors could permanently skip a low-id
+    /// transfer whose parent message has a high id. Message projection has no
+    /// dependency on transfer projection, so draining messages first is safe.
+    ///
+    /// Each phase's cursor advances to the highest *candidate* id scanned that
+    /// round (not the highest *projected* one), so permanently deferred rows
+    /// (missing evidence whose counterpart chain is indexed) are scanned once
+    /// and never rescanned, which is what makes this loop provably terminate.
     pub async fn backfill_stats_until_idle_with_token_enrichment(
         &self,
+        indexed: &IndexedChains,
         token_info: Option<Arc<TokenInfoService>>,
     ) -> anyhow::Result<()> {
         let mut total_messages = 0usize;
-        let mut total_transfers = 0usize;
+        let mut message_min_id = i64::MIN;
         loop {
             let r = self
-                .backfill_stats_projection_round(STATS_BACKFILL_BATCH, STATS_BACKFILL_BATCH)
+                .backfill_stats_projection_round(
+                    indexed,
+                    message_min_id,
+                    STATS_BACKFILL_BATCH,
+                    i64::MIN,
+                    0,
+                )
                 .await?;
-            if r.messages_processed == 0 && r.transfers_processed == 0 {
+            if r.messages_scanned == 0 {
                 break;
             }
             total_messages += r.messages_processed;
-            total_transfers += r.transfers_processed;
+            message_min_id = r.messages_highest_candidate_id.unwrap_or(message_min_id);
             tracing::info!(
                 messages_this_round = r.messages_processed,
-                transfers_this_round = r.transfers_processed,
+                messages_scanned_this_round = r.messages_scanned,
                 total_messages_so_far = total_messages,
+                "stats backfill message phase progress"
+            );
+        }
+
+        let mut total_transfers = 0usize;
+        let mut transfer_min_id = i64::MIN;
+        loop {
+            let r = self
+                .backfill_stats_projection_round(
+                    indexed,
+                    i64::MIN,
+                    0,
+                    transfer_min_id,
+                    STATS_BACKFILL_BATCH,
+                )
+                .await?;
+            if r.transfers_scanned == 0 {
+                break;
+            }
+            total_transfers += r.transfers_processed;
+            transfer_min_id = r.transfers_highest_candidate_id.unwrap_or(transfer_min_id);
+            tracing::info!(
+                transfers_this_round = r.transfers_processed,
+                transfers_scanned_this_round = r.transfers_scanned,
                 total_transfers_so_far = total_transfers,
-                "stats backfill progress"
+                "stats backfill transfer phase progress"
             );
             if let (Some(svc), keys) = (token_info.as_ref(), &r.token_keys_for_enrichment)
                 && !keys.is_empty()
@@ -1586,6 +1682,7 @@ impl InterchainDatabase {
                     .kickoff_token_fetch_for_stats_enrichment(keys.clone());
             }
         }
+
         tracing::info!(
             total_messages = total_messages,
             total_transfers = total_transfers,
@@ -2770,7 +2867,7 @@ mod tests {
 
     use super::{CrosschainMessageLookup, JoinedTransfer};
     use crate::{
-        ChainBridgeFilter, InterchainDatabase, MessagePathStatsRow,
+        ChainBridgeFilter, IndexedChains, InterchainDatabase, MessagePathStatsRow,
         test_utils::{
             init_db,
             mock_db::{fill_mock_interchain_database, mock_base_ts},
@@ -4892,9 +4989,13 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92001i64, 1i32)])
-                    .await
-                    .map(|_| ())
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92001i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+                .map(|_| ())
             })
         })
         .await
@@ -4934,9 +5035,13 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92060i64, 1i32)])
-                    .await
-                    .map(|_| ())
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92060i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+                .map(|_| ())
             })
         })
         .await
@@ -4972,9 +5077,13 @@ mod tests {
         for _ in 0..2 {
             db.transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats::projection::project_messages_batch(tx, &[(92002i64, 1i32)])
-                        .await
-                        .map(|_| ())
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(92002i64, 1i32)],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
+                    .map(|_| ())
                 })
             })
             .await
@@ -5017,6 +5126,7 @@ mod tests {
                 crate::stats::projection::project_messages_batch(
                     tx,
                     &[(92061i64, 1i32), (92062i64, 1i32)],
+                    &IndexedChains::AllIndexed,
                 )
                 .await
                 .map(|_| ())
@@ -5059,6 +5169,7 @@ mod tests {
                 crate::stats::projection::project_messages_batch(
                     tx,
                     &[(92063i64, 1i32), (92064i64, 1i32)],
+                    &IndexedChains::AllIndexed,
                 )
                 .await
                 .map(|_| ())
@@ -5103,6 +5214,7 @@ mod tests {
                 crate::stats::projection::project_messages_batch(
                     tx,
                     &[(92065i64, 1i32), (92066i64, 1i32)],
+                    &IndexedChains::AllIndexed,
                 )
                 .await
                 .map(|_| ())
@@ -5210,6 +5322,7 @@ mod tests {
                         (92068i64, 1i32),
                         (92069i64, 1i32),
                     ],
+                    &IndexedChains::AllIndexed,
                 )
                 .await
                 .map(|_| ())
@@ -5343,8 +5456,18 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92003i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92003i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92003i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92003i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -5408,7 +5531,12 @@ mod tests {
         .unwrap();
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_transfers_batch(tx, &[92070i64]).await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92070i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -5443,7 +5571,12 @@ mod tests {
         let processed = db
             .transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats::projection::project_transfers_batch(tx, &[92071i64]).await
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &[92071i64],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
                 })
             })
             .await
@@ -5513,8 +5646,18 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92020i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92020i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92020i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92020i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -5579,8 +5722,18 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92019i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92019i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92019i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92019i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -5636,8 +5789,18 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92021i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92021i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92021i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92021i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -5677,8 +5840,18 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92022i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92022i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92022i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92022i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -5746,8 +5919,18 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92032i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92032i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92032i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92032i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -5811,10 +5994,15 @@ mod tests {
                 crate::stats::projection::project_messages_batch(
                     tx,
                     &[(92030i64, 1i32), (92031i64, 1i32)],
+                    &IndexedChains::AllIndexed,
                 )
                 .await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92030i64, 92031i64])
-                    .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92030i64, 92031i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -5930,9 +6118,18 @@ mod tests {
         let res = db
             .transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats::projection::project_messages_batch(tx, &[(92023i64, 1i32)])
-                        .await?;
-                    crate::stats::projection::project_transfers_batch(tx, &[92023i64]).await?;
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(92023i64, 1i32)],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await?;
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &[92023i64],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await?;
                     Ok::<(), sea_orm::DbErr>(())
                 })
             })
@@ -6016,8 +6213,18 @@ mod tests {
         // Must commit: the unreconcilable transfer is skipped, not fatal.
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92024i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92024i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92024i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92024i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -6098,8 +6305,18 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92050i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92050i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92050i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92050i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -6153,8 +6370,18 @@ mod tests {
 
         db.transaction(|tx| {
             Box::pin(async move {
-                crate::stats::projection::project_messages_batch(tx, &[(92051i64, 1i32)]).await?;
-                crate::stats::projection::project_transfers_batch(tx, &[92051i64]).await?;
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92051i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92051i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
                 Ok::<(), sea_orm::DbErr>(())
             })
         })
@@ -6511,9 +6738,18 @@ mod tests {
         for _ in 0..2 {
             db.transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats::projection::project_messages_batch(tx, &[(92004i64, 1i32)])
-                        .await?;
-                    crate::stats::projection::project_transfers_batch(tx, &[92004i64]).await?;
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(92004i64, 1i32)],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await?;
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &[92004i64],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await?;
                     Ok::<(), sea_orm::DbErr>(())
                 })
             })
@@ -6564,7 +6800,10 @@ mod tests {
         .unwrap();
 
         let ic = InterchainDatabase::new(_db.client());
-        let r = ic.backfill_stats_projection_round(50, 50).await.unwrap();
+        let r = ic
+            .backfill_stats_projection_round(&IndexedChains::AllIndexed, i64::MIN, 50, i64::MIN, 50)
+            .await
+            .unwrap();
         assert!(r.messages_processed >= 1);
         assert!(r.transfers_processed >= 1);
 
@@ -6582,7 +6821,10 @@ mod tests {
         assert_eq!(t.stats_processed, 1);
         assert!(t.stats_asset_id.is_some());
 
-        let r2 = ic.backfill_stats_projection_round(50, 50).await.unwrap();
+        let r2 = ic
+            .backfill_stats_projection_round(&IndexedChains::AllIndexed, i64::MIN, 50, i64::MIN, 50)
+            .await
+            .unwrap();
         assert_eq!(r2.messages_processed, 0);
         assert_eq!(r2.transfers_processed, 0);
     }
@@ -6592,7 +6834,9 @@ mod tests {
     async fn stats_backfill_until_idle_empty_succeeds() {
         let _db = init_db("stats_backfill_until_idle_empty_succeeds").await;
         let ic = InterchainDatabase::new(_db.client());
-        ic.backfill_stats_until_idle().await.unwrap();
+        ic.backfill_stats_until_idle(&IndexedChains::AllIndexed)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -6623,7 +6867,9 @@ mod tests {
         .await
         .unwrap();
 
-        ic.backfill_stats_until_idle().await.unwrap();
+        ic.backfill_stats_until_idle(&IndexedChains::AllIndexed)
+            .await
+            .unwrap();
 
         let m = crosschain_messages::Entity::find_by_id((92008i64, 1i32))
             .one(db)
@@ -6660,8 +6906,12 @@ mod tests {
         let res = db
             .transaction(|tx| {
                 Box::pin(async move {
-                    crate::stats::projection::project_messages_batch(tx, &[(92006i64, 1i32)])
-                        .await?;
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(92006i64, 1i32)],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await?;
                     Err::<(), sea_orm::DbErr>(sea_orm::DbErr::Custom("forced abort".into()))
                 })
             })
@@ -7965,6 +8215,7 @@ mod tests {
                 crate::stats::projection::project_messages_batch(
                     tx,
                     &[(93001i64, 1i32), (93001i64, 2i32)],
+                    &IndexedChains::AllIndexed,
                 )
                 .await
                 .map(|_| ())
@@ -8236,7 +8487,9 @@ mod tests {
         .await
         .unwrap();
 
-        ic.backfill_stats_until_idle().await.unwrap();
+        ic.backfill_stats_until_idle(&IndexedChains::AllIndexed)
+            .await
+            .unwrap();
 
         // Completed + failed AMB messages projected on bridge 1 (count 2); the
         // failed non-AMB message is left unprocessed.
@@ -8275,8 +8528,832 @@ mod tests {
         assert!(edge_rows.iter().all(|e| e.bridge_id == 1));
 
         // A second idle pass finds nothing eligible (no double counting).
-        let again = ic.backfill_stats_projection_round(50, 50).await.unwrap();
+        let again = ic
+            .backfill_stats_projection_round(&IndexedChains::AllIndexed, i64::MIN, 50, i64::MIN, 50)
+            .await
+            .unwrap();
         assert_eq!(again.messages_processed, 0);
         assert_eq!(again.transfers_processed, 0);
+    }
+
+    // --- coding-task-4a: IndexedChains-based stats eligibility ---
+
+    fn transfer_active_model(
+        id: i64,
+        message_id: i64,
+        bridge_id: i32,
+        token_src_chain_id: i64,
+        token_dst_chain_id: i64,
+        token_src_address: Option<Vec<u8>>,
+        token_dst_address: Option<Vec<u8>>,
+    ) -> crosschain_transfers::ActiveModel {
+        crosschain_transfers::ActiveModel {
+            id: Set(id),
+            message_id: Set(message_id),
+            bridge_id: Set(bridge_id),
+            index: Set(0),
+            token_src_chain_id: Set(token_src_chain_id),
+            token_dst_chain_id: Set(token_dst_chain_id),
+            src_amount: Set(token_src_address.as_ref().map(|_| BigDecimal::from(10u64))),
+            dst_amount: Set(token_dst_address.as_ref().map(|_| BigDecimal::from(10u64))),
+            token_src_address: Set(token_src_address),
+            token_dst_address: Set(token_dst_address),
+            stats_processed: Set(0),
+            ..Default::default()
+        }
+    }
+
+    async fn seed_bridge5_backlog(db: &sea_orm::DatabaseConnection) {
+        interchain_indexer_entity::bridges::Entity::insert(
+            interchain_indexer_entity::bridges::ActiveModel {
+                id: Set(5),
+                name: Set("Removed".into()),
+                ..Default::default()
+            },
+        )
+        .exec(db)
+        .await
+        .unwrap();
+
+        let msg = |id: i64| crosschain_messages::ActiveModel {
+            id: Set(id),
+            bridge_id: Set(5),
+            status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(100)),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        };
+        crosschain_messages::Entity::insert_many([msg(95040), msg(95041)])
+            .exec(db)
+            .await
+            .unwrap();
+
+        crosschain_transfers::Entity::insert_many([
+            transfer_active_model(95040, 95040, 5, 1, 100, None, Some([0xD1u8; 20].to_vec())),
+            transfer_active_model(95041, 95041, 5, 1, 100, Some([0xD2u8; 20].to_vec()), None),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_project_transfer_missing_endpoint_indexed_counterpart_defers() {
+        let _db =
+            init_db("test_project_transfer_missing_endpoint_indexed_counterpart_defers").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        // Both chains are indexed for bridge 1: a missing endpoint on either
+        // side must defer, never commit to a singleton asset.
+        let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+
+        // Case A: destination known, source missing.
+        crosschain_messages::Entity::insert(completed_message(95001, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            95001,
+            95001,
+            1,
+            1,
+            100,
+            None,
+            Some([0xA1u8; 20].to_vec()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Case B: source known, destination missing.
+        crosschain_messages::Entity::insert(completed_message(95002, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            95002,
+            95002,
+            1,
+            1,
+            100,
+            Some([0xB1u8; 20].to_vec()),
+            None,
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        for id in [95001i64, 95002i64] {
+            let indexed = indexed.clone();
+            let n = db
+                .transaction(|tx| {
+                    Box::pin(async move {
+                        crate::stats::projection::project_transfers_batch(tx, &[id], &indexed).await
+                    })
+                })
+                .await
+                .unwrap();
+            assert_eq!(n, 0, "transfer {id} must defer, not project");
+
+            let t = crosschain_transfers::Entity::find_by_id(id)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(t.stats_processed, 0);
+            assert!(t.stats_asset_id.is_none());
+        }
+        assert_eq!(stats_assets::Entity::find().count(db).await.unwrap(), 0);
+        assert_eq!(
+            stats_asset_edges::Entity::find().count(db).await.unwrap(),
+            0
+        );
+
+        // Flush the missing side for each transfer (opposite discovery orders).
+        crosschain_transfers::Entity::update(crosschain_transfers::ActiveModel {
+            id: Set(95001),
+            token_src_address: Set(Some([0xA2u8; 20].to_vec())),
+            src_amount: Set(Some(BigDecimal::from(10u64))),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        crosschain_transfers::Entity::update(crosschain_transfers::ActiveModel {
+            id: Set(95002),
+            token_dst_address: Set(Some([0xB2u8; 20].to_vec())),
+            dst_amount: Set(Some(BigDecimal::from(10u64))),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        for id in [95001i64, 95002i64] {
+            let indexed = indexed.clone();
+            let n = db
+                .transaction(|tx| {
+                    Box::pin(async move {
+                        crate::stats::projection::project_transfers_batch(tx, &[id], &indexed).await
+                    })
+                })
+                .await
+                .unwrap();
+            assert_eq!(n, 1, "transfer {id} must project once both sides are known");
+
+            let t = crosschain_transfers::Entity::find_by_id(id)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(t.stats_processed, 1);
+            let aid = t.stats_asset_id.unwrap();
+            let tokens = stats_asset_tokens::Entity::find()
+                .filter(stats_asset_tokens::Column::StatsAssetId.eq(aid))
+                .all(db)
+                .await
+                .unwrap();
+            assert_eq!(
+                tokens.len(),
+                2,
+                "transfer {id} asset must hold both token mappings"
+            );
+            let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(edge.transfers_count, 1);
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_project_transfer_unindexed_destination_counts_now() {
+        let _db = init_db("test_project_transfer_unindexed_destination_counts_now").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        // Bridge 1 indexes chain 1 only; chain 100 (destination) is unindexed.
+        let indexed = IndexedChains::from_pairs([(1, 1)]);
+
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: Set(95010),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(100)),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            95010,
+            95010,
+            1,
+            1,
+            100,
+            Some([0xC1u8; 20].to_vec()),
+            Some([0xC2u8; 20].to_vec()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let n = db
+            .transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(tx, &[95010i64], &indexed)
+                        .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            n, 1,
+            "unconfirmed message with unindexed destination must count now"
+        );
+
+        let t = crosschain_transfers::Entity::find_by_id(95010i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 1);
+        let aid = t.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.transfers_count, 1);
+        assert_eq!(edge.amount_side, EdgeAmountSide::Source);
+        let cumulative_after_first = edge.cumulative_amount.clone();
+
+        // Adding the chain to the config must not reclassify or reprocess.
+        let indexed2 = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+        let n2 = db
+            .transaction(|tx| {
+                let indexed2 = indexed2.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(tx, &[95010i64], &indexed2)
+                        .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(n2, 0, "already-processed row must not be reprojected");
+
+        let t2 = crosschain_transfers::Entity::find_by_id(95010i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t2.stats_processed, 1);
+        let edge2 = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge2.transfers_count, 1);
+        assert_eq!(edge2.cumulative_amount, cumulative_after_first);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_project_message_null_dst_chain_defers_regardless_of_indexed_set() {
+        let _db = init_db("test_project_message_null_dst_chain_defers_regardless").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: Set(95020),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(None),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Even the maximally restrictive indexed set (bridge present, no
+        // contracts -> every chain unindexed for it) must not count a NULL
+        // destination: the `dst_chain_id IS NOT NULL` filter is unconditional.
+        let indexed = IndexedChains::from_bridges([(1, vec![])]);
+        let n = db
+            .transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(95020i64, 1i32)],
+                        &indexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(n, 0);
+        let m = crosschain_messages::Entity::find_by_id((95020i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(m.stats_processed, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_project_message_unindexed_destination_counts() {
+        let _db = init_db("test_project_message_unindexed_destination_counts").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: Set(95030),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Initiated),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(100)),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let indexed = IndexedChains::from_pairs([(1, 1)]); // chain 100 unindexed for bridge 1
+        let n = db
+            .transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(95030i64, 1i32)],
+                        &indexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(n, 1);
+
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.messages_count, 1);
+        let daily_rows = stats_messages_days::Entity::find().all(db).await.unwrap();
+        assert_eq!(daily_rows.len(), 1);
+        assert_eq!(daily_rows[0].messages_count, 1);
+
+        // Re-projecting the same key is a no-op.
+        let n2 = db
+            .transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(95030i64, 1i32)],
+                        &indexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(n2, 0);
+        let row2 = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row2.messages_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_project_transfer_unknown_bridge_defers() {
+        let _db = init_db("test_project_transfer_unknown_bridge_defers").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        seed_bridge5_backlog(db).await;
+
+        // Bridge 5 was removed from the config: absent from the map entirely.
+        let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+
+        for (mid, bid) in [(95040i64, 5i32), (95041i64, 5i32)] {
+            let indexed = indexed.clone();
+            let n = db
+                .transaction(|tx| {
+                    Box::pin(async move {
+                        crate::stats::projection::project_messages_batch(
+                            tx,
+                            &[(mid, bid)],
+                            &indexed,
+                        )
+                        .await
+                    })
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                n, 0,
+                "message {mid} of a removed bridge must not be projected"
+            );
+        }
+        for tid in [95040i64, 95041i64] {
+            let indexed = indexed.clone();
+            let n = db
+                .transaction(|tx| {
+                    Box::pin(async move {
+                        crate::stats::projection::project_transfers_batch(tx, &[tid], &indexed)
+                            .await
+                    })
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                n, 0,
+                "transfer {tid} of a removed bridge must not be projected"
+            );
+        }
+
+        // The whole backlog stays untouched.
+        for mid in [95040i64, 95041i64] {
+            let m = crosschain_messages::Entity::find_by_id((mid, 5i32))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(m.stats_processed, 0);
+        }
+        for tid in [95040i64, 95041i64] {
+            let t = crosschain_transfers::Entity::find_by_id(tid)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(t.stats_processed, 0);
+        }
+        assert_eq!(
+            stats_messages::Entity::find()
+                .filter(stats_messages::Column::BridgeId.eq(5i32))
+                .count(db)
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            stats_asset_edges::Entity::find().count(db).await.unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_project_transfer_bridge_with_no_contracts_counts_now() {
+        let _db = init_db("test_project_transfer_bridge_with_no_contracts_counts_now").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        seed_bridge5_backlog(db).await;
+
+        // Bridge 5 is declared but has no configured contracts: present with
+        // an empty set, the opposite half of the asymmetry from the test above.
+        let indexed = IndexedChains::from_bridges([(1, vec![1, 100]), (5, vec![])]);
+
+        for (mid, bid) in [(95040i64, 5i32), (95041i64, 5i32)] {
+            let indexed = indexed.clone();
+            let n = db
+                .transaction(|tx| {
+                    Box::pin(async move {
+                        crate::stats::projection::project_messages_batch(
+                            tx,
+                            &[(mid, bid)],
+                            &indexed,
+                        )
+                        .await
+                    })
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                n, 1,
+                "message {mid} of a contract-less bridge must count now"
+            );
+        }
+        for tid in [95040i64, 95041i64] {
+            let indexed = indexed.clone();
+            let n = db
+                .transaction(|tx| {
+                    Box::pin(async move {
+                        crate::stats::projection::project_transfers_batch(tx, &[tid], &indexed)
+                            .await
+                    })
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                n, 1,
+                "transfer {tid} of a contract-less bridge must count now"
+            );
+        }
+
+        for mid in [95040i64, 95041i64] {
+            let m = crosschain_messages::Entity::find_by_id((mid, 5i32))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(m.stats_processed, 1);
+        }
+        for tid in [95040i64, 95041i64] {
+            let t = crosschain_transfers::Entity::find_by_id(tid)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(t.stats_processed, 1);
+            assert!(t.stats_asset_id.is_some());
+        }
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64, 5i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.messages_count, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_all_indexed_reproduces_current_counting() {
+        let _db = init_db("test_all_indexed_reproduces_current_counting").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        crosschain_messages::Entity::insert(completed_message(95060, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            95060,
+            95060,
+            1,
+            1,
+            100,
+            Some([0x91u8; 20].to_vec()),
+            Some([0x92u8; 20].to_vec()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let indexed = IndexedChains::AllIndexed;
+        let nm = db
+            .transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(95060i64, 1i32)],
+                        &indexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(nm, 1);
+        let nt = db
+            .transaction(|tx| {
+                let indexed = indexed.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(tx, &[95060i64], &indexed)
+                        .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(nt, 1);
+
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.messages_count, 1);
+        let t = crosschain_transfers::Entity::find_by_id(95060i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let aid = t.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.transfers_count, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_backfill_terminates_with_permanently_deferred_rows() {
+        let _db = init_db("test_backfill_terminates_with_permanently_deferred_rows").await;
+        let ic = InterchainDatabase::new(_db.client());
+        let db = ic.db.as_ref();
+        seed_minimal_bridge(db).await;
+
+        // Both chains indexed for bridge 1: a missing endpoint here defers permanently.
+        let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+
+        // Permanently deferred: destination-only transfer, source chain indexed.
+        crosschain_messages::Entity::insert(completed_message(95070, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            95070,
+            95070,
+            1,
+            1,
+            100,
+            None,
+            Some([0xE1u8; 20].to_vec()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Countable rows around it (lower and higher ids) to exercise the cursor.
+        crosschain_messages::Entity::insert_many([
+            completed_message(95069, 1, 100),
+            completed_message(95071, 1, 100),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+        crosschain_transfers::Entity::insert_many([
+            transfer_active_model(
+                95069,
+                95069,
+                1,
+                1,
+                100,
+                Some([0xE2u8; 20].to_vec()),
+                Some([0xE3u8; 20].to_vec()),
+            ),
+            transfer_active_model(
+                95071,
+                95071,
+                1,
+                1,
+                100,
+                Some([0xE4u8; 20].to_vec()),
+                Some([0xE5u8; 20].to_vec()),
+            ),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        ic.backfill_stats_until_idle(&indexed).await.unwrap();
+
+        for id in [95069i64, 95071i64] {
+            let t = crosschain_transfers::Entity::find_by_id(id)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                t.stats_processed, 1,
+                "countable transfer {id} must be projected"
+            );
+        }
+        let deferred = crosschain_transfers::Entity::find_by_id(95070i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            deferred.stats_processed, 0,
+            "permanently deferred transfer must stay unprocessed"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_backfill_and_live_projection_agree() {
+        let _db = init_db("test_backfill_and_live_projection_agree").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
+        let src_tok = [0xF1u8; 20].to_vec();
+        let dst_tok = [0xF2u8; 20].to_vec();
+
+        // Half projected live (direct project_*_batch calls)...
+        crosschain_messages::Entity::insert(completed_message(95080, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            95080,
+            95080,
+            1,
+            1,
+            100,
+            Some(src_tok.clone()),
+            Some(dst_tok.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+        db.transaction(|tx| {
+            let indexed = indexed.clone();
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(tx, &[(95080i64, 1i32)], &indexed)
+                    .await?;
+                crate::stats::projection::project_transfers_batch(tx, &[95080i64], &indexed)
+                    .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        // ...half projected via backfill, same token pair.
+        crosschain_messages::Entity::insert(completed_message(95081, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            95081,
+            95081,
+            1,
+            1,
+            100,
+            Some(src_tok),
+            Some(dst_tok),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+        let ic = InterchainDatabase::new(conn.clone());
+        ic.backfill_stats_until_idle(&indexed).await.unwrap();
+
+        let t1 = crosschain_transfers::Entity::find_by_id(95080i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let t2 = crosschain_transfers::Entity::find_by_id(95081i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t1.stats_processed, 1);
+        assert_eq!(t2.stats_processed, 1);
+        assert_eq!(
+            t1.stats_asset_id, t2.stats_asset_id,
+            "same token pair must resolve to the same asset regardless of projection path"
+        );
+        let aid = t1.stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(edge.transfers_count, 2);
+        let row = stats_messages::Entity::find_by_id((1i64, 100i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.messages_count, 2);
     }
 }

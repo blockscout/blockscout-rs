@@ -22,6 +22,13 @@ use sea_orm::{
 
 use crate::bulk::run_in_batches;
 
+use super::{
+    indexed_chains::{
+        IndexedChains, message_countable_condition, transfer_identity_ready_condition,
+    },
+    metrics::STATS_TRANSFERS_DEFERRED_TOTAL,
+};
+
 /// Distinct `(chain_id, token_address)` from transfers — for [`TokenInfoService::kickoff_token_fetch_for_stats_enrichment`]
 /// after projection commits (inline flush or backfill).
 pub fn token_keys_for_stats_enrichment_from_transfer_models(
@@ -58,12 +65,15 @@ pub(crate) fn finalized_message_stats_condition() -> Condition {
 
 /// Project eligible finalized messages into `stats_messages`, `stats_messages_days`,
 /// and mark them processed.
-/// Eligible: `stats_processed = 0`, `status = completed` (all bridges) or
-/// `failed` (AMB only), `dst_chain_id` set.
+/// Eligible: `stats_processed = 0`, `dst_chain_id` set, and countable per
+/// [`message_countable_condition`] — confirmed (`status = completed`, any
+/// bridge, or `failed` on AMB) or its destination confirmation can never
+/// arrive (`dst_chain_id` unindexed for the message's bridge).
 /// Returns how many message rows were updated.
 pub async fn project_messages_batch(
     tx: &DatabaseTransaction,
     message_pks: &[(i64, i32)], // [(message_id, bridge_id)]
+    indexed: &IndexedChains,
 ) -> Result<usize, DbErr> {
     if message_pks.is_empty() {
         return Ok(0);
@@ -94,7 +104,7 @@ pub async fn project_messages_batch(
             ))
             .eq(0i16),
         )
-        .filter(finalized_message_stats_condition())
+        .filter(message_countable_condition(indexed))
         .filter(
             Expr::col((
                 crosschain_messages::Entity,
@@ -796,12 +806,16 @@ impl EdgeAccum {
 }
 
 /// Project eligible transfers into stats asset tables and mark them processed.
-/// Eligible: `stats_processed = 0` and parent message `completed` (all bridges)
-/// or `failed` (AMB only).
+/// Eligible: `stats_processed = 0`, parent message countable per
+/// [`message_countable_condition`] (confirmed, or destination confirmation can
+/// never arrive), and identity-ready per [`transfer_identity_ready_condition`]
+/// (every unknown token endpoint sits on a chain unindexed for this bridge, and
+/// at least one endpoint is known).
 /// Returns how many transfer rows were counted.
 pub async fn project_transfers_batch(
     tx: &DatabaseTransaction,
     transfer_ids: &[i64],
+    indexed: &IndexedChains,
 ) -> Result<usize, DbErr> {
     if transfer_ids.is_empty() {
         return Ok(0);
@@ -819,7 +833,8 @@ pub async fn project_transfers_batch(
             JoinType::InnerJoin,
             crosschain_messages::Relation::Bridges.def(),
         )
-        .filter(finalized_message_stats_condition())
+        .filter(message_countable_condition(indexed))
+        .filter(transfer_identity_ready_condition(indexed))
         .filter(
             Expr::col((
                 crosschain_transfers::Entity,
@@ -836,6 +851,44 @@ pub async fn project_transfers_batch(
         )
         .all(tx)
         .await?;
+
+    // Deferral bookkeeping: any requested id that the eligibility filters above
+    // did not return is deferred, not lost — it stays `stats_processed = 0` and
+    // will be re-evaluated the next time its canonical key is flushed. Classify
+    // by re-checking `IndexedChains::may_observe` in Rust so the metric label
+    // stays honest without duplicating the SQL predicate logic.
+    if transfer_ids.len() > transfers.len() {
+        let projected_ids: HashSet<i64> = transfers.iter().map(|t| t.id).collect();
+        let deferred_ids: Vec<i64> = ids
+            .iter()
+            .copied()
+            .filter(|id| !projected_ids.contains(id))
+            .collect();
+        if !deferred_ids.is_empty() {
+            let deferred_rows = crosschain_transfers::Entity::find()
+                .filter(crosschain_transfers::Column::Id.is_in(deferred_ids))
+                // Exclude rows a concurrent writer already finished between the
+                // caller's initial candidate selection and this transaction:
+                // those are done, not deferred, and must not be metric-counted.
+                .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
+                .all(tx)
+                .await?;
+            for t in &deferred_rows {
+                let identity_incomplete = (t.token_src_address.is_none()
+                    && indexed.may_observe(t.bridge_id, t.token_src_chain_id))
+                    || (t.token_dst_address.is_none()
+                        && indexed.may_observe(t.bridge_id, t.token_dst_chain_id));
+                let reason = if identity_incomplete {
+                    "identity_incomplete"
+                } else {
+                    "awaiting_confirmation"
+                };
+                STATS_TRANSFERS_DEFERRED_TOTAL
+                    .with_label_values(&[reason])
+                    .inc();
+            }
+        }
+    }
 
     if transfers.is_empty() {
         return Ok(0);

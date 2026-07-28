@@ -15,7 +15,10 @@ use super::{
     metrics,
     types::{Consolidate, Key},
 };
-use crate::{InterchainDatabase, StatsService, TokenInfoService, settings::MessageBufferSettings};
+use crate::{
+    IndexedChains, InterchainDatabase, StatsService, TokenInfoService,
+    settings::MessageBufferSettings,
+};
 
 /// Tiered message buffer with hot (memory) and cold (Postgres) storage.
 ///
@@ -40,7 +43,12 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
     #[allow(dead_code)] // embedders/tests; production indexer uses [`Self::new_with_stats`]
     pub fn new(db: InterchainDatabase, config: MessageBufferSettings) -> Arc<Self> {
         Self::new_with_stats(
-            Arc::new(StatsService::new(Arc::new(db), None, Default::default())),
+            Arc::new(StatsService::new(
+                Arc::new(db),
+                None,
+                Default::default(),
+                IndexedChains::AllIndexed,
+            )),
             config,
         )
     }
@@ -66,6 +74,7 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
                 Arc::new(db),
                 token_info,
                 Default::default(),
+                IndexedChains::AllIndexed,
             )),
             config,
         )
