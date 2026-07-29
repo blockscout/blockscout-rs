@@ -472,10 +472,10 @@ definitions:
     properties:
       operation_id:
         type: string
-      route:
-        $ref: '#/definitions/v2V2OperationRoute'
-      op_status:
-        $ref: '#/definitions/v2V2OperationStatus'
+      type:
+        type: string
+      success:
+        type: boolean
       finalized:
         type: boolean
       rollback:
@@ -489,10 +489,10 @@ definitions:
     properties:
       operation_id:
         type: string
-      route:
-        $ref: '#/definitions/v2V2OperationRoute'
-      op_status:
-        $ref: '#/definitions/v2V2OperationStatus'
+      type:
+        type: string
+      success:
+        type: boolean
       finalized:
         type: boolean
       rollback:
@@ -513,15 +513,6 @@ definitions:
         type: string
       type:
         $ref: '#/definitions/v2V2BlockchainType'
-  v2V2OperationRoute:
-    type: string
-    enum:
-      - UNKNOWN_ROUTE
-      - TON_TAC_TON
-      - TAC_TON
-      - TON_TAC
-      - UNRECOGNIZED_ROUTE
-    default: UNKNOWN_ROUTE
   v2V2OperationStage:
     type: object
     properties:
@@ -540,12 +531,6 @@ definitions:
           $ref: '#/definitions/v2V2OperationRelatedTransaction'
       note:
         type: string
-  v2V2OperationStatus:
-    type: string
-    enum:
-      - SUCCESS
-      - FAILED
-    default: SUCCESS
   v2V2OperationsFullResponse:
     type: object
     properties:

@@ -29,19 +29,6 @@ message V2GetOperationByTxHashRequest {
   string tx_hash = 1;
 }
 
-enum V2OperationRoute {
-  UNKNOWN_ROUTE = 0;
-  TON_TAC_TON = 1;
-  TAC_TON = 2;
-  TON_TAC = 3;
-  UNRECOGNIZED_ROUTE = 4;
-}
-
-enum V2OperationStatus {
-  SUCCESS = 0;
-  FAILED = 1;
-}
-
 message V2OperationsResponse {
   repeated V2OperationBriefDetails items = 1;
   optional V2Pagination next_page_params = 2;
@@ -49,12 +36,8 @@ message V2OperationsResponse {
 
 message V2OperationBriefDetails {
   string operation_id = 1;
-  oneof optional_route {
-    V2OperationRoute route = 2;
-  }
-  oneof optional_op_status {
-    V2OperationStatus op_status = 3;
-  }
+  optional string type = 2;
+  optional bool success = 3;
   optional bool finalized = 4;
   optional bool rollback = 5;
   string timestamp = 6;
@@ -63,12 +46,8 @@ message V2OperationBriefDetails {
 
 message V2OperationDetails {
   string operation_id = 1;
-  oneof optional_route {
-    V2OperationRoute route = 2;
-  }
-  oneof optional_op_status {
-    V2OperationStatus op_status = 3;
-  }
+  optional string type = 2;
+  optional bool success = 3;
   optional bool finalized = 4;
   optional bool rollback = 5;
   string timestamp = 6;

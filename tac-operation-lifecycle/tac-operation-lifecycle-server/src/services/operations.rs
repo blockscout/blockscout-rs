@@ -5,7 +5,6 @@ use chrono::NaiveDateTime;
 use std::{collections::HashSet, sync::Arc};
 use tac_operation_lifecycle_entity::{operation, operation_stage, transaction};
 use tac_operation_lifecycle_logic::{
-    client::models::profiling::OperationRoute,
     database::{LogicPagination, TacDatabase},
     lifecycle::{project_v1_type, PROFILING_VERSION_V2},
 };
@@ -169,37 +168,29 @@ impl OperationsService {
 
     fn v2_lifecycle(
         operation: &operation::Model,
-    ) -> (Option<i32>, Option<i32>, Option<bool>, Option<bool>) {
+    ) -> (Option<String>, Option<bool>, Option<bool>, Option<bool>) {
         if operation.profiling_version != PROFILING_VERSION_V2 {
             return (None, None, None, None);
         }
-        let route = operation
-            .op_type
-            .as_deref()
-            .and_then(|value| match value.parse().ok()? {
-                OperationRoute::TonTacTon => Some(v2::V2OperationRoute::TonTacTon as i32),
-                OperationRoute::TacTon => Some(v2::V2OperationRoute::TacTon as i32),
-                OperationRoute::TonTac => Some(v2::V2OperationRoute::TonTac as i32),
-                OperationRoute::Unknown => Some(v2::V2OperationRoute::UnknownRoute as i32),
-                OperationRoute::Unrecognized(_) => {
-                    Some(v2::V2OperationRoute::UnrecognizedRoute as i32)
-                }
-            });
-        let status = match operation.op_status.as_deref() {
-            Some("success") => Some(v2::V2OperationStatus::Success as i32),
-            Some("failed") => Some(v2::V2OperationStatus::Failed as i32),
+        let success = match operation.op_status.as_deref() {
+            Some("success") => Some(true),
+            Some("failed") => Some(false),
             _ => None,
         };
-        (route, status, operation.finalized, operation.rollback)
+        (
+            operation.op_type.clone(),
+            success,
+            operation.finalized,
+            operation.rollback,
+        )
     }
 
     fn convert_short_v2(operation: operation::Model) -> v2::V2OperationBriefDetails {
-        let (route, op_status, finalized, rollback) = Self::v2_lifecycle(&operation);
+        let (r#type, success, finalized, rollback) = Self::v2_lifecycle(&operation);
         v2::V2OperationBriefDetails {
             operation_id: operation.id.clone(),
-            optional_route: route.map(v2::v2_operation_brief_details::OptionalRoute::Route),
-            optional_op_status: op_status
-                .map(v2::v2_operation_brief_details::OptionalOpStatus::OpStatus),
+            r#type,
+            success,
             finalized,
             rollback,
             timestamp: db_datetime_to_string(operation.timestamp),
@@ -213,11 +204,11 @@ impl OperationsService {
     }
 
     fn convert_full_v2((operation, stages): OperationWithStages) -> v2::V2OperationDetails {
-        let (route, op_status, finalized, rollback) = Self::v2_lifecycle(&operation);
+        let (r#type, success, finalized, rollback) = Self::v2_lifecycle(&operation);
         v2::V2OperationDetails {
             operation_id: operation.id.clone(),
-            optional_route: route.map(v2::v2_operation_details::OptionalRoute::Route),
-            optional_op_status: op_status.map(v2::v2_operation_details::OptionalOpStatus::OpStatus),
+            r#type,
+            success,
             finalized,
             rollback,
             timestamp: db_datetime_to_string(operation.timestamp),
@@ -402,13 +393,13 @@ mod tests {
     use super::*;
     use tac_operation_lifecycle_entity::sea_orm_active_enums::StatusEnum;
 
-    fn operation(profiling_version: i16) -> operation::Model {
+    fn operation(profiling_version: i16, op_status: Option<&str>) -> operation::Model {
         let now = chrono::Utc::now().naive_utc();
         operation::Model {
             id: "op".to_string(),
             op_type: Some("TON-TAC".to_string()),
             profiling_version,
-            op_status: Some("failed".to_string()),
+            op_status: op_status.map(str::to_string),
             finalized: Some(true),
             rollback: Some(false),
             timestamp: now,
@@ -424,19 +415,39 @@ mod tests {
 
     #[test]
     fn v2_hides_canonical_fields_for_v1_source_rows() {
-        let response = OperationsService::convert_short_v2(operation(1));
-        assert!(response.optional_route.is_none());
-        assert!(response.optional_op_status.is_none());
+        let response = OperationsService::convert_short_v2(operation(1, Some("failed")));
+        assert!(response.r#type.is_none());
+        assert!(response.success.is_none());
         assert!(response.finalized.is_none());
         assert!(response.rollback.is_none());
     }
 
     #[test]
     fn v2_exposes_independent_lifecycle_for_v2_rows() {
-        let response = OperationsService::convert_short_v2(operation(2));
-        assert!(response.optional_route.is_some());
-        assert!(response.optional_op_status.is_some());
+        let response = OperationsService::convert_short_v2(operation(2, Some("failed")));
+        assert_eq!(response.r#type.as_deref(), Some("TON-TAC"));
+        assert_eq!(response.success, Some(false));
         assert_eq!(response.finalized, Some(true));
         assert_eq!(response.rollback, Some(false));
+    }
+
+    #[test]
+    fn v2_maps_only_known_operation_statuses_to_success() {
+        let successful = OperationsService::convert_short_v2(operation(2, Some("success")));
+        let unknown = OperationsService::convert_short_v2(operation(2, Some("pending")));
+        let absent = OperationsService::convert_short_v2(operation(2, None));
+
+        assert_eq!(successful.success, Some(true));
+        assert_eq!(unknown.success, None);
+        assert_eq!(absent.success, None);
+
+        let successful_json =
+            serde_json::to_value(successful).expect("v2 operation response must serialize");
+        assert_eq!(successful_json["type"], "TON-TAC");
+        assert_eq!(successful_json["success"], true);
+
+        let unknown_json =
+            serde_json::to_value(unknown).expect("v2 operation response must serialize");
+        assert_eq!(unknown_json["success"], serde_json::Value::Null);
     }
 }
