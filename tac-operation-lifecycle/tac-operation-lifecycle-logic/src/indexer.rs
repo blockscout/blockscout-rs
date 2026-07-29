@@ -189,6 +189,7 @@ mod tests {
             op_type: None,
             profiling_version: 1,
             op_status: None,
+            error_reason: None,
             finalized: None,
             rollback: None,
             timestamp,

@@ -16,6 +16,7 @@ impl MigrationTrait for Migration {
                 ALTER TABLE "operation"
                     ADD COLUMN "profiling_version" SMALLINT NOT NULL DEFAULT 1,
                     ADD COLUMN "op_status" TEXT NULL,
+                    ADD COLUMN "error_reason" TEXT NULL,
                     ADD COLUMN "finalized" BOOLEAN NULL,
                     ADD COLUMN "rollback" BOOLEAN NULL;
 
@@ -74,6 +75,7 @@ impl MigrationTrait for Migration {
                 ALTER TABLE "operation"
                     DROP COLUMN "rollback",
                     DROP COLUMN "finalized",
+                    DROP COLUMN "error_reason",
                     DROP COLUMN "op_status",
                     DROP COLUMN "profiling_version";
                 "#,
@@ -129,7 +131,7 @@ mod tests {
             let row = conn
                 .query_one(Statement::from_sql_and_values(
                     sea_orm_migration::sea_orm::DatabaseBackend::Postgres,
-                    "SELECT op_type, profiling_version, status::text status FROM operation WHERE id=$1",
+                    "SELECT op_type, profiling_version, error_reason, status::text status FROM operation WHERE id=$1",
                     [id.into()],
                 ))
                 .await
@@ -137,6 +139,10 @@ mod tests {
                 .unwrap();
             assert_eq!(row.try_get::<String>("", "op_type").unwrap(), expected_type);
             assert_eq!(row.try_get::<i16>("", "profiling_version").unwrap(), 1);
+            assert_eq!(
+                row.try_get::<Option<String>>("", "error_reason").unwrap(),
+                None
+            );
             assert_eq!(
                 row.try_get::<String>("", "status").unwrap(),
                 expected_status
@@ -193,5 +199,16 @@ mod tests {
                 expected_status
             );
         }
+
+        let row = conn
+            .query_one(Statement::from_string(
+                sea_orm_migration::sea_orm::DatabaseBackend::Postgres,
+                "SELECT COUNT(*)::BIGINT AS count FROM information_schema.columns \
+                 WHERE table_name='operation' AND column_name='error_reason'",
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.try_get::<i64>("", "count").unwrap(), 0);
     }
 }

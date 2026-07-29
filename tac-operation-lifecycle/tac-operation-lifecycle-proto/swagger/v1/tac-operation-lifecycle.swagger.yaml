@@ -484,6 +484,8 @@ definitions:
         type: string
       sender:
         $ref: '#/definitions/v2V2BlockchainAddress'
+      error_reason:
+        type: string
   v2V2OperationDetails:
     type: object
     properties:
@@ -506,6 +508,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v2V2OperationStage'
+      error_reason:
+        type: string
   v2V2OperationRelatedTransaction:
     type: object
     properties:

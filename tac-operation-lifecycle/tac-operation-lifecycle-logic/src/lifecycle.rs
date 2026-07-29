@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use crate::client::models::profiling::{LegacyOperationType, OperationRoute, Stage};
+use crate::client::models::profiling::{
+    LegacyOperationType, OperationRoute, OperationStatus, SourceOperationData, Stage, StageType,
+};
+use serde_json::Value;
 use std::{collections::HashMap, str::FromStr};
 
 pub const PROFILING_VERSION_V1: i16 = 1;
 pub const PROFILING_VERSION_V2: i16 = 2;
+pub const INSUFFICIENT_FEE_ERROR_REASON: &str = "Insufficient Fee";
 
 pub fn has_insufficient_fee_stages<'a>(stages: impl IntoIterator<Item = &'a Stage>) -> bool {
     stages
@@ -29,6 +33,65 @@ pub fn derive_v1_source_type(
         LegacyOperationType::InsufficientFee
     } else {
         operation_type.clone()
+    }
+}
+
+pub fn derive_operation_error_reason(data: &SourceOperationData) -> Option<String> {
+    let SourceOperationData::V2(data) = data else {
+        return None;
+    };
+    if data.status != Some(OperationStatus::Failed) {
+        return None;
+    }
+    if has_insufficient_fee_stages(data.stages.values()) {
+        return Some(INSUFFICIENT_FEE_ERROR_REASON.to_string());
+    }
+
+    data.stages
+        .iter()
+        .filter_map(|(stage_type, stage)| {
+            let stage = stage.stage_data.as_ref()?;
+            if stage.success {
+                return None;
+            }
+            let reason = stage.note.as_deref().and_then(error_reason_from_note)?;
+            Some((stage_order(stage_type), reason))
+        })
+        .max_by_key(|(order, _)| *order)
+        .map(|(_, reason)| reason)
+}
+
+fn stage_order(stage_type: &StageType) -> u8 {
+    match stage_type {
+        StageType::CollectedInTAC => 1,
+        StageType::IncludedInTACConsensus => 2,
+        StageType::ExecutedInTAC => 3,
+        StageType::CollectedInTON => 4,
+        StageType::IncludedInTONConsensus => 5,
+        StageType::ExecutedInTON => 6,
+    }
+}
+
+fn error_reason_from_note(note: &str) -> Option<String> {
+    fn non_empty(value: &str) -> Option<String> {
+        let value = value.trim();
+        (!value.is_empty()).then(|| value.to_string())
+    }
+
+    let note = note.trim();
+    if note.is_empty() {
+        return None;
+    }
+    let Ok(value) = serde_json::from_str::<Value>(note) else {
+        return Some(note.to_string());
+    };
+    match value {
+        Value::String(value) => non_empty(&value),
+        Value::Object(values) => ["internalMsg", "content", "errorName", "internalBytesError"]
+            .into_iter()
+            .find_map(|key| values.get(key)?.as_str().and_then(non_empty)),
+        Value::Null => None,
+        value => non_empty(&value.to_string()),
     }
 }
 
@@ -68,6 +131,33 @@ pub fn project_v1_type(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::models::profiling::{StageData, V2OperationData};
+
+    fn failed_stage(note: &str) -> Stage {
+        Stage {
+            exists: true,
+            stage_data: Some(StageData {
+                success: false,
+                timestamp: 1,
+                transactions: None,
+                note: Some(note.to_string()),
+            }),
+        }
+    }
+
+    fn v2_data(
+        status: Option<OperationStatus>,
+        stages: HashMap<StageType, Stage>,
+    ) -> SourceOperationData {
+        SourceOperationData::V2(V2OperationData {
+            operation_type: OperationRoute::TonTac,
+            status,
+            finalized: true,
+            rollback: false,
+            meta_info: None,
+            stages,
+        })
+    }
 
     #[test]
     fn v2_projection_ignores_technical_status() {
@@ -176,5 +266,84 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn insufficient_fee_has_priority_over_other_failed_stage_reasons() {
+        let data = v2_data(
+            Some(OperationStatus::Failed),
+            HashMap::from([
+                (
+                    StageType::ExecutedInTAC,
+                    failed_stage(
+                        r#"{"content":"execution failed","errorName":"ProxyCallError","internalBytesError":"","internalMsg":"ProxyCallError: default error"}"#,
+                    ),
+                ),
+                (
+                    StageType::ExecutedInTON,
+                    failed_stage(
+                        r#"{"content":"insufficient executor fee","errorName":"","internalBytesError":"","internalMsg":""}"#,
+                    ),
+                ),
+            ]),
+        );
+
+        assert_eq!(
+            derive_operation_error_reason(&data).as_deref(),
+            Some(INSUFFICIENT_FEE_ERROR_REASON)
+        );
+    }
+
+    #[test]
+    fn error_reason_uses_latest_failed_stage_and_best_note_field() {
+        let data = v2_data(
+            Some(OperationStatus::Failed),
+            HashMap::from([
+                (
+                    StageType::ExecutedInTAC,
+                    failed_stage(r#"{"content":"earlier failure"}"#),
+                ),
+                (
+                    StageType::ExecutedInTON,
+                    failed_stage(
+                        r#"{"content":"opaque payload","errorName":"ProxyCallError","internalMsg":"ProxyCallError: default error"}"#,
+                    ),
+                ),
+            ]),
+        );
+
+        assert_eq!(
+            derive_operation_error_reason(&data).as_deref(),
+            Some("ProxyCallError: default error")
+        );
+    }
+
+    #[test]
+    fn error_reason_supports_content_and_plain_text_notes() {
+        let json = v2_data(
+            Some(OperationStatus::Failed),
+            HashMap::from([(
+                StageType::ExecutedInTAC,
+                failed_stage(r#"{"content":"message expired"}"#),
+            )]),
+        );
+        let plain = v2_data(
+            Some(OperationStatus::Failed),
+            HashMap::from([(StageType::ExecutedInTAC, failed_stage("plain failure"))]),
+        );
+        let successful = v2_data(
+            Some(OperationStatus::Success),
+            HashMap::from([(StageType::ExecutedInTAC, failed_stage("must stay hidden"))]),
+        );
+
+        assert_eq!(
+            derive_operation_error_reason(&json).as_deref(),
+            Some("message expired")
+        );
+        assert_eq!(
+            derive_operation_error_reason(&plain).as_deref(),
+            Some("plain failure")
+        );
+        assert_eq!(derive_operation_error_reason(&successful), None);
     }
 }

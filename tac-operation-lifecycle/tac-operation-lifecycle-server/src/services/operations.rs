@@ -26,6 +26,15 @@ type OperationWithStages = (
     Vec<(operation_stage::Model, Vec<transaction::Model>)>,
 );
 
+#[derive(Default)]
+struct V2Lifecycle {
+    r#type: Option<String>,
+    success: Option<bool>,
+    error_reason: Option<String>,
+    finalized: Option<bool>,
+    rollback: Option<bool>,
+}
+
 impl OperationsService {
     fn sender_parts(operation: &operation::Model) -> Option<(String, i32)> {
         match (
@@ -166,31 +175,40 @@ impl OperationsService {
             .map_err(map_db_error)
     }
 
-    fn v2_lifecycle(
-        operation: &operation::Model,
-    ) -> (Option<String>, Option<bool>, Option<bool>, Option<bool>) {
+    fn v2_lifecycle(operation: &operation::Model) -> V2Lifecycle {
         if operation.profiling_version != PROFILING_VERSION_V2 {
-            return (None, None, None, None);
+            return V2Lifecycle::default();
         }
         let success = match operation.op_status.as_deref() {
             Some("success") => Some(true),
             Some("failed") => Some(false),
             _ => None,
         };
-        (
-            operation.op_type.clone(),
+        let error_reason = (success == Some(false))
+            .then(|| operation.error_reason.clone())
+            .flatten();
+        V2Lifecycle {
+            r#type: operation.op_type.clone(),
             success,
-            operation.finalized,
-            operation.rollback,
-        )
+            error_reason,
+            finalized: operation.finalized,
+            rollback: operation.rollback,
+        }
     }
 
     fn convert_short_v2(operation: operation::Model) -> v2::V2OperationBriefDetails {
-        let (r#type, success, finalized, rollback) = Self::v2_lifecycle(&operation);
+        let V2Lifecycle {
+            r#type,
+            success,
+            error_reason,
+            finalized,
+            rollback,
+        } = Self::v2_lifecycle(&operation);
         v2::V2OperationBriefDetails {
             operation_id: operation.id.clone(),
             r#type,
             success,
+            error_reason,
             finalized,
             rollback,
             timestamp: db_datetime_to_string(operation.timestamp),
@@ -204,11 +222,18 @@ impl OperationsService {
     }
 
     fn convert_full_v2((operation, stages): OperationWithStages) -> v2::V2OperationDetails {
-        let (r#type, success, finalized, rollback) = Self::v2_lifecycle(&operation);
+        let V2Lifecycle {
+            r#type,
+            success,
+            error_reason,
+            finalized,
+            rollback,
+        } = Self::v2_lifecycle(&operation);
         v2::V2OperationDetails {
             operation_id: operation.id.clone(),
             r#type,
             success,
+            error_reason,
             finalized,
             rollback,
             timestamp: db_datetime_to_string(operation.timestamp),
@@ -400,6 +425,7 @@ mod tests {
             op_type: Some("TON-TAC".to_string()),
             profiling_version,
             op_status: op_status.map(str::to_string),
+            error_reason: None,
             finalized: Some(true),
             rollback: Some(false),
             timestamp: now,
@@ -418,28 +444,39 @@ mod tests {
         let response = OperationsService::convert_short_v2(operation(1, Some("failed")));
         assert!(response.r#type.is_none());
         assert!(response.success.is_none());
+        assert!(response.error_reason.is_none());
         assert!(response.finalized.is_none());
         assert!(response.rollback.is_none());
     }
 
     #[test]
     fn v2_exposes_independent_lifecycle_for_v2_rows() {
-        let response = OperationsService::convert_short_v2(operation(2, Some("failed")));
+        let mut operation = operation(2, Some("failed"));
+        operation.error_reason = Some("Insufficient Fee".to_string());
+        let response = OperationsService::convert_short_v2(operation);
         assert_eq!(response.r#type.as_deref(), Some("TON-TAC"));
         assert_eq!(response.success, Some(false));
+        assert_eq!(response.error_reason.as_deref(), Some("Insufficient Fee"));
         assert_eq!(response.finalized, Some(true));
         assert_eq!(response.rollback, Some(false));
     }
 
     #[test]
     fn v2_maps_only_known_operation_statuses_to_success() {
-        let successful = OperationsService::convert_short_v2(operation(2, Some("success")));
-        let unknown = OperationsService::convert_short_v2(operation(2, Some("pending")));
+        let mut successful_operation = operation(2, Some("success"));
+        successful_operation.error_reason = Some("must stay hidden".to_string());
+        let successful = OperationsService::convert_short_v2(successful_operation);
+        let mut unknown_operation = operation(2, Some("pending"));
+        unknown_operation.error_reason = Some("must stay hidden".to_string());
+        let unknown = OperationsService::convert_short_v2(unknown_operation);
         let absent = OperationsService::convert_short_v2(operation(2, None));
 
         assert_eq!(successful.success, Some(true));
+        assert_eq!(successful.error_reason, None);
         assert_eq!(unknown.success, None);
+        assert_eq!(unknown.error_reason, None);
         assert_eq!(absent.success, None);
+        assert_eq!(absent.error_reason, None);
 
         let successful_json =
             serde_json::to_value(successful).expect("v2 operation response must serialize");
@@ -449,5 +486,6 @@ mod tests {
         let unknown_json =
             serde_json::to_value(unknown).expect("v2 operation response must serialize");
         assert_eq!(unknown_json["success"], serde_json::Value::Null);
+        assert_eq!(unknown_json["error_reason"], serde_json::Value::Null);
     }
 }

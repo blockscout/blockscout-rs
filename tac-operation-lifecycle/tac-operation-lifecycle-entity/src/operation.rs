@@ -11,6 +11,7 @@ pub struct Model {
     pub op_type: Option<String>,
     pub profiling_version: i16,
     pub op_status: Option<String>,
+    pub error_reason: Option<String>,
     pub finalized: Option<bool>,
     pub rollback: Option<bool>,
     pub timestamp: DateTime,

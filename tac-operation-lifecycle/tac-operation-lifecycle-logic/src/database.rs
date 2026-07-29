@@ -5,7 +5,10 @@ use crate::{
         operations::Operations as ApiOperations,
         profiling::{BlockchainType, OperationMetaInfo, SourceOperationData},
     },
-    lifecycle::{derive_v1_source_type, PROFILING_VERSION_V1, PROFILING_VERSION_V2},
+    lifecycle::{
+        derive_operation_error_reason, derive_v1_source_type, PROFILING_VERSION_V1,
+        PROFILING_VERSION_V2,
+    },
     utils::{
         blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address,
         timestamp_to_naive,
@@ -106,6 +109,7 @@ struct JoinedRow {
     op_type: Option<String>,
     profiling_version: i16,
     op_status: Option<String>,
+    error_reason: Option<String>,
     finalized: Option<bool>,
     rollback: Option<bool>,
     timestamp: DateTime,
@@ -420,6 +424,7 @@ impl TacDatabase {
                 op_type: Set(None),
                 profiling_version: Set(PROFILING_VERSION_V1),
                 op_status: Set(None),
+                error_reason: Set(None),
                 finalized: Set(None),
                 rollback: Set(None),
                 timestamp: Set(timestamp_to_naive(op.timestamp as i64)),
@@ -562,7 +567,7 @@ impl TacDatabase {
             UPDATE operation 
             SET status = '{new_status}'::status_enum
             WHERE id IN (SELECT id FROM selected_operations)
-            RETURNING id, op_type, profiling_version, op_status, finalized, rollback,
+            RETURNING id, op_type, profiling_version, op_status, error_reason, finalized, rollback,
                       timestamp, status::text, sender_address, sender_blockchain,
                       next_retry, retry_count, inserted_at, updated_at
             "#,
@@ -862,6 +867,7 @@ impl TacDatabase {
     ) -> Result<(), DbErr> {
         let mut operation_model: operation::ActiveModel = operation.clone().into();
         operation_model.updated_at = Set(chrono::Utc::now().naive_utc());
+        operation_model.error_reason = Set(derive_operation_error_reason(operation_data));
         match operation_data {
             SourceOperationData::V1(data) => {
                 operation_model.op_type = Set(Some(
@@ -900,6 +906,7 @@ impl TacDatabase {
         let new_type = operation_model.op_type.clone();
         let profiling_version = operation_model.profiling_version.clone();
         let op_status = operation_model.op_status.clone();
+        let error_reason = operation_model.error_reason.clone();
         let finalized = operation_model.finalized.clone();
         let rollback = operation_model.rollback.clone();
         let upd_at = operation_model.updated_at.clone().into_value().unwrap();
@@ -912,6 +919,7 @@ impl TacDatabase {
                 op_type =? new_type,
                 profiling_version =? profiling_version,
                 op_status =? op_status,
+                error_reason =? error_reason,
                 finalized =? finalized,
                 rollback =? rollback,
                 updated_at =? upd_at,
@@ -1236,7 +1244,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.profiling_version, o.op_status, o.finalized, o.rollback,
+                o.id as op_id, o.op_type, o.profiling_version, o.op_status, o.error_reason, o.finalized, o.rollback,
                 o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
@@ -1262,7 +1270,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.profiling_version, o.op_status, o.finalized, o.rollback,
+                o.id as op_id, o.op_type, o.profiling_version, o.op_status, o.error_reason, o.finalized, o.rollback,
                 o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
@@ -1367,6 +1375,7 @@ impl TacDatabase {
                         op_type: row.op_type.clone(),
                         profiling_version: row.profiling_version,
                         op_status: row.op_status.clone(),
+                        error_reason: row.error_reason.clone(),
                         finalized: row.finalized,
                         rollback: row.rollback,
                         timestamp: row.timestamp,
