@@ -761,6 +761,79 @@ mod tests {
         assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
     }
 
+    /// Reconstructed-shaped row: unlike `destination_only_completed_with_transfer`
+    /// (one nullable side), both `token_src_address` / `token_dst_address` are
+    /// already populated — mirroring
+    /// `avalanche::consolidation::build_reconstructed_transfer` for an incoming
+    /// `SINGLE_HOP_SEND`, whose `sender_address` is explicitly `None` (Decision 4).
+    fn reconstructed_incoming_completed_with_transfer() -> ConsolidatedMessage {
+        let mut entry = destination_only_completed();
+        entry.transfers = vec![transfer(
+            Some(1_000),
+            Some(1_000),
+            Some(vec![0xAA]),
+            Some(vec![0xBB]),
+            None,
+            Some(vec![0x2B]),
+        )];
+        entry
+    }
+
+    /// The `send`-derived row for the same key, arriving later once chain `X`
+    /// becomes configured for the bridge and the real `send` event is indexed.
+    fn send_derived_completed_with_transfer() -> ConsolidatedMessage {
+        let mut entry = destination_only_completed();
+        entry.transfers = vec![transfer(
+            Some(1_000),
+            Some(1_000),
+            Some(vec![0xAA]),
+            Some(vec![0xBB]),
+            Some(vec![0x1A]),
+            Some(vec![0x2B]),
+        )];
+        entry
+    }
+
+    /// Regression test for the Avalanche incoming-ICTT-reconstruction merge
+    /// contract: a reconstructed row (no `send` observed, built from the ICM
+    /// payload) is flushed and stats-projected first; a later `send`-derived
+    /// flush for the same `(message_id, bridge_id, index)` must merge into the
+    /// same row without double counting and without resetting
+    /// `stats_processed` / `stats_asset_id`. `token_src_address` must not
+    /// regress — it is byte-identical across both writers by construction
+    /// (`TeleporterMessage.originSenderAddress` == the emitting transferrer),
+    /// which this asserts rather than assumes.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_reconstructed_incoming_transfer_merges_with_later_send_derived_row() {
+        let test_db = init_db("flush_reconstructed_then_send_derived").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, reconstructed_incoming_completed_with_transfer()).await;
+        let stats_asset_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db.db.as_ref())
+        .await
+        .unwrap()
+        .id;
+        mark_transfer_projected(&db, 1, Some(stats_asset_id)).await;
+
+        flush(&db, send_derived_completed_with_transfer()).await;
+
+        let transfer = load_transfer(&db).await;
+        assert_eq!(transfer.stats_processed, 1);
+        assert_eq!(transfer.stats_asset_id, Some(stats_asset_id));
+        assert_eq!(transfer.token_src_address, Some(vec![0xAA]));
+        assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
+        assert_eq!(
+            transfer.sender_address,
+            Some(vec![0x1A]),
+            "the later send-derived flush enriches the previously-NULL sender_address"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "needs database"]
     async fn test_collision_replacement_deletes_stale_source_message_and_transfer() {

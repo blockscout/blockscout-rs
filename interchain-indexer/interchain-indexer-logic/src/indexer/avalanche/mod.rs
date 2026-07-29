@@ -17,6 +17,8 @@
 pub mod abi;
 mod blockchain_id_resolver;
 pub mod consolidation;
+mod ictt_payload;
+mod metrics;
 pub mod settings;
 pub mod types;
 
@@ -70,6 +72,10 @@ pub struct AvalancheIndexer {
     chains: Vec<AvalancheChainConfig>,
     home_chain: Option<i64>,
     process_unknown_chains: bool,
+    /// Per-bridge kill switch for incoming-ICTT-transfer reconstruction from
+    /// the ICM payload. Applied at ingestion (see `gate_receiver_ictt_arm`),
+    /// not in `consolidation.rs`.
+    reconstruct_incoming_ictt_transfers: bool,
     settings: AvalancheIndexerSettings,
     buffer: Arc<MessageBuffer<Message>>,
     buffer_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
@@ -128,6 +134,7 @@ impl AvalancheIndexer {
         chains: Vec<AvalancheChainConfig>,
         home_chain: Option<ChainId>,
         process_unknown_chains: bool,
+        reconstruct_incoming_ictt_transfers: bool,
         settings: &AvalancheIndexerSettings,
         buffer_settings: &crate::MessageBufferSettings,
     ) -> Result<Self> {
@@ -162,6 +169,7 @@ impl AvalancheIndexer {
             chains,
             home_chain,
             process_unknown_chains,
+            reconstruct_incoming_ictt_transfers,
             settings: settings.clone(),
             buffer,
             buffer_handle: Arc::new(parking_lot::RwLock::new(None)),
@@ -180,6 +188,7 @@ impl AvalancheIndexer {
             chains: self.chains.clone(),
             home_chain: self.home_chain,
             process_unknown_chains: self.process_unknown_chains,
+            reconstruct_incoming_ictt_transfers: self.reconstruct_incoming_ictt_transfers,
             settings: self.settings.clone(),
             buffer: self.buffer.clone(),
             buffer_handle: self.buffer_handle.clone(),
@@ -202,6 +211,7 @@ impl AvalancheIndexer {
         let chains = self.chains;
         let home_chain = self.home_chain;
         let process_unknown_chains = self.process_unknown_chains;
+        let reconstruct_incoming_ictt_transfers = self.reconstruct_incoming_ictt_transfers;
         let settings = self.settings;
         let buffer = self.buffer;
 
@@ -279,6 +289,7 @@ impl AvalancheIndexer {
             chain_ids: &chain_ids,
             home_chain,
             process_unknown_chains,
+            reconstruct_incoming_ictt_transfers,
             blockchain_id_resolver: &blockchain_id_resolver,
             buffer: &buffer,
         };
@@ -474,6 +485,8 @@ struct BatchProcessContext<'a> {
     process_unknown_chains: bool,
     /// Narrow processing to messages touching this chain when configured.
     home_chain: Option<i64>,
+    /// Per-bridge kill switch for incoming-ICTT-transfer reconstruction.
+    reconstruct_incoming_ictt_transfers: bool,
     blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
 }
@@ -542,6 +555,7 @@ async fn process_batch(
                 chain_ids: ctx.chain_ids,
                 process_unknown_chains: ctx.process_unknown_chains,
                 home_chain: ctx.home_chain,
+                reconstruct_incoming_ictt_transfers: ctx.reconstruct_incoming_ictt_transfers,
                 blockchain_id_resolver: ctx.blockchain_id_resolver,
                 buffer: ctx.buffer,
                 receipt_logs,
@@ -753,6 +767,36 @@ fn parse_receiver_ictt_log(
     Ok(transfer)
 }
 
+/// Apply the per-bridge ICTT-reconstruction kill switch at ingestion.
+///
+/// A *source-side-less* ICTT arm is consumed by exactly one thing: payload-based
+/// reconstruction in `consolidation.rs` (`build_transfer` needs `send`, which can
+/// never arrive for a message whose source chain is not configured for this
+/// bridge). When reconstruction is disabled we therefore do not record one, and
+/// consolidation has nothing to reconstruct from — no configuration has to reach
+/// `Consolidate::consolidate`, which takes none.
+///
+/// The condition is `source_is_unknown`, NOT "the arm has no source side": a
+/// configured-source message whose destination logs are ingested before its
+/// `send` log legitimately holds `Sent(None, Some(withdrawn))`, and
+/// `parse_sender_ictt_log` preserves that `withdrawn` when the send log lands.
+/// Dropping it would strand the outgoing row non-final forever.
+///
+/// If anything other than reconstruction ever needs a source-less arm (Solution 2's
+/// `contract_address == TeleporterMessage.destinationAddress` corroboration, or a
+/// "destination-only ICTT observed" metric), this gate must move rather than
+/// silently drop data.
+fn gate_receiver_ictt_arm(
+    parsed: Option<TokenTransfer>,
+    source_is_unknown: bool,
+    reconstruction_enabled: bool,
+) -> Option<TokenTransfer> {
+    match (source_is_unknown, reconstruction_enabled) {
+        (true, false) => None,
+        _ => parsed,
+    }
+}
+
 /// Shared per-log handler context.
 ///
 /// This bundles the (previously many) positional arguments passed through the
@@ -769,6 +813,11 @@ struct LogHandleContext<'a> {
     process_unknown_chains: bool,
     /// Narrow processing to messages touching this chain when configured.
     home_chain: Option<i64>,
+    /// Per-bridge kill switch for incoming-ICTT-transfer reconstruction from
+    /// the ICM payload. When `false` and the source chain is unknown, a
+    /// source-side-less receiver ICTT arm is not recorded — see
+    /// `gate_receiver_ictt_arm`.
+    reconstruct_incoming_ictt_transfers: bool,
     blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
 
@@ -1060,6 +1109,13 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
                 source_chain_id,
                 destination_chain_id,
             });
+            // Clear a source-side-less arm restored from the cold tier while
+            // the kill switch was on: without this, an entry offloaded to
+            // `pending_messages` and restored after a restart with the switch
+            // off would still reconstruct once. See `gate_receiver_ictt_arm`.
+            if source_is_unknown && !ctx.reconstruct_incoming_ictt_transfers {
+                msg.transfer = None;
+            }
             Ok(())
         })
         .await?;
@@ -1135,6 +1191,15 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
     let destination_chain_id = ctx.chain_id;
     let source_is_unknown = !ctx.chain_ids.contains(&source_chain_id);
 
+    // `skipped_disabled` is counted here, at ingestion, once per suppressed
+    // log — not in `consolidation.rs`, which is not config-aware. This is the
+    // only handler where the receiver-side ICTT arm is recorded.
+    if source_is_unknown && !ctx.reconstruct_incoming_ictt_transfers {
+        metrics::AVALANCHE_ICTT_PAYLOAD_OUTCOMES_TOTAL
+            .with_label_values(&[&ctx.bridge_id.to_string(), "skipped_disabled"])
+            .inc();
+    }
+
     let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
     let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
 
@@ -1153,7 +1218,15 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
                 source_chain_id,
                 destination_chain_id,
             }));
-            msg.transfer = parse_receiver_ictt_logs(&msg.transfer, ctx.receipt_logs)?;
+            // Call unconditionally: parse_receiver_ictt_logs also enforces the
+            // batched-receipt invariants (multiple/mismatched receiver logs in
+            // one receipt), which must keep firing exactly as today.
+            let parsed = parse_receiver_ictt_logs(&msg.transfer, ctx.receipt_logs)?;
+            msg.transfer = gate_receiver_ictt_arm(
+                parsed,
+                source_is_unknown,
+                ctx.reconstruct_incoming_ictt_transfers,
+            );
             Ok(())
         })
         .await?;
@@ -1252,6 +1325,12 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
                 ));
             }
 
+            // Clear a source-side-less arm restored from the cold tier while
+            // the kill switch was on — see `gate_receiver_ictt_arm`.
+            if source_is_unknown && !ctx.reconstruct_incoming_ictt_transfers {
+                msg.transfer = None;
+            }
+
             Ok(())
         })
         .await?;
@@ -1274,7 +1353,9 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::should_process_message;
+    use super::{gate_receiver_ictt_arm, should_process_message};
+    use crate::indexer::avalanche::{abi::ITokenTransferrer, types::TokenTransfer};
+    use alloy::primitives::{Address, U256};
     use rstest::rstest;
     use std::collections::HashSet;
 
@@ -1433,6 +1514,66 @@ mod tests {
                 home_chain
             ),
             expected
+        );
+    }
+
+    /// A source-side-less receiver arm, the shape `parse_receiver_ictt_logs`
+    /// produces when a `TokensWithdrawn` arrives for a message with no `send`.
+    fn source_less_withdrawn_arm() -> Option<TokenTransfer> {
+        Some(TokenTransfer::Sent(
+            None,
+            Some(ITokenTransferrer::TokensWithdrawn {
+                recipient: Address::from([0x22; 20]),
+                amount: U256::from(1_000u64),
+            }),
+        ))
+    }
+
+    #[test]
+    fn test_gate_receiver_ictt_arm_disabled_source_unknown_drops_arm() {
+        let parsed = source_less_withdrawn_arm();
+
+        let result = gate_receiver_ictt_arm(parsed, true, false);
+
+        assert!(
+            result.is_none(),
+            "the kill switch must suppress a source-side-less arm for an \
+             unconfigured source chain"
+        );
+    }
+
+    /// Regression test for invariant 9: a configured-source message can
+    /// legitimately hold `Sent(None, Some(withdrawn))` while its `send` log
+    /// has not been ingested yet (`parse_sender_ictt_log` preserves it when
+    /// the send log later arrives). The gate must not drop that arm just
+    /// because reconstruction is disabled — only `source_is_unknown` may
+    /// trigger the drop.
+    #[test]
+    fn test_gate_receiver_ictt_arm_disabled_source_configured_preserves_arm() {
+        let parsed = source_less_withdrawn_arm();
+
+        let result = gate_receiver_ictt_arm(parsed.clone(), false, false);
+
+        assert!(
+            matches!(result, Some(TokenTransfer::Sent(None, Some(_)))),
+            "a configured-source message must keep its arm regardless of the \
+             kill switch"
+        );
+    }
+
+    #[rstest]
+    #[case::source_unknown(true)]
+    #[case::source_configured(false)]
+    fn test_gate_receiver_ictt_arm_enabled_preserves_arm_either_way(
+        #[case] source_is_unknown: bool,
+    ) {
+        let parsed = source_less_withdrawn_arm();
+
+        let result = gate_receiver_ictt_arm(parsed.clone(), source_is_unknown, true);
+
+        assert!(
+            matches!(result, Some(TokenTransfer::Sent(None, Some(_)))),
+            "an enabled kill switch must never drop an arm"
         );
     }
 }

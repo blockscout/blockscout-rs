@@ -65,6 +65,7 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 | `api_url` / `ui_url` / `docs_url` | Optional external links. |
 | `process_unknown_chains` | When `true`, allow messages with one unknown endpoint. When `false` (default), both endpoints must be configured chains. |
 | `home_chain_id` | Optional chain id that narrows processing to messages where at least one endpoint is this chain. |
+| `reconstruct_incoming_ictt_transfers` | Avalanche only. When `true` (default), an incoming ICTT transfer from a chain that is not configured for this bridge is reconstructed from the ICM payload. When `false`, no transfer row is built for such messages. |
 | `contracts`  | Per-chain contract config: `chain_id`, `address`, `version`, `started_at_block`, optional `kind`, and optional inline `abi`. AMB uses `kind: "amb_proxy"` and `kind: "omnibridge_mediator"`; Avalanche configs leave `kind` unset. |
 
 `process_unknown_chains` and `home_chain_id` apply as two sequential filters:

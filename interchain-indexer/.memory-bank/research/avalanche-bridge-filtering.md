@@ -171,17 +171,26 @@ This flag causes two levels of degradation during consolidation:
    `sender_address`, no `payload`, and `init_timestamp` equals the
    destination-side block timestamp instead of the source-side timestamp.
 
-2. **Complete ICTT transfer loss** — transfer building at
-   `consolidation.rs:189–195` requires both `self.send` and `self.transfer`
-   to be present. Without a send event, `self.send` stays `None`, so the
-   consolidated message always gets `transfers: Vec::new()` — **zero
-   `crosschain_transfers` rows**. This is not a simplification; it reflects a
-   hard constraint: source-side ICTT logs (`TokensSent`, `TokensRouted`,
-   etc.) carry the sender address, amount, source token address, and
-   destination token address needed to build a transfer record. Destination-
-   side events alone do not carry enough data to reconstruct this.
-   Implementing destination-only ICTT reconstruction is possible but currently
-   unimplemented due to complexity.
+2. **ICTT transfer reconstruction from the ICM payload** — the
+   `send`-driven builder (`consolidation.rs`'s `build_transfer`) still
+   requires `self.send`, which never arrives for an unconfigured source
+   chain. But `TeleporterMessage.message` (carried by both `receive` and a
+   `MessageExecutionFailed` event) is `abi.encode(TransferrerMessage)` for
+   ICTT traffic, and `TeleporterMessage.originSenderAddress` /
+   `destinationAddress` are exactly the addresses the outgoing path already
+   writes as `token_src_address` / `token_dst_address`. A second builder
+   (`try_reconstruct_transfer` / `build_reconstructed_transfer` in
+   `consolidation.rs`, decoding via `ictt_payload.rs`) fires only in the
+   `(None, true)` branch (source chain unknown, no `send`) and only for
+   `SINGLE_HOP_SEND` / `SINGLE_HOP_CALL` messages corroborated by a
+   receiver-side ICTT effect in the receipt. `MULTI_HOP_*` arriving at a home
+   chain is a routing intermediate (re-sends under a new message id) and is
+   skipped with a metric rather than producing a spurious `R1 -> home` row.
+   A per-bridge kill switch, `bridges.json`'s
+   `reconstruct_incoming_ictt_transfers` (default `true`), is applied at
+   *ingestion* — a source-side-less receiver ICTT arm is simply not recorded
+   for a source-unknown message when disabled, so consolidation has nothing
+   to reconstruct from.
 
 The flag tells consolidation: "we will never get a send event for this
 message, so stop waiting and consolidate with what we have."
@@ -251,9 +260,11 @@ Configured chains = {1, 2, 3}. Verified against `rstest` cases in
   persists a chain, bridge B (strict) benefits from the cached resolution
   but still rejects the message per its own policy. See `gotchas.md`,
   "Cross-Bridge Resolver Persistence Leaks".
-- Unknown-source messages are stored as messaging-only records with no
-  `crosschain_transfers` rows. The ICTT layer is invisible for these
-  messages.
+- Unknown-source ICTT messages get a reconstructed `crosschain_transfers` row
+  when the payload decodes to `SINGLE_HOP_SEND` / `SINGLE_HOP_CALL` and a
+  receiver-side ICTT effect corroborates it; `MULTI_HOP_*` and
+  `REGISTER_REMOTE` still produce zero rows (see point 2 above and
+  `ictt_payload.rs`).
 - Upgrading unknown chains to proper bridges requires a clean delete + fresh
   re-index, not incremental patching. See `gotchas.md`, "Upgrading Unknown
   Chains to Proper Bridges".
@@ -268,7 +279,10 @@ Update this note when:
 - the relationship between indexed set and exposed set changes
 - new event handlers are added with different filtering behavior
 - `source_chain_is_unknown` semantics or consolidation fallback changes
-- destination-only ICTT reconstruction is implemented
+- destination-only ICTT reconstruction changes (see
+  `interchain-indexer-logic/src/indexer/avalanche/consolidation.rs`'s
+  `try_reconstruct_transfer` / `build_reconstructed_transfer` and
+  `ictt_payload.rs`)
 
 ## Open Questions
 

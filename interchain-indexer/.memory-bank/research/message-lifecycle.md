@@ -388,13 +388,49 @@ consistency across send/receive/execution.
 **Finality** (`is_final`):
 
 - Execution must have succeeded, **AND**
-- ICTT transfer must be complete (both source and destination sides present),
-  if applicable
+- ICTT transfer must be complete
 - Failed messages are **never final** — they can be retried via
   `retryMessageExecution()`
 - Messages without ICTT transfers: `is_final = execution_succeeded`
+- "ICTT transfer complete" is **not** simply "both source and destination
+  sides present" — the destination side may legitimately never exist. The
+  ICM payload (`TeleporterMessage.message`, decoded by `ictt_payload.rs`) is
+  classified into a credit expectation: `SINGLE_HOP_SEND` / `SINGLE_HOP_CALL`
+  ⇒ a destination credit (`TokensWithdrawn` / `CallSucceeded` / `CallFailed`)
+  is expected; `REGISTER_REMOTE` / `MULTI_HOP_SEND` / `MULTI_HOP_CALL` ⇒ none
+  ever will be (a `MULTI_HOP_*` arriving at a home re-sends under a *new*
+  message id instead of crediting a recipient). A transfer with the source
+  side present, no destination side, and "no credit expected" now completes
+  — this is what closes the finality bug below. Classification runs
+  regardless of whether `send` or the `(None, true)` fallback path supplied
+  the payload, so it also fixes a fully indexed multi-hop first leg.
 
-**Transfer building**: only built when both `send` and `transfer` are present.
+**Transfer building**: the `send`-driven builder (`build_transfer`) still
+requires both `send` and `transfer`. A second path,
+`try_reconstruct_transfer` / `build_reconstructed_transfer`, builds a
+transfer from the ICM payload alone when `send` is absent, the source chain
+is unknown, the payload classifies as `SINGLE_HOP_SEND` / `SINGLE_HOP_CALL`,
+and a receiver-side ICTT effect corroborates it. It never fires when `send`
+is present or the source chain is configured — that would race the real
+`send` event. A per-bridge kill switch
+(`bridges.json.reconstruct_incoming_ictt_transfers`, default `true`) is
+applied at ingestion, not here: when disabled, a source-side-less receiver
+ICTT arm is simply never recorded for a source-unknown message, so this
+builder has nothing to work with.
+
+**The finality bug this closes** (historical): before this change,
+"transfer complete" required both sides present, so an incoming ICTT
+message from an unindexed source chain — which can never produce a `send`
+event and therefore never gets a destination-paired *source* side — stayed
+`Partial` forever, was never stats-projected, and accumulated permanently in
+`pending_messages`. The same bug fired on a fully indexed multi-hop first
+leg, whose home routes onward instead of crediting a recipient. Both
+triggers are fixed by classifying "no credit expected" as complete, not by
+requiring a reconstructed row — if the payload has not arrived yet, the
+message finalizes with no transfer, is evicted, and a later flush (once the
+payload does arrive) re-writes the same `(message_id, bridge_id, 0)` key
+safely, because both on-conflict builders omit `stats_processed` from the
+update list.
 
 #### 9. Key derivation
 
@@ -441,6 +477,18 @@ pattern, not a generic contract, but may be reused by future indexers.
 - One receiver-side ICTT outcome per receipt is enforced
 - Destination chain ID consistency across all present events is verified during
   consolidation
+- Incoming-ICTT-transfer reconstruction only fires in `consolidate()`'s
+  `(None, true)` branch (`send` absent, source chain unknown); it never races
+  a real `send` event
+- The per-bridge `reconstruct_incoming_ictt_transfers` kill switch never drops
+  a receiver-side ICTT arm for a message whose source chain **is** configured
+  — the ingestion gate keys on `source_is_unknown`, not on "this arm has no
+  source side", because `parse_sender_ictt_log` legitimately produces a
+  source-side-less arm for a configured-source message whose destination logs
+  arrived before its `send` log
+- `Message`'s buffered shape is unaffected by the kill switch: it is applied
+  where the receiver-side ICTT arm is recorded (`avalanche/mod.rs`), not as a
+  field on `Message`
 
 ## Failure Modes / Observability
 

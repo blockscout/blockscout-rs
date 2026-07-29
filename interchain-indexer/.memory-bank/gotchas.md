@@ -4,13 +4,30 @@ Non-obvious traps and their solutions.
 
 ## Message Finality is Complex
 
-**Symptom:** Messages stuck in "Initiated" status despite execution events arriving.
+**Symptom:** Messages stuck in "Initiated"/"Partial" status despite execution events arriving, accumulating permanently in `pending_messages`.
 
 **Root cause:** A message is NOT final if:
 - Execution failed (can be retried via `retryMessageExecution()`)
-- ICTT transfer incomplete (waiting for destination-side events)
+- ICTT transfer incomplete
 
-**Fix:** Finality requires: execution succeeded AND ICTT transfer complete (if applicable). Check `consolidation.rs` for the logic.
+Before the incoming-ICTT-reconstruction task, "incomplete" meant "the
+destination side produced no `TokensWithdrawn`/`CallSucceeded`/`CallFailed`",
+full stop — which is wrong for two message shapes that will *never* get one:
+an incoming ICTT message from a chain not configured for the bridge (no
+`send`, so no destination-paired source side either), and a fully indexed
+multi-hop first leg whose home chain routes onward (`TokensRouted`) instead
+of crediting a recipient. Both stayed `Partial` forever, were never
+stats-projected, and never left `pending_messages`.
+
+**Fix:** The ICM payload (`TeleporterMessage.message`, decoded by
+`ictt_payload.rs`) is what discriminates this: `SINGLE_HOP_SEND` /
+`SINGLE_HOP_CALL` mean a destination credit is expected and completeness still
+waits for it; `REGISTER_REMOTE` / `MULTI_HOP_SEND` / `MULTI_HOP_CALL` mean no
+credit will ever arrive for this message id, so the transfer is complete as
+soon as its source side is present. This classification runs on every
+`consolidate()` call that has any payload source (`send` | `receive` |
+`execution = Failed`), not only when reconstruction can build a row. Check
+`consolidation.rs`'s `ictt_completeness` / `classify_payload` for the logic.
 
 ---
 
@@ -599,5 +616,25 @@ that left it `NotSet` then insert SQL `NULL` instead of omitting the column
 **Fix:** Split into separate inserts — one batch that relies on DB defaults,
 another that explicitly `Set`s timestamps — or set the column on every model
 in the batch.
+
+---
+
+## `abi_decode_validate` Does Not Reject Trailing Bytes
+
+**Symptom:** Decoding a payload with garbage appended after a valid ABI
+encoding still succeeds.
+
+**Root cause:** `alloy_sol_types::SolValue::abi_decode_validate` only
+type-checks the tokens it reads (correct offsets, correct word count for the
+declared type); it does not verify that the input slice was fully consumed.
+Non-canonical offsets and trailing bytes both pass silently.
+
+**Fix:** Add an explicit canonicity round trip — re-encode the decoded value
+(`decoded.abi_encode()`) and compare it byte-for-byte to the original input.
+This is the layer that actually rejects trailing bytes and non-canonical
+encodings. See `interchain-indexer-logic/src/indexer/avalanche/ictt_payload.rs`
+(`decode_transferrer_message` / `decode_inner`) for the pattern — it matters
+here because a false-positive ICTT payload decode would fabricate a bogus
+`crosschain_transfers` row from an arbitrary ICM message.
 
 ---

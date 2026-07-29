@@ -49,7 +49,16 @@ pub struct BridgeConfig {
     /// Validated at startup.
     #[serde(default)]
     pub home_chain_id: Option<ChainId>,
+    /// When true (default), an incoming ICTT transfer from a chain that is
+    /// not configured for this bridge is reconstructed from the ICM payload.
+    /// Avalanche-only; ignored by other indexer types.
+    #[serde(default = "default_reconstruct_incoming_ictt_transfers")]
+    pub reconstruct_incoming_ictt_transfers: bool,
     pub contracts: Vec<BridgeContractConfig>,
+}
+
+fn default_reconstruct_incoming_ictt_transfers() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -131,6 +140,7 @@ impl From<bridges::Model> for BridgeConfig {
             docs_url: model.docs_url,
             process_unknown_chains: false,
             home_chain_id: None,
+            reconstruct_incoming_ictt_transfers: true,
             contracts: vec![], // Contracts are in a separate table
         }
     }
@@ -578,6 +588,11 @@ mod tests {
         assert_eq!(bridges.len(), 1);
         assert!(!bridges[0].process_unknown_chains);
         assert_eq!(bridges[0].home_chain_id, None);
+        assert!(
+            bridges[0].reconstruct_incoming_ictt_transfers,
+            "reconstruct_incoming_ictt_transfers must default to true so existing \
+             config files stay valid and behavior does not change go-forward"
+        );
     }
 
     #[test]
@@ -604,6 +619,30 @@ mod tests {
         assert_eq!(bridges.len(), 1);
         assert!(bridges[0].process_unknown_chains);
         assert_eq!(bridges[0].home_chain_id, Some(43114));
+    }
+
+    #[test]
+    fn test_deserialize_bridge_with_reconstruct_incoming_ictt_transfers_false() {
+        let json = r#"
+        [
+            {
+                "bridge_id": 7,
+                "name": "Reconstruction Disabled",
+                "type": "avalanche_native",
+                "indexer_type": "icm_ictt",
+                "enabled": true,
+                "api_url": null,
+                "ui_url": null,
+                "docs_url": null,
+                "reconstruct_incoming_ictt_transfers": false,
+                "contracts": []
+            }
+        ]
+        "#;
+
+        let bridges: Vec<BridgeConfig> = serde_json::from_str(json).unwrap();
+        assert_eq!(bridges.len(), 1);
+        assert!(!bridges[0].reconstruct_incoming_ictt_transfers);
     }
 
     #[test]
@@ -638,6 +677,7 @@ mod tests {
         assert_eq!(config.indexer_type, IndexerType::Unknown);
         assert!(!config.process_unknown_chains);
         assert_eq!(config.home_chain_id, None);
+        assert!(config.reconstruct_incoming_ictt_transfers);
         assert_eq!(config.contracts, vec![]);
     }
 
