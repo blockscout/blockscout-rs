@@ -121,4 +121,60 @@ mod tests {
             LegacyOperationType::InsufficientFee
         );
     }
+
+    #[test]
+    fn v2_projection_truth_table_covers_nonfinal_and_final_failures() {
+        let cases = [
+            (
+                ("TON-TAC", Some("failed"), Some(false), Some(false), true),
+                LegacyOperationType::InsufficientFee,
+            ),
+            (
+                ("TON-TAC", Some("failed"), Some(false), Some(false), false),
+                LegacyOperationType::Pending,
+            ),
+            (
+                ("TON-TAC", Some("success"), Some(false), Some(true), true),
+                LegacyOperationType::Pending,
+            ),
+            (
+                ("TON-TAC", Some("failed"), Some(true), Some(true), false),
+                LegacyOperationType::Rollback,
+            ),
+            (
+                ("TON-TAC", Some("failed"), Some(true), Some(false), false),
+                LegacyOperationType::TonTac,
+            ),
+            (
+                ("TAC-TON", Some("success"), Some(true), Some(true), false),
+                LegacyOperationType::TacTon,
+            ),
+            (
+                ("UNKNOWN", None, Some(true), Some(false), false),
+                LegacyOperationType::Unknown,
+            ),
+            (
+                ("NEW-ROUTE", None, Some(true), Some(false), false),
+                LegacyOperationType::ErrorType,
+            ),
+            (
+                ("TON-TAC", Some("failed"), None, Some(true), true),
+                LegacyOperationType::ErrorType,
+            ),
+        ];
+
+        for ((route, status, finalized, rollback, insufficient_fee), expected) in cases {
+            assert_eq!(
+                project_v1_type(
+                    PROFILING_VERSION_V2,
+                    Some(route),
+                    status,
+                    finalized,
+                    rollback,
+                    insufficient_fee
+                ),
+                expected
+            );
+        }
+    }
 }

@@ -442,6 +442,35 @@ mod tests {
         assert!(!client.v2_available_for_direct_request());
     }
 
+    #[test]
+    fn concurrent_callers_reserve_exactly_one_probe() {
+        let client = Client::new(RpcSettings {
+            stage_profiling_v2_probe_interval: Duration::ZERO,
+            ..Default::default()
+        });
+        client.open_v2_circuit(&ProfilingError::EmptyResponse);
+
+        const CALLERS: usize = 16;
+        let barrier = Arc::new(std::sync::Barrier::new(CALLERS));
+        let handles: Vec<_> = (0..CALLERS)
+            .map(|_| {
+                let client = client.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    client.v2_available_for_direct_request()
+                })
+            })
+            .collect();
+
+        let reserved = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("probe caller panicked"))
+            .filter(|reserved| *reserved)
+            .count();
+        assert_eq!(reserved, 1);
+    }
+
     #[tokio::test]
     async fn prefer_v2_falls_back_for_eligible_error() {
         let server = MockServer::start().await;
