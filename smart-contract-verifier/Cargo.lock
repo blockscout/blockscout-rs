@@ -252,7 +252,7 @@ dependencies = [
  "futures-core",
  "log",
  "pin-project-lite",
- "prometheus 0.14.0",
+ "prometheus",
  "regex",
  "strfmt",
 ]
@@ -1102,7 +1102,7 @@ dependencies = [
  "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
- "prometheus 0.14.0",
+ "prometheus",
  "reqwest 0.12.9",
  "serde",
  "serde_json",
@@ -3772,21 +3772,6 @@ dependencies = [
 
 [[package]]
 name = "prometheus"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d33c28a30771f7f96db69893f78b857f7450d7e0237e9c8fc6427a81bae7ed1"
-dependencies = [
- "cfg-if",
- "fnv",
- "lazy_static",
- "memchr",
- "parking_lot 0.12.3",
- "protobuf 2.28.0",
- "thiserror 1.0.63",
-]
-
-[[package]]
-name = "prometheus"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ca5326d8d0b950a9acd87e6a3f94745394f62e4dae1b1ee22b2bc0c394af43a"
@@ -3796,7 +3781,7 @@ dependencies = [
  "lazy_static",
  "memchr",
  "parking_lot 0.12.3",
- "protobuf 3.7.2",
+ "protobuf",
  "thiserror 2.0.11",
 ]
 
@@ -3881,12 +3866,6 @@ checksum = "8991c4cbdb8bc5b11f0b074ffe286c30e523de90fee5ba8132f1399f23cb3dd7"
 dependencies = [
  "prost",
 ]
-
-[[package]]
-name = "protobuf"
-version = "2.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "protobuf"
@@ -5145,7 +5124,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "pretty_assertions",
  "primitive-types 0.14.0",
- "prometheus 0.13.4",
+ "prometheus",
  "quick-xml",
  "rand 0.8.5",
  "reqwest 0.11.27",
@@ -5216,7 +5195,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "pretty_assertions",
- "prometheus 0.13.4",
+ "prometheus",
  "rstest",
  "rust-s3",
  "semver 1.0.23",

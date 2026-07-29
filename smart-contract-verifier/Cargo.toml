@@ -41,7 +41,7 @@ nonempty = { version = "0.10.0" }
 parking_lot = { version = "0.12" }
 pretty_assertions = { version = "1.2" }
 primitive-types = { version = "0.14.0" }
-prometheus = { version = "0.13" }
+prometheus = { version = "0.14" }
 prost = { version = "0.14" }
 prost-build = { version = "0.14" }
 quick-xml = { version = "0.24" }
