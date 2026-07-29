@@ -1074,6 +1074,7 @@ async fn load_stats_asset_edges_for_keys(
 /// transfer's asset identity was already resolved unambiguously before this
 /// marker fires, so the caller still links `stats_asset_id` to it — only the
 /// edge/count contribution is skipped.
+#[derive(Debug)]
 struct DecimalsConflict;
 
 fn warn_edge_decimals_mismatch(
@@ -1735,5 +1736,122 @@ mod token_key_tests {
         assert_eq!(keys.len(), 2);
         assert!(keys.contains(&(1, a)));
         assert!(keys.contains(&(100, b)));
+    }
+}
+
+// Isolated coverage for the decision behind `STATS_EDGE_DECIMALS_CONFLICT_TOTAL`
+// (see `warn_edge_decimals_mismatch`). This deliberately does NOT read the
+// metric itself: `STATS_EDGE_DECIMALS_CONFLICT_TOTAL` is a process-wide
+// `lazy_static` counter shared by every test in this binary, so a
+// before/after delta on it is not test-isolated under `cargo test`'s default
+// parallelism — that pattern is what made
+// `database::tests::test_decimals_conflict_on_counting_path_skips_transfer_without_aborting`
+// flaky (see the comment there). Instead, this tests the pure decision
+// function directly: a decimals mismatch must return `Err(DecimalsConflict)`
+// (the trigger for both the metric increment and the caller's
+// skip-not-abort behaviour), while a match or a not-yet-known decimals value
+// must resolve the amount without conflict. No shared state is touched, so
+// this cannot race with any other test, present or future.
+#[cfg(test)]
+mod edge_transfer_amount_for_side_tests {
+    use super::{DecimalsConflict, edge_transfer_amount_for_side, transfer_amount_for_side};
+    use interchain_indexer_entity::{crosschain_transfers, sea_orm_active_enums::EdgeAmountSide};
+    use sea_orm::prelude::BigDecimal;
+
+    fn transfer(src_amount: Option<u64>, dst_amount: Option<u64>) -> crosschain_transfers::Model {
+        crosschain_transfers::Model {
+            id: 1,
+            message_id: 1,
+            bridge_id: 1,
+            index: 0,
+            r#type: None,
+            token_src_chain_id: 1,
+            token_dst_chain_id: 100,
+            src_amount: src_amount.map(BigDecimal::from),
+            dst_amount: dst_amount.map(BigDecimal::from),
+            token_src_address: None,
+            token_dst_address: None,
+            sender_address: None,
+            recipient_address: None,
+            token_ids: None,
+            stats_processed: 0,
+            stats_asset_id: None,
+            created_at: None,
+            updated_at: None,
+        }
+    }
+
+    #[test]
+    fn matching_decimals_resolves_amount_without_conflict() {
+        let t = transfer(Some(10), Some(20));
+        let mut working_decimals = Some(18i16);
+        let amount = edge_transfer_amount_for_side(
+            &EdgeAmountSide::Source,
+            &mut working_decimals,
+            &t,
+            Some(18),
+            Some(6),
+            42,
+        )
+        .expect("matching decimals must not conflict");
+        assert_eq!(amount, BigDecimal::from(10u64));
+        assert_eq!(
+            working_decimals,
+            Some(18),
+            "the already-known decimals are unchanged"
+        );
+    }
+
+    #[test]
+    fn mismatched_decimals_triggers_the_conflict_marker() {
+        let t = transfer(Some(10), Some(20));
+        let mut working_decimals = Some(18i16);
+        let err = edge_transfer_amount_for_side(
+            &EdgeAmountSide::Source,
+            &mut working_decimals,
+            &t,
+            Some(17), // disagrees with working_decimals (18)
+            Some(6),
+            42,
+        )
+        .expect_err("a decimals mismatch must be reported as a conflict, not silently accepted");
+        // `DecimalsConflict` carries no fields; reaching this arm at all is
+        // the behaviour under test — it is exactly the trigger that makes the
+        // caller invoke `warn_edge_decimals_mismatch` (which increments
+        // `STATS_EDGE_DECIMALS_CONFLICT_TOTAL`).
+        match err {
+            DecimalsConflict => {}
+        }
+    }
+
+    #[test]
+    fn unknown_working_decimals_adopts_incoming_without_conflict() {
+        let t = transfer(Some(10), Some(20));
+        let mut working_decimals = None;
+        let amount = edge_transfer_amount_for_side(
+            &EdgeAmountSide::Source,
+            &mut working_decimals,
+            &t,
+            Some(9),
+            Some(6),
+            42,
+        )
+        .expect("no prior decimals means nothing to conflict with");
+        assert_eq!(amount, BigDecimal::from(10u64));
+        assert_eq!(
+            working_decimals,
+            Some(9),
+            "the first-seen decimals are adopted"
+        );
+    }
+
+    #[test]
+    fn missing_primary_amount_falls_back_to_the_opposite_side() {
+        let t = transfer(None, Some(20));
+        assert_eq!(
+            transfer_amount_for_side(&t, &EdgeAmountSide::Source),
+            BigDecimal::from(20u64),
+            "a destination-only transfer falls back to dst_amount for the source side"
+        );
     }
 }

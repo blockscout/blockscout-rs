@@ -1210,6 +1210,56 @@ mod tests {
         );
     }
 
+    /// Trigger-2 regression, `MULTI_HOP_CALL` variant: a fully indexed
+    /// multi-hop first leg (`send` present, source chain configured) whose
+    /// home routes onward instead of crediting a recipient. Mirrors
+    /// `test_consolidate_multi_hop_first_leg_with_no_destination_credit_becomes_final`
+    /// above, but for `MULTI_HOP_CALL`. `transfer = Sent(Some(src), None)`
+    /// (destination side absent) is the key choice: unlike
+    /// `test_consolidate_multi_hop_call_produces_no_reconstructed_row` below
+    /// (which uses a destination-present arm and so trivially satisfies
+    /// `ictt_completeness`'s `(dst_present=true, _, _) => true` row
+    /// regardless of `credit_expectation`), this shape can only resolve to
+    /// complete through the `NotExpected` row — the same completeness
+    /// decision `IcttPayload::credit_expectation()` maps `MultiHopCall` to.
+    /// Without this test, `MULTI_HOP_CALL`'s contribution to that branch was
+    /// only ever exercised indirectly via `MULTI_HOP_SEND` (review-1.md
+    /// finding 2, `avalanche-incoming-ictt-transfers` task).
+    #[test]
+    fn test_consolidate_multi_hop_call_first_leg_with_no_destination_credit_becomes_final() {
+        let icm_destination = addr(0xaa);
+        let send = send_event_with_payload(icm_destination, multi_hop_call_payload(1_000));
+        let transfer = tokens_sent_transfer(addr(0xbb), addr(0x11), addr(0x22), addr(0x33), 1_000);
+
+        let message = Message {
+            send: Some(send.clone()),
+            execution: Some(execution_succeeded(
+                send.source_chain_id,
+                send.destination_chain_id,
+            )),
+            transfer: Some(transfer),
+            source_chain_is_unknown: false,
+            ..Default::default()
+        };
+
+        let consolidated = message
+            .consolidate(&key())
+            .unwrap()
+            .expect("must consolidate");
+
+        assert!(
+            consolidated.is_final,
+            "a MULTI_HOP_CALL first leg with src present and no destination credit \
+             must become final once classified as a routing intermediate \
+             (NotExpected completeness branch)"
+        );
+        assert_eq!(
+            consolidated.transfers.len(),
+            1,
+            "the send-driven row is still built as today"
+        );
+    }
+
     /// Same classification, but via `MULTI_HOP_CALL` and taken from the
     /// `(None, true)` fallback path — must still skip row reconstruction.
     #[test]
