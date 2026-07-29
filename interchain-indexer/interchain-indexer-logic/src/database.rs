@@ -6632,9 +6632,12 @@ mod tests {
             t.stats_processed, 1,
             "transfer must be marked processed despite the conflict"
         );
-        assert!(
-            t.stats_asset_id.is_none(),
-            "conflict-skipped transfer keeps no stats asset link, same shape as a mapping conflict"
+        assert_eq!(
+            t.stats_asset_id,
+            Some(aid),
+            "decimals-conflict-skipped transfer still links its unambiguously resolved asset \
+             (unlike a genuine mapping conflict, identity was already known here — only the \
+             amount could not be safely counted)"
         );
 
         let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
@@ -6653,6 +6656,158 @@ mod tests {
         assert!(
             cursor.is_some(),
             "the cursor write inside the same transaction must survive (no poison pill)"
+        );
+    }
+
+    // Contrasts the two counting-path skip kinds in one batch so a future
+    // change cannot collapse `stats_asset_id` back to the same shape for both
+    // (ADR-004 Decision 3: counting and identity are separate concerns).
+    //
+    // - A decimals conflict fires *after* `ensure_asset_for_transfer` already
+    //   resolved this exact transfer's asset unambiguously — only the amount
+    //   could not be safely folded into the edge, so `stats_asset_id` is
+    //   still linked.
+    // - A mapping conflict (here: two different tokens of one chain trying to
+    //   link to a fresh asset) means identity itself is unresolved — there is
+    //   no asset id to write, so `stats_asset_id` stays NULL.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_decimals_conflict_links_asset_but_mapping_conflict_leaves_it_null() {
+        let _db =
+            init_db("test_decimals_conflict_links_asset_but_mapping_conflict_leaves_it_null").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        // --- Transfer A: decimals conflict. Identity is unambiguous (both
+        // endpoints already map to `aid`); only the edge's stored decimals
+        // disagree with the incoming source decimals.
+        let addr_a = [0xe1u8; 20].to_vec();
+        let addr_b = [0xe2u8; 20].to_vec();
+        let aid = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(1),
+            token_address: Set(addr_a.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(aid),
+            chain_id: Set(100),
+            token_address: Set(addr_b.clone()),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(addr_a.clone()),
+            decimals: Set(Some(18)),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            stats_asset_id: Set(aid),
+            bridge_id: Set(1),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(100),
+            transfers_count: Set(3),
+            cumulative_amount: Set(BigDecimal::from(300u64)),
+            decimals: Set(Some(17)),
+            amount_side: Set(EdgeAmountSide::Source),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        crosschain_messages::Entity::insert(completed_message(99010, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            99010,
+            99010,
+            1,
+            1,
+            100,
+            Some(addr_a.clone()),
+            Some(addr_b.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        // --- Transfer B: mapping conflict. Both endpoints are unmapped and
+        // land on the same chain with two different addresses — a fresh
+        // asset can hold at most one token per chain, so identity cannot be
+        // resolved at all.
+        let addr_c = [0xe3u8; 20].to_vec();
+        let addr_d = [0xe4u8; 20].to_vec();
+        crosschain_messages::Entity::insert(completed_message(99011, 1, 1))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            99011,
+            99011,
+            1,
+            1,
+            1,
+            Some(addr_c.clone()),
+            Some(addr_d.clone()),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+
+        let processed = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &[99010i64, 99011i64],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(processed, 2, "both skipped transfers count as handled");
+
+        let decimals_conflict_transfer = crosschain_transfers::Entity::find_by_id(99010i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(decimals_conflict_transfer.stats_processed, 1);
+        assert_eq!(
+            decimals_conflict_transfer.stats_asset_id,
+            Some(aid),
+            "decimals conflict: identity was already known, so the asset stays linked"
+        );
+
+        let mapping_conflict_transfer = crosschain_transfers::Entity::find_by_id(99011i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(mapping_conflict_transfer.stats_processed, 1);
+        assert!(
+            mapping_conflict_transfer.stats_asset_id.is_none(),
+            "mapping conflict: identity is genuinely unresolved, so there is no asset to link"
         );
     }
 

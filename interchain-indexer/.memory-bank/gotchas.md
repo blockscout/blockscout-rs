@@ -340,21 +340,65 @@ longer silently drops failed-AMB aggregates.
 
 ---
 
-## Stats Asset Mapping Conflicts Skip Transfer Projection
+## Stats Asset Mapping Conflicts Merge; Only Same-Chain Collisions Skip
 
-**Symptom:** Repeated warnings like `stats projection: transfer endpoints map to different stats assets; skipping transfer_id=... src_stats_asset_id=... dst_stats_asset_id=...`.
+**Symptom:** A transfer whose two endpoints already map to two different
+`stats_assets` no longer stalls as a fragmented pair — the components are
+merged automatically, visible as `interchain_indexer_stats_asset_merges_total{outcome="merged"}`
+increasing. The skip that remains is rarer: a warning like `stats projection:
+stats asset already has a different token on the destination chain; skipping
+transfer` (or `...two different tokens on one chain; skipping`), paired with
+`interchain_indexer_stats_asset_merges_total{outcome="refused_chain_collision"}`.
+Separately, `stats projection: skipping transfer due to stats_asset_edges
+decimals mismatch` paired with `interchain_indexer_stats_edge_decimals_conflict_total`
+is a different, non-corrupting skip — see below.
 
-**Root cause:** `stats_asset_tokens` already maps the transfer's source token and destination token to two different logical `stats_assets`. Projection cannot safely infer that those assets should be merged, because each `stats_asset` may hold at most one token per chain and auto-merging could corrupt bridged-token aggregates.
+**Root cause:** Asset identity is an incrementally discovered connected-component
+problem — two complete transfers on fully indexed chains can legitimately form
+disjoint components (`{A,B}` and `{C,D}`) that a later `B→C` transfer must join.
+`ensure_asset_for_transfer` resolves this via `merge_assets`: a transactional,
+validate-then-mutate union (weighted — the component with more linked tokens
+wins, ties go to the lower id) that repoints the loser's `stats_asset_tokens`,
+`stats_asset_edges` (folding amounts, rescaling for a decimals difference), and
+`crosschain_transfers.stats_asset_id`, then deletes the loser `stats_assets`
+row, all inside the same transaction as the triggering transfer. The only
+genuine refusal left is a merge that would place two different tokens of one
+chain into one `stats_asset` (a `stats_asset` can hold at most one token per
+chain) — that case cannot be resolved automatically and cannot be forced
+without corrupting the chain-uniqueness invariant.
 
-**Impact:** Canonical `crosschain_messages` / `crosschain_transfers` rows remain persisted. Only bridged-token stats projection skips that transfer: no `stats_asset_edges` increment and `crosschain_transfers.stats_asset_id` stays `NULL`. The skipped row is still marked `stats_processed += 1`, so the same row should not warn every maintenance cycle; ongoing warnings usually mean new transfers hit the same fragmented mapping or a backfill is processing historical rows.
+A decimals conflict is a separate, unrelated skip on the *counting* path:
+by the time it fires, this transfer's asset identity is already resolved
+unambiguously (directly or via a merge) — the conflict is only about whether
+this transfer's amount can be safely folded into the edge aggregate. It never
+aborts the batch (task Decision 7) and, since identity succeeded here, the
+transfer still links its resolved `stats_asset_id`.
 
-**Fix:** Treat as a data repair problem. Verify the two assets really represent the same bridged token, then merge their `stats_asset_tokens`, `stats_asset_edges`, and affected `crosschain_transfers` consistently before resetting skipped transfer stats for re-projection. For local development, a fresh reindex may be simpler.
+**Impact:** Canonical `crosschain_messages` / `crosschain_transfers` rows are
+never at risk in any of these paths. For a successful merge, the database
+changes: the winner asset absorbs the loser's tokens, edges, and transfers,
+and the loser row is gone — by design, not a side effect to repair. For a
+refused chain-collision merge, the transaction leaves the database
+byte-identical: nothing is mutated beyond marking the triggering transfer
+`stats_processed += 1` with `stats_asset_id` left `NULL`. For a decimals
+conflict, `stats_processed += 1` and `stats_asset_id` is set to the resolved
+asset, with no `stats_asset_edges` contribution.
 
-**Note:** this describes current behavior. Asset identity is an incrementally
-discovered connected-component problem — two complete transfers on fully indexed
-chains can form disjoint components (`{A,B}` and `{C,D}`) that a later `B→C`
-must join — so the planned direction is to turn this skip into an automatic
-merge. See the observability gotcha below.
+Read `crosschain_transfers.stats_asset_id` accordingly: `NULL` means identity
+is genuinely unknown or ambiguous (the chain-collision refusal is the only
+remaining case); a set `stats_asset_id` with `stats_processed > 0` and no
+corresponding edge contribution means identity is known but this transfer's
+amount was not counted (the decimals-conflict case). Either way the skipped
+row is marked processed so it does not re-warn every maintenance cycle;
+ongoing warnings usually mean new transfers keep hitting the same bad token
+data or a backfill is processing historical rows.
+
+**Fix:** A successful merge needs no manual repair — it already is the repair.
+A chain-collision refusal is a genuine data problem: verify the token address
+recorded per chain for both components (a token's address was likely
+misattributed to the wrong chain), fix the source data, then reset the
+affected transfers' `stats_processed` for re-projection. For local
+development, a fresh reindex may be simpler.
 
 ---
 

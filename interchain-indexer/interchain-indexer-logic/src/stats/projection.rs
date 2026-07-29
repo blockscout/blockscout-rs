@@ -1070,8 +1070,10 @@ async fn load_stats_asset_edges_for_keys(
 /// skip, because a `DbErr` here would roll back the shared maintenance
 /// transaction — including cursor writes — every cycle, a poison pill from one
 /// bad pair of edge rows. The caller marks the transfer processed without an
-/// edge contribution instead, the same shape as the existing mapping-conflict
-/// skip.
+/// edge contribution instead. Unlike a genuine mapping conflict, this
+/// transfer's asset identity was already resolved unambiguously before this
+/// marker fires, so the caller still links `stats_asset_id` to it — only the
+/// edge/count contribution is skipped.
 struct DecimalsConflict;
 
 fn warn_edge_decimals_mismatch(
@@ -1409,6 +1411,12 @@ pub async fn project_transfers_batch(
     let existing_edges = load_stats_asset_edges_for_keys(tx, &edge_key_per_transfer).await?;
     let mut edge_acc: HashMap<EdgeKey, EdgeAccum> = HashMap::new();
     let mut decimals_conflict_ids: Vec<i64> = Vec::new();
+    // Paired with `decimals_conflict_ids`: unlike a mapping conflict, a
+    // decimals conflict fires *after* `ensure_asset_for_transfer` already
+    // resolved this transfer's asset unambiguously — only the amount could
+    // not be safely counted. Carry the resolved id forward so it can still be
+    // linked (see the write-up below).
+    let mut decimals_conflict_asset_ids: Vec<(i64, i64)> = Vec::new();
 
     for (t, &asset_id) in proj_transfers.iter().zip(&asset_ids) {
         let edge_key: EdgeKey = (
@@ -1472,13 +1480,17 @@ pub async fn project_transfers_batch(
 
         if outcome.is_err() {
             decimals_conflict_ids.push(t.id);
+            decimals_conflict_asset_ids.push((t.id, asset_id));
         }
     }
 
     // Remove decimals-conflict transfers from the counted set — they are
-    // skipped (marked processed, no stats asset written), same shape as the
-    // existing mapping-conflict skip.
+    // skipped (marked processed, edge not incremented), but unlike a genuine
+    // mapping conflict their `stats_asset_id` is still linked below: identity
+    // was already resolved unambiguously; only the amount could not be
+    // safely folded into the edge aggregate.
     let decimals_conflict_set: HashSet<i64> = decimals_conflict_ids.into_iter().collect();
+    let decimals_conflict_count = decimals_conflict_set.len();
     let (proj_transfers, asset_ids): (Vec<_>, Vec<_>) = if decimals_conflict_set.is_empty() {
         (proj_transfers, asset_ids)
     } else {
@@ -1488,7 +1500,6 @@ pub async fn project_transfers_batch(
             .filter(|(t, _)| !decimals_conflict_set.contains(&t.id))
             .unzip()
     };
-    skipped_ids.extend(decimals_conflict_set);
 
     for (key, accum) in edge_acc {
         match accum {
@@ -1582,9 +1593,11 @@ pub async fn project_transfers_batch(
         .await?;
     }
 
-    // Mark conflict-skipped transfers processed (without a stats asset) so the
-    // maintenance loop does not reprocess and re-skip them every cycle. This
-    // covers both mapping-conflict skips and decimals-conflict skips.
+    // Mark mapping-conflict-skipped transfers processed, with no stats asset
+    // link: the mapping conflict means asset identity is genuinely unknown or
+    // ambiguous for this transfer (its endpoints could not be reconciled to
+    // one asset), so there is no id to write. `stats_asset_id IS NULL` after
+    // this update means exactly that — identity unknown.
     if !skipped_ids.is_empty() {
         run_in_batches(&skipped_ids, 1, |batch| async {
             crosschain_transfers::Entity::update_many()
@@ -1603,6 +1616,54 @@ pub async fn project_transfers_batch(
             Ok(())
         })
         .await?;
+    }
+
+    // Mark decimals-conflict-skipped transfers processed *and* link the
+    // resolved asset. ADR-004 Decision 3 separates counting from identity:
+    // here counting failed (the edge amount could not be safely folded in,
+    // so `transfers_count`/`cumulative_amount` are untouched and this batch's
+    // `stats_asset_edges` mutation above never saw this transfer) but
+    // identity succeeded — `ensure_asset_for_transfer` resolved this exact
+    // transfer to `asset_id` unambiguously before the conflict fired.
+    // Discarding that identity would conflate the two concerns again and
+    // collapse this case with a genuine mapping conflict. After this update,
+    // `stats_asset_id` set together with `stats_processed > 0` and no edge
+    // contribution reads unambiguously as "identity known, amount not
+    // counted" — distinct from `stats_asset_id IS NULL`, which stays reserved
+    // for "identity unknown" (the mapping-conflict case above).
+    //
+    // This is inert for counting: `stats_processed` is already non-zero after
+    // this same update (it is set together with the link, gated by the same
+    // `StatsProcessed.eq(0i16)` filter used everywhere else in this
+    // function), so the repair path's `StatsProcessed.gt(0i16)` filter is the
+    // only thing that can ever touch `stats_asset_id` for this row again, and
+    // it never touches `stats_processed`/`transfers_count`/
+    // `cumulative_amount`. Nothing can recount this transfer either way.
+    if !decimals_conflict_asset_ids.is_empty() {
+        let mut by_asset_decimals_conflict: HashMap<i64, Vec<i64>> = HashMap::new();
+        for (tid, aid) in decimals_conflict_asset_ids {
+            by_asset_decimals_conflict.entry(aid).or_default().push(tid);
+        }
+        for (aid, ids) in by_asset_decimals_conflict {
+            run_in_batches(&ids, 1, |batch| async {
+                crosschain_transfers::Entity::update_many()
+                    .col_expr(crosschain_transfers::Column::StatsAssetId, Expr::value(aid))
+                    .col_expr(
+                        crosschain_transfers::Column::StatsProcessed,
+                        Expr::col(crosschain_transfers::Column::StatsProcessed).add(1),
+                    )
+                    .col_expr(
+                        crosschain_transfers::Column::UpdatedAt,
+                        Expr::current_timestamp().into(),
+                    )
+                    .filter(crosschain_transfers::Column::Id.is_in(batch.iter().copied()))
+                    .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
+                    .exec(tx)
+                    .await?;
+                Ok(())
+            })
+            .await?;
+        }
     }
 
     // Repair path: link the (possibly merged) asset id for an already-counted
@@ -1631,7 +1692,7 @@ pub async fn project_transfers_batch(
         }
     }
 
-    Ok(proj_transfers.len() + skipped_ids.len())
+    Ok(proj_transfers.len() + skipped_ids.len() + decimals_conflict_count)
 }
 
 #[cfg(test)]
