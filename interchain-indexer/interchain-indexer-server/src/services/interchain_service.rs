@@ -19,7 +19,6 @@ use interchain_indexer_logic::{
     },
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
-use sea_orm::ActiveEnum;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -27,6 +26,7 @@ use std::{
 use tonic::{Request, Response, Status};
 
 use super::{
+    bridge_proto::bridge_model_to_proto,
     chain_info_proto::chain_model_to_proto,
     utils::{build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, map_db_error},
 };
@@ -757,18 +757,7 @@ impl InterchainService for InterchainServiceImpl {
         let rows = self.db.get_all_bridges().await.map_err(map_db_error)?;
         let items = rows
             .into_iter()
-            .map(|m| {
-                let id = u32::try_from(m.id)
-                    .map_err(|_| map_db_error(anyhow!("bridge id out of range")))?;
-                Ok(Bridge {
-                    id,
-                    name: m.name,
-                    r#type: m.r#type.map(|t| ActiveEnum::to_value(&t)),
-                    enabled: m.enabled,
-                    ui_url: m.ui_url,
-                    docs_url: m.docs_url,
-                })
-            })
+            .map(|m| bridge_model_to_proto(m, &self.indexed_chains))
             .collect::<Result<Vec<_>, Status>>()?;
         Ok(Response::new(GetBridgesResponse { items }))
     }

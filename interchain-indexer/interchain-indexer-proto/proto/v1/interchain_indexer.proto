@@ -248,6 +248,12 @@ message Bridge {
   bool enabled = 4;
   optional string ui_url = 5;
   optional string docs_url = 6;
+  // Chain ids this bridge actually indexes today, sorted ascending. Derived
+  // from the in-memory bridges config (`IndexedChains`), not from historical
+  // `bridge_contracts` rows, so a bridge removed from config but still
+  // present in the `bridges` table (upserts never delete) reports an empty
+  // list here rather than stale contract history.
+  repeated int64 indexed_chain_ids = 7;
 }
 
 message GetBridgesResponse {

@@ -177,6 +177,34 @@ impl IndexedChains {
         Some(pairs)
     }
 
+    /// Sorted chain ids actually configured for `bridge_id` — the concrete
+    /// set, not the permissive [`Self::may_observe`] predicate.
+    ///
+    /// Returns an empty vec both when `bridge_id` is absent from the map
+    /// (removed from config, or never configured) and under `AllIndexed` (no
+    /// per-bridge config at all). This is the opposite default from
+    /// `may_observe`, and deliberately so: `may_observe` must stay permissive
+    /// for an absent bridge so existing history keeps counting, but a
+    /// directory listing (`GetBridges`) must report what is actually
+    /// configured today, not "assume everything". A present-but-empty bridge
+    /// (declared with zero contracts) also yields an empty vec here, which is
+    /// the correct answer for that case on both predicates.
+    ///
+    /// Only for directory views keyed by a single bridge id (`GetBridges`).
+    /// Use [`Self::configured_pairs`] instead when iterating every bridge at
+    /// once, so the two never derive membership from separate code paths.
+    pub fn chain_ids_for(&self, bridge_id: i32) -> Vec<i64> {
+        match self {
+            IndexedChains::AllIndexed => Vec::new(),
+            IndexedChains::PerBridge(map) => {
+                let mut chains: Vec<i64> =
+                    map.get(&bridge_id).into_iter().flatten().copied().collect();
+                chains.sort_unstable();
+                chains
+            }
+        }
+    }
+
     /// Union of every bridge's chain set, deduplicated and sorted ascending.
     /// `None` means "no restriction" (`AllIndexed`); so does `Some(vec![])`, which
     /// can only arise from a config with no bridges at all — see the renderer note
@@ -535,6 +563,37 @@ mod tests {
             indexed.configured_pairs(None),
             Some(vec![(1, vec![100]), (2, vec![250])])
         );
+    }
+
+    // --- chain_ids_for ---
+
+    #[test]
+    fn test_chain_ids_for_all_indexed_is_empty() {
+        assert_eq!(
+            IndexedChains::AllIndexed.chain_ids_for(1),
+            Vec::<i64>::new()
+        );
+    }
+
+    #[test]
+    fn test_chain_ids_for_absent_bridge_is_empty() {
+        // Bridge 1 is absent from the map (removed from config, or never
+        // configured): the concrete-set accessor reports nothing, unlike the
+        // permissive `may_observe`.
+        let indexed = IndexedChains::from_pairs([(2, 100)]);
+        assert_eq!(indexed.chain_ids_for(1), Vec::<i64>::new());
+    }
+
+    #[test]
+    fn test_chain_ids_for_present_but_empty_bridge_is_empty() {
+        let indexed = IndexedChains::from_bridges([(1, vec![]), (2, vec![100])]);
+        assert_eq!(indexed.chain_ids_for(1), Vec::<i64>::new());
+    }
+
+    #[test]
+    fn test_chain_ids_for_multi_chain_bridge_is_sorted() {
+        let indexed = IndexedChains::from_pairs([(1, 300), (1, 100), (1, 200), (1, 100)]);
+        assert_eq!(indexed.chain_ids_for(1), vec![100, 200, 300]);
     }
 
     // --- configured_union ---
