@@ -36,8 +36,16 @@ The TAC Operation Lifecycle Indexer follows a process describing below:
 4. Operation Processing:
 * For each operation, the indexer fetches detailed stage information
 * Operation stages track the lifecycle of the operation across different blockchains
-* Once stages are fetched, the operation is marked as `finalized`
+* Stage Profiler v2 is preferred and stores route, operation outcome (`op_status`), finality, and rollback independently
+* Upstream `finalized=true` is the normal polling-terminal signal; the technical database `status` remains indexer bookkeeping
+* Non-final operations older than one week stop local polling without changing their canonical `finalized=false` value
+* Legacy v1 profiling remains available as an adaptive fallback, and a persistent worker upgrades v1-source rows after v2 recovers
 * If fetching fails, the operation is scheduled for retry
+
+Read API v2 is served under `/api/v2/tac/...` and exposes the independent lifecycle
+fields. Read API v1 remains a compatibility projection. Both API versions are described
+by the same Swagger document, served at `/api/v1/docs/swagger.yaml` and
+`/api/v2/docs/swagger.yaml`.
 
 
 ```
@@ -115,6 +123,8 @@ Parameters can be configured either using a `toml` file or environment variables
 | `TAC_OPERATION_LIFECYCLE__RPC__REQUEST_PER_SECOND` | | The rate limit for requests per second. | `100` |
 | `TAC_OPERATION_LIFECYCLE__RPC__NUM_OF_RETRIES` | | The number of retries for each request. A request is considered failed after this number of retries. | `10` |
 | `TAC_OPERATION_LIFECYCLE__RPC__RETRY_DELAY_MS` | | The delay in milliseconds between retries. | `1000` |
+| `TAC_OPERATION_LIFECYCLE__RPC__STAGE_PROFILING_MODE` | | Stage Profiler selection: `prefer_v2`, `v2_only`, or `v1_only`. `prefer_v2` falls back only for v2 availability/compatibility errors. | `prefer_v2` |
+| `TAC_OPERATION_LIFECYCLE__RPC__STAGE_PROFILING_V2_PROBE_INTERVAL` | | Seconds between v2 recovery probes while `prefer_v2` uses v1 fallback. | `60` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CREATE_DATABASE` | | Whether to create the database if it does not exist. | `false` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__RUN_MIGRATIONS` | | Whether to run database migrations on startup. | `false` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT__URL` | | The database connection URL (e.g., `postgres://postgres:postgres@database:5432/blockscout`). | None |

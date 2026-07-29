@@ -9,6 +9,10 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
     pub op_type: Option<String>,
+    pub profiling_version: i16,
+    pub op_status: Option<String>,
+    pub finalized: Option<bool>,
+    pub rollback: Option<bool>,
     pub timestamp: DateTime,
     pub next_retry: Option<DateTime>,
     pub status: StatusEnum,

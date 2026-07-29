@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package blockscout.tacOperationLifecycle.v2;
+
+option go_package = "github.com/blockscout/blockscout-rs/tac-operation-lifecycle";
+
+service TacServiceV2 {
+  rpc GetOperations(V2GetOperationsRequest) returns (V2OperationsResponse) {}
+  rpc GetOperationDetails(V2GetOperationDetailsRequest) returns (V2OperationDetails) {}
+  rpc GetOperationsByTransaction(V2GetOperationByTxHashRequest) returns (V2OperationsFullResponse) {}
+}
+
+message V2Pagination {
+  uint64 page_token = 1;
+  uint32 page_items = 2;
+}
+
+message V2GetOperationsRequest {
+  optional string q = 1;
+  optional uint64 page_token = 2;
+  optional uint64 page_items = 3;
+}
+
+message V2GetOperationDetailsRequest {
+  string operation_id = 1;
+}
+
+message V2GetOperationByTxHashRequest {
+  string tx_hash = 1;
+}
+
+enum V2OperationRoute {
+  UNKNOWN_ROUTE = 0;
+  TON_TAC_TON = 1;
+  TAC_TON = 2;
+  TON_TAC = 3;
+  UNRECOGNIZED_ROUTE = 4;
+}
+
+enum V2OperationStatus {
+  SUCCESS = 0;
+  FAILED = 1;
+}
+
+message V2OperationsResponse {
+  repeated V2OperationBriefDetails items = 1;
+  optional V2Pagination next_page_params = 2;
+}
+
+message V2OperationBriefDetails {
+  string operation_id = 1;
+  oneof optional_route {
+    V2OperationRoute route = 2;
+  }
+  oneof optional_op_status {
+    V2OperationStatus op_status = 3;
+  }
+  optional bool finalized = 4;
+  optional bool rollback = 5;
+  string timestamp = 6;
+  optional V2BlockchainAddress sender = 7;
+}
+
+message V2OperationDetails {
+  string operation_id = 1;
+  oneof optional_route {
+    V2OperationRoute route = 2;
+  }
+  oneof optional_op_status {
+    V2OperationStatus op_status = 3;
+  }
+  optional bool finalized = 4;
+  optional bool rollback = 5;
+  string timestamp = 6;
+  optional V2BlockchainAddress sender = 7;
+  repeated V2OperationStage status_history = 8;
+}
+
+enum V2BlockchainType {
+  TAC = 0;
+  TON = 1;
+  UNKNOWN_BLOCKCHAIN = 2;
+}
+
+message V2BlockchainAddress {
+  string address = 1;
+  V2BlockchainType blockchain = 2;
+}
+
+message V2OperationRelatedTransaction {
+  string hash = 1;
+  V2BlockchainType type = 2;
+}
+
+message V2OperationStage {
+  enum V2StageType {
+    COLLECTED_IN_TAC = 0;
+    INCLUDED_IN_TAC_CONSENSUS = 1;
+    EXECUTED_IN_TAC = 2;
+    COLLECTED_IN_TON = 3;
+    INCLUDED_IN_TON_CONSENSUS = 4;
+    EXECUTED_IN_TON = 5;
+  }
+  V2StageType type = 1;
+  bool is_exist = 2;
+  optional bool is_success = 3;
+  optional string timestamp = 4;
+  repeated V2OperationRelatedTransaction transactions = 5;
+  optional string note = 6;
+}
+
+message V2OperationsFullResponse {
+  repeated V2OperationDetails items = 1;
+}

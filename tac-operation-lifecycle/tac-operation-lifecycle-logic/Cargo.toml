@@ -37,3 +37,4 @@ blockscout-service-launcher = { workspace = true, features = [
 ] }
 pretty_assertions = { workspace = true }
 tac-operation-lifecycle-migration = { path = "../tac-operation-lifecycle-migration" }
+wiremock = { workspace = true }

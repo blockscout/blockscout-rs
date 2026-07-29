@@ -2,9 +2,15 @@
 
 use crate::{
     proto::{
-        health_actix::route_health, health_server::HealthServer,
-        tac_service_actix::route_tac_service, tac_service_server::TacServiceServer,
-        tac_statistic_actix::route_tac_statistic, tac_statistic_server::TacStatisticServer,
+        v1::{
+            health_actix::route_health, health_server::HealthServer,
+            tac_service_actix::route_tac_service as route_tac_service_v1,
+            tac_service_server::TacServiceServer as TacServiceServerV1,
+            tac_statistic_actix::route_tac_statistic, tac_statistic_server::TacStatisticServer,
+        },
+        v2::{
+            tac_service_v2_actix::route_tac_service_v2, tac_service_v2_server::TacServiceV2Server,
+        },
     },
     services::{HealthService, OperationsService, StatisticService},
     settings::Settings,
@@ -34,20 +40,29 @@ impl Router {
         tonic::transport::Server::builder()
             .add_service(HealthServer::from_arc(self.health.clone()))
             .add_service(TacStatisticServer::from_arc(self.stat.clone()))
-            .add_service(TacServiceServer::from_arc(self.operations.clone()))
+            .add_service(TacServiceServerV1::from_arc(self.operations.clone()))
+            .add_service(TacServiceV2Server::from_arc(self.operations.clone()))
     }
 }
 
 impl launcher::HttpRouter for Router {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config.configure(|config| route_health(config, self.health.clone()));
-        service_config.configure(|config| route_tac_service(config, self.operations.clone()));
+        service_config.configure(|config| route_tac_service_v1(config, self.operations.clone()));
+        service_config.configure(|config| route_tac_service_v2(config, self.operations.clone()));
         service_config.configure(|config| route_tac_statistic(config, self.stat.clone()));
         service_config.configure(|config| {
             route_swagger(
                 config,
                 self.swagger_path.clone(),
                 "/api/v1/docs/swagger.yaml",
+            )
+        });
+        service_config.configure(|config| {
+            route_swagger(
+                config,
+                self.swagger_path.clone(),
+                "/api/v2/docs/swagger.yaml",
             )
         });
     }

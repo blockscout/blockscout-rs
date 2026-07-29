@@ -339,14 +339,17 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Set up the mock for /stage-profiling endpoint
-        Mock::given(method("GET"))
-            .and(path("/stage-profiling"))
+        // Set up the mock for the preferred Stage Profiler v2 endpoint
+        Mock::given(method("POST"))
+            .and(path("/v2/stage-profiling"))
             .respond_with(ResponseTemplate::new(200)
                 .set_body_json(json!({
                     "response": {
                         "0x33e2ee58e3e8d48f064915a062adb02dcc062c0533fb429c7f703ba3e1fe33fb": {
                             "operationType": "TON-TAC-TON",
+                            "status": "success",
+                            "finalized": true,
+                            "rollback": false,
                             "collectedInTAC": {
                                 "exists": true,
                                 "stageData": {

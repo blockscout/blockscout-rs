@@ -9,5 +9,11 @@ pub mod blockscout {
                 "/blockscout.tac_operation_lifecycle.v1.rs"
             ));
         }
+        pub mod v2 {
+            include!(concat!(
+                env!("OUT_DIR"),
+                "/blockscout.tac_operation_lifecycle.v2.rs"
+            ));
+        }
     }
 }
