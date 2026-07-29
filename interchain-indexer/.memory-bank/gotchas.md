@@ -491,6 +491,172 @@ with a NULL endpoint is not a backfill backlog.
 
 ---
 
+## `pending_messages` Retention for Unconfigured Counterparts Is Load-Bearing, Not a Leak
+
+**Symptom:** `pending_messages` grows and plateaus rather than draining to
+zero, even long after catch-up finishes — most visibly for a bridge running
+with `process_unknown_chains: true` against subnets it does not configure. A
+live run on Avalanche bridge 2 (C-Chain + Numine configured,
+`process_unknown_chains: true`) showed roughly 20k cold-tier rows with the
+oldest row's timestamp not moving between snapshots — see
+`tmp/tasks/runtime-verification-run-2026-07-29.md`.
+
+**Root cause:** Removal from `pending_messages` is gated on **protocol
+finality**, not on "has this key been flushed." A message flushed as
+`Partial` keeps its buffered cold-tier row — permanently, if its counterpart
+chain is unconfigured for the bridge. This is deliberate, not an oversight:
+
+- consolidation reads only the buffered state for a key; it has no path to
+  rehydrate a canonical row back into the buffer
+- `Consolidate for Message`'s `consolidate()` refuses to proceed for a
+  *configured* source chain with no `send` event yet
+  (`(None, false) => Ok(None)` in `consolidation.rs`) — it will not fabricate
+  a message from a destination-only view when the source chain could still
+  produce one
+- the retained cold-tier row is exactly what makes adding a chain to a
+  bridge later **safe without rescanning the already-indexed chain**, whose
+  checkpoint has already moved past the relevant blocks — the buffered row is
+  the only place the destination-side information still lives
+
+The asymmetry worth remembering: `SourceData::from_send` only consumes seven
+fields off the `send` event, and the canonical row already stores every one
+of them. So the retained buffer entry is not needed because information is
+missing — it is needed because nothing ever arrives to **trigger**
+re-consolidation for that key once its source chain is genuinely never
+going to produce a `send`.
+
+**Fix:** Do not treat a non-draining `pending_messages` count as a leak by
+itself. Distinguish "still catching up" from "permanently retained": query the
+oldest `updated_at`/`created_at` per `(bridge_id, chain_id)` twice, separated
+by time, once catch-up has converged — if it has not moved and the message
+count matches "one-sided messages whose counterpart chain is unconfigured,"
+that is expected. If a chain is later added to a bridge's contracts, do not
+attempt to clear or rescan these rows preemptively; the buffered entries pick
+up the new configuration correctly once new events restore them into the hot
+tier.
+
+---
+
+## `bridge_contracts` Is Only A Diagnostic Proxy For Runtime Membership
+
+**Symptom:** A chain that is clearly indexed (or clearly not) for a bridge
+disagrees with what `bridge_contracts` shows for that `(bridge_id, chain_id)`
+pair.
+
+**Root cause:** `bridge_contracts` is populated by `upsert_bridge_contracts`
+at startup, which is intentionally sequenced **after** the stats backfill
+pass (see `gotchas.md` / `stats-projection.md` on why `IndexedChains` must
+come from in-memory config, never this table). Two effects follow:
+
+- **under-populated during startup backfill:** the table has no rows for the
+  current run yet exactly when backfill needs an accurate indexed-chain set
+- **permanently over-populated after a chain is removed from a bridge:** no
+  code path deletes a `bridge_contracts` row when `bridges.json` drops a
+  contract, so the table keeps reporting a chain as configured long after it
+  stopped being indexed
+
+**Fix:** Treat `bridge_contracts` as useful for diagnostics and joins, never
+as the authoritative "is this chain indexed for this bridge" answer. The
+authoritative answer is always `IndexedChains::may_observe`, built once at
+startup from the in-memory bridges config
+(`interchain-indexer-logic/src/stats/indexed_chains.rs`,
+`interchain-indexer-server/src/server.rs`). If a diagnostic query needs the
+concrete configured set, prefer `IndexedChains::chain_ids_for(bridge_id)` /
+`configured_pairs(...)` semantics as the reference, not a raw
+`bridge_contracts` scan.
+
+---
+
+## `just test` / `just test-with-db` Silently Target The Dev Database
+
+**Symptom:** Running `just test` (or `just test-with-db`) appears to pass or
+fail against unexpected data, or interferes with a locally running dev
+Postgres instance rather than an isolated test database.
+
+**Root cause:** `justfile` computes `DATABASE_URL` from `DB_HOST`/`DB_PORT`
+(defaulting to `localhost:5432`, the dev database's usual address) and
+`export`s it, which **overrides** any `DATABASE_URL` already set in the
+calling shell's environment. `just test-with-db` does start a separate
+Postgres on `TEST_DB_PORT` (default `9433`) and reassigns `db-port`/`db-name`
+for its own recipe invocation — but any direct `just test` call, or a
+shell that already exported a different `DATABASE_URL` expecting it to be
+honored, silently loses that value.
+
+**Fix:** For a self-contained run, prefer `just test-with-db`, which manages
+its own disposable Postgres end to end. For a targeted single-test run against
+a specific database, invoke `cargo test` directly with an explicit
+`DATABASE_URL=...` rather than going through `just test`, since the recipe
+recomputes and exports the variable regardless of what the shell already set.
+`just test-with-db` also runs its underlying `cargo test` as one invocation
+across the workspace; a failure aborts that run rather than continuing to
+exercise unrelated crates, so a single failing test elsewhere in the workspace
+can stop you from seeing results for the crate you actually care about — scope
+with `cargo test -p <crate>` when you only need one crate's tests.
+
+---
+
+## Two Pre-Existing `avalanche-e2e` Failures Are Environmental, Not Regressions
+
+**Symptom:** Running the full `avalanche-e2e` suite
+(`cargo test --package interchain-indexer-server --features avalanche-e2e --
+--ignored --nocapture`) reproducibly fails exactly two tests out of nine,
+independent of which commit is checked out.
+
+**Root cause:** Both reproduce identically on `main` and are unrelated to any
+in-flight change:
+
+- `test_home_chain_does_not_override_strict_unknown_filter` polls for a
+  `chains`/blockchain-ID-mapping row that `blockchain_id_resolver.rs` will
+  never persist for its scenario: the resolver only writes a mapping when
+  `process_unknown_chains` is set or the chain already exists, and this test
+  deliberately configures neither. A test/contract mismatch predating any
+  recent branch by several releases, not a network problem (the live
+  Avalanche Data API was independently confirmed reachable and correct).
+- `test_icm_and_ictt_are_indexed` races a checkpoint write in `log_stream.rs`:
+  the realtime cursor is persisted when the catch-up loop exits, and this
+  test forks both chains exactly at the event block, so there is no catch-up
+  range at all — the checkpoint reports "done" before the realtime fetch of
+  that very block has actually been handled. The test's readiness check is
+  checkpoint equality, so it queries too early and fails as either
+  `message not found` or `status Initiated` depending on scheduling. It is the
+  only test in the suite with both sides forked at the event block *and* a
+  checkpoint-based wait, which is why the other e2e tests are unaffected.
+
+**Fix:** Do not chase these as regressions when validating a change against
+`avalanche-e2e` — confirm they were already failing on `main` first. Fixing
+either is a pre-existing-bug task, not part of feature work that happens to
+touch nearby code: the resolver mismatch is fixable from either the resolver
+or the test's scenario; the checkpoint race needs the catch-up-exit write in
+`log_stream.rs` to not precede the realtime fetch it claims to cover, or the
+test's readiness check to wait on something other than checkpoint equality.
+
+---
+
+## Token Identity In `stats_asset_tokens` Is The ICTT Contract Address, Not The Wrapped ERC-20
+
+**Symptom:** Two chain-local token rows for the same `stats_asset` show the
+identical token address, and it looks like the split-asset detector should
+have flagged it but did not.
+
+**Root cause:** This is intentional modelling, not a defect. Avalanche ICTT
+transfers key chain-local token identity by the TokenTransferrer contract
+address (the Home/Remote bridge contract), not by the wrapped ERC-20 the
+contract wraps. When Home and Remote happen to be deployed at the same
+address via CREATE2, the two chain-local rows for that asset legitimately
+carry the same address — this is one asset observed on two chains, not two
+assets that collided. The owner confirmed this modelling is intended
+(observed on Avalanche NUMI/WTTC in a live run; see
+`tmp/tasks/runtime-verification-run-2026-07-29.md`, "Not re-reported").
+
+**Fix:** Do not "fix" a same-address pair across two chains in
+`stats_asset_tokens` as if it were a bug — the split detector (`stats_asset_id`
+per endpoint disagreeing) correctly does not flag it, because it is not a
+split. If a genuine split is suspected, verify via the split detector
+described in `gotchas.md`, "Stats Asset Mapping Conflicts Merge; Only
+Same-Chain Collisions Skip," rather than by eyeballing address equality.
+
+---
+
 ## Upgrading Unknown Chains to Proper Bridges
 
 **Symptom:** You have partial messages (unknown source chain) and want to properly index that chain pair.

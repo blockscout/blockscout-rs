@@ -218,18 +218,25 @@ Classification outcomes:
    JSON into `pending_messages` (upsert)
 2. `flush_to_final_storage(tx, consolidated_entries)` — upsert into
    `crosschain_messages` and `crosschain_transfers`
-3. `stats.apply_stats_for_finalized_batch(tx, finalized)` — inline stats
-   projection for the finalized subset
+3. `stats.apply_stats_for_flushed_batch(tx, flushed)` — inline stats
+   projection for **every flushed entry, final and `Partial`** (renamed from
+   `apply_stats_for_finalized_batch` and widened past finalized-only; see
+   `.memory-bank/research/stats-projection.md` and
+   `.memory-bank/research/stats-subsystem.md` for why: token/asset identity
+   maintenance must see every flushed canonical key, while counting itself
+   stays gated on eligibility inside the projection functions)
 4. `remove_finalized_from_pending(tx, finalized_keys)` — delete finalized
-   entries from `pending_messages`
+   entries from `pending_messages` (still keyed on `is_final`, unaffected by
+   the widened stats trigger)
 5. `fetch_cursors` + `calculate_updates` + `upsert_cursors` — derive and
    persist new checkpoint positions
 
 **Post-commit phase** (outside the transaction):
 
-6. `kickoff_token_enrichment_for_finalized(finalized)` — extract distinct
-   `(chain_id, token_address)` pairs from finalized transfers and trigger async
-   token metadata fetch
+6. `kickoff_token_enrichment_for_flushed(flushed)` — extract distinct
+   `(chain_id, token_address)` pairs from every flushed transfer (final and
+   `Partial`, renamed from `kickoff_token_enrichment_for_finalized`) and
+   trigger async token metadata fetch
 7. `mark_flushed_versions(keys_to_mark_flushed)` — update
    `last_flushed_version` for partial entries so they won't be re-flushed until
    mutated again
@@ -456,6 +463,13 @@ pattern, not a generic contract, but may be reused by future indexers.
 - The maintenance transaction is atomic: all five steps commit or roll back
   together
 - Stats projection runs inside the maintenance transaction, not after
+- Stats projection and token enrichment are triggered for **every flushed
+  entry each cycle, final and `Partial` alike** — not only finalized ones.
+  `is_final` still gates pending-tier cleanup, hot-tier eviction, and
+  finalized-batch metrics; it does not gate whether an entry reaches these two
+  hooks. Whether a flushed row is actually *counted* by stats is a separate
+  eligibility decision made inside the projection functions themselves — see
+  `.memory-bank/research/stats-projection.md`
 - Token enrichment runs outside the transaction (post-commit)
 - Cursors can only advance monotonically in their scanning direction
 - Hot-tier eviction uses CAS: concurrent mutations between planning and

@@ -93,6 +93,7 @@ Settings                              (deny_unknown_fields)
 BridgeConfig          (deny_unknown_fields)
   ├─ bridge_id, name, bridge_type, indexer_type, enabled
   ├─ process_unknown_chains, home_chain_id
+  ├─ reconstruct_incoming_ictt_transfers (default true; Avalanche-only switch)
   └─ contracts: Vec<BridgeContractConfig>     (deny_unknown_fields)
        └─ abi: dual-form deserializer (JSON string or inline JSON)
 
@@ -184,8 +185,18 @@ Config is converted to SeaORM `ActiveModel`s and upserted:
   version)` updates ABI and `started_at_block`
 
 Fields not persisted (runtime-only):
-- Bridge: `indexer_type`, `process_unknown_chains`, `home_chain_id`
+- Bridge: `indexer_type`, `process_unknown_chains`, `home_chain_id`,
+  `reconstruct_incoming_ictt_transfers`
 - Chain: `rpcs`, `pool_config`
+
+Separately, the stats layer's per-bridge `IndexedChains` (which chains a
+bridge indexes) is *also* never derived from the persisted `bridges`/
+`bridge_contracts` rows — it is built once at startup straight from this same
+in-memory `BridgeConfig` list, for the same reason: `bridge_contracts` has no
+rows yet (or stale ones) exactly when startup stats backfill needs an
+accurate set. See `.memory-bank/research/stats-subsystem.md` and
+`.memory-bank/gotchas.md`, "`bridge_contracts` Is Only A Diagnostic Proxy For
+Runtime Membership."
 
 ### 7. Indexer Construction and Late Validation
 

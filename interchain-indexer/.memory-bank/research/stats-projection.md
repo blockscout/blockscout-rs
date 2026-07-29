@@ -6,8 +6,13 @@ This note covers how finalized `crosschain_messages` are projected into
 `stats_messages` and related aggregate tables, how the incremental
 `stats_processed` marker works, and where the startup backfill path fits.
 
-For the broader stats API surface, datasource split, and refresh models across
-the whole embedded stats subsystem, see `stats-subsystem.md`.
+Since the observability-horizon work (ADR-004), message eligibility is no
+longer decided by protocol status alone — it also depends on which chains a
+bridge indexes. This note covers that mechanism as it applies to messages;
+`stats-subsystem.md` covers the parallel transfer/asset-identity story and the
+full API surface. See
+`.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md` for
+the design rationale — this note does not restate it.
 
 ## Short Answer
 
@@ -17,27 +22,51 @@ buffer maintenance first persist canonical rows into `crosschain_messages` and
 groups them into aggregate deltas, upserts those deltas into stats tables, and
 increments `stats_processed` so the same canonical rows are not counted twice.
 
+Eligibility is **not** "protocol status `Completed`" alone. A message also
+counts once its destination chain is no longer indexed by its bridge — because
+then the missing confirmation can never arrive, and deferring would discard
+the row forever. This is decided by `IndexedChains::may_observe`, the single
+per-bridge "can this evidence still arrive?" predicate (`stats/indexed_chains.rs`).
+
 ## Why This Matters
 
 Projection is the bridge between canonical interchain storage and the
 precomputed directional message stats used by higher-level APIs. If its
 eligibility rules, processed markers, or transaction boundaries are wrong, the
-system can silently miss counts or double count historical rows.
+system can silently miss counts or double count historical rows. Since
+ADR-004, eligibility also depends on live bridge configuration, so the same
+canonical row can flip from "deferred" to "countable" without any migration —
+getting that wrong either strands data or double-counts it.
 
 ## Source-of-Truth Files
 
 - `interchain-indexer-logic/src/stats/projection.rs`
+- `interchain-indexer-logic/src/stats/indexed_chains.rs` — `IndexedChains`,
+  `message_countable_condition()`, `transfer_identity_ready_condition()`,
+  `chain_unindexed_condition()`
+- `interchain-indexer-logic/src/stats/metrics.rs`
 - `interchain-indexer-logic/src/stats/service.rs`
 - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
-- `interchain-indexer-logic/src/message_buffer/persistence.rs`
 - `interchain-indexer-logic/src/indexer/avalanche/consolidation.rs`
-- `interchain-indexer-server/src/server.rs`
+- `interchain-indexer-server/src/server.rs` — builds `IndexedChains` and wires
+  it into `StatsService`
 - `interchain-indexer-migration/src/migrations_up/m20260312_175120_add_stats_tables_up.sql`
 
 ## Key Types / Tables / Contracts
 
-- `StatsService`
-- `project_messages_batch(...)`
+- `StatsService` — holds an `IndexedChains` alongside the DB handle
+- `StatsService::apply_stats_for_flushed_batch(...)` — the live hook (renamed
+  from `apply_stats_for_finalized_batch`); see step 2 below
+- `project_messages_batch(tx, keys, indexed: &IndexedChains)`
+- `project_transfers_batch(tx, transfer_ids, indexed: &IndexedChains)`
+- `IndexedChains` — `AllIndexed` (permissive, no config) or
+  `PerBridge(HashMap<bridge_id, HashSet<chain_id>>)`
+- `finalized_message_stats_condition()` — unchanged: `status = Completed` (any
+  bridge) **or** `status = Failed` on an AMB bridge. This is now only the
+  *finality* half of eligibility, not the whole gate.
+- `message_countable_condition(indexed)` — the actual eligibility gate:
+  `finalized_message_stats_condition() OR chain_unindexed_condition(dst
+  unindexed for this bridge)`
 - `crosschain_messages`
 - `stats_messages`
 - `stats_messages_days`
@@ -61,11 +90,23 @@ Primary code paths:
 - canonical persistence helpers:
   `interchain-indexer-logic/src/message_buffer/persistence.rs`
 
-### 2. Stats projection runs from canonical rows
+### 2. Every flushed entry reaches the stats hook — not only final ones
 
-`stats_messages` is not written directly by protocol indexers. Instead, stats
-projection reads canonical `crosschain_messages` rows and projects eligible
-rows into aggregate tables.
+`commit_maintenance` passes **all** flushed entries for the cycle — final and
+`Partial` alike — to `StatsService::apply_stats_for_flushed_batch(...)`, with
+no `is_final` filter. This is deliberate: asset/token identity maintenance
+(see `stats-subsystem.md`) must run for every flushed canonical key, including
+a `Partial` entry that only just filled in a previously-missing token address,
+or a later relink would be silently missed. `is_final` still governs whether
+the entry is evicted from the hot buffer, removed from `pending_messages`, and
+counted in finalized-batch metrics — none of that is stats-projection's
+concern.
+
+Actual **counting** is still gated inside the projection functions themselves,
+not by the hook: `project_messages_batch` only increments `stats_processed`
+for rows matching `stats_processed = 0 AND message_countable_condition(indexed)`.
+
+### 3. Stats projection runs from canonical rows, gated by observability
 
 `stats_messages` is a bridge-qualified directional aggregate keyed by:
 
@@ -73,10 +114,13 @@ rows into aggregate tables.
 - `src_chain_id`
 - `dst_chain_id`
 
-Each row stores a count of finalized messages for that `(bridge, src, dst)`
-edge. The same directional chain edge on two different bridges is two distinct
-rows; read queries that do not filter by bridge `SUM` over the bridge dimension
-to reproduce the bridge-collapsed totals.
+Each row stores a count of finalized-or-uncomfirmable messages for that
+`(bridge, src, dst)` edge — "finalized-or-unconfirmable" because a message
+also counts once its destination chain is no longer indexed for that bridge,
+even while `status = Initiated`. The same directional chain edge on two
+different bridges is two distinct rows; read queries that do not filter by
+bridge `SUM` over the bridge dimension to reproduce the bridge-collapsed
+totals.
 
 Related tables (all three additive aggregates are bridge-qualified since
 `m20260720_120000_add_read_filters_and_bridge_stats`):
@@ -91,26 +135,34 @@ The schema is introduced in:
 
 - `interchain-indexer-migration/src/migrations_up/m20260312_175120_add_stats_tables_up.sql`
 
-### 3. Each projection batch reloads and filters canonical messages
+### 4. Each projection batch reloads and filters canonical messages
 
-In the same maintenance transaction, stats projection runs for the flushed
-batch. `project_messages_batch(...)` reloads the canonical message rows for the
-flushed primary keys and filters to rows that are:
+In the same maintenance transaction, `project_messages_batch(...)` reloads the
+canonical message rows for the flushed primary keys and filters to rows that
+are:
 
 - `stats_processed = 0`
-- eligible per the shared finality predicate: `status = completed` (any bridge)
-  **or** `status = failed` on an AMB bridge — `finalized_message_stats_condition()`
-  in `stats/projection.rs`, exposed `pub(crate)` and reused by the startup
-  backfill candidate queries in `database.rs` so live and backfill can never
-  diverge
-- `dst_chain_id IS NOT NULL`
+- eligible per `message_countable_condition(indexed)` — either
+  `finalized_message_stats_condition()` (`status = completed` on any bridge,
+  or `status = failed` on an AMB bridge), **or** the destination chain is not
+  indexed by this bridge (`chain_unindexed_condition`, built from
+  `IndexedChains::may_observe`)
+- `dst_chain_id IS NOT NULL` (a NULL destination can never satisfy either
+  branch — there is no chain to test unindexed-ness against, so it always
+  defers)
+
+`transfer_identity_ready_condition(indexed)` is the transfer-side analogue,
+used by `project_transfers_batch`; see `stats-subsystem.md` for the fuller
+transfer/asset story.
 
 Primary code paths:
 
 - projection implementation:
   `interchain-indexer-logic/src/stats/projection.rs`
+- eligibility predicates:
+  `interchain-indexer-logic/src/stats/indexed_chains.rs`
 
-### 4. Projection groups eligible rows into aggregate deltas
+### 5. Projection groups eligible rows into aggregate deltas
 
 Eligible rows are grouped by bridge-qualified directional edge —
 `(bridge_id, src_chain_id, dst_chain_id)` and, for the daily table,
@@ -118,15 +170,34 @@ Eligible rows are grouped by bridge-qualified directional edge —
 then upserts those deltas into `stats_messages` and `stats_messages_days`, and
 increments `crosschain_messages.stats_processed` for the counted rows.
 
-### 5. Startup backfill reuses the same projection rules
+### 6. Startup backfill reuses the same eligibility rules, in two sequential phases
 
 There is also a startup backfill path for historical rows:
 
 - when `stats.backfill_on_start = true` (env:
   `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START=true`), server startup triggers
   a stats backfill pass
-- the backfill scans canonical rows with `stats_processed = 0`
-- it applies the same projection logic in batches until no eligible rows remain
+- `backfill_stats_until_idle_with_token_enrichment()` (`database.rs`) drives
+  **two sequential phases**, each with its own **monotonic id cursor**: a
+  message-candidate phase (`message_min_id`) run to idle first, then a
+  transfer-candidate phase (`transfer_min_id`). This ordering is required, not
+  cosmetic — the transfer candidate query requires the parent message's
+  `stats_processed > 0`, so interleaving the two cursors could permanently
+  skip a low-id transfer whose parent message has a high id.
+- each round (`backfill_stats_projection_round`) filters candidates through
+  the **same** `message_countable_condition(indexed)` /
+  `transfer_identity_ready_condition(indexed)` used by live projection, so live
+  and backfill can never diverge on what counts as eligible
+- each phase's loop breaks on **candidates scanned == 0**, not on rows
+  actually processed/counted == 0. This is deliberate: because the candidate
+  queries and the projection functions share the same condition builders,
+  `processed == 0 ⟺ scanned == 0` by construction; breaking on `scanned == 0`
+  stays safe even if that invariant ever drifts (a stale hand-copied predicate
+  would otherwise leave a silent backlog), and the monotonic `min_id` cursor
+  bounds the loop by the id space regardless of which counter gates the break.
+  The reasoning is recorded in
+  `tmp/tasks/prevent-split-stats-assets/coding-task-4a.md`'s "Post-Landing
+  Note".
 
 Primary code paths:
 
@@ -134,14 +205,20 @@ Primary code paths:
   `interchain-indexer-server/src/server.rs`
 - service orchestration:
   `interchain-indexer-logic/src/stats/service.rs`
+- backfill round + drive loop: `interchain-indexer-logic/src/database.rs`
+  (`backfill_stats_projection_round`, `backfill_stats_until_idle_with_token_enrichment`)
 
 Ordering note:
 
 - startup backfill is intentionally executed before `upsert_chains`,
-  `upsert_bridges`, and `upsert_bridge_contracts` so historical rows are
-  projected against the same reference data they were indexed with.
+  `upsert_bridges`, and `upsert_bridge_contracts` — this is now load-bearing
+  for `IndexedChains` too, not just for reference-data freshness:
+  `IndexedChains` is built once from the in-memory `bridges.json` config
+  (`IndexedChains::from_bridges` in `server.rs`), **never** from the
+  `bridge_contracts` table, precisely because that table has no rows yet
+  (or stale ones) exactly when backfill needs an accurate set.
 
-### 6. Queries read the aggregate tables, with clear limits
+### 7. Queries read the aggregate tables, with clear limits
 
 `stats_messages` is well-suited for:
 
@@ -167,10 +244,14 @@ Those require either canonical-table queries or additional stats tables.
 ## Invariants
 
 - stats are derived from canonical tables, not raw logs
-- `stats_processed` is the guard against double counting
+- `stats_processed` is the guard against double counting, and is **additive,
+  exactly once, never reset, never reversed** — it guards counting only, not
+  asset/token identity maintenance (see `stats-subsystem.md`)
 - a message row is counted only when it is in the projection batch,
-  `stats_processed = 0`, eligible (completed on any bridge, or failed on an AMB
-  bridge), and `dst_chain_id` is not null
+  `stats_processed = 0`, `dst_chain_id` is not null, and
+  `message_countable_condition(indexed)` holds — i.e. either the shared
+  finality predicate (completed on any bridge, or failed on an AMB bridge) or
+  its destination chain is not indexed by this bridge
 - the three additive aggregates are bridge-qualified; projection never merges
   identical edges from different bridges, and it sets `bridge_id` in every active
   model / `ON CONFLICT` target / exact-row update (message counts and
@@ -179,7 +260,13 @@ Those require either canonical-table queries or additional stats tables.
   matching `stats_processed` increment commit together, so a crash is safe to
   resume)
 - the startup backfill path applies the same eligibility and aggregation rules
-  as the maintenance-triggered projection path (one shared finality predicate)
+  as the maintenance-triggered projection path (`message_countable_condition`
+  is the single shared gate for both)
+- the eligibility gate depends on **live, in-memory** bridge configuration,
+  never on `bridge_contracts`; a bridge removed from config stays permissive
+  (`may_observe` defaults to `true` for an absent bridge) so its already-
+  counted history is never retroactively reinterpreted — see ADR-004
+  Decision 5 and `gotchas.md`
 - **projection-invalidating migrations** (e.g. the bridge-qualified rebuild) are
   atomic: they clear the three aggregates and reset `stats_processed` for both
   canonical tables together, then rely on `BACKFILL_ON_START=true` to rebuild
@@ -197,10 +284,17 @@ Those require either canonical-table queries or additional stats tables.
   not run after introducing stats tables on a populated database
 - because projection runs after canonical persistence, directional message
   stats are near-realtime rather than immediate on raw event ingestion
+- `STATS_INDEXED_CHAINS` (gauge, per bridge) is published once at startup from
+  `IndexedChains::record_metrics()` — a bridge showing `0` is either absent
+  from the metric entirely (never in the map) or present with zero chains (a
+  misconfigured, contract-less bridge); check startup warn logs to tell which
+- `STATS_TRANSFERS_DEFERRED_TOTAL{reason}` (events, not distinct rows) counts
+  deferral decisions on the transfer path; see `stats-subsystem.md` for the
+  full metric set
 
 Primary places to inspect:
 
-- startup logs for backfill activity
+- startup logs for backfill activity and per-bridge `STATS_INDEXED_CHAINS`
 - buffer maintenance logs, since live projection runs inside maintenance
 - `crosschain_messages.stats_processed` when checking whether rows were
   projected
@@ -214,20 +308,30 @@ Primary places to inspect:
   data
 - message counts are directional; `A -> B` and `B -> A` are different rows
 - stats are near-realtime, not immediate: messages must reach repo-specific
-  finality, then be flushed by buffer maintenance, and only then can projection
+  finality (or have their destination chain drop out of the indexed set),
+  then be flushed by buffer maintenance, and only then can projection
   increment aggregate tables
+- a transfer counted because its destination chain was unindexed stays
+  counted after that chain is later added to the bridge's config, even if the
+  movement never actually completed — an accepted inaccuracy confined to the
+  opt-in unindexed slice (see `stats-subsystem.md`'s read-filter section), not
+  a bug
 - `interchain-indexer-logic/src/database.rs` contains lower-level stats helper
-  methods, but the authoritative production semantics for message counts are in
-  `interchain-indexer-logic/src/stats/projection.rs`
+  methods (including the backfill round/drive functions), but the
+  authoritative production semantics for message counts are in
+  `interchain-indexer-logic/src/stats/projection.rs` and
+  `interchain-indexer-logic/src/stats/indexed_chains.rs`
 
 ## Change Triggers
 
 Update this note when:
 
-- message eligibility rules for projection change
+- message eligibility rules for projection change (including
+  `IndexedChains`/`message_countable_condition` semantics)
 - `stats_processed` semantics change
 - `stats_messages` or `stats_messages_days` schema changes
-- startup backfill behavior changes
+- startup backfill behavior changes, including the two-phase cursor structure
+  or the scanned-vs-processed loop-exit decision
 - directional message-path APIs stop reading these projected tables
 
 ## Open Questions
