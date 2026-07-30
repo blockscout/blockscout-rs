@@ -14,11 +14,15 @@ impl MigrationTrait for Migration {
             .execute_unprepared(
                 r#"
                 ALTER TABLE "operation"
-                    ADD COLUMN "profiling_version" SMALLINT NOT NULL DEFAULT 1,
+                    ADD COLUMN "profiling_version" SMALLINT NULL,
                     ADD COLUMN "op_status" TEXT NULL,
                     ADD COLUMN "error_reason" TEXT NULL,
                     ADD COLUMN "finalized" BOOLEAN NULL,
                     ADD COLUMN "rollback" BOOLEAN NULL;
+
+                UPDATE "operation"
+                SET "profiling_version" = 1
+                WHERE "op_type" IS NOT NULL;
 
                 CREATE INDEX "idx_operation_v2_pending"
                     ON "operation" ("timestamp" DESC)
@@ -112,7 +116,8 @@ mod tests {
                 ('rollback-op', 'ROLLBACK', NOW(), NULL, 'completed', 0, NOW(), NOW()),
                 ('unknown', 'UNKNOWN', NOW(), NULL, 'pending', 0, NOW(), NOW()),
                 ('error', 'ERROR', NOW(), NULL, 'completed', 0, NOW(), NOW()),
-                ('forever', 'PENDING', NOW(), NULL, 'completed', 0, NOW(), NOW());
+                ('forever', 'PENDING', NOW(), NULL, 'completed', 0, NOW(), NOW()),
+                ('unprofiled', NULL, NOW(), NULL, 'pending', 0, NOW(), NOW());
             "#,
         )
         .await
@@ -148,6 +153,22 @@ mod tests {
                 expected_status
             );
         }
+
+        let unprofiled = conn
+            .query_one(Statement::from_sql_and_values(
+                sea_orm_migration::sea_orm::DatabaseBackend::Postgres,
+                "SELECT profiling_version FROM operation WHERE id=$1",
+                ["unprofiled".into()],
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            unprofiled
+                .try_get::<Option<i16>>("", "profiling_version")
+                .unwrap(),
+            None
+        );
 
         conn.execute_unprepared(
             r#"

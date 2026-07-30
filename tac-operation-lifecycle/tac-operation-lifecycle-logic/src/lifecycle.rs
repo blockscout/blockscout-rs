@@ -96,14 +96,14 @@ fn error_reason_from_note(note: &str) -> Option<String> {
 }
 
 pub fn project_v1_type(
-    profiling_version: i16,
+    profiling_version: Option<i16>,
     stored_type: Option<&str>,
     op_status: Option<&str>,
     finalized: Option<bool>,
     rollback: Option<bool>,
     has_insufficient_fee: bool,
 ) -> LegacyOperationType {
-    if profiling_version != PROFILING_VERSION_V2 {
+    if profiling_version != Some(PROFILING_VERSION_V2) {
         return stored_type
             .and_then(|value| LegacyOperationType::from_str(value).ok())
             .unwrap_or(LegacyOperationType::Unknown);
@@ -162,7 +162,14 @@ mod tests {
     #[test]
     fn v2_projection_ignores_technical_status() {
         assert_eq!(
-            project_v1_type(2, Some("TON-TAC"), None, Some(false), Some(false), false),
+            project_v1_type(
+                Some(2),
+                Some("TON-TAC"),
+                None,
+                Some(false),
+                Some(false),
+                false,
+            ),
             LegacyOperationType::Pending
         );
     }
@@ -171,7 +178,7 @@ mod tests {
     fn failed_is_required_for_special_v2_projection() {
         assert_eq!(
             project_v1_type(
-                2,
+                Some(2),
                 Some("TON-TAC"),
                 Some("failed"),
                 Some(false),
@@ -182,7 +189,7 @@ mod tests {
         );
         assert_eq!(
             project_v1_type(
-                2,
+                Some(2),
                 Some("TON-TAC"),
                 Some("success"),
                 Some(false),
@@ -193,7 +200,7 @@ mod tests {
         );
         assert_eq!(
             project_v1_type(
-                2,
+                Some(2),
                 Some("TON-TAC"),
                 Some("failed"),
                 Some(true),
@@ -207,8 +214,16 @@ mod tests {
     #[test]
     fn legacy_projection_returns_stored_overloaded_type() {
         assert_eq!(
-            project_v1_type(1, Some("INSUFFICIENT-FEE"), None, None, None, false),
+            project_v1_type(Some(1), Some("INSUFFICIENT-FEE"), None, None, None, false,),
             LegacyOperationType::InsufficientFee
+        );
+    }
+
+    #[test]
+    fn unprofiled_projection_is_unknown() {
+        assert_eq!(
+            project_v1_type(None, None, None, None, None, false),
+            LegacyOperationType::Unknown
         );
     }
 
@@ -256,7 +271,7 @@ mod tests {
         for ((route, status, finalized, rollback, insufficient_fee), expected) in cases {
             assert_eq!(
                 project_v1_type(
-                    PROFILING_VERSION_V2,
+                    Some(PROFILING_VERSION_V2),
                     Some(route),
                     status,
                     finalized,

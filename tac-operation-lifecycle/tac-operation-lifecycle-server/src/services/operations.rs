@@ -163,7 +163,7 @@ impl OperationsService {
         let candidates: Vec<_> = operations
             .iter()
             .filter(|op| {
-                op.profiling_version == PROFILING_VERSION_V2
+                op.profiling_version == Some(PROFILING_VERSION_V2)
                     && op.finalized == Some(false)
                     && op.op_status.as_deref() == Some("failed")
             })
@@ -176,7 +176,7 @@ impl OperationsService {
     }
 
     fn v2_lifecycle(operation: &operation::Model) -> V2Lifecycle {
-        if operation.profiling_version != PROFILING_VERSION_V2 {
+        if operation.profiling_version != Some(PROFILING_VERSION_V2) {
             return V2Lifecycle::default();
         }
         let success = match operation.op_status.as_deref() {
@@ -423,7 +423,7 @@ mod tests {
         operation::Model {
             id: "op".to_string(),
             op_type: Some("TON-TAC".to_string()),
-            profiling_version,
+            profiling_version: Some(profiling_version),
             op_status: op_status.map(str::to_string),
             error_reason: None,
             finalized: Some(true),
@@ -442,6 +442,18 @@ mod tests {
     #[test]
     fn v2_hides_canonical_fields_for_v1_source_rows() {
         let response = OperationsService::convert_short_v2(operation(1, Some("failed")));
+        assert!(response.r#type.is_none());
+        assert!(response.success.is_none());
+        assert!(response.error_reason.is_none());
+        assert!(response.finalized.is_none());
+        assert!(response.rollback.is_none());
+    }
+
+    #[test]
+    fn v2_hides_canonical_fields_for_unprofiled_rows() {
+        let mut operation = operation(1, Some("failed"));
+        operation.profiling_version = None;
+        let response = OperationsService::convert_short_v2(operation);
         assert!(response.r#type.is_none());
         assert!(response.success.is_none());
         assert!(response.error_reason.is_none());

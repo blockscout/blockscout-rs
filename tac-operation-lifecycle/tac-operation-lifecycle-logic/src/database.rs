@@ -107,7 +107,7 @@ struct JoinedRow {
     // operation
     op_id: String,
     op_type: Option<String>,
-    profiling_version: i16,
+    profiling_version: Option<i16>,
     op_status: Option<String>,
     error_reason: Option<String>,
     finalized: Option<bool>,
@@ -422,7 +422,7 @@ impl TacDatabase {
             .map(|op| operation::ActiveModel {
                 id: Set(op.id.clone()),
                 op_type: Set(None),
-                profiling_version: Set(PROFILING_VERSION_V1),
+                profiling_version: Set(None),
                 op_status: Set(None),
                 error_reason: Set(None),
                 finalized: Set(None),
@@ -680,7 +680,7 @@ impl TacDatabase {
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![
             format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
-            "op_type IS NULL".to_string(),
+            "profiling_version IS NULL".to_string(),
         ];
 
         let sql = self.build_operation_query(
@@ -873,14 +873,14 @@ impl TacDatabase {
                 operation_model.op_type = Set(Some(
                     derive_v1_source_type(&data.operation_type, &data.stages).to_string(),
                 ));
-                operation_model.profiling_version = Set(PROFILING_VERSION_V1);
+                operation_model.profiling_version = Set(Some(PROFILING_VERSION_V1));
                 operation_model.op_status = Set(None);
                 operation_model.finalized = Set(None);
                 operation_model.rollback = Set(None);
             }
             SourceOperationData::V2(data) => {
                 operation_model.op_type = Set(Some(data.operation_type.to_string()));
-                operation_model.profiling_version = Set(PROFILING_VERSION_V2);
+                operation_model.profiling_version = Set(Some(PROFILING_VERSION_V2));
                 operation_model.op_status = Set(data.status.map(|status| status.to_string()));
                 operation_model.finalized = Set(Some(data.finalized));
                 operation_model.rollback = Set(Some(data.rollback));
@@ -1595,7 +1595,7 @@ mod tests {
                  NOW(), NULL, 'pending', 0, NOW(), NOW()),
                 ('v1-route-completed', 'TON-TAC', 1, NULL, NULL, NULL,
                  NOW(), NULL, 'completed', 0, NOW(), NOW()),
-                ('unprofiled', NULL, 1, NULL, NULL, NULL,
+                ('unprofiled', NULL, NULL, NULL, NULL, NULL,
                  NOW(), NULL, 'pending', 0, NOW(), NOW());
             "#,
         )
@@ -1603,6 +1603,16 @@ mod tests {
         .unwrap();
         let database = TacDatabase::new(db.client(), 0);
 
+        let new = database
+            .query_new_operations(10, OrderDirection::LatestFirst)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|operation| operation.id)
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(new, ["unprofiled".to_string()].into_iter().collect());
+
+        database.reset_processing_operations().await.unwrap();
         let pending = database
             .query_pending_operations(10, OrderDirection::LatestFirst)
             .await

@@ -187,7 +187,7 @@ mod tests {
         operation::Model {
             id: "operation".to_string(),
             op_type: None,
-            profiling_version: 1,
+            profiling_version: None,
             op_status: None,
             error_reason: None,
             finalized: None,

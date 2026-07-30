@@ -9,7 +9,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
     pub op_type: Option<String>,
-    pub profiling_version: i16,
+    pub profiling_version: Option<i16>,
     pub op_status: Option<String>,
     pub error_reason: Option<String>,
     pub finalized: Option<bool>,
