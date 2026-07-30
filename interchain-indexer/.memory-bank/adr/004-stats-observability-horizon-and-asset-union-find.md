@@ -117,9 +117,10 @@ catches every relink. No marker column and no migration are required.
 
 Indexers, not the stats layer, own protocol knowledge:
 
-1. if a transfer side can be derived from events on any single chain the bridge
-   indexes, fill it — do not leave it NULL merely because the counterpart chain's
-   event was not observed;
+1. if a transfer side — or a message field such as `sender_address` /
+   `payload` — can be derived from events on any single chain the bridge
+   indexes, fill it — do not leave it NULL merely because the counterpart
+   chain's event was not observed;
 2. chain-id columns are always known;
 3. `status` reflects only the protocol lifecycle — never encode "the other side is
    unobservable" into it;
@@ -248,7 +249,9 @@ exist for a generic bridge. Recorded as the long-term direction, not adopted.
 - Avalanche indexer-contract requirement 1 (incoming ICTT reconstruction),
   which this decision's eligibility rule depends on: commit `9329320c`
 - `.memory-bank/gotchas.md` — "Stats Eligibility Is About Observability, Not
-  Protocol Terminality"
+  Protocol Terminality", "Recoverable Message Fields Are Not A 'Never Mirror'
+  Case", "`recipient_address` On A Terminal `crosschain_messages` Row Can Never
+  Be Patched Later"
 - `.memory-bank/research/stats-projection.md`,
   `.memory-bank/research/stats-subsystem.md`
 - ADR-002 (write-side unknown-chain policy), ADR-003 (nullable transfer sides)

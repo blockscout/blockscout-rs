@@ -834,6 +834,101 @@ mod tests {
         );
     }
 
+    /// Fallback-only completed row: mirrors `SourceData::from_receive` /
+    /// `from_execution`'s `Failed` arm after the fix — `sender_address` and
+    /// `payload` recovered from the delivered `TeleporterMessage`, plus
+    /// `recipient_address` (which the pre-fix code already filled).
+    /// `src_tx_hash` stays NULL: no field anywhere carries a transaction hash
+    /// for a chain never observed.
+    fn fallback_completed_message() -> ConsolidatedMessage {
+        ConsolidatedMessage {
+            is_final: true,
+            replace_existing: false,
+            message: crosschain_messages::ActiveModel {
+                id: ActiveValue::Set(MESSAGE_ID),
+                bridge_id: ActiveValue::Set(BRIDGE_ID),
+                status: ActiveValue::Set(MessageStatus::Completed),
+                init_timestamp: ActiveValue::Set(ts(2_000)),
+                last_update_timestamp: ActiveValue::Set(Some(ts(2_000))),
+                src_chain_id: ActiveValue::Set(SRC_CHAIN),
+                dst_chain_id: ActiveValue::Set(Some(DST_CHAIN)),
+                native_id: ActiveValue::Set(Some(vec![0xAB])),
+                src_tx_hash: ActiveValue::Set(None),
+                dst_tx_hash: ActiveValue::Set(Some(vec![0xDD])),
+                sender_address: ActiveValue::Set(Some(vec![0x5E])),
+                recipient_address: ActiveValue::Set(Some(vec![0xEE])),
+                payload: ActiveValue::Set(Some(vec![0xFA])),
+                stats_processed: ActiveValue::Set(0),
+                created_at: ActiveValue::NotSet,
+                updated_at: ActiveValue::NotSet,
+            },
+            transfers: vec![],
+            amb_confirmations: vec![],
+            amb_anomalies: vec![],
+        }
+    }
+
+    /// The `send`-derived row for the same key, arriving later once chain `X`
+    /// becomes configured for the bridge and the real `send` event is indexed.
+    /// `sender_address` / `recipient_address` / `payload` are byte-identical to
+    /// the fallback values above — same underlying `TeleporterMessage`,
+    /// observed twice. `src_tx_hash` is the one field the fallback path could
+    /// never fill, now known.
+    fn send_derived_message_after_fallback() -> ConsolidatedMessage {
+        let mut entry = fallback_completed_message();
+        entry.message.src_tx_hash = ActiveValue::Set(Some(vec![0x11]));
+        entry
+    }
+
+    /// DB-backed round trip for the fallback-fields fix: a fallback-only
+    /// message (`sender_address`/`payload` recovered per-commit, `src_tx_hash`
+    /// NULL) is flushed to terminal status, then a `send`-driven flush for the
+    /// same `(id, bridge_id)` arrives once chain `X` is configured. The merge
+    /// must be a same-value no-op for `sender_address`/`payload` — proving the
+    /// "harmless once the real send arrives" claim instead of assuming it —
+    /// while `src_tx_hash` is newly enriched.
+    ///
+    /// `recipient_address` is the odd one out: `crosschain_messages_on_conflict`
+    /// uses `keep_existing_if_terminal` for it (unlike the `COALESCE`
+    /// `prefer_incoming` policy for `sender_address`/`payload`/`src_tx_hash`),
+    /// so once `status` is terminal it is locked to the stored value forever —
+    /// even a *different* incoming value would be silently discarded here, not
+    /// just this identical one. A recipient left NULL on first write can never
+    /// be patched by a later flush.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_send_derived_merge_is_no_op_for_already_recovered_fallback_fields() {
+        let test_db = init_db("flush_fallback_then_send_derived_message_fields").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, fallback_completed_message()).await;
+        flush(&db, send_derived_message_after_fallback()).await;
+
+        let row = load(&db).await;
+        assert_eq!(row.status, MessageStatus::Completed);
+        assert_eq!(
+            row.sender_address,
+            Some(vec![0x5E]),
+            "already-correct sender_address must be unchanged by the later merge"
+        );
+        assert_eq!(
+            row.payload,
+            Some(vec![0xFA]),
+            "already-correct payload must be unchanged by the later merge"
+        );
+        assert_eq!(
+            row.src_tx_hash,
+            Some(vec![0x11]),
+            "src_tx_hash is newly known now that chain X is configured"
+        );
+        assert_eq!(
+            row.recipient_address,
+            Some(vec![0xEE]),
+            "recipient_address stays locked to the fallback value once terminal"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "needs database"]
     async fn test_collision_replacement_deletes_stale_source_message_and_transfer() {

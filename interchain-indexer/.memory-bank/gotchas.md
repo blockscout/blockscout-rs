@@ -503,6 +503,95 @@ transfers, classified by reason) and E (unindexed-chain edges).
 
 ---
 
+## Recoverable Message Fields Are Not A "Never Mirror" Case
+
+**Symptom:** For a message arriving from a chain the bridge does not index,
+`crosschain_messages.sender_address`, `recipient_address`, and `payload` were
+all NULL even though the `ReceiveCrossChainMessage` (or
+`MessageExecutionFailed`) log the destination chain delivered carries all
+three directly. On a live database this was 100% of unindexed→indexed
+messages (13,865 rows on one bridge), versus 0% of indexed-source messages.
+It looked intentional because a regression test asserted the NULLs as an
+invariant.
+
+**Root cause:** `SourceData::from_receive` / `from_execution` in
+`indexer/avalanche/consolidation.rs` built with `..Default::default()`,
+discarding all three fields — even though the very same `TeleporterMessage` is
+read a few lines away in the same function, for payload classification and
+ICTT reconstruction. This traces back to `4c7198d1` (the `SourceData` block was
+byte-identical on `main` for a long time), but commit `9329320c` mistakenly
+*codified* it: it added a test and a comment asserting the NULLs as correct,
+borrowing ADR-003's "never mirror an unknown side" language and misapplying it
+to fields that are not mirroring at all.
+
+**The line ADR-003 actually draws:** ADR-003 forbids copying *one side's*
+value into the *other side's* column when the true value for that side is
+genuinely unknown and directionally ambiguous — its motivating case is the AMB
+calldata `_token`, which means the source or the destination token depending on
+which mediator function was called, so there is no way to know which side it
+belongs to. Reading `originSenderAddress` / `destinationAddress` / `message`
+out of a delivered, Warp-verified ICM message is not that: it is an
+unambiguously named field the message carries **about itself**, observed from
+an equally authoritative point (the destination chain's own receipt). The test
+is whether a value is *ambiguous* or merely *late*. `src_tx_hash` is the one
+field this reasoning does not rescue: it is a fact about a transaction on a
+chain never observed, and no field anywhere carries it — it must stay NULL in
+every fallback path.
+
+**Fix:** `from_receive` and `from_execution`'s `Failed` arm now populate
+`sender_address`, `recipient_address`, and `payload` from the delivered
+`TeleporterMessage`; `from_execution`'s `Succeeded` arm is unchanged because
+`MessageExecuted` carries only `messageID` + `sourceBlockchainID` — genuinely
+nothing to recover there. This is the same "fill it if any single indexed
+chain's events carry it" rule ADR-004 Decision 4 already states for
+`crosschain_transfers` sides, generalized to `crosschain_messages` fields; see
+that ADR's Decision 4.
+
+**Before writing off a NULL as "the other side is unknown," check whether the
+value is actually ambiguous or just sitting in an event you haven't read yet
+in this code path.**
+
+**Operational consequence:** this fix changes `stats_chains` unique-user
+counts. `unique_message_users_count` counts distinct non-NULL
+`recipient_address` values grouped by `dst_chain_id`
+(`select_stats_chains_message_user_counts` in `database.rs`); with
+`recipient_address` NULL for every unindexed-source message, that chain's
+count was silently deflated (one production chain showed 23 against 13,865
+uncounted completed incoming messages). After this fix and a stats rebuild,
+operators will see the number jump — that is a correction, not a bug.
+
+---
+
+## `recipient_address` On A Terminal `crosschain_messages` Row Can Never Be Patched Later
+
+**Symptom:** A message's `recipient_address` stays NULL forever even after its
+source chain is later added to the bridge config and the real `send` event
+(carrying the correct value) is indexed — while `sender_address` and `payload`
+*do* get filled in by that same later flush.
+
+**Root cause:** `crosschain_messages_on_conflict` (`message_buffer/persistence.rs`)
+does not apply one merge policy to all columns. `dst_chain_id`, `dst_tx_hash`,
+and `recipient_address` use `keep_existing_if_terminal`: once `status` is
+`completed`/`failed`, the **stored** value is kept unconditionally and the
+incoming flush's value for that column is discarded outright — even if the
+stored value is NULL and the incoming one is not. `sender_address`, `payload`,
+and `src_tx_hash` instead use `prefer_incoming`
+(`COALESCE(EXCLUDED.col, stored.col)`), which fills a NULL from a later flush
+regardless of terminal status.
+
+**Fix / implication:** a NULL `recipient_address` written on the row's first
+terminal flush is **permanent** — there is no later opportunity to backfill
+it, unlike `sender_address`/`payload`, which self-heal once a real `send`
+arrives even if left NULL initially. This is exactly why the fix above must
+populate `recipient_address` at first write for the unindexed-source fallback
+path, not lean on "a later `send` will patch it": for this one column, that
+assumption is false. If a future change needs `recipient_address` to be
+correctable after terminal status, it requires either a different conflict
+policy for that column or an explicit reconciliation path — the existing merge
+will silently discard the correction.
+
+---
+
 ## `pending_messages` Retention for Unconfigured Counterparts Is Load-Bearing, Not a Leak
 
 **Symptom:** `pending_messages` grows and plateaus rather than draining to

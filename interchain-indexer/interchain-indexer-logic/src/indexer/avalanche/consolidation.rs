@@ -55,7 +55,13 @@ impl SourceData {
     }
 
     /// Build from the receive event (fallback for unknown source chain).
-    /// Uses the destination-side timestamp as `init_timestamp`.
+    /// Uses the destination-side timestamp as `init_timestamp`. `src_tx_hash`
+    /// stays `None` — no field anywhere carries a transaction hash on a chain
+    /// never observed — but `sender_address`, `recipient_address` and
+    /// `payload` are unambiguous fields the delivered, Warp-verified
+    /// `TeleporterMessage` carries about itself, so they are recoverable here.
+    /// See the "never mirror" gotcha for why this is not the case ADR-003
+    /// forbids.
     fn from_receive(
         receive: &AnnotatedEvent<super::abi::ITeleporterMessenger::ReceiveCrossChainMessage>,
     ) -> Result<Self> {
@@ -64,6 +70,9 @@ impl SourceData {
             source_chain_id: u64::try_from(receive.source_chain_id)
                 .context("source_chain_id out of range")?,
             message_id: receive.event.messageID,
+            sender_address: Some(receive.event.message.originSenderAddress),
+            recipient_address: Some(receive.event.message.destinationAddress),
+            payload: Some(receive.event.message.message.clone()),
             ..Default::default()
         })
     }
@@ -72,6 +81,8 @@ impl SourceData {
     /// when only execution events are available).
     fn from_execution(execution: &MessageExecutionOutcome) -> Result<Self> {
         match execution {
+            // `MessageExecuted` carries only `messageID` + `sourceBlockchainID`
+            // (see `abi.rs`) — there is genuinely nothing to recover here.
             MessageExecutionOutcome::Succeeded(e) => Ok(Self {
                 init_timestamp: e.block_timestamp,
                 source_chain_id: u64::try_from(e.source_chain_id)
@@ -79,11 +90,16 @@ impl SourceData {
                 message_id: e.event.messageID,
                 ..Default::default()
             }),
+            // `MessageExecutionFailed` carries the full `TeleporterMessage`,
+            // same recoverable fields as `from_receive`.
             MessageExecutionOutcome::Failed(e) => Ok(Self {
                 init_timestamp: e.block_timestamp,
                 source_chain_id: u64::try_from(e.source_chain_id)
                     .context("source_chain_id out of range")?,
                 message_id: e.event.messageID,
+                sender_address: Some(e.event.message.originSenderAddress),
+                recipient_address: Some(e.event.message.destinationAddress),
+                payload: Some(e.event.message.message.clone()),
                 ..Default::default()
             }),
         }
@@ -902,6 +918,39 @@ mod tests {
         })
     }
 
+    /// Unlike `MessageExecuted`, `MessageExecutionFailed` carries the full
+    /// `TeleporterMessage` — this is the execution-only fallback path's
+    /// payload source (`SourceData::from_execution`'s `Failed` arm).
+    fn execution_failed(
+        message_bytes: Bytes,
+        origin_sender_address: Address,
+        destination_address: Address,
+        source_chain_id: i64,
+        destination_chain_id: i64,
+    ) -> MessageExecutionOutcome {
+        MessageExecutionOutcome::Failed(Box::new(AnnotatedEvent {
+            event: ITeleporterMessenger::MessageExecutionFailed {
+                messageID: message_id(),
+                sourceBlockchainID: B256::from([0x02u8; 32]),
+                message: TeleporterMessage {
+                    messageNonce: U256::from(1u64),
+                    originSenderAddress: origin_sender_address,
+                    destinationBlockchainID: B256::from([0x02u8; 32]),
+                    destinationAddress: destination_address,
+                    requiredGasLimit: U256::from(100_000u64),
+                    allowedRelayerAddresses: vec![],
+                    receipts: vec![],
+                    message: message_bytes,
+                },
+            },
+            transaction_hash: B256::from([0x06u8; 32]),
+            block_number: 200,
+            block_timestamp: chrono::Utc::now().naive_utc(),
+            source_chain_id,
+            destination_chain_id,
+        }))
+    }
+
     fn encode_transferrer(message_type: u8, inner: Vec<u8>) -> Bytes {
         TransferrerMessage {
             messageType: message_type,
@@ -1008,7 +1057,7 @@ mod tests {
 
         let message = Message {
             receive: Some(receive_event(
-                message_bytes,
+                message_bytes.clone(),
                 origin_sender,
                 destination_address,
                 43114,
@@ -1050,11 +1099,89 @@ mod tests {
         assert_eq!(set_value(&t.src_amount), Some(BigDecimal::from(21_633u64)));
         assert_eq!(set_value(&t.dst_amount), Some(BigDecimal::from(21_633u64)));
 
-        // Reconstruction must never populate source-side message columns.
+        // `src_tx_hash` is a fact about a transaction on a chain never
+        // observed — no field anywhere carries it, so it must stay NULL. But
+        // `sender_address` and `payload` are unambiguous fields the delivered
+        // `TeleporterMessage` carries about itself, observed from an equally
+        // authoritative point (the destination chain's `ReceiveCrossChainMessage`),
+        // so the fix recovers them instead of discarding them.
+        let m = &consolidated.message;
+        assert_eq!(set_value(&m.src_tx_hash), None);
+        assert_eq!(
+            set_value(&m.sender_address),
+            Some(origin_sender.as_slice().to_vec())
+        );
+        assert_eq!(set_value(&m.payload), Some(message_bytes.to_vec()));
+    }
+
+    /// `(None, Some(exec))` branch, `Succeeded` arm: no `receive` was ever
+    /// observed (e.g. it fell outside the indexed block range), only the
+    /// execution outcome. `MessageExecuted` carries no `TeleporterMessage`, so
+    /// `sender_address` / `recipient_address` / `payload` must stay `None` —
+    /// there is genuinely nothing to recover, unlike the `Failed` arm below.
+    #[test]
+    fn test_consolidate_execution_only_succeeded_leaves_message_fields_none() {
+        let message = Message {
+            receive: None,
+            execution: Some(execution_succeeded(43114, 8021)),
+            transfer: None,
+            source_chain_is_unknown: true,
+            ..Default::default()
+        };
+
+        let consolidated = message
+            .consolidate(&key())
+            .unwrap()
+            .expect("must consolidate from execution outcome alone");
+
         let m = &consolidated.message;
         assert_eq!(set_value(&m.src_tx_hash), None);
         assert_eq!(set_value(&m.sender_address), None);
+        assert_eq!(set_value(&m.recipient_address), None);
         assert_eq!(set_value(&m.payload), None);
+    }
+
+    /// `(None, Some(exec))` branch, `Failed` arm: no `receive` was ever
+    /// observed, only `MessageExecutionFailed`. Unlike `MessageExecuted`, this
+    /// event carries the full `TeleporterMessage`, so `sender_address` and
+    /// `payload` are recoverable exactly as in the `receive`-driven fallback;
+    /// `src_tx_hash` still stays `None`.
+    #[test]
+    fn test_consolidate_execution_only_failed_populates_message_fields() {
+        let origin_sender = addr(0x33);
+        let destination_address = addr(0x01);
+        let message_bytes = single_hop_send_payload(addr(0x71), 1_000);
+
+        let message = Message {
+            receive: None,
+            execution: Some(execution_failed(
+                message_bytes.clone(),
+                origin_sender,
+                destination_address,
+                43114,
+                8021,
+            )),
+            transfer: None,
+            source_chain_is_unknown: true,
+            ..Default::default()
+        };
+
+        let consolidated = message
+            .consolidate(&key())
+            .unwrap()
+            .expect("must consolidate from execution outcome alone");
+
+        let m = &consolidated.message;
+        assert_eq!(set_value(&m.src_tx_hash), None);
+        assert_eq!(
+            set_value(&m.sender_address),
+            Some(origin_sender.as_slice().to_vec())
+        );
+        assert_eq!(
+            set_value(&m.recipient_address),
+            Some(destination_address.as_slice().to_vec())
+        );
+        assert_eq!(set_value(&m.payload), Some(message_bytes.to_vec()));
     }
 
     #[test]
