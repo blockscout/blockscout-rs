@@ -195,9 +195,6 @@ There is also a startup backfill path for historical rows:
   stays safe even if that invariant ever drifts (a stale hand-copied predicate
   would otherwise leave a silent backlog), and the monotonic `min_id` cursor
   bounds the loop by the id space regardless of which counter gates the break.
-  The reasoning is recorded in
-  `tmp/tasks/prevent-split-stats-assets/coding-task-4a.md`'s "Post-Landing
-  Note".
 
 Primary code paths:
 

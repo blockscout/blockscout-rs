@@ -241,12 +241,12 @@ exist for a generic bridge. Recorded as the long-term direction, not adopted.
 
 ## References
 
-- `tmp/tasks/prevent-split-stats-assets/` — analysis, `solution_4.md`,
-  `implementation-plan-2.md`, `coding-task-4a.md`, `coding-task-4b.md`
-- `tmp/tasks/api-hide-unindexed-chain-messages/` — the read-side
-  `include_unindexed_chains` filter and `has_unindexed_chain` flag
-- `tmp/tasks/avalanche-incoming-ictt-transfers/` — indexer-contract requirement 1
-  for the Avalanche incoming direction
+- Observability-horizon eligibility and union-find asset merge: commits
+  `6f102e15`, `636b9a53`, `cb81d8ea`, `bde5fe7d`
+- Read-side `include_unindexed_chains` filter and `has_unindexed_chain` flag:
+  commits `883c9efb`, `b0540fc8`, `a7dd0acd`
+- Avalanche indexer-contract requirement 1 (incoming ICTT reconstruction),
+  which this decision's eligibility rule depends on: commit `9329320c`
 - `.memory-bank/gotchas.md` — "Stats Eligibility Is About Observability, Not
   Protocol Terminality"
 - `.memory-bank/research/stats-projection.md`,

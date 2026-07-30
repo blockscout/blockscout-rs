@@ -75,6 +75,7 @@ When finishing a reusable investigation, add or update a note in `.memory-bank/r
 When making an architectural decision, add an ADR to `.memory-bank/adr/`.
 When corrected about a convention, update the relevant file in `.memory-bank/rules/`.
 When a new coding rule emerges, update the relevant file in `.memory-bank/rules/` or create a new one if needed.
+Never cite a `tmp/` path from a committed file — it is gitignored and resolves to nothing for anyone else; cite code, a commit, or an ADR instead.
 
 ## Workflows
 

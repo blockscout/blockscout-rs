@@ -498,8 +498,7 @@ zero, even long after catch-up finishes — most visibly for a bridge running
 with `process_unknown_chains: true` against subnets it does not configure. A
 live run on Avalanche bridge 2 (C-Chain + Numine configured,
 `process_unknown_chains: true`) showed roughly 20k cold-tier rows with the
-oldest row's timestamp not moving between snapshots — see
-`tmp/tasks/runtime-verification-run-2026-07-29.md`.
+oldest row's timestamp not moving between snapshots.
 
 **Root cause:** Removal from `pending_messages` is gated on **protocol
 finality**, not on "has this key been flushed." A message flushed as
@@ -645,8 +644,7 @@ contract wraps. When Home and Remote happen to be deployed at the same
 address via CREATE2, the two chain-local rows for that asset legitimately
 carry the same address — this is one asset observed on two chains, not two
 assets that collided. The owner confirmed this modelling is intended
-(observed on Avalanche NUMI/WTTC in a live run; see
-`tmp/tasks/runtime-verification-run-2026-07-29.md`, "Not re-reported").
+(observed on Avalanche NUMI/WTTC in a live run).
 
 **Fix:** Do not "fix" a same-address pair across two chains in
 `stats_asset_tokens` as if it were a bug — the split detector (`stats_asset_id`
@@ -743,10 +741,8 @@ cursor** field (proto field 7), and `GetChainsStatsRequest` uses `chain_id`
 cursor semantics for `api.use_pagination_token=false` clients.
 
 The unified read-filter vocabulary avoids both by construction:
-`home_chain_id`, `counterparty_chain_ids`, `bridge_ids` (design record:
-`tmp/tasks/api-per-frontend-chain-filtering/task.md`, "Filter Vocabulary").
-Never add request fields named `bridge_id`/`chain_id` to these messages for
-non-cursor purposes.
+`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`. Never add request
+fields named `bridge_id`/`chain_id` to these messages for non-cursor purposes.
 
 ---
 
@@ -764,7 +760,7 @@ rows.
 Pattern for the read-API filters: declare the field in proto even when the
 endpoint cannot honor it yet, and return
 `Status::invalid_argument("<param> is not supported by this endpoint yet")`
-for non-blank values (see `tmp/tasks/api-per-frontend-chain-filtering/`).
+for non-blank values.
 
 ---
 

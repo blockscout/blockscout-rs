@@ -100,5 +100,9 @@ When working on this codebase:
 - **Learn something project-specific?** → Update the relevant canonical file
 - **Create a temporary note in `tmp/` during investigation?** → Promote durable findings into
   `.memory-bank/` and avoid leaving long-term knowledge only in `tmp/`
+- **Citing a source from a committed file (`.memory-bank/`, an ADR, etc.)?** → Never cite a
+  `tmp/` path. `tmp/` is local and gitignored, so a path under it is a dangling reference for
+  every other clone of the repo. State the substance inline instead, or point to a durable
+  anchor — a code path, a commit hash, or an ADR section
 
 This keeps the knowledge base current and useful for future sessions.

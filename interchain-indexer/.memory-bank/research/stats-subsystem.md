@@ -579,7 +579,7 @@ Metadata semantics:
   CREATE2 at the same address, an asset can legitimately show the same
   address on two chains — that is not a split, and the split detector
   correctly does not flag it (owner-confirmed modelling, observed on
-  Avalanche NUMI/WTTC in `tmp/tasks/runtime-verification-run-2026-07-29.md`)
+  Avalanche NUMI/WTTC in a live run)
 
 ### `/stats/chains`
 
@@ -822,12 +822,10 @@ Useful operational signals:
 
 ## Read-Time Filterability Constraints (verified 2026-07-20; extended by ADR-004)
 
-Discovered while designing per-frontend API filtering
-(`tmp/tasks/api-per-frontend-chain-filtering/`); constrains what filters the
-stats endpoints can honor without projection rework. Extended by the
-`include_unindexed_chains` / `has_unindexed_chain` / `indexed_chain_ids`
-surface added by ADR-004's read-side tasks
-(`tmp/tasks/api-hide-unindexed-chain-messages/`).
+Discovered while designing per-frontend API filtering; constrains what
+filters the stats endpoints can honor without projection rework. Extended by
+the `include_unindexed_chains` / `has_unindexed_chain` / `indexed_chain_ids`
+surface added by ADR-004's read-side work.
 
 Filterability matrix (as of the bridge-qualified stats rebuild,
 `m20260720_120000_add_read_filters_and_bridge_stats`, plus the observability
@@ -873,14 +871,12 @@ filter):
   `/stats/chains` remains bridge-unaware, and why it uses the cross-bridge
   union rather than any per-bridge restriction for chain visibility.
 
-Candidate designs and the phased delivery decision are recorded in
-`tmp/tasks/api-per-frontend-chain-filtering/task.md` ("Follow-Up Scope"). The
-bridge dimension on message-paths / bridged-tokens was delivered by
-`tmp/tasks/api-bridge-filtered-projected-stats/`. The observability-horizon
-eligibility rule and the `include_unindexed_chains` / `has_unindexed_chain` /
-`indexed_chain_ids` surface were delivered by
-`tmp/tasks/prevent-split-stats-assets/` and
-`tmp/tasks/api-hide-unindexed-chain-messages/` (see ADR-004).
+Candidate designs and the phased delivery decision were recorded during the
+per-frontend chain-filtering follow-up scoping. The bridge dimension on
+message-paths / bridged-tokens was delivered in a later iteration. The
+observability-horizon eligibility rule and the `include_unindexed_chains` /
+`has_unindexed_chain` / `indexed_chain_ids` surface were delivered together on
+one branch (see ADR-004).
 
 ## Change Triggers
 
