@@ -296,6 +296,8 @@ Primary places to inspect:
 - `crosschain_messages.stats_processed` when checking whether rows were
   projected
 - `stats_messages` and `stats_messages_days` contents for directional totals
+- `.memory-bank/runbooks/runtime-verification.md` for copy-paste-runnable,
+  read-only SQL to check these invariants against a live database
 
 ## Edge Cases / Gotchas
 

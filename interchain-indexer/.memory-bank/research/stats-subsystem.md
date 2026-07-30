@@ -17,7 +17,9 @@ This note covers the embedded stats subsystem inside `interchain-indexer`:
 This note does not cover the standalone external stats service in detail, and
 it does not restate ADR-004's reasoning — see
 `.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md` for
-that; this note describes current behavior and points there for "why."
+that; this note describes current behavior and points there for "why." For
+copy-paste-runnable SQL to confirm this behavior against a live database, see
+`.memory-bank/runbooks/runtime-verification.md`.
 
 ## Short Answer
 
@@ -798,6 +800,9 @@ Useful operational signals:
 - startup logs for stats backfill progress and per-bridge indexed-chain counts
 - startup logs for `stats_chains` recomputation success / failure
 - buffer maintenance logs and metrics, because those gate projected stats
+- `.memory-bank/runbooks/runtime-verification.md` — read-only SQL canaries
+  and diagnostics for confirming eligibility and asset-merge behavior
+  directly against a live database
 
 ## Edge Cases / Gotchas
 

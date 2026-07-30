@@ -29,6 +29,10 @@ soon as its source side is present. This classification runs on every
 `execution = Failed`), not only when reconstruction can build a row. Check
 `consolidation.rs`'s `ictt_completeness` / `classify_payload` for the logic.
 
+To confirm this at runtime against a live database, see
+`.memory-bank/runbooks/runtime-verification.md` queries F (incoming ICTT
+reconstruction is landing) and G (`pending_messages` backlog trend).
+
 ---
 
 ## Events Filtered for Unconfigured Chains
@@ -417,6 +421,10 @@ misattributed to the wrong chain), fix the source data, then reset the
 affected transfers' `stats_processed` for re-projection. For local
 development, a fresh reindex may be simpler.
 
+To confirm this at runtime against a live database, see
+`.memory-bank/runbooks/runtime-verification.md` queries A (split-asset
+detector) and B (refusal legitimacy check).
+
 ---
 
 ## Stats Eligibility Is About Observability, Not Protocol Terminality
@@ -489,6 +497,10 @@ whose evidence is permanently lost (AMB `messageId` collision, history older tha
 the configured start block) stays deferred forever by design — a marker-zero row
 with a NULL endpoint is not a backfill backlog.
 
+To confirm this at runtime against a live database, see
+`.memory-bank/runbooks/runtime-verification.md` queries D (deferred
+transfers, classified by reason) and E (unindexed-chain edges).
+
 ---
 
 ## `pending_messages` Retention for Unconfigured Counterparts Is Load-Bearing, Not a Leak
@@ -534,6 +546,10 @@ attempt to clear or rescan these rows preemptively; the buffered entries pick
 up the new configuration correctly once new events restore them into the hot
 tier.
 
+To confirm this at runtime against a live database, see
+`.memory-bank/runbooks/runtime-verification.md` query G (`pending_messages`
+backlog trend).
+
 ---
 
 ## `bridge_contracts` Is Only A Diagnostic Proxy For Runtime Membership
@@ -563,6 +579,9 @@ startup from the in-memory bridges config
 concrete configured set, prefer `IndexedChains::chain_ids_for(bridge_id)` /
 `configured_pairs(...)` semantics as the reference, not a raw
 `bridge_contracts` scan.
+
+`.memory-bank/runbooks/runtime-verification.md` spells out this caveat in
+full for the queries that join against `bridge_contracts` (D, E).
 
 ---
 

@@ -25,6 +25,7 @@ Start with these files:
 - `.memory-bank/glossary.md` — repo-specific terminology
 - `.memory-bank/gotchas.md` — non-obvious traps and operational edge cases
 - `.memory-bank/research/README.md` — durable deep-dive investigations
+- `.memory-bank/runbooks/` — operational diagnostics for a live/running service
 - `.memory-bank/rules/` — coding conventions
 - `.memory-bank/workflows/` — reusable task procedures
 - `.memory-bank/adr/README.md` — architectural decision records
