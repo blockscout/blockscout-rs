@@ -2,9 +2,11 @@
 
 ## Scope
 
-This note covers how finalized `crosschain_messages` are projected into
-`stats_messages` and related aggregate tables, how the incremental
-`stats_processed` marker works, and where the startup backfill path fits.
+This note covers how flushed `crosschain_messages` are projected into
+`stats_messages` and related aggregate tables — every flushed entry reaches the
+projection hook, and a separate eligibility rule decides which of them are
+counted — plus how the incremental `stats_processed` marker works and where the
+startup backfill path fits.
 
 Since the observability-horizon work (ADR-004), message eligibility is no
 longer decided by protocol status alone — it also depends on which chains a
@@ -75,15 +77,19 @@ getting that wrong either strands data or double-counts it.
 
 ## Step-by-Step Flow
 
-### 1. Finalized rows land in canonical tables
+### 1. Flushed rows land in canonical tables
 
-Protocol-specific consolidation creates finalized message and transfer models.
-Message-buffer maintenance then flushes those finalized rows into
-`crosschain_messages` and `crosschain_transfers`.
+Protocol-specific consolidation builds message and transfer models from whatever
+evidence it has. Message-buffer maintenance flushes **every** consolidatable
+entry into `crosschain_messages` and `crosschain_transfers` — an entry whose
+`is_final` is false is classified `Partial` and flushed all the same. `is_final`
+governs pending-tier cleanup, hot-tier eviction and finalized-batch metrics; it
+has never governed whether a row is persisted, and since ADR-004 it does not
+govern whether a row reaches the projection hook either.
 
 Primary code paths:
 
-- finalized message creation:
+- message creation:
   `interchain-indexer-logic/src/indexer/avalanche/consolidation.rs`
 - canonical persistence and maintenance orchestration:
   `interchain-indexer-logic/src/message_buffer/maintenance.rs`

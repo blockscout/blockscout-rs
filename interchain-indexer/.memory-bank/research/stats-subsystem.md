@@ -32,7 +32,8 @@ endpoints.
 The subsystem is not uniform. It has three refresh modes:
 
 - direct request-time queries over canonical tables
-- incremental projection into `stats_*` tables during finalized flushes
+- incremental projection into `stats_*` tables on every flushed batch, with
+  countability decided per row rather than by the flush being final
 - periodic full recomputation for per-chain user counters
 
 Backfill does not use separate calculation logic. It reuses the same
@@ -74,7 +75,7 @@ behave the same way:
 
 - some endpoints are backed by precomputed tables
 - some are live scans over canonical tables
-- some refresh on every finalized flush
+- some refresh on every flushed batch, final or `Partial`
 - one refreshes on a background period
 - since ADR-004, "counted" no longer means "protocol-complete" — it can also
   mean "protocol-incomplete but permanently unconfirmable," a distinction that
