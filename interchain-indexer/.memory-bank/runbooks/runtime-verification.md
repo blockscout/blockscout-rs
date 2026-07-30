@@ -109,15 +109,24 @@ itself — check those two counters first.
 **The diagnostic reading that makes queries D and A interpretable, on
 `crosschain_transfers`:**
 
-- `stats_asset_id IS NULL` → identity is genuinely unknown or ambiguous (the
-  chain-collision refusal is the only remaining way to reach this);
+- `stats_asset_id IS NULL AND stats_processed > 0` → identity is genuinely
+  unknown or ambiguous (the chain-collision refusal is the only remaining way
+  to reach this, once the row has actually been processed);
 - a **set** `stats_asset_id` together with `stats_processed > 0` and no
   matching contribution in `stats_asset_edges` → identity is known, but this
   transfer's amount specifically was not counted (the decimals-conflict
   skip).
 
-Both leave the row `stats_processed`'d so projection does not re-warn on it
-every cycle — this is deliberate, not a stuck row.
+`stats_asset_id IS NULL` on its own, with `stats_processed = 0`, is not
+evidence of anything — it is simply the normal state of a deferred or
+not-yet-projected transfer that hasn't been decided on yet (see query D for
+the full breakdown of why a row might still be at `stats_processed = 0`).
+Only once `stats_processed > 0` does a `NULL` `stats_asset_id` mean the
+chain-collision refusal specifically; reading NULL alone as "identity
+conflict" will misclassify ordinary backlog as a defect.
+
+Both processed cases leave the row `stats_processed`'d so projection does not
+re-warn on it every cycle — this is deliberate, not a stuck row.
 
 ---
 
@@ -182,6 +191,16 @@ generalizes from). Under the current design a merge should join the two
 components as soon as such a transfer is observed, so this should always
 come back empty on any database that has been fully projected under it.
 
+**Why the query requires `t.stats_processed > 0`:** a freshly flushed
+transfer that projection has not reached yet can already have both its token
+endpoints mapped to two different `stats_assets` by *earlier* transfers —
+and it is precisely this not-yet-projected transfer whose merge would join
+those two components. Without the predicate, this ordinary, momentary lag
+between flush and projection reads as a false-positive split. Do not
+"simplify" this predicate away: dropping it reintroduces that false positive
+on any database with normal write/projection concurrency, not just a broken
+one.
+
 ```sql
 SELECT t.bridge_id,
        t.token_src_chain_id, encode(t.token_src_address,'hex') AS src_token, s.stats_asset_id AS src_asset,
@@ -191,6 +210,7 @@ FROM crosschain_transfers t
 JOIN stats_asset_tokens s ON s.chain_id = t.token_src_chain_id AND s.token_address = t.token_src_address
 JOIN stats_asset_tokens d ON d.chain_id = t.token_dst_chain_id AND d.token_address = t.token_dst_address
 WHERE s.stats_asset_id <> d.stats_asset_id
+  AND t.stats_processed > 0
 GROUP BY 1,2,3,4,5,6,7
 ORDER BY transfers DESC;
 ```
@@ -222,7 +242,11 @@ conflict that genuinely cannot be resolved automatically.
 **Why it matters:** this is the test that tells you whether a row from A is
 expected (a real, pre-existing data problem the merge correctly declined to
 paper over) or an actual defect in the merge logic (a pair that should have
-merged silently failed to).
+merged silently failed to). This diagnostic does not need its own
+`stats_processed` qualification — it takes an already-returned `(src_asset,
+dst_asset)` pair from A as given, and A's `t.stats_processed > 0` predicate
+is what already ruled out the transient flushed-but-not-yet-projected case
+before the pair ever reaches here.
 
 Replace both occurrences of `__SRC_ASSET__` and `__DST_ASSET__` below with
 the literal integers from A's `src_asset` / `dst_asset` columns for the row
@@ -364,6 +388,21 @@ because of reconstruction (see ADR-004 References, and
 **Why it matters:** direct evidence the reconstruction-from-ICM-payload path
 is producing rows, as opposed to only having passed tests.
 
+**Precondition — this query can only ever return rows if the bridge accepts
+the message in the first place.** Incoming ICTT reconstruction runs on an
+unknown-source message, and an unknown-source message only reaches
+consolidation at all when the bridge has `process_unknown_chains: true`
+(see `.memory-bank/gotchas.md`, "Events Filtered for Unconfigured Chains").
+With the default `process_unknown_chains: false`, one-known/one-unknown
+endpoint pairs are filtered out before reconstruction ever runs, so an empty
+result on such a bridge says nothing about whether reconstruction works — it
+is the expected result regardless. If the bridge also sets `home_chain_id`,
+that filter must independently admit the message too (at least one endpoint
+must equal `home_chain_id`) — a message that clears `process_unknown_chains`
+but is narrowed out by `home_chain_id` is filtered the same way, before
+reconstruction. Confirm both settings for the bridge in `bridges.json` before
+treating an empty result here as informative one way or the other.
+
 ```sql
 SELECT t.bridge_id, t.token_src_chain_id, t.token_dst_chain_id, m.status,
        t.src_amount, t.dst_amount, t.sender_address IS NULL AS no_sender
@@ -382,9 +421,13 @@ arrive. `no_sender = true` is possible and not itself concerning — the
 sender address is not always recoverable purely from the destination-side
 event.
 
-**What an empty result means:** either this bridge has no reachable
-scenario for the reconstruction path yet (no destination-observed, source-
-unindexed ICTT traffic has occurred), or the per-bridge kill switch
+**What an empty result means:** check, in this order, before treating it as
+a defect — (1) `process_unknown_chains` is `false` for the bridge, the
+default, in which case an empty result is expected regardless of anything
+else (see the precondition above); (2) `home_chain_id` is set and does not
+admit the relevant messages; (3) this bridge has no reachable scenario for
+the reconstruction path yet (no destination-observed, source-unindexed ICTT
+traffic has occurred); or (4) the per-bridge kill switch
 (`reconstruct_incoming_ictt_transfers` in `bridges.json`) is off for it. Not
 itself alarming — check whether the scenario should be reachable given your
 bridge topology before treating this as a defect.
@@ -445,5 +488,5 @@ the way it used to.
 | B — refusal legitimacy | diagnostic | row returned = correct refusal; empty = merge should have happened | empty result is a real defect — file it |
 | D — deferred-transfer reasons | diagnostic | mostly expected buckets; two "watch" buckets | growth in `one-sided, peer unindexed` or unbounded `COMPLETE AND CONFIRMED` is a bug signal |
 | E — unindexed-chain edges | diagnostic | rows present wherever a bridge has unconfigured chains | unexpectedly empty means opt-in retention isn't running; cross-check against real config, not `bridge_contracts` |
-| F — incoming ICTT reconstruction | diagnostic | rows present where reachable | empty may just mean the scenario or the kill switch — check both before worrying |
+| F — incoming ICTT reconstruction | diagnostic | rows present where reachable, but only if `process_unknown_chains: true` and `home_chain_id` admits it | check `process_unknown_chains`/`home_chain_id` first, then the scenario/kill switch, before worrying |
 | G — pending_messages trend | diagnostic | `oldest` stops receding indefinitely | still climbing at the old rate → leak persists |

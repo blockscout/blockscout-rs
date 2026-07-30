@@ -8,8 +8,10 @@ use prometheus::{IntCounterVec, register_int_counter_vec};
 lazy_static! {
     /// ICTT payload classification outcomes per bridge, one increment per
     /// consolidation attempt — except `skipped_disabled`, which is
-    /// incremented once per suppressed log at ingestion time
-    /// (`avalanche/mod.rs`), because consolidation is not config-aware.
+    /// incremented at ingestion time (`avalanche/mod.rs`,
+    /// `gate_receiver_ictt_arm`), because consolidation is not config-aware.
+    /// It fires only when a receiver-side ICTT arm was actually dropped, not
+    /// merely whenever the source is unknown and reconstruction is off.
     ///
     /// `outcome` is a closed set: `reconstructed`, `skipped_multi_hop`,
     /// `skipped_register_remote`, `skipped_disabled`,

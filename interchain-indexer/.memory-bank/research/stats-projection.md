@@ -114,7 +114,7 @@ for rows matching `stats_processed = 0 AND message_countable_condition(indexed)`
 - `src_chain_id`
 - `dst_chain_id`
 
-Each row stores a count of finalized-or-uncomfirmable messages for that
+Each row stores a count of finalized-or-unconfirmable messages for that
 `(bridge, src, dst)` edge — "finalized-or-unconfirmable" because a message
 also counts once its destination chain is no longer indexed for that bridge,
 even while `status = Initiated`. The same directional chain edge on two

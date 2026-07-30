@@ -124,19 +124,28 @@ impl StatsService {
         // No `stats_processed = 0` filter here: an already-counted transfer of
         // a flushed key must still reach `project_transfers_batch`, which
         // itself decides identity-maintenance-only (repair) vs. counting.
-        let transfer_ids: Vec<i64> = crosschain_transfers::Entity::find()
-            .filter(
-                Expr::tuple([
-                    Expr::col(crosschain_transfers::Column::MessageId).into(),
-                    Expr::col(crosschain_transfers::Column::BridgeId).into(),
-                ])
-                .in_tuples(msg_pks.iter().copied()),
-            )
-            .all(tx)
-            .await?
-            .into_iter()
-            .map(|t| t.id)
-            .collect();
+        //
+        // Chunked at two bind params per key: `flushed` is the whole
+        // consolidatable cohort of one maintenance cycle, which during catch-up
+        // can exceed the PostgreSQL bind-param limit on its own. Read loops that
+        // accumulate results chunk by hand rather than through
+        // `bulk::run_in_batches`, whose closure cannot lend out a mutable
+        // accumulator — see `projection.rs`'s `load_*_map` helpers.
+        let batch_size = (crate::bulk::PG_BIND_PARAM_LIMIT / 2).max(1);
+        let mut transfer_ids: Vec<i64> = Vec::with_capacity(msg_pks.len());
+        for batch in msg_pks.chunks(batch_size) {
+            let found = crosschain_transfers::Entity::find()
+                .filter(
+                    Expr::tuple([
+                        Expr::col(crosschain_transfers::Column::MessageId).into(),
+                        Expr::col(crosschain_transfers::Column::BridgeId).into(),
+                    ])
+                    .in_tuples(batch.iter().copied()),
+                )
+                .all(tx)
+                .await?;
+            transfer_ids.extend(found.into_iter().map(|t| t.id));
+        }
 
         super::projection::project_transfers_batch(tx, &transfer_ids, &self.indexed_chains).await?;
         Ok(())
@@ -342,7 +351,7 @@ mod tests {
     /// filter used to silently drop forever.
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn test_partial_flush_reaches_stats_hook_without_counting() {
+    async fn test_partial_flush_reaches_stats_hook_and_counts_unindexed_destination() {
         let guard = init_db("stats_service_partial_flush_reaches_hook").await;
         let conn = guard.client();
 

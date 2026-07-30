@@ -786,14 +786,26 @@ fn parse_receiver_ictt_log(
 /// `contract_address == TeleporterMessage.destinationAddress` corroboration, or a
 /// "destination-only ICTT observed" metric), this gate must move rather than
 /// silently drop data.
+///
+/// This is also the only place `skipped_disabled` is incremented, and only
+/// when there was actually an arm to drop — a plain ICM message with an
+/// unknown source and no receiver-side ICTT log has nothing for this gate to
+/// suppress, so it must not count as a suppression.
 fn gate_receiver_ictt_arm(
     parsed: Option<TokenTransfer>,
     source_is_unknown: bool,
     reconstruction_enabled: bool,
+    bridge_id: i32,
 ) -> Option<TokenTransfer> {
-    match (source_is_unknown, reconstruction_enabled) {
-        (true, false) => None,
-        _ => parsed,
+    match (source_is_unknown, reconstruction_enabled, parsed) {
+        (true, false, Some(_)) => {
+            metrics::AVALANCHE_ICTT_PAYLOAD_OUTCOMES_TOTAL
+                .with_label_values(&[&bridge_id.to_string(), "skipped_disabled"])
+                .inc();
+            None
+        }
+        (true, false, None) => None,
+        (_, _, parsed) => parsed,
     }
 }
 
@@ -1191,15 +1203,6 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
     let destination_chain_id = ctx.chain_id;
     let source_is_unknown = !ctx.chain_ids.contains(&source_chain_id);
 
-    // `skipped_disabled` is counted here, at ingestion, once per suppressed
-    // log — not in `consolidation.rs`, which is not config-aware. This is the
-    // only handler where the receiver-side ICTT arm is recorded.
-    if source_is_unknown && !ctx.reconstruct_incoming_ictt_transfers {
-        metrics::AVALANCHE_ICTT_PAYLOAD_OUTCOMES_TOTAL
-            .with_label_values(&[&ctx.bridge_id.to_string(), "skipped_disabled"])
-            .inc();
-    }
-
     let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
     let block_number = u64::try_from(ctx.block_number).context("block_number out of range")?;
 
@@ -1226,6 +1229,7 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
                 parsed,
                 source_is_unknown,
                 ctx.reconstruct_incoming_ictt_transfers,
+                ctx.bridge_id,
             );
             Ok(())
         })
@@ -1353,7 +1357,7 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::{gate_receiver_ictt_arm, should_process_message};
+    use super::{gate_receiver_ictt_arm, metrics, should_process_message};
     use crate::indexer::avalanche::{abi::ITokenTransferrer, types::TokenTransfer};
     use alloy::primitives::{Address, U256};
     use rstest::rstest;
@@ -1533,7 +1537,7 @@ mod tests {
     fn test_gate_receiver_ictt_arm_disabled_source_unknown_drops_arm() {
         let parsed = source_less_withdrawn_arm();
 
-        let result = gate_receiver_ictt_arm(parsed, true, false);
+        let result = gate_receiver_ictt_arm(parsed, true, false, 101);
 
         assert!(
             result.is_none(),
@@ -1552,7 +1556,7 @@ mod tests {
     fn test_gate_receiver_ictt_arm_disabled_source_configured_preserves_arm() {
         let parsed = source_less_withdrawn_arm();
 
-        let result = gate_receiver_ictt_arm(parsed.clone(), false, false);
+        let result = gate_receiver_ictt_arm(parsed.clone(), false, false, 102);
 
         assert!(
             matches!(result, Some(TokenTransfer::Sent(None, Some(_)))),
@@ -1569,11 +1573,43 @@ mod tests {
     ) {
         let parsed = source_less_withdrawn_arm();
 
-        let result = gate_receiver_ictt_arm(parsed.clone(), source_is_unknown, true);
+        let result = gate_receiver_ictt_arm(parsed.clone(), source_is_unknown, true, 103);
 
         assert!(
             matches!(result, Some(TokenTransfer::Sent(None, Some(_)))),
             "an enabled kill switch must never drop an arm"
+        );
+    }
+
+    /// Pins the fix for the metric-placement bug: a plain ICM message with an
+    /// unknown source and the reconstruction switch off has no receiver-side
+    /// ICTT arm to suppress (`parsed` is `None`), so `skipped_disabled` must
+    /// not increment — only an actually-dropped arm should count. Before the
+    /// fix this incremented unconditionally on `(source_is_unknown, !enabled)`
+    /// regardless of `parsed`, overcounting the bulk of plain-ICM,
+    /// unknown-source traffic.
+    ///
+    /// Uses a bridge id (`104`) not used by any other test in this binary so
+    /// the counter reading is not a shared-state before/after delta (see
+    /// `.memory-bank/rules/testing.md`, "Never Assert A Before/After Delta On
+    /// A Process-Wide Metric") — it is a one-shot read of a label combination
+    /// only this test can ever write to.
+    #[test]
+    fn test_gate_receiver_ictt_arm_disabled_source_unknown_no_arm_does_not_increment() {
+        const SENTINEL_BRIDGE_ID: i32 = 104;
+
+        let result = gate_receiver_ictt_arm(None, true, false, SENTINEL_BRIDGE_ID);
+
+        assert!(
+            result.is_none(),
+            "no arm to begin with must still result in no arm"
+        );
+        assert_eq!(
+            metrics::AVALANCHE_ICTT_PAYLOAD_OUTCOMES_TOTAL
+                .with_label_values(&[&SENTINEL_BRIDGE_ID.to_string(), "skipped_disabled"])
+                .get(),
+            0,
+            "skipped_disabled must only count a suppression that actually dropped an arm"
         );
     }
 }

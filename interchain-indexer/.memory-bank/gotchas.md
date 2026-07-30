@@ -24,7 +24,10 @@ stats-projected, and never left `pending_messages`.
 `SINGLE_HOP_CALL` mean a destination credit is expected and completeness still
 waits for it; `REGISTER_REMOTE` / `MULTI_HOP_SEND` / `MULTI_HOP_CALL` mean no
 credit will ever arrive for this message id, so the transfer is complete as
-soon as its source side is present. This classification runs on every
+soon as the available message evidence is present — for an unknown-source
+message that has no source-side event at all, this means the receive or
+failed-execution evidence is what completeness rests on, not a source side
+that will never exist. This classification runs on every
 `consolidate()` call that has any payload source (`send` | `receive` |
 `execution = Failed`), not only when reconstruction can build a row. Check
 `consolidation.rs`'s `ictt_completeness` / `classify_payload` for the logic.
