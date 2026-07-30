@@ -293,15 +293,17 @@ pub(super) async fn flush_to_final_storage(
     Ok(())
 }
 
-/// Distinct `(chain_id, token_address)` from finalized transfers for async token enrichment.
-pub(super) fn token_keys_from_finalized_for_enrichment(
-    finalized: &[ConsolidatedMessage],
+/// Distinct `(chain_id, token_address)` from flushed transfers for async token
+/// enrichment. Covers **all** flushed entries, not only finalized ones: a
+/// transfer to a chain unindexed for its bridge is never `is_final` (the
+/// destination-side events can never arrive) but is now countable and
+/// asset-linked, so its known-side token must still be eligible for
+/// enrichment (task.md Success Criteria).
+pub(super) fn token_keys_from_flushed_for_enrichment(
+    flushed: &[ConsolidatedMessage],
 ) -> Vec<(i64, Vec<u8>)> {
     let mut out = HashSet::new();
-    for c in finalized {
-        if !c.is_final {
-            continue;
-        }
+    for c in flushed {
         for t in &c.transfers {
             if let (ActiveValue::Set(sc), ActiveValue::Set(Some(sa))) =
                 (&t.token_src_chain_id, &t.token_src_address)
@@ -757,6 +759,174 @@ mod tests {
         assert_eq!(transfer.stats_asset_id, Some(stats_asset_id));
         assert_eq!(transfer.token_src_address, Some(vec![0xAA]));
         assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
+    }
+
+    /// Reconstructed-shaped row: unlike `destination_only_completed_with_transfer`
+    /// (one nullable side), both `token_src_address` / `token_dst_address` are
+    /// already populated — mirroring
+    /// `avalanche::consolidation::build_reconstructed_transfer` for an incoming
+    /// `SINGLE_HOP_SEND`, whose `sender_address` is explicitly `None` (Decision 4).
+    fn reconstructed_incoming_completed_with_transfer() -> ConsolidatedMessage {
+        let mut entry = destination_only_completed();
+        entry.transfers = vec![transfer(
+            Some(1_000),
+            Some(1_000),
+            Some(vec![0xAA]),
+            Some(vec![0xBB]),
+            None,
+            Some(vec![0x2B]),
+        )];
+        entry
+    }
+
+    /// The `send`-derived row for the same key, arriving later once chain `X`
+    /// becomes configured for the bridge and the real `send` event is indexed.
+    fn send_derived_completed_with_transfer() -> ConsolidatedMessage {
+        let mut entry = destination_only_completed();
+        entry.transfers = vec![transfer(
+            Some(1_000),
+            Some(1_000),
+            Some(vec![0xAA]),
+            Some(vec![0xBB]),
+            Some(vec![0x1A]),
+            Some(vec![0x2B]),
+        )];
+        entry
+    }
+
+    /// Regression test for the Avalanche incoming-ICTT-reconstruction merge
+    /// contract: a reconstructed row (no `send` observed, built from the ICM
+    /// payload) is flushed and stats-projected first; a later `send`-derived
+    /// flush for the same `(message_id, bridge_id, index)` must merge into the
+    /// same row without double counting and without resetting
+    /// `stats_processed` / `stats_asset_id`. `token_src_address` must not
+    /// regress — it is byte-identical across both writers by construction
+    /// (`TeleporterMessage.originSenderAddress` == the emitting transferrer),
+    /// which this asserts rather than assumes.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_reconstructed_incoming_transfer_merges_with_later_send_derived_row() {
+        let test_db = init_db("flush_reconstructed_then_send_derived").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, reconstructed_incoming_completed_with_transfer()).await;
+        let stats_asset_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db.db.as_ref())
+        .await
+        .unwrap()
+        .id;
+        mark_transfer_projected(&db, 1, Some(stats_asset_id)).await;
+
+        flush(&db, send_derived_completed_with_transfer()).await;
+
+        let transfer = load_transfer(&db).await;
+        assert_eq!(transfer.stats_processed, 1);
+        assert_eq!(transfer.stats_asset_id, Some(stats_asset_id));
+        assert_eq!(transfer.token_src_address, Some(vec![0xAA]));
+        assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
+        assert_eq!(
+            transfer.sender_address,
+            Some(vec![0x1A]),
+            "the later send-derived flush enriches the previously-NULL sender_address"
+        );
+    }
+
+    /// Fallback-only completed row: mirrors `SourceData::from_receive` /
+    /// `from_execution`'s `Failed` arm after the fix — `sender_address` and
+    /// `payload` recovered from the delivered `TeleporterMessage`, plus
+    /// `recipient_address` (which the pre-fix code already filled).
+    /// `src_tx_hash` stays NULL: no field anywhere carries a transaction hash
+    /// for a chain never observed.
+    fn fallback_completed_message() -> ConsolidatedMessage {
+        ConsolidatedMessage {
+            is_final: true,
+            replace_existing: false,
+            message: crosschain_messages::ActiveModel {
+                id: ActiveValue::Set(MESSAGE_ID),
+                bridge_id: ActiveValue::Set(BRIDGE_ID),
+                status: ActiveValue::Set(MessageStatus::Completed),
+                init_timestamp: ActiveValue::Set(ts(2_000)),
+                last_update_timestamp: ActiveValue::Set(Some(ts(2_000))),
+                src_chain_id: ActiveValue::Set(SRC_CHAIN),
+                dst_chain_id: ActiveValue::Set(Some(DST_CHAIN)),
+                native_id: ActiveValue::Set(Some(vec![0xAB])),
+                src_tx_hash: ActiveValue::Set(None),
+                dst_tx_hash: ActiveValue::Set(Some(vec![0xDD])),
+                sender_address: ActiveValue::Set(Some(vec![0x5E])),
+                recipient_address: ActiveValue::Set(Some(vec![0xEE])),
+                payload: ActiveValue::Set(Some(vec![0xFA])),
+                stats_processed: ActiveValue::Set(0),
+                created_at: ActiveValue::NotSet,
+                updated_at: ActiveValue::NotSet,
+            },
+            transfers: vec![],
+            amb_confirmations: vec![],
+            amb_anomalies: vec![],
+        }
+    }
+
+    /// The `send`-derived row for the same key, arriving later once chain `X`
+    /// becomes configured for the bridge and the real `send` event is indexed.
+    /// `sender_address` / `recipient_address` / `payload` are byte-identical to
+    /// the fallback values above — same underlying `TeleporterMessage`,
+    /// observed twice. `src_tx_hash` is the one field the fallback path could
+    /// never fill, now known.
+    fn send_derived_message_after_fallback() -> ConsolidatedMessage {
+        let mut entry = fallback_completed_message();
+        entry.message.src_tx_hash = ActiveValue::Set(Some(vec![0x11]));
+        entry
+    }
+
+    /// DB-backed round trip for the fallback-fields fix: a fallback-only
+    /// message (`sender_address`/`payload` recovered per-commit, `src_tx_hash`
+    /// NULL) is flushed to terminal status, then a `send`-driven flush for the
+    /// same `(id, bridge_id)` arrives once chain `X` is configured. The merge
+    /// must be a same-value no-op for `sender_address`/`payload` — proving the
+    /// "harmless once the real send arrives" claim instead of assuming it —
+    /// while `src_tx_hash` is newly enriched.
+    ///
+    /// `recipient_address` is the odd one out: `crosschain_messages_on_conflict`
+    /// uses `keep_existing_if_terminal` for it (unlike the `COALESCE`
+    /// `prefer_incoming` policy for `sender_address`/`payload`/`src_tx_hash`),
+    /// so once `status` is terminal it is locked to the stored value forever —
+    /// even a *different* incoming value would be silently discarded here, not
+    /// just this identical one. A recipient left NULL on first write can never
+    /// be patched by a later flush.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_send_derived_merge_is_no_op_for_already_recovered_fallback_fields() {
+        let test_db = init_db("flush_fallback_then_send_derived_message_fields").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, fallback_completed_message()).await;
+        flush(&db, send_derived_message_after_fallback()).await;
+
+        let row = load(&db).await;
+        assert_eq!(row.status, MessageStatus::Completed);
+        assert_eq!(
+            row.sender_address,
+            Some(vec![0x5E]),
+            "already-correct sender_address must be unchanged by the later merge"
+        );
+        assert_eq!(
+            row.payload,
+            Some(vec![0xFA]),
+            "already-correct payload must be unchanged by the later merge"
+        );
+        assert_eq!(
+            row.src_tx_hash,
+            Some(vec![0x11]),
+            "src_tx_hash is newly known now that chain X is configured"
+        );
+        assert_eq!(
+            row.recipient_address,
+            Some(vec![0xEE]),
+            "recipient_address stays locked to the fallback value once terminal"
+        );
     }
 
     #[tokio::test]

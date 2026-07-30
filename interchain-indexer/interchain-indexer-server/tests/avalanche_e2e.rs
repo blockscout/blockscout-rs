@@ -65,7 +65,7 @@ fn parse_message_id_from_native_id(native_id: &str) -> i64 {
 
 use interchain_indexer_entity::sea_orm_active_enums::BridgeType;
 use interchain_indexer_logic::{
-    CrosschainIndexer, InterchainDatabase, StatsService,
+    CrosschainIndexer, IndexedChains, InterchainDatabase, StatsService,
     indexer::avalanche::{
         AvalancheChainConfig, AvalancheIndexer, settings::AvalancheIndexerSettings,
     },
@@ -158,6 +158,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         docs_url: None,
         process_unknown_chains: false,
         home_chain_id: None,
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     assert_eq!(provider_src.get_block_number().await?, block_number_src);
@@ -211,6 +212,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -218,6 +220,7 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &Default::default(),
         &Default::default(),
     )?;
@@ -445,6 +448,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         docs_url: None,
         process_unknown_chains: false,
         home_chain_id: None,
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
@@ -503,6 +507,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -510,6 +515,7 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &settings,
         &Default::default(),
     )?;
@@ -642,6 +648,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         docs_url: None,
         process_unknown_chains: false,
         home_chain_id: None,
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     assert_eq!(provider_src.get_block_number().await?, block_number_src);
@@ -701,6 +708,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -708,6 +716,7 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &settings,
         &Default::default(),
     )?;
@@ -812,6 +821,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         docs_url: None,
         process_unknown_chains: true,
         home_chain_id: Some(chain_id_src),
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     assert_eq!(provider_src.get_block_number().await?, block_number_src);
@@ -855,6 +865,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -862,6 +873,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &settings,
         &Default::default(),
     )?;
@@ -927,7 +939,9 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
 /// - `init_timestamp == last_update_timestamp` (destination-side timestamp used)
 /// - `src_tx_hash = None` (source chain is not indexed)
 /// - `status = Completed` (execution succeeded on destination)
-/// - No ICTT transfer records (source-side TokensSent not available)
+/// - Exactly one ICTT transfer record, reconstructed from the ICM payload
+///   the destination chain already delivered (source-side `TokensSent` is
+///   not available, but the payload carries enough to build the row)
 #[tokio::test]
 #[ignore = "requires network access and Anvil binary"]
 async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result<()> {
@@ -980,6 +994,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         docs_url: None,
         process_unknown_chains: true,
         home_chain_id: Some(chain_id_dest),
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
@@ -1023,6 +1038,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1030,6 +1046,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &settings,
         &Default::default(),
     )?;
@@ -1092,10 +1109,56 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
         "dst_tx_hash should be present from receive/execution event"
     );
 
-    // No ICTT transfers (source-side TokensSent not available).
+    // Reconstructed ICTT transfer: decoded from the ICM payload the
+    // destination chain already delivered (source-side `TokensSent` is not
+    // available since the source chain is unknown). Byte-identical to the
+    // outgoing path's `token_src_address` for the *same* message, asserted at
+    // `:320-328` above for the fully indexed direction — that identity is
+    // what makes this a byte-identity check, not new magic numbers.
+    assert_eq!(
+        transfers.len(),
+        1,
+        "exactly one reconstructed ICTT transfer row is expected"
+    );
+    let transfer = &transfers[0];
+    assert_eq!(transfer.token_src_chain_id, chain_id_src as i64);
+    assert_eq!(transfer.token_dst_chain_id, chain_id_dest as i64);
+    assert_eq!(
+        to_hex(&transfer.token_src_address),
+        "0x33a31e0f62c0ddf25090b61ef21a70d5f48725b7",
+        "token_src_address must be byte-identical to what the outgoing path writes"
+    );
+    assert_eq!(
+        to_hex(&transfer.token_dst_address),
+        "0x012cb6651cb29c7d5dc96173756a773f7fb87cfb"
+    );
+    assert_eq!(
+        to_hex(&transfer.recipient_address),
+        "0x718245e1a9b44909f89b130e29a8908a9d6bec41"
+    );
+    assert_eq!(
+        transfer.src_amount,
+        Some(BigDecimal::from(21633300000000000000u128))
+    );
+    assert_eq!(
+        transfer.dst_amount,
+        Some(BigDecimal::from(21633300000000000000u128))
+    );
+    assert_eq!(
+        transfer.sender_address, None,
+        "a reconstructed SINGLE_HOP_SEND row leaves sender_address NULL (Decision 4) \
+         — unlike the outgoing row's 0x718245e1..."
+    );
+
+    // The message must now be final (finality fix): it must not (re)appear in
+    // pending_messages.
+    let pending = interchain_db
+        .get_pending_message(message.id, bridge_id as i32)
+        .await?;
     assert!(
-        transfers.is_empty(),
-        "No ICTT transfers should be present when source chain is unknown (no TokensSent event)"
+        pending.is_none(),
+        "a message with a credited ICTT transfer must be final and therefore \
+         absent from pending_messages"
     );
 
     indexer.stop().await;
@@ -1159,6 +1222,7 @@ async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> R
         docs_url: None,
         process_unknown_chains: true,
         home_chain_id: None,
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
@@ -1201,6 +1265,7 @@ async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> R
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1208,6 +1273,7 @@ async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> R
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &settings,
         &Default::default(),
     )?;
@@ -1307,6 +1373,7 @@ async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()>
         docs_url: None,
         process_unknown_chains: false,
         home_chain_id: Some(chain_id_dest),
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
@@ -1349,6 +1416,7 @@ async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()>
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1356,6 +1424,7 @@ async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()>
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &settings,
         &Default::default(),
     )?;
@@ -1494,6 +1563,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         docs_url: None,
         process_unknown_chains: false,
         home_chain_id: None,
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     let db_guard = helpers::init_db("avalanche_e2e", "configured_source_waits").await;
@@ -1550,6 +1620,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1557,6 +1628,7 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &settings,
         &Default::default(),
     )?;
@@ -1659,6 +1731,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         docs_url: None,
         process_unknown_chains: true,
         home_chain_id: Some(chain_id_dest),
+        reconstruct_incoming_ictt_transfers: true,
     };
 
     assert_eq!(provider_dest.get_block_number().await?, block_number_dest);
@@ -1702,6 +1775,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         std::sync::Arc::new(interchain_db.clone()),
         None,
         Default::default(),
+        IndexedChains::AllIndexed,
     ));
     let indexer = AvalancheIndexer::new(
         stats,
@@ -1709,6 +1783,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
         avalanche_chains,
         bridge_config.home_chain_id,
         bridge_config.process_unknown_chains,
+        bridge_config.reconstruct_incoming_ictt_transfers,
         &settings,
         &Default::default(),
     )?;

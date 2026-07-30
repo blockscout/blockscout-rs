@@ -75,6 +75,5 @@ Validation:
 
 ## References
 
-- Plan: `tmp/plans/re-introduce-process-unknown-chains.md`
 - Implementation: `interchain-indexer-logic/src/indexer/avalanche/mod.rs`
 - Bridge config: `interchain-indexer-server/src/config.rs`

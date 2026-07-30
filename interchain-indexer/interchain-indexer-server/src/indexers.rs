@@ -54,6 +54,7 @@ pub async fn spawn_configured_indexers(
                             configs,
                             bridge.home_chain_id,
                             bridge.process_unknown_chains,
+                            bridge.reconstruct_incoming_ictt_transfers,
                             &settings.avalanche_indexer,
                             &settings.buffer_settings,
                         )

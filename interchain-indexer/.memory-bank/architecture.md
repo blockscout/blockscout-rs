@@ -73,12 +73,32 @@ Location: `interchain-indexer-logic/src/message_buffer/types.rs`
 Determines when a buffered message is ready for database persistence:
 
 ```rust
-pub trait Consolidate {
-    fn consolidate(&self) -> Option<ConsolidatedMessage>;
+pub trait Consolidate: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de> {
+    fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>>;
 }
 ```
 
-Returns `Some` when message has reached finality (all expected events received).
+Three outcomes, not two: `Ok(None)` (not yet consolidatable), `Ok(Some(.. is_final:
+false ..))` (partial — flushed but kept in the buffer), `Ok(Some(.. is_final: true
+..))` (complete — flushed and evicted). "Ready for finality" is not simply "all
+expected events received" for every protocol — see
+`.memory-bank/research/message-lifecycle.md` for the full contract and
+`interchain-indexer-logic/src/indexer/avalanche/consolidation.rs` for how
+Avalanche's finality rule (execution success **and** ICTT completeness, where
+completeness now also accounts for hops that never produce a destination
+credit) fulfills it.
+
+### `IndexedChains` (Stats Eligibility)
+
+Location: `interchain-indexer-logic/src/stats/indexed_chains.rs`
+
+The stats layer's single observability-horizon predicate: which chains a
+bridge indexes, i.e. where its events can be observed at all. Answers "can
+this evidence still arrive?" for both stats projection eligibility and the
+read-side unindexed-chain filter, from one in-memory-config-derived set —
+never from the `bridge_contracts` table. See
+`.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md`
+and `.memory-bank/research/stats-subsystem.md`.
 
 ## Global Services
 
@@ -112,7 +132,17 @@ pending_messages (intermediate state before finality)
 indexer_checkpoints (chain_id, bridge_id, block_number)
 indexer_failures (error tracking)
 tokens (cached token metadata)
+
+stats_messages (bridge_id, src_chain_id, dst_chain_id, messages_count)
+stats_messages_days (date, bridge_id, src_chain_id, dst_chain_id, messages_count)
+stats_assets / stats_asset_tokens (logical bridged-token asset ↔ chain-local tokens, union-find merged)
+stats_asset_edges (stats_asset_id, bridge_id, src_chain_id, dst_chain_id, cumulative_amount)
+stats_chains (chain_id, unique_transfer_users_count, unique_message_users_count — periodic snapshot)
 ```
+
+Stats tables are projections from `crosschain_messages`/`crosschain_transfers`,
+not primary ingestion tables — see `.memory-bank/research/stats-projection.md`
+and `.memory-bank/research/stats-subsystem.md`.
 
 ## Indexer Implementations
 

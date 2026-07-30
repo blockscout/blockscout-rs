@@ -4,13 +4,37 @@ Non-obvious traps and their solutions.
 
 ## Message Finality is Complex
 
-**Symptom:** Messages stuck in "Initiated" status despite execution events arriving.
+**Symptom:** Messages stuck in "Initiated"/"Partial" status despite execution events arriving, accumulating permanently in `pending_messages`.
 
 **Root cause:** A message is NOT final if:
 - Execution failed (can be retried via `retryMessageExecution()`)
-- ICTT transfer incomplete (waiting for destination-side events)
+- ICTT transfer incomplete
 
-**Fix:** Finality requires: execution succeeded AND ICTT transfer complete (if applicable). Check `consolidation.rs` for the logic.
+Before the incoming-ICTT-reconstruction task, "incomplete" meant "the
+destination side produced no `TokensWithdrawn`/`CallSucceeded`/`CallFailed`",
+full stop — which is wrong for two message shapes that will *never* get one:
+an incoming ICTT message from a chain not configured for the bridge (no
+`send`, so no destination-paired source side either), and a fully indexed
+multi-hop first leg whose home chain routes onward (`TokensRouted`) instead
+of crediting a recipient. Both stayed `Partial` forever, were never
+stats-projected, and never left `pending_messages`.
+
+**Fix:** The ICM payload (`TeleporterMessage.message`, decoded by
+`ictt_payload.rs`) is what discriminates this: `SINGLE_HOP_SEND` /
+`SINGLE_HOP_CALL` mean a destination credit is expected and completeness still
+waits for it; `REGISTER_REMOTE` / `MULTI_HOP_SEND` / `MULTI_HOP_CALL` mean no
+credit will ever arrive for this message id, so the transfer is complete as
+soon as the available message evidence is present — for an unknown-source
+message that has no source-side event at all, this means the receive or
+failed-execution evidence is what completeness rests on, not a source side
+that will never exist. This classification runs on every
+`consolidate()` call that has any payload source (`send` | `receive` |
+`execution = Failed`), not only when reconstruction can build a row. Check
+`consolidation.rs`'s `ictt_completeness` / `classify_payload` for the logic.
+
+To confirm this at runtime against a live database, see
+`.memory-bank/runbooks/runtime-verification.md` queries F (incoming ICTT
+reconstruction is landing) and G (`pending_messages` backlog trend).
 
 ---
 
@@ -340,15 +364,405 @@ longer silently drops failed-AMB aggregates.
 
 ---
 
-## Stats Asset Mapping Conflicts Skip Transfer Projection
+## Stats Asset Mapping Conflicts Merge; Only Same-Chain Collisions Skip
 
-**Symptom:** Repeated warnings like `stats projection: transfer endpoints map to different stats assets; skipping transfer_id=... src_stats_asset_id=... dst_stats_asset_id=...`.
+**Symptom:** A transfer whose two endpoints already map to two different
+`stats_assets` no longer stalls as a fragmented pair — the components are
+merged automatically, visible as `interchain_indexer_stats_asset_merges_total{outcome="merged"}`
+increasing. The skip that remains is rarer: a warning like `stats projection:
+stats asset already has a different token on the destination chain; skipping
+transfer` (or `...two different tokens on one chain; skipping`), paired with
+`interchain_indexer_stats_asset_merges_total{outcome="refused_chain_collision"}`.
+Separately, `stats projection: skipping transfer due to stats_asset_edges
+decimals mismatch` paired with `interchain_indexer_stats_edge_decimals_conflict_total`
+is a different, non-corrupting skip — see below.
 
-**Root cause:** `stats_asset_tokens` already maps the transfer's source token and destination token to two different logical `stats_assets`. Projection cannot safely infer that those assets should be merged, because each `stats_asset` may hold at most one token per chain and auto-merging could corrupt bridged-token aggregates.
+**Root cause:** Asset identity is an incrementally discovered connected-component
+problem — two complete transfers on fully indexed chains can legitimately form
+disjoint components (`{A,B}` and `{C,D}`) that a later `B→C` transfer must join.
+`ensure_asset_for_transfer` resolves this via `merge_assets`: a transactional,
+validate-then-mutate union (weighted — the component with more linked tokens
+wins, ties go to the lower id) that repoints the loser's `stats_asset_tokens`,
+`stats_asset_edges` (folding amounts, rescaling for a decimals difference), and
+`crosschain_transfers.stats_asset_id`, then deletes the loser `stats_assets`
+row, all inside the same transaction as the triggering transfer. The only
+genuine refusal left is a merge that would place two different tokens of one
+chain into one `stats_asset` (a `stats_asset` can hold at most one token per
+chain) — that case cannot be resolved automatically and cannot be forced
+without corrupting the chain-uniqueness invariant.
 
-**Impact:** Canonical `crosschain_messages` / `crosschain_transfers` rows remain persisted. Only bridged-token stats projection skips that transfer: no `stats_asset_edges` increment and `crosschain_transfers.stats_asset_id` stays `NULL`. The skipped row is still marked `stats_processed += 1`, so the same row should not warn every maintenance cycle; ongoing warnings usually mean new transfers hit the same fragmented mapping or a backfill is processing historical rows.
+A decimals conflict is a separate, unrelated skip on the *counting* path:
+by the time it fires, this transfer's asset identity is already resolved
+unambiguously (directly or via a merge) — the conflict is only about whether
+this transfer's amount can be safely folded into the edge aggregate. It never
+aborts the batch (task Decision 7) and, since identity succeeded here, the
+transfer still links its resolved `stats_asset_id`.
 
-**Fix:** Treat as a data repair problem. Verify the two assets really represent the same bridged token, then merge their `stats_asset_tokens`, `stats_asset_edges`, and affected `crosschain_transfers` consistently before resetting skipped transfer stats for re-projection. For local development, a fresh reindex may be simpler.
+**Impact:** Canonical `crosschain_messages` / `crosschain_transfers` rows are
+never at risk in any of these paths. For a successful merge, the database
+changes: the winner asset absorbs the loser's tokens, edges, and transfers,
+and the loser row is gone — by design, not a side effect to repair. For a
+refused chain-collision merge, the transaction leaves the database
+byte-identical: nothing is mutated beyond marking the triggering transfer
+`stats_processed += 1` with `stats_asset_id` left `NULL`. For a decimals
+conflict, `stats_processed += 1` and `stats_asset_id` is set to the resolved
+asset, with no `stats_asset_edges` contribution.
+
+Read `crosschain_transfers.stats_asset_id` accordingly: `NULL` means identity
+is genuinely unknown or ambiguous (the chain-collision refusal is the only
+remaining case); a set `stats_asset_id` with `stats_processed > 0` and no
+corresponding edge contribution means identity is known but this transfer's
+amount was not counted (the decimals-conflict case). Either way the skipped
+row is marked processed so it does not re-warn every maintenance cycle;
+ongoing warnings usually mean new transfers keep hitting the same bad token
+data or a backfill is processing historical rows.
+
+**Fix:** A successful merge needs no manual repair — it already is the repair.
+A chain-collision refusal is a genuine data problem: verify the token address
+recorded per chain for both components (a token's address was likely
+misattributed to the wrong chain), fix the source data, then reset the
+affected transfers' `stats_processed` for re-projection. For local
+development, a fresh reindex may be simpler.
+
+To confirm this at runtime against a live database, see
+`.memory-bank/runbooks/runtime-verification.md` queries A (split-asset
+detector) and B (refusal legitimacy check).
+
+---
+
+## Stats Eligibility Is About Observability, Not Protocol Terminality
+
+**Symptom:** A bridged token appears as two one-token `stats_assets` (one per
+chain); or a processed transfer is later found with both token endpoints while
+its assigned asset contains only one of them; or a whole chain pair is missing
+from bridged-token and message-path stats even though canonical rows exist.
+
+**Root cause:** two different kinds of incompleteness get conflated.
+
+- *Protocol terminality* — AMB destination execution is terminal even when the
+  source-chain request has not been observed yet. Accepting that
+  destination-only transfer creates a singleton asset and marks the transfer
+  processed; a later source-side upsert fills the nullable canonical columns but
+  preserves `stats_processed` / `stats_asset_id`, so stats never reconsiders the
+  now-complete pair.
+- *Observability* — a message whose counterpart chain is not configured for its
+  bridge can never be confirmed. Judging it by `status = Completed` defers it
+  forever, so its data disappears from stats instead of being available as an
+  opt-in slice.
+
+**Invariant:** the stats layer decides eligibility from one question — *can the
+missing evidence still arrive?* It can exactly when the chain that would produce
+it is indexed **by that bridge** (it has a configured contract there). Nothing in
+this rule may branch on bridge type. The full rationale, the indexer contract it
+depends on, and the rejected alternatives are in
+`adr/004-stats-observability-horizon-and-asset-union-find.md`.
+
+- missing token endpoint, counterpart chain indexed → defer;
+- missing token endpoint, counterpart chain unindexed → commit to what is known;
+- missing destination confirmation, destination chain indexed → defer;
+- missing destination confirmation, destination chain unindexed → count now.
+
+The indexed-chain set comes from the **in-memory config**, per bridge. Do not
+read it from `bridge_contracts`: startup backfill runs before
+`upsert_bridge_contracts`, so a DB-derived set is stale exactly when backfill
+needs it. The same set must reach live projection and both backfill candidate
+queries — a divergence either loses rows or makes backfill loop forever.
+
+**A bridge removed from the config is not the same as a bridge with no
+contracts** (added 2026-07-28). `may_observe` answers `true` for a bridge *absent*
+from the set (permissive: defer, and keep showing its rows) and `false` for a
+bridge *present* with an empty set (restrictive: count now, hide its rows).
+Removing a bridge from `bridges.json` must therefore commit nothing and hide
+nothing — `upsert_bridges` never deletes the `bridges` row and nothing filters on
+`bridges.enabled`, so the rows stay joinable and only their classification could
+change. The branch is unreachable on the live path (no indexer ⇒ no flushes) but
+**reachable on startup backfill**, which scans every `stats_processed = 0` row
+regardless of which indexers run. `map.get(&bridge_id).is_some_and(..)` is the
+plausible-looking bug here; it must be `map_or(true, ..)`.
+
+**Counting and identity are separate concerns.** `stats_processed` guards
+counting only: additive, exactly once, never reversed. Asset identity — linking a
+newly known token endpoint, merging two asset components — is idempotent
+maintenance that may re-run for an already-counted transfer. Filling a missing
+side always requires a flush of that canonical key, so the live path must run
+identity maintenance for every flushed key, not only for entries whose incoming
+buffer item is `is_final`.
+
+**Warning:** never reset `stats_processed` after enrichment. `stats_asset_edges`
+updates are additive and would double count the previous projection. Late repair
+must go through identity maintenance, never through re-counting.
+
+**Consequence to expect:** a transfer counted while its destination chain was
+unindexed stays counted after that chain is added, even if it turns out the
+movement never completed. That is an accepted inaccuracy for the opt-in
+unindexed slice, not a bug. A transfer whose counterpart chain *is* indexed but
+whose evidence is permanently lost (AMB `messageId` collision, history older than
+the configured start block) stays deferred forever by design — a marker-zero row
+with a NULL endpoint is not a backfill backlog.
+
+To confirm this at runtime against a live database, see
+`.memory-bank/runbooks/runtime-verification.md` queries D (deferred
+transfers, classified by reason) and E (unindexed-chain edges).
+
+---
+
+## Recoverable Message Fields Are Not A "Never Mirror" Case
+
+**Symptom:** For a message arriving from a chain the bridge does not index,
+`crosschain_messages.sender_address`, `recipient_address`, and `payload` were
+all NULL even though the `ReceiveCrossChainMessage` (or
+`MessageExecutionFailed`) log the destination chain delivered carries all
+three directly. On a live database this was 100% of unindexed→indexed
+messages (13,865 rows on one bridge), versus 0% of indexed-source messages.
+It looked intentional because a regression test asserted the NULLs as an
+invariant.
+
+**Root cause:** `SourceData::from_receive` / `from_execution` in
+`indexer/avalanche/consolidation.rs` built with `..Default::default()`,
+discarding all three fields — even though the very same `TeleporterMessage` is
+read a few lines away in the same function, for payload classification and
+ICTT reconstruction. This traces back to `4c7198d1` (the `SourceData` block was
+byte-identical on `main` for a long time), but commit `9329320c` mistakenly
+*codified* it: it added a test and a comment asserting the NULLs as correct,
+borrowing ADR-003's "never mirror an unknown side" language and misapplying it
+to fields that are not mirroring at all.
+
+**The line ADR-003 actually draws:** ADR-003 forbids copying *one side's*
+value into the *other side's* column when the true value for that side is
+genuinely unknown and directionally ambiguous — its motivating case is the AMB
+calldata `_token`, which means the source or the destination token depending on
+which mediator function was called, so there is no way to know which side it
+belongs to. Reading `originSenderAddress` / `destinationAddress` / `message`
+out of a delivered, Warp-verified ICM message is not that: it is an
+unambiguously named field the message carries **about itself**, observed from
+an equally authoritative point (the destination chain's own receipt). The test
+is whether a value is *ambiguous* or merely *late*. `src_tx_hash` is the one
+field this reasoning does not rescue: it is a fact about a transaction on a
+chain never observed, and no field anywhere carries it — it must stay NULL in
+every fallback path.
+
+**Fix:** `from_receive` and `from_execution`'s `Failed` arm now populate
+`sender_address`, `recipient_address`, and `payload` from the delivered
+`TeleporterMessage`; `from_execution`'s `Succeeded` arm is unchanged because
+`MessageExecuted` carries only `messageID` + `sourceBlockchainID` — genuinely
+nothing to recover there. This is the same "fill it if any single indexed
+chain's events carry it" rule ADR-004 Decision 4 already states for
+`crosschain_transfers` sides, generalized to `crosschain_messages` fields; see
+that ADR's Decision 4.
+
+**Before writing off a NULL as "the other side is unknown," check whether the
+value is actually ambiguous or just sitting in an event you haven't read yet
+in this code path.**
+
+**Operational consequence:** this fix changes `stats_chains` unique-user
+counts. `unique_message_users_count` counts distinct non-NULL
+`recipient_address` values grouped by `dst_chain_id`
+(`select_stats_chains_message_user_counts` in `database.rs`); with
+`recipient_address` NULL for every unindexed-source message, that chain's
+count was silently deflated (one production chain showed 23 against 13,865
+uncounted completed incoming messages). After this fix and a stats rebuild,
+operators will see the number jump — that is a correction, not a bug.
+
+---
+
+## `recipient_address` On A Terminal `crosschain_messages` Row Can Never Be Patched Later
+
+**Symptom:** A message's `recipient_address` stays NULL forever even after its
+source chain is later added to the bridge config and the real `send` event
+(carrying the correct value) is indexed — while `sender_address` and `payload`
+*do* get filled in by that same later flush.
+
+**Root cause:** `crosschain_messages_on_conflict` (`message_buffer/persistence.rs`)
+does not apply one merge policy to all columns. `dst_chain_id`, `dst_tx_hash`,
+and `recipient_address` use `keep_existing_if_terminal`: once `status` is
+`completed`/`failed`, the **stored** value is kept unconditionally and the
+incoming flush's value for that column is discarded outright — even if the
+stored value is NULL and the incoming one is not. `sender_address`, `payload`,
+and `src_tx_hash` instead use `prefer_incoming`
+(`COALESCE(EXCLUDED.col, stored.col)`), which fills a NULL from a later flush
+regardless of terminal status.
+
+**Fix / implication:** a NULL `recipient_address` written on the row's first
+terminal flush is **permanent** — there is no later opportunity to backfill
+it, unlike `sender_address`/`payload`, which self-heal once a real `send`
+arrives even if left NULL initially. This is exactly why the fix above must
+populate `recipient_address` at first write for the unindexed-source fallback
+path, not lean on "a later `send` will patch it": for this one column, that
+assumption is false. If a future change needs `recipient_address` to be
+correctable after terminal status, it requires either a different conflict
+policy for that column or an explicit reconciliation path — the existing merge
+will silently discard the correction.
+
+---
+
+## `pending_messages` Retention for Unconfigured Counterparts Is Load-Bearing, Not a Leak
+
+**Symptom:** `pending_messages` grows and plateaus rather than draining to
+zero, even long after catch-up finishes — most visibly for a bridge running
+with `process_unknown_chains: true` against subnets it does not configure. A
+live run on Avalanche bridge 2 (C-Chain + Numine configured,
+`process_unknown_chains: true`) showed roughly 20k cold-tier rows with the
+oldest row's timestamp not moving between snapshots.
+
+**Root cause:** Removal from `pending_messages` is gated on **protocol
+finality**, not on "has this key been flushed." A message flushed as
+`Partial` keeps its buffered cold-tier row — permanently, if its counterpart
+chain is unconfigured for the bridge. This is deliberate, not an oversight:
+
+- consolidation reads only the buffered state for a key; it has no path to
+  rehydrate a canonical row back into the buffer
+- `Consolidate for Message`'s `consolidate()` refuses to proceed for a
+  *configured* source chain with no `send` event yet
+  (`(None, false) => Ok(None)` in `consolidation.rs`) — it will not fabricate
+  a message from a destination-only view when the source chain could still
+  produce one
+- the retained cold-tier row is exactly what makes adding a chain to a
+  bridge later **safe without rescanning the already-indexed chain**, whose
+  checkpoint has already moved past the relevant blocks — the buffered row is
+  the only place the destination-side information still lives
+
+The asymmetry worth remembering: `SourceData::from_send` only consumes seven
+fields off the `send` event, and the canonical row already stores every one
+of them. So the retained buffer entry is not needed because information is
+missing — it is needed because nothing ever arrives to **trigger**
+re-consolidation for that key once its source chain is genuinely never
+going to produce a `send`.
+
+**Fix:** Do not treat a non-draining `pending_messages` count as a leak by
+itself. Distinguish "still catching up" from "permanently retained": query the
+oldest `updated_at`/`created_at` per `(bridge_id, chain_id)` twice, separated
+by time, once catch-up has converged — if it has not moved and the message
+count matches "one-sided messages whose counterpart chain is unconfigured,"
+that is expected. If a chain is later added to a bridge's contracts, do not
+attempt to clear or rescan these rows preemptively; the buffered entries pick
+up the new configuration correctly once new events restore them into the hot
+tier.
+
+To confirm this at runtime against a live database, see
+`.memory-bank/runbooks/runtime-verification.md` query G (`pending_messages`
+backlog trend).
+
+---
+
+## `bridge_contracts` Is Only A Diagnostic Proxy For Runtime Membership
+
+**Symptom:** A chain that is clearly indexed (or clearly not) for a bridge
+disagrees with what `bridge_contracts` shows for that `(bridge_id, chain_id)`
+pair.
+
+**Root cause:** `bridge_contracts` is populated by `upsert_bridge_contracts`
+at startup, which is intentionally sequenced **after** the stats backfill
+pass (see `gotchas.md` / `stats-projection.md` on why `IndexedChains` must
+come from in-memory config, never this table). Two effects follow:
+
+- **under-populated during startup backfill:** the table has no rows for the
+  current run yet exactly when backfill needs an accurate indexed-chain set
+- **permanently over-populated after a chain is removed from a bridge:** no
+  code path deletes a `bridge_contracts` row when `bridges.json` drops a
+  contract, so the table keeps reporting a chain as configured long after it
+  stopped being indexed
+
+**Fix:** Treat `bridge_contracts` as useful for diagnostics and joins, never
+as the authoritative "is this chain indexed for this bridge" answer. The
+authoritative answer is always `IndexedChains::may_observe`, built once at
+startup from the in-memory bridges config
+(`interchain-indexer-logic/src/stats/indexed_chains.rs`,
+`interchain-indexer-server/src/server.rs`). If a diagnostic query needs the
+concrete configured set, prefer `IndexedChains::chain_ids_for(bridge_id)` /
+`configured_pairs(...)` semantics as the reference, not a raw
+`bridge_contracts` scan.
+
+`.memory-bank/runbooks/runtime-verification.md` spells out this caveat in
+full for the queries that join against `bridge_contracts` (D, E).
+
+---
+
+## `just test` / `just test-with-db` Silently Target The Dev Database
+
+**Symptom:** Running `just test` (or `just test-with-db`) appears to pass or
+fail against unexpected data, or interferes with a locally running dev
+Postgres instance rather than an isolated test database.
+
+**Root cause:** `justfile` computes `DATABASE_URL` from `DB_HOST`/`DB_PORT`
+(defaulting to `localhost:5432`, the dev database's usual address) and
+`export`s it, which **overrides** any `DATABASE_URL` already set in the
+calling shell's environment. `just test-with-db` does start a separate
+Postgres on `TEST_DB_PORT` (default `9433`) and reassigns `db-port`/`db-name`
+for its own recipe invocation — but any direct `just test` call, or a
+shell that already exported a different `DATABASE_URL` expecting it to be
+honored, silently loses that value.
+
+**Fix:** For a self-contained run, prefer `just test-with-db`, which manages
+its own disposable Postgres end to end. For a targeted single-test run against
+a specific database, invoke `cargo test` directly with an explicit
+`DATABASE_URL=...` rather than going through `just test`, since the recipe
+recomputes and exports the variable regardless of what the shell already set.
+`just test-with-db` also runs its underlying `cargo test` as one invocation
+across the workspace; a failure aborts that run rather than continuing to
+exercise unrelated crates, so a single failing test elsewhere in the workspace
+can stop you from seeing results for the crate you actually care about — scope
+with `cargo test -p <crate>` when you only need one crate's tests.
+
+---
+
+## Two Pre-Existing `avalanche-e2e` Failures Are Environmental, Not Regressions
+
+**Symptom:** Running the full `avalanche-e2e` suite
+(`cargo test --package interchain-indexer-server --features avalanche-e2e --
+--ignored --nocapture`) reproducibly fails exactly two tests out of nine,
+independent of which commit is checked out.
+
+**Root cause:** Both reproduce identically on `main` and are unrelated to any
+in-flight change:
+
+- `test_home_chain_does_not_override_strict_unknown_filter` polls for a
+  `chains`/blockchain-ID-mapping row that `blockchain_id_resolver.rs` will
+  never persist for its scenario: the resolver only writes a mapping when
+  `process_unknown_chains` is set or the chain already exists, and this test
+  deliberately configures neither. A test/contract mismatch predating any
+  recent branch by several releases, not a network problem (the live
+  Avalanche Data API was independently confirmed reachable and correct).
+- `test_icm_and_ictt_are_indexed` races a checkpoint write in `log_stream.rs`:
+  the realtime cursor is persisted when the catch-up loop exits, and this
+  test forks both chains exactly at the event block, so there is no catch-up
+  range at all — the checkpoint reports "done" before the realtime fetch of
+  that very block has actually been handled. The test's readiness check is
+  checkpoint equality, so it queries too early and fails as either
+  `message not found` or `status Initiated` depending on scheduling. It is the
+  only test in the suite with both sides forked at the event block *and* a
+  checkpoint-based wait, which is why the other e2e tests are unaffected.
+
+**Fix:** Do not chase these as regressions when validating a change against
+`avalanche-e2e` — confirm they were already failing on `main` first. Fixing
+either is a pre-existing-bug task, not part of feature work that happens to
+touch nearby code: the resolver mismatch is fixable from either the resolver
+or the test's scenario; the checkpoint race needs the catch-up-exit write in
+`log_stream.rs` to not precede the realtime fetch it claims to cover, or the
+test's readiness check to wait on something other than checkpoint equality.
+
+---
+
+## Token Identity In `stats_asset_tokens` Is The ICTT Contract Address, Not The Wrapped ERC-20
+
+**Symptom:** Two chain-local token rows for the same `stats_asset` show the
+identical token address, and it looks like the split-asset detector should
+have flagged it but did not.
+
+**Root cause:** This is intentional modelling, not a defect. Avalanche ICTT
+transfers key chain-local token identity by the TokenTransferrer contract
+address (the Home/Remote bridge contract), not by the wrapped ERC-20 the
+contract wraps. When Home and Remote happen to be deployed at the same
+address via CREATE2, the two chain-local rows for that asset legitimately
+carry the same address — this is one asset observed on two chains, not two
+assets that collided. The owner confirmed this modelling is intended
+(observed on Avalanche NUMI/WTTC in a live run).
+
+**Fix:** Do not "fix" a same-address pair across two chains in
+`stats_asset_tokens` as if it were a bug — the split detector (`stats_asset_id`
+per endpoint disagreeing) correctly does not flag it, because it is not a
+split. If a genuine split is suspected, verify via the split detector
+described in `gotchas.md`, "Stats Asset Mapping Conflicts Merge; Only
+Same-Chain Collisions Skip," rather than by eyeballing address equality.
 
 ---
 
@@ -438,10 +852,8 @@ cursor** field (proto field 7), and `GetChainsStatsRequest` uses `chain_id`
 cursor semantics for `api.use_pagination_token=false` clients.
 
 The unified read-filter vocabulary avoids both by construction:
-`home_chain_id`, `counterparty_chain_ids`, `bridge_ids` (design record:
-`tmp/tasks/api-per-frontend-chain-filtering/task.md`, "Filter Vocabulary").
-Never add request fields named `bridge_id`/`chain_id` to these messages for
-non-cursor purposes.
+`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`. Never add request
+fields named `bridge_id`/`chain_id` to these messages for non-cursor purposes.
 
 ---
 
@@ -459,7 +871,7 @@ rows.
 Pattern for the read-API filters: declare the field in proto even when the
 endpoint cannot honor it yet, and return
 `Status::invalid_argument("<param> is not supported by this endpoint yet")`
-for non-blank values (see `tmp/tasks/api-per-frontend-chain-filtering/`).
+for non-blank values.
 
 ---
 
@@ -477,5 +889,25 @@ that left it `NotSet` then insert SQL `NULL` instead of omitting the column
 **Fix:** Split into separate inserts — one batch that relies on DB defaults,
 another that explicitly `Set`s timestamps — or set the column on every model
 in the batch.
+
+---
+
+## `abi_decode_validate` Does Not Reject Trailing Bytes
+
+**Symptom:** Decoding a payload with garbage appended after a valid ABI
+encoding still succeeds.
+
+**Root cause:** `alloy_sol_types::SolValue::abi_decode_validate` only
+type-checks the tokens it reads (correct offsets, correct word count for the
+declared type); it does not verify that the input slice was fully consumed.
+Non-canonical offsets and trailing bytes both pass silently.
+
+**Fix:** Add an explicit canonicity round trip — re-encode the decoded value
+(`decoded.abi_encode()`) and compare it byte-for-byte to the original input.
+This is the layer that actually rejects trailing bytes and non-canonical
+encodings. See `interchain-indexer-logic/src/indexer/avalanche/ictt_payload.rs`
+(`decode_transferrer_message` / `decode_inner`) for the pattern — it matters
+here because a false-positive ICTT payload decode would fabricate a bogus
+`crosschain_transfers` row from an arbitrary ICM message.
 
 ---

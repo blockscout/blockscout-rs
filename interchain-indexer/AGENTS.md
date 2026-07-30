@@ -25,6 +25,7 @@ Start with these files:
 - `.memory-bank/glossary.md` — repo-specific terminology
 - `.memory-bank/gotchas.md` — non-obvious traps and operational edge cases
 - `.memory-bank/research/README.md` — durable deep-dive investigations
+- `.memory-bank/runbooks/` — operational diagnostics for a live/running service
 - `.memory-bank/rules/` — coding conventions
 - `.memory-bank/workflows/` — reusable task procedures
 - `.memory-bank/adr/README.md` — architectural decision records
@@ -75,6 +76,7 @@ When finishing a reusable investigation, add or update a note in `.memory-bank/r
 When making an architectural decision, add an ADR to `.memory-bank/adr/`.
 When corrected about a convention, update the relevant file in `.memory-bank/rules/`.
 When a new coding rule emerges, update the relevant file in `.memory-bank/rules/` or create a new one if needed.
+Never cite a `tmp/` path from a committed file — it is gitignored and resolves to nothing for anyone else; cite code, a commit, or an ADR instead.
 
 ## Workflows
 

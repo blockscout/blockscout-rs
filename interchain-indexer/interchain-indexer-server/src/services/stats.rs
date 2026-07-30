@@ -11,8 +11,8 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
-    StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField, StatsListQuery,
-    StatsService, StatsSortOrder, utils::to_hex_prefixed,
+    IndexedChains, StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField,
+    StatsListQuery, StatsService, StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -21,6 +21,7 @@ pub struct InterchainStatisticsServiceImpl {
     pub stats: Arc<StatsService>,
     pub api_settings: ApiSettings,
     pub chain_info: Arc<ChainInfoService>,
+    pub indexed_chains: Arc<IndexedChains>,
 }
 
 impl InterchainStatisticsServiceImpl {
@@ -28,11 +29,13 @@ impl InterchainStatisticsServiceImpl {
         stats: Arc<StatsService>,
         api_settings: ApiSettings,
         chain_info: Arc<ChainInfoService>,
+        indexed_chains: Arc<IndexedChains>,
     ) -> Self {
         Self {
             stats,
             api_settings,
             chain_info,
+            indexed_chains,
         }
     }
 }
@@ -55,6 +58,8 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let counters = self
@@ -88,6 +93,8 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
             inner.bridge_ids.as_deref(),
+            self.indexed_chains.as_ref(),
+            inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
         let counters = self
@@ -110,6 +117,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         request: Request<GetBridgedTokensRequest>,
     ) -> Result<Response<GetBridgedTokensResponse>, Status> {
         let inner = request.into_inner();
+        let include_unindexed = inner.include_unindexed_chains.unwrap_or(false);
         let sort = BridgedTokensSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -147,12 +155,27 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         )?);
         let bridges = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
 
+        // Per-bridge restriction for the edges aggregate, and the union over all
+        // bridges for the per-asset token list (`stats_asset_tokens` has no
+        // `bridge_id`, so it can only use the union). Both derive from
+        // `IndexedChains` so they can never disagree with `/stats/chains` or
+        // `GetChains`. `None` (opt-in, or an `AllIndexed` configuration) applies
+        // no restriction.
+        let pairs = (!include_unindexed)
+            .then(|| self.indexed_chains.configured_pairs(bridges.as_deref()))
+            .flatten();
+        let union = (!include_unindexed)
+            .then(|| self.indexed_chains.configured_union())
+            .flatten();
+
         let (rows, pagination) = self
             .stats
             .get_bridged_tokens_for_chain(
                 inner.chain_id,
                 counterparty.as_deref(),
                 bridges.as_deref(),
+                pairs.as_deref(),
+                union.as_deref(),
                 StatsListQuery {
                     sort,
                     order,
@@ -183,6 +206,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         request: Request<GetChainsStatsRequest>,
     ) -> Result<Response<GetChainsStatsResponse>, Status> {
         let inner = request.into_inner();
+        let include_unindexed = inner.include_unindexed_chains.unwrap_or(false);
         let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
         let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
@@ -214,10 +238,18 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         let last_page = inner.last_page.unwrap_or(false);
         let q = normalize_stats_q(inner.q.as_deref());
 
+        // `None` = no restriction (opt-in, or an `AllIndexed` configuration).
+        // Derived from the same `configured_union()` accessor `GetChains` uses,
+        // so the two directory views cannot drift apart.
+        let indexed = (!include_unindexed)
+            .then(|| self.indexed_chains.configured_union())
+            .flatten();
+
         let (rows, pagination) = self
             .stats
             .get_stats_chains(
                 chain_ids,
+                indexed.as_deref(),
                 StatsListQuery {
                     sort,
                     order,
@@ -266,6 +298,7 @@ impl InterchainStatisticsServiceImpl {
         inner: GetMessagePathsRequest,
         outgoing: bool,
     ) -> Result<Response<GetMessagePathsResponse>, Status> {
+        let include_unindexed = inner.include_unindexed_chains.unwrap_or(false);
         let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
         let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
         let counterparty_ids = parse_chain_ids_csv(
@@ -276,6 +309,19 @@ impl InterchainStatisticsServiceImpl {
         let bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
         let bridges = (!bridge_ids.is_empty()).then_some(bridge_ids.as_slice());
 
+        // Per-bridge pairs plus the union *over the in-scope bridges*, derived
+        // from the same `pairs` value so the two restrictions can never
+        // disagree about which bridges are in scope (coding-task-2b item 7).
+        let pairs = (!include_unindexed)
+            .then(|| self.indexed_chains.configured_pairs(bridges))
+            .flatten();
+        let union = pairs.as_ref().map(|p| {
+            let mut ids: Vec<i64> = p.iter().flat_map(|(_, c)| c.iter().copied()).collect();
+            ids.sort_unstable();
+            ids.dedup();
+            ids
+        });
+
         let rows = if outgoing {
             self.stats
                 .get_outgoing_message_paths(
@@ -284,6 +330,8 @@ impl InterchainStatisticsServiceImpl {
                     to_date,
                     counterparty,
                     bridges,
+                    pairs.as_deref(),
+                    union.as_deref(),
                 )
                 .await
         } else {
@@ -294,6 +342,8 @@ impl InterchainStatisticsServiceImpl {
                     to_date,
                     counterparty,
                     bridges,
+                    pairs.as_deref(),
+                    union.as_deref(),
                 )
                 .await
         }

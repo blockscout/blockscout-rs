@@ -28,6 +28,8 @@ This directory is a shared knowledge base for AI coding assistants. In this chec
 │   ├── stats-projection.md
 │   ├── stats-subsystem.md
 │   └── token-info-service.md
+├── runbooks/            # Operational diagnostics against a live/running service
+│   └── runtime-verification.md
 ├── rules/               # Coding conventions (symlinked to tool dirs)
 │   ├── rust-style.md
 │   ├── error-handling.md
@@ -80,6 +82,11 @@ This directory is a shared knowledge base for AI coding assistants. In this chec
   - repo-specific terminology
 - `research/`
   - focused investigations into multi-file behaviors and invariants
+- `runbooks/`
+  - operational diagnostics for verifying or troubleshooting a live/running
+    service (copy-paste-runnable queries, canaries vs. diagnostics) — distinct
+    from `research/` (investigations of behavior), `rules/` (coding
+    conventions), and `workflows/` (authoring procedures for agents)
 - `gotchas.md`
   - non-obvious traps and their fixes
 - `rules/`
@@ -97,8 +104,15 @@ When working on this codebase:
 - **Make an architectural decision?** → Add an ADR to `adr/`
 - **Get corrected about a convention?** → Update the relevant file in `rules/`
 - **Finish a reusable multi-file investigation?** → Add or update a note in `research/`
+- **Write or extend a copy-paste diagnostic query for a live/running service?** →
+  Add or update an entry in `runbooks/` (not `research/`, which is for
+  investigations rather than repeatable checks)
 - **Learn something project-specific?** → Update the relevant canonical file
 - **Create a temporary note in `tmp/` during investigation?** → Promote durable findings into
   `.memory-bank/` and avoid leaving long-term knowledge only in `tmp/`
+- **Citing a source from a committed file (`.memory-bank/`, an ADR, etc.)?** → Never cite a
+  `tmp/` path. `tmp/` is local and gitignored, so a path under it is a dangling reference for
+  every other clone of the repo. State the substance inline instead, or point to a durable
+  anchor — a code path, a commit hash, or an ADR section
 
 This keeps the knowledge base current and useful for future sessions.

@@ -59,6 +59,12 @@ specialized persistence module, or a higher-level service.
 - `interchain-indexer-logic/src/bulk.rs`
 - `interchain-indexer-logic/src/message_buffer/persistence.rs`
 - `interchain-indexer-logic/src/stats/projection.rs`
+- `interchain-indexer-logic/src/stats/indexed_chains.rs` — shared SQL condition
+  builders (`chain_unindexed_condition` and friends) consumed by both
+  `stats/projection.rs` and `database.rs`'s raw-SQL stats/backfill queries
+- `interchain-indexer-logic/src/filters.rs` — `ChainBridgeFilter`, the SeaORM
+  condition builder for the read-side unindexed-chain filter over canonical
+  tables
 - `interchain-indexer-logic/src/stats_chains_query.rs`
 - `interchain-indexer-logic/src/bridged_tokens_query.rs`
 - `interchain-indexer-server/src/server.rs`
@@ -175,11 +181,25 @@ Instead, they mutate the message buffer. During maintenance:
    - `crosschain_transfers`
 3. finalized entries are removed from `pending_messages`
 4. `indexer_checkpoints` is updated conservatively from buffer cursors
-5. finalized canonical rows are projected into stats tables in the same
-   maintenance transaction
+5. **every flushed row (final or `Partial`) is projected into stats tables**
+   in the same maintenance transaction — not only finalized rows.
+   `stats_processed` counting stays gated on eligibility inside the
+   projection functions themselves; the wider trigger exists so token/asset
+   identity maintenance (see below) can see every flush, not only final ones.
+   See `.memory-bank/research/stats-projection.md`.
 
 This means the authoritative canonical write path is split between the buffer
 maintenance algorithm and specialized persistence/projection modules.
+
+Since ADR-004, stats projection is also a **multi-table batched write** in one
+other respect: resolving a transfer's bridged-token identity can trigger a
+union-find merge across two existing `stats_assets` components, repointing
+rows in `stats_asset_tokens`, `stats_asset_edges`, and
+`crosschain_transfers.stats_asset_id` (batched to respect the bind-parameter
+limit) before deleting the losing `stats_assets` row — all inside the same
+transaction as the triggering transfer's projection. See
+`.memory-bank/research/stats-subsystem.md` and
+`.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md`.
 
 ### 4. Runtime Metadata Writes
 
@@ -259,6 +279,14 @@ Operationally, DB-layer activity is easiest to inspect through:
   - `avalanche_icm_blockchain_ids`
   - dynamically ensured `chains` rows
   - token metadata in `tokens`
+- `bridge_contracts` is a config-reference table but is **not** authoritative
+  for "is this chain currently indexed for this bridge": it is under-populated
+  during startup stats backfill (which runs before `upsert_bridge_contracts`)
+  and never cleaned up after a contract is removed from `bridges.json` (no
+  code path deletes the row). The authoritative answer is
+  `IndexedChains::may_observe`, built once from the in-memory bridges config —
+  see `.memory-bank/gotchas.md`, "`bridge_contracts` Is Only A Diagnostic
+  Proxy For Runtime Membership"
 - the database layer is not a single repository file or package today; it is a
   hybrid split across facade and specialized modules
 

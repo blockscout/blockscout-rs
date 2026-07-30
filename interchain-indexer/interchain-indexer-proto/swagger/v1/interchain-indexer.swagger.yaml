@@ -45,6 +45,14 @@ paths:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: include_unindexed_chains
+          description: |-
+            When true, also return chains that no configured bridge indexes.
+            Default (absent or false) omits them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainService
   /api/v1/interchain/messages:
@@ -147,6 +155,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also return messages/transfers touching a chain that this
+            record's own bridge does not index (such a record can never be observed
+            from both sides). Default (absent or false) hides them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainService
   /api/v1/interchain/messages/{message_id}:
@@ -276,6 +292,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also return messages/transfers touching a chain that this
+            record's own bridge does not index (such a record can never be observed
+            from both sides). Default (absent or false) hides them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainService
   /api/v1/interchain/messages:byTx/{tx_hash}:
@@ -377,6 +401,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also return messages/transfers touching a chain that this
+            record's own bridge does not index (such a record can never be observed
+            from both sides). Default (absent or false) hides them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainService
   /api/v1/interchain/transfers:
@@ -485,6 +517,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also return messages/transfers touching a chain that this
+            record's own bridge does not index (such a record can never be observed
+            from both sides). Default (absent or false) hides them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainService
   /api/v1/interchain/transfers:byAddress/{address}:
@@ -592,6 +632,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also return messages/transfers touching a chain that this
+            record's own bridge does not index (such a record can never be observed
+            from both sides). Default (absent or false) hides them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainService
   /api/v1/interchain/transfers:byTx/{tx_hash}:
@@ -699,6 +747,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also return messages/transfers touching a chain that this
+            record's own bridge does not index (such a record can never be observed
+            from both sides). Default (absent or false) hides them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainService
   /api/v1/stats/chain/{chain_id}/bridged-tokens:
@@ -800,6 +856,22 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also include tokens/edges touching a chain that no configured
+            bridge indexes. Default (absent or false) hides them. Currently returns no
+            additional rows — the aggregates for unindexed chain pairs are not written
+            yet.
+
+            The per-asset token list can only be restricted by the union across all
+            bridges (the underlying table carries no bridge id), while the edges
+            aggregate above is restricted per the edge's own bridge. So by default an
+            asset's token list omits tokens on chains no bridge indexes at all, but may
+            still list a token on a chain indexed only by a *different* bridge than the
+            one whose edges produced the asset.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainStatisticsService
   /api/v1/stats/chain/{chain_id}/messages-paths/received:
@@ -845,6 +917,15 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also include message paths touching a chain that no configured
+            bridge indexes. Default (absent or false) hides them. Currently returns no
+            additional rows — the aggregates for unindexed chain pairs are not written
+            yet.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainStatisticsService
   /api/v1/stats/chain/{chain_id}/messages-paths/sent:
@@ -890,6 +971,15 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also include message paths touching a chain that no configured
+            bridge indexes. Default (absent or false) hides them. Currently returns no
+            additional rows — the aggregates for unindexed chain pairs are not written
+            yet.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainStatisticsService
   /api/v1/stats/chains:
@@ -964,6 +1054,13 @@ paths:
           enum:
             - UNIQUE_TRANSFER_USERS_COUNT
           default: UNIQUE_TRANSFER_USERS_COUNT
+        - name: include_unindexed_chains
+          description: |-
+            When true, also return chains that no configured bridge indexes. Default
+            (absent or false) omits them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainStatisticsService
   /api/v1/stats/common:
@@ -1022,6 +1119,13 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also count messages/transfers touching a chain that this
+            record's own bridge does not index. Default (absent or false) hides them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainStatisticsService
   /api/v1/stats/daily:
@@ -1080,6 +1184,13 @@ paths:
           in: query
           required: false
           type: string
+        - name: include_unindexed_chains
+          description: |-
+            When true, also count messages/transfers touching a chain that this
+            record's own bridge does not index. Default (absent or false) hides them.
+          in: query
+          required: false
+          type: boolean
       tags:
         - InterchainStatisticsService
   /api/v1/status/indexers:
@@ -1202,6 +1313,17 @@ definitions:
         type: string
       docs_url:
         type: string
+      indexed_chain_ids:
+        type: array
+        items:
+          type: string
+          format: int64
+        description: |-
+          Chain ids this bridge actually indexes today, sorted ascending. Derived
+          from the in-memory bridges config (`IndexedChains`), not from historical
+          `bridge_contracts` rows, so a bridge removed from config but still
+          present in the `bridges` table (upserts never delete) reports an empty
+          list here rather than stale contract history.
   v1BridgeInfo:
     type: object
     properties:
@@ -1419,6 +1541,12 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1InterchainTransfer'
+      has_unindexed_chain:
+        type: boolean
+        description: |-
+          True when this record's source or destination chain is not indexed by its
+          own bridge (an unknown destination also counts). Such a record can never be
+          observed from both sides. Always present.
   v1InterchainTransfer:
     type: object
     properties:
@@ -1452,6 +1580,12 @@ definitions:
         $ref: '#/definitions/v1AddressInfo'
       receive_timestamp:
         type: string
+      has_unindexed_chain:
+        type: boolean
+        description: |-
+          True when this record's source or destination chain is not indexed by its
+          own bridge (an unknown destination also counts). Such a record can never be
+          observed from both sides. Always present.
   v1MessagePathRow:
     type: object
     properties:

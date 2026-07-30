@@ -4069,6 +4069,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "base64 0.22.1",
+ "bigdecimal",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "bon",

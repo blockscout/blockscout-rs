@@ -35,6 +35,7 @@ pub use indexer::*;
 pub use provider_layers::*;
 pub use settings::MessageBufferSettings;
 pub use stats::{
-    BridgedTokenListRow, StatsChainListRow, StatsListQuery, StatsReadSettings, StatsService,
+    BridgedTokenListRow, IndexedChains, StatsChainListRow, StatsListQuery, StatsReadSettings,
+    StatsService,
 };
 pub use token_info::{TokenInfoService, TokenInfoServiceSettings};

@@ -104,6 +104,11 @@ message GetMessagesRequest {
   // dst_chain_id is in this set). A destination filter excludes messages with a
   // NULL destination through normal SQL semantics.
   optional string dst_chain_ids = 13;
+
+  // When true, also return messages/transfers touching a chain that this
+  // record's own bridge does not index (such a record can never be observed
+  // from both sides). Default (absent or false) hides them.
+  optional bool include_unindexed_chains = 14;
 }
 
 message GetMessageDetailsRequest {
@@ -150,6 +155,11 @@ message GetMessagesByTransactionRequest {
   // dst_chain_id is in this set). A destination filter excludes messages with a
   // NULL destination through normal SQL semantics.
   optional string dst_chain_ids = 13;
+
+  // When true, also return messages/transfers touching a chain that this
+  // record's own bridge does not index (such a record can never be observed
+  // from both sides). Default (absent or false) hides them.
+  optional bool include_unindexed_chains = 14;
 }
 
 message GetMessagesByAddressRequest {
@@ -188,6 +198,11 @@ message GetMessagesByAddressRequest {
   // dst_chain_id is in this set). A destination filter excludes messages with a
   // NULL destination through normal SQL semantics.
   optional string dst_chain_ids = 13;
+
+  // When true, also return messages/transfers touching a chain that this
+  // record's own bridge does not index (such a record can never be observed
+  // from both sides). Default (absent or false) hides them.
+  optional bool include_unindexed_chains = 14;
 }
 
 message AddressInfo {
@@ -213,7 +228,11 @@ message ChainInfo {
   optional string custom_token_route = 7;
 }
 
-message GetChainsRequest {}
+message GetChainsRequest {
+  // When true, also return chains that no configured bridge indexes.
+  // Default (absent or false) omits them.
+  optional bool include_unindexed_chains = 1;
+}
 
 message GetChainsResponse {
   repeated ChainInfo items = 1;
@@ -229,6 +248,12 @@ message Bridge {
   bool enabled = 4;
   optional string ui_url = 5;
   optional string docs_url = 6;
+  // Chain ids this bridge actually indexes today, sorted ascending. Derived
+  // from the in-memory bridges config (`IndexedChains`), not from historical
+  // `bridge_contracts` rows, so a bridge removed from config but still
+  // present in the `bridges` table (upserts never delete) reports an empty
+  // list here rather than stale contract history.
+  repeated int64 indexed_chain_ids = 7;
 }
 
 message GetBridgesResponse {
@@ -261,6 +286,11 @@ message InterchainMessage {
   map<string, string> extra = 13; // additional parsed data
 
   repeated InterchainTransfer transfers = 14;
+
+  // True when this record's source or destination chain is not indexed by its
+  // own bridge (an unknown destination also counts). Such a record can never be
+  // observed from both sides. Always present.
+  optional bool has_unindexed_chain = 15;
 }
 
 message GetMessagesResponse {
@@ -305,6 +335,11 @@ message GetTransfersRequest {
   // narrows the focal predicate through AND. Matched by the transfer's own token
   // destination chain (token_dst_chain_id).
   optional string dst_chain_ids = 14;
+
+  // When true, also return messages/transfers touching a chain that this
+  // record's own bridge does not index (such a record can never be observed
+  // from both sides). Default (absent or false) hides them.
+  optional bool include_unindexed_chains = 15;
 }
 
 message GetTransfersByTransactionRequest {
@@ -343,6 +378,11 @@ message GetTransfersByTransactionRequest {
   // narrows the focal predicate through AND. Matched by the transfer's own token
   // destination chain (token_dst_chain_id).
   optional string dst_chain_ids = 14;
+
+  // When true, also return messages/transfers touching a chain that this
+  // record's own bridge does not index (such a record can never be observed
+  // from both sides). Default (absent or false) hides them.
+  optional bool include_unindexed_chains = 15;
 }
 
 message GetTransfersByAddressRequest {
@@ -381,6 +421,11 @@ message GetTransfersByAddressRequest {
   // narrows the focal predicate through AND. Matched by the transfer's own token
   // destination chain (token_dst_chain_id).
   optional string dst_chain_ids = 14;
+
+  // When true, also return messages/transfers touching a chain that this
+  // record's own bridge does not index (such a record can never be observed
+  // from both sides). Default (absent or false) hides them.
+  optional bool include_unindexed_chains = 15;
 }
 
 message TokenInfo {
@@ -412,7 +457,11 @@ message InterchainTransfer {
   optional string destination_transaction_hash = 11;
   optional AddressInfo recipient = 12;
   optional string receive_timestamp = 13;
-  
+
+  // True when this record's source or destination chain is not indexed by its
+  // own bridge (an unknown destination also counts). Such a record can never be
+  // observed from both sides. Always present.
+  optional bool has_unindexed_chain = 16;
 }
 
 message GetTransfersResponse {

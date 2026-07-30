@@ -46,6 +46,29 @@
   - `interchain-indexer-logic/src/indexer/avalanche/blockchain_id_resolver.rs`
   - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
 
+## If You Need to Understand Incoming ICTT Reconstruction / ICM Payload Decoding
+
+- `interchain-indexer-logic/src/indexer/avalanche/ictt_payload.rs`
+  - decodes `TeleporterMessage.message` into a `TransferrerMessage`,
+    classifies the hop (`REGISTER_REMOTE` / `SINGLE_HOP_SEND` /
+    `SINGLE_HOP_CALL` / `MULTI_HOP_SEND` / `MULTI_HOP_CALL`), enforces the
+    canonicity round-trip that rejects trailing bytes
+- `interchain-indexer-logic/src/indexer/avalanche/consolidation.rs`
+  - `classify_payload` / `ictt_completeness` (finality classification),
+    `try_reconstruct_transfer` / `build_reconstructed_transfer` (the
+    reconstruction builder), `build_transfer` (the ordinary `send`-driven
+    builder)
+- `interchain-indexer-logic/src/indexer/avalanche/metrics.rs`
+  - per-outcome reconstruction metric
+- `interchain-indexer-logic/src/indexer/avalanche/abi.rs`
+  - `TransferrerMessage` and per-hop-type ABI structs
+- `interchain-indexer-server/src/config.rs`
+  - `reconstruct_incoming_ictt_transfers` per-bridge kill switch (default `true`)
+- then continue to:
+  - `.memory-bank/gotchas.md` — "Message Finality is Complex"
+  - `.memory-bank/research/message-lifecycle.md` — Layer 2 §8
+  - `.memory-bank/research/avalanche-bridge-filtering.md` — point 2 in "Post-filter"
+
 ## If You Need to Understand Bridge Filtering
 
 - `interchain-indexer-server/src/config.rs`
@@ -102,14 +125,51 @@
 
 ## If You Need to Understand Stats
 
+- `interchain-indexer-logic/src/stats/indexed_chains.rs`
+  - **start here for eligibility** — `IndexedChains`, `may_observe`, and the
+    shared SQL condition builders (`message_countable_condition`,
+    `transfer_identity_ready_condition`, `chain_unindexed_condition`) used by
+    both live projection and backfill
 - `interchain-indexer-logic/src/stats/projection.rs`
-  - projection of canonical rows into stats tables
+  - projection of canonical rows into stats tables; asset union-find merge
+    (`merge_assets`, `ensure_asset_for_transfer`); decimals-conflict handling
+- `interchain-indexer-logic/src/stats/metrics.rs`
+  - eligibility, merge, and decimals-conflict metrics
 - `interchain-indexer-logic/src/stats/service.rs`
-  - backfill and recomputation orchestration
+  - backfill and recomputation orchestration; `apply_stats_for_flushed_batch`
+    (the live projection hook, runs for every flushed entry, not only final)
+- `interchain-indexer-logic/src/filters.rs`
+  - `ChainBridgeFilter` — read-side SeaORM condition builder consuming
+    `IndexedChains` for the unindexed-chain opt-in filter
+- `interchain-indexer-server/src/services/bridge_proto.rs`
+  - builds the `Bridge` proto message, including `indexed_chain_ids`
 - `interchain-indexer-server/src/server.rs`
-  - startup backfill and periodic stats chains worker
+  - startup backfill, `IndexedChains::from_bridges` construction, and
+    periodic stats chains worker
+- `.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md`
+  - design rationale for the eligibility rule and asset merge
 - `.memory-bank/research/stats-projection.md`
   - durable walkthrough for stats projection semantics
+- `.memory-bank/research/stats-subsystem.md`
+  - full stats API surface, eligibility rule, asset merge, and read-filter
+    surface
+
+## If You Need to Verify a Running Service / Diagnose Stats at Runtime
+
+- `.memory-bank/runbooks/runtime-verification.md`
+  - **start here** — copy-paste-runnable, read-only SQL checklist for
+    confirming stats-projection and observability-horizon behavior against a
+    live database: canaries to run routinely, diagnostics to reach for once
+    a canary fires, and how to read `stats_asset_id` / `bridge_contracts` /
+    the merge metrics
+- `.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md`
+  - the design the runbook's queries verify
+- then continue to:
+  - `.memory-bank/gotchas.md` — "`bridge_contracts` Is Only A Diagnostic
+    Proxy For Runtime Membership", "Stats Asset Mapping Conflicts Merge; Only
+    Same-Chain Collisions Skip", "Stats Eligibility Is About Observability,
+    Not Protocol Terminality", "`pending_messages` Retention for
+    Unconfigured Counterparts Is Load-Bearing, Not a Leak"
 
 ## If You Need to Understand Service-Wide Metadata Services
 

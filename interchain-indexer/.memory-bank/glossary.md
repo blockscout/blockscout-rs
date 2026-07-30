@@ -80,6 +80,49 @@ A derived write from canonical tables into aggregate tables. In this repo,
 stats are projections from `crosschain_messages` and `crosschain_transfers`,
 not primary ingestion tables.
 
+## Observability Horizon
+
+The stats layer's eligibility rule (ADR-004): a message or transfer counts
+once the evidence it is still missing can no longer arrive, because the chain
+that would produce it is not indexed by that bridge. Answered by exactly one
+method, `IndexedChains::may_observe(bridge_id, chain_id)`, used identically by
+projection and by the read-side unindexed-chain filter. Distinct from
+protocol finality — a message can be observability-horizon-countable while
+its protocol `status` is still `Initiated`.
+
+## `IndexedChains`
+
+The per-bridge set of chains a bridge actually indexes (a configured
+contract there), built once at startup from the in-memory `bridges.json`
+config — never from the `bridge_contracts` table, which is stale exactly when
+backfill needs an accurate set. `AllIndexed` (no config, permissive default)
+or `PerBridge(HashMap<bridge_id, HashSet<chain_id>>)`. A bridge absent from
+the map is permissive (existing history stays countable); a bridge present
+with an empty chain set is restrictive (a misconfiguration surfaced by a
+startup warning). See `interchain-indexer-logic/src/stats/indexed_chains.rs`.
+
+## Countable / Deferred (Stats)
+
+The two outcomes of the observability-horizon eligibility check. *Countable*
+means a message/transfer's missing evidence either arrived or can never
+arrive, so it is safe to count now (increments `stats_processed` and the
+matching aggregate). *Deferred* means the evidence could still arrive later
+(its chain is indexed by the bridge), so the row waits, uncounted, for a
+future flush. Deferral is re-evaluated, not remembered — a deferred row is
+simply re-checked the next time its canonical key is flushed.
+
+## Union-Find Asset Merge
+
+The strategy for resolving bridged-token identity in `stats_assets` /
+`stats_asset_tokens` (ADR-004): a transfer is an edge between two token
+vertices, an asset is a connected component, and linking two tokens already
+in different components merges the components (repointing tokens, edges,
+transfers, then deleting the losing row) rather than refusing. The only
+unresolvable conflict is two different tokens of one chain landing in the
+same asset. See `merge_assets` / `ensure_asset_for_transfer` in
+`stats/projection.rs` and `gotchas.md`, "Stats Asset Mapping Conflicts Merge;
+Only Same-Chain Collisions Skip."
+
 ## Teleporter / ICM
 
 Avalanche native interchain messaging protocol. In this repo, Teleporter / ICM
@@ -89,6 +132,39 @@ events are the main message-level signal for the Avalanche indexer.
 
 Avalanche Inter-Chain Token Transfer protocol. ICTT events extend message flows
 with token transfer semantics and affect finality and stats behavior.
+
+## ICM Payload / `TransferrerMessage`
+
+The ICTT envelope carried inside `TeleporterMessage.message`, decoded by
+`indexer/avalanche/ictt_payload.rs`. Its `messageType` classifies the hop
+into `REGISTER_REMOTE`, `SINGLE_HOP_SEND`, `SINGLE_HOP_CALL`,
+`MULTI_HOP_SEND`, or `MULTI_HOP_CALL`. `SINGLE_HOP_*` means a destination
+credit event is expected before the transfer is complete; `MULTI_HOP_*` /
+`REGISTER_REMOTE` mean none will ever arrive for this message id (a multi-hop
+first leg re-sends under a *new* id at the home chain instead of crediting a
+recipient) — this classification is what lets `consolidation.rs` finalize
+such a message without waiting forever for a destination event that will
+never come. Decoding enforces a canonicity round-trip (re-encode and
+byte-compare) to reject non-canonical ABI encodings or trailing bytes.
+
+## Incoming ICTT Reconstruction
+
+The second transfer-building path in `consolidation.rs`
+(`try_reconstruct_transfer` / `build_reconstructed_transfer`), which builds a
+`crosschain_transfers` row purely from the ICM payload and a receiver-side
+ICTT effect when the source chain is unconfigured (no `send` event will ever
+arrive). Fires only for `SINGLE_HOP_SEND` / `SINGLE_HOP_CALL`; never races a
+real `send` event; gated per bridge by `bridges.json`'s
+`reconstruct_incoming_ictt_transfers` (default `true`).
+
+## Unindexed-Chain Read Filter
+
+The opt-in read-side surface built on `IndexedChains::may_observe`:
+`include_unindexed_chains` (request field, default `false`) widens list and
+stats endpoints to include rows a bridge could not have fully observed;
+`has_unindexed_chain` (response field on messages/transfers) flags such rows
+either way; `indexed_chain_ids` (response field on `Bridge`) reports a
+bridge's actual configured chain set. See `stats-subsystem.md`.
 
 ## Source-Indexed Data
 

@@ -111,7 +111,10 @@ Current usage sites are:
 - `interchain-indexer-server/src/services/interchain_service.rs`
   - request-time enrichment for transfer API responses
 - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
-  - post-commit enrichment kickoff for newly finalized transfers
+  - post-commit enrichment kickoff for **every flushed transfer each cycle,
+    final and `Partial` alike** (`StatsService::kickoff_token_enrichment_for_flushed`,
+    renamed from `..._for_finalized`) — not only newly finalized ones; see
+    `.memory-bank/research/message-lifecycle.md`
 - `interchain-indexer-logic/src/database.rs`
   - startup backfill round hands discovered token keys to the service
 - `interchain-indexer-logic/src/message_buffer/buffer.rs`
@@ -204,7 +207,8 @@ best-effort external icon responses.
 
 There are two stats-related kickoff paths:
 
-- normal runtime maintenance after finalized entries are flushed and projected
+- normal runtime maintenance after each cycle's flushed entries (final and
+  `Partial` alike) are flushed and projected
 - startup backfill when unprocessed stats batches are replayed
 
 In both cases, token enrichment is kicked off only after the core projection

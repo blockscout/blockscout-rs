@@ -82,6 +82,36 @@ let result = self.fetch().await.inspect_err(|e| {
 - Prefer `?` + context or explicit branching for recoverable failures.
 - Validate external input before parsing/conversion.
 
+## Expected Skips Inside a Shared Transaction
+
+Never represent an expected, business-level skip as the transaction's error type.
+A `DbErr` escaping a transaction closure rolls back *everything* in that
+transaction, including unrelated work — and if the condition recurs, it rolls back
+on every cycle, so one bad row stalls the service permanently.
+
+The maintenance transaction is the case that matters: it carries canonical
+message and transfer writes, stats projection, and cursor persistence together.
+Returning `Err` from projection there discards cursor progress, so the next cycle
+re-reads the same blocks and hits the same row again.
+
+Use a domain-specific type for the expected condition and let the caller decide:
+
+```rust
+// Good: a marker the caller can collect and skip
+struct DecimalsConflict;
+fn edge_amount(...) -> Result<BigDecimal, DecimalsConflict> { ... }
+
+// Bad: aborts the whole transaction, every cycle
+return Err(DbErr::Custom(format!("conflicting decimals ...")));
+```
+
+Reserve `DbErr` for genuine database failures. Anything you can foresee — a data
+conflict, an unreconcilable mapping, a unit mismatch — is a skip: warn, count a
+metric, mark the row processed so it is not retried forever, and commit.
+
+Related: never detect such a conflict by letting an `INSERT` fail. In PostgreSQL a
+failed statement poisons the whole transaction, so check with a `SELECT` first.
+
 ## Recovery Patterns
 
 - Use `inspect_err()` only at handling boundaries (e.g., metrics/logging), not during propagation.

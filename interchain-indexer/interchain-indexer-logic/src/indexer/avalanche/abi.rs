@@ -154,6 +154,74 @@ sol! {
         uint256 secondaryFee;
     }
 
+    /// ICTT payload structs carried inside `TeleporterMessage.message`
+    /// (`message == abi.encode(TransferrerMessage)`), from
+    /// `icm-contracts/contracts/ictt/interfaces/ITokenTransferrer.sol`.
+    ///
+    /// These are **decode-only**: they are never buffered and never persisted,
+    /// unlike every other type in this file, which is why they derive `Debug`
+    /// only and omit `Serialize`/`Deserialize`. `sol!` has no Solidity `enum`
+    /// support, so `messageType` is declared `uint8`; the ordinal-to-variant
+    /// mapping lives in Rust (`ictt_payload.rs`) and its order is load-bearing:
+    /// `REGISTER_REMOTE = 0`, `SINGLE_HOP_SEND = 1`, `SINGLE_HOP_CALL = 2`,
+    /// `MULTI_HOP_SEND = 3`, `MULTI_HOP_CALL = 4`.
+    #[derive(Debug)]
+    struct TransferrerMessage {
+        uint8 messageType;
+        bytes payload;
+    }
+
+    #[derive(Debug)]
+    struct RegisterRemoteMessage {
+        uint256 initialReserveImbalance;
+        uint8 homeTokenDecimals;
+        uint8 remoteTokenDecimals;
+    }
+
+    #[derive(Debug)]
+    struct SingleHopSendMessage {
+        address recipient;
+        uint256 amount;
+    }
+
+    #[derive(Debug)]
+    struct SingleHopCallMessage {
+        bytes32 sourceBlockchainID;
+        address originTokenTransferrerAddress;
+        address originSenderAddress;
+        address recipientContract;
+        uint256 amount;
+        bytes recipientPayload;
+        uint256 recipientGasLimit;
+        address fallbackRecipient;
+    }
+
+    #[derive(Debug)]
+    struct MultiHopSendMessage {
+        bytes32 destinationBlockchainID;
+        address destinationTokenTransferrerAddress;
+        address recipient;
+        uint256 amount;
+        uint256 secondaryFee;
+        uint256 secondaryGasLimit;
+        address multiHopFallback;
+    }
+
+    #[derive(Debug)]
+    struct MultiHopCallMessage {
+        address originSenderAddress;
+        bytes32 destinationBlockchainID;
+        address destinationTokenTransferrerAddress;
+        address recipientContract;
+        uint256 amount;
+        bytes recipientPayload;
+        uint256 recipientGasLimit;
+        address fallbackRecipient;
+        uint256 secondaryRequiredGasLimit;
+        address multiHopFallback;
+        uint256 secondaryFee;
+    }
+
      /// @notice Interface for an Avalanche interchain token transferrer that
      /// sends tokens to another chain.
      ///
