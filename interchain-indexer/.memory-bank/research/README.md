@@ -123,6 +123,10 @@ Small topics may keep some sections brief.
   `TokensBridged` events (not calldata), the native/bridged token model and
   `handleBridgedTokens` vs `handleNativeTokens` directional semantics, and the
   nullable transfer-side columns
+- `indexing-gaps-retries-and-checkpoint-safety.md` — failure and retry
+  semantics for Avalanche and AMB indexing, the missing post-`getLogs`
+  acknowledgement boundary, durable-gap scenarios, and the actual guarantees
+  of `indexer_checkpoints` and `indexer_failures`
 - Follow-up: migrate Avalanche's inline cleanup guard / EVM log orchestration
   onto `interchain-indexer-logic/src/indexer/cleanup_guard.rs` and
   `interchain-indexer-logic/src/indexer/evm/`.

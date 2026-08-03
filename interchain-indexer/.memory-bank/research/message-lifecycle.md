@@ -127,14 +127,67 @@ Configurable parameters: `filter`, `batch_size`, `poll_interval`,
 LogStream is protocol-agnostic. Indexers configure it with their own filters
 and cursors.
 
-#### 2. Checkpoint restoration
+#### 2. Checkpoint restoration and cursor semantics
 
 On startup, indexers read `indexer_checkpoints` for their `(bridge_id,
 chain_id)` pairs to determine `realtime_cursor` and `catchup_cursor`. If no
 checkpoint exists, they initialize from config or latest block. This is the
-universal restart mechanism — cursors are advanced conservatively during
-maintenance so that no finalized work is repeated and no unfinished work is
-skipped.
+universal restart mechanism. Maintenance advances cursors conservatively for
+state that successfully reached `MessageBuffer`, but the checkpoint is not a
+per-block processing acknowledgement: post-`getLogs` failures and direct
+catchup completion can move scan coverage past work that never reached the
+buffer. See `indexing-gaps-retries-and-checkpoint-safety.md`.
+
+**What the three cursors mean.** All are **inclusive "next block to scan"**
+boundaries, not "last block scanned" — which is why a restored boundary block is
+re-scanned. Together, `catchup_min_cursor` and `catchup_max_cursor` delimit the
+**interval that has not been scanned yet**:
+
+```text
+   started_at_block                                                     chain tip
+        │                                                                   │
+        ▼                                                                   ▼
+   ─────┬───────────────┬──────────────────────┬─────────────────────┬──────────
+        │   scanned     │     NOT scanned      │       scanned       │ not yet
+        │  (upward      │   (catchup work      │  (downward catchup  │ reached
+        │   catchup)    │     remaining)       │   + realtime)       │
+   ─────┴───────────────┴──────────────────────┴─────────────────────┴──────────
+                        ▲                      ▲                     ▲
+              catchup_min_cursor       catchup_max_cursor      realtime_cursor
+              inclusive, only rises    inclusive, only falls   inclusive, only rises
+```
+
+| Cursor | Meaning | Direction | Conflict rule |
+|---|---|---|---|
+| `catchup_min_cursor` | lowest block not yet scanned | only rises | `GREATEST` (see caveat) |
+| `catchup_max_cursor` | highest block not yet scanned | only falls | `LEAST` |
+| `realtime_cursor` | next block the forward scan will request | only rises | `GREATEST` |
+| `finality_cursor` | intended confirmed-block boundary | — | unused |
+
+Consequences worth internalizing:
+
+- **Catchup completion is "the two catchup cursors met"**, i.e. the unscanned
+  interval is empty (`catchup_max_cursor < catchup_min_cursor`). It is not "the
+  frontier reached `started_at_block`" — that formulation only happens to work
+  while `catchup_min_cursor` sits at `started_at_block`.
+- **The model allows catchup from both ends at once** — downward from realtime
+  and upward from `started_at_block`. Nothing in the schema or the cursor
+  algebra prevents it. Both current indexers walk **downward only**, so a reader
+  should treat one-directional catchup as an implementation property, not as the
+  contract.
+- `realtime_cursor` is monotonically the highest block ever known for the pair,
+  so it doubles as a usable upper anchor for progress calculations.
+
+**Current caveat — `catchup_min_cursor` is written but never used.** Both writers
+hard-code it to `0` (`message_buffer/persistence.rs:394`,
+`database.rs:2512`) and no reader consumes it, so today the lower bound of the
+unscanned interval is implicit in `started_at_block` from config rather than
+stored. The column is therefore *dormant, not dead*: the semantics above are the
+schema's design, and the hard-coded `0` is the gap between design and
+implementation. `finality_cursor` is likewise written as `0` and read nowhere,
+but that one has no implementation behind it at all — there is no
+confirmation-depth or reorg logic (see
+`indexing-gaps-retries-and-checkpoint-safety.md`).
 
 #### 3. Buffer mutation via `alter()`
 
@@ -205,7 +258,8 @@ Classification outcomes:
 
 | Dirty? | Consolidation | Stale? | Action |
 |--------|---------------|--------|--------|
-| No | — | — | `Unchanged` — skip entirely |
+| No | — | No | `Unchanged` — skip consolidation/flush, keep as hot cursor barrier |
+| No | — | Yes | `Unchanged` + stale — offload to cold tier |
 | Yes | `None` | No | `NotReady` — stays in hot tier (hot cursor barrier) |
 | Yes | `None` | Yes | `NotReady` + stale — offload to cold tier |
 | Yes | `Some(final=false)` | No | `Partial` — flush to DB, mark flushed, keep in hot |
@@ -251,8 +305,9 @@ Cursor tracking determines how far `indexer_checkpoints` can safely advance.
 **Block classification during planning:**
 
 - Entries leaving the hot tier (stale or finalized) contribute their
-  `touched_blocks` as **cold** — these blocks are fully processed and safe to
-  advance past.
+  `touched_blocks` as **cold** — finalized state is flushed, while stale
+  incomplete state is first persisted in `pending_messages`, so it can be
+  restored after restart.
 - Entries remaining in the hot tier contribute their `touched_blocks` as
   **hot** — these blocks contain pending work and act as barriers.
 
@@ -270,7 +325,13 @@ Cursor tracking determines how far `indexer_checkpoints` can safely advance.
   (backward scanning)
 - `realtime_cursor` uses `GREATEST(existing, new)` — can only increase
   (forward scanning)
-- This ensures cursors never skip unprocessed blocks on restart.
+- `catchup_min_cursor` is written as constant `0` and never read — see the cursor
+  semantics table in step 2 for what it is *meant* to hold
+- This preserves cursor monotonicity but does not prove full block processing.
+  Gap bridging is safe only when missing block numbers truly contain no failed
+  work. Blocks that fail after a successful `eth_getLogs` are absent from both
+  hot and cold sets and can therefore be crossed. See
+  `indexing-gaps-retries-and-checkpoint-safety.md`.
 
 #### 8. `CrosschainIndexer` trait
 
@@ -455,11 +516,14 @@ pattern, not a generic contract, but may be reused by future indexers.
 
 ### Generic
 
-- `buffer.alter()` is the sole path from indexers to the shared pipeline
-- Indexers never interact with `pending_messages` or `indexer_checkpoints`
-  directly
+- `buffer.alter()` is the normal path from protocol event handlers to the
+  shared message pipeline
+- Protocol handlers do not write `pending_messages` or `indexer_checkpoints`
+  directly, but `LogStream` directly calls
+  `InterchainDatabase::mark_catchup_complete()`
 - Maintenance is the sole writer to `crosschain_messages`,
-  `crosschain_transfers`, `pending_messages`, and `indexer_checkpoints`
+  `crosschain_transfers`, and `pending_messages`; it is not the sole writer to
+  `indexer_checkpoints`
 - The maintenance transaction is atomic: all five steps commit or roll back
   together
 - Stats projection runs inside the maintenance transaction, not after
@@ -512,8 +576,11 @@ pattern, not a generic contract, but may be reused by future indexers.
   `BUFFER_MAINTENANCE_ERRORS_TOTAL`; the loop continues on next tick
 - Cold-tier restore failure (DB or deserialization) propagates from
   `buffer.alter()` to the indexer's per-log error handling
-- Cursor advancement is conservative: if maintenance fails mid-transaction,
-  cursors are not advanced, ensuring safe replay on restart
+- Cursor advancement inside maintenance is transactional: if maintenance fails
+  mid-transaction, its cursor update rolls back. This guarantee only covers
+  work represented in that maintenance plan; it does not cover post-`getLogs`
+  processing failures or the separate catchup-completion writer. See
+  `indexing-gaps-retries-and-checkpoint-safety.md`
 - Per-bridge metrics: `BUFFER_HOT_ENTRIES`, `BUFFER_MAINTENANCE_ENTRIES` (by
   state), `BUFFER_EVICTED_ENTRIES` (by reason), `BUFFER_MESSAGES_FINALIZED_TOTAL`,
   `BUFFER_TRANSFERS_FINALIZED_TOTAL`, `BUFFER_CURSOR` (by direction),
@@ -526,7 +593,9 @@ pattern, not a generic contract, but may be reused by future indexers.
   skipped)
 - Filtered messages produce trace-level logs with full context (message ID,
   chains, filter reason)
-- Receipt/block fetch failures fail the entire batch for that transaction
+- Receipt/block collection is all-or-nothing: one failure aborts the entire
+  fetched batch before event dispatch, and the outer loop logs and continues
+  without requeueing that range
 
 ## Edge Cases / Gotchas
 
@@ -565,6 +634,11 @@ Update this note when:
 - `buffer.alter()` API or cold-tier restore behavior changes
 - maintenance transaction step ordering changes
 - cursor derivation logic (cold/hot classification, extend/bootstrap) changes
+- `catchup_min_cursor` or `finality_cursor` gains a real runtime writer or reader
+  (both are currently written as constant `0`; the cursor semantics table in
+  Layer 1 step 2 must then be updated to describe behaviour rather than intent)
+- catchup gains an upward scanning direction, making the two-ended unscanned
+  interval real rather than latent
 - new post-commit hooks are added to the maintenance pipeline
 - `LogStream` API or bidirectional scanning model changes
 - `CrosschainIndexer` trait contract changes

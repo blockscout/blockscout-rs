@@ -212,7 +212,7 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 
 | Variable                                                                   | Req&#x200B;uir&#x200B;ed | Description                                                            | Default value |
 | -------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------- | ------------- |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`                        |                          | Number of contract events to be pulled at once.                        | `1000`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`                        |                          | Number of blocks scanned per log request.                              | `1000`        |
 | `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`                  |                          | Duration between pulling contract events. Unit: `milliseconds`         | `10000`       |
 | `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__NETWORK` |                          | Avalanche Data API network. One of `mainnet`, `fuji`, `testnet`.       | `Mainnet`     |
 | `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__API_KEY` |                          | API key for Avalanche Data API (`x-glacier-api-key` header). Optional. | `null`        |
@@ -225,7 +225,7 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 
 | Variable                                                     | Req&#x200B;uir&#x200B;ed | Description                                                    | Default value |
 | ------------------------------------------------------------ | ------------------------ | -------------------------------------------------------------- | ------------- |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE`                |                          | Number of contract events to be pulled at once.                | `1000`        |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE`                |                          | Number of blocks scanned per log request.                      | `1000`        |
 | `INTERCHAIN_INDEXER__AMB_INDEXER__PULL_INTERVAL_MS`          |                          | Duration between pulling contract events. Unit: `milliseconds` | `500`       |
 | `INTERCHAIN_INDEXER__AMB_INDEXER__RECEIPT_CONCURRENCY`       |                          | Maximum concurrent receipt and block fetches per AMB batch.    | `25`          |
 | `INTERCHAIN_INDEXER__AMB_INDEXER__CLOCK_SKEW_TOLERANCE`      |                          | Tolerance for a destination execution preceding its source request before flagging an AMB `messageId` collision. Unit: `seconds` | `300`         |
