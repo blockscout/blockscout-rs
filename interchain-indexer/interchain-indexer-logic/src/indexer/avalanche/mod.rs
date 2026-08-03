@@ -46,7 +46,11 @@ use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
     StatsService,
     avalanche::settings::AvalancheIndexerSettings,
-    log_stream::LogStream,
+    indexer::{
+        failure_ledger::FailureLedger,
+        range_driver::{BatchError, RangeDriver, RangeProcessor},
+    },
+    log_stream::{LogBatch, LogStream},
     message_buffer::{Key, MessageBuffer},
 };
 
@@ -207,6 +211,7 @@ impl AvalancheIndexer {
     /// - Merges streams and processes batches in order of arrival.
     async fn run(self) -> Result<()> {
         let db = (*self.db).clone();
+        let ledger = Arc::new(FailureLedger::new(self.db.clone()));
         let bridge_id = self.bridge_id;
         let chains = self.chains;
         let home_chain = self.home_chain;
@@ -215,10 +220,11 @@ impl AvalancheIndexer {
         let settings = self.settings;
         let buffer = self.buffer;
 
-        let chain_ids: HashSet<i64> = chains.iter().map(|c| c.chain_id).collect();
+        let chain_ids: Arc<HashSet<i64>> = Arc::new(chains.iter().map(|c| c.chain_id).collect());
 
         let data_api_settings = settings.data_api_client_settings.clone();
-        let blockchain_id_resolver = BlockchainIdResolver::new(data_api_settings, db.clone());
+        let blockchain_id_resolver =
+            Arc::new(BlockchainIdResolver::new(data_api_settings, db.clone()));
 
         tracing::info!(
             bridge_id,
@@ -228,7 +234,7 @@ impl AvalancheIndexer {
 
         let mut combined_stream = SelectAll::new();
 
-        for chain in chains {
+        for chain in &chains {
             let chain_id = chain.chain_id;
             let start_block = chain.start_block;
             let contract_address = chain.contract_address;
@@ -264,7 +270,6 @@ impl AvalancheIndexer {
 
             tracing::info!(bridge_id, chain_id, "configured log stream");
 
-            let stream_provider = provider.clone();
             let stream = LogStream::builder(provider.clone())
                 .filter(filter)
                 .poll_interval(settings.pull_interval_ms)
@@ -278,40 +283,100 @@ impl AvalancheIndexer {
                 .catchup()
                 .realtime()
                 .build()?
-                .map(move |logs| (chain_id, stream_provider.clone(), logs))
+                .map(move |batch| (chain_id, batch))
                 .boxed();
 
             combined_stream.push(stream);
         }
 
-        let batch_ctx = BatchProcessContext {
+        let processor = AvalancheRangeProcessor {
             bridge_id,
-            chain_ids: &chain_ids,
+            chains,
+            chain_ids,
             home_chain,
             process_unknown_chains,
             reconstruct_incoming_ictt_transfers,
-            blockchain_id_resolver: &blockchain_id_resolver,
-            buffer: &buffer,
+            blockchain_id_resolver,
+            buffer,
+            batch_size: settings.batch_size,
         };
 
-        // Process events
-        while let Some((chain_id, provider, batch)) = combined_stream.next().await {
-            match process_batch(batch, chain_id, &batch_ctx, &provider).await {
-                Ok(_) => {
-                    tracing::debug!(bridge_id, chain_id, "processed log batch");
-                }
-                Err(err) => {
-                    tracing::error!(
-                        err = ?err,
-                        bridge_id,
-                        chain_id,
-                        "failed to process Avalanche log batch"
-                    );
-                }
-            }
-        }
+        RangeDriver::new(processor, ledger, settings.failure_retry.clone())
+            .run(combined_stream)
+            .await?;
 
         tracing::warn!(bridge_id, "Avalanche indexer stream completed unexpectedly");
+        Ok(())
+    }
+}
+
+/// Owned form of [`BatchProcessContext`] for [`RangeProcessor`].
+/// `BatchProcessContext` itself borrows `run()`'s locals and cannot live
+/// behind a trait, so this struct owns the backing data instead and
+/// rebuilds the borrowed context per call in `process`.
+struct AvalancheRangeProcessor {
+    bridge_id: i32,
+    chains: Vec<AvalancheChainConfig>,
+    chain_ids: Arc<HashSet<i64>>,
+    home_chain: Option<i64>,
+    process_unknown_chains: bool,
+    reconstruct_incoming_ictt_transfers: bool,
+    blockchain_id_resolver: Arc<BlockchainIdResolver>,
+    buffer: Arc<MessageBuffer<Message>>,
+    batch_size: u64,
+}
+
+impl AvalancheRangeProcessor {
+    fn chain_config(&self, chain_id: i64) -> Option<&AvalancheChainConfig> {
+        self.chains.iter().find(|c| c.chain_id == chain_id)
+    }
+}
+
+#[async_trait]
+impl RangeProcessor for AvalancheRangeProcessor {
+    fn bridge_id(&self) -> i32 {
+        self.bridge_id
+    }
+
+    fn chain_ids(&self) -> Vec<i64> {
+        self.chains.iter().map(|c| c.chain_id).collect()
+    }
+
+    fn provider(&self, chain_id: i64) -> Option<DynProvider<Ethereum>> {
+        self.chain_config(chain_id).map(|c| c.provider.clone())
+    }
+
+    fn log_filter(&self, chain_id: i64) -> Result<Filter> {
+        let chain = self
+            .chain_config(chain_id)
+            .ok_or_else(|| anyhow!("no configured Avalanche contract for chain_id {chain_id}"))?;
+
+        Ok(Filter::new()
+            .address(chain.contract_address)
+            .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES))
+    }
+
+    fn batch_size(&self) -> u64 {
+        self.batch_size
+    }
+
+    async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError> {
+        let provider = self
+            .provider(chain_id)
+            .ok_or_else(|| anyhow!("no provider configured for chain_id {chain_id}"))?;
+
+        let ctx = BatchProcessContext {
+            bridge_id: self.bridge_id,
+            chain_ids: &self.chain_ids,
+            home_chain: self.home_chain,
+            process_unknown_chains: self.process_unknown_chains,
+            reconstruct_incoming_ictt_transfers: self.reconstruct_incoming_ictt_transfers,
+            blockchain_id_resolver: &self.blockchain_id_resolver,
+            buffer: &self.buffer,
+        };
+
+        process_batch(&batch.logs, chain_id, &ctx, &provider).await?;
+        tracing::debug!(bridge_id = self.bridge_id, chain_id, "processed log batch");
         Ok(())
     }
 }
@@ -496,7 +561,7 @@ struct BatchProcessContext<'a> {
 /// Logs are grouped by transaction hash so we can fetch the full receipt
 /// (including non-Teleporter logs) and block timestamp once per tx.
 async fn process_batch(
-    batch: Vec<Log>,
+    batch: &[Log],
     chain_id: i64,
     ctx: &BatchProcessContext<'_>,
     provider: &DynProvider<Ethereum>,

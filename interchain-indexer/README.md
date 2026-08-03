@@ -210,12 +210,19 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 
 [anchor]: <> (anchors.envs.start.avalanche)
 
-| Variable                                                                   | Req&#x200B;uir&#x200B;ed | Description                                                            | Default value |
-| -------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------- | ------------- |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`                        |                          | Number of blocks scanned per log request.                              | `1000`        |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`                  |                          | Duration between pulling contract events. Unit: `milliseconds`         | `10000`       |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__NETWORK` |                          | Avalanche Data API network. One of `mainnet`, `fuji`, `testnet`.       | `Mainnet`     |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__API_KEY` |                          | API key for Avalanche Data API (`x-glacier-api-key` header). Optional. | `null`        |
+| Variable                                                                             | Req&#x200B;uir&#x200B;ed | Description                                                            | Default value |
+| ------------------------------------------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------- | ------------- |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`                                  |                          | Number of blocks scanned per log request.                              | `1000`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`                            |                          | Duration between pulling contract events. Unit: `milliseconds`         | `10000`       |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__NETWORK`           |                          | Avalanche Data API network. One of `mainnet`, `fuji`, `testnet`.       | `Mainnet`     |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__API_KEY`           |                          | API key for Avalanche Data API (`x-glacier-api-key` header). Optional. | `null`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__BACKOFF_BASE`                 |                          | Base delay of the capped exponential backoff between replay attempts for a recorded failed block range. Unit: `seconds`                                                             | `30`          |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__BACKOFF_CAP`                  |                          | Ceiling of the capped exponential backoff between replay attempts. This is the knob that makes retrying a permanently unrecoverable interval forever affordable. Unit: `seconds`    | `3600`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__ENABLED`                      |                          | Kill switch for the failed-range replay pass. Recording failed ranges still happens when `false`; only replay of already-recorded ranges is paused.                                 | `true`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__MAX_CHUNKS_PER_PASS`          |                          | Maximum number of `batch_size`-sized chunks replayed per retry tick, across all due failed ranges. Bounds how much a large backlog of holes can starve the realtime scan.           | `16`          |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__RECORD_RETRY_ATTEMPTS`        |                          | Number of attempts to persist a failed range to `indexer_failures` before the indexer gives up and stops (enters a failed state).                                                    | `3`           |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__RECORD_RETRY_INITIAL_BACKOFF` |                          | Initial delay before retrying a failed `indexer_failures` write; doubles on each subsequent retry. Unit: `milliseconds`                                                              | `200`         |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__SCAN_INTERVAL`                |                          | How often the retry pass scans recorded failed ranges for ones that are due for another replay attempt. Unit: `seconds`                                                              | `60`          |
 
 [anchor]: <> (anchors.envs.end.avalanche)
 
@@ -223,12 +230,19 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 
 [anchor]: <> (anchors.envs.start.amb)
 
-| Variable                                                     | Req&#x200B;uir&#x200B;ed | Description                                                    | Default value |
-| ------------------------------------------------------------ | ------------------------ | -------------------------------------------------------------- | ------------- |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE`                |                          | Number of blocks scanned per log request.                      | `1000`        |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__PULL_INTERVAL_MS`          |                          | Duration between pulling contract events. Unit: `milliseconds` | `500`       |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__RECEIPT_CONCURRENCY`       |                          | Maximum concurrent receipt and block fetches per AMB batch.    | `25`          |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__CLOCK_SKEW_TOLERANCE`      |                          | Tolerance for a destination execution preceding its source request before flagging an AMB `messageId` collision. Unit: `seconds` | `300`         |
+| Variable                                                                       | Req&#x200B;uir&#x200B;ed | Description                                                                                                                      | Default value |
+| ------------------------------------------------------------------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE`                                  |                          | Number of blocks scanned per log request.                                                                                        | `1000`        |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__PULL_INTERVAL_MS`                            |                          | Duration between pulling contract events. Unit: `milliseconds`                                                                   | `500`         |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__RECEIPT_CONCURRENCY`                         |                          | Maximum concurrent receipt and block fetches per AMB batch.                                                                      | `25`          |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__CLOCK_SKEW_TOLERANCE`                        |                          | Tolerance for a destination execution preceding its source request before flagging an AMB `messageId` collision. Unit: `seconds` | `300`         |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__BACKOFF_BASE`                 |                          | Base delay of the capped exponential backoff between replay attempts for a recorded failed block range. Unit: `seconds`                                                          | `30`          |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__BACKOFF_CAP`                  |                          | Ceiling of the capped exponential backoff between replay attempts. This is the knob that makes retrying a permanently unrecoverable interval forever affordable. Unit: `seconds` | `3600`        |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__ENABLED`                      |                          | Kill switch for the failed-range replay pass. Recording failed ranges still happens when `false`; only replay of already-recorded ranges is paused.                              | `true`        |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__MAX_CHUNKS_PER_PASS`          |                          | Maximum number of `batch_size`-sized chunks replayed per retry tick, across all due failed ranges. Bounds how much a large backlog of holes can starve the realtime scan.        | `16`          |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__RECORD_RETRY_ATTEMPTS`        |                          | Number of attempts to persist a failed range to `indexer_failures` before the indexer gives up and stops (enters a failed state).                                                 | `3`           |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__RECORD_RETRY_INITIAL_BACKOFF` |                          | Initial delay before retrying a failed `indexer_failures` write; doubles on each subsequent retry. Unit: `milliseconds`                                                           | `200`         |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__SCAN_INTERVAL`                |                          | How often the retry pass scans recorded failed ranges for ones that are due for another replay attempt. Unit: `seconds`                                                           | `60`          |
 
 [anchor]: <> (anchors.envs.end.amb)
 

@@ -3,12 +3,15 @@ use std::{sync::Arc, time::Duration};
 use alloy::{
     network::Ethereum,
     providers::{DynProvider, Provider},
-    rpc::types::{Filter, Log},
+    rpc::types::Filter,
 };
 use anyhow::{Context, Result};
 use futures::{StreamExt, stream::BoxStream};
 
-use crate::{InterchainDatabase, log_stream::LogStream};
+use crate::{
+    InterchainDatabase,
+    log_stream::{LogBatch, LogStream},
+};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn build_log_stream_for_chain(
@@ -20,7 +23,7 @@ pub(crate) async fn build_log_stream_for_chain(
     db: &InterchainDatabase,
     poll_interval: Duration,
     batch_size: u64,
-) -> Result<BoxStream<'static, (i64, DynProvider<Ethereum>, Vec<Log>)>> {
+) -> Result<BoxStream<'static, (i64, LogBatch)>> {
     let checkpoint = db.get_checkpoint(bridge_id as u64, chain_id as u64).await?;
 
     let (realtime_cursor, catchup_cursor) = if let Some(cp) = checkpoint {
@@ -46,7 +49,6 @@ pub(crate) async fn build_log_stream_for_chain(
 
     tracing::info!(bridge_id, chain_id, "configured EVM log stream");
 
-    let stream_provider = provider.clone();
     Ok(LogStream::builder(provider)
         .filter(filter)
         .poll_interval(poll_interval)
@@ -60,6 +62,6 @@ pub(crate) async fn build_log_stream_for_chain(
         .catchup()
         .realtime()
         .build()?
-        .map(move |logs| (chain_id, stream_provider.clone(), logs))
+        .map(move |batch| (chain_id, batch))
         .boxed())
 }

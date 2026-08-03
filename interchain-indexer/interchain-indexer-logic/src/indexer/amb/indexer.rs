@@ -10,11 +10,11 @@ use alloy::{
     network::Ethereum,
     primitives::{Address, B256},
     providers::DynProvider,
-    rpc::types::Log,
+    rpc::types::{Filter, Log},
 };
-use anyhow::{Result, ensure};
+use anyhow::{Result, anyhow, ensure};
 use dashmap::DashMap;
-use futures::{StreamExt, stream::SelectAll};
+use futures::stream::SelectAll;
 use serde_json::Value;
 use tokio::task::JoinHandle;
 use tonic::async_trait;
@@ -22,6 +22,11 @@ use tonic::async_trait;
 use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
     MessageBufferSettings, StatsService,
+    indexer::{
+        failure_ledger::{BlockRange, FailureLedger},
+        range_driver::{BatchError, RangeDriver, RangeProcessor},
+    },
+    log_stream::LogBatch,
     message_buffer::{Key, MessageBuffer},
 };
 
@@ -121,7 +126,7 @@ impl AmbIndexer {
         }
     }
 
-    async fn run(ctx: Arc<RunContext>) -> Result<()> {
+    async fn run(ctx: RunContext) -> Result<()> {
         tracing::info!(
             bridge_id = ctx.bridge_id,
             chain_count = ctx.chains.len(),
@@ -145,30 +150,26 @@ impl AmbIndexer {
             combined_stream.push(stream);
         }
 
-        while let Some((chain_id, provider, batch)) = combined_stream.next().await {
-            if batch.is_empty() {
-                continue;
-            }
-            if let Err(err) = Self::process_batch(&ctx, chain_id, &provider, &batch).await {
-                tracing::error!(
-                    err = ?err,
-                    bridge_id = ctx.bridge_id,
-                    chain_id,
-                    batch_size = batch.len(),
-                    "failed to process AMB log batch, continuing"
-                );
-            }
-        }
+        let ledger = Arc::new(FailureLedger::new(ctx.db.clone()));
+        let failure_retry_settings = ctx.settings.failure_retry.clone();
 
-        Ok(())
+        RangeDriver::new(ctx, ledger, failure_retry_settings)
+            .run(combined_stream)
+            .await
     }
 
+    /// Returns `Err(BatchError)` narrowed to the block(s) of any transaction
+    /// that failed to dispatch, rather than swallowing the error and always
+    /// returning `Ok(())`. Swallowing it would let the retry path's
+    /// `ledger.resolve` delete the recorded hole for a range whose
+    /// transactions actually failed — the messages would be lost *and* the
+    /// ledger would report the range recovered.
     async fn process_batch(
         ctx: &RunContext,
         chain_id: i64,
         provider: &DynProvider<Ethereum>,
         batch: &[Log],
-    ) -> Result<()> {
+    ) -> Result<(), BatchError> {
         let logs_by_tx = crate::indexer::evm::group_logs_by_transaction(batch);
         let hashes = logs_by_tx.keys().copied().collect::<Vec<_>>();
         let receipts = crate::indexer::evm::fetch_receipts_for_transactions(
@@ -177,6 +178,10 @@ impl AmbIndexer {
             ctx.settings.receipt_concurrency as usize,
         )
         .await?;
+
+        let mut failed_blocks: Vec<u64> = Vec::new();
+        let mut last_err: Option<anyhow::Error> = None;
+        let mut failed_count = 0usize;
 
         for (hash, _logs) in logs_by_tx {
             let Some(receipt) = receipts.get(&hash) else {
@@ -205,17 +210,83 @@ impl AmbIndexer {
             )
             .await
             {
-                tracing::error!(
+                // Downgraded to `warn`: the aggregate failure is now
+                // propagated (below) and logged once, at `error`, by the
+                // driver for the whole range — logging every per-tx failure
+                // at `error` too would double-log the same incident.
+                tracing::warn!(
                     err = ?err,
                     bridge_id = ctx.bridge_id,
                     chain_id,
                     tx_hash = %hash,
-                    "failed to dispatch AMB transaction, continuing"
+                    "failed to dispatch AMB transaction"
                 );
+                failed_blocks.push(receipt.block.header.number);
+                failed_count += 1;
+                last_err = Some(err);
             }
         }
 
+        if let Some(err) = last_err {
+            failed_blocks.sort_unstable();
+            failed_blocks.dedup();
+            let attributed = failed_blocks
+                .into_iter()
+                .map(|number| BlockRange {
+                    from: number,
+                    to: number,
+                })
+                .collect();
+
+            return Err(BatchError {
+                error: err.context(format!(
+                    "{failed_count} AMB transaction(s) failed to dispatch"
+                )),
+                attributed,
+            });
+        }
+
         Ok(())
+    }
+}
+
+#[async_trait]
+impl RangeProcessor for RunContext {
+    fn bridge_id(&self) -> i32 {
+        self.bridge_id
+    }
+
+    fn chain_ids(&self) -> Vec<i64> {
+        self.chains.iter().map(|c| c.chain_id).collect()
+    }
+
+    fn provider(&self, chain_id: i64) -> Option<DynProvider<Ethereum>> {
+        self.chains
+            .iter()
+            .find(|c| c.chain_id == chain_id)
+            .map(|c| c.provider.clone())
+    }
+
+    fn log_filter(&self, chain_id: i64) -> Result<Filter> {
+        self.abi_registry.filter_for_chain(chain_id)
+    }
+
+    fn batch_size(&self) -> u64 {
+        self.settings.batch_size
+    }
+
+    async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError> {
+        // The stream never yields an empty range (`log_stream.rs`), but the
+        // retry path can, and this guard is cheap to keep for either case.
+        if batch.logs.is_empty() {
+            return Ok(());
+        }
+
+        let provider = self
+            .provider(chain_id)
+            .ok_or_else(|| anyhow!("no provider configured for chain_id {chain_id}"))?;
+
+        AmbIndexer::process_batch(self, chain_id, &provider, &batch.logs).await
     }
 }
 
@@ -251,7 +322,7 @@ impl CrosschainIndexer for AmbIndexer {
         };
         *self.buffer_handle.write() = Some(buffer_handle);
 
-        let run_ctx = Arc::new(self.run_context());
+        let run_ctx = self.run_context();
         let guard = crate::indexer::cleanup_guard::CleanupGuard {
             is_running: self.is_running.clone(),
             state: self.state.clone(),
