@@ -110,21 +110,24 @@ function _handleNewOwner(event: NewOwnerEvent, isMigrated: boolean): void {
   }
 
   if (domain.name == null) {
-    // Get label and node names
-    let label = ens.nameByHash(event.params.label.toHexString());
-    if (label != null) {
-      domain.labelName = label;
-    }
-
-    if (label === null) {
-      label = "[" + event.params.label.toHexString().slice(2) + "]";
-    }
+    // Root-level children (the etn TLD itself, `reverse`, and any junk
+    // created under the root during deployment) keep name/labelName null so
+    // BENS's `label_name IS NOT NULL` filter hides them from lookups.
+    // Real .etn names never rely on this path: the BaseRegistrar and
+    // controller handlers in ethRegistrar.ts name them directly.
     if (
-      event.params.node.toHexString() ==
+      event.params.node.toHexString() !=
       "0x0000000000000000000000000000000000000000000000000000000000000000"
     ) {
-      domain.name = label;
-    } else {
+      // Get label and node names
+      let label = ens.nameByHash(event.params.label.toHexString());
+      if (label != null) {
+        domain.labelName = label;
+      }
+
+      if (label === null) {
+        label = "[" + event.params.label.toHexString().slice(2) + "]";
+      }
       parent = parent!;
       let name = parent.name;
       if (label && name) {
