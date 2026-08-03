@@ -1,0 +1,23 @@
+{
+  "electroneum-mainnet": {
+    "ENSRegistry": {
+      "address": "0x6f311f2212593165988dff84977e24c1005dbb85",
+      "startBlock": 15031539
+    },
+    "Resolver": {
+      "startBlock": 15031539
+    },
+    "BaseRegistrar": {
+      "address": "0x5207496c1248bbd2aeedd57bde44dd9d4e9f1b59",
+      "startBlock": 15031631
+    },
+    "EthRegistrarController": {
+      "address": "0x3cfa6d6e7e1216393c2cb9393bc0f411492e33e9",
+      "startBlock": 15031647
+    },
+    "NameWrapper": {
+      "address": "0xd8f4b1a91469b05d9e0b15cac4917ee47b2a6f64",
+      "startBlock": 15031643
+    }
+  }
+}
