@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use alloy::{network::Ethereum, providers::DynProvider, rpc::types::Filter};
 use anyhow::bail;
@@ -72,140 +72,151 @@ pub trait RangeProcessor: Send + Sync {
     /// by `max_chunks` across every due interval combined, so a large hole
     /// set cannot starve the realtime scan sharing this task.
     ///
-    /// **Rotated, not started at `interval.range.from`.** `max_chunks` is a
-    /// budget shared across every due interval, so a wide interval whose
-    /// leading chunks fail deterministically would otherwise never let this
-    /// pass reach its tail: the failing prefix keeps re-merging into the same
-    /// row on every tick, `from` never moves, and later chunks are never
-    /// attempted. Rotating the chunk list by `interval.attempts` — state
-    /// already on the row, so no new column is needed — moves that window
-    /// across the interval instead of pinning it to the head.
+    /// **Resumed, not started at the head.** `max_chunks` is a budget shared
+    /// across every due interval on every chain, so restarting each pass at
+    /// the head would let a wide interval — or merely a chain that sorts
+    /// first — consume the whole budget forever, and everything behind it
+    /// would never be attempted at all. Since the retry pass is the *only*
+    /// recovery path, a chunk that is never re-fetched is a hole that stays
+    /// open while its row keeps advertising itself as retryable.
     ///
-    /// The sweep is **complete only when a failing chunk records a single
-    /// range**, which is the whole-range default (Avalanche). Then `attempts`
-    /// advances once per pass, the window walks by one chunk each time, and
-    /// every chunk is eventually attempted. An indexer that narrows
-    /// `attributed` into several ranges per chunk (AMB attributes per failing
-    /// block) advances `attempts` once *per range*, so the offset can step
-    /// further than the window is wide and the reachable start offsets fall on
-    /// multiples of `gcd(ranges_per_pass, chunk_count)`. Chunks between those
-    /// offsets are then not re-fetched. Still strictly better than pinning to
-    /// `from` — which starved everything past the first budget — and nothing
-    /// is lost or resolved, the interval simply drains partially. Making the
-    /// sweep unconditional needs a per-pass counter that advances by the
-    /// window size rather than by `attempts`.
+    /// So every due interval on every chain is flattened into one ordered
+    /// chunk sequence and walked **cyclically from where the previous pass
+    /// stopped**. The cursor advances by exactly the number of queue positions
+    /// consumed, so consecutive passes cover consecutive segments and the
+    /// sweep is complete after `ceil(len / max_chunks)` passes — regardless of
+    /// how many ranges a failure is attributed to, how intervals split under
+    /// `resolve`, or how uneven the per-chain hole counts are.
+    ///
+    /// The cursor is `(chain_id, block)` rather than an index because indices
+    /// are invalidated by every split and merge, while block space is stable:
+    /// after a pass the position names a real boundary, and the next pass
+    /// resumes at the first chunk at or after it even if the surrounding rows
+    /// changed shape. It is in-memory and per-driver — losing it on restart
+    /// costs at most one pass starting at the head, which is where the old
+    /// behaviour started every time.
     async fn retry_pending(
         &self,
         ledger: &FailureLedger,
         due: &[(i64, FailedInterval)],
         max_chunks: usize,
+        resume_from: &mut Option<(i64, u64)>,
     ) {
         let bridge_id = self.bridge_id();
         let batch_size = self.batch_size().max(1);
-        let mut chunks_attempted = 0usize;
 
-        for (chain_id, interval) in due {
-            if chunks_attempted >= max_chunks {
-                break;
+        let queue = retry_queue(due, batch_size);
+
+        if queue.is_empty() {
+            return;
+        }
+
+        // Provider and filter resolve once per chain per pass, not once per
+        // chunk: `log_filter` allocates the address set, and a chain that
+        // cannot be resolved must log once rather than once per chunk.
+        let mut targets: HashMap<i64, Option<(DynProvider<Ethereum>, Filter)>> = HashMap::new();
+        for (chain_id, _) in &queue {
+            if targets.contains_key(chain_id) {
+                continue;
             }
-
             let chain_id = *chain_id;
+            let resolved = match (self.provider(chain_id), self.log_filter(chain_id)) {
+                (None, _) => {
+                    tracing::error!(
+                        bridge_id,
+                        chain_id,
+                        "no provider configured for chain during retry pass"
+                    );
+                    None
+                }
+                (Some(_), Err(err)) => {
+                    tracing::error!(err = ?err, bridge_id, chain_id, "failed to build log filter during retry pass");
+                    None
+                }
+                (Some(provider), Ok(filter)) => Some((provider, filter)),
+            };
+            targets.insert(chain_id, resolved);
+        }
 
-            let Some(provider) = self.provider(chain_id) else {
-                tracing::error!(
-                    bridge_id,
-                    chain_id,
-                    "no provider configured for chain during retry pass"
-                );
+        let start = resume_index(&queue, *resume_from);
+
+        for offset in 0..queue.len().min(max_chunks) {
+            let (chain_id, chunk) = queue[(start + offset) % queue.len()];
+
+            // Consumed whether or not the chunk could be attempted: an
+            // unresolvable chain must not pin the cursor and starve the rest.
+            *resume_from = Some((chain_id, chunk.to.saturating_add(1)));
+
+            let Some(Some((provider, filter))) = targets.get(&chain_id) else {
                 continue;
             };
 
-            let filter = match self.log_filter(chain_id) {
-                Ok(filter) => filter,
-                Err(err) => {
-                    tracing::error!(err = ?err, bridge_id, chain_id, "failed to build log filter during retry pass");
-                    continue;
-                }
-            };
+            match fetch_logs(provider.clone(), filter, chunk.from, chunk.to).await {
+                Ok(mut logs) => {
+                    // Parity with the forward path's ascending sort.
+                    logs.sort_by_key(|log| (log.block_number, log.log_index));
+                    let batch = LogBatch {
+                        from_block: chunk.from,
+                        to_block: chunk.to,
+                        direction: ScanDirection::Retry,
+                        logs,
+                    };
 
-            let chunks =
-                rotate_by_attempts(chunk_range(interval.range, batch_size), interval.attempts);
-
-            for chunk in chunks {
-                if chunks_attempted >= max_chunks {
-                    break;
-                }
-                chunks_attempted += 1;
-
-                match fetch_logs(provider.clone(), &filter, chunk.from, chunk.to).await {
-                    Ok(mut logs) => {
-                        // Parity with the forward path's ascending sort.
-                        logs.sort_by_key(|log| (log.block_number, log.log_index));
-                        let batch = LogBatch {
-                            from_block: chunk.from,
-                            to_block: chunk.to,
-                            direction: ScanDirection::Retry,
-                            logs,
-                        };
-
-                        match self.process(chain_id, &batch).await {
-                            Ok(()) => {
-                                // A retried chunk that returns zero logs must
-                                // still be resolved: the forward path never
-                                // yields empty ranges, so this case exists
-                                // only here.
-                                if let Err(err) =
-                                    ledger.resolve(bridge_id, chain_id, &[chunk]).await
-                                {
-                                    tracing::error!(
-                                        err = ?err,
-                                        bridge_id,
-                                        chain_id,
-                                        chunk_from = chunk.from,
-                                        chunk_to = chunk.to,
-                                        direction = ?batch.direction,
-                                        "failed to resolve a successfully retried chunk"
-                                    );
-                                }
+                    match self.process(chain_id, &batch).await {
+                        Ok(()) => {
+                            // A retried chunk that returns zero logs must
+                            // still be resolved: the forward path never
+                            // yields empty ranges, so this case exists
+                            // only here.
+                            if let Err(err) = ledger.resolve(bridge_id, chain_id, &[chunk]).await {
+                                tracing::error!(
+                                    err = ?err,
+                                    bridge_id,
+                                    chain_id,
+                                    chunk_from = chunk.from,
+                                    chunk_to = chunk.to,
+                                    direction = ?batch.direction,
+                                    "failed to resolve a successfully retried chunk"
+                                );
                             }
-                            Err(batch_err) => {
-                                let ranges = attributed_ranges(&batch_err, chunk);
-                                let reason = truncate_reason(&format!("{:#}", batch_err.error));
-                                let ranges_with_reason = with_reason(ranges, reason);
-                                if let Err(err) = ledger
-                                    .record(bridge_id, chain_id, &ranges_with_reason)
-                                    .await
-                                {
-                                    tracing::error!(
-                                        err = ?err,
-                                        bridge_id,
-                                        chain_id,
-                                        chunk_from = chunk.from,
-                                        chunk_to = chunk.to,
-                                        direction = ?batch.direction,
-                                        "failed to re-record a still-failing retried chunk"
-                                    );
-                                }
+                        }
+                        Err(batch_err) => {
+                            let ranges = attributed_ranges(&batch_err, chunk);
+                            let reason = truncate_reason(&format!("{:#}", batch_err.error));
+                            let ranges_with_reason = with_reason(ranges, reason);
+                            if let Err(err) = ledger
+                                .record(bridge_id, chain_id, &ranges_with_reason)
+                                .await
+                            {
+                                tracing::error!(
+                                    err = ?err,
+                                    bridge_id,
+                                    chain_id,
+                                    chunk_from = chunk.from,
+                                    chunk_to = chunk.to,
+                                    direction = ?batch.direction,
+                                    "failed to re-record a still-failing retried chunk"
+                                );
                             }
                         }
                     }
-                    Err(err) => {
-                        // An eth_getLogs failure records the chunk as
-                        // still-failed and moves on — this is not an
-                        // escalation, the range was never re-scanned.
-                        let reason = truncate_reason(&format!("{:#}", err));
-                        if let Err(record_err) =
-                            ledger.record(bridge_id, chain_id, &[(chunk, reason)]).await
-                        {
-                            tracing::error!(
-                                err = ?record_err,
-                                bridge_id,
-                                chain_id,
-                                chunk_from = chunk.from,
-                                chunk_to = chunk.to,
-                                "failed to re-record a retry-fetch failure"
-                            );
-                        }
+                }
+                Err(err) => {
+                    // An eth_getLogs failure records the chunk as
+                    // still-failed and moves on — this is not an
+                    // escalation, the range was never re-scanned.
+                    let reason = truncate_reason(&format!("{:#}", err));
+                    if let Err(record_err) =
+                        ledger.record(bridge_id, chain_id, &[(chunk, reason)]).await
+                    {
+                        tracing::error!(
+                            err = ?record_err,
+                            bridge_id,
+                            chain_id,
+                            chunk_from = chunk.from,
+                            chunk_to = chunk.to,
+                            "failed to re-record a retry-fetch failure"
+                        );
                     }
                 }
             }
@@ -236,18 +247,39 @@ fn chunk_range(range: BlockRange, batch_size: u64) -> Vec<BlockRange> {
     chunks
 }
 
-/// Rotates `chunks` left by `attempts % chunks.len()`, so the chunk that
-/// starts this pass's attempted window changes as `attempts` grows. `attempts`
-/// is the interval's own retry counter — it strictly increases every pass a
-/// still-open chunk keeps failing (see `record`'s `max(attempts) + 1` merge
-/// rule), so a permanently failing prefix cannot pin the window in place
-/// forever: the offset eventually walks past it and reaches every chunk.
-fn rotate_by_attempts(mut chunks: Vec<BlockRange>, attempts: u32) -> Vec<BlockRange> {
-    let len = chunks.len();
-    if len > 1 {
-        chunks.rotate_left((attempts as usize) % len);
-    }
-    chunks
+/// Flattens every due interval into one chunk queue ordered by
+/// `(chain_id, from)` — the same order the resume cursor is expressed in.
+/// `open()` guarantees no ordering of its own, so sorting here is what makes
+/// the cursor meaningful rather than an arbitrary offset.
+fn retry_queue(due: &[(i64, FailedInterval)], batch_size: u64) -> Vec<(i64, BlockRange)> {
+    let mut queue: Vec<(i64, BlockRange)> = due
+        .iter()
+        .flat_map(|(chain_id, interval)| {
+            chunk_range(interval.range, batch_size)
+                .into_iter()
+                .map(move |chunk| (*chain_id, chunk))
+        })
+        .collect();
+    queue.sort_by_key(|(chain_id, chunk)| (*chain_id, chunk.from));
+    queue
+}
+
+/// The queue position the next pass resumes at: the first chunk at or after
+/// `resume_from`, or the head when the cursor is unset or has fallen past the
+/// end (every position behind it was resolved, so the sweep wraps).
+///
+/// Compares against `chunk.to`, not `chunk.from`, so a cursor landing inside a
+/// chunk re-attempts that chunk rather than skipping it. Re-attempting is
+/// harmless — `resolve` is a set difference — while skipping is exactly the
+/// starvation this cursor exists to prevent.
+fn resume_index(queue: &[(i64, BlockRange)], resume_from: Option<(i64, u64)>) -> usize {
+    resume_from
+        .and_then(|cursor| {
+            queue
+                .iter()
+                .position(|(chain_id, chunk)| (*chain_id, chunk.to) >= cursor)
+        })
+        .unwrap_or(0)
 }
 
 /// `err.attributed`, or the whole yielded/retried range when empty.
@@ -288,6 +320,9 @@ pub struct RangeDriver<P: RangeProcessor> {
     processor: P,
     ledger: Arc<FailureLedger>,
     settings: FailureRetrySettings,
+    /// Where the next retry pass resumes its cyclic sweep of the due chunks.
+    /// See `RangeProcessor::retry_pending`.
+    retry_cursor: Option<(i64, u64)>,
 }
 
 impl<P: RangeProcessor> RangeDriver<P> {
@@ -296,13 +331,14 @@ impl<P: RangeProcessor> RangeDriver<P> {
             processor,
             ledger,
             settings,
+            retry_cursor: None,
         }
     }
 
     /// Consumes the merged per-chain stream until it ends (`Ok(())`), or
     /// returns `Err` on the escalation path only.
     pub async fn run(
-        self,
+        mut self,
         mut stream: impl Stream<Item = (i64, LogBatch)> + Unpin + Send,
     ) -> anyhow::Result<()> {
         let bridge_id = self.processor.bridge_id();
@@ -474,7 +510,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
         Err(last_err)
     }
 
-    async fn run_retry_tick(&self, bridge_id: i32, pairs: &[(i32, i64)]) {
+    async fn run_retry_tick(&mut self, bridge_id: i32, pairs: &[(i32, i64)]) {
         let open = match self.ledger.open(pairs).await {
             Ok(open) => open,
             Err(err) => {
@@ -498,7 +534,12 @@ impl<P: RangeProcessor> RangeDriver<P> {
             .collect();
 
         self.processor
-            .retry_pending(&self.ledger, &due, self.settings.max_chunks_per_pass)
+            .retry_pending(
+                &self.ledger,
+                &due,
+                self.settings.max_chunks_per_pass,
+                &mut self.retry_cursor,
+            )
             .await;
     }
 }
@@ -615,53 +656,108 @@ mod tests {
         );
     }
 
-    #[test]
-    fn rotate_by_attempts_leaves_a_single_chunk_unchanged() {
-        let chunks = vec![BlockRange { from: 0, to: 99 }];
-
-        assert_eq!(rotate_by_attempts(chunks.clone(), 1), chunks);
-        assert_eq!(
-            rotate_by_attempts(chunks, 50),
-            vec![BlockRange { from: 0, to: 99 }]
-        );
+    fn interval(from: u64, to: u64, attempts: u32) -> FailedInterval {
+        let at = chrono::DateTime::from_timestamp(0, 0).unwrap().naive_utc();
+        FailedInterval {
+            range: BlockRange { from, to },
+            attempts,
+            reason: None,
+            first_failed_at: at,
+            last_attempt_at: at,
+        }
     }
 
     #[test]
-    fn rotate_by_attempts_shifts_the_starting_chunk_by_attempts_modulo_len() {
-        let chunks = vec![
-            BlockRange { from: 0, to: 9 },
-            BlockRange { from: 10, to: 19 },
-            BlockRange { from: 20, to: 29 },
+    fn retry_queue_orders_every_chain_s_chunks_by_chain_then_block() {
+        // Deliberately unordered input: `open()` promises no ordering, and the
+        // resume cursor is only meaningful against a known order.
+        let due = vec![
+            (2, interval(50, 69, 1)),
+            (1, interval(100, 119, 1)),
+            (1, interval(0, 19, 1)),
         ];
 
-        // attempts = 1: start at index 1.
+        let queue = retry_queue(&due, 10);
+
         assert_eq!(
-            rotate_by_attempts(chunks.clone(), 1),
+            queue,
             vec![
-                BlockRange { from: 10, to: 19 },
-                BlockRange { from: 20, to: 29 },
-                BlockRange { from: 0, to: 9 },
+                (1, BlockRange { from: 0, to: 9 }),
+                (1, BlockRange { from: 10, to: 19 }),
+                (1, BlockRange { from: 100, to: 109 }),
+                (1, BlockRange { from: 110, to: 119 }),
+                (2, BlockRange { from: 50, to: 59 }),
+                (2, BlockRange { from: 60, to: 69 }),
             ]
         );
-        // attempts = 3 == len: wraps back to the original order.
-        assert_eq!(rotate_by_attempts(chunks.clone(), 3), chunks);
-        // attempts = 4: same offset as attempts = 1 (4 % 3 == 1).
-        assert_eq!(
-            rotate_by_attempts(chunks.clone(), 4),
-            rotate_by_attempts(chunks, 1)
-        );
     }
 
     #[test]
-    fn rotate_by_attempts_never_panics_at_a_very_large_attempts_count() {
-        let chunks = vec![
-            BlockRange { from: 0, to: 9 },
-            BlockRange { from: 10, to: 19 },
-        ];
+    fn resume_index_starts_at_the_head_when_unset_or_past_the_end() {
+        let queue = retry_queue(&[(1, interval(0, 29, 1))], 10);
 
-        let rotated = rotate_by_attempts(chunks, u32::MAX);
+        assert_eq!(resume_index(&queue, None), 0);
+        // Past the last chunk on the last chain: wrap.
+        assert_eq!(resume_index(&queue, Some((1, 30))), 0);
+        // A chain that sorts after everything in the queue: wrap.
+        assert_eq!(resume_index(&queue, Some((7, 0))), 0);
+    }
 
-        assert_eq!(rotated.len(), 2);
+    #[test]
+    fn resume_index_re_attempts_the_chunk_a_cursor_lands_inside() {
+        let queue = retry_queue(&[(1, interval(0, 29, 1))], 10);
+
+        // Cursor inside chunk 1 ([10, 19]) resolves to chunk 1, not chunk 2:
+        // skipping it would be the starvation this cursor prevents.
+        assert_eq!(resume_index(&queue, Some((1, 15))), 1);
+        // Exactly on a boundary: the chunk starting there.
+        assert_eq!(resume_index(&queue, Some((1, 20))), 2);
+    }
+
+    /// The property the cursor exists for: with a budget smaller than the
+    /// queue, consecutive passes must cover every position — including when a
+    /// pass consumes several queue slots per interval, which is what broke the
+    /// previous `attempts`-driven rotation (AMB attributes a failure per
+    /// block, advancing `attempts` faster than the window is wide).
+    #[test]
+    fn successive_passes_sweep_every_queue_position_within_ceil_len_over_budget() {
+        let due = vec![(1, interval(0, 99, 1)), (2, interval(0, 49, 1))];
+        let queue = retry_queue(&due, 10);
+        assert_eq!(queue.len(), 15);
+
+        let budget = 4usize;
+        let mut cursor: Option<(i64, u64)> = None;
+        let mut visited = std::collections::HashSet::new();
+
+        // ceil(15 / 4) == 4 passes.
+        for _ in 0..4 {
+            let start = resume_index(&queue, cursor);
+            for offset in 0..queue.len().min(budget) {
+                let (chain_id, chunk) = queue[(start + offset) % queue.len()];
+                visited.insert((chain_id, chunk.from));
+                cursor = Some((chain_id, chunk.to.saturating_add(1)));
+            }
+        }
+
+        assert_eq!(
+            visited.len(),
+            queue.len(),
+            "every queue position must be attempted within ceil(len / budget) passes"
+        );
+    }
+
+    /// A budget at or above the queue length attempts everything in one pass
+    /// and must not double-attempt by wrapping.
+    #[test]
+    fn a_budget_covering_the_whole_queue_attempts_each_position_once() {
+        let queue = retry_queue(&[(1, interval(0, 29, 1))], 10);
+        let start = resume_index(&queue, None);
+
+        let attempted: Vec<_> = (0..queue.len().min(100))
+            .map(|offset| queue[(start + offset) % queue.len()])
+            .collect();
+
+        assert_eq!(attempted, queue);
     }
 
     // --- DB-backed driver tests ---
@@ -1015,7 +1111,7 @@ mod tests {
             let processor = TestRangeProcessor::new(1, vec![1], 100)
                 .with_provider(1, mock_provider(mock_service));
 
-            processor.retry_pending(&ledger, &due, 16).await;
+            processor.retry_pending(&ledger, &due, 16, &mut None).await;
 
             let open = ledger.open(&[(1, 1)]).await.unwrap();
             assert!(
@@ -1065,7 +1161,7 @@ mod tests {
             // The middle chunk fails at the `process()` level.
             processor.fail_range(1, 1000, 1999);
 
-            processor.retry_pending(&ledger, &due, 16).await;
+            processor.retry_pending(&ledger, &due, 16, &mut None).await;
 
             let open = ledger.open(&[(1, 1)]).await.unwrap();
             assert_eq!(open.len(), 1);
@@ -1121,7 +1217,7 @@ mod tests {
                 .with_provider(1, mock_provider(mock_service));
             let process_calls = processor.process_calls.clone();
 
-            processor.retry_pending(&ledger, &due, 2).await;
+            processor.retry_pending(&ledger, &due, 2, &mut None).await;
 
             assert_eq!(
                 process_calls.load(Ordering::SeqCst),
@@ -1138,29 +1234,33 @@ mod tests {
                 .collect();
             open.sort_by_key(|range| range.from);
 
-            // The rotated window (`[1000,1999]`, `[2000,2999]`) resolved;
-            // both the untouched prefix and suffix remain, as two rows.
+            // A fresh cursor starts at the head, so the first two chunks
+            // (`[0,999]`, `[1000,1999]`) resolved and the untouched tail
+            // remains as one row. The *next* pass would resume at `[2000,…]`;
+            // that continuation is what
+            // `retry_pass_fairness_reaches_chunks_beyond_a_permanently_failing_prefix`
+            // covers.
             assert_eq!(
                 open,
-                vec![
-                    BlockRange { from: 0, to: 999 },
-                    BlockRange {
-                        from: 3000,
-                        to: 4999
-                    },
-                ]
+                vec![BlockRange {
+                    from: 2000,
+                    to: 4999
+                }]
             );
         }
 
         /// Regression for the P2 "permanently failing prefix starves the
-        /// tail" finding: before the `rotate_by_attempts` fix, every retry
-        /// pass started at `interval.range.from`, so a leading prefix wider
-        /// than `max_chunks_per_pass` re-merged into the same still-open row
-        /// on every tick and later chunks of that interval were never
-        /// attempted at all. Ten 100-block chunks, the first four (blocks
-        /// `[0, 399]`) permanently fail, and the budget is two chunks per
-        /// pass — strictly narrower than the failing prefix, so a driver that
-        /// never rotates would loop on `[0,199]` forever.
+        /// tail" finding: with every retry pass starting at the queue head, a
+        /// leading prefix wider than `max_chunks_per_pass` re-merged into the
+        /// same still-open row on every tick and later chunks of that interval
+        /// were never attempted at all. Ten 100-block chunks, the first four
+        /// (blocks `[0, 399]`) permanently fail, and the budget is two chunks
+        /// per pass — strictly narrower than the failing prefix, so a driver
+        /// that does not carry a resume cursor loops on `[0,199]` forever.
+        ///
+        /// This is the end-to-end half of the guarantee; the sweep's
+        /// completeness itself is pinned by the pure `resume_index` tests
+        /// above, which do not need a database.
         #[tokio::test]
         #[ignore = "needs database to run"]
         async fn retry_pass_fairness_reaches_chunks_beyond_a_permanently_failing_prefix() {
@@ -1195,6 +1295,10 @@ mod tests {
             }
 
             let mut reached_beyond_prefix = false;
+            // The driver keeps this across passes; a test that reset it per
+            // pass would re-run the same head window forever and assert
+            // nothing.
+            let mut retry_cursor: Option<(i64, u64)> = None;
 
             for _pass in 0..MAX_PASSES {
                 let due: Vec<(i64, FailedInterval)> = ledger
@@ -1210,7 +1314,7 @@ mod tests {
                 );
 
                 processor
-                    .retry_pending(&ledger, &due, MAX_CHUNKS_PER_PASS)
+                    .retry_pending(&ledger, &due, MAX_CHUNKS_PER_PASS, &mut retry_cursor)
                     .await;
 
                 if processor
@@ -1268,7 +1372,7 @@ mod tests {
             let processor = TestRangeProcessor::new(1, vec![1], 100)
                 .with_provider(1, mock_provider(mock_service));
 
-            processor.retry_pending(&ledger, &due, 16).await;
+            processor.retry_pending(&ledger, &due, 16, &mut None).await;
 
             let open = ledger.open(&[(1, 1)]).await.unwrap();
             assert_eq!(

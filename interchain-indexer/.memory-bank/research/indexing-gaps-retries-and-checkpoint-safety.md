@@ -610,7 +610,11 @@ requested, and canonical rows produced from orphaned logs are not removed.
   drive the replay backoff, and the interval columns are the ledger itself. Note
   that `attempts` is approximate by construction — `max + 1` on merge, reset to
   `1` on a split that proved progress — so anything needing precision should use
-  `created_at`/`updated_at`, which are exact under both operations.
+  `created_at`/`updated_at`, which are exact under both operations. This is also
+  why `attempts` must not be used to schedule *which* chunks a pass attempts: it
+  advances once per recorded range, so an adapter attributing a failure per
+  block advances it faster than the retry window is wide. The retry sweep uses
+  its own in-memory cursor instead (ADR-005).
 - Buffer mutation is not transactional in memory: a fallible mutator can modify
   `inner` before returning an error, while `record_block()` and `touch()` are
   skipped.

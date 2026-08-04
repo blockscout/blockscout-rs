@@ -779,7 +779,7 @@ mod tests {
             .collect();
         assert_eq!(due.len(), 1, "the seeded hole must be due for retry");
 
-        <RunContext as RangeProcessor>::retry_pending(&ctx, &ledger, &due, 16).await;
+        <RunContext as RangeProcessor>::retry_pending(&ctx, &ledger, &due, 16, &mut None).await;
 
         let open = ledger.open(&[(BRIDGE_ID, CHAIN_ID)]).await.unwrap();
         assert_eq!(

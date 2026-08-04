@@ -88,6 +88,25 @@ Consequential details, each of which is load-bearing:
   the full cap again.
 - **Replay uses the indexer's own `batch_size`.** Shared code never talks to an
   RPC; it hands the processor a range and the processor chunks it.
+- **The retry pass sweeps, it does not restart.** Every due interval on every
+  chain is flattened into one queue ordered by `(chain_id, from)` and walked
+  cyclically from an in-memory cursor. `max_chunks_per_pass` is a budget shared
+  across all of them, so a pass that always began at the head would let a wide
+  interval — or merely the chain that sorts first — consume it forever, and
+  since this is the only recovery path, the chunks behind it are holes that stay
+  open while their rows keep advertising themselves as retryable. The cursor
+  advances by exactly the positions consumed, so the sweep completes in
+  `ceil(len / max_chunks_per_pass)` passes no matter how a failure is
+  attributed. It is `(chain_id, block)` rather than an index because `resolve`
+  splits and `record` merges invalidate indices while block space stays stable.
+- **A drain must not clear its queue before its writes succeed.** AMB's
+  correlation drain applies a clone and removes the queue entry only on success.
+  Removing first and applying after means a mid-drain failure loses the
+  remainder while the block *is* recorded — so the replay finds nothing queued,
+  reports success, and resolves a hole whose data was never restored. Any
+  future adapter holding in-memory state consumed during processing inherits
+  this ordering requirement: **the ledger can only replay what the replay can
+  still find.**
 - **No schema change.** `indexer_failures` is used exactly as defined. No
   `given_up_at`, no index, no unique constraint.
 
@@ -190,19 +209,11 @@ written off.
   that would have caused another replay — so the ledger is a post-failure work
   queue, not a durable processing acknowledgement, and must not be described as
   one. Catch-up completion has the same shape.
-- **A wide interval may drain only partially.** The retry pass rotates its chunk
-  window by the row's `attempts` so a deterministically failing prefix cannot
-  starve the tail. That sweep is complete only when a failing chunk records one
-  range; an indexer narrowing `attributed` per block advances `attempts` faster
-  than the window is wide, leaving chunks between the reachable offsets
-  un-refetched. Nothing is lost or falsely resolved — the row simply shrinks
-  slower. A per-pass counter advancing by the window size would make it
-  unconditional.
-- **AMB's in-memory correlation drain can still false-clear.** The pending entry
-  is removed before the fallible applies, so a failure mid-drain loses the
-  remainder; the block *is* recorded, but the replay finds nothing pending,
-  succeeds, and resolves the hole while the data is gone. Part of the wider AMB
-  restart-durability follow-up.
+- **AMB's correlation state is still lost on restart.** The in-memory pending
+  queue is not persisted, so a stop with entries queued drops them, and the
+  blocks that carried them were processed successfully and are therefore not in
+  the ledger. Distinct from the drain false-clear, which is closed (see the
+  Decision section); this one needs durable correlation state.
 - **Failures a handler swallows never reach the ledger**, and a replay covering
   them reads as success and resolves the range. Locally detectable malformed
   input (a log without `transaction_hash`, an event without `topic0`, a failed

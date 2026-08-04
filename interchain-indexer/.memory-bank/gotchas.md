@@ -986,3 +986,26 @@ keep them in lock-step, and pin the expected floors from the real config in a
 test, because drift here silently mis-reports every AMB pair.
 
 ---
+
+## A Replay Can Only Recover What The Replay Can Still Find
+
+**Symptom:** A recorded `indexer_failures` row disappears after a retry pass
+that "succeeded", but the data it covered is still missing.
+
+**Root cause:** The ledger records *block ranges*, and a replay re-fetches those
+blocks and reprocesses them. Anything the failed attempt consumed from memory —
+an entry taken out of a correlation queue, a lookup removed, a channel drained —
+is not restored by re-fetching the blocks. The replay then finds nothing to do,
+returns `Ok`, and `resolve` deletes the row. The concrete instance: AMB's
+message-hash queue used to `remove` the pending entry before running the
+fallible applies, so a mid-drain failure lost the remainder while the block was
+correctly recorded. Both halves looked right in isolation.
+
+**Fix:** Consume in-memory state **last**. Work on a clone, and remove the
+original only after every fallible step has succeeded. This makes the operation
+at-least-once rather than exactly-once, which is already the regime for any
+replayed range. When reviewing a new adapter, the question is not "is the
+failure recorded" but "will a replay of those blocks reconstruct everything the
+failed attempt consumed".
+
+---
