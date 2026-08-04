@@ -996,6 +996,12 @@ once at startup by `log_amb_floor_divergence`. A chain with **no** mediator is
 also legal and still indexed; a mediator that *is* configured but has a broken
 ABI stays fatal, because that is a config error rather than a choice.
 
+Operator-facing semantics of changing `started_at_block` — what is rescanned,
+what the reported progress does, and why a failed floor reconciliation is a
+`warn` — are in `README.md` → "Changing `started_at_block` on a live
+deployment". Keep the two in step: the README is what an operator reads before
+editing a live config.
+
 ---
 
 ## A Contract Version Is `(address, block)`, Not `address`

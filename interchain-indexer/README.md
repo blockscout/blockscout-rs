@@ -79,6 +79,46 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 
 **`started_at_block`** — indexer starts scanning from this block on associated chain; set it to reduce initial sync time or to start from a specific deployment block.
 
+#### Which contracts define a chain's scan floor
+
+A `(bridge, chain)` pair has **one** scan floor, however many contracts it declares.
+
+| Bridge type | Floor |
+| ----------- | ----- |
+| `amb` | lowest `started_at_block` among the chain's `kind: "amb_proxy"` entries |
+| everything else | lowest `started_at_block` among all the chain's entries |
+
+For AMB this means **editing `omnibridge_mediator`'s `started_at_block` changes nothing about scanning.** In the shipped Gnosis config the mediator sits ~7.4M blocks below the proxy on chain 1; that range is deliberately not scanned. A mediator configured *above* the proxy floor is also legal — messages in between are indexed without token transfers. Both cases are warned about once at startup.
+
+`0` is rejected at startup for every contract entry: a catch-up that completed at genesis is recorded as `floor - 1`, which is unrepresentable in `u64` when the floor is `0`.
+
+#### Multiple versions of the same contract
+
+An implementation upgrade is a **new entry**, not an edit: same `address`, higher `version`, and `started_at_block` set to the block the new implementation took effect. The old entry stays. `bridge_contracts` keys on `(bridge_id, chain_id, address, version)`, and events are decoded against whichever version was in force at the log's block.
+
+Since the floor is the *minimum* across versions, adding a later version never raises it and never orphans history the previous version covered.
+
+If `interchain_indexer_amb_logs_dropped_wrong_version_total` is non-zero, a version boundary disagrees with the chain: real events are being discarded. Nothing else reports this — the blocks were scanned, so no failure row exists.
+
+#### Changing `started_at_block` on a live deployment
+
+Both directions are supported; neither deletes anything already indexed.
+
+**Raising it.** Catch-up stops higher, and the stored floor is raised at startup. Blocks already indexed below the new floor stay in the database and are still served by the message APIs — they simply stop counting toward `catchup_blocks_remaining` and `catchup_progress_percent`, so reported progress can jump.
+
+**Lowering it.** The newly opened range *is* scanned. Catch-up walks downward from `catchup_max_cursor` to the configured floor, and a previously completed catch-up left that cursor at `old_floor - 1`, so the scan resumes exactly at the boundary and continues to the new floor.
+
+The stored floor needs separate handling, because the cursor-maintenance writer can only ever raise it. A startup pass compares the configured floor against the previous run's value — read from `bridge_contracts` in the window *before* that table is refreshed — and lowers `catchup_min_cursor` when the configured value dropped.
+
+If that write fails, startup continues with a `warn` and the affected bridge's `bridge_contracts` rows are withheld, so the next restart can still detect the change. Until then **the scan is correct and only the reported progress under-states the remaining work**, because the scan takes its floor from config while the report reads the stored one.
+
+Two consequences worth knowing:
+
+- Lowering the floor and adding a new contract version *in the same edit* defers the floor reconciliation by one restart: the new version has no stored row yet, so the previous floor reads as unknown and is not treated as a change. The following restart applies it.
+- Restoring a floor you previously raised is not symmetric with never having raised it: the range between the two floors is rescanned, and already-indexed rows in it are re-derived rather than duplicated.
+
+Raising a floor to skip history and then lowering it back is therefore safe but not free — plan floor changes as deliberate rescans.
+
 ### Overriding `chains.json` / `bridges.json` via environment
 
 At startup, environment variables under two dedicated prefixes are deep-merged

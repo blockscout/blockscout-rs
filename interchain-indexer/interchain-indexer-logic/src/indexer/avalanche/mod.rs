@@ -160,6 +160,8 @@ impl AvalancheIndexer {
             "Avalanche indexer requires at least one configured chain"
         );
 
+        validate_chain_configs(&chains)?;
+
         settings
             .failure_retry
             .validate()
@@ -375,6 +377,36 @@ impl AvalancheRangeProcessor {
     fn chain_config(&self, chain_id: i64) -> Option<&AvalancheChainConfig> {
         self.chains.iter().find(|c| c.chain_id == chain_id)
     }
+}
+
+/// Rejects a chain set that would break the one-scanner-per-pair invariant.
+///
+/// Both checks are structural, not defensive. An empty address list reaches
+/// `Filter::address(vec![])`, which matches *every* address on the chain. Two
+/// configs sharing a `chain_id` become two streams over one
+/// `(bridge_id, chain_id)` checkpoint — the loss `AvalancheChainConfig`
+/// documents, and the reason the per-contract shape was removed.
+///
+/// Enforced at construction rather than at stream build so a bad config names
+/// the offending chain and fails `new()`, instead of taking the whole bridge's
+/// indexing task to `Failed` once it is already running. `AmbIndexer` gets the
+/// same guarantee from `AbiRegistry::from_chains`.
+fn validate_chain_configs(chains: &[AvalancheChainConfig]) -> Result<()> {
+    let mut seen_chain_ids = HashSet::new();
+    for chain in chains {
+        ensure!(
+            !chain.contract_addresses.is_empty(),
+            "Avalanche chain {} has no configured contract address",
+            chain.chain_id
+        );
+        ensure!(
+            seen_chain_ids.insert(chain.chain_id),
+            "Avalanche chain {} is configured more than once; one config per chain covers \
+             every address on it",
+            chain.chain_id
+        );
+    }
+    Ok(())
 }
 
 /// The log filter for one chain: every Teleporter Messenger deployment
@@ -1742,6 +1774,73 @@ mod tests {
             0,
             "skipped_disabled must only count a suppression that actually dropped an arm"
         );
+    }
+
+    mod chain_config_validation {
+        use alloy::{
+            primitives::Address,
+            providers::{Provider, ProviderBuilder},
+        };
+
+        use super::super::{AvalancheChainConfig, validate_chain_configs};
+
+        fn chain(chain_id: i64, contract_addresses: Vec<Address>) -> AvalancheChainConfig {
+            AvalancheChainConfig {
+                chain_id,
+                // Never dialed: validation does not touch the provider.
+                provider: ProviderBuilder::new()
+                    .connect_http("http://127.0.0.1:1".parse().unwrap())
+                    .erased(),
+                contract_addresses,
+                start_block: 1,
+            }
+        }
+
+        #[test]
+        fn accepts_one_config_per_chain_with_addresses() {
+            let chains = vec![
+                chain(1, vec![Address::from([0xAA; 20])]),
+                chain(
+                    2,
+                    vec![Address::from([0xBB; 20]), Address::from([0xCC; 20])],
+                ),
+            ];
+
+            assert!(validate_chain_configs(&chains).is_ok());
+        }
+
+        /// `Filter::address(vec![])` matches every address on the chain, so an
+        /// empty list is not "scan nothing" but "scan everything".
+        #[test]
+        fn rejects_a_chain_with_no_contract_address() {
+            let chains = vec![chain(43114, Vec::new())];
+
+            let err = validate_chain_configs(&chains).expect_err("empty address list rejected");
+
+            assert!(
+                err.to_string().contains("43114"),
+                "the error must name the offending chain: {err}"
+            );
+        }
+
+        /// Two configs for one chain are two streams over one
+        /// `(bridge_id, chain_id)` checkpoint — whichever finishes catch-up
+        /// first publishes a floor for the pair, and the other never rescans
+        /// what it had left.
+        #[test]
+        fn rejects_the_same_chain_configured_twice() {
+            let chains = vec![
+                chain(43114, vec![Address::from([0xAA; 20])]),
+                chain(43114, vec![Address::from([0xBB; 20])]),
+            ];
+
+            let err = validate_chain_configs(&chains).expect_err("duplicate chain rejected");
+
+            assert!(
+                err.to_string().contains("configured more than once"),
+                "unexpected error: {err}"
+            );
+        }
     }
 
     /// A chain with several Teleporter deployments must replay against all of
