@@ -974,16 +974,25 @@ becomes real, the ledger needs a database-level non-overlap constraint
 and the progress endpoint's denominator does not move.
 
 **Root cause:** AMB declares two contracts per `(bridge, chain)`, but one log
-stream covers both addresses, and its floor comes from the `amb_proxy` entry
+stream covers both addresses, and its floor comes from the `amb_proxy` entries
 alone. In the shipped config the mediator's value sits ~7.4M blocks below the
 proxy's on chain 1, so taking `min` across a chain's contracts would understate
 the scan floor by that much.
 
-**Fix:** Change the `amb_proxy` value to reach earlier history. When writing code
-that derives a scan floor for a pair, branch on bridge type: `amb_proxy` for AMB,
-`min` across contracts otherwise. That rule now lives in more than one place —
-keep them in lock-step, and pin the expected floors from the real config in a
-test, because drift here silently mis-reports every AMB pair.
+**Fix:** Change the `amb_proxy` value to reach earlier history. Do not add a
+second place that derives a floor: `ChainPlan`/`plan_bridge`
+(`interchain-indexer-server/src/indexers.rs`) is the one selection rule, and the
+progress denominator, the running indexer's `genesis_block` and the startup
+floor reconciliation all read it. The rule is `min` over the contracts of the
+kind that drives the scan — `amb_proxy` for AMB, all of them otherwise — and
+`min` rather than "the first one" because several versions of the same kind is
+how a contract upgrade is expressed. An AMB chain with no `amb_proxy` yields no
+floor at all rather than falling back to the mediator's: it cannot be indexed,
+and a plausible number for a scan that never runs is worse than none.
+
+A mediator floor *above* the proxy floor is legal — AMB-only operation indexes
+messages without transfers — and both directions of divergence are warned about
+once at startup by `log_amb_floor_divergence`.
 
 ---
 

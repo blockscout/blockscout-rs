@@ -102,6 +102,7 @@ pub async fn spawn_configured_indexers(
                 indexers.push(indexer);
             }
             BridgeType::Amb => {
+                log_amb_floor_divergence(bridge);
                 let configs = build_amb_chain_configs(bridge, &chain_lookup, chain_providers);
 
                 if configs.is_empty() {
@@ -174,16 +175,9 @@ fn build_amb_chain_configs(
     chain_lookup: &HashMap<i64, ChainConfig>,
     chain_providers: &HashMap<i64, DynProvider<Ethereum>>,
 ) -> Vec<AmbChainConfig> {
-    let mut by_chain: HashMap<i64, Vec<&crate::BridgeContractConfig>> = HashMap::new();
-    for contract in &bridge.contracts {
-        by_chain
-            .entry(contract.chain_id)
-            .or_default()
-            .push(contract);
-    }
-
     let mut chain_configs = Vec::new();
-    for (chain_id, contracts) in by_chain {
+    for plan in plan_bridge(bridge) {
+        let chain_id = plan.chain_id;
         let Some(_chain_config) = chain_lookup.get(&chain_id) else {
             tracing::warn!(
                 bridge_id = bridge.bridge_id,
@@ -202,14 +196,12 @@ fn build_amb_chain_configs(
             continue;
         };
 
-        let amb = contracts
-            .iter()
-            .copied()
-            .find(|contract| contract.kind.as_deref() == Some("amb_proxy"));
+        let contracts = &plan.contracts;
+        let amb = plan.floor_contracts.first().copied();
         let mediator = contracts
             .iter()
             .copied()
-            .find(|contract| contract.kind.as_deref() == Some("omnibridge_mediator"));
+            .find(|contract| contract.kind.as_deref() == Some(OMNIBRIDGE_MEDIATOR_KIND));
 
         let (Some(amb), Some(mediator)) = (amb, mediator) else {
             tracing::error!(
@@ -242,16 +234,19 @@ fn build_amb_chain_configs(
             mediator.abi.as_ref(),
         );
 
+        // From the plan, not from `amb.started_at_block`: the progress API and
+        // the startup floor reconciliation read the same `ChainPlan`, so the
+        // denominator cannot drift from where the indexer actually starts.
+        let Some(start_block) = plan.start_block() else {
+            continue;
+        };
+
         chain_configs.push(AmbChainConfig {
             chain_id,
             provider: provider.clone(),
             amb_proxy_address,
             mediator_address,
-            // Mirrored by `scan_floor_for_pair` below (used for progress-API
-            // enumeration and startup floor reconciliation). Keep both in
-            // sync: drift here silently mis-reports the denominator for
-            // every AMB pair.
-            start_block: amb.started_at_block,
+            start_block,
             amb_version: amb.version,
             mediator_version: mediator.version,
             amb_abi,
@@ -311,41 +306,43 @@ fn build_avalanche_chain_configs(
 ) -> Vec<AvalancheChainConfig> {
     let mut chain_configs = Vec::new();
 
-    for contract in &bridge.contracts {
-        let Some(_chain_config) = chain_lookup.get(&contract.chain_id) else {
+    for plan in plan_bridge(bridge) {
+        let chain_id = plan.chain_id;
+        let Some(_chain_config) = chain_lookup.get(&chain_id) else {
             tracing::warn!(
                 bridge_id = bridge.bridge_id,
-                chain_id = contract.chain_id,
+                chain_id,
                 "Chain configuration missing for Avalanche indexer"
             );
             continue;
         };
 
-        let Some(provider) = chain_providers.get(&(contract.chain_id)) else {
+        let Some(provider) = chain_providers.get(&chain_id) else {
             tracing::warn!(
                 bridge_id = bridge.bridge_id,
-                chain_id = contract.chain_id,
+                chain_id,
                 "No configured provider for chain"
             );
             continue;
         };
 
-        let Ok(address_bytes): Result<[u8; 20], _> = contract.address.clone().try_into() else {
-            tracing::error!(
-                bridge_id = bridge.bridge_id,
-                chain_id = contract.chain_id,
-                "Bridge contract address must be 20 bytes"
-            );
-            continue;
-        };
-        let contract_address = Address::from(address_bytes);
+        for contract in &plan.contracts {
+            let Ok(address_bytes): Result<[u8; 20], _> = contract.address.clone().try_into() else {
+                tracing::error!(
+                    bridge_id = bridge.bridge_id,
+                    chain_id,
+                    "Bridge contract address must be 20 bytes"
+                );
+                continue;
+            };
 
-        chain_configs.push(AvalancheChainConfig {
-            chain_id: contract.chain_id,
-            start_block: contract.started_at_block,
-            provider: provider.clone(),
-            contract_address,
-        });
+            chain_configs.push(AvalancheChainConfig {
+                chain_id,
+                start_block: contract.started_at_block,
+                provider: provider.clone(),
+                contract_address: Address::from(address_bytes),
+            });
+        }
     }
 
     chain_configs
@@ -353,10 +350,16 @@ fn build_avalanche_chain_configs(
 
 // --- Indexing-progress API support ---
 //
-// `scan_floor_for_pair`, `enumerate_indexing_targets` and
+// `plan_bridge`, `enumerate_indexing_targets` and
 // `reconcile_catchup_floors` are the config-driven surface behind
 // `GetIndexingProgress`. See `.memory-bank/research/message-lifecycle.md` §2
 // for the cursor semantics these functions rely on.
+
+/// `kind` values AMB assigns to its contracts. Parsing and interpreting `kind`
+/// is the AMB indexer's business; these constants exist because the *plan*
+/// must know which contracts drive a chain's scan.
+pub(crate) const AMB_PROXY_KIND: &str = "amb_proxy";
+pub(crate) const OMNIBRIDGE_MEDIATOR_KIND: &str = "omnibridge_mediator";
 
 /// Groups a bridge's configured contracts by `chain_id`, so each pair is
 /// considered once regardless of how many contracts it declares (AMB
@@ -374,34 +377,140 @@ fn group_contracts_by_chain(
     by_chain
 }
 
-/// The block a `(bridge, chain)` pair's *scan* starts from — i.e. the value handed to
-/// `LogStream.genesis_block`.
+/// One `(bridge, chain)` pair as its protocol sees it: every contract configured
+/// on that chain, plus the subset whose `started_at_block` determines where the
+/// scan begins.
 ///
-/// For `BridgeType::Amb` that is the `kind == "amb_proxy"` contract's `started_at_block`,
-/// mirroring `build_amb_chain_configs` (see the `start_block:` field around indexers.rs:247).
-/// The `omnibridge_mediator` value is deliberately NOT used: in
-/// `config/omnibridge/bridges.json` it is 7.4M blocks lower on chain 1, so `min` across
-/// contracts would badly understate the denominator.
-///
-/// For every other bridge type, `min` across the chain's configured contracts (Avalanche
-/// declares exactly one contract per chain, so `min` is that contract's value).
-/// An AMB chain with no `amb_proxy` contract falls back to `min`.
-pub(crate) fn scan_floor_for_pair(
-    bridge_type: BridgeType,
-    contracts: &[&BridgeContractConfig],
-) -> Option<u64> {
-    if bridge_type == BridgeType::Amb
-        && let Some(amb) = contracts
-            .iter()
-            .find(|contract| contract.kind.as_deref() == Some("amb_proxy"))
-    {
-        return Some(amb.started_at_block);
-    }
+/// This exists so "where does this pair start" is decided **once**. The rule
+/// previously lived in three places — `build_amb_chain_configs`,
+/// `scan_floor_for_pair` and `derive_prev_floor` — each re-deriving it from
+/// `kind`, with a comment asking future readers to keep them in lock-step and a
+/// test whose only job was to catch the drift. Drift there does not fail: it
+/// silently mis-reports a denominator, or reconciles a floor against a
+/// different contract than the one the indexer actually starts from.
+pub(crate) struct ChainPlan<'a> {
+    pub(crate) chain_id: i64,
+    /// Every configured contract on this chain. The set of addresses the
+    /// indexer collects logs from is derived from this by the indexer itself.
+    pub(crate) contracts: Vec<&'a BridgeContractConfig>,
+    /// The contracts whose `started_at_block` sets the floor. Empty when the
+    /// protocol's required contracts are absent from the config.
+    pub(crate) floor_contracts: Vec<&'a BridgeContractConfig>,
+}
 
-    contracts
-        .iter()
-        .map(|contract| contract.started_at_block)
-        .min()
+impl ChainPlan<'_> {
+    /// The block handed to `LogStream.genesis_block`, or `None` when the pair
+    /// has no contract that could define one.
+    ///
+    /// `None` is not the same as "not configured": the pair is still enumerated
+    /// for the progress API, because a pair whose indexer cannot start is
+    /// exactly what that endpoint exists to surface. It just gets no indexer.
+    pub(crate) fn start_block(&self) -> Option<u64> {
+        self.floor_contracts
+            .iter()
+            .map(|contract| contract.started_at_block)
+            .min()
+    }
+}
+
+/// Groups `bridge`'s contracts into one plan per chain, applying that bridge
+/// type's own rule for which contracts define the floor.
+///
+/// **AMB** scans from the earliest `amb_proxy`, never from the mediator. In
+/// `config/omnibridge/bridges.json` the mediator sits ~7.4M blocks below the
+/// proxy on chain 1, so `min` across all contracts would badly understate the
+/// denominator — and the indexer would not scan there anyway. A chain with no
+/// `amb_proxy` yields an empty `floor_contracts`: AMB cannot index it at all,
+/// and inferring a floor from the mediator would produce a plausible number for
+/// a scan that never happens. The mediator is *not* required — a bridge
+/// configured with AMB contracts only indexes messages without transfers.
+///
+/// **Everything else** takes `min` across the chain's contracts. Avalanche
+/// declares one contract per chain today, so `min` is that contract's value;
+/// with several deployments on one chain it is the earliest, which is the only
+/// floor under which every configured address is covered.
+///
+/// Pure, and deliberately so: all three callers run at startup, and a condition
+/// logged here would be reported once per caller rather than once.
+pub(crate) fn plan_bridge(bridge: &BridgeConfig) -> Vec<ChainPlan<'_>> {
+    let mut plans: Vec<ChainPlan<'_>> = group_contracts_by_chain(&bridge.contracts)
+        .into_iter()
+        .map(|(chain_id, contracts)| {
+            let floor_contracts = match bridge.bridge_type {
+                BridgeType::Amb => contracts
+                    .iter()
+                    .copied()
+                    .filter(|contract| contract.kind.as_deref() == Some(AMB_PROXY_KIND))
+                    .collect(),
+                _ => contracts.clone(),
+            };
+
+            ChainPlan {
+                chain_id,
+                contracts,
+                floor_contracts,
+            }
+        })
+        .collect();
+
+    plans.sort_by_key(|plan| plan.chain_id);
+    plans
+}
+
+/// Warns when a chain's contract kinds start at materially different blocks, so
+/// the range that is consequently not covered end-to-end is visible in the log
+/// rather than only derivable from the config.
+///
+/// Both directions matter and they are different problems. A mediator starting
+/// *below* the proxy means its logs under the proxy's floor are never fetched.
+/// A mediator starting *above* it means the range in between indexes messages
+/// with no transfer contract configured — accepted by design (AMB-only
+/// operation is supported), but the operator should know the range.
+///
+/// Startup-only: called once per running AMB bridge, not from `plan_bridge`.
+fn log_amb_floor_divergence(bridge: &BridgeConfig) {
+    for plan in plan_bridge(bridge) {
+        let Some(proxy_floor) = plan.start_block() else {
+            continue;
+        };
+        let mediator_floor = plan
+            .contracts
+            .iter()
+            .filter(|contract| contract.kind.as_deref() == Some(OMNIBRIDGE_MEDIATOR_KIND))
+            .map(|contract| contract.started_at_block)
+            .min();
+
+        match mediator_floor {
+            None => tracing::warn!(
+                bridge_id = bridge.bridge_id,
+                chain_id = plan.chain_id,
+                proxy_floor,
+                "AMB chain has no omnibridge_mediator contract: messages will be indexed \
+                 without token transfers"
+            ),
+            Some(mediator_floor) if mediator_floor < proxy_floor => tracing::warn!(
+                bridge_id = bridge.bridge_id,
+                chain_id = plan.chain_id,
+                proxy_floor,
+                mediator_floor,
+                excluded_from = mediator_floor,
+                excluded_to = proxy_floor - 1,
+                "omnibridge_mediator starts below the amb_proxy floor: its logs in that \
+                 range are never scanned"
+            ),
+            Some(mediator_floor) if mediator_floor > proxy_floor => tracing::warn!(
+                bridge_id = bridge.bridge_id,
+                chain_id = plan.chain_id,
+                proxy_floor,
+                mediator_floor,
+                messages_without_transfers_from = proxy_floor,
+                messages_without_transfers_to = mediator_floor - 1,
+                "omnibridge_mediator starts above the amb_proxy floor: messages in that \
+                 range are indexed without token transfers"
+            ),
+            Some(_) => {}
+        }
+    }
 }
 
 /// One `(bridge, chain)` the service is configured to index, with the block the scan
@@ -422,9 +531,9 @@ pub struct IndexingTarget {
 /// Disabled bridges are excluded (they have no indexer by design and would sit at 0%
 /// forever). Everything else is included even when no indexer could actually be built —
 /// a missing `chains.json` entry, a missing provider, an unsupported `indexer_type`, or an
-/// AMB chain lacking its `amb_proxy`/`omnibridge_mediator` pair — because a pair whose
-/// indexer failed to start is exactly the case this enumeration exists to surface at 0%
-/// instead of silently omitting it.
+/// AMB chain with no `amb_proxy` contract (`ChainPlan::start_block` is then `None` and the
+/// pair is reported from block 0) — because a pair whose indexer failed to start is exactly
+/// the case this enumeration exists to surface at 0% instead of silently omitting it.
 ///
 /// Sorted by `(bridge_id, chain_id)`.
 pub fn enumerate_indexing_targets(bridges: &[BridgeConfig]) -> Vec<IndexingTarget> {
@@ -435,13 +544,13 @@ pub fn enumerate_indexing_targets(bridges: &[BridgeConfig]) -> Vec<IndexingTarge
             continue;
         }
 
-        for (chain_id, contracts) in group_contracts_by_chain(&bridge.contracts) {
-            let start_block = match scan_floor_for_pair(bridge.bridge_type.clone(), &contracts) {
+        for plan in plan_bridge(bridge) {
+            let start_block = match plan.start_block() {
                 Some(start_block) => start_block,
                 None => {
                     tracing::warn!(
                         bridge_id = bridge.bridge_id,
-                        chain_id,
+                        chain_id = plan.chain_id,
                         "no scan floor could be derived for this configured pair; reporting start_block = 0"
                     );
                     0
@@ -450,7 +559,7 @@ pub fn enumerate_indexing_targets(bridges: &[BridgeConfig]) -> Vec<IndexingTarge
 
             targets.push(IndexingTarget {
                 bridge_id: bridge.bridge_id,
-                chain_id,
+                chain_id: plan.chain_id,
                 start_block,
             });
         }
@@ -481,26 +590,25 @@ pub(crate) fn decide_floor_reconciliation(prev: Option<u64>, new: u64) -> FloorR
     }
 }
 
-/// Derives the previous run's scan floor by applying the exact same selection rule as
-/// `scan_floor_for_pair`, but over `bridge_contracts` rows instead of config values, so
-/// `prev` and `new` can never disagree because of a rule mismatch (e.g. editing the AMB
-/// mediator's `started_at_block` must never look like a change in scanning).
+/// Derives the previous run's scan floor from the same `floor_contracts` the plan selected,
+/// but over `bridge_contracts` rows instead of config values, so `prev` and `new` can never
+/// disagree because of a rule mismatch (e.g. editing the AMB mediator's `started_at_block`
+/// must never look like a change in scanning). The selection rule is not re-derived here —
+/// it arrives from `ChainPlan`, which is the point.
 ///
-/// Identity-scoped lookup: only the identities currently in `contracts` (i.e. currently in
-/// config) are looked up by `(chain_id, address, version)`, `bridge_contracts`' unique key —
+/// Identity-scoped lookup: only the identities currently in `floor_contracts` (i.e. currently
+/// in config) are looked up by `(chain_id, address, version)`, `bridge_contracts`' unique key —
 /// a stale stored row for an address no longer in config can never influence the result.
 ///
-/// Returns `None` ("previous unknown") whenever a *relevant* contract (the `amb_proxy` for
-/// AMB, every configured contract for the min rule) has no stored row yet, or a stored row
-/// with `started_at_block IS NULL`. `bridge_contracts.started_at_block` is deliberately read
-/// directly (`Option<i64>`), never through
+/// Returns `None` ("previous unknown") whenever any floor contract has no stored row yet, or a
+/// stored row with `started_at_block IS NULL`. `bridge_contracts.started_at_block` is
+/// deliberately read directly (`Option<i64>`), never through
 /// `bridge_contracts::Model::validated_started_at_block()`, which maps `None` to `0` and
 /// would read a genuinely unknown previous value as a raise.
 fn derive_prev_floor(
     bridge_id: i32,
     chain_id: i64,
-    bridge_type: BridgeType,
-    contracts: &[&BridgeContractConfig],
+    floor_contracts: &[&BridgeContractConfig],
     stored: &[bridge_contracts::Model],
 ) -> Option<u64> {
     let lookup = |contract: &BridgeContractConfig| -> Option<i64> {
@@ -533,19 +641,12 @@ fn derive_prev_floor(
         }
     };
 
-    if bridge_type == BridgeType::Amb
-        && let Some(amb) = contracts
-            .iter()
-            .find(|contract| contract.kind.as_deref() == Some("amb_proxy"))
-    {
-        return lookup(amb).and_then(|value| u64::try_from(value).ok());
-    }
-
-    // Fallback -- mirrors `scan_floor_for_pair`: non-AMB bridges, and an AMB
-    // chain with no `amb_proxy` contract, both use `min` across the pair's
-    // configured contracts' stored values.
+    // `min` over the plan's floor contracts' stored values, mirroring
+    // `ChainPlan::start_block`'s `min` over their configured values. An empty
+    // set yields `None`, which is correct: with no contract defining the floor
+    // there is no previous floor to compare against either.
     let mut floor: Option<u64> = None;
-    for contract in contracts {
+    for contract in floor_contracts {
         let value = u64::try_from(lookup(contract)?).ok()?;
         floor = Some(floor.map_or(value, |current| current.min(value)));
     }
@@ -613,9 +714,9 @@ pub async fn reconcile_catchup_floors(
             }
         };
 
-        for (chain_id, contracts) in group_contracts_by_chain(&bridge.contracts) {
-            let Some(new_floor) = scan_floor_for_pair(bridge.bridge_type.clone(), &contracts)
-            else {
+        for plan in plan_bridge(bridge) {
+            let chain_id = plan.chain_id;
+            let Some(new_floor) = plan.start_block() else {
                 tracing::warn!(
                     bridge_id = bridge.bridge_id,
                     chain_id,
@@ -627,8 +728,7 @@ pub async fn reconcile_catchup_floors(
             let prev_floor = derive_prev_floor(
                 bridge.bridge_id,
                 chain_id,
-                bridge.bridge_type.clone(),
-                &contracts,
+                &plan.floor_contracts,
                 &stored_contracts,
             );
 
@@ -755,14 +855,15 @@ mod tests {
         }
     }
 
-    // --- enumerate_indexing_targets / scan_floor_for_pair ---
+    // --- plan_bridge / enumerate_indexing_targets ---
 
     #[test]
     fn test_enumerate_indexing_targets_amb_config_pins_amb_proxy_floors_not_mediator() {
-        // Regression test for drift against `build_amb_chain_configs`'s
-        // `start_block: amb.started_at_block` (this file, near the AMB chain
-        // config push): the progress denominator must come from the exact
-        // same contract that the running indexer actually starts from.
+        // Drift between the denominator and where the indexer actually starts
+        // is now structurally impossible — both read `ChainPlan` — so this
+        // pins the other half: that the shared rule produces the right floors
+        // for the *real* config, and that a future edit to `plan_bridge`
+        // cannot quietly start preferring the mediator.
         let bridges = crate::load_bridges_from_file(omnibridge_config_path()).unwrap();
         let targets = enumerate_indexing_targets(&bridges);
 
@@ -808,6 +909,88 @@ mod tests {
                 start_block: 100
             }]
         );
+    }
+
+    /// A chain declaring several `amb_proxy` versions starts from the earliest,
+    /// not from whichever the config happens to list first. This is the rule
+    /// versioned deployments rely on: adding a v2 entry must not move the floor
+    /// up and orphan everything v1 covered.
+    #[test]
+    fn test_plan_bridge_amb_floor_is_the_earliest_amb_proxy_version() {
+        let bridge = bridge(
+            1,
+            BridgeType::Amb,
+            true,
+            vec![
+                contract(1, Some("amb_proxy"), 900, 2),
+                contract(1, Some("amb_proxy"), 100, 1),
+                contract(1, Some("omnibridge_mediator"), 50, 1),
+            ],
+        );
+
+        let plans = plan_bridge(&bridge);
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].start_block(), Some(100));
+        assert_eq!(
+            plans[0].contracts.len(),
+            3,
+            "every configured contract stays in the plan; only the floor is selective"
+        );
+    }
+
+    /// An AMB chain without an `amb_proxy` cannot be indexed at all, so it has
+    /// no floor — rather than silently inheriting the mediator's, which would
+    /// report a plausible denominator for a scan that never runs.
+    #[test]
+    fn test_plan_bridge_amb_without_proxy_has_no_floor() {
+        let bridges = vec![bridge(
+            1,
+            BridgeType::Amb,
+            true,
+            vec![contract(1, Some("omnibridge_mediator"), 50, 1)],
+        )];
+
+        assert_eq!(plan_bridge(&bridges[0])[0].start_block(), None);
+
+        // Still enumerated: a misconfigured pair must surface at 0%, not vanish.
+        assert_eq!(
+            enumerate_indexing_targets(&bridges),
+            vec![IndexingTarget {
+                bridge_id: 1,
+                chain_id: 1,
+                start_block: 0
+            }]
+        );
+    }
+
+    /// The mediator is optional by design: AMB contracts alone index messages
+    /// without token transfers, so their absence must not remove the floor.
+    #[test]
+    fn test_plan_bridge_amb_without_mediator_keeps_its_floor() {
+        let bridge = bridge(
+            1,
+            BridgeType::Amb,
+            true,
+            vec![contract(1, Some("amb_proxy"), 100, 1)],
+        );
+
+        assert_eq!(plan_bridge(&bridge)[0].start_block(), Some(100));
+    }
+
+    /// Non-AMB bridges take `min` across every contract on the chain — the only
+    /// floor under which each configured address is covered.
+    #[test]
+    fn test_plan_bridge_non_amb_floor_is_min_across_contracts() {
+        let bridge = bridge(
+            1,
+            BridgeType::AvalancheNative,
+            true,
+            vec![contract(1, None, 900, 2), contract(1, None, 100, 1)],
+        );
+
+        let plans = plan_bridge(&bridge);
+        assert_eq!(plans[0].start_block(), Some(100));
+        assert_eq!(plans[0].floor_contracts.len(), 2);
     }
 
     #[test]
