@@ -154,12 +154,12 @@ re-scanned. Together, `catchup_min_cursor` and `catchup_max_cursor` delimit the
    ─────┴───────────────┴──────────────────────┴─────────────────────┴──────────
                         ▲                      ▲                     ▲
               catchup_min_cursor       catchup_max_cursor      realtime_cursor
-              inclusive, only rises    inclusive, only falls   inclusive, only rises
+              inclusive, see below     inclusive, only falls   inclusive, only rises
 ```
 
 | Cursor | Meaning | Direction | Conflict rule |
 |---|---|---|---|
-| `catchup_min_cursor` | lowest block not yet scanned | only rises | `GREATEST` (see caveat) |
+| `catchup_min_cursor` | lowest block not yet scanned | **up by progress, down by config** | `GREATEST` on the scan path; assignment on the startup reconciliation |
 | `catchup_max_cursor` | highest block not yet scanned | only falls | `LEAST` |
 | `realtime_cursor` | next block the forward scan will request | only rises | `GREATEST` |
 | `finality_cursor` | intended confirmed-block boundary | — | unused |
@@ -178,13 +178,33 @@ Consequences worth internalizing:
 - `realtime_cursor` is monotonically the highest block ever known for the pair,
   so it doubles as a usable upper anchor for progress calculations.
 
-**Current caveat — `catchup_min_cursor` is written but never used.** Both writers
-hard-code it to `0` (`message_buffer/persistence.rs:394`,
-`database.rs:2512`) and no reader consumes it, so today the lower bound of the
-unscanned interval is implicit in `started_at_block` from config rather than
-stored. The column is therefore *dormant, not dead*: the semantics above are the
-schema's design, and the hard-coded `0` is the gap between design and
-implementation. `finality_cursor` is likewise written as `0` and read nowhere,
+**`catchup_min_cursor` moves in two different ways, and conflating them is a
+bug.** It is seeded to the contract's `started_at_block` at indexer startup and
+read by the progress endpoint (`GET /api/v1/status/indexing`). Two distinct
+mechanisms write it:
+
+- **Up, by progress.** Every writer on the scan path uses `GREATEST`, so a
+  restart can never discard scanned coverage. Today no indexer actually advances
+  it — both walk downward only — so it sits at the configured floor.
+- **Down, by config.** Lowering a contract's `started_at_block` *widens the scope
+  of work*; it is not a regression of progress. `GREATEST` refuses it by
+  construction, so a startup reconciliation lowers the stored floor to match,
+  using the previous configured value still held in
+  `bridge_contracts.started_at_block` before `upsert_bridge_contracts` overwrites
+  it. Without this the endpoint reports the widened range as finished for the
+  whole duration of the backfill, and a future bidirectional catchup would skip
+  the range entirely.
+
+Reading the column as "only rises" is what produces both of those failures, which
+is why the table above splits the direction cell rather than simplifying it.
+
+A consequence worth stating: the read side applies
+`lo = max(catchup_min_cursor, start_block)` **before** evaluating completion. The
+literal `catchup_max_cursor < catchup_min_cursor` is wrong for a row written
+before seeding existed (`min = 0`, `max = start_block - 1`), which it would
+report as unfinished forever.
+
+`finality_cursor` remains *dormant, not dead* — written as `0` and read nowhere,
 but that one has no implementation behind it at all — there is no
 confirmation-depth or reorg logic (see
 `indexing-gaps-retries-and-checkpoint-safety.md`).
@@ -325,8 +345,10 @@ Cursor tracking determines how far `indexer_checkpoints` can safely advance.
   (backward scanning)
 - `realtime_cursor` uses `GREATEST(existing, new)` — can only increase
   (forward scanning)
-- `catchup_min_cursor` is written as constant `0` and never read — see the cursor
-  semantics table in step 2 for what it is *meant* to hold
+- `catchup_min_cursor` uses `GREATEST(existing, new)` on the scan path — but the
+  startup reconciliation lowers it by assignment when the configured
+  `started_at_block` drops. See the cursor semantics table in step 2: this is the
+  one cursor whose direction is not a single rule
 - This preserves cursor monotonicity but does not prove full block processing.
   Gap bridging is safe only when missing block numbers truly contain no failed
   work. Blocks that fail after a successful `eth_getLogs` are absent from both

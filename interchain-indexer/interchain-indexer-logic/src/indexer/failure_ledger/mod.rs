@@ -117,17 +117,4 @@ impl FailureLedger {
     ) -> anyhow::Result<Vec<(i32, i64, FailedInterval)>> {
         self.db.open_indexer_failures(pairs).await
     }
-
-    /// Pure read, delegates to `indexer_failure_totals`. Exists on the
-    /// facade (rather than requiring callers to hold a separate
-    /// `Arc<InterchainDatabase>`) so `RangeDriver`'s gauge refresh — the only
-    /// caller today — can reach the aggregate through the one handle it
-    /// already holds.
-    pub async fn failure_totals(
-        &self,
-        bridge_id: Option<i32>,
-        chain_id: Option<i64>,
-    ) -> anyhow::Result<Vec<(i32, i64, u64, Option<chrono::NaiveDateTime>)>> {
-        self.db.indexer_failure_totals(bridge_id, chain_id).await
-    }
 }

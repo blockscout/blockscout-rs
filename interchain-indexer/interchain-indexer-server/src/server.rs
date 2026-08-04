@@ -25,18 +25,22 @@ use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{
     database, launcher, launcher::LaunchSettings, tracing as bs_tracing,
 };
+use chrono::NaiveDateTime;
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
 use interchain_indexer_logic::{
     ChainInfoService, IndexedChains, InterchainDatabase, StatsReadSettings, StatsService,
     TokenInfoService,
-    indexer::metrics::{INDEXER_CATCHUP_BLOCKS_REMAINING, INDEXER_CATCHUP_PROGRESS},
+    indexer::metrics::{
+        FAILED_BLOCKS, INDEXER_CATCHUP_BLOCKS_REMAINING, INDEXER_CATCHUP_PROGRESS,
+        OLDEST_OPEN_HOLE_AGE_SECONDS,
+    },
 };
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     interchain_statistics_service_actix::route_interchain_statistics_service,
     status_service_actix::route_status_service,
 };
 use migration::Migrator;
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 const SERVICE_NAME: &str = "interchain_indexer";
 
 /// Refresh interval for the indexing-progress gauges. A module constant, not a
@@ -73,7 +77,19 @@ fn spawn_stats_chains_recalculation_worker(stats: Arc<StatsService>, period_secs
 /// Refreshes `interchain_indexer_catchup_progress` /
 /// `interchain_indexer_catchup_blocks_remaining` on a fixed interval, from
 /// the same `collect_indexing_progress` join the RPC handler uses so the two
-/// can never disagree.
+/// can never disagree. Also refreshes `interchain_indexer_failed_blocks` /
+/// `interchain_indexer_oldest_open_hole_age_seconds`.
+///
+/// The two failure-ledger gauges used to be refreshed by `RangeDriver`'s
+/// retry tick, which is reachable only from a live driver loop — so a pair
+/// whose indexer never started emitted no `failed_blocks` series at all, and
+/// a driver that `bail!`ed out of its loop froze both gauges forever,
+/// including `oldest_open_hole_age_seconds`, the sole detector of a retry
+/// pass that has stopped converging. Refreshing them here instead, keyed off
+/// `targets` (every configured `(bridge, chain)` pair, config-driven, the
+/// same enumeration `collect_indexing_progress` uses), fixes both: this
+/// worker runs regardless of any driver's liveness, so every configured
+/// target gets both series.
 ///
 /// Gauges are written only here. A gauge refreshed from a request handler
 /// would be frozen between calls, which is worse than not having it.
@@ -101,9 +117,114 @@ fn spawn_indexing_progress_metrics_worker(
                     "indexing-progress metrics refresh failed; keeping previous gauge values, retrying after interval"
                 ),
             }
+            refresh_failure_ledger_gauges(&db, &targets).await;
             tokio::time::sleep(PROGRESS_METRICS_REFRESH).await;
         }
     });
+}
+
+/// Refresh the two failure-ledger gauges from `indexer_failure_totals`,
+/// covering every configured target rather than only the pairs a live
+/// `RangeDriver` happens to be looping over.
+///
+/// **Fetch first, decide, then apply** — never zero the gauges before the
+/// query is known to have succeeded. A pool blip on the totals query must
+/// leave the previous gauge values in place; zeroing first would make a
+/// transient DB error look like "every hole just vanished," clearing exactly
+/// the alert this gauge exists to raise. The decision (including which
+/// absent pairs become explicit zeroes) is the pure, unit-tested
+/// `gauge_refresh_values`; this function only performs the `.await` and the
+/// trivial `.set()` calls around it.
+async fn refresh_failure_ledger_gauges(db: &InterchainDatabase, targets: &[IndexingTarget]) {
+    let totals = db.indexer_failure_totals(None, None).await;
+    let now = chrono::Utc::now().naive_utc();
+    let pairs: Vec<(i32, i64)> = targets
+        .iter()
+        .map(|target| (target.bridge_id, target.chain_id))
+        .collect();
+
+    if let Some(values) = gauge_refresh_values(&pairs, &totals, now) {
+        for (bridge_id, chain_id, blocks, age_seconds) in values {
+            let bridge_label = bridge_id.to_string();
+            let chain_label = chain_id.to_string();
+            FAILED_BLOCKS
+                .with_label_values(&[&bridge_label, &chain_label])
+                .set(blocks);
+            OLDEST_OPEN_HOLE_AGE_SECONDS
+                .with_label_values(&[&bridge_label, &chain_label])
+                .set(age_seconds);
+        }
+    }
+
+    // Matched on the result itself rather than on `gauge_refresh_values`
+    // returning `None`: the two are equivalent only as long as `Err` stays
+    // that function's sole `None` path, and an `unwrap_err` resting on that
+    // coupling would panic this worker the moment a second `None` arm is
+    // added (`.memory-bank/rules/error-handling.md`).
+    if let Err(err) = totals {
+        tracing::error!(
+            err = ?err,
+            "failed to refresh failure-ledger gauges; leaving previous values in place"
+        );
+    }
+}
+
+/// One gauge pair's value: `(bridge_id, chain_id, failed_blocks,
+/// oldest_open_hole_age_seconds)`.
+type GaugeValue = (i32, i64, f64, f64);
+
+/// One `indexer_failure_totals` row: `(bridge_id, chain_id, blocks, oldest created_at)`.
+type FailureTotalsRow = (i32, i64, u64, Option<NaiveDateTime>);
+
+/// Outcome of an `indexer_failure_totals` query, as passed to
+/// [`gauge_refresh_values`].
+type FailureTotalsResult = anyhow::Result<Vec<FailureTotalsRow>>;
+
+/// Decides the per-pair gauge values to apply for one totals-query outcome.
+///
+/// `Ok(totals)` -> `Some(values)`, one entry per `pairs`: a pair present in
+/// `totals` gets its aggregate; a pair absent gets an explicit zero — a pair
+/// whose last hole was just resolved does not appear in
+/// `indexer_failure_totals`, so without this its `GaugeVec` child would stay
+/// frozen at the last non-zero value. This also covers a pair whose indexer
+/// never started: it is still in `pairs` (config-driven), so it gets an
+/// explicit zero instead of no series at all.
+///
+/// `Err(_)` -> `None`, meaning "apply nothing, leave the gauges at their
+/// previous values." Communicating this as `None` rather than falling
+/// through to a zeroed `Vec` is what makes the "leave values untouched on
+/// error" behaviour (defect: a failed query used to zero every gauge)
+/// unit-testable without touching the process-wide `GaugeVec`s themselves
+/// (`.memory-bank/rules/testing.md`).
+fn gauge_refresh_values(
+    pairs: &[(i32, i64)],
+    totals: &FailureTotalsResult,
+    now: NaiveDateTime,
+) -> Option<Vec<GaugeValue>> {
+    let totals = totals.as_ref().ok()?;
+
+    let by_pair: HashMap<(i32, i64), (u64, Option<NaiveDateTime>)> = totals
+        .iter()
+        .map(|(bridge_id, chain_id, blocks, oldest)| ((*bridge_id, *chain_id), (*blocks, *oldest)))
+        .collect();
+
+    Some(
+        pairs
+            .iter()
+            .map(|&(bridge_id, chain_id)| {
+                let (blocks, age_seconds) = match by_pair.get(&(bridge_id, chain_id)) {
+                    Some((blocks, oldest)) => {
+                        let age = oldest
+                            .map(|ts| (now - ts).num_seconds().max(0))
+                            .unwrap_or(0);
+                        (*blocks as f64, age as f64)
+                    }
+                    None => (0.0, 0.0),
+                };
+                (bridge_id, chain_id, blocks, age_seconds)
+            })
+            .collect(),
+    )
 }
 
 #[derive(Clone)]
@@ -380,4 +501,58 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     //example.stop_indexing().await;
 
     launch_result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ts(secs_since_epoch: i64) -> NaiveDateTime {
+        chrono::DateTime::from_timestamp(secs_since_epoch, 0)
+            .unwrap()
+            .naive_utc()
+    }
+
+    #[test]
+    fn gauge_refresh_values_uses_the_aggregate_for_a_pair_present_in_totals() {
+        let now = ts(10_000);
+        let oldest = ts(9_000);
+        let totals: FailureTotalsResult = Ok(vec![(1, 42, 250, Some(oldest))]);
+
+        let values =
+            gauge_refresh_values(&[(1, 42)], &totals, now).expect("Ok totals must yield Some");
+
+        assert_eq!(values, vec![(1, 42, 250.0, 1_000.0)]);
+    }
+
+    #[test]
+    fn gauge_refresh_values_zeroes_a_configured_pair_absent_from_totals() {
+        let now = ts(10_000);
+        // (1, 42) has an open hole; (1, 7) is configured — including a pair
+        // whose indexer never started — but has never recorded a failure and
+        // therefore does not appear in the aggregate at all.
+        let totals: FailureTotalsResult = Ok(vec![(1, 42, 250, Some(ts(9_000)))]);
+
+        let values = gauge_refresh_values(&[(1, 42), (1, 7)], &totals, now)
+            .expect("Ok totals must yield Some");
+
+        assert_eq!(values.len(), 2);
+        assert!(
+            values.contains(&(1, 7, 0.0, 0.0)),
+            "a healthy configured pair must get an explicit zero, not be omitted: {values:?}"
+        );
+    }
+
+    #[test]
+    fn gauge_refresh_values_returns_none_on_error_so_callers_leave_values_untouched() {
+        let now = ts(10_000);
+        let totals: FailureTotalsResult = Err(anyhow::anyhow!("pool blip"));
+
+        let values = gauge_refresh_values(&[(1, 42)], &totals, now);
+
+        assert!(
+            values.is_none(),
+            "a failed totals query must not produce any values to apply: {values:?}"
+        );
+    }
 }

@@ -38,14 +38,24 @@ pub struct CrosschainIndexerStatus {
     /// and avoid putting high-cardinality or frequently-changing data here.
     pub extra_info: HashMap<String, Value>,
     // TODO: Telemetry fields were intentionally removed from the trait status.
-    // They should be exported as Prometheus metrics instead:
+    // They should be exported as Prometheus metrics instead. Status as of the
+    // indexing-completeness-and-progress-api work:
     // - catchup progress / lag:
-    //   - `indexer_catchup_progress{bridge_id,chain_id}` (gauge) OR
-    //   - `indexer_chain_lag_blocks{bridge_id,chain_id}` (gauge)
-    // - counts:
+    //   - `indexer_catchup_progress{bridge_id,chain_id}` (gauge) — DONE, exported
+    //     as `interchain_indexer_catchup_progress` (`indexer::metrics`), refreshed
+    //     by `spawn_indexing_progress_metrics_worker`
+    //     (`interchain-indexer-server/src/server.rs`) from the same DB-only join
+    //     the `GetIndexingProgress` RPC uses. `interchain_indexer_catchup_blocks_remaining`
+    //     ships alongside it, and the failed-range ledger separately exports
+    //     `interchain_indexer_failed_blocks` / `interchain_indexer_oldest_open_hole_age_seconds`
+    //     per `(bridge_id, chain_id)` from the same worker.
+    //   - `indexer_chain_lag_blocks{bridge_id,chain_id}` — still unimplemented; this
+    //     was an alternative to catchup progress, not an additional requirement.
+    // - counts: still unimplemented
     //   - `indexer_messages_indexed_total{bridge_id,chain_id?}` (counter)
     //   - `indexer_transfers_indexed_total{bridge_id,chain_id?}` (counter)
-    //   - `indexer_errors_total{bridge_id,kind?}` (counter)
+    //   - `indexer_errors_total{bridge_id,kind?}` (counter) — the failed-range ledger
+    //     gauges above cover per-range hole tracking, not a generic error counter
 }
 
 #[async_trait]

@@ -970,8 +970,8 @@ mod tests {
         assert_eq!(transfer.recipient_address, Some(vec![0x2B]));
     }
 
-    // --- `upsert_cursors`' `catchup_min_cursor` GREATEST insurance
-    // (coding-task-4 Part B, work item 4). This rule alone heals nothing —
+    // --- `upsert_cursors`' `catchup_min_cursor` GREATEST insurance.
+    // This rule alone heals nothing —
     // `upsert_cursors` always supplies `0` on insert — it only guarantees a
     // once-seeded floor can never be lowered by a later cursor-maintenance
     // write. See `InterchainDatabase::seed_catchup_floor` for the healing

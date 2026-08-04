@@ -23,9 +23,32 @@ frequency, or validate deployed configuration, RPC behavior, logs, or alerts.
 Intentional filter/config exclusions are described separately from accidental
 gaps.
 
+## Status: the gap this note describes has since been closed
+
+This note was written against the code **before** the failed-range ledger landed,
+and it is kept in that voice because the analysis is what justifies the design.
+What changed, and where each claim below now has to be read as "before":
+
+- `LogStream` yields `LogBatch { from_block, to_block, direction, logs }`, so a
+  consumer can name the range it failed on.
+- `indexer_failures` has real producers and consumers. `FailureLedger` records a
+  failed interval (union, merging on overlap *or* adjacency), clears it by set
+  difference once the blocks are actually reprocessed, and `RangeDriver` replays
+  open intervals forever with a capped backoff.
+- A batch-processing failure that cannot be *recorded* is now fatal to the
+  stream: the driver stops consuming and the indexer state becomes `Failed`.
+- `catchup_min_cursor` is seeded and read; the checkpoint row now exists from
+  startup, which retires the incidental safe case under §7.
+
+What did **not** change, and is still the correct model: a checkpoint certifies
+*scanning*, not correctness. Cursor derivation is untouched, holes live in a
+separate record, and the two are read together only by the progress endpoint.
+
 ## Short Answer
 
-Yes. Both indexers can advance beyond blocks whose logs were fetched
+Yes — this was the finding, and it is what the ledger now addresses.
+
+Both indexers can advance beyond blocks whose logs were fetched
 successfully but whose receipts, blocks, parsing, correlation, or buffer
 mutations failed afterward.
 
@@ -49,8 +72,10 @@ after `poll_interval`, with no total attempt limit. A permanent deterministic
 error therefore stalls that scan direction indefinitely rather than creating a
 gap.
 
-`indexer_failures` is schema only. No runtime path inserts, selects, retries, or
-deletes its rows.
+`indexer_failures` was schema only when this was written — no runtime path
+inserted, selected, retried, or deleted its rows. That is what made a
+post-`getLogs` failure permanent rather than merely delayed, and it is the
+single fact the ledger changed.
 
 ## Why This Matters
 
@@ -295,12 +320,17 @@ ever created, and no realtime work created one concurrently,
 then scans again. Empty catchup may create a row with the realtime start cursor,
 but that boundary is inclusive and is replayed.
 
-That safe case is **incidental and fragile**: it rests entirely on the checkpoint
-row not existing yet. Today the row is created only by the first successful
-maintenance pass that has something to write (`upsert_cursors`) — so the property
-silently disappears for any bridge/chain with early buffer activity, and it would
-disappear altogether if anything else began seeding the row at startup. It should
-not be relied on as a safety mechanism.
+That safe case was **incidental and fragile**: it rested entirely on the
+checkpoint row not existing yet. The row used to be created only by the first
+successful maintenance pass that had something to write (`upsert_cursors`), so
+the property already disappeared for any bridge/chain with early buffer activity,
+and it would disappear altogether if anything began seeding the row at startup.
+
+**It is now gone.** `seed_catchup_floor` creates the row at indexer startup so
+that `catchup_min_cursor` can hold the configured floor, which means
+`mark_catchup_complete`'s update always finds a row to write. This was an
+accepted trade: the safe case was never reliable, and the ledger — not the
+absence of a row — is what makes a failed historical range replayable.
 
 ## Invariants
 
@@ -511,14 +541,19 @@ requested, and canonical rows produced from orphaned logs are not removed.
   can remain stalled while the indexer status stays `Running`.
 - Post-fetch errors are logged per batch, transaction, or event, but are not
   represented in a durable table.
-- Batch-processing errors handled inside the run loop do not increment the
-  indexer's fatal task error counter or set state to `Failed`.
+- Batch-processing errors handled inside the run loop did not increment the
+  indexer's fatal task error counter or set state to `Failed`. They still do not
+  — a failed batch is recorded and replayed, not escalated. What *is* fatal now
+  is a failure to **record** it: the driver stops consuming and the state becomes
+  `Failed`, because that is the one remaining point where a range could be lost.
 - Buffer maintenance errors increment
   `BUFFER_MAINTENANCE_ERRORS_TOTAL`.
 - `BUFFER_CURSOR` exposes the cursor produced by maintenance but does not prove
   full range processing.
-- There is no built-in range backlog/gap reconciliation using
-  `indexer_failures`.
+- There was no built-in range backlog / gap reconciliation using
+  `indexer_failures`. There is now: `RangeDriver`'s retry tick reads the open
+  intervals, filters them by the backoff policy, re-fetches each in chunks of the
+  indexer's own `batch_size`, and resolves or re-records per chunk.
 
 ## Edge Cases / Gotchas
 
@@ -535,8 +570,12 @@ requested, and canonical rows produced from orphaned logs are not removed.
   boundary block itself, not failed blocks that a later boundary has crossed.
 - `LEAST`/`GREATEST` protects cursor monotonicity; it does not validate that the
   proposed cursor is correct.
-- `indexer_failures.attempts`, `reason`, and block interval columns have no
-  runtime producers or consumers.
+- `indexer_failures.attempts`, `reason`, and the block interval columns had no
+  runtime producers or consumers. They do now: `attempts` and the timestamps
+  drive the replay backoff, and the interval columns are the ledger itself. Note
+  that `attempts` is approximate by construction — `max + 1` on merge, reset to
+  `1` on a split that proved progress — so anything needing precision should use
+  `created_at`/`updated_at`, which are exact under both operations.
 - Buffer mutation is not transactional in memory: a fallible mutator can modify
   `inner` before returning an error, while `record_block()` and `touch()` are
   skipped.
@@ -547,11 +586,12 @@ requested, and canonical rows produced from orphaned logs are not removed.
   replay. Anything that tries to deduplicate or account for failed ranges by exact
   interval identity therefore works for catchup and grows without bound for realtime;
   coalescing must treat *adjacent* intervals as mergeable, not only overlapping ones.
-- **The consumer cannot name the range it is processing.** `LogStream` yields a bare
-  `Vec<Log>`, so an indexer that wants to record a failed interval has no way to
-  learn `[from_block, to_block]` for the batch it just failed on. This is the
-  structural reason `indexer_failures` has no producer today, independent of any
-  missing logic.
+- **The consumer could not name the range it is processing.** `LogStream` yielded
+  a bare `Vec<Log>`, so an indexer wanting to record a failed interval had no way
+  to learn `[from_block, to_block]` for the batch it just failed on. This was the
+  structural reason `indexer_failures` had no producer, independent of any
+  missing logic — and naming the range (`LogBatch`) is therefore the first of the
+  three pieces the ledger needed, not an incidental refactor.
 - Compact `i64` message keys are derived from only eight bytes
   (Teleporter ID prefix; AMB full-ID hash prefix). Collisions are low
   probability but cannot represent two independent native IDs under the same

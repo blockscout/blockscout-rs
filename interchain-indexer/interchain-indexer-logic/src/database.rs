@@ -4076,7 +4076,7 @@ mod tests {
     }
 
     // --- list_indexer_checkpoints / seed_catchup_floor / lower_catchup_floor
-    // (coding-task-4 Part B, work items 3, 5, 7) ---
+    // (indexing-progress API: read, seed, reconcile) ---
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -4315,8 +4315,9 @@ mod tests {
 
     /// End to end over the write path: seed the floor, then complete catch-up
     /// via `mark_catchup_complete` exactly as `log_stream.rs` does (passing
-    /// `start_block - 1`, not `start_block` -- see `coding-task-4.md`'s Open
-    /// Questions item 1), then read. The floor must be untouched by
+    /// `start_block - 1`, not `start_block` -- the parameter is the first
+    /// block *below* the covered floor, which is why seeding cannot reuse it),
+    /// then read. The floor must be untouched by
     /// `mark_catchup_complete`, and `CatchupProgress::compute` must read the
     /// pair as fully, 100% scanned.
     #[tokio::test]
@@ -4356,7 +4357,7 @@ mod tests {
         assert_eq!(progress.progress_percent, 100.0);
     }
 
-    // --- indexer_failures accessors (coding-task-1 Part A, item 5/13) ---
+    // --- indexer_failures accessors (the failed-range ledger, ADR-005) ---
 
     async fn indexer_failures_rows_for(
         interchain_db: &InterchainDatabase,

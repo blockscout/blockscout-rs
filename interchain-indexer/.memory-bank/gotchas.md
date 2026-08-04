@@ -911,3 +911,68 @@ here because a false-positive ICTT payload decode would fabricate a bogus
 `crosschain_transfers` row from an arbitrary ICM message.
 
 ---
+
+## A Checkpoint Certifies Scanning, Not Correctness
+
+**Symptom:** `indexer_checkpoints` shows a chain fully caught up, and
+`GET /api/v1/status/indexing` reports `catchup_progress_percent: 100` with
+`catchup_scan_complete: true` — while messages from blocks inside that range are
+missing from the database.
+
+**Root cause:** A checkpoint records that `eth_getLogs` returned successfully for
+a range, plus gaps between known blocks inferred as "scanned but empty". It has
+never meant "every covered block was processed without errors". A range that was
+fetched and then failed downstream leaves no hot barrier, so a later successful
+item moves the frontier straight across it.
+
+**Fix:** Read the two records together. Completeness lives in `indexer_failures`
+(the failed-range ledger), not in the cursors. In the API payload,
+`failed_blocks != 0` is the only completeness signal — the percentage is the
+*scanned* share and reaches 100% with holes still open, by design. Operationally,
+alert on `interchain_indexer_oldest_open_hole_age_seconds`: the retry pass is the
+only recovery path, so a hole that stops draining is invisible otherwise. See
+ADR-005 and `.memory-bank/research/indexing-gaps-retries-and-checkpoint-safety.md`.
+
+---
+
+## The Failure Ledger's Healthy Path Is DB-Free Only Because One Process Owns A Bridge
+
+**Symptom:** Running two replicas against the same database appears to work, then
+produces overlapping `indexer_failures` rows, over-reported `failed_blocks`, and
+holes that resolve on one replica while another still believes they are open.
+
+**Root cause:** `FailureLedger` keeps an in-memory set of `(bridge_id, chain_id)`
+pairs known to have open holes, so a successful batch on a healthy chain performs
+**zero** database statements. That cache may be stale-*true* (one redundant
+query, harmless) but must never be stale-*false* — which holds only while a single
+process indexes a given bridge. `failed_blocks` also sums row widths directly,
+which is exact only because rows for a pair are disjoint and non-adjacent, an
+invariant maintained by merge-on-write within one writer.
+
+**Fix:** Keep one replica per bridge. The assumption was already implicit in
+checkpointing (`LEAST`/`GREATEST` upserts tolerate concurrency but do not make it
+correct); the ledger simply gives it a second consumer. If multi-writer ever
+becomes real, the ledger needs a database-level non-overlap constraint
+(`EXCLUDE USING gist`) before the cache can be trusted.
+
+---
+
+## The AMB Scan Floor Is The `amb_proxy` Contract's `started_at_block`
+
+**Symptom:** Lowering `omnibridge_mediator`'s `started_at_block` in
+`config/omnibridge/bridges.json` changes nothing — no earlier history is scanned,
+and the progress endpoint's denominator does not move.
+
+**Root cause:** AMB declares two contracts per `(bridge, chain)`, but one log
+stream covers both addresses, and its floor comes from the `amb_proxy` entry
+alone. In the shipped config the mediator's value sits ~7.4M blocks below the
+proxy's on chain 1, so taking `min` across a chain's contracts would understate
+the scan floor by that much.
+
+**Fix:** Change the `amb_proxy` value to reach earlier history. When writing code
+that derives a scan floor for a pair, branch on bridge type: `amb_proxy` for AMB,
+`min` across contracts otherwise. That rule now lives in more than one place —
+keep them in lock-step, and pin the expected floors from the real config in a
+test, because drift here silently mis-reports every AMB pair.
+
+---

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-//! HTTP contract tests for `GET /api/v1/status/indexing`
-//! (`coding-task-4.md` Part B).
+//! HTTP contract tests for `GET /api/v1/status/indexing`.
 //!
 //! `helpers::init_interchain_indexer_server` boots the full `run()` from
 //! `config/omnibridge/{chains,bridges}.json`: bridge 1 declares contracts on

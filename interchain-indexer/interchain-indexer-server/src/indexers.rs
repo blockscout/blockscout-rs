@@ -351,7 +351,7 @@ fn build_avalanche_chain_configs(
     chain_configs
 }
 
-// --- Indexing-progress API support (coding-task-4 Part B) ---
+// --- Indexing-progress API support ---
 //
 // `scan_floor_for_pair`, `enumerate_indexing_targets` and
 // `reconcile_catchup_floors` are the config-driven surface behind
@@ -561,8 +561,8 @@ fn derive_prev_floor(
 /// failure unless the ordering itself is asserted.
 ///
 /// Reconciles **every** bridge, including disabled ones. This is a deliberate deviation
-/// from the original design (`coding-task-4.md`, `implementation-plan-4.md`), which skipped
-/// disabled bridges here on the assumption that `upsert_bridge_contracts` would too. It does
+/// from the original design, which skipped disabled bridges here on the assumption that
+/// `upsert_bridge_contracts` would too. It does
 /// not: `server.rs` builds that payload from *all* configured bridges with no `enabled`
 /// filter, so a disabled bridge's stored `started_at_block` is refreshed regardless. Skipping
 /// it here would consume the previous value with nothing having looked at it, permanently
@@ -899,7 +899,7 @@ mod tests {
         );
     }
 
-    // --- reconcile_catchup_floors (coding-task-4 Part B, work item 8d, DB-backed) ---
+    // --- reconcile_catchup_floors (DB-backed) ---
 
     use blockscout_service_launcher::test_database::TestDbGuard;
     use interchain_indexer_entity::{bridges, chains};
@@ -979,8 +979,7 @@ mod tests {
             .catchup_min_cursor
     }
 
-    /// Encodes the exact bug the reconciliation exists to fix
-    /// (`coding-task-4.md`, "Why the reconciliation exists at all"): a
+    /// Encodes the exact bug the reconciliation exists to fix (ADR-005): a
     /// lowered `started_at_block` left un-reconciled makes a fully-scanned
     /// stale floor read as "complete" for the *widened* range, forever.
     #[tokio::test]

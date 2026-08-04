@@ -12,7 +12,15 @@ pub struct BlockRange {
 
 impl BlockRange {
     /// Number of blocks covered by this range, inclusive on both ends.
-    pub fn width(&self) -> u64 {
+    ///
+    /// `pub(crate)` and `cfg(test)`, not `pub`: production computes widths in
+    /// SQL (`indexer_failure_totals`); the only Rust callers are this
+    /// module's own tests and the disjointness-union assertion in
+    /// `database.rs`'s test module, both within this crate and both
+    /// test-only — without `cfg(test)` a normal (non-test) build has zero
+    /// callers and `-D warnings` correctly flags it as dead code.
+    #[cfg(test)]
+    pub(crate) fn width(&self) -> u64 {
         self.to.saturating_sub(self.from).saturating_add(1)
     }
 }
@@ -90,7 +98,15 @@ pub fn subtract(row: BlockRange, sub: BlockRange) -> Vec<BlockRange> {
 /// implementation of the fold lives there so a payload-carrying caller (e.g.
 /// `database::pre_union_with_reason`, which carries a `reason` string
 /// alongside each range) does not need its own hand-written copy.
-pub fn pre_union(ranges: &[BlockRange]) -> Vec<BlockRange> {
+///
+/// Not `pub`, and `cfg(test)`: production reaches the fold through
+/// `database::pre_union_with_reason` directly; this unit-payload form is
+/// exercised only by this module's own tests (the simplest way to assert the
+/// union algebra without a `reason` payload along for the ride), and without
+/// `cfg(test)` a normal (non-test) build has zero callers, which `-D
+/// warnings` correctly flags as dead code.
+#[cfg(test)]
+fn pre_union(ranges: &[BlockRange]) -> Vec<BlockRange> {
     fold_adjacent(ranges.iter().map(|range| (*range, ())).collect())
         .into_iter()
         .map(|(range, ())| range)

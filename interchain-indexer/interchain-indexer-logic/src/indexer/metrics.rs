@@ -55,7 +55,7 @@ lazy_static! {
     )
     .unwrap();
 
-    // Metrics for the `GetIndexingProgress` API (coding-task-4 Part B).
+    // Metrics for the `GetIndexingProgress` API.
     // Refreshed only by the periodic metrics worker
     // (`spawn_indexing_progress_metrics_worker` in `server.rs`), never from a
     // request handler — a gauge refreshed from a request handler is frozen
