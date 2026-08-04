@@ -11,8 +11,9 @@ use dashmap::DashMap;
 use crate::message_buffer::{Key, MessageBuffer};
 
 use super::{
-    abi::{AbiRegistry, ContractKind},
+    abi::{AbiRegistry, ContractKind, LogResolution},
     header::parse_amb_header,
+    metrics,
     settings::AmbIndexerSettings,
     types::{
         AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution, DestinationExecutionEvent,
@@ -25,6 +26,10 @@ use super::{
 pub(super) struct EventContext<'a> {
     pub(super) bridge_id: i32,
     pub(super) chain_id: i64,
+    /// The block every log in this context came from. Contract versions are
+    /// resolved by `(address, block)`, so this is not diagnostic metadata —
+    /// without it an upgraded proxy decodes against the wrong ABI.
+    pub(super) block_number: u64,
     pub(super) abi_registry: &'a AbiRegistry,
     pub(super) buffer: &'a Arc<MessageBuffer<Message>>,
     pub(super) message_hash_lookup: &'a Arc<DashMap<B256, Key>>,
@@ -102,12 +107,34 @@ pub(super) async fn dispatch_transaction(
         let Some(topic) = log.topic0() else {
             continue;
         };
-        let Some((event, kind)) =
-            ctx.abi_registry
-                .event_for_log(ctx.chain_id, log.address(), topic)
-        else {
-            continue;
-        };
+        let (event, kind) =
+            match ctx
+                .abi_registry
+                .resolve_log(ctx.chain_id, log.address(), topic, ctx.block_number)
+            {
+                LogResolution::Matched(event, kind) => (event, kind),
+                LogResolution::NotConfigured => continue,
+                // This address does declare the topic, in a version window this
+                // block is not in. Dropping is right when the configured windows
+                // are right — and the counter is how a wrong one becomes visible
+                // instead of looking like a chain that simply emitted nothing.
+                LogResolution::WrongVersion => {
+                    metrics::AMB_LOGS_DROPPED_WRONG_VERSION_TOTAL
+                        .with_label_values(&[&ctx.chain_id.to_string()])
+                        .inc();
+                    tracing::warn!(
+                        bridge_id = ctx.bridge_id,
+                        chain_id = ctx.chain_id,
+                        block_number = ctx.block_number,
+                        tx_hash = ?log.transaction_hash,
+                        log_index = ?log.log_index,
+                        address = %log.address(),
+                        "dropped an AMB log whose topic belongs to a different configured version \
+                         of this contract; check started_at_block for that address"
+                    );
+                    continue;
+                }
+            };
 
         tracing::trace!(
             bridge_id = ctx.bridge_id,
@@ -239,6 +266,7 @@ async fn handle_source_request(
             ctx.chain_id,
             log.address(),
             log.topic0().expect("topic exists"),
+            ctx.block_number,
         )
         .context("source event contract missing from registry")?
     else {
@@ -385,7 +413,7 @@ fn find_tokens_bridging_initiated(
         };
         let Some((event, kind)) =
             ctx.abi_registry
-                .event_for_log(ctx.chain_id, log.address(), topic)
+                .event_for_log(ctx.chain_id, log.address(), topic, ctx.block_number)
         else {
             continue;
         };
@@ -436,6 +464,7 @@ fn find_tokens_bridging_initiated(
 fn find_tokens_bridged(
     abi_registry: &AbiRegistry,
     chain_id: i64,
+    block_number: u64,
     receipt_logs: &[Log],
     message_id: &B256,
 ) -> Option<DestinationTransferDetails> {
@@ -443,7 +472,9 @@ fn find_tokens_bridged(
         let Some(topic) = log.topic0() else {
             continue;
         };
-        let Some((event, kind)) = abi_registry.event_for_log(chain_id, log.address(), topic) else {
+        let Some((event, kind)) =
+            abi_registry.event_for_log(chain_id, log.address(), topic, block_number)
+        else {
             continue;
         };
         if !matches!(kind, ContractKind::OmnibridgeMediator) || event.name != "TokensBridged" {
@@ -715,6 +746,7 @@ async fn handle_destination_execution(
             ctx.chain_id,
             log.address(),
             log.topic0().expect("topic exists"),
+            ctx.block_number,
         )
         .context("destination event contract missing from registry")?;
     let ContractKind::AmbProxy { side, .. } = contract_kind else {
@@ -737,8 +769,13 @@ async fn handle_destination_execution(
         source_chain_id,
         destination_chain_id: ctx.chain_id,
     };
-    let destination_transfer =
-        find_tokens_bridged(ctx.abi_registry, ctx.chain_id, receipt_logs, &message_id);
+    let destination_transfer = find_tokens_bridged(
+        ctx.abi_registry,
+        ctx.chain_id,
+        ctx.block_number,
+        receipt_logs,
+        &message_id,
+    );
 
     tracing::trace!(
         bridge_id = ctx.bridge_id,
@@ -901,11 +938,14 @@ mod tests {
     use crate::{
         MessageBufferSettings,
         indexer::amb::{
-            abi::{AbiRegistry, ContractAbi, ContractKind},
+            abi::{AbiRegistry, ContractAbi, ContractKind, ContractVersion},
             settings::AmbIndexerSettings,
         },
         message_buffer::{Key, MessageBuffer},
     };
+
+    /// Any block at or above the fixtures' single version floor of 0.
+    const BLOCK_NUMBER: u64 = 100;
 
     fn tokens_bridged_event() -> Event {
         serde_json::from_str(
@@ -930,8 +970,11 @@ mod tests {
         AbiRegistry::from_contracts_for_test(vec![ContractAbi {
             chain_id,
             address: mediator,
-            kind: ContractKind::OmnibridgeMediator,
-            events_by_topic,
+            versions: vec![ContractVersion {
+                started_at_block: 0,
+                kind: ContractKind::OmnibridgeMediator,
+                events_by_topic,
+            }],
         }])
     }
 
@@ -980,7 +1023,7 @@ mod tests {
             mediator, token, recipient, message_id, value, &event,
         )];
 
-        let found = find_tokens_bridged(&registry, chain_id, &logs, &message_id)
+        let found = find_tokens_bridged(&registry, chain_id, BLOCK_NUMBER, &logs, &message_id)
             .expect("TokensBridged must match by messageId regardless of executor");
         assert_eq!(found.token, token);
         assert_eq!(found.recipient, recipient);
@@ -1004,7 +1047,10 @@ mod tests {
 
         let other_message_id =
             b256!("0000000000000000000000000000000000000000000000000000000000000001");
-        assert!(find_tokens_bridged(&registry, chain_id, &logs, &other_message_id).is_none());
+        assert!(
+            find_tokens_bridged(&registry, chain_id, BLOCK_NUMBER, &logs, &other_message_id)
+                .is_none()
+        );
     }
 
     #[test]
@@ -1084,6 +1130,7 @@ mod tests {
         let ctx = EventContext {
             bridge_id: 1,
             chain_id: 1,
+            block_number: BLOCK_NUMBER,
             abi_registry: &registry,
             buffer: &buffer,
             message_hash_lookup: &lookup,
@@ -1130,6 +1177,7 @@ mod tests {
         let ctx = EventContext {
             bridge_id: 1,
             chain_id: 1,
+            block_number: BLOCK_NUMBER,
             abi_registry: &registry,
             buffer: &buffer,
             message_hash_lookup: &lookup,

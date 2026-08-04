@@ -7,7 +7,7 @@ use interchain_indexer_entity::{bridge_contracts, sea_orm_active_enums::BridgeTy
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase, StatsService,
     indexer::{
-        amb::{AmbChainConfig, AmbIndexer},
+        amb::{AmbChainConfig, AmbContractConfig, AmbIndexer},
         avalanche::{AvalancheChainConfig, AvalancheIndexer},
     },
 };
@@ -196,45 +196,39 @@ fn build_amb_chain_configs(
             continue;
         };
 
-        let contracts = &plan.contracts;
-        let amb = plan.floor_contracts.first().copied();
-        let mediator = contracts
-            .iter()
-            .copied()
-            .find(|contract| contract.kind.as_deref() == Some(OMNIBRIDGE_MEDIATOR_KIND));
+        // Every configured version of each kind, not the first of each: an
+        // upgrade behind the same address is expressed as another entry with a
+        // higher version and the block it takes effect from. Taking one per
+        // kind silently dropped the rest.
+        let amb_proxies =
+            amb_contract_configs(bridge.bridge_id, chain_id, AMB_PROXY_KIND, &plan.contracts);
+        let mediators = amb_contract_configs(
+            bridge.bridge_id,
+            chain_id,
+            OMNIBRIDGE_MEDIATOR_KIND,
+            &plan.contracts,
+        );
 
-        let (Some(amb), Some(mediator)) = (amb, mediator) else {
+        if amb_proxies.is_empty() {
             tracing::error!(
                 bridge_id = bridge.bridge_id,
                 chain_id,
-                "AMB bridge requires amb_proxy and omnibridge_mediator contracts per chain"
+                "AMB bridge requires at least one usable amb_proxy contract per chain"
             );
             continue;
-        };
+        }
 
-        let Some(amb_proxy_address) =
-            parse_contract_address(bridge.bridge_id, chain_id, "amb_proxy", &amb.address)
-        else {
-            continue;
-        };
-        let Some(mediator_address) = parse_contract_address(
-            bridge.bridge_id,
-            chain_id,
-            "omnibridge_mediator",
-            &mediator.address,
-        ) else {
-            continue;
-        };
+        // Mediators are optional by design: with none configured this chain's
+        // messages are indexed without token transfers.
+        if mediators.is_empty() {
+            tracing::warn!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "no usable omnibridge_mediator contract; indexing messages without transfers"
+            );
+        }
 
-        let amb_abi = parse_contract_abi(bridge.bridge_id, chain_id, "amb_proxy", amb.abi.as_ref());
-        let mediator_abi = parse_contract_abi(
-            bridge.bridge_id,
-            chain_id,
-            "omnibridge_mediator",
-            mediator.abi.as_ref(),
-        );
-
-        // From the plan, not from `amb.started_at_block`: the progress API and
+        // From the plan, not from a contract read here: the progress API and
         // the startup floor reconciliation read the same `ChainPlan`, so the
         // denominator cannot drift from where the indexer actually starts.
         let Some(start_block) = plan.start_block() else {
@@ -244,17 +238,37 @@ fn build_amb_chain_configs(
         chain_configs.push(AmbChainConfig {
             chain_id,
             provider: provider.clone(),
-            amb_proxy_address,
-            mediator_address,
             start_block,
-            amb_version: amb.version,
-            mediator_version: mediator.version,
-            amb_abi,
-            mediator_abi,
+            amb_proxies,
+            mediators,
         });
     }
 
     chain_configs
+}
+
+/// Every configured contract of one `kind` on a chain, as the indexer's own
+/// config type. Entries whose address does not parse are dropped with an error
+/// — the same treatment they got before, now per entry rather than per kind.
+fn amb_contract_configs(
+    bridge_id: i32,
+    chain_id: i64,
+    kind: &str,
+    contracts: &[&BridgeContractConfig],
+) -> Vec<AmbContractConfig> {
+    contracts
+        .iter()
+        .filter(|contract| contract.kind.as_deref() == Some(kind))
+        .filter_map(|contract| {
+            let address = parse_contract_address(bridge_id, chain_id, kind, &contract.address)?;
+            Some(AmbContractConfig {
+                address,
+                version: contract.version,
+                started_at_block: contract.started_at_block,
+                abi: parse_contract_abi(bridge_id, chain_id, kind, contract.abi.as_ref()),
+            })
+        })
+        .collect()
 }
 
 fn parse_contract_address(
@@ -1018,6 +1032,93 @@ mod tests {
         );
 
         assert_eq!(plan_bridge(&bridge)[0].start_block(), Some(100));
+    }
+
+    /// Every configured version of each kind must reach the indexer. Taking
+    /// one per kind — which is what `.find()` did — silently indexed whichever
+    /// the config listed first and dropped the upgrade.
+    #[test]
+    fn test_build_amb_chain_configs_keeps_every_configured_version() {
+        let bridge = bridge(
+            1,
+            BridgeType::Amb,
+            true,
+            vec![
+                BridgeContractConfig {
+                    address: vec![0xAA; 20],
+                    ..contract(1, Some(AMB_PROXY_KIND), 100, 1)
+                },
+                // Same address, later block: an implementation upgrade behind
+                // the proxy, which is the normal AMB deployment shape.
+                BridgeContractConfig {
+                    address: vec![0xAA; 20],
+                    ..contract(1, Some(AMB_PROXY_KIND), 900, 2)
+                },
+                BridgeContractConfig {
+                    address: vec![0xBB; 20],
+                    ..contract(1, Some(OMNIBRIDGE_MEDIATOR_KIND), 50, 1)
+                },
+            ],
+        );
+
+        let chain_lookup = HashMap::from([(1i64, chain_config_fixture(1))]);
+        let chain_providers = HashMap::from([(1i64, dummy_provider())]);
+
+        let configs = build_amb_chain_configs(&bridge, &chain_lookup, &chain_providers);
+
+        assert_eq!(configs.len(), 1);
+        assert_eq!(
+            configs[0]
+                .amb_proxies
+                .iter()
+                .map(|proxy| (proxy.version, proxy.started_at_block))
+                .collect::<Vec<_>>(),
+            vec![(1, 100), (2, 900)]
+        );
+        assert_eq!(configs[0].mediators.len(), 1);
+        assert_eq!(
+            configs[0].start_block, 100,
+            "the scan starts at the earliest proxy version, not the latest"
+        );
+    }
+
+    /// A chain configured with AMB contracts only is indexable: messages
+    /// without token transfers. Before, the missing mediator disqualified the
+    /// whole pair and nothing on that chain was indexed at all.
+    #[test]
+    fn test_build_amb_chain_configs_without_mediator_still_indexes_the_chain() {
+        let bridge = bridge(
+            1,
+            BridgeType::Amb,
+            true,
+            vec![contract(1, Some(AMB_PROXY_KIND), 100, 1)],
+        );
+
+        let chain_lookup = HashMap::from([(1i64, chain_config_fixture(1))]);
+        let chain_providers = HashMap::from([(1i64, dummy_provider())]);
+
+        let configs = build_amb_chain_configs(&bridge, &chain_lookup, &chain_providers);
+
+        assert_eq!(configs.len(), 1);
+        assert_eq!(configs[0].amb_proxies.len(), 1);
+        assert!(configs[0].mediators.is_empty());
+    }
+
+    /// Without a proxy there is nothing to scan from, so no config is produced
+    /// — the mediator alone cannot drive an AMB chain.
+    #[test]
+    fn test_build_amb_chain_configs_without_proxy_produces_nothing() {
+        let bridge = bridge(
+            1,
+            BridgeType::Amb,
+            true,
+            vec![contract(1, Some(OMNIBRIDGE_MEDIATOR_KIND), 50, 1)],
+        );
+
+        let chain_lookup = HashMap::from([(1i64, chain_config_fixture(1))]);
+        let chain_providers = HashMap::from([(1i64, dummy_provider())]);
+
+        assert!(build_amb_chain_configs(&bridge, &chain_lookup, &chain_providers).is_empty());
     }
 
     /// A chain with several Teleporter deployments must produce **one**

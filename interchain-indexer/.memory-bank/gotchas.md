@@ -992,7 +992,43 @@ and a plausible number for a scan that never runs is worse than none.
 
 A mediator floor *above* the proxy floor is legal — AMB-only operation indexes
 messages without transfers — and both directions of divergence are warned about
-once at startup by `log_amb_floor_divergence`.
+once at startup by `log_amb_floor_divergence`. A chain with **no** mediator is
+also legal and still indexed; a mediator that *is* configured but has a broken
+ABI stays fatal, because that is a config error rather than a choice.
+
+---
+
+## A Contract Version Is `(address, block)`, Not `address`
+
+**Symptom:** Adding a second entry for a contract in `bridges.json` — same
+address, higher `version`, a `started_at_block` where the implementation
+changed — changes nothing, or events stop decoding after that block.
+
+**Root cause:** An AMB proxy is upgraded **behind the same address**. That is
+what `bridge_contracts`' `UNIQUE(bridge_id, chain_id, address, version)` and its
+`started_at_block` column ("needed to select proper contract for the concrete
+block") are for. Address alone cannot identify the implementation, and neither
+can `topic0`: it hashes the event signature, which does **not** include which
+parameters are `indexed`, so two versions can share a topic and still decode
+differently.
+
+**Fix:** Resolve at decode time by `(address, block)` —
+`AbiRegistry::resolve_log`. A version is in force from its `started_at_block`
+until the next one's; the last is open-ended.
+
+Deliberately *not* fixed by splitting the `eth_getLogs` call into per-version
+windows. The fetch filter stays a union over every address and every version,
+because narrowing the fetch would have to be mirrored exactly by the retry path,
+and a replay whose filter is narrower than the forward scan resolves holes it
+never re-read — the same class as the Avalanche multi-contract filter bug.
+Version selection at decode costs one lookup and adds no cross-path invariant.
+
+Consequence to watch: a log whose topic belongs to a *different* version window
+than its block is dropped. That is correct only if the configured boundaries are
+right, so it is counted by
+`interchain_indexer_amb_logs_dropped_wrong_version_total` and warned about.
+Non-zero means a `started_at_block` disagrees with the chain and real events are
+being discarded — with no ledger row, because the blocks were scanned.
 
 ---
 

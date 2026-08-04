@@ -15,4 +15,19 @@ lazy_static! {
         &["bridge_id"],
     )
     .unwrap();
+
+    /// Logs dropped because the contract version in force at the log's block
+    /// does not declare its `topic0`, while another configured version of the
+    /// same address does.
+    ///
+    /// Zero is the expected value. Anything else means a `started_at_block`
+    /// boundary in `bridges.json` disagrees with the chain: real events are
+    /// being discarded, and — unlike a fetch failure — nothing else reports it,
+    /// because the blocks *were* scanned and the ledger has no row.
+    pub static ref AMB_LOGS_DROPPED_WRONG_VERSION_TOTAL: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_amb_logs_dropped_wrong_version_total",
+        "AMB logs dropped because the version active at their block does not declare their topic0",
+        &["chain_id"],
+    )
+    .unwrap();
 }

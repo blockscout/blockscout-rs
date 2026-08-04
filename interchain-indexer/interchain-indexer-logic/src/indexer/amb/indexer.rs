@@ -37,17 +37,35 @@ use super::{
     types::Message,
 };
 
+/// One configured deployment of an AMB contract, valid from `started_at_block`
+/// until the next version of the same address begins.
+#[derive(Clone, Debug)]
+pub struct AmbContractConfig {
+    pub address: Address,
+    pub version: i16,
+    pub started_at_block: u64,
+    pub abi: Option<Value>,
+}
+
+/// One chain this bridge indexes, with every configured version of each kind.
+///
+/// Lists rather than single fields: an implementation upgrade is expressed as a
+/// new config entry with a higher `version` and the block it takes effect from
+/// (`bridge_contracts` keys on `(bridge_id, chain_id, address, version)`), and
+/// a proxy is normally upgraded behind the *same* address. Collapsing each kind
+/// to one entry silently indexed whichever the config happened to list first
+/// and dropped the rest.
 #[derive(Clone)]
 pub struct AmbChainConfig {
     pub chain_id: i64,
     pub provider: DynProvider<Ethereum>,
-    pub amb_proxy_address: Address,
-    pub mediator_address: Address,
+    /// The block the scan starts from: the lowest `started_at_block` among
+    /// `amb_proxies`.
     pub start_block: u64,
-    pub amb_version: i16,
-    pub mediator_version: i16,
-    pub amb_abi: Option<Value>,
-    pub mediator_abi: Option<Value>,
+    /// At least one; AMB cannot index a chain without a proxy.
+    pub amb_proxies: Vec<AmbContractConfig>,
+    /// May be empty — messages are then indexed without token transfers.
+    pub mediators: Vec<AmbContractConfig>,
 }
 
 pub struct AmbIndexer {
@@ -201,6 +219,7 @@ impl AmbIndexer {
             let event_ctx = EventContext {
                 bridge_id: ctx.bridge_id,
                 chain_id,
+                block_number: receipt.block.header.number,
                 abi_registry: &ctx.abi_registry,
                 buffer: &ctx.buffer,
                 message_hash_lookup: &ctx.message_hash_lookup,
@@ -377,7 +396,7 @@ impl CrosschainIndexer for AmbIndexer {
         let mediator_versions = self
             .chains
             .iter()
-            .map(|chain| chain.mediator_version)
+            .flat_map(|chain| chain.mediators.iter().map(|mediator| mediator.version))
             .collect::<Vec<_>>();
         let extra_info = HashMap::from([
             (
@@ -444,7 +463,7 @@ mod tests {
     use crate::{
         MessageBufferSettings,
         indexer::{
-            amb::abi::{ContractAbi, ContractKind},
+            amb::abi::{ContractAbi, ContractKind, ContractVersion},
             failure_ledger::{BlockRange, FailedInterval, FailureLedger, FailureRetrySettings},
         },
         log_stream::ScanDirection,
@@ -477,8 +496,11 @@ mod tests {
         AbiRegistry::from_contracts_for_test(vec![ContractAbi {
             chain_id,
             address: contract_address,
-            kind: ContractKind::OmnibridgeMediator,
-            events_by_topic,
+            versions: vec![ContractVersion {
+                started_at_block: 0,
+                kind: ContractKind::OmnibridgeMediator,
+                events_by_topic,
+            }],
         }])
     }
 
@@ -607,13 +629,14 @@ mod tests {
         AmbChainConfig {
             chain_id,
             provider,
-            amb_proxy_address: contract_address,
-            mediator_address: contract_address,
             start_block: 0,
-            amb_version: 6,
-            mediator_version: 1,
-            amb_abi: None,
-            mediator_abi: None,
+            amb_proxies: vec![AmbContractConfig {
+                address: contract_address,
+                version: 6,
+                started_at_block: 0,
+                abi: None,
+            }],
+            mediators: Vec::new(),
         }
     }
 
