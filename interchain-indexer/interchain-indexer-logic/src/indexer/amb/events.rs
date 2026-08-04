@@ -85,6 +85,19 @@ pub(super) async fn dispatch_transaction(
         .map(|dt| dt.naive_utc())
         .context("invalid block timestamp")?;
 
+    // Aggregated rather than early-returned: a handler failure on one event
+    // must not skip the remaining events in this transaction (and their
+    // buffer mutations), so every log is still dispatched before the
+    // aggregate failure (if any) is reported to the caller. Without this,
+    // `dispatch_transaction` always returned `Ok(())` regardless of handler
+    // failures, which made `process_batch`'s `failed_blocks`/`last_err`
+    // collection dead code: no AMB downstream failure ever reached the
+    // failure ledger, and worse, a repeated swallowed failure during a retry
+    // pass could make `RangeDriver` treat the batch as successful and
+    // resolve (delete) a real recorded hole.
+    let mut last_err: Option<anyhow::Error> = None;
+    let mut failed_events = 0usize;
+
     for log in receipt_logs {
         let Some(topic) = log.topic0() else {
             continue;
@@ -165,7 +178,12 @@ pub(super) async fn dispatch_transaction(
         };
 
         if let Err(err) = result {
-            tracing::error!(
+            // Downgraded from `error` to `warn`: the aggregate failure
+            // below is now propagated to the caller and logged once, at
+            // `error`, by `RangeDriver` for the whole batch/range —
+            // logging every per-event failure at `error` too would
+            // double-log the same incident.
+            tracing::warn!(
                 bridge_id = ctx.bridge_id,
                 chain_id = ctx.chain_id,
                 tx_hash = ?log.transaction_hash,
@@ -174,6 +192,8 @@ pub(super) async fn dispatch_transaction(
                 err = ?err,
                 "failed to process AMB event"
             );
+            failed_events += 1;
+            last_err = Some(err);
         } else if matches!(kind, ContractKind::AmbProxy { .. }) {
             tracing::debug!(
                 bridge_id = ctx.bridge_id,
@@ -184,6 +204,12 @@ pub(super) async fn dispatch_transaction(
                 "processed AMB event"
             );
         }
+    }
+
+    if let Some(err) = last_err {
+        return Err(err.context(format!(
+            "{failed_events} AMB event handler(s) failed to process"
+        )));
     }
 
     Ok(())

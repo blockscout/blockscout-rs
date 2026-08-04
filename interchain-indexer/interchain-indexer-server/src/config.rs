@@ -6,7 +6,7 @@ use alloy::{
     primitives::{Address, ChainId},
     providers::DynProvider,
 };
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
 };
@@ -68,6 +68,13 @@ pub struct BridgeContractConfig {
     #[serde(deserialize_with = "deserialize_address")]
     pub address: Vec<u8>,
     pub version: i16,
+    /// Must be at least `1`. `0` is rejected by `load_bridges_impl`: a
+    /// completed catch-up persists `genesis_block.saturating_sub(1)`
+    /// (`log_stream.rs`), which saturates to `0` at `started_at_block == 0`
+    /// and makes the completed interval indistinguishable from one block of
+    /// remaining work (`CatchupProgress::compute` in
+    /// `interchain-indexer-logic/src/indexer/progress.rs`) — the empty
+    /// interval below block zero simply cannot be represented in `u64`.
     pub started_at_block: u64,
     pub kind: Option<String>,
     #[serde(default, deserialize_with = "deserialize_abi")]
@@ -413,12 +420,37 @@ fn load_bridges_impl<P: AsRef<Path>>(
     )?;
     log_applied_overrides(&applied, "bridges");
 
-    serde_json::from_value(value).with_context(|| {
+    let bridges: Vec<BridgeConfig> = serde_json::from_value(value).with_context(|| {
         format!(
             "Failed to parse bridges config JSON (after env overrides): {:?}",
             path.as_ref()
         )
-    })
+    })?;
+    validate_started_at_blocks(&bridges)?;
+
+    Ok(bridges)
+}
+
+/// Rejects `started_at_block == 0`: the empty interval below block zero
+/// cannot be represented in `u64`, so a completed catch-up starting at
+/// genesis would be permanently unrepresentable (see the doc comment on
+/// `BridgeContractConfig::started_at_block`). Config typos fail hard in this
+/// repo (`deny_unknown_fields` everywhere); this is the same convention
+/// applied to a semantically invalid value rather than a structural one.
+fn validate_started_at_blocks(bridges: &[BridgeConfig]) -> Result<()> {
+    for bridge in bridges {
+        for contract in &bridge.contracts {
+            ensure!(
+                contract.started_at_block != 0,
+                "bridge {} chain {} has started_at_block = 0, which is invalid: the empty \
+                 interval below block zero cannot be represented, so configure a \
+                 started_at_block of at least 1",
+                bridge.bridge_id,
+                contract.chain_id,
+            );
+        }
+    }
+    Ok(())
 }
 
 fn log_applied_overrides(applied: &[env_merge::AppliedOverride], kind: &str) {
@@ -990,6 +1022,25 @@ mod tests {
         .unwrap();
 
         assert_eq!(bridges[0].api_url, None);
+    }
+
+    #[test]
+    fn test_load_bridges_impl_rejects_started_at_block_zero() {
+        let file = write_temp_json(BRIDGES_FILE);
+        let err = load_bridges_impl(
+            file.path(),
+            fixture_vars(&[(
+                "INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xF6A78083CA3E2A662D6DD1703C939C8ACE2E268D__6__STARTED_AT_BLOCK",
+                "0",
+            )]),
+        )
+        .unwrap_err();
+
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("started_at_block = 0"),
+            "unexpected: {message}"
+        );
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -48,6 +49,37 @@ pub struct FailureRetrySettings {
     pub record_retry_initial_backoff: Duration,
 }
 
+impl FailureRetrySettings {
+    /// Rejects zero values that would either panic the indexer task or
+    /// silently disable the only recovery path, instead of accepting them
+    /// and clamping/defaulting quietly. Call once at indexer construction so
+    /// a misconfiguration fails loudly at startup — this repo's convention
+    /// for config typos (`deny_unknown_fields` everywhere).
+    ///
+    /// - `scan_interval == 0` is fed straight into `tokio::time::interval`
+    ///   (`range_driver.rs`), which panics on a zero period — inside a
+    ///   `tokio::spawn`ed indexer task, regardless of `enabled`, since the
+    ///   interval is constructed unconditionally before the loop checks the
+    ///   kill switch.
+    /// - `max_chunks_per_pass == 0` makes every retry tick attempt zero
+    ///   chunks, silently turning off the only recovery path for a recorded
+    ///   hole while `enabled` still reads `true`.
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            !self.scan_interval.is_zero(),
+            "failure_retry.scan_interval must be greater than zero: \
+             tokio::time::interval panics on a zero period"
+        );
+        ensure!(
+            self.max_chunks_per_pass > 0,
+            "failure_retry.max_chunks_per_pass must be greater than zero, or the retry pass \
+             — the only recovery path for a recorded processing failure — silently attempts \
+             nothing every tick while `enabled` stays true"
+        );
+        Ok(())
+    }
+}
+
 impl Default for FailureRetrySettings {
     fn default() -> Self {
         Self {
@@ -88,4 +120,51 @@ fn default_record_retry_attempts() -> u32 {
 
 fn default_record_retry_initial_backoff() -> Duration {
     Duration::from_millis(200)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_accepts_defaults() {
+        assert!(FailureRetrySettings::default().validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_rejects_zero_scan_interval() {
+        let settings = FailureRetrySettings {
+            scan_interval: Duration::ZERO,
+            ..Default::default()
+        };
+
+        let err = settings
+            .validate()
+            .expect_err("a zero scan_interval must be rejected");
+        assert!(format!("{err:#}").contains("scan_interval"));
+    }
+
+    #[test]
+    fn test_validate_rejects_zero_max_chunks_per_pass() {
+        let settings = FailureRetrySettings {
+            max_chunks_per_pass: 0,
+            ..Default::default()
+        };
+
+        let err = settings
+            .validate()
+            .expect_err("a zero max_chunks_per_pass must be rejected");
+        assert!(format!("{err:#}").contains("max_chunks_per_pass"));
+    }
+
+    #[test]
+    fn test_validate_accepts_boundary_value_of_one() {
+        let settings = FailureRetrySettings {
+            scan_interval: Duration::from_secs(1),
+            max_chunks_per_pass: 1,
+            ..Default::default()
+        };
+
+        assert!(settings.validate().is_ok());
+    }
 }

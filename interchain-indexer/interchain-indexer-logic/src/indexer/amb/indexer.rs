@@ -12,7 +12,7 @@ use alloy::{
     providers::DynProvider,
     rpc::types::{Filter, Log},
 };
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use dashmap::DashMap;
 use futures::stream::SelectAll;
 use serde_json::Value;
@@ -90,6 +90,11 @@ impl AmbIndexer {
             !chains.is_empty(),
             "AMB indexer requires at least one chain"
         );
+
+        settings
+            .failure_retry
+            .validate()
+            .context("invalid AMB indexer failure_retry settings")?;
 
         let abi_registry = Arc::new(AbiRegistry::from_chains(&chains)?);
         let db = stats.interchain_db_arc();
@@ -402,5 +407,392 @@ impl CrosschainIndexer for AmbIndexer {
             init_timestamp: self.init_timestamp,
             extra_info,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Regression coverage for the P1 review finding: `dispatch_transaction`
+    //! (`events.rs`) used to log every handler failure and unconditionally
+    //! return `Ok(())`, which made `process_batch`'s `failed_blocks`/
+    //! `last_err` collection below dead code. These tests exercise the real
+    //! `RunContext` -> `RangeDriver` pipeline (not a reimplementation of it)
+    //! so a regression in `dispatch_transaction`'s aggregation is caught here,
+    //! not just in `events.rs`'s own unit tests.
+
+    use std::{
+        future,
+        task::{Context as TaskContext, Poll},
+        time::Duration,
+    };
+
+    use alloy::{
+        consensus::{Eip658Value, Receipt, ReceiptEnvelope, ReceiptWithBloom},
+        json_abi::Event,
+        primitives::{Bytes, LogData, address},
+        providers::{Provider, ProviderBuilder},
+        rpc::{
+            client::RpcClient,
+            types::{Block, Header as RpcHeader, TransactionReceipt},
+        },
+        transports::{TransportError, TransportErrorKind, TransportFut},
+    };
+    use alloy_json_rpc::{Id, RequestPacket, Response, ResponsePacket, ResponsePayload};
+    use tower::Service;
+
+    use super::*;
+    use crate::{
+        MessageBufferSettings,
+        indexer::{
+            amb::abi::{ContractAbi, ContractKind},
+            failure_ledger::{BlockRange, FailedInterval, FailureLedger, FailureRetrySettings},
+        },
+        log_stream::ScanDirection,
+        test_utils::{init_db, mock_db::fill_mock_interchain_database},
+    };
+
+    /// An event with one indexed and one non-indexed parameter, dispatched
+    /// through `handle_validator_confirmation` — chosen because that handler
+    /// decodes the log before touching the buffer or any correlation map, so
+    /// a malformed log fails deterministically and immediately, with no other
+    /// side effects to account for.
+    fn signed_for_affirmation_event() -> alloy::json_abi::Event {
+        serde_json::from_str(
+            r#"{
+                "anonymous": false,
+                "inputs": [
+                    {"indexed": true,  "name": "signer",      "type": "address"},
+                    {"indexed": false, "name": "messageHash", "type": "bytes32"}
+                ],
+                "name": "SignedForAffirmation",
+                "type": "event"
+            }"#,
+        )
+        .expect("SignedForAffirmation ABI")
+    }
+
+    fn registry_with_event(chain_id: i64, contract_address: Address, event: Event) -> AbiRegistry {
+        let mut events_by_topic = HashMap::new();
+        events_by_topic.insert(event.selector(), event);
+        AbiRegistry::from_contracts_for_test(vec![ContractAbi {
+            chain_id,
+            address: contract_address,
+            kind: ContractKind::OmnibridgeMediator,
+            events_by_topic,
+        }])
+    }
+
+    /// A log matching `event`'s topic0 but missing the indexed `signer`
+    /// topic, so `Event::decode_log` fails with `TopicLengthMismatch` —
+    /// deterministic, and locally detectable without a real chain.
+    fn undecodable_log(contract_address: Address, event: &Event, tx_hash: B256, block: u64) -> Log {
+        Log {
+            inner: alloy::primitives::Log {
+                address: contract_address,
+                data: LogData::new_unchecked(vec![event.selector()], Bytes::new()),
+            },
+            block_number: Some(block),
+            transaction_hash: Some(tx_hash),
+            log_index: Some(0),
+            ..Default::default()
+        }
+    }
+
+    fn mock_receipt(
+        tx_hash: B256,
+        block_number: u64,
+        log: Log,
+        from: Address,
+        to: Address,
+    ) -> TransactionReceipt {
+        let envelope = ReceiptEnvelope::Legacy(ReceiptWithBloom {
+            receipt: Receipt {
+                status: Eip658Value::Eip658(true),
+                cumulative_gas_used: 21_000,
+                logs: vec![log],
+            },
+            logs_bloom: Default::default(),
+        });
+
+        TransactionReceipt {
+            inner: envelope,
+            transaction_hash: tx_hash,
+            transaction_index: Some(0),
+            block_hash: Some(B256::with_last_byte(1)),
+            block_number: Some(block_number),
+            gas_used: 21_000,
+            effective_gas_price: 1,
+            blob_gas_used: None,
+            blob_gas_price: None,
+            from,
+            to: Some(to),
+            contract_address: None,
+        }
+    }
+
+    fn mock_block(block_number: u64, timestamp: u64) -> Block {
+        let header = alloy::consensus::Header {
+            number: block_number,
+            timestamp,
+            ..Default::default()
+        };
+        Block {
+            header: RpcHeader::new(header),
+            uncles: vec![],
+            transactions: Default::default(),
+            withdrawals: None,
+        }
+    }
+
+    /// Serves `eth_getLogs` (retry path only), `eth_getTransactionReceipt`
+    /// and `eth_getBlockByNumber` — the only RPC methods `process_batch`
+    /// (and, on retry, `fetch_logs`) issue. Fixed canned responses, not a
+    /// queue: every call to a given method gets the same answer, which is
+    /// all these tests need.
+    #[derive(Clone)]
+    struct AmbDispatchMockService {
+        logs: Vec<Log>,
+        receipt: TransactionReceipt,
+        block: Block,
+    }
+
+    impl Service<RequestPacket> for AmbDispatchMockService {
+        type Response = ResponsePacket;
+        type Error = TransportError;
+        type Future = TransportFut<'static>;
+
+        fn poll_ready(&mut self, _cx: &mut TaskContext<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, req: RequestPacket) -> Self::Future {
+            let single = req.as_single();
+            let result = match single {
+                Some(sr) => match sr.method() {
+                    "eth_getLogs" => Ok(json_response(sr.id().clone(), &self.logs)),
+                    "eth_getTransactionReceipt" => {
+                        Ok(json_response(sr.id().clone(), &self.receipt))
+                    }
+                    "eth_getBlockByNumber" => Ok(json_response(sr.id().clone(), &self.block)),
+                    other => Err(TransportErrorKind::custom_str(&format!(
+                        "AmbDispatchMockService: unexpected method {other}"
+                    ))),
+                },
+                None => Err(TransportErrorKind::custom_str(
+                    "AmbDispatchMockService: expected a single request",
+                )),
+            };
+            Box::pin(future::ready(result))
+        }
+    }
+
+    fn json_response<T: serde::Serialize>(id: Id, value: &T) -> ResponsePacket {
+        let payload = serde_json::value::to_raw_value(value).expect("serialize mock response");
+        ResponsePacket::Single(Response {
+            id,
+            payload: ResponsePayload::Success(payload),
+        })
+    }
+
+    fn mock_provider(service: AmbDispatchMockService) -> DynProvider<Ethereum> {
+        let client = RpcClient::builder().transport(service, false);
+        ProviderBuilder::new().connect_client(client).erased()
+    }
+
+    fn chain_config(
+        chain_id: i64,
+        contract_address: Address,
+        provider: DynProvider<Ethereum>,
+    ) -> AmbChainConfig {
+        AmbChainConfig {
+            chain_id,
+            provider,
+            amb_proxy_address: contract_address,
+            mediator_address: contract_address,
+            start_block: 0,
+            amb_version: 6,
+            mediator_version: 1,
+            amb_abi: None,
+            mediator_abi: None,
+        }
+    }
+
+    fn run_context(
+        db: Arc<InterchainDatabase>,
+        owned_db: InterchainDatabase,
+        bridge_id: i32,
+        chains: Vec<AmbChainConfig>,
+        registry: AbiRegistry,
+    ) -> RunContext {
+        RunContext {
+            db,
+            bridge_id,
+            chains,
+            abi_registry: Arc::new(registry),
+            message_hash_lookup: Arc::new(DashMap::new()),
+            pending_message_hash_events: Arc::new(DashMap::new()),
+            settings: AmbIndexerSettings::default(),
+            buffer: MessageBuffer::<Message>::new(
+                owned_db,
+                MessageBufferSettings {
+                    hot_ttl: Duration::from_secs(60),
+                    maintenance_interval: Duration::from_secs(60),
+                },
+            ),
+        }
+    }
+
+    /// Acceptance: an AMB handler error must propagate all the way into an
+    /// `indexer_failures` row for the correct block. Before the fix,
+    /// `dispatch_transaction` always returned `Ok(())`, so this batch would
+    /// have looked successful and no row would ever appear.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn amb_handler_failure_creates_indexer_failure_row_for_the_failing_block() {
+        const BRIDGE_ID: i32 = 1;
+        const CHAIN_ID: i64 = 1;
+        const BLOCK_NUMBER: u64 = 500;
+
+        let db = init_db("amb_handler_failure_creates_indexer_failure_row").await;
+        fill_mock_interchain_database(&db).await;
+        let owned_db = InterchainDatabase::new(db.client());
+        let arc_db = Arc::new(owned_db.clone());
+        let ledger = Arc::new(FailureLedger::new(arc_db.clone()));
+
+        let contract_address = address!("1111111111111111111111111111111111111111");
+        let tx_hash = B256::with_last_byte(7);
+        let event = signed_for_affirmation_event();
+        let registry = registry_with_event(CHAIN_ID, contract_address, event.clone());
+        let log = undecodable_log(contract_address, &event, tx_hash, BLOCK_NUMBER);
+        let receipt = mock_receipt(
+            tx_hash,
+            BLOCK_NUMBER,
+            log.clone(),
+            Address::ZERO,
+            contract_address,
+        );
+        let service = AmbDispatchMockService {
+            logs: vec![],
+            receipt,
+            block: mock_block(BLOCK_NUMBER, 1_700_000_000),
+        };
+        let chain = chain_config(CHAIN_ID, contract_address, mock_provider(service));
+        let ctx = run_context(arc_db.clone(), owned_db, BRIDGE_ID, vec![chain], registry);
+
+        let batch = LogBatch {
+            from_block: BLOCK_NUMBER,
+            to_block: BLOCK_NUMBER,
+            direction: ScanDirection::Realtime,
+            logs: vec![log],
+        };
+        let stream = futures::stream::iter(vec![(CHAIN_ID, batch)]);
+        let settings = FailureRetrySettings {
+            enabled: false,
+            ..Default::default()
+        };
+
+        RangeDriver::new(ctx, ledger, settings)
+            .run(stream)
+            .await
+            .expect("a recordable handler failure must not escalate the driver");
+
+        let open = arc_db
+            .open_indexer_failures(&[(BRIDGE_ID, CHAIN_ID)])
+            .await
+            .unwrap();
+        assert_eq!(
+            open.len(),
+            1,
+            "the AMB handler failure must create exactly one open interval: {open:?}"
+        );
+        assert_eq!(
+            open[0].2.range,
+            BlockRange {
+                from: BLOCK_NUMBER,
+                to: BLOCK_NUMBER
+            },
+            "the failing transaction's block must be recorded: {open:?}"
+        );
+    }
+
+    /// Regression for the false-clear: a *repeated* handler failure during a
+    /// retry pass must re-record the block, never resolve it. If
+    /// `dispatch_transaction` goes back to swallowing handler errors, this
+    /// batch looks successful to `retry_pending`, which calls
+    /// `ledger.resolve` and deletes the still-real hole — this test fails in
+    /// exactly that scenario.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn repeated_amb_handler_failure_during_retry_does_not_resolve_existing_hole() {
+        const BRIDGE_ID: i32 = 1;
+        const CHAIN_ID: i64 = 1;
+        const BLOCK_NUMBER: u64 = 700;
+
+        let db = init_db("amb_repeated_handler_failure_no_resolve").await;
+        fill_mock_interchain_database(&db).await;
+        let owned_db = InterchainDatabase::new(db.client());
+        let arc_db = Arc::new(owned_db.clone());
+        let ledger = Arc::new(FailureLedger::new(arc_db.clone()));
+
+        arc_db
+            .record_indexer_failures(
+                BRIDGE_ID,
+                CHAIN_ID,
+                &[(
+                    BlockRange {
+                        from: BLOCK_NUMBER,
+                        to: BLOCK_NUMBER,
+                    },
+                    "seed".to_string(),
+                )],
+            )
+            .await
+            .unwrap();
+        ledger.initialize(&[(BRIDGE_ID, CHAIN_ID)]).await.unwrap();
+
+        let contract_address = address!("2222222222222222222222222222222222222222");
+        let tx_hash = B256::with_last_byte(9);
+        let event = signed_for_affirmation_event();
+        let registry = registry_with_event(CHAIN_ID, contract_address, event.clone());
+        let log = undecodable_log(contract_address, &event, tx_hash, BLOCK_NUMBER);
+        let receipt = mock_receipt(
+            tx_hash,
+            BLOCK_NUMBER,
+            log.clone(),
+            Address::ZERO,
+            contract_address,
+        );
+        let service = AmbDispatchMockService {
+            logs: vec![log],
+            receipt,
+            block: mock_block(BLOCK_NUMBER, 1_700_000_000),
+        };
+        let chain = chain_config(CHAIN_ID, contract_address, mock_provider(service));
+        let ctx = run_context(arc_db.clone(), owned_db, BRIDGE_ID, vec![chain], registry);
+
+        let due: Vec<(i64, FailedInterval)> = ledger
+            .open(&[(BRIDGE_ID, CHAIN_ID)])
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|(_, chain_id, interval)| (chain_id, interval))
+            .collect();
+        assert_eq!(due.len(), 1, "the seeded hole must be due for retry");
+
+        <RunContext as RangeProcessor>::retry_pending(&ctx, &ledger, &due, 16).await;
+
+        let open = ledger.open(&[(BRIDGE_ID, CHAIN_ID)]).await.unwrap();
+        assert_eq!(
+            open.len(),
+            1,
+            "a repeated handler failure must NOT resolve the existing hole: {open:?}"
+        );
+        assert_eq!(
+            open[0].2.range,
+            BlockRange {
+                from: BLOCK_NUMBER,
+                to: BLOCK_NUMBER
+            }
+        );
     }
 }

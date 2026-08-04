@@ -147,6 +147,11 @@ impl AvalancheIndexer {
             "Avalanche indexer requires at least one configured chain"
         );
 
+        settings
+            .failure_retry
+            .validate()
+            .context("invalid Avalanche indexer failure_retry settings")?;
+
         // Validate home_chain if set: it must be one of the configured chains.
         let home_chain = home_chain
             .map(i64::try_from)
@@ -371,12 +376,31 @@ impl RangeProcessor for AvalancheRangeProcessor {
     }
 
     fn log_filter(&self, chain_id: i64) -> Result<Filter> {
-        let chain = self
-            .chain_config(chain_id)
-            .ok_or_else(|| anyhow!("no configured Avalanche contract for chain_id {chain_id}"))?;
+        // Every configured contract for this chain, not just the first
+        // match: `build_avalanche_chain_configs` emits one `AvalancheChainConfig`
+        // per contract, so a chain with several Teleporter deployments (a
+        // legitimate case — e.g. two Messenger versions on one chain) has
+        // several entries sharing `chain_id`. A replay keyed on a single
+        // contract's address would re-scan a hole recorded by one stream
+        // against a different contract's logs, come back empty, and resolve
+        // (delete) a hole that was never actually fixed. Filtering on the
+        // full address set instead replays a superset of what any single
+        // forward stream fetched — idempotent, and consistent with this
+        // design's preference for wider-but-safe over precise. The forward
+        // path is untouched: it still runs one stream per contract.
+        let addresses: Vec<Address> = self
+            .chains
+            .iter()
+            .filter(|c| c.chain_id == chain_id)
+            .map(|c| c.contract_address)
+            .collect();
+        ensure!(
+            !addresses.is_empty(),
+            "no configured Avalanche contract for chain_id {chain_id}"
+        );
 
         Ok(Filter::new()
-            .address(chain.contract_address)
+            .address(addresses)
             .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES))
     }
 
@@ -1700,5 +1724,88 @@ mod tests {
             0,
             "skipped_disabled must only count a suppression that actually dropped an arm"
         );
+    }
+
+    /// Regression for the P2 finding: `build_avalanche_chain_configs` emits
+    /// one `AvalancheChainConfig` per contract, so a chain with several
+    /// Teleporter deployments has several entries sharing `chain_id`. Before
+    /// the fix, `log_filter` matched only the first configured contract, so a
+    /// hole recorded by the second stream would replay against the first
+    /// contract's address, come back empty, and get resolved as if fixed.
+    /// The retry filter must cover every configured address for the chain.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn log_filter_covers_every_configured_contract_address_for_a_chain_with_several() {
+        use super::{AvalancheChainConfig, AvalancheRangeProcessor, Message};
+        use crate::{
+            MessageBufferSettings,
+            indexer::{
+                avalanche::blockchain_id_resolver::BlockchainIdResolver,
+                range_driver::RangeProcessor,
+            },
+            message_buffer::MessageBuffer,
+            test_utils::init_db,
+        };
+        use alloy::providers::{Provider, ProviderBuilder};
+        use std::{sync::Arc, time::Duration};
+
+        let db = init_db("avalanche_log_filter_multi_contract_address").await;
+        let interchain_db = crate::InterchainDatabase::new(db.client());
+
+        const CHAIN_ID: i64 = 43114;
+        let address_a = Address::from([0xAA; 20]);
+        let address_b = Address::from([0xBB; 20]);
+        // Never dialed: `log_filter` does not touch the provider.
+        let dummy_provider = ProviderBuilder::new()
+            .connect_http("http://127.0.0.1:1".parse().unwrap())
+            .erased();
+
+        let chains = vec![
+            AvalancheChainConfig {
+                chain_id: CHAIN_ID,
+                provider: dummy_provider.clone(),
+                contract_address: address_a,
+                start_block: 0,
+            },
+            AvalancheChainConfig {
+                chain_id: CHAIN_ID,
+                provider: dummy_provider,
+                contract_address: address_b,
+                start_block: 0,
+            },
+        ];
+
+        let processor = AvalancheRangeProcessor {
+            bridge_id: 1,
+            chains: chains.clone(),
+            chain_ids: Arc::new(chains.iter().map(|c| c.chain_id).collect()),
+            home_chain: None,
+            process_unknown_chains: false,
+            reconstruct_incoming_ictt_transfers: true,
+            blockchain_id_resolver: Arc::new(BlockchainIdResolver::new(
+                Default::default(),
+                interchain_db.clone(),
+            )),
+            buffer: MessageBuffer::<Message>::new(
+                interchain_db,
+                MessageBufferSettings {
+                    hot_ttl: Duration::from_secs(60),
+                    maintenance_interval: Duration::from_secs(60),
+                },
+            ),
+            batch_size: 1000,
+        };
+
+        let filter = processor
+            .log_filter(CHAIN_ID)
+            .expect("a configured chain must yield a filter");
+
+        assert_eq!(
+            filter.address.len(),
+            2,
+            "the filter must cover every configured contract address, not just the first"
+        );
+        assert!(filter.address.contains(&address_a));
+        assert!(filter.address.contains(&address_b));
     }
 }

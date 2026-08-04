@@ -71,6 +71,29 @@ pub trait RangeProcessor: Send + Sync {
     /// progress survives a failure partway through a wide interval. Bounded
     /// by `max_chunks` across every due interval combined, so a large hole
     /// set cannot starve the realtime scan sharing this task.
+    ///
+    /// **Rotated, not started at `interval.range.from`.** `max_chunks` is a
+    /// budget shared across every due interval, so a wide interval whose
+    /// leading chunks fail deterministically would otherwise never let this
+    /// pass reach its tail: the failing prefix keeps re-merging into the same
+    /// row on every tick, `from` never moves, and later chunks are never
+    /// attempted. Rotating the chunk list by `interval.attempts` — state
+    /// already on the row, so no new column is needed — moves that window
+    /// across the interval instead of pinning it to the head.
+    ///
+    /// The sweep is **complete only when a failing chunk records a single
+    /// range**, which is the whole-range default (Avalanche). Then `attempts`
+    /// advances once per pass, the window walks by one chunk each time, and
+    /// every chunk is eventually attempted. An indexer that narrows
+    /// `attributed` into several ranges per chunk (AMB attributes per failing
+    /// block) advances `attempts` once *per range*, so the offset can step
+    /// further than the window is wide and the reachable start offsets fall on
+    /// multiples of `gcd(ranges_per_pass, chunk_count)`. Chunks between those
+    /// offsets are then not re-fetched. Still strictly better than pinning to
+    /// `from` — which starved everything past the first budget — and nothing
+    /// is lost or resolved, the interval simply drains partially. Making the
+    /// sweep unconditional needs a per-pass counter that advances by the
+    /// window size rather than by `attempts`.
     async fn retry_pending(
         &self,
         ledger: &FailureLedger,
@@ -105,16 +128,13 @@ pub trait RangeProcessor: Send + Sync {
                 }
             };
 
-            let mut from = interval.range.from;
-            let to = interval.range.to;
+            let chunks =
+                rotate_by_attempts(chunk_range(interval.range, batch_size), interval.attempts);
 
-            while from <= to {
+            for chunk in chunks {
                 if chunks_attempted >= max_chunks {
                     break;
                 }
-
-                let chunk_to = from.saturating_add(batch_size.saturating_sub(1)).min(to);
-                let chunk = BlockRange { from, to: chunk_to };
                 chunks_attempted += 1;
 
                 match fetch_logs(provider.clone(), &filter, chunk.from, chunk.to).await {
@@ -188,14 +208,46 @@ pub trait RangeProcessor: Send + Sync {
                         }
                     }
                 }
-
-                if chunk_to == to {
-                    break;
-                }
-                from = chunk_to.saturating_add(1);
             }
         }
     }
+}
+
+/// Splits `range` into consecutive, non-overlapping chunks of at most
+/// `batch_size` blocks each (the last chunk may be narrower). `batch_size` is
+/// clamped to at least `1`, so this always terminates and never divides by
+/// zero.
+fn chunk_range(range: BlockRange, batch_size: u64) -> Vec<BlockRange> {
+    let batch_size = batch_size.max(1);
+    let mut chunks = Vec::new();
+    let mut from = range.from;
+
+    loop {
+        let to = from
+            .saturating_add(batch_size.saturating_sub(1))
+            .min(range.to);
+        chunks.push(BlockRange { from, to });
+        if to >= range.to {
+            break;
+        }
+        from = to.saturating_add(1);
+    }
+
+    chunks
+}
+
+/// Rotates `chunks` left by `attempts % chunks.len()`, so the chunk that
+/// starts this pass's attempted window changes as `attempts` grows. `attempts`
+/// is the interval's own retry counter — it strictly increases every pass a
+/// still-open chunk keeps failing (see `record`'s `max(attempts) + 1` merge
+/// rule), so a permanently failing prefix cannot pin the window in place
+/// forever: the offset eventually walks past it and reaches every chunk.
+fn rotate_by_attempts(mut chunks: Vec<BlockRange>, attempts: u32) -> Vec<BlockRange> {
+    let len = chunks.len();
+    if len > 1 {
+        chunks.rotate_left((attempts as usize) % len);
+    }
+    chunks
 }
 
 /// `err.attributed`, or the whole yielded/retried range when empty.
@@ -359,11 +411,21 @@ impl<P: RangeProcessor> RangeDriver<P> {
                                 .inc();
                             // With no cursor barrier, `record()` is the last
                             // point where data can be permanently lost.
-                            // Stopping here is provably safe: realtime is
-                            // monotone forward per chain, so once the driver
-                            // stops consuming, no buffer entry above the
-                            // failed interval can appear and the cursor
-                            // cannot be derived past it.
+                            // Stopping closes that for every *subsequent*
+                            // batch: realtime is monotone forward per chain,
+                            // so once the driver stops consuming, no buffer
+                            // entry above the failed interval can appear and
+                            // the cursor cannot be derived past it.
+                            //
+                            // It does NOT close it for the batch in flight.
+                            // Both adapters process a batch's transactions out
+                            // of order and maintenance runs concurrently, so a
+                            // later block may already be persisted — and the
+                            // cursor already advanced past this failing one —
+                            // before we get here. Stopping cannot retract
+                            // that; closing it needs the acknowledgement
+                            // boundary rejected in ADR-005, where it is
+                            // carried as a known limitation.
                             bail!(
                                 "unable to record indexer failure for bridge {bridge_id} chain {chain_id} \
                                  range [{}, {}] after {} attempt(s) (processing error: {:#}): {final_err:#}",
@@ -512,6 +574,96 @@ mod tests {
         assert!(paired.iter().all(|(_, reason)| reason == "boom"));
     }
 
+    #[test]
+    fn chunk_range_splits_into_batch_size_pieces_with_a_narrower_last_chunk() {
+        let chunks = chunk_range(BlockRange { from: 0, to: 2500 }, 1000);
+
+        assert_eq!(
+            chunks,
+            vec![
+                BlockRange { from: 0, to: 999 },
+                BlockRange {
+                    from: 1000,
+                    to: 1999
+                },
+                BlockRange {
+                    from: 2000,
+                    to: 2500
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn chunk_range_narrower_than_batch_size_yields_one_chunk() {
+        let chunks = chunk_range(BlockRange { from: 10, to: 20 }, 1000);
+
+        assert_eq!(chunks, vec![BlockRange { from: 10, to: 20 }]);
+    }
+
+    #[test]
+    fn chunk_range_clamps_a_zero_batch_size_to_one() {
+        let chunks = chunk_range(BlockRange { from: 0, to: 2 }, 0);
+
+        assert_eq!(
+            chunks,
+            vec![
+                BlockRange { from: 0, to: 0 },
+                BlockRange { from: 1, to: 1 },
+                BlockRange { from: 2, to: 2 },
+            ]
+        );
+    }
+
+    #[test]
+    fn rotate_by_attempts_leaves_a_single_chunk_unchanged() {
+        let chunks = vec![BlockRange { from: 0, to: 99 }];
+
+        assert_eq!(rotate_by_attempts(chunks.clone(), 1), chunks);
+        assert_eq!(
+            rotate_by_attempts(chunks, 50),
+            vec![BlockRange { from: 0, to: 99 }]
+        );
+    }
+
+    #[test]
+    fn rotate_by_attempts_shifts_the_starting_chunk_by_attempts_modulo_len() {
+        let chunks = vec![
+            BlockRange { from: 0, to: 9 },
+            BlockRange { from: 10, to: 19 },
+            BlockRange { from: 20, to: 29 },
+        ];
+
+        // attempts = 1: start at index 1.
+        assert_eq!(
+            rotate_by_attempts(chunks.clone(), 1),
+            vec![
+                BlockRange { from: 10, to: 19 },
+                BlockRange { from: 20, to: 29 },
+                BlockRange { from: 0, to: 9 },
+            ]
+        );
+        // attempts = 3 == len: wraps back to the original order.
+        assert_eq!(rotate_by_attempts(chunks.clone(), 3), chunks);
+        // attempts = 4: same offset as attempts = 1 (4 % 3 == 1).
+        assert_eq!(
+            rotate_by_attempts(chunks.clone(), 4),
+            rotate_by_attempts(chunks, 1)
+        );
+    }
+
+    #[test]
+    fn rotate_by_attempts_never_panics_at_a_very_large_attempts_count() {
+        let chunks = vec![
+            BlockRange { from: 0, to: 9 },
+            BlockRange { from: 10, to: 19 },
+        ];
+
+        let rotated = rotate_by_attempts(chunks, u32::MAX);
+
+        assert_eq!(rotated.len(), 2);
+    }
+
     // --- DB-backed driver tests ---
     //
     // The "universality" case lives here rather than `indexer/example/`,
@@ -625,6 +777,10 @@ mod tests {
             providers: HashMap<i64, DynProvider<Ethereum>>,
             fail_exact: Arc<Mutex<HashSet<(i64, u64, u64)>>>,
             process_calls: Arc<AtomicUsize>,
+            /// Every `(chain_id, from_block, to_block)` ever passed to
+            /// `process()`, in call order. Only the fairness/rotation test
+            /// reads this; every other test ignores it.
+            attempted: Arc<Mutex<Vec<(i64, u64, u64)>>>,
         }
 
         impl TestRangeProcessor {
@@ -636,6 +792,7 @@ mod tests {
                     providers: HashMap::new(),
                     fail_exact: Arc::new(Mutex::new(HashSet::new())),
                     process_calls: Arc::new(AtomicUsize::new(0)),
+                    attempted: Arc::new(Mutex::new(Vec::new())),
                 }
             }
 
@@ -673,6 +830,9 @@ mod tests {
 
             async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError> {
                 self.process_calls.fetch_add(1, Ordering::SeqCst);
+                self.attempted
+                    .lock()
+                    .push((chain_id, batch.from_block, batch.to_block));
                 let should_fail =
                     self.fail_exact
                         .lock()
@@ -920,7 +1080,12 @@ mod tests {
         }
 
         /// `max_chunks_per_pass` bounds chunks per tick so a large hole set
-        /// cannot starve the realtime scan sharing this task.
+        /// cannot starve the realtime scan sharing this task. The freshly
+        /// recorded row has `attempts == 1`, so the rotation fix (see
+        /// `rotate_by_attempts`) starts this pass's window at chunk index
+        /// `1 % 5 == 1` (`[1000,1999]`), not at the interval's `from` — the
+        /// two attempted chunks resolve, leaving the untouched prefix
+        /// `[0,999]` and suffix `[3000,4999]` as two separate open rows.
         #[tokio::test]
         #[ignore = "needs database to run"]
         async fn retry_pass_is_bounded_by_max_chunks_per_pass() {
@@ -964,15 +1129,107 @@ mod tests {
                 "exactly max_chunks_per_pass chunks must be attempted"
             );
 
-            let open = ledger.open(&[(1, 1)]).await.unwrap();
-            assert_eq!(open.len(), 1);
-            // The first two 1000-block chunks resolved; the rest remains.
+            let mut open: Vec<BlockRange> = ledger
+                .open(&[(1, 1)])
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|(_, _, interval)| interval.range)
+                .collect();
+            open.sort_by_key(|range| range.from);
+
+            // The rotated window (`[1000,1999]`, `[2000,2999]`) resolved;
+            // both the untouched prefix and suffix remain, as two rows.
             assert_eq!(
-                open[0].2.range,
-                BlockRange {
-                    from: 2000,
-                    to: 4999
+                open,
+                vec![
+                    BlockRange { from: 0, to: 999 },
+                    BlockRange {
+                        from: 3000,
+                        to: 4999
+                    },
+                ]
+            );
+        }
+
+        /// Regression for the P2 "permanently failing prefix starves the
+        /// tail" finding: before the `rotate_by_attempts` fix, every retry
+        /// pass started at `interval.range.from`, so a leading prefix wider
+        /// than `max_chunks_per_pass` re-merged into the same still-open row
+        /// on every tick and later chunks of that interval were never
+        /// attempted at all. Ten 100-block chunks, the first four (blocks
+        /// `[0, 399]`) permanently fail, and the budget is two chunks per
+        /// pass — strictly narrower than the failing prefix, so a driver that
+        /// never rotates would loop on `[0,199]` forever.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn retry_pass_fairness_reaches_chunks_beyond_a_permanently_failing_prefix() {
+            const MAX_CHUNKS_PER_PASS: usize = 2;
+            const MAX_PASSES: usize = 30;
+
+            let db = init_db("range_driver_retry_fairness_beyond_failing_prefix").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+
+            interchain_db
+                .record_indexer_failures(
+                    1,
+                    1,
+                    &[(BlockRange { from: 0, to: 999 }, "boom".to_string())],
+                )
+                .await
+                .unwrap();
+
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+            ledger.initialize(&[(1, 1)]).await.unwrap();
+
+            let mock_service = MockLogsService::new();
+            for _ in 0..(MAX_CHUNKS_PER_PASS * MAX_PASSES) {
+                mock_service.push_logs(vec![]);
+            }
+
+            let processor = TestRangeProcessor::new(1, vec![1], 100)
+                .with_provider(1, mock_provider(mock_service));
+            for from in [0u64, 100, 200, 300] {
+                processor.fail_range(1, from, from + 99);
+            }
+
+            let mut reached_beyond_prefix = false;
+
+            for _pass in 0..MAX_PASSES {
+                let due: Vec<(i64, FailedInterval)> = ledger
+                    .open(&[(1, 1)])
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|(_, chain_id, interval)| (chain_id, interval))
+                    .collect();
+                assert!(
+                    !due.is_empty(),
+                    "the permanently failing prefix must always leave an open interval"
+                );
+
+                processor
+                    .retry_pending(&ledger, &due, MAX_CHUNKS_PER_PASS)
+                    .await;
+
+                if processor
+                    .attempted
+                    .lock()
+                    .iter()
+                    .any(|&(_, from, _)| from >= 400)
+                {
+                    reached_beyond_prefix = true;
+                    break;
                 }
+            }
+
+            assert!(
+                reached_beyond_prefix,
+                "chunks beyond the permanently-failing prefix (blocks [0, 399]) must \
+                 eventually be attempted once that prefix is wider than \
+                 max_chunks_per_pass; attempted so far: {:?}",
+                processor.attempted.lock()
             );
         }
 

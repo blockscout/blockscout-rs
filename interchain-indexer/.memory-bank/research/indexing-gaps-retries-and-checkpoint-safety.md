@@ -23,11 +23,13 @@ frequency, or validate deployed configuration, RPC behavior, logs, or alerts.
 Intentional filter/config exclusions are described separately from accidental
 gaps.
 
-## Status: the gap this note describes has since been closed
+## Status: a recovery primitive now exists; read the limits before trusting it
 
 This note was written against the code **before** the failed-range ledger landed,
 and it is kept in that voice because the analysis is what justifies the design.
-What changed, and where each claim below now has to be read as "before":
+Two separate things changed, and conflating them is the mistake to avoid.
+
+**The shared primitive exists.**
 
 - `LogStream` yields `LogBatch { from_block, to_block, direction, logs }`, so a
   consumer can name the range it failed on.
@@ -35,10 +37,43 @@ What changed, and where each claim below now has to be read as "before":
   failed interval (union, merging on overlap *or* adjacency), clears it by set
   difference once the blocks are actually reprocessed, and `RangeDriver` replays
   open intervals forever with a capped backoff.
-- A batch-processing failure that cannot be *recorded* is now fatal to the
-  stream: the driver stops consuming and the indexer state becomes `Failed`.
+- A batch-processing failure that cannot be *recorded* stops the driver and the
+  indexer state becomes `Failed`.
 - `catchup_min_cursor` is seeded and read; the checkpoint row now exists from
   startup, which retires the incidental safe case under §7.
+
+**Whether a failure reaches that primitive is per-adapter**, and is the part
+worth checking before concluding anything about completeness. An error a handler
+swallows never becomes a `BatchError`, so the batch reads as successful and the
+retry pass will happily `resolve` an existing hole for that range. Both adapters
+now propagate their downstream failures; anything added later must do the same
+deliberately.
+
+**What the ledger still does not cover.** These are open by construction, not
+oversights, and `catchup_scan_complete == true && failed_blocks == 0` is
+therefore not proof that every block was indexed:
+
+- **The current batch is not fenced.** Both adapters process a batch's
+  transactions out of order, and maintenance runs concurrently. A later block can
+  be mutated and persisted before an earlier block in the same batch fails, so
+  the cursor may already have crossed the earlier block by the time the driver
+  discovers it cannot write the failure. Stopping consumption prevents *future*
+  batches; it does not retract that. Closing this needs the claim-before-processing
+  or acknowledgement boundary that was deliberately rejected (see ADR-005).
+- **`resolve` runs before durability.** A successful `process` means the mutation
+  reached `MessageBuffer`, not the database — maintenance flushes later. A stop
+  between the two loses the replayed work *and* the row that would have caused
+  another replay. Catch-up completion has the same shape: it certifies that the
+  processor returned, not that its output is durable.
+- **Locally detectable malformed input is treated as success** — a log without a
+  `transaction_hash`, a selected event without `topic0`, an AMB token-enrichment
+  decode mismatch. These are skipped as data quality, produce no row, and a
+  replay containing them resolves the range. Reclassifying them would make
+  ordinary junk retry forever; the trade is deliberate, but it means the ledger
+  is silent about them.
+- **Nothing retroactive.** Holes that predate the ledger are invisible to it.
+- Crash mid-batch, planned-stop drain, reorgs and AMB's in-memory correlation
+  maps remain as they were — see the accepted non-goals below.
 
 What did **not** change, and is still the correct model: a checkpoint certifies
 *scanning*, not correctness. Cursor derivation is untouched, holes live in a

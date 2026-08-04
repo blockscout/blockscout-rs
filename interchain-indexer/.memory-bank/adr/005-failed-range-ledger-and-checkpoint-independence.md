@@ -71,8 +71,16 @@ Consequential details, each of which is load-bearing:
   point where a range can be lost. The danger is not the outage itself — while
   the database is down no cursor can move — but the moment it recovers, when
   maintenance bridges gaps and the frontier leaps over intervals that were never
-  recorded. Stopping at the first unrecordable failure is provably safe against
-  this, because realtime is monotone forward per chain.
+  recorded. Stopping at the first unrecordable failure closes that for every
+  *subsequent* batch, because realtime is monotone forward per chain.
+
+  It does **not** close it for the batch in flight. Both adapters process a
+  batch's transactions out of order, and maintenance runs concurrently, so a
+  later block can already be persisted — and the cursor already advanced past an
+  earlier failing block — before the driver learns it cannot record. Stopping
+  prevents future work; it cannot retract that. Closing this needs the
+  acknowledgement boundary rejected as Alternative 1, so it is carried as a known
+  limitation rather than claimed as safe.
 - **Proven progress resets the backoff.** A `resolve` split gives remainders
   `attempts = 1` and the parent's `updated_at`. Inheriting the parent's attempt
   count instead makes an hour-long incident take ~22 hours to drain, since each
@@ -154,8 +162,10 @@ written off.
 
 ### Positive
 
-- A scanned range that fails downstream is durably recorded and replayed. The
-  original silent-loss path is closed.
+- A scanned range whose failure **reaches the driver** is durably recorded and
+  replayed. That is the mechanism the original silent-loss path needed; whether a
+  given failure reaches it is a property of each adapter, not of this decision,
+  and is the first thing to check when reasoning about completeness.
 - The mechanism is protocol-agnostic: a new indexer gets recording, replay and
   escalation by implementing `RangeProcessor`.
 - Checkpoint semantics are now stated rather than assumed — a checkpoint
@@ -171,6 +181,35 @@ written off.
   re-fetches and reprocesses more than the failing blocks. Accepted deliberately.
 - A crash between the processing failure and the `record` write is still a silent
   hole. Graceful drain in `stop()` is the cheap follow-up.
+- **The batch in flight is not fenced** when a `record` write fails — see the
+  Decision section. Narrow window, real hole, and not closable without an
+  acknowledgement boundary.
+- **`resolve` runs before the work is durable.** A successful `process` means the
+  mutation reached `MessageBuffer`; the database write happens later in
+  maintenance. A stop in between loses the replayed work *and* the ledger row
+  that would have caused another replay — so the ledger is a post-failure work
+  queue, not a durable processing acknowledgement, and must not be described as
+  one. Catch-up completion has the same shape.
+- **A wide interval may drain only partially.** The retry pass rotates its chunk
+  window by the row's `attempts` so a deterministically failing prefix cannot
+  starve the tail. That sweep is complete only when a failing chunk records one
+  range; an indexer narrowing `attributed` per block advances `attempts` faster
+  than the window is wide, leaving chunks between the reachable offsets
+  un-refetched. Nothing is lost or falsely resolved — the row simply shrinks
+  slower. A per-pass counter advancing by the window size would make it
+  unconditional.
+- **AMB's in-memory correlation drain can still false-clear.** The pending entry
+  is removed before the fallible applies, so a failure mid-drain loses the
+  remainder; the block *is* recorded, but the replay finds nothing pending,
+  succeeds, and resolves the hole while the data is gone. Part of the wider AMB
+  restart-durability follow-up.
+- **Failures a handler swallows never reach the ledger**, and a replay covering
+  them reads as success and resolves the range. Locally detectable malformed
+  input (a log without `transaction_hash`, an event without `topic0`, a failed
+  token-enrichment decode) is deliberately treated as a data-quality skip rather
+  than a failure, because the alternative is retrying ordinary junk forever.
+  Consequently `failed_blocks == 0` means "nothing was recorded", not "nothing
+  was lost".
 - Nothing is ever written off, so a permanently unrecoverable interval keeps the
   staleness metric climbing until someone deletes the row by hand. Truthful, but
   alert fatigue is the risk to watch and the strongest argument for reviving a

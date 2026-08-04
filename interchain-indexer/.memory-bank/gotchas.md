@@ -930,8 +930,18 @@ item moves the frontier straight across it.
 `failed_blocks != 0` is the only completeness signal — the percentage is the
 *scanned* share and reaches 100% with holes still open, by design. Operationally,
 alert on `interchain_indexer_oldest_open_hole_age_seconds`: the retry pass is the
-only recovery path, so a hole that stops draining is invisible otherwise. See
-ADR-005 and `.memory-bank/research/indexing-gaps-retries-and-checkpoint-safety.md`.
+only recovery path, so a hole that stops draining is invisible otherwise.
+
+**The converse does not hold.** `failed_blocks == 0` means "nothing was
+recorded", not "nothing was lost". A failure only becomes a row if it reaches the
+driver as a `BatchError`, so an error a handler swallows is invisible — and worse,
+a replay covering that range reads as success and `resolve`s an existing hole.
+Malformed input is skipped as data quality on purpose (a log without
+`transaction_hash`, an event without `topic0`, a failed token-enrichment decode),
+and `resolve` runs before the mutation is durable. When adding an indexer or an
+event handler, propagating the failure is what buys you the guarantee; nothing
+else does. See ADR-005 and
+`.memory-bank/research/indexing-gaps-retries-and-checkpoint-safety.md`.
 
 ---
 
