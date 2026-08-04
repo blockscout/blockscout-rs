@@ -62,11 +62,24 @@ use types::{
     SentOrRouted, SentOrRoutedAndCalled, TokenTransfer,
 };
 
+/// One chain this bridge indexes: every Teleporter Messenger deployment
+/// configured on it, scanned as a single unit.
+///
+/// **One config per chain, not per contract.** Checkpoints, the failure ledger
+/// and the progress API are all keyed `(bridge_id, chain_id)`, so a chain
+/// covered by several independent scanners has several producers writing one
+/// scan frontier. Whichever finished first published a floor for the pair —
+/// `mark_catchup_complete` lowers `catchup_max_cursor` with `LEAST` — and after
+/// a restart the others resumed from it, never scanning the range they had
+/// left. That loss needs no RPC failure and leaves no ledger row: the blocks
+/// were "scanned" as far as every shared record could tell.
 #[derive(Clone, Debug)]
 pub struct AvalancheChainConfig {
     pub chain_id: i64,
     pub provider: DynProvider<Ethereum>,
-    pub contract_address: Address,
+    pub contract_addresses: Vec<Address>,
+    /// The lowest `started_at_block` among this chain's contracts — the only
+    /// floor under which every configured address is covered.
     pub start_block: u64,
 }
 
@@ -242,7 +255,6 @@ impl AvalancheIndexer {
         for chain in &chains {
             let chain_id = chain.chain_id;
             let start_block = chain.start_block;
-            let contract_address = chain.contract_address;
             let provider = chain.provider.clone();
 
             // Restore checkpoint if it exists for this bridge and chain.
@@ -293,11 +305,15 @@ impl AvalancheIndexer {
                 );
             }
 
-            let filter = Filter::new()
-                .address(contract_address)
-                .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES);
+            let filter = teleporter_log_filter(&chain.contract_addresses)
+                .with_context(|| format!("failed to build log filter for chain {chain_id}"))?;
 
-            tracing::info!(bridge_id, chain_id, "configured log stream");
+            tracing::info!(
+                bridge_id,
+                chain_id,
+                contract_count = chain.contract_addresses.len(),
+                "configured log stream"
+            );
 
             let stream = LogStream::builder(provider.clone())
                 .filter(filter)
@@ -361,6 +377,29 @@ impl AvalancheRangeProcessor {
     }
 }
 
+/// The log filter for one chain: every Teleporter Messenger deployment
+/// configured on it, and the full Teleporter event set.
+///
+/// The forward streams and the retry replay build their filter here, from the
+/// same address list, deliberately. They used to be two constructions, and a
+/// replay narrower than the forward path re-scans a recorded hole against the
+/// wrong addresses, finds nothing, and resolves a hole that was never fixed —
+/// the ledger reporting a repair that did not happen.
+///
+/// Rejects an empty address list rather than passing it to `Filter::address`,
+/// where it degrades to "match every address on the chain" — a filter that
+/// silently succeeds while pulling in unrelated contracts' logs.
+fn teleporter_log_filter(contract_addresses: &[Address]) -> Result<Filter> {
+    ensure!(
+        !contract_addresses.is_empty(),
+        "no configured Avalanche contract addresses"
+    );
+
+    Ok(Filter::new()
+        .address(contract_addresses.to_vec())
+        .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES))
+}
+
 #[async_trait]
 impl RangeProcessor for AvalancheRangeProcessor {
     fn bridge_id(&self) -> i32 {
@@ -376,32 +415,11 @@ impl RangeProcessor for AvalancheRangeProcessor {
     }
 
     fn log_filter(&self, chain_id: i64) -> Result<Filter> {
-        // Every configured contract for this chain, not just the first
-        // match: `build_avalanche_chain_configs` emits one `AvalancheChainConfig`
-        // per contract, so a chain with several Teleporter deployments (a
-        // legitimate case — e.g. two Messenger versions on one chain) has
-        // several entries sharing `chain_id`. A replay keyed on a single
-        // contract's address would re-scan a hole recorded by one stream
-        // against a different contract's logs, come back empty, and resolve
-        // (delete) a hole that was never actually fixed. Filtering on the
-        // full address set instead replays a superset of what any single
-        // forward stream fetched — idempotent, and consistent with this
-        // design's preference for wider-but-safe over precise. The forward
-        // path is untouched: it still runs one stream per contract.
-        let addresses: Vec<Address> = self
-            .chains
-            .iter()
-            .filter(|c| c.chain_id == chain_id)
-            .map(|c| c.contract_address)
-            .collect();
-        ensure!(
-            !addresses.is_empty(),
-            "no configured Avalanche contract for chain_id {chain_id}"
-        );
+        let chain = self
+            .chain_config(chain_id)
+            .ok_or_else(|| anyhow!("no configured Avalanche chain for chain_id {chain_id}"))?;
 
-        Ok(Filter::new()
-            .address(addresses)
-            .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES))
+        teleporter_log_filter(&chain.contract_addresses)
     }
 
     fn batch_size(&self) -> u64 {
@@ -1726,13 +1744,14 @@ mod tests {
         );
     }
 
-    /// Regression for the P2 finding: `build_avalanche_chain_configs` emits
-    /// one `AvalancheChainConfig` per contract, so a chain with several
-    /// Teleporter deployments has several entries sharing `chain_id`. Before
-    /// the fix, `log_filter` matched only the first configured contract, so a
-    /// hole recorded by the second stream would replay against the first
-    /// contract's address, come back empty, and get resolved as if fixed.
-    /// The retry filter must cover every configured address for the chain.
+    /// A chain with several Teleporter deployments must replay against all of
+    /// their addresses. A replay narrower than the forward scan re-fetches a
+    /// recorded hole against the wrong contract, finds nothing, and resolves
+    /// the hole as if fixed.
+    ///
+    /// Since both paths now build the filter through `teleporter_log_filter`
+    /// from the same `contract_addresses`, this pins that the config-to-filter
+    /// step keeps every address rather than collapsing to one.
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn log_filter_covers_every_configured_contract_address_for_a_chain_with_several() {
@@ -1760,20 +1779,12 @@ mod tests {
             .connect_http("http://127.0.0.1:1".parse().unwrap())
             .erased();
 
-        let chains = vec![
-            AvalancheChainConfig {
-                chain_id: CHAIN_ID,
-                provider: dummy_provider.clone(),
-                contract_address: address_a,
-                start_block: 0,
-            },
-            AvalancheChainConfig {
-                chain_id: CHAIN_ID,
-                provider: dummy_provider,
-                contract_address: address_b,
-                start_block: 0,
-            },
-        ];
+        let chains = vec![AvalancheChainConfig {
+            chain_id: CHAIN_ID,
+            provider: dummy_provider,
+            contract_addresses: vec![address_a, address_b],
+            start_block: 0,
+        }];
 
         let processor = AvalancheRangeProcessor {
             bridge_id: 1,

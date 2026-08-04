@@ -326,23 +326,47 @@ fn build_avalanche_chain_configs(
             continue;
         };
 
+        let mut contract_addresses = Vec::new();
         for contract in &plan.contracts {
             let Ok(address_bytes): Result<[u8; 20], _> = contract.address.clone().try_into() else {
                 tracing::error!(
                     bridge_id = bridge.bridge_id,
                     chain_id,
+                    version = contract.version,
                     "Bridge contract address must be 20 bytes"
                 );
                 continue;
             };
-
-            chain_configs.push(AvalancheChainConfig {
-                chain_id,
-                start_block: contract.started_at_block,
-                provider: provider.clone(),
-                contract_address: Address::from(address_bytes),
-            });
+            contract_addresses.push(Address::from(address_bytes));
         }
+
+        // Every configured address on this chain is scanned by one stream,
+        // from one floor. See `AvalancheChainConfig` for why per-contract
+        // streams over a shared `(bridge_id, chain_id)` checkpoint lose data.
+        let Some(start_block) = plan.start_block() else {
+            tracing::error!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "no scan floor could be derived for this pair; skipping chain"
+            );
+            continue;
+        };
+
+        if contract_addresses.is_empty() {
+            tracing::error!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "no usable contract address for this pair; skipping chain"
+            );
+            continue;
+        }
+
+        chain_configs.push(AvalancheChainConfig {
+            chain_id,
+            start_block,
+            provider: provider.clone(),
+            contract_addresses,
+        });
     }
 
     chain_configs
@@ -833,6 +857,25 @@ mod tests {
         }
     }
 
+    fn chain_config_fixture(chain_id: i64) -> ChainConfig {
+        ChainConfig {
+            chain_id,
+            name: format!("chain-{chain_id}"),
+            icon: String::new(),
+            explorer: Default::default(),
+            pool_config: Default::default(),
+            rpcs: Vec::new(),
+        }
+    }
+
+    /// Never dialed: the config builders only clone the handle.
+    fn dummy_provider() -> DynProvider<Ethereum> {
+        use alloy::providers::{Provider, ProviderBuilder};
+        ProviderBuilder::new()
+            .connect_http("http://127.0.0.1:1".parse().unwrap())
+            .erased()
+    }
+
     fn bridge(
         bridge_id: i32,
         bridge_type: BridgeType,
@@ -975,6 +1018,51 @@ mod tests {
         );
 
         assert_eq!(plan_bridge(&bridge)[0].start_block(), Some(100));
+    }
+
+    /// A chain with several Teleporter deployments must produce **one**
+    /// `AvalancheChainConfig` carrying every address, not one per contract.
+    /// Per-contract configs become per-contract log streams sharing a single
+    /// `(bridge_id, chain_id)` checkpoint: whichever finishes catch-up first
+    /// lowers the pair's `catchup_max_cursor`, and after a restart the others
+    /// resume from it and never scan what they had left — with no RPC failure
+    /// and no ledger row, because every shared record says those blocks were
+    /// scanned.
+    #[test]
+    fn test_build_avalanche_chain_configs_groups_a_chain_s_contracts_into_one_stream() {
+        let bridge = bridge(
+            1,
+            BridgeType::AvalancheNative,
+            true,
+            vec![
+                BridgeContractConfig {
+                    address: vec![0xAA; 20],
+                    started_at_block: 900,
+                    ..contract(1, None, 900, 2)
+                },
+                BridgeContractConfig {
+                    address: vec![0xBB; 20],
+                    started_at_block: 100,
+                    ..contract(1, None, 100, 1)
+                },
+            ],
+        );
+
+        let chain_lookup = HashMap::from([(1i64, chain_config_fixture(1))]);
+        let chain_providers = HashMap::from([(1i64, dummy_provider())]);
+
+        let configs = build_avalanche_chain_configs(&bridge, &chain_lookup, &chain_providers);
+
+        assert_eq!(configs.len(), 1, "one stream per chain, not per contract");
+        assert_eq!(configs[0].chain_id, 1);
+        assert_eq!(
+            configs[0].contract_addresses,
+            vec![Address::from([0xAA; 20]), Address::from([0xBB; 20])]
+        );
+        assert_eq!(
+            configs[0].start_block, 100,
+            "the shared stream must start low enough to cover every address"
+        );
     }
 
     /// Non-AMB bridges take `min` across every contract on the chain — the only

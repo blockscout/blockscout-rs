@@ -996,6 +996,31 @@ once at startup by `log_amb_floor_divergence`.
 
 ---
 
+## One Scanner Per `(bridge, chain)`, Never One Per Contract
+
+**Symptom:** A chain with more than one configured contract loses a block range
+after a restart. No `indexer_failures` row, no RPC error, no gap in any log —
+the checkpoint simply sits above blocks that were never scanned for one of the
+addresses.
+
+**Root cause:** `indexer_checkpoints`, `indexer_failures` and the progress API
+are all keyed `(bridge_id, chain_id)`. Give a chain two independent scanners and
+they share one scan frontier while each covers only part of the address set.
+Catch-up completion is the sharpest form: `mark_catchup_complete` lowers
+`catchup_max_cursor` with `LEAST`, so the first scanner to reach its floor
+publishes that floor for the whole pair, and after a restart the other resumes
+below its own remaining work. Realtime has the same shape whenever one scanner
+stalls while another advances the cursor past it.
+
+**Fix:** One `AvalancheChainConfig` (and one `LogStream`) per chain, with every
+configured address in one filter and `min(started_at_block)` as the floor. AMB
+was already built this way; Avalanche was not. When adding a protocol, the
+invariant to hold is that the unit of scanning matches the key of the records
+that describe scanning. Scanning a wider address set or a lower floor than
+strictly needed is free; splitting the scan under a shared key is not.
+
+---
+
 ## A Replay Can Only Recover What The Replay Can Still Find
 
 **Symptom:** A recorded `indexer_failures` row disappears after a retry pass

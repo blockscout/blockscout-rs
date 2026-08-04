@@ -113,6 +113,18 @@ Consequential details, each of which is load-bearing:
 `catchup_min_cursor` is put to work by the same change (see the companion
 decision below), which is what makes "how much has been scanned" reportable.
 
+### Scanning unit must match the record key
+
+Everything here is keyed `(bridge_id, chain_id)` — the checkpoint, the ledger
+rows, the progress target. A protocol that scans a pair with more than one
+independent stream therefore has several producers for one scan frontier, and
+the ledger cannot help: the lost range is never recorded, because every shared
+record agrees those blocks were scanned.
+
+So **one scanner per `(bridge, chain)`**, covering every configured address at
+the lowest configured floor. Over-scanning is cheap; splitting a scan under a
+shared key loses data with no failure signal anywhere.
+
 ### Forward constraint
 
 `catchup_min_cursor` is seeded at startup and lowered by a startup reconciliation
