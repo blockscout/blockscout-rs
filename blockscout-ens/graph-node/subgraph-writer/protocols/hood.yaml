@@ -1,0 +1,42 @@
+# Metadata for .hood on Robinhood Chain.
+# The subgraph under ../subgraphs/hood-subgraph is hand-maintained
+# (ENS-schema mappings with namehash("hood") base node), similar to ens-subgraph.
+default_context:
+  project_name: ".hood Name Service Subgraph"
+  short_name: "hood"
+  network: "robinhood-mainnet"
+  network_test: "robinhood-testnet"
+
+  registry: true
+  registry_name: "ENSRegistry"
+  registry_address: "0xEA48F389c296A6f823a488210194c50af41517d8"
+  registry_start_block: 15140962
+  registry_address_test: "0x0000000000000000000000000000000000000000"
+  registry_start_block_test: 0
+  registry_abi: "[]"
+
+  resolver: true
+  resolver_name: "Resolver"
+  resolver_address: "0xeDBC408F887aE72c692232FE2437510f27288046"
+  resolver_start_block: 15141293
+  resolver_start_block_test: 0
+  resolver_abi: "[]"
+
+  controller: true
+  controller_name: "EthRegistrarController"
+  controller_address: "0xebEb27e29cE202365a57A1aDeeb25B2CB5e77923"
+  controller_start_block: 15141206
+  controller_address_test: "0x0000000000000000000000000000000000000000"
+  controller_start_block_test: 0
+  controller_abi: "[]"
+
+  base: true
+  base_name: "BaseRegistrar"
+  base_address: "0x4942CE5912706A05034F7018dFBF19953B7dFC80"
+  base_start_block: 15140992
+  base_address_test: "0x0000000000000000000000000000000000000000"
+  base_start_block_test: 0
+  base_abi: "[]"
+  base_tld: ".hood"
+  # namehash("hood")
+  base_tld_hash: "17f79377132793bf63f8c99a522a617a401dc4826aa34aa9cc11e97310c22e5d"

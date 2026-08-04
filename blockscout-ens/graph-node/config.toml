@@ -119,3 +119,9 @@ shard = "primary"
 label    = "base-mainnet"
 url      = "https://base-mainnet-prod-2.node.blockscout.com"
 features = []
+
+[chains.robinhood-mainnet]
+provider = [
+    { label = "robinhood-mainnet", url = "https://rpc.mainnet.chain.robinhood.com", features = [] }
+]
+shard = "primary"

@@ -1,0 +1,20 @@
+{
+  "robinhood-mainnet": {
+    "ENSRegistry": {
+      "address": "0xEA48F389c296A6f823a488210194c50af41517d8",
+      "startBlock": 15140962
+    },
+    "BaseRegistrar": {
+      "address": "0x4942CE5912706A05034F7018dFBF19953B7dFC80",
+      "startBlock": 15140992
+    },
+    "EthRegistrarController": {
+      "address": "0xebEb27e29cE202365a57A1aDeeb25B2CB5e77923",
+      "startBlock": 15141206
+    },
+    "Resolver": {
+      "address": "0xeDBC408F887aE72c692232FE2437510f27288046",
+      "startBlock": 15141293
+    }
+  }
+}

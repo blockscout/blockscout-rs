@@ -1,0 +1,10 @@
+# Graph cli generated
+.docker
+generated
+build/
+.DS_STORE
+node_modules
+yarn.lock
+package-lock.json
+.env
+.idea

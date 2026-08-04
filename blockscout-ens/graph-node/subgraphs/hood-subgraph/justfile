@@ -1,0 +1,19 @@
+graph_node_url := "http://127.0.0.1:8020"
+ipfs_url := "http://127.0.0.1:5001"
+network := "robinhood-mainnet"
+name := "hood-subgraph"
+
+init:
+    yarn install
+
+codegen:
+    yarn codegen
+
+build:
+    yarn build
+
+create:
+    yarn graph create --node {{graph_node_url}} {{name}}
+
+deploy VERSION:
+    yarn graph deploy --node {{graph_node_url}} --ipfs {{ipfs_url}} {{name}} --network {{network}} --version-label {{VERSION}}

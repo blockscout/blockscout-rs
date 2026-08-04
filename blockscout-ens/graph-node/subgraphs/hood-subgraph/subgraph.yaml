@@ -1,0 +1,128 @@
+# ENS-schema subgraph for .hood on Robinhood Chain mainnet (4663).
+#
+# HOW TO USE
+# 1. Clone ens-subgraph mappings into this folder (see README.md)
+# 2. graph-node must connect to a Robinhood Chain archive RPC
+# 3. Deploy: graph create --node <node> hood-subgraph && graph deploy ...
+#
+# Our contracts emit EXACT ENS event signatures — stock ens-subgraph mappings
+# work after renaming the ".eth" suffix to ".hood".
+
+specVersion: 0.0.4
+description: .hood — ENS-compatible naming on Robinhood Chain (chain 4663)
+repository: https://github.com/blockscout/blockscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: ENSRegistry
+    network: robinhood-mainnet
+    source:
+      abi: EnsRegistry
+      address: "0xEA48F389c296A6f823a488210194c50af41517d8"
+      startBlock: 15140962
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/ensRegistry.ts
+      entities:
+        - Domain
+        - Account
+        - Resolver
+      abis:
+        - name: EnsRegistry
+          file: ./abis/Registry.json
+      eventHandlers:
+        - event: Transfer(indexed bytes32,address)
+          handler: handleTransfer
+        - event: NewOwner(indexed bytes32,indexed bytes32,address)
+          handler: handleNewOwner
+        - event: NewResolver(indexed bytes32,address)
+          handler: handleNewResolver
+        - event: NewTTL(indexed bytes32,uint64)
+          handler: handleNewTTL
+  - kind: ethereum/contract
+    name: BaseRegistrar
+    network: robinhood-mainnet
+    source:
+      abi: BaseRegistrar
+      address: "0x4942CE5912706A05034F7018dFBF19953B7dFC80"
+      startBlock: 15140992
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/ethRegistrar.ts
+      entities:
+        - Registration
+        - NameRegistered
+        - NameRenewed
+        - NameTransferred
+      abis:
+        - name: BaseRegistrar
+          file: ./abis/BaseRegistrar.json
+      eventHandlers:
+        - event: NameRegistered(indexed uint256,indexed address,uint256)
+          handler: handleNameRegistered
+        - event: NameRenewed(indexed uint256,uint256)
+          handler: handleNameRenewed
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleNameTransferred
+  - kind: ethereum/contract
+    name: EthRegistrarController
+    network: robinhood-mainnet
+    source:
+      abi: EthRegistrarController
+      address: "0xebEb27e29cE202365a57A1aDeeb25B2CB5e77923"
+      startBlock: 15141206
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/ethRegistrar.ts
+      entities:
+        - Registration
+      abis:
+        - name: EthRegistrarController
+          file: ./abis/EthRegistrarController.json
+      eventHandlers:
+        # Plaintext label — required for "monkey.hood" instead of hashes on Blockscout.
+        - event: NameRegistered(string,indexed bytes32,indexed address,uint256,uint256,uint256)
+          handler: handleNameRegisteredByController
+        - event: NameRenewed(string,indexed bytes32,uint256,uint256)
+          handler: handleNameRenewedByController
+  - kind: ethereum/contract
+    name: Resolver
+    network: robinhood-mainnet
+    source:
+      abi: Resolver
+      address: "0xeDBC408F887aE72c692232FE2437510f27288046"
+      startBlock: 15141293
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/resolver.ts
+      entities:
+        - AddrChanged
+        - MulticoinAddrChanged
+        - NameChanged
+        - TextChanged
+        - ContenthashChanged
+      abis:
+        - name: Resolver
+          file: ./abis/PublicResolver.json
+      eventHandlers:
+        - event: AddrChanged(indexed bytes32,address)
+          handler: handleAddrChanged
+        - event: AddressChanged(indexed bytes32,uint256,bytes)
+          handler: handleMulticoinAddrChanged
+        - event: NameChanged(indexed bytes32,string)
+          handler: handleNameChanged
+        - event: TextChanged(indexed bytes32,indexed string,string,string)
+          handler: handleTextChangedWithValue
+        - event: ContenthashChanged(indexed bytes32,bytes)
+          handler: handleContentHashChanged
+        - event: VersionChanged(indexed bytes32,uint64)
+          handler: handleVersionChanged

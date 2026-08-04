@@ -282,6 +282,15 @@
           "arb"
         ]
       },
+      "4663": {
+        "blockscout": {
+          "url": "https://robinhoodchain.blockscout.com"
+        },
+        "use_protocols": [
+          "ens",
+          "hood"
+        ]
+      },
       "695569": {
         "blockscout": {
           "url": "https://explorer.pyropechain.com/"
@@ -807,6 +816,22 @@
           "description": "InfinityName is a decentralized naming service giving users permanent ownership of their domain names",
           "icon_url": "https://infinityname.com/img/InfinityName-logo.png",
           "docs_url": "https://infinityname.com/documentation"
+        }
+      },
+      "hood": {
+        "tld_list": ["hood"],
+        "network_id": 4663,
+        "subgraph_name": "hood-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x4942CE5912706A05034F7018dFBF19953B7dFC80"
+        },
+        "meta": {
+          "short_name": ".hood",
+          "title": ".hood Name Service",
+          "description": "ENS-compatible naming on Robinhood Chain. Register human-readable .hood names for wallet addresses.",
+          "docs_url": "https://robinhoodchain.blockscout.com"
         }
       }
     }
