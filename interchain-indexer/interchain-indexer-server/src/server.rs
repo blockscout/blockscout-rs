@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use crate::{
-    create_provider_pools_from_chains, load_bridges_from_file, load_chains_from_file,
+    create_provider_pools_from_chains,
+    indexers::{
+        IndexingTarget, bridges_pending_contracts_upsert, enumerate_indexing_targets,
+        reconcile_catchup_floors,
+    },
+    load_bridges_from_file, load_chains_from_file,
     proto::{
         health_actix::route_health, health_server::HealthServer,
         interchain_service_actix::route_interchain_service,
@@ -11,6 +16,7 @@ use crate::{
     },
     services::{
         HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl, StatusServiceImpl,
+        collect_indexing_progress,
     },
     settings::Settings,
     spawn_configured_indexers,
@@ -23,6 +29,7 @@ use interchain_indexer_entity::{bridge_contracts, bridges, chains};
 use interchain_indexer_logic::{
     ChainInfoService, IndexedChains, InterchainDatabase, StatsReadSettings, StatsService,
     TokenInfoService,
+    indexer::metrics::{INDEXER_CATCHUP_BLOCKS_REMAINING, INDEXER_CATCHUP_PROGRESS},
 };
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     interchain_statistics_service_actix::route_interchain_statistics_service,
@@ -31,6 +38,11 @@ use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
 use migration::Migrator;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 const SERVICE_NAME: &str = "interchain_indexer";
+
+/// Refresh interval for the indexing-progress gauges. A module constant, not a
+/// setting: there is no operational decision behind it and a setting would
+/// grow the ENV surface.
+const PROGRESS_METRICS_REFRESH: Duration = Duration::from_secs(60);
 
 /// Spawns a Tokio task that recomputes `stats_chains` on a fixed interval.
 ///
@@ -54,6 +66,42 @@ fn spawn_stats_chains_recalculation_worker(stats: Arc<StatsService>, period_secs
                 ),
             }
             tokio::time::sleep(Duration::from_secs(period_secs)).await;
+        }
+    });
+}
+
+/// Refreshes `interchain_indexer_catchup_progress` /
+/// `interchain_indexer_catchup_blocks_remaining` on a fixed interval, from
+/// the same `collect_indexing_progress` join the RPC handler uses so the two
+/// can never disagree.
+///
+/// Gauges are written only here. A gauge refreshed from a request handler
+/// would be frozen between calls, which is worse than not having it.
+fn spawn_indexing_progress_metrics_worker(
+    db: Arc<InterchainDatabase>,
+    targets: Arc<Vec<IndexingTarget>>,
+) {
+    tokio::spawn(async move {
+        loop {
+            match collect_indexing_progress(&db, &targets, None, None).await {
+                Ok(items) => {
+                    for item in items {
+                        let bridge_label = item.bridge_id.to_string();
+                        let chain_label = item.chain_id.to_string();
+                        INDEXER_CATCHUP_PROGRESS
+                            .with_label_values(&[&bridge_label, &chain_label])
+                            .set(item.catchup_progress_percent);
+                        INDEXER_CATCHUP_BLOCKS_REMAINING
+                            .with_label_values(&[&bridge_label, &chain_label])
+                            .set(item.catchup_blocks_remaining as f64);
+                    }
+                }
+                Err(err) => tracing::error!(
+                    err = ?err,
+                    "indexing-progress metrics refresh failed; keeping previous gauge values, retrying after interval"
+                ),
+            }
+            tokio::time::sleep(PROGRESS_METRICS_REFRESH).await;
         }
     });
 }
@@ -204,15 +252,38 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .collect::<Vec<bridges::ActiveModel>>(),
     )
     .await?;
-    let bridge_contracts: Vec<bridge_contracts::ActiveModel> = bridges
-        .iter()
-        .flat_map(|bridge| {
-            bridge
-                .contracts
-                .iter()
-                .map(move |contract| contract.to_active_model(bridge.bridge_id))
-        })
-        .collect();
+
+    // Enumerated once from the in-memory bridges config, before `bridges` is
+    // moved into `InterchainServiceImpl::new` below. Shared by the
+    // indexing-progress RPC handler and its periodic metrics worker so the
+    // two can never disagree.
+    let targets = Arc::new(enumerate_indexing_targets(&bridges));
+
+    // ORDERING-CRITICAL: must run before `upsert_bridge_contracts` a few
+    // lines down. The reconciliation reads `bridge_contracts` to learn the
+    // *previous* run's `started_at_block`, which only still holds the old
+    // value in the window before `upsert_bridge_contracts`'s `ON CONFLICT`
+    // overwrites it. Reordering this breaks floor reset detection with no
+    // test failure unless the ordering itself is asserted (see
+    // `interchain-indexer-server/src/indexers.rs` tests).
+    //
+    // Bridges this call could not fully reconcile are excluded from the
+    // upsert payload below, via `bridges_pending_contracts_upsert`: refreshing
+    // an unreconciled bridge's `bridge_contracts` rows here would overwrite
+    // the only place the previous `started_at_block` survives, permanently
+    // losing the evidence needed to detect a lowered floor.
+    let unreconciled_bridges = reconcile_catchup_floors(&db, &bridges).await;
+
+    let bridge_contracts: Vec<bridge_contracts::ActiveModel> =
+        bridges_pending_contracts_upsert(&bridges, &unreconciled_bridges)
+            .into_iter()
+            .flat_map(|bridge| {
+                bridge
+                    .contracts
+                    .iter()
+                    .map(move |contract| contract.to_active_model(bridge.bridge_id))
+            })
+            .collect();
     if !bridge_contracts.is_empty() {
         db.upsert_bridge_contracts(bridge_contracts.clone()).await?;
     }
@@ -273,7 +344,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         chain_info_service.clone(),
         indexed_chains.clone(),
     ));
-    let status_service = Arc::new(StatusServiceImpl::new(indexers.clone()));
+    let status_service = Arc::new(StatusServiceImpl::new(
+        indexers.clone(),
+        db.clone(),
+        targets.clone(),
+    ));
     let router = Router {
         health,
         interchain_service,
@@ -287,6 +362,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let stats_chains_period_secs = settings.stats.chains_recalculation_period_secs;
     spawn_stats_chains_recalculation_worker(stats.clone(), stats_chains_period_secs);
+    spawn_indexing_progress_metrics_worker(db.clone(), targets.clone());
 
     let launch_settings = LaunchSettings {
         service_name: SERVICE_NAME.to_string(),

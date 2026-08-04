@@ -54,4 +54,28 @@ lazy_static! {
         &["bridge_id"],
     )
     .unwrap();
+
+    // Metrics for the `GetIndexingProgress` API (coding-task-4 Part B).
+    // Refreshed only by the periodic metrics worker
+    // (`spawn_indexing_progress_metrics_worker` in `server.rs`), never from a
+    // request handler — a gauge refreshed from a request handler is frozen
+    // between calls, which is worse than not having it.
+
+    /// Scanned share of the historical block range, 0-100, per bridge and chain.
+    /// This is the scanned share only, never a completeness measure: it can read
+    /// 100 while `interchain_indexer_failed_blocks` is nonzero for the same pair.
+    pub static ref INDEXER_CATCHUP_PROGRESS: GaugeVec = register_gauge_vec!(
+        "interchain_indexer_catchup_progress",
+        "scanned share of the historical block range, 0-100",
+        &["bridge_id", "chain_id"],
+    )
+    .unwrap();
+
+    /// Blocks still inside the unscanned catch-up interval, per bridge and chain.
+    pub static ref INDEXER_CATCHUP_BLOCKS_REMAINING: GaugeVec = register_gauge_vec!(
+        "interchain_indexer_catchup_blocks_remaining",
+        "blocks remaining in the unscanned catchup interval",
+        &["bridge_id", "chain_id"],
+    )
+    .unwrap();
 }

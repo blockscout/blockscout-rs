@@ -1226,6 +1226,31 @@ paths:
           type: string
       tags:
         - StatusService
+  /api/v1/status/indexing:
+    get:
+      operationId: StatusService_GetIndexingProgress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetIndexingProgressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: bridge_id
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+          format: int64
+      tags:
+        - StatusService
   /health:
     get:
       summary: |-
@@ -1367,6 +1392,50 @@ definitions:
       - INPUT_TRANSFERS_COUNT
       - NAME
     default: TOTAL_TRANSFERS_COUNT
+  v1ChainIndexingProgress:
+    type: object
+    properties:
+      bridge_id:
+        type: integer
+        format: int32
+      chain_id:
+        type: string
+        format: int64
+      start_block:
+        type: string
+        format: uint64
+        description: |-
+          The unscanned interval is [catchup_min_cursor, catchup_max_cursor], inclusive.
+          Both are "next block to scan" boundaries, so catch-up can close the interval
+          from either end. An empty interval means the scan is complete.
+
+          configured started_at_block
+      catchup_min_cursor:
+        type: string
+        format: uint64
+      catchup_max_cursor:
+        type: string
+        format: uint64
+      realtime_cursor:
+        type: string
+        format: uint64
+      catchup_scan_complete:
+        type: boolean
+      catchup_progress_percent:
+        type: number
+        format: double
+        title: scanned share, NOT a completeness measure
+      catchup_blocks_remaining:
+        type: string
+        format: uint64
+      failed_blocks:
+        type: string
+        format: uint64
+        description: |-
+          Blocks inside unresolved holes. A single number on purpose: which ranges
+          failed and why is operator-side diagnostics, not API surface.
+      checkpoint_updated_at:
+        type: string
   v1ChainInfo:
     type: object
     properties:
@@ -1454,6 +1523,14 @@ definitions:
       daily_transfers:
         type: string
         format: uint64
+  v1GetIndexingProgressResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainIndexingProgress'
   v1GetMessagePathsResponse:
     type: object
     properties:

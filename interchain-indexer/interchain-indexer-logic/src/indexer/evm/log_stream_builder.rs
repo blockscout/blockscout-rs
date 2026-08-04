@@ -47,6 +47,30 @@ pub(crate) async fn build_log_stream_for_chain(
         (latest_block, latest_block.saturating_sub(1))
     };
 
+    // Seed / heal the durable scan floor for this pair. A failed write is a
+    // `warn`, never a startup blocker: the read-side guard in
+    // `CatchupProgress::compute` makes the stored floor cosmetic for the
+    // correctness of the reported numbers, and progress reporting must not
+    // be able to break ingestion.
+    if let Err(err) = db
+        .seed_catchup_floor(
+            bridge_id,
+            chain_id,
+            start_block,
+            catchup_cursor,
+            realtime_cursor,
+        )
+        .await
+    {
+        tracing::warn!(
+            err = ?err,
+            bridge_id,
+            chain_id,
+            start_block,
+            "failed to seed catchup floor; progress reporting may understate this pair"
+        );
+    }
+
     tracing::info!(bridge_id, chain_id, "configured EVM log stream");
 
     Ok(LogStream::builder(provider)

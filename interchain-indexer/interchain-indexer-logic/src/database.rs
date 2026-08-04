@@ -2497,6 +2497,31 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
+    /// Lists checkpoint rows, optionally narrowed to one bridge and/or chain.
+    /// Deterministic order so a dashboard diff is stable.
+    pub async fn list_indexer_checkpoints(
+        &self,
+        bridge_id: Option<i32>,
+        chain_id: Option<i64>,
+    ) -> anyhow::Result<Vec<indexer_checkpoints::Model>> {
+        let mut query = indexer_checkpoints::Entity::find()
+            .order_by_asc(indexer_checkpoints::Column::BridgeId)
+            .order_by_asc(indexer_checkpoints::Column::ChainId);
+
+        if let Some(bridge_id) = bridge_id {
+            query = query.filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id));
+        }
+        if let Some(chain_id) = chain_id {
+            query = query.filter(indexer_checkpoints::Column::ChainId.eq(chain_id));
+        }
+
+        query
+            .all(self.db.as_ref())
+            .await
+            .inspect_err(|e| tracing::error!(err =? e, "failed to list indexer checkpoints"))
+            .map_err(|e| e.into())
+    }
+
     /// Mark catchup as finalized for a (bridge_id, chain_id) pair by lowering
     /// `catchup_max_cursor` down to `genesis_block`. Uses `LEAST(...)` so the
     /// cursor is never moved upward (catchup cursor only decreases as scanning
@@ -2540,6 +2565,20 @@ impl InterchainDatabase {
                     indexer_checkpoints::Column::CatchupMaxCursor,
                     Expr::cust(
                         "LEAST(indexer_checkpoints.catchup_max_cursor, EXCLUDED.catchup_max_cursor)",
+                    ),
+                )
+                // Monotonicity insurance, not the healing mechanism: this
+                // writer always supplies `0` on insert, and
+                // `GREATEST(existing, 0) = existing` can never lower
+                // anything, so this rule alone heals nothing. The startup
+                // seed (`seed_catchup_floor`) is what heals a stored `0`.
+                // The value of this rule is that a future writer supplying a
+                // real floor inherits the correct conflict behaviour instead
+                // of a plain assignment.
+                .value(
+                    indexer_checkpoints::Column::CatchupMinCursor,
+                    Expr::cust(
+                        "GREATEST(indexer_checkpoints.catchup_min_cursor, EXCLUDED.catchup_min_cursor)",
                     ),
                 )
                 .value(
@@ -2588,6 +2627,118 @@ impl InterchainDatabase {
         })?;
 
         Ok(())
+    }
+
+    /// Creates the checkpoint row for a pair at startup and raises
+    /// `catchup_min_cursor` to the configured scan floor. Called by the
+    /// stream builders, which are the only place that knows
+    /// `started_at_block` (buffer maintenance never sees bridge config).
+    ///
+    /// On CONFLICT this writes ONLY `catchup_min_cursor` and `updated_at`.
+    /// Restricting the conflict clause to the floor is deliberate, not
+    /// laziness: the two scan cursors the caller supplies came *out of* that
+    /// same row moments earlier, so re-supplying them on conflict is at best
+    /// a no-op and at worst lets a startup race disturb a frontier.
+    /// Restricting the clause makes a restart provably unable to move
+    /// `catchup_max_cursor` or `realtime_cursor`.
+    pub async fn seed_catchup_floor(
+        &self,
+        bridge_id: i32,
+        chain_id: i64,
+        start_block: u64,
+        catchup_max_cursor: u64,
+        realtime_cursor: u64,
+    ) -> anyhow::Result<()> {
+        let start_block_i64 =
+            i64::try_from(start_block).context("start_block does not fit into i64")?;
+        let catchup_max_cursor_i64 = i64::try_from(catchup_max_cursor)
+            .context("catchup_max_cursor does not fit into i64")?;
+        let realtime_cursor_i64 =
+            i64::try_from(realtime_cursor).context("realtime_cursor does not fit into i64")?;
+
+        indexer_checkpoints::Entity::insert(indexer_checkpoints::ActiveModel {
+            bridge_id: ActiveValue::Set(bridge_id),
+            chain_id: ActiveValue::Set(chain_id),
+            catchup_min_cursor: ActiveValue::Set(start_block_i64),
+            catchup_max_cursor: ActiveValue::Set(catchup_max_cursor_i64),
+            finality_cursor: ActiveValue::Set(0),
+            realtime_cursor: ActiveValue::Set(realtime_cursor_i64),
+            created_at: ActiveValue::NotSet,
+            updated_at: ActiveValue::NotSet,
+        })
+        .on_conflict(
+            OnConflict::columns([
+                indexer_checkpoints::Column::BridgeId,
+                indexer_checkpoints::Column::ChainId,
+            ])
+            .value(
+                indexer_checkpoints::Column::CatchupMinCursor,
+                Expr::cust(
+                    "GREATEST(indexer_checkpoints.catchup_min_cursor, EXCLUDED.catchup_min_cursor)",
+                ),
+            )
+            .value(
+                indexer_checkpoints::Column::UpdatedAt,
+                Expr::current_timestamp(),
+            )
+            .to_owned(),
+        )
+        .exec(self.db.as_ref())
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                err = ?e,
+                bridge_id,
+                chain_id,
+                start_block,
+                "failed to seed catchup floor in database"
+            )
+        })?;
+
+        Ok(())
+    }
+
+    /// Lowers a pair's stored scan floor to `new_floor`, used only when the
+    /// configured `started_at_block` was lowered since the previous run. The
+    /// `catchup_min_cursor > $new_floor` predicate makes the statement
+    /// idempotent and unable to raise the floor. Returns the number of rows
+    /// affected (0 = no row yet, or already at/below the floor).
+    ///
+    /// `catchup_max_cursor` is **not** touched — lowering the floor does not
+    /// invalidate the downward frontier.
+    pub async fn lower_catchup_floor(
+        &self,
+        bridge_id: i32,
+        chain_id: i64,
+        new_floor: u64,
+    ) -> anyhow::Result<u64> {
+        let new_floor_i64 = i64::try_from(new_floor).context("new_floor does not fit into i64")?;
+
+        let result = indexer_checkpoints::Entity::update_many()
+            .col_expr(
+                indexer_checkpoints::Column::CatchupMinCursor,
+                Expr::value(new_floor_i64),
+            )
+            .col_expr(
+                indexer_checkpoints::Column::UpdatedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(indexer_checkpoints::Column::BridgeId.eq(bridge_id))
+            .filter(indexer_checkpoints::Column::ChainId.eq(chain_id))
+            .filter(indexer_checkpoints::Column::CatchupMinCursor.gt(new_floor_i64))
+            .exec(self.db.as_ref())
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    err = ?e,
+                    bridge_id,
+                    chain_id,
+                    new_floor,
+                    "failed to lower catchup floor in database"
+                )
+            })?;
+
+        Ok(result.rows_affected)
     }
 
     // INDEXER TABLE: indexer_failures
@@ -3922,6 +4073,287 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(checkpoints_count, 0);
+    }
+
+    // --- list_indexer_checkpoints / seed_catchup_floor / lower_catchup_floor
+    // (coding-task-4 Part B, work items 3, 5, 7) ---
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn list_indexer_checkpoints_filters_and_orders_deterministically() {
+        let db = init_db("list_indexer_checkpoints_filters").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .mark_catchup_complete(1, 100, 10, Some(100))
+            .await
+            .unwrap();
+        interchain_db
+            .mark_catchup_complete(1, 1, 10, Some(200))
+            .await
+            .unwrap();
+        interchain_db
+            .mark_catchup_complete(2, 1, 10, Some(300))
+            .await
+            .unwrap();
+
+        let pairs = |rows: &[indexer_checkpoints::Model]| -> Vec<(i32, i64)> {
+            rows.iter().map(|c| (c.bridge_id, c.chain_id)).collect()
+        };
+
+        let all = interchain_db
+            .list_indexer_checkpoints(None, None)
+            .await
+            .unwrap();
+        assert_eq!(pairs(&all), vec![(1, 1), (1, 100), (2, 1)]);
+
+        let bridge_1 = interchain_db
+            .list_indexer_checkpoints(Some(1), None)
+            .await
+            .unwrap();
+        assert_eq!(pairs(&bridge_1), vec![(1, 1), (1, 100)]);
+
+        let chain_1 = interchain_db
+            .list_indexer_checkpoints(None, Some(1))
+            .await
+            .unwrap();
+        assert_eq!(pairs(&chain_1), vec![(1, 1), (2, 1)]);
+
+        let both = interchain_db
+            .list_indexer_checkpoints(Some(2), Some(1))
+            .await
+            .unwrap();
+        assert_eq!(pairs(&both), vec![(2, 1)]);
+
+        let none = interchain_db
+            .list_indexer_checkpoints(Some(999), None)
+            .await
+            .unwrap();
+        assert!(
+            none.is_empty(),
+            "a filter matching nothing must return an empty list, not an error"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn seed_catchup_floor_inserts_row_when_none_exists() {
+        let db = init_db("seed_catchup_floor_inserts").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .seed_catchup_floor(1, 1, 1000, 5000, 6000)
+            .await
+            .unwrap();
+
+        let checkpoint = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(checkpoint.catchup_min_cursor, 1000);
+        assert_eq!(checkpoint.catchup_max_cursor, 5000);
+        assert_eq!(checkpoint.realtime_cursor, 6000);
+        assert_eq!(checkpoint.finality_cursor, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn seed_catchup_floor_heals_a_stored_zero() {
+        let db = init_db("seed_catchup_floor_heals_zero").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        // `mark_catchup_complete`'s insert path always stores
+        // `catchup_min_cursor = 0` -- the un-healed state the seed exists to fix.
+        interchain_db
+            .mark_catchup_complete(1, 1, 1000, Some(5000))
+            .await
+            .unwrap();
+        assert_eq!(
+            interchain_db
+                .get_checkpoint(1, 1)
+                .await
+                .unwrap()
+                .unwrap()
+                .catchup_min_cursor,
+            0
+        );
+
+        interchain_db
+            .seed_catchup_floor(1, 1, 1000, 999, 5000)
+            .await
+            .unwrap();
+        assert_eq!(
+            interchain_db
+                .get_checkpoint(1, 1)
+                .await
+                .unwrap()
+                .unwrap()
+                .catchup_min_cursor,
+            1000
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn seed_catchup_floor_does_not_lower_an_already_advanced_floor() {
+        let db = init_db("seed_catchup_floor_no_lower").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .seed_catchup_floor(1, 1, 5000, 999, 6000)
+            .await
+            .unwrap();
+        // A later restart with a lower configured `started_at_block` must not
+        // lower the floor -- that is the startup reconciliation's job, not
+        // the seed's.
+        interchain_db
+            .seed_catchup_floor(1, 1, 1000, 999, 6000)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            interchain_db
+                .get_checkpoint(1, 1)
+                .await
+                .unwrap()
+                .unwrap()
+                .catchup_min_cursor,
+            5000
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn seed_catchup_floor_conflict_clause_touches_only_the_floor_and_is_idempotent() {
+        let db = init_db("seed_catchup_floor_idempotent").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        interchain_db
+            .seed_catchup_floor(1, 1, 1000, 5000, 6000)
+            .await
+            .unwrap();
+        // A later restart supplies the current (moved) scan cursors -- the
+        // conflict clause must ignore them entirely, touching only the floor.
+        interchain_db
+            .seed_catchup_floor(1, 1, 1000, 4000, 7000)
+            .await
+            .unwrap();
+
+        let checkpoint = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(checkpoint.catchup_min_cursor, 1000);
+        assert_eq!(
+            checkpoint.catchup_max_cursor, 5000,
+            "conflict clause must not touch catchup_max_cursor"
+        );
+        assert_eq!(
+            checkpoint.realtime_cursor, 6000,
+            "conflict clause must not touch realtime_cursor"
+        );
+
+        // A second, identical call is idempotent.
+        interchain_db
+            .seed_catchup_floor(1, 1, 1000, 4000, 7000)
+            .await
+            .unwrap();
+        let checkpoint_again = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(checkpoint_again.catchup_min_cursor, 1000);
+        assert_eq!(checkpoint_again.catchup_max_cursor, 5000);
+        assert_eq!(checkpoint_again.realtime_cursor, 6000);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn lower_catchup_floor_is_idempotent_and_never_raises_or_touches_max_cursor() {
+        let db = init_db("lower_catchup_floor_idempotent").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        // No row yet: 0 rows affected.
+        assert_eq!(
+            interchain_db.lower_catchup_floor(1, 1, 500).await.unwrap(),
+            0
+        );
+
+        interchain_db
+            .seed_catchup_floor(1, 1, 1000, 5000, 6000)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            interchain_db.lower_catchup_floor(1, 1, 500).await.unwrap(),
+            1
+        );
+        let checkpoint = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(checkpoint.catchup_min_cursor, 500);
+        assert_eq!(
+            checkpoint.catchup_max_cursor, 5000,
+            "lowering the floor must not touch catchup_max_cursor"
+        );
+
+        // Already at the floor: idempotent, 0 rows affected.
+        assert_eq!(
+            interchain_db.lower_catchup_floor(1, 1, 500).await.unwrap(),
+            0
+        );
+        // Below the floor: must never raise it back up.
+        assert_eq!(
+            interchain_db.lower_catchup_floor(1, 1, 900).await.unwrap(),
+            0
+        );
+        assert_eq!(
+            interchain_db
+                .get_checkpoint(1, 1)
+                .await
+                .unwrap()
+                .unwrap()
+                .catchup_min_cursor,
+            500
+        );
+    }
+
+    /// End to end over the write path: seed the floor, then complete catch-up
+    /// via `mark_catchup_complete` exactly as `log_stream.rs` does (passing
+    /// `start_block - 1`, not `start_block` -- see `coding-task-4.md`'s Open
+    /// Questions item 1), then read. The floor must be untouched by
+    /// `mark_catchup_complete`, and `CatchupProgress::compute` must read the
+    /// pair as fully, 100% scanned.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn seed_then_mark_catchup_complete_reads_as_fully_scanned() {
+        let db = init_db("seed_then_mark_complete_end_to_end").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        let start_block = 1000u64;
+        interchain_db
+            .seed_catchup_floor(1, 1, start_block, 5000, 6000)
+            .await
+            .unwrap();
+        interchain_db
+            .mark_catchup_complete(1, 1, start_block - 1, None)
+            .await
+            .unwrap();
+
+        let checkpoint = interchain_db.get_checkpoint(1, 1).await.unwrap().unwrap();
+        assert_eq!(
+            checkpoint.catchup_min_cursor, start_block as i64,
+            "the floor must be untouched by mark_catchup_complete"
+        );
+        assert_eq!(checkpoint.catchup_max_cursor, (start_block - 1) as i64);
+
+        let progress = crate::indexer::progress::CatchupProgress::compute(
+            start_block,
+            Some(crate::indexer::progress::CheckpointCursors {
+                catchup_min_cursor: checkpoint.validated_catchup_min_cursor(),
+                catchup_max_cursor: checkpoint.validated_catchup_cursor(),
+                realtime_cursor: checkpoint.validated_realtime_cursor(),
+            }),
+        );
+        assert!(progress.scan_complete);
+        assert_eq!(progress.blocks_remaining, 0);
+        assert_eq!(progress.progress_percent, 100.0);
     }
 
     // --- indexer_failures accessors (coding-task-1 Part A, item 5/13) ---
