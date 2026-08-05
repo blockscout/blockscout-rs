@@ -33,8 +33,19 @@ pub struct FailureRetrySettings {
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub backoff_cap: Duration,
     /// Maximum number of `batch_size`-sized chunks replayed per retry tick,
-    /// across all due intervals. Bounds how much a large hole set can
-    /// back-pressure the realtime scan.
+    /// across all due intervals. The pass is awaited inside the driver's
+    /// `select!` loop, so for its whole duration neither the catch-up nor the
+    /// realtime stream is polled — bounding that pause is the entire purpose
+    /// of this knob.
+    ///
+    /// It bounds *chunks*, not time, so the pause is this value times the
+    /// per-chunk `eth_getLogs` latency. That distinction is why the default
+    /// is low: against a slow public endpoint 16 chunks measured ~87s, which
+    /// is longer than `scan_interval`, so the next tick was already due when
+    /// the pass returned and the forward streams made no progress between two
+    /// back-to-back passes. A low value costs replay throughput and never
+    /// coverage — the sweep's resume cursor continues the backlog on the next
+    /// tick.
     #[serde(default = "default_max_chunks_per_pass")]
     pub max_chunks_per_pass: usize,
     /// Number of attempts `FailureLedger::record` makes before the driver
@@ -111,7 +122,7 @@ fn default_backoff_cap() -> Duration {
 }
 
 fn default_max_chunks_per_pass() -> usize {
-    16
+    2
 }
 
 fn default_record_retry_attempts() -> u32 {

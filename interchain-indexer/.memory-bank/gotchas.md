@@ -1085,3 +1085,45 @@ failure recorded" but "will a replay of those blocks reconstruct everything the
 failed attempt consumed".
 
 ---
+
+## The Retry Pass Starves The Forward Streams, And That Looks Like RPC Failure
+
+**Symptom:** Catch-up and realtime stop logging for a minute or two, then a burst
+of `RPC request to node failed ... source: TimedOut` warnings appears for *every*
+configured chain at once, and only after that do the forward scans resume.
+Nothing is wrong with the endpoints — the retry pass was making successful
+`eth_getLogs` calls against the same node throughout.
+
+**Root cause:** `RangeDriver::run` is a single task with one `tokio::select!`
+([`range_driver.rs`](../interchain-indexer-logic/src/indexer/range_driver.rs)).
+`run_retry_tick` is awaited *inside* one branch, so while it runs the
+`stream.next()` branch is not polled and the combined log stream cannot advance.
+The pass is a sequential loop of up to `max_chunks_per_pass` chunks, each with an
+awaited `eth_getLogs` plus `process`, so the pause is
+`max_chunks_per_pass × per-chunk latency` — a bound in chunks, not in time.
+
+The timeout burst is a *consequence* of the pause, not a cause. The forward
+requests already in flight had their deadlines registered before the pass began.
+Their timers fire on schedule and wake the driver task, but the task is busy in
+the retry pass, so nothing is polled; the first poll after the pass returns
+`TimedOut` immediately. One warning per in-flight forward request — with N chains
+that is 2N warnings (catch-up plus realtime) inside the same millisecond, which
+is the signature to look for. A `scanning CATCHUP`/`scanning REALTIME` line is
+printed *before* the await, so it means "request issued", never "response
+received".
+
+Observed on Avalanche C-Chain: `max_chunks_per_pass = 16` against
+`api.avax.network` measured ~87s per pass, longer than the 60s `scan_interval`,
+so the tick was already due when the pass returned and two passes ran
+back-to-back with zero forward progress in between.
+
+**Fix:** Keep `max_chunks_per_pass` low — it is the only bound that exists, which
+is why the default is `2`. A low value costs replay throughput and never
+coverage: the sweep's resume cursor continues the backlog on the next tick. The
+real fix is to bound the pass by elapsed time, or to move it off the driver task
+entirely — the latter introduces `process()` running concurrently with the
+forward path (concurrent transactions over the same messages, concurrent AMB
+correlation state) and is a design change of the same class as the alternatives
+rejected in ADR-005.
+
+---
