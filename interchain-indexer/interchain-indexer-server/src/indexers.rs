@@ -3,7 +3,7 @@
 use crate::{BridgeConfig, BridgeContractConfig, ChainConfig, Settings, config::IndexerType};
 use alloy::{network::Ethereum, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Result};
-use interchain_indexer_entity::{bridge_contracts, sea_orm_active_enums::BridgeType};
+use interchain_indexer_entity::sea_orm_active_enums::BridgeType;
 use interchain_indexer_logic::{
     CrosschainIndexer, InterchainDatabase, StatsService,
     indexer::{
@@ -11,10 +11,7 @@ use interchain_indexer_logic::{
         avalanche::{AvalancheChainConfig, AvalancheIndexer},
     },
 };
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 pub async fn spawn_configured_indexers(
     stats: Arc<StatsService>,
@@ -607,154 +604,74 @@ pub fn enumerate_indexing_targets(bridges: &[BridgeConfig]) -> Vec<IndexingTarge
     targets
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FloorReconciliation {
-    /// The configured floor was lowered: assign the new, lower value.
-    Lower(u64),
-    /// Nothing to do — progress is preserved, or the seed's `GREATEST` handles it.
-    NoAction,
-}
-
-/// `prev` is the previous run's configured scan floor, read from `bridge_contracts`
-/// before `upsert_bridge_contracts` overwrites it. `None` means "previous unknown" —
-/// treating it as `0` would classify every legacy row as a raise and silently defeat
-/// the whole mechanism.
-pub(crate) fn decide_floor_reconciliation(prev: Option<u64>, new: u64) -> FloorReconciliation {
-    match prev {
-        Some(prev) if prev > new => FloorReconciliation::Lower(new),
-        // `prev == new` (progress preserved), `prev < new` (the seed's `GREATEST`
-        // raises it), and `prev == None` (unknown, not a raise) all take no action.
-        _ => FloorReconciliation::NoAction,
-    }
-}
-
-/// Derives the previous run's scan floor from the same `floor_contracts` the plan selected,
-/// but over `bridge_contracts` rows instead of config values, so `prev` and `new` can never
-/// disagree because of a rule mismatch (e.g. editing the AMB mediator's `started_at_block`
-/// must never look like a change in scanning). The selection rule is not re-derived here —
-/// it arrives from `ChainPlan`, which is the point.
+/// Enforces the invariant `catchup_min_cursor == the pair's configured scan floor`
+/// by lowering the stored value whenever configuration sits below it.
 ///
-/// Identity-scoped lookup: only the identities currently in `floor_contracts` (i.e. currently
-/// in config) are looked up by `(chain_id, address, version)`, `bridge_contracts`' unique key —
-/// a stale stored row for an address no longer in config can never influence the result.
+/// # Why this is allowed to be this simple
 ///
-/// Returns `None` ("previous unknown") whenever any floor contract has no stored row yet, or a
-/// stored row with `started_at_block IS NULL`. `bridge_contracts.started_at_block` is
-/// deliberately read directly (`Option<i64>`), never through
-/// `bridge_contracts::Model::validated_started_at_block()`, which maps `None` to `0` and
-/// would read a genuinely unknown previous value as a raise.
-fn derive_prev_floor(
-    bridge_id: i32,
-    chain_id: i64,
-    floor_contracts: &[&BridgeContractConfig],
-    stored: &[bridge_contracts::Model],
-) -> Option<u64> {
-    let lookup = |contract: &BridgeContractConfig| -> Option<i64> {
-        let stored_row = stored.iter().find(|row| {
-            row.chain_id == contract.chain_id
-                && row.address == contract.address
-                && row.version == contract.version
-        });
-
-        match stored_row {
-            Some(row) if row.started_at_block.is_none() => {
-                tracing::warn!(
-                    bridge_id,
-                    chain_id,
-                    kind = ?contract.kind,
-                    "stored bridge_contracts row has a NULL started_at_block; treating previous scan floor as unknown"
-                );
-                None
-            }
-            Some(row) => row.started_at_block,
-            None => {
-                tracing::debug!(
-                    bridge_id,
-                    chain_id,
-                    kind = ?contract.kind,
-                    "no stored bridge_contracts row yet for this configured contract; treating previous scan floor as unknown"
-                );
-                None
-            }
-        }
-    };
-
-    // `min` over the plan's floor contracts' stored values, mirroring
-    // `ChainPlan::start_block`'s `min` over their configured values. An empty
-    // set yields `None`, which is correct: with no contract defining the floor
-    // there is no previous floor to compare against either.
-    let mut floor: Option<u64> = None;
-    for contract in floor_contracts {
-        let value = u64::try_from(lookup(contract)?).ok()?;
-        floor = Some(floor.map_or(value, |current| current.min(value)));
-    }
-    floor
-}
-
-/// Detects a `started_at_block` that was lowered since the previous run and lowers the
-/// stored `catchup_min_cursor` to match.
+/// `catchup_min_cursor` is **not** a scan frontier today. It never advances with
+/// progress: the cursor-maintenance writer always supplies `0` and relies on
+/// `GREATEST(existing, 0)` purely to preserve whatever is there
+/// (`message_buffer/persistence.rs`). Exactly two writers move it —
+/// `seed_catchup_floor` (raise-only) and `lower_catchup_floor` (lower-only) — so the
+/// stored value *is* the previous run's configured floor, and comparing configuration
+/// against it directly is exact rather than a proxy.
 ///
-/// MUST be called BEFORE `upsert_bridge_contracts` — see `server.rs`. `bridge_contracts`
-/// only still holds the *previous* run's `started_at_block` in the window before that
-/// call's `ON CONFLICT` overwrites it; reordering this call breaks detection with no test
-/// failure unless the ordering itself is asserted.
+/// That is the whole licence for this function. An earlier design reconstructed the
+/// previous floor from `bridge_contracts.started_at_block` instead, in order to act
+/// only on a detected config *transition*. It could not survive a change to the
+/// identity set: adding a contract whose `started_at_block` is below the current floor
+/// leaves the new `(address, version)` without a stored row, the derived previous floor
+/// reads as unknown, nothing is lowered, and the same startup's
+/// `upsert_bridge_contracts` then writes the new value — after which the derived
+/// previous floor equals the configured one forever and the pair is pinned at the old
+/// floor permanently. Comparing against the checkpoint removes the proxy, and with it
+/// that failure, the ordering constraint against `upsert_bridge_contracts`, and the
+/// need to withhold contract rows to preserve evidence.
 ///
-/// Reconciles **every** bridge, including disabled ones. This is a deliberate deviation
-/// from the original design, which skipped disabled bridges here on the assumption that
-/// `upsert_bridge_contracts` would too. It does
-/// not: `server.rs` builds that payload from *all* configured bridges with no `enabled`
-/// filter, so a disabled bridge's stored `started_at_block` is refreshed regardless. Skipping
-/// it here would consume the previous value with nothing having looked at it, permanently
-/// defeating the reset for the sequence disable → lower `started_at_block` → restart →
-/// re-enable → restart. Lowering a stored floor for a disabled bridge is harmless — nothing
-/// indexes it, and `enumerate_indexing_targets` still excludes disabled bridges from the
-/// progress endpoint's output.
+/// # This is a workaround, and here is its expiry condition
 ///
-/// Never panics or propagates an error: every failure is logged and skipped, and the
-/// bridge's id is returned so the caller can withhold that bridge's `bridge_contracts` rows
-/// from this startup's `upsert_bridge_contracts` payload (see `bridges_pending_contracts_upsert`).
-/// Refreshing an unreconciled bridge's rows anyway would overwrite the only place the
-/// previous `started_at_block` survives, permanently losing the evidence needed to detect a
-/// lowered floor — no later restart could recover it, since `prev == new` forever after.
-/// Excluding it instead makes the failure retryable: the next startup sees the still-stale
-/// `bridge_contracts` row and can complete the reconciliation. This does **not** change the
-/// severity of the failure itself — it is still a `warn`, not fatal — it only ensures the
-/// failure does not become permanent.
+/// Enforcing `catchup_min_cursor == configured floor` is only correct while catch-up is
+/// **one-directional**. Under a bidirectional catch-up, `catchup_min_cursor` becomes the
+/// ascending frontier, so `configured_floor < stored` is true whenever the ascending walk
+/// has made any progress — this function would then fire on *every* startup and reset that
+/// walk each time. Not a one-off rescan: a loop.
 ///
-/// This is deliberately a `warn`, not fatal — safe only while catch-up is one-directional,
-/// because the downward scan takes its floor from the config value handed to
-/// `LogStream.genesis_block` and ignores `catchup_min_cursor` entirely, so a failed reset
-/// costs a wrong reading on the progress endpoint and loses no data. **Whoever makes
-/// `catchup_min_cursor` a real scan boundary must first make this write's failure fatal for
-/// the pair** — under a bidirectional indexer, the identical failure would silently drop the
-/// newly opened range instead of merely mis-reporting it.
+/// The correct shape there is to persist the floor in its own column, separate from the
+/// frontier, and reconcile against that. Then a lowered floor is applied by lowering the
+/// stored floor and setting `catchup_max_cursor` to `old_floor - 1`, which confines the
+/// rescan to exactly the newly opened range. That needs a migration, which is why it is
+/// not done here.
 ///
-/// Returns the set of bridge ids that could not be fully reconciled this startup (a failed
-/// `get_bridge_contracts` read, or a failed `lower_catchup_floor` write for any of the
-/// bridge's pairs).
-pub async fn reconcile_catchup_floors(
-    db: &InterchainDatabase,
-    bridges: &[BridgeConfig],
-) -> HashSet<i32> {
-    let mut unreconciled_bridges = HashSet::new();
-
+/// **Whoever makes `catchup_min_cursor` a real scan boundary must replace this function,
+/// not extend it** — and must also make its write failure fatal for the pair. Today a
+/// failed write is a `warn` because the downward scan takes its floor from the config value
+/// handed to `LogStream.genesis_block` and ignores `catchup_min_cursor` entirely, so the
+/// cost is a wrong reading on the progress endpoint and no lost data. Under a bidirectional
+/// indexer the identical failure would silently drop the newly opened range instead.
+///
+/// # Notes
+///
+/// No rescan is caused by lowering the floor in the current design. A completed catch-up
+/// left `catchup_max_cursor` at `old_floor - 1` (`mark_catchup_complete`), so the descending
+/// scan resumes exactly at the boundary; a catch-up still in progress has that cursor above
+/// the old floor and simply keeps walking past it.
+///
+/// The decision itself lives in SQL: `lower_catchup_floor` is
+/// `SET catchup_min_cursor = new WHERE catchup_min_cursor > new`. Calling it
+/// unconditionally is therefore both the raise-guard and the no-op case, and re-running it
+/// on an already-correct pair writes nothing.
+///
+/// Runs for **every** bridge, including disabled ones: a disabled bridge can be lowered and
+/// re-enabled later, nothing indexes it in the meantime, and `enumerate_indexing_targets`
+/// still excludes it from the progress endpoint. Never panics or propagates: each pair's
+/// failure is logged and skipped, and the next startup retries it — the invariant is
+/// re-enforced on every startup rather than detected once.
+pub async fn reconcile_catchup_floors(db: &InterchainDatabase, bridges: &[BridgeConfig]) {
     for bridge in bridges {
-        let stored_contracts = match db.get_bridge_contracts(bridge.bridge_id).await {
-            Ok(contracts) => contracts,
-            Err(err) => {
-                tracing::warn!(
-                    err = ?err,
-                    bridge_id = bridge.bridge_id,
-                    "failed to read stored bridge contracts for catchup floor reconciliation; skipping bridge"
-                );
-                unreconciled_bridges.insert(bridge.bridge_id);
-                continue;
-            }
-        };
-
         for plan in plan_bridge(bridge) {
             let chain_id = plan.chain_id;
-            let Some(new_floor) = plan.start_block() else {
+            let Some(floor) = plan.start_block() else {
                 tracing::warn!(
                     bridge_id = bridge.bridge_id,
                     chain_id,
@@ -763,83 +680,32 @@ pub async fn reconcile_catchup_floors(
                 continue;
             };
 
-            let prev_floor = derive_prev_floor(
-                bridge.bridge_id,
-                chain_id,
-                &plan.floor_contracts,
-                &stored_contracts,
-            );
-
-            if let FloorReconciliation::Lower(new_floor) =
-                decide_floor_reconciliation(prev_floor, new_floor)
+            match db
+                .lower_catchup_floor(bridge.bridge_id, chain_id, floor)
+                .await
             {
-                match db
-                    .lower_catchup_floor(bridge.bridge_id, chain_id, new_floor)
-                    .await
-                {
-                    Ok(rows_affected) => tracing::info!(
-                        bridge_id = bridge.bridge_id,
-                        chain_id,
-                        prev = ?prev_floor,
-                        new = new_floor,
-                        rows_affected,
-                        "lowered stored catchup floor to match a lowered configured started_at_block"
-                    ),
-                    Err(err) => {
-                        tracing::warn!(
-                            err = ?err,
-                            bridge_id = bridge.bridge_id,
-                            chain_id,
-                            prev = ?prev_floor,
-                            new = new_floor,
-                            "failed to lower catchup floor; startup continues, progress reporting may be stale for this pair"
-                        );
-                        unreconciled_bridges.insert(bridge.bridge_id);
-                    }
-                }
+                // `rows_affected == 0` is the common case: the stored floor already
+                // matches configuration, or configuration was raised and the seed's
+                // `GREATEST` owns that direction.
+                Ok(0) => {}
+                Ok(rows_affected) => tracing::info!(
+                    bridge_id = bridge.bridge_id,
+                    chain_id,
+                    floor,
+                    rows_affected,
+                    "lowered stored catchup floor to the configured scan floor"
+                ),
+                Err(err) => tracing::warn!(
+                    err = ?err,
+                    bridge_id = bridge.bridge_id,
+                    chain_id,
+                    floor,
+                    "failed to lower catchup floor; startup continues and the next one retries, \
+                     progress reporting may under-state this pair until then"
+                ),
             }
         }
     }
-
-    unreconciled_bridges
-}
-
-/// Bridges whose `bridge_contracts` rows should be refreshed by this startup's
-/// `upsert_bridge_contracts` call: every configured bridge except those
-/// `reconcile_catchup_floors` could not fully reconcile.
-///
-/// This is the fix for the permanence gap described on `reconcile_catchup_floors`: the
-/// previous run's `started_at_block` survives only in `bridge_contracts`, and
-/// `upsert_bridge_contracts`'s `ON CONFLICT` overwrites it a few statements later. Refreshing
-/// an unreconciled bridge's rows anyway destroys that evidence on the very startup that
-/// failed to act on it. Excluding the bridge instead defers the refresh — and with it, the
-/// reconciliation — to the next startup, where it can be retried.
-pub(crate) fn bridges_pending_contracts_upsert<'a>(
-    bridges: &'a [BridgeConfig],
-    unreconciled_bridges: &HashSet<i32>,
-) -> Vec<&'a BridgeConfig> {
-    // Partitioned rather than filtered with a logging side effect in the
-    // predicate: the warning must fire exactly once per skipped bridge, and a
-    // predicate that logs only does so while the consumer happens to drain the
-    // iterator fully. Returning a lazy iterator, or a caller reaching for
-    // `any()`/`take()`, would silently drop or duplicate the warnings — and
-    // this warning is the only signal that a refresh was deferred.
-    let (pending, skipped): (Vec<_>, Vec<_>) = bridges
-        .iter()
-        .partition(|bridge| !unreconciled_bridges.contains(&bridge.bridge_id));
-
-    for bridge in skipped {
-        tracing::warn!(
-            bridge_id = bridge.bridge_id,
-            "skipping bridge_contracts refresh this startup: catchup floor \
-             reconciliation could not be completed for this bridge, so overwriting \
-             started_at_block now would permanently lose the evidence needed to \
-             detect a lowered floor; deferring the refresh (and the reconciliation) \
-             to the next startup"
-        );
-    }
-
-    pending
 }
 
 #[cfg(test)]
@@ -1237,44 +1103,10 @@ mod tests {
         assert_eq!(pairs, vec![(1, 100), (1, 200), (2, 5)]);
     }
 
-    // --- decide_floor_reconciliation ---
-
-    #[test]
-    fn test_decide_floor_reconciliation_prev_greater_than_new_lowers() {
-        assert_eq!(
-            decide_floor_reconciliation(Some(1000), 500),
-            FloorReconciliation::Lower(500)
-        );
-    }
-
-    #[test]
-    fn test_decide_floor_reconciliation_prev_equal_new_no_action() {
-        assert_eq!(
-            decide_floor_reconciliation(Some(500), 500),
-            FloorReconciliation::NoAction
-        );
-    }
-
-    #[test]
-    fn test_decide_floor_reconciliation_prev_less_than_new_no_action() {
-        assert_eq!(
-            decide_floor_reconciliation(Some(100), 500),
-            FloorReconciliation::NoAction
-        );
-    }
-
-    #[test]
-    fn test_decide_floor_reconciliation_prev_none_no_action() {
-        assert_eq!(
-            decide_floor_reconciliation(None, 500),
-            FloorReconciliation::NoAction
-        );
-    }
-
     // --- reconcile_catchup_floors (DB-backed) ---
 
     use blockscout_service_launcher::test_database::TestDbGuard;
-    use interchain_indexer_entity::{bridges, chains};
+    use interchain_indexer_entity::{bridge_contracts, bridges, chains};
     use interchain_indexer_logic::indexer::progress::{CatchupProgress, CheckpointCursors};
     use sea_orm::ActiveValue::Set;
 
@@ -1317,10 +1149,9 @@ mod tests {
         .unwrap();
     }
 
-    /// Stores a `bridge_contracts` row directly, bypassing
-    /// `BridgeContractConfig::to_active_model` so `started_at_block` can be
-    /// `None` -- exercising the "previous unknown" fixture that
-    /// `BridgeContractConfig` (a required `u64` in config) cannot represent.
+    /// Stores a `bridge_contracts` row directly. Nothing in the reconciliation
+    /// reads this table any more; the fixtures that still use it exist
+    /// precisely to prove that its contents cannot influence the outcome.
     async fn store_bridge_contract(
         db: &InterchainDatabase,
         bridge_id: i32,
@@ -1351,6 +1182,41 @@ mod tests {
             .catchup_min_cursor
     }
 
+    /// Mirrors what `server.rs` does after the reconciliation.
+    async fn upsert_configured_contracts(db: &InterchainDatabase, bridges: &[BridgeConfig]) {
+        let payload: Vec<bridge_contracts::ActiveModel> = bridges
+            .iter()
+            .flat_map(|bridge| {
+                bridge
+                    .contracts
+                    .iter()
+                    .map(move |contract| contract.to_active_model(bridge.bridge_id))
+            })
+            .collect();
+        db.upsert_bridge_contracts(payload).await.unwrap();
+    }
+
+    async fn progress_for(
+        db: &InterchainDatabase,
+        bridge_id: i32,
+        chain_id: i64,
+        start_block: u64,
+    ) -> CatchupProgress {
+        let checkpoint = db
+            .get_checkpoint(bridge_id as u64, chain_id as u64)
+            .await
+            .unwrap()
+            .expect("checkpoint row must exist");
+        CatchupProgress::compute(
+            start_block,
+            Some(CheckpointCursors {
+                catchup_min_cursor: checkpoint.validated_catchup_min_cursor(),
+                catchup_max_cursor: checkpoint.validated_catchup_cursor(),
+                realtime_cursor: checkpoint.validated_realtime_cursor(),
+            }),
+        )
+    }
+
     /// Encodes the exact bug the reconciliation exists to fix (ADR-005): a
     /// lowered `started_at_block` left un-reconciled makes a fully-scanned
     /// stale floor read as "complete" for the *widened* range, forever.
@@ -1364,12 +1230,17 @@ mod tests {
         let db = InterchainDatabase::new(test_db.client());
         seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
 
-        // Previous run: started_at_block = 1000, stored in bridge_contracts,
-        // catch-up already completed (X = 999).
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(1000)).await;
+        // Previous run: floor 1000, catch-up already completed (X = 999).
         db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 1000, 999, 2000)
             .await
             .unwrap();
+
+        // Without reconciliation, the stale floor (1000) against the new, lower
+        // start_block (500) reports the widened range as complete -- exactly
+        // the bug this feature exists to fix.
+        let stale_progress = progress_for(&db, BRIDGE_ID, CHAIN_ID, 500).await;
+        assert!(stale_progress.scan_complete);
+        assert_eq!(stale_progress.blocks_remaining, 0);
 
         let new_config = vec![bridge(
             BRIDGE_ID,
@@ -1377,21 +1248,6 @@ mod tests {
             true,
             vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
         )];
-
-        // Without reconciliation, the stale floor (1000) against the new,
-        // lower start_block (500) reports the widened range as complete --
-        // exactly the bug this feature exists to fix.
-        let stale_progress = CatchupProgress::compute(
-            500,
-            Some(CheckpointCursors {
-                catchup_min_cursor: checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await as u64,
-                catchup_max_cursor: 999,
-                realtime_cursor: 2000,
-            }),
-        );
-        assert!(stale_progress.scan_complete);
-        assert_eq!(stale_progress.blocks_remaining, 0);
-
         reconcile_catchup_floors(&db, &new_config).await;
 
         let checkpoint = db
@@ -1402,24 +1258,155 @@ mod tests {
         assert_eq!(checkpoint.catchup_min_cursor, 500);
         assert_eq!(
             checkpoint.catchup_max_cursor, 999,
-            "reconciliation must not touch catchup_max_cursor"
+            "reconciliation must not touch catchup_max_cursor: a completed catch-up already \
+             left it at old_floor - 1, which is exactly where the reopened scan resumes"
         );
 
-        let fixed_progress = CatchupProgress::compute(
-            500,
-            Some(CheckpointCursors {
-                catchup_min_cursor: checkpoint.validated_catchup_min_cursor(),
-                catchup_max_cursor: checkpoint.validated_catchup_cursor(),
-                realtime_cursor: checkpoint.validated_realtime_cursor(),
-            }),
-        );
+        let fixed_progress = progress_for(&db, BRIDGE_ID, CHAIN_ID, 500).await;
         assert!(!fixed_progress.scan_complete);
         assert_eq!(fixed_progress.blocks_remaining, 500);
     }
 
+    /// The review finding this rewrite exists for: adding a contract identity
+    /// whose `started_at_block` sits below the current floor. The previous
+    /// design derived the previous floor from `bridge_contracts` and read
+    /// "unknown" here, because the new `(address, version)` has no stored row
+    /// yet -- so it did nothing, and the same startup's
+    /// `upsert_bridge_contracts` then destroyed the only evidence that the pair
+    /// used to start higher, pinning it at the old floor permanently.
+    ///
+    /// Comparing configuration against `catchup_min_cursor` instead fixes it on
+    /// the *first* startup, and the second startup is asserted too because that
+    /// is where the old design was unrecoverable.
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn reconcile_catchup_floors_unchanged_config_value_leaves_advanced_floor_untouched() {
+    async fn reconcile_catchup_floors_new_lower_floor_identity_is_applied_on_the_first_startup() {
+        const BRIDGE_ID: i32 = 1;
+        const CHAIN_ID: i64 = 1;
+
+        let test_db = init_db("reconcile_new_lower_identity").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
+
+        // Prior state: one identity at 1000, its row stored, catch-up complete.
+        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(1000)).await;
+        db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 1000, 999, 2000)
+            .await
+            .unwrap();
+
+        // Config gains a second identity starting at 500. The old entry stays.
+        let widened_config = vec![bridge(
+            BRIDGE_ID,
+            BridgeType::AvalancheNative,
+            true,
+            vec![
+                contract_with_address(CHAIN_ID, None, 1000, 1, 0xAA),
+                contract_with_address(CHAIN_ID, None, 500, 1, 0xBB),
+            ],
+        )];
+
+        // Startup #1, in server.rs order: reconcile, then refresh contracts.
+        reconcile_catchup_floors(&db, &widened_config).await;
+        upsert_configured_contracts(&db, &widened_config).await;
+
+        assert_eq!(
+            checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await,
+            500,
+            "a newly added identity below the current floor must lower it immediately"
+        );
+        let progress = progress_for(&db, BRIDGE_ID, CHAIN_ID, 500).await;
+        assert!(
+            !progress.scan_complete,
+            "the reopened range must not read as complete while it is being rescanned"
+        );
+        assert_eq!(progress.blocks_remaining, 500);
+
+        // Startup #2: both identities now have stored rows -- the state in
+        // which the old design was permanently stuck. Nothing more to do, and
+        // nothing undone.
+        reconcile_catchup_floors(&db, &widened_config).await;
+        assert_eq!(checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await, 500);
+        assert_eq!(
+            progress_for(&db, BRIDGE_ID, CHAIN_ID, 500)
+                .await
+                .blocks_remaining,
+            500
+        );
+    }
+
+    /// The ordering constraint the old design carried, asserted inverted: the
+    /// contracts refresh runs *first* here, and the floor is still lowered.
+    /// `bridge_contracts` is not an input any more, so no call order can break
+    /// detection.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn reconcile_catchup_floors_is_independent_of_the_contracts_upsert_order() {
+        const BRIDGE_ID: i32 = 1;
+        const CHAIN_ID: i64 = 1;
+
+        let test_db = init_db("reconcile_independent_of_upsert_order").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
+
+        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(1000)).await;
+        db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 1000, 999, 2000)
+            .await
+            .unwrap();
+
+        let lowered_config = vec![bridge(
+            BRIDGE_ID,
+            BridgeType::AvalancheNative,
+            true,
+            vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
+        )];
+
+        // Deliberately the order that broke the old design.
+        upsert_configured_contracts(&db, &lowered_config).await;
+        reconcile_catchup_floors(&db, &lowered_config).await;
+
+        assert_eq!(checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await, 500);
+    }
+
+    /// `bridge_contracts` rows cannot influence the outcome, however stale:
+    /// this fixture stores a row for an address no longer in config carrying a
+    /// far lower value, and the floor must stay at the configured one.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn reconcile_catchup_floors_stale_contract_rows_cannot_influence_the_floor() {
+        const BRIDGE_ID: i32 = 1;
+        const CHAIN_ID: i64 = 1;
+
+        let test_db = init_db("reconcile_stale_rows_ignored").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
+
+        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xFF; 20], 1, None, Some(10)).await;
+        // A second stale row with a NULL value: the fixture that used to read
+        // as "previous unknown" and suppress the write entirely.
+        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xEE; 20], 1, None, None).await;
+        db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 500, 999, 2000)
+            .await
+            .unwrap();
+
+        let config = vec![bridge(
+            BRIDGE_ID,
+            BridgeType::AvalancheNative,
+            true,
+            vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
+        )];
+
+        reconcile_catchup_floors(&db, &config).await;
+
+        assert_eq!(
+            checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await,
+            500,
+            "neither a stale lower value nor a NULL one may reach the decision"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn reconcile_catchup_floors_unchanged_config_value_writes_nothing() {
         const BRIDGE_ID: i32 = 1;
         const CHAIN_ID: i64 = 1;
 
@@ -1427,7 +1414,6 @@ mod tests {
         let db = InterchainDatabase::new(test_db.client());
         seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
 
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(800)).await;
         db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 800, 999, 2000)
             .await
             .unwrap();
@@ -1454,7 +1440,6 @@ mod tests {
         let db = InterchainDatabase::new(test_db.client());
         seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
 
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(500)).await;
         db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 500, 999, 2000)
             .await
             .unwrap();
@@ -1483,72 +1468,6 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn reconcile_catchup_floors_null_previous_started_at_block_performs_no_write() {
-        const BRIDGE_ID: i32 = 1;
-        const CHAIN_ID: i64 = 1;
-
-        let test_db = init_db("reconcile_null_previous_no_write").await;
-        let db = InterchainDatabase::new(test_db.client());
-        seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
-
-        // Stored row exists but `started_at_block IS NULL`.
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, None).await;
-
-        let config = vec![bridge(
-            BRIDGE_ID,
-            BridgeType::AvalancheNative,
-            true,
-            vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
-        )];
-
-        reconcile_catchup_floors(&db, &config).await;
-
-        assert!(
-            db.get_checkpoint(BRIDGE_ID as u64, CHAIN_ID as u64)
-                .await
-                .unwrap()
-                .is_none(),
-            "a NULL previous value must not be treated as a raise, and no checkpoint row exists to write to"
-        );
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database"]
-    async fn reconcile_catchup_floors_stale_row_for_removed_address_does_not_influence_decision() {
-        const BRIDGE_ID: i32 = 1;
-        const CHAIN_ID: i64 = 1;
-
-        let test_db = init_db("reconcile_stale_row_ignored").await;
-        let db = InterchainDatabase::new(test_db.client());
-        seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
-
-        // A stale row for an address no longer in config, with a lowered
-        // value that must NOT influence the decision.
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xFF; 20], 1, None, Some(10)).await;
-        // The actually-configured contract has no stored row yet (identity
-        // mismatch: different address), so `prev` must read as unknown.
-        db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 500, 999, 2000)
-            .await
-            .unwrap();
-
-        let config = vec![bridge(
-            BRIDGE_ID,
-            BridgeType::AvalancheNative,
-            true,
-            vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
-        )];
-
-        reconcile_catchup_floors(&db, &config).await;
-
-        assert_eq!(
-            checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await,
-            500,
-            "a stale row for a different address must not drive the floor down to 10"
-        );
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database"]
     async fn reconcile_catchup_floors_amb_pair_only_resets_on_amb_proxy_lowered() {
         const BRIDGE_ID: i32 = 1;
         const CHAIN_ID: i64 = 1;
@@ -1557,26 +1476,6 @@ mod tests {
         let db = InterchainDatabase::new(test_db.client());
         seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
 
-        store_bridge_contract(
-            &db,
-            BRIDGE_ID,
-            CHAIN_ID,
-            &[0xAA; 20],
-            1,
-            Some("amb_proxy"),
-            Some(1000),
-        )
-        .await;
-        store_bridge_contract(
-            &db,
-            BRIDGE_ID,
-            CHAIN_ID,
-            &[0xBB; 20],
-            1,
-            Some("omnibridge_mediator"),
-            Some(2000),
-        )
-        .await;
         db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 1000, 999, 5000)
             .await
             .unwrap();
@@ -1617,60 +1516,13 @@ mod tests {
         );
     }
 
-    /// Acceptance criterion 7: the reconciliation must read `bridge_contracts`
-    /// *before* `upsert_bridge_contracts` overwrites it. This test invokes both
-    /// in the exact order `server.rs::run` uses and asserts both outcomes: the
-    /// lowered value is detected *and* `bridge_contracts` ends up holding the
-    /// new value afterward.
+    /// A failed write is a `warn`, and the next startup retries it. The old
+    /// design needed `bridges_pending_contracts_upsert` to withhold contract
+    /// rows so the retry could still detect the change; with the checkpoint as
+    /// the input there is no evidence to preserve, so the retry is inherent.
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn reconcile_catchup_floors_runs_before_upsert_bridge_contracts_detects_lowered_value() {
-        const BRIDGE_ID: i32 = 1;
-        const CHAIN_ID: i64 = 1;
-
-        let test_db = init_db("reconcile_ordering_before_upsert_bridge_contracts").await;
-        let db = InterchainDatabase::new(test_db.client());
-        seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
-
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(1000)).await;
-        db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 1000, 999, 2000)
-            .await
-            .unwrap();
-
-        let lowered_config = vec![bridge(
-            BRIDGE_ID,
-            BridgeType::AvalancheNative,
-            true,
-            vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
-        )];
-
-        // Exact order server.rs::run uses: reconcile, THEN upsert_bridge_contracts.
-        reconcile_catchup_floors(&db, &lowered_config).await;
-        let bridge_contracts: Vec<bridge_contracts::ActiveModel> = lowered_config
-            .iter()
-            .flat_map(|bridge| {
-                bridge
-                    .contracts
-                    .iter()
-                    .map(move |contract| contract.to_active_model(bridge.bridge_id))
-            })
-            .collect();
-        db.upsert_bridge_contracts(bridge_contracts).await.unwrap();
-
-        // Detection worked (the reset fired before the overwrite).
-        assert_eq!(checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await, 500);
-        // And bridge_contracts now holds the new value.
-        let stored = db.get_bridge_contracts(BRIDGE_ID).await.unwrap();
-        let stored_contract = stored
-            .iter()
-            .find(|row| row.chain_id == CHAIN_ID && row.address == vec![0xAA; 20])
-            .expect("stored contract row must exist");
-        assert_eq!(stored_contract.started_at_block, Some(500));
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database"]
-    async fn reconcile_catchup_floors_failed_write_does_not_panic_or_propagate() {
+    async fn reconcile_catchup_floors_failed_write_is_warn_only_and_retried_next_startup() {
         const BRIDGE_ID: i32 = 1;
         const CHAIN_ID: i64 = 1;
 
@@ -1678,49 +1530,6 @@ mod tests {
         let db = InterchainDatabase::new(test_db.client());
         seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
 
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(1000)).await;
-        db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 1000, 999, 2000)
-            .await
-            .unwrap();
-
-        // Sever the connection so every subsequent accessor call fails.
-        db.db.close_by_ref().await.unwrap();
-
-        let lowered_config = vec![bridge(
-            BRIDGE_ID,
-            BridgeType::AvalancheNative,
-            true,
-            vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
-        )];
-
-        // `reconcile_catchup_floors` never panics or propagates a `Result` --
-        // a failure here is reported only via the returned bridge-id set, so
-        // this must simply not panic, and the bridge must come back as
-        // unreconciled (the connection is closed, so `get_bridge_contracts`
-        // itself fails).
-        let unreconciled = reconcile_catchup_floors(&db, &lowered_config).await;
-        assert!(unreconciled.contains(&BRIDGE_ID));
-    }
-
-    /// Regression test for the permanence gap fixed by
-    /// `bridges_pending_contracts_upsert`: a bridge whose reconciliation could
-    /// not be completed this startup must not have its `bridge_contracts` row
-    /// refreshed, or the previous `started_at_block` -- the only place that
-    /// value survives -- is overwritten on the very startup that failed to
-    /// act on it, so `prev == new` forever after and no later restart can
-    /// ever detect the lowering. This test fails if the exclusion in
-    /// `bridges_pending_contracts_upsert` is removed.
-    #[tokio::test]
-    #[ignore = "needs database"]
-    async fn bridges_pending_contracts_upsert_excludes_unreconciled_bridge_and_permits_retry() {
-        const BRIDGE_ID: i32 = 1;
-        const CHAIN_ID: i64 = 1;
-
-        let test_db = init_db("bridges_pending_upsert_excludes_unreconciled").await;
-        let db = InterchainDatabase::new(test_db.client());
-        seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
-
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(1000)).await;
         db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 1000, 999, 2000)
             .await
             .unwrap();
@@ -1732,10 +1541,9 @@ mod tests {
             vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
         )];
 
-        // Startup #1: an independent connection to the same test database,
-        // closed before use, stands in for a transient DB failure during
-        // this bridge's reconciliation -- without disturbing `db`'s own
-        // connection, so the rest of the test can keep using it.
+        // Startup #1: an independent handle to the same test database, closed
+        // before use, stands in for a transient DB failure -- without
+        // disturbing `db`'s own connection.
         let broken_conn = Arc::new(
             sea_orm::Database::connect(test_db.db_url())
                 .await
@@ -1747,67 +1555,24 @@ mod tests {
             .expect("close the second handle before use");
         let failing_db = InterchainDatabase::new(broken_conn);
 
-        let unreconciled = reconcile_catchup_floors(&failing_db, &lowered_config).await;
-        assert!(
-            unreconciled.contains(&BRIDGE_ID),
-            "a failed read or write during reconciliation must mark the bridge unreconciled"
-        );
-
-        let pending = bridges_pending_contracts_upsert(&lowered_config, &unreconciled);
-        assert!(
-            pending.is_empty(),
-            "an unreconciled bridge must be excluded from this startup's bridge_contracts upsert"
-        );
-        let bridge_contracts_payload: Vec<bridge_contracts::ActiveModel> = pending
-            .into_iter()
-            .flat_map(|bridge| {
-                bridge
-                    .contracts
-                    .iter()
-                    .map(move |contract| contract.to_active_model(bridge.bridge_id))
-            })
-            .collect();
-        if !bridge_contracts_payload.is_empty() {
-            db.upsert_bridge_contracts(bridge_contracts_payload)
-                .await
-                .unwrap();
-        }
-
-        // bridge_contracts must still hold the OLD value: nothing refreshed it.
-        let stored = db.get_bridge_contracts(BRIDGE_ID).await.unwrap();
-        let stored_contract = stored
-            .iter()
-            .find(|row| row.chain_id == CHAIN_ID && row.address == vec![0xAA; 20])
-            .expect("stored contract row must exist");
-        assert_eq!(
-            stored_contract.started_at_block,
-            Some(1000),
-            "bridge_contracts must still hold the previous run's value; a failed \
-             reconciliation must not let it be overwritten"
-        );
-        // And the floor was never lowered on this failed startup.
-        assert_eq!(checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await, 1000);
-
-        // Startup #2, same config, on a healthy connection: because
-        // bridge_contracts still holds the pre-lowering value, reconciliation
-        // now detects the lowering and fixes the floor.
-        let unreconciled_second = reconcile_catchup_floors(&db, &lowered_config).await;
-        assert!(unreconciled_second.is_empty());
+        // Must not panic and must not propagate.
+        reconcile_catchup_floors(&failing_db, &lowered_config).await;
         assert_eq!(
             checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await,
-            500,
-            "the second startup must retry and detect the lowering the first startup could \
-             not confirm"
+            1000,
+            "a failed write must leave the stored floor alone"
         );
+
+        // Startup #2 on a healthy connection: nothing had to be preserved for
+        // this to work.
+        reconcile_catchup_floors(&db, &lowered_config).await;
+        assert_eq!(checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await, 500);
     }
 
-    /// Regression test for the disabled-bridge deviation documented on
-    /// `reconcile_catchup_floors`: `server.rs` upserts `bridge_contracts` for
-    /// every configured bridge regardless of `enabled`, so reconciliation
-    /// must cover disabled bridges too, or a disable → lower
-    /// `started_at_block` → restart → re-enable → restart sequence consumes
-    /// the previous value with nothing having looked at it, and the stored
-    /// floor never lowers.
+    /// Disabled bridges are reconciled too. Under the old design that was
+    /// load-bearing because the contracts refresh covered disabled bridges and
+    /// would consume the previous value unseen; it now simply means a bridge
+    /// lowered while disabled is already correct when it is re-enabled.
     #[tokio::test]
     #[ignore = "needs database"]
     async fn reconcile_catchup_floors_disabled_bridge_lowered_then_reenabled_ends_up_lowered() {
@@ -1818,9 +1583,6 @@ mod tests {
         let db = InterchainDatabase::new(test_db.client());
         seed_bridge_and_chain(&db, BRIDGE_ID, CHAIN_ID).await;
 
-        // Prior state: the bridge ran enabled with started_at_block = 1000
-        // and completed catch-up.
-        store_bridge_contract(&db, BRIDGE_ID, CHAIN_ID, &[0xAA; 20], 1, None, Some(1000)).await;
         db.seed_catchup_floor(BRIDGE_ID, CHAIN_ID, 1000, 999, 2000)
             .await
             .unwrap();
@@ -1833,43 +1595,19 @@ mod tests {
             false,
             vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
         )];
+        reconcile_catchup_floors(&db, &disabled_lowered_config).await;
+        upsert_configured_contracts(&db, &disabled_lowered_config).await;
 
-        let unreconciled = reconcile_catchup_floors(&db, &disabled_lowered_config).await;
-        assert!(unreconciled.is_empty());
+        assert_eq!(checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await, 500);
 
-        // Mirrors server.rs: `bridges_pending_contracts_upsert` excludes only
-        // unreconciled bridges, never disabled ones.
-        let bridge_contracts_payload: Vec<bridge_contracts::ActiveModel> =
-            bridges_pending_contracts_upsert(&disabled_lowered_config, &unreconciled)
-                .into_iter()
-                .flat_map(|bridge| {
-                    bridge
-                        .contracts
-                        .iter()
-                        .map(move |contract| contract.to_active_model(bridge.bridge_id))
-                })
-                .collect();
-        db.upsert_bridge_contracts(bridge_contracts_payload)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await,
-            500,
-            "a disabled bridge must still be reconciled before its bridge_contracts row is \
-             refreshed, or the lowering is lost permanently"
-        );
-
-        // Restart #2: the operator re-enables the bridge; started_at_block is
-        // unchanged from restart #1.
+        // Restart #2: re-enabled, started_at_block unchanged.
         let reenabled_config = vec![bridge(
             BRIDGE_ID,
             BridgeType::AvalancheNative,
             true,
             vec![contract_with_address(CHAIN_ID, None, 500, 1, 0xAA)],
         )];
-        let unreconciled_second = reconcile_catchup_floors(&db, &reenabled_config).await;
-        assert!(unreconciled_second.is_empty());
+        reconcile_catchup_floors(&db, &reenabled_config).await;
 
         assert_eq!(
             checkpoint_floor(&db, BRIDGE_ID, CHAIN_ID).await,

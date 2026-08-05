@@ -2,10 +2,7 @@
 
 use crate::{
     create_provider_pools_from_chains,
-    indexers::{
-        IndexingTarget, bridges_pending_contracts_upsert, enumerate_indexing_targets,
-        reconcile_catchup_floors,
-    },
+    indexers::{IndexingTarget, enumerate_indexing_targets, reconcile_catchup_floors},
     load_bridges_from_file, load_chains_from_file,
     proto::{
         health_actix::route_health, health_server::HealthServer,
@@ -380,31 +377,23 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     // two can never disagree.
     let targets = Arc::new(enumerate_indexing_targets(&bridges));
 
-    // ORDERING-CRITICAL: must run before `upsert_bridge_contracts` a few
-    // lines down. The reconciliation reads `bridge_contracts` to learn the
-    // *previous* run's `started_at_block`, which only still holds the old
-    // value in the window before `upsert_bridge_contracts`'s `ON CONFLICT`
-    // overwrites it. Reordering this breaks floor reset detection with no
-    // test failure unless the ordering itself is asserted (see
-    // `interchain-indexer-server/src/indexers.rs` tests).
-    //
-    // Bridges this call could not fully reconcile are excluded from the
-    // upsert payload below, via `bridges_pending_contracts_upsert`: refreshing
-    // an unreconciled bridge's `bridge_contracts` rows here would overwrite
-    // the only place the previous `started_at_block` survives, permanently
-    // losing the evidence needed to detect a lowered floor.
-    let unreconciled_bridges = reconcile_catchup_floors(&db, &bridges).await;
+    // Order-independent by construction: the reconciliation compares the
+    // configured scan floor against `indexer_checkpoints.catchup_min_cursor`
+    // and never reads `bridge_contracts`, so it does not care whether the
+    // upsert below has run. An earlier version derived the previous floor from
+    // `bridge_contracts` and had to run first — see `reconcile_catchup_floors`
+    // for why that proxy was removed.
+    reconcile_catchup_floors(&db, &bridges).await;
 
-    let bridge_contracts: Vec<bridge_contracts::ActiveModel> =
-        bridges_pending_contracts_upsert(&bridges, &unreconciled_bridges)
-            .into_iter()
-            .flat_map(|bridge| {
-                bridge
-                    .contracts
-                    .iter()
-                    .map(move |contract| contract.to_active_model(bridge.bridge_id))
-            })
-            .collect();
+    let bridge_contracts: Vec<bridge_contracts::ActiveModel> = bridges
+        .iter()
+        .flat_map(|bridge| {
+            bridge
+                .contracts
+                .iter()
+                .map(move |contract| contract.to_active_model(bridge.bridge_id))
+        })
+        .collect();
     if !bridge_contracts.is_empty() {
         db.upsert_bridge_contracts(bridge_contracts.clone()).await?;
     }

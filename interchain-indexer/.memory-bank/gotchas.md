@@ -1127,3 +1127,57 @@ correlation state) and is a design change of the same class as the alternatives
 rejected in ADR-005.
 
 ---
+
+## `catchup_min_cursor` Is A Stored Floor, Not A Frontier — And Code Depends On That
+
+**Symptom:** none yet. This is the precondition a whole startup path silently
+rests on, recorded so the next person to touch cursor semantics sees it before
+they break it.
+
+**Root cause:** the name suggests a moving lower boundary, symmetric with
+`catchup_max_cursor`. It is not. `catchup_min_cursor` never advances with
+progress: `upsert_cursors` always supplies `0` for it and relies on
+`GREATEST(existing, 0)` purely to preserve whatever is stored
+([`message_buffer/persistence.rs`](../interchain-indexer-logic/src/message_buffer/persistence.rs)).
+Exactly two writers move it — `seed_catchup_floor` (raise-only) and
+`lower_catchup_floor` (lower-only) — so its value is the pair's configured scan
+floor and nothing else.
+
+`reconcile_catchup_floors` is licensed by precisely that. It enforces
+`catchup_min_cursor == configured floor` by lowering the stored value whenever
+configuration sits below it, unconditionally, every startup. That is exact only
+because the stored value is a floor. Make it a frontier and the same comparison
+becomes true whenever the ascending walk has progressed, so the pass would reset
+that walk on **every** restart — a loop, not a one-off rescan. ADR-007 states the
+expiry condition and the replacement (a dedicated floor column, plus
+`catchup_max_cursor = old_floor - 1` to bound the rescan); ADR-005 records why
+the failed write is only a `warn` today and why that must change too.
+
+**Fix:** if you make `catchup_min_cursor` a real scan boundary, replace
+`reconcile_catchup_floors` rather than extending it, and read ADR-007 first. The
+tell that you are in this situation: you are adding a writer that raises
+`catchup_min_cursor` for a reason other than a configuration change.
+
+---
+
+## Lowering A Scan Floor Does Not Cause A Rescan
+
+**Symptom:** an operator expects lowering `started_at_block` to re-fetch
+everything above the new floor, and plans a maintenance window for it.
+
+**Root cause:** the descending catch-up resumes from `catchup_max_cursor`, and a
+completed catch-up left that cursor at `old_floor - 1` (`mark_catchup_complete`),
+which is exactly the top of the newly opened range. A catch-up still in progress
+has the cursor above the old floor and simply keeps walking past it to the new
+one. Either way only `[new_floor, old_floor - 1]` is fetched.
+
+The reconciliation deliberately does not touch `catchup_max_cursor` for this
+reason — writing it would at best be a no-op and at worst re-fetch a block.
+
+**Fix:** nothing to do. The case that *does* rescan is the asymmetric one:
+raising a floor and later restoring it re-fetches the range between the two
+floors, because the raise let catch-up complete above the old floor and the
+descending cursor moved on. Rows there are re-derived, not duplicated. Plan floor
+changes as deliberate rescans only in that direction.
+
+---

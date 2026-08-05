@@ -106,18 +106,13 @@ Both directions are supported; neither deletes anything already indexed.
 
 **Raising it.** Catch-up stops higher, and the stored floor is raised at startup. Blocks already indexed below the new floor stay in the database and are still served by the message APIs — they simply stop counting toward `catchup_blocks_remaining` and `catchup_progress_percent`, so reported progress can jump.
 
-**Lowering it.** The newly opened range *is* scanned. Catch-up walks downward from `catchup_max_cursor` to the configured floor, and a previously completed catch-up left that cursor at `old_floor - 1`, so the scan resumes exactly at the boundary and continues to the new floor.
+**Lowering it.** The newly opened range *is* scanned. Catch-up walks downward from `catchup_max_cursor` to the configured floor, and a previously completed catch-up left that cursor at `old_floor - 1`, so the scan resumes exactly at the boundary and continues to the new floor. Nothing above the old floor is re-fetched.
 
-The stored floor needs separate handling, because the cursor-maintenance writer can only ever raise it. A startup pass compares the configured floor against the previous run's value — read from `bridge_contracts` in the window *before* that table is refreshed — and lowers `catchup_min_cursor` when the configured value dropped.
+The stored floor needs separate handling, because the cursor-maintenance writer can only ever raise it. A startup pass compares the configured floor against the stored `catchup_min_cursor` and lowers the stored value whenever configuration sits below it — so the two are back in agreement on the first restart after any floor change, however the change was expressed: editing `started_at_block` on an existing entry, or adding a new contract entry whose value is lower.
 
-If that write fails, startup continues with a `warn` and the affected bridge's `bridge_contracts` rows are withheld, so the next restart can still detect the change. Until then **the scan is correct and only the reported progress under-states the remaining work**, because the scan takes its floor from config while the report reads the stored one.
+If that write fails, startup continues with a `warn` and the next restart re-applies it — the pass enforces the agreement every time rather than detecting a one-off transition. Until then **the scan is correct and only the reported progress under-states the remaining work**, because the scan takes its floor from config while the report reads the stored one.
 
-Two consequences worth knowing:
-
-- Lowering the floor and adding a new contract version *in the same edit* defers the floor reconciliation by one restart: the new version has no stored row yet, so the previous floor reads as unknown and is not treated as a change. The following restart applies it.
-- Restoring a floor you previously raised is not symmetric with never having raised it: the range between the two floors is rescanned, and already-indexed rows in it are re-derived rather than duplicated.
-
-Raising a floor to skip history and then lowering it back is therefore safe but not free — plan floor changes as deliberate rescans.
+Restoring a floor you previously raised is not symmetric with never having raised it: the range between the two floors is rescanned, and already-indexed rows in it are re-derived rather than duplicated. Raising a floor to skip history and then lowering it back is therefore safe but not free — plan floor changes as deliberate rescans.
 
 ### Overriding `chains.json` / `bridges.json` via environment
 
