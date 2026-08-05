@@ -127,6 +127,29 @@ dataSources:
           handler: handleNameRegisteredByController
         - event: NameRenewed(string,indexed bytes32,uint256,uint256,bytes32)
           handler: handleNameRenewedByController
+  # UniversalRegistrarRenewalWithReferrer: the wrapper-safe renewal path (all
+  # dapp renewals route here). Emits NameRenewed with the exact same shape as
+  # the controller, so it reuses the controller ABI and handler.
+  - kind: ethereum/contract
+    name: UniversalRenewal
+    network: electroneum-mainnet
+    source:
+      abi: EthRegistrarController
+      address: "0x8fcd8ebdc9db2cc29f334a922c11f0ccbc41a74f"
+      startBlock: 15172506
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/ethRegistrar.ts
+      entities:
+        - Registration
+      abis:
+        - name: EthRegistrarController
+          file: ./abis/EthRegistrarController.json
+      eventHandlers:
+        - event: NameRenewed(string,indexed bytes32,uint256,uint256,bytes32)
+          handler: handleNameRenewedByController
   - kind: ethereum/contract
     name: NameWrapper
     network: electroneum-mainnet

@@ -15,6 +15,10 @@
       "address": "0x3cfa6d6e7e1216393c2cb9393bc0f411492e33e9",
       "startBlock": 15031647
     },
+    "UniversalRenewal": {
+      "address": "0x8fcd8ebdc9db2cc29f334a922c11f0ccbc41a74f",
+      "startBlock": 15172506
+    },
     "NameWrapper": {
       "address": "0xd8f4b1a91469b05d9e0b15cac4917ee47b2a6f64",
       "startBlock": 15031643
