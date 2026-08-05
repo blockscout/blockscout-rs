@@ -111,6 +111,22 @@ pub trait RangeProcessor: Send + Sync {
             return;
         }
 
+        // Emitted once per pass, and only when there is work — a tick with
+        // nothing due stays silent instead of printing every `scan_interval`.
+        //
+        // The forward streams need no equivalent: each is one continuous
+        // monotone walk, so a per-chunk line is readable on its own — the
+        // previous line's `to_block` predicts the next line's `from_block`.
+        // The retry pass is instead a bounded *cyclic* sweep resumed from
+        // `resume_from`, so consecutive per-chunk lines jump between chains
+        // and between unrelated intervals; without this header naming the
+        // window they belong to, they cannot be interpreted.
+        //
+        // `chunks` counts the chunks of the *due* intervals only — an interval
+        // still in backoff never reaches the queue — so it is the work planned
+        // for this tick, not the size of the open hole set.
+        tracing::info!(bridge_id, due_intervals = due.len(), chunks = queue.len(), max_chunks, resume_from =? resume_from, "starting RETRY    pass");
+
         // Provider and filter resolve once per chain per pass, not once per
         // chunk: `log_filter` allocates the address set, and a chain that
         // cannot be resolved must log once rather than once per chunk.
@@ -151,6 +167,8 @@ pub trait RangeProcessor: Send + Sync {
                 continue;
             };
 
+            tracing::info!(bridge_id, chain_id, from_block = chunk.from, to_block = chunk.to, size =? (chunk.to - chunk.from + 1), "scanning RETRY    logs");
+
             match fetch_logs(provider.clone(), filter, chunk.from, chunk.to).await {
                 Ok(mut logs) => {
                     // Parity with the forward path's ascending sort.
@@ -164,6 +182,14 @@ pub trait RangeProcessor: Send + Sync {
 
                     match self.process(chain_id, &batch).await {
                         Ok(()) => {
+                            tracing::debug!(
+                                bridge_id,
+                                chain_id,
+                                chunk_from = chunk.from,
+                                chunk_to = chunk.to,
+                                count = batch.logs.len(),
+                                "retried chunk processed"
+                            );
                             // A retried chunk that returns zero logs must
                             // still be resolved: the forward path never
                             // yields empty ranges, so this case exists
@@ -181,6 +207,14 @@ pub trait RangeProcessor: Send + Sync {
                             }
                         }
                         Err(batch_err) => {
+                            tracing::warn!(
+                                err = ?batch_err.error,
+                                bridge_id,
+                                chain_id,
+                                chunk_from = chunk.from,
+                                chunk_to = chunk.to,
+                                "retried chunk still failing"
+                            );
                             let ranges = attributed_ranges(&batch_err, chunk);
                             let reason = truncate_reason(&format!("{:#}", batch_err.error));
                             let ranges_with_reason = with_reason(ranges, reason);
@@ -202,6 +236,14 @@ pub trait RangeProcessor: Send + Sync {
                     }
                 }
                 Err(err) => {
+                    tracing::warn!(
+                        err = ?err,
+                        bridge_id,
+                        chain_id,
+                        chunk_from = chunk.from,
+                        chunk_to = chunk.to,
+                        "failed to re-fetch a retried chunk"
+                    );
                     // An eth_getLogs failure records the chunk as
                     // still-failed and moves on — this is not an
                     // escalation, the range was never re-scanned.
