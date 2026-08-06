@@ -139,6 +139,7 @@ Parameters can be configured either using a `toml` file or environment variables
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__CONNECT_LAZY` | | Whether to establish database connections lazily. | `false` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_LEVEL` | | The logging level for slow SQL statements. | `off` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_THRESHOLD` | | The threshold (in seconds) for logging slow SQL statements. | `1` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__ENABLED` | | Optionally disabling of all indexer tasks (do not fetch intervals and operations) | `true` |
 
 [anchor]: <> (anchors.envs.end.service)
 

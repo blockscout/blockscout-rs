@@ -1009,6 +1009,11 @@ impl Indexer {
 
     #[instrument(name = "indexer", skip_all, level = "info")]
     pub async fn start(&self) -> anyhow::Result<()> {
+        if !self.settings.enabled {
+            tracing::warn!("Indexer disabled by configuration");
+            return Ok(());
+        }
+
         tracing::info!("Initializing TAC indexer");
 
         self.ensure_stages_types_exist().await?;
