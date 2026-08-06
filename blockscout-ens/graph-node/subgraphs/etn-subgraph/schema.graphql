@@ -457,3 +457,21 @@ type VersionChanged implements ResolverEvent @entity {
   "The new version number of the resolver"
   version: BigInt!
 }
+
+type PrimaryNameRecord @entity {
+  "Unique identifier (resolved address)"
+  id: ID!
+  "The resolved address"
+  resolved_address: String!
+  "The domain ID that this address resolves to"
+  domain_id: String
+  "The domain name that this address resolves to"
+  domain_name: String
+}
+
+type ReverseClaim @entity {
+  "The namehash of <addr>.addr.reverse"
+  id: ID!
+  "The address the reverse node was claimed for"
+  address: String!
+}

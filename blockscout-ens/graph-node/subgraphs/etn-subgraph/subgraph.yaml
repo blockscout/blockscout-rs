@@ -150,6 +150,51 @@ dataSources:
       eventHandlers:
         - event: NameRenewed(string,indexed bytes32,uint256,uint256,bytes32)
           handler: handleNameRenewedByController
+  # ENSIP-19 default reverse registrar: primary names set by the v1.7
+  # controller and the dapp live here (NOT under addr.reverse). Feeds the
+  # primary_name_record table BENS reads for address->name resolution.
+  - kind: ethereum/contract
+    name: DefaultReverseRegistrar
+    network: electroneum-mainnet
+    source:
+      abi: DefaultReverseRegistrar
+      address: "0x3bed61fe4d7d3bc79e46912ee7acce2c231aa0a6"
+      startBlock: 15031646
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/reverseRecords.ts
+      entities:
+        - PrimaryNameRecord
+      abis:
+        - name: DefaultReverseRegistrar
+          file: ./abis/DefaultReverseRegistrar.json
+      eventHandlers:
+        - event: NameForAddrChanged(indexed address,string)
+          handler: handleNameForAddrChanged
+  # Classic reverse registrar: maps <addr>.addr.reverse nodes to addresses so
+  # resolver NameChanged events on those nodes also feed PrimaryNameRecord.
+  - kind: ethereum/contract
+    name: ReverseRegistrar
+    network: electroneum-mainnet
+    source:
+      abi: ReverseRegistrar
+      address: "0xfbb14edbd8d3f6e7bb240bfa388f6582df0d8e7a"
+      startBlock: 15031637
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/reverseRecords.ts
+      entities:
+        - ReverseClaim
+      abis:
+        - name: ReverseRegistrar
+          file: ./abis/ReverseRegistrar.json
+      eventHandlers:
+        - event: ReverseClaimed(indexed address,indexed bytes32)
+          handler: handleReverseClaimed
   - kind: ethereum/contract
     name: NameWrapper
     network: electroneum-mainnet

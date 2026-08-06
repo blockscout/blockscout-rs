@@ -23,9 +23,12 @@ import {
   NameChanged,
   PubkeyChanged,
   Resolver,
+  ReverseClaim,
   TextChanged,
   VersionChanged,
 } from "./types/schema";
+
+import { setPrimaryNameRecord } from "./reverseRecords";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
   let account = new Account(event.params.a.toHexString());
@@ -87,6 +90,13 @@ export function handleNameChanged(event: NameChangedEvent): void {
   resolverEvent.transactionID = event.transaction.hash;
   resolverEvent.name = event.params.name;
   resolverEvent.save();
+
+  // Classic reverse records: if this node is a claimed <addr>.addr.reverse
+  // node, the name() record is that address's primary name.
+  let claim = ReverseClaim.load(event.params.node.toHexString());
+  if (claim != null) {
+    setPrimaryNameRecord(claim.address, event.params.name);
+  }
 }
 
 export function handleABIChanged(event: ABIChangedEvent): void {
