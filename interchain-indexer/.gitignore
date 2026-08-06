@@ -4,3 +4,4 @@ database
 CLAUDE.local.md
 tmp
 __pycache__
+/graphify-out/cache
