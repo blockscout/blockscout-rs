@@ -538,7 +538,16 @@ definitions:
       - success
       - failed
     default: pending
-    description: Lower-case names preserve the existing public JSON values.
+    description: |-
+      Public outcome of an operation. Lower-case names preserve the existing public
+      JSON values.
+
+      `failed` is reported as soon as the operation outcome is known to be failed,
+      including while the indexer still re-requests the operation upstream.
+      `success` additionally requires the operation to be final upstream, so a
+      successful but not-yet-final operation is reported as `pending`, as is an
+      operation whose stage profiling has not been requested yet. The internal
+      upstream finality flag is not part of this contract.
   v2V2OperationType:
     type: string
     enum:
