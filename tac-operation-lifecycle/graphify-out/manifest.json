@@ -15,7 +15,7 @@
     "semantic_hash": "3c4c0db75c7bc464be911e0aca6122b7"
   },
   "tac-operation-lifecycle-entity/src/operation.rs": {
-    "mtime": 1786026234.89485,
+    "mtime": 1786099445.6709003,
     "ast_hash": "f03e6a8365e3090119f01d69ddecc160",
     "semantic_hash": "f03e6a8365e3090119f01d69ddecc160"
   },
@@ -55,7 +55,7 @@
     "semantic_hash": "cffba3ece2618c45ad274b81adbd9997"
   },
   "tac-operation-lifecycle-logic/src/client/mod.rs": {
-    "mtime": 1786024427.2004821,
+    "mtime": 1786099445.6713681,
     "ast_hash": "611bd2321553413c6aad6e76a021269d",
     "semantic_hash": "611bd2321553413c6aad6e76a021269d"
   },
@@ -70,37 +70,37 @@
     "semantic_hash": "e5a1b39d9d44f8102cffaf1bcf8d3096"
   },
   "tac-operation-lifecycle-logic/src/client/models/profiling.rs": {
-    "mtime": 1786024427.200634,
+    "mtime": 1786099445.6715925,
     "ast_hash": "54bc9ed5b631f82d828bf407cd3f9864",
     "semantic_hash": "54bc9ed5b631f82d828bf407cd3f9864"
   },
   "tac-operation-lifecycle-logic/src/client/settings.rs": {
-    "mtime": 1786024427.200756,
+    "mtime": 1786099445.6717892,
     "ast_hash": "3d8172c8be41ae8042d33b6eb5253919",
     "semantic_hash": "3d8172c8be41ae8042d33b6eb5253919"
   },
   "tac-operation-lifecycle-logic/src/database.rs": {
-    "mtime": 1786024427.2010896,
-    "ast_hash": "542d7577a87dcfd87ff0910e1d85963c",
-    "semantic_hash": "542d7577a87dcfd87ff0910e1d85963c"
+    "mtime": 1786105586.5461814,
+    "ast_hash": "66fd1c22cbd7552d247fcb0b71bcd3ec",
+    "semantic_hash": ""
   },
   "tac-operation-lifecycle-logic/src/indexer.rs": {
-    "mtime": 1786026536.2871935,
-    "ast_hash": "b0c36c0028830b51c2e9d7e0b1374ee7",
-    "semantic_hash": "b0c36c0028830b51c2e9d7e0b1374ee7"
+    "mtime": 1786105532.6281965,
+    "ast_hash": "a6f556ddd44fba98d331cca03647c6ef",
+    "semantic_hash": ""
   },
   "tac-operation-lifecycle-logic/src/lib.rs": {
-    "mtime": 1786024427.2014892,
+    "mtime": 1786099445.6728659,
     "ast_hash": "d1348d746686ad602bee4863522f4802",
     "semantic_hash": "d1348d746686ad602bee4863522f4802"
   },
   "tac-operation-lifecycle-logic/src/lifecycle.rs": {
-    "mtime": 1786024427.2017093,
+    "mtime": 1786102313.3653553,
     "ast_hash": "9bb5f75f309653fd5d6f23a604f28ff4",
     "semantic_hash": "9bb5f75f309653fd5d6f23a604f28ff4"
   },
   "tac-operation-lifecycle-logic/src/settings.rs": {
-    "mtime": 1786025811.2828007,
+    "mtime": 1786099445.6732886,
     "ast_hash": "b8d3f0f8bb9342d888896323b74d6f1d",
     "semantic_hash": "b8d3f0f8bb9342d888896323b74d6f1d"
   },
@@ -110,7 +110,7 @@
     "semantic_hash": "8af1e282958e4a1845a32705d5833e9f"
   },
   "tac-operation-lifecycle-migration/src/lib.rs": {
-    "mtime": 1786024427.2018392,
+    "mtime": 1786099445.6734188,
     "ast_hash": "670af47b9357c9c03290814b7b081c7a",
     "semantic_hash": "670af47b9357c9c03290814b7b081c7a"
   },
@@ -130,7 +130,7 @@
     "semantic_hash": "aa1c2ecaeab0d53455748b82a1567590"
   },
   "tac-operation-lifecycle-migration/src/m20260729_000001_add_stage_profiler_v2_lifecycle.rs": {
-    "mtime": 1786024427.2021136,
+    "mtime": 1786099445.6737356,
     "ast_hash": "dc033c4a59a6451df171ed8e09c3d8e9",
     "semantic_hash": "dc033c4a59a6451df171ed8e09c3d8e9"
   },
@@ -140,12 +140,12 @@
     "semantic_hash": "b9f33d7619bde8226312f4bd77e7ee34"
   },
   "tac-operation-lifecycle-proto/build.rs": {
-    "mtime": 1786024427.2022316,
-    "ast_hash": "c10fd94b9563fb0702f627ab26f2f811",
-    "semantic_hash": "c10fd94b9563fb0702f627ab26f2f811"
+    "mtime": 1786099445.6740196,
+    "ast_hash": "190e3e5d5cd1156796a2563501a9699a",
+    "semantic_hash": ""
   },
   "tac-operation-lifecycle-proto/src/lib.rs": {
-    "mtime": 1786024427.2026474,
+    "mtime": 1786099445.674392,
     "ast_hash": "688b8b74f69965e1000d639d5972bcbc",
     "semantic_hash": "688b8b74f69965e1000d639d5972bcbc"
   },
@@ -160,17 +160,17 @@
     "semantic_hash": "9665a6515071e86158df62d3d0576c8a"
   },
   "tac-operation-lifecycle-server/src/proto.rs": {
-    "mtime": 1786024427.2035298,
+    "mtime": 1786099445.6751704,
     "ast_hash": "8d7ccb103534a422cdce1dc42b54decf",
     "semantic_hash": "8d7ccb103534a422cdce1dc42b54decf"
   },
   "tac-operation-lifecycle-server/src/server.rs": {
-    "mtime": 1786024427.2036338,
+    "mtime": 1786099445.6752887,
     "ast_hash": "2e46693cbb5249c05c50f6d9081ee16d",
     "semantic_hash": "2e46693cbb5249c05c50f6d9081ee16d"
   },
   "tac-operation-lifecycle-server/src/services/health.rs": {
-    "mtime": 1786024427.203735,
+    "mtime": 1786099445.67541,
     "ast_hash": "3671efd5d2bc967179c0ece1b6e32113",
     "semantic_hash": "3671efd5d2bc967179c0ece1b6e32113"
   },
@@ -180,9 +180,9 @@
     "semantic_hash": "ddda792c21156705f8140e7be711d638"
   },
   "tac-operation-lifecycle-server/src/services/operations.rs": {
-    "mtime": 1786024427.204015,
-    "ast_hash": "6d87818485daa27ceabcdd66d0100fb7",
-    "semantic_hash": "6d87818485daa27ceabcdd66d0100fb7"
+    "mtime": 1786102508.8834007,
+    "ast_hash": "80e8caa32436548f82727181f662b892",
+    "semantic_hash": ""
   },
   "tac-operation-lifecycle-server/src/services/statistic.rs": {
     "mtime": 1780473140.286116,
@@ -195,7 +195,7 @@
     "semantic_hash": "b6368e73b82fd6a2fafca76fde746444"
   },
   "tac-operation-lifecycle-server/tests/mod.rs": {
-    "mtime": 1786024427.2041738,
+    "mtime": 1786099445.675855,
     "ast_hash": "14ccc2f8cb1bf3feb3ad601cfeb23276",
     "semantic_hash": "14ccc2f8cb1bf3feb3ad601cfeb23276"
   },
@@ -210,108 +210,243 @@
     "semantic_hash": "1438d1f68b17ec0c94be9108208d27eb"
   },
   ".claude/skills/implementation-plan/SKILL.md": {
-    "mtime": 1786024427.1924496,
+    "mtime": 1786099445.658027,
     "ast_hash": "d720890df268758ee97bc7837f094030",
     "semantic_hash": "d720890df268758ee97bc7837f094030"
   },
   ".claude/skills/pr-description/SKILL.md": {
-    "mtime": 1786024427.1926672,
+    "mtime": 1786099445.6582742,
     "ast_hash": "7fd272023d46cd7e8c26d6a496769d2a",
     "semantic_hash": "7fd272023d46cd7e8c26d6a496769d2a"
   },
   ".claude/skills/research-scope/SKILL.md": {
-    "mtime": 1786024427.1931016,
+    "mtime": 1786099445.6586936,
     "ast_hash": "b8186f543cac7a11e4bfacee0b66e962",
     "semantic_hash": "b8186f543cac7a11e4bfacee0b66e962"
   },
   ".claude/skills/solution-review/SKILL.md": {
-    "mtime": 1786024427.193276,
+    "mtime": 1786099445.6588337,
     "ast_hash": "e97b156d497d0f10135149c0d05a68c9",
     "semantic_hash": "e97b156d497d0f10135149c0d05a68c9"
   },
   ".claude/skills/task-analysis/SKILL.md": {
-    "mtime": 1786024427.1934285,
+    "mtime": 1786099445.6589758,
     "ast_hash": "4a2d4488b30daeb40366ff8a8a3a1425",
     "semantic_hash": "4a2d4488b30daeb40366ff8a8a3a1425"
   },
   ".claude/skills/task-to-code/SKILL.md": {
-    "mtime": 1786024427.1935804,
+    "mtime": 1786099445.6591382,
     "ast_hash": "63be8e5e985e05a2b76e252a8e61b260",
     "semantic_hash": "63be8e5e985e05a2b76e252a8e61b260"
   },
   ".codex/skills/implementation-plan/SKILL.md": {
-    "mtime": 1786024427.1938093,
+    "mtime": 1786099445.6593943,
     "ast_hash": "e382e55608a456bc2d45f77778fe2217",
     "semantic_hash": "e382e55608a456bc2d45f77778fe2217"
   },
   ".codex/skills/implementation-plan/agents/openai.yaml": {
-    "mtime": 1786024427.193964,
+    "mtime": 1786099445.6595595,
     "ast_hash": "0b59ce9b8e938ce90804a9bde4e2841d",
     "semantic_hash": "0b59ce9b8e938ce90804a9bde4e2841d"
   },
   ".codex/skills/pr-description/SKILL.md": {
-    "mtime": 1786024427.1941097,
+    "mtime": 1786099445.6597123,
     "ast_hash": "df7b3d27cd3ac8a48ac65a8cfc63d23e",
     "semantic_hash": "df7b3d27cd3ac8a48ac65a8cfc63d23e"
   },
   ".codex/skills/pr-description/agents/openai.yaml": {
-    "mtime": 1786024427.1944733,
+    "mtime": 1786099445.6599634,
     "ast_hash": "10769155fe98b9c1561e711c934d511b",
     "semantic_hash": "10769155fe98b9c1561e711c934d511b"
   },
   ".codex/skills/research-scope/SKILL.md": {
-    "mtime": 1786024427.1946285,
+    "mtime": 1786099445.660107,
     "ast_hash": "81d410728701d76f730ab238466385e1",
     "semantic_hash": "81d410728701d76f730ab238466385e1"
   },
   ".codex/skills/research-scope/agents/openai.yaml": {
-    "mtime": 1786024427.1948051,
+    "mtime": 1786099445.6602635,
     "ast_hash": "f978671d1aebb24d3398e2be00e48241",
     "semantic_hash": "f978671d1aebb24d3398e2be00e48241"
   },
   ".codex/skills/solution-review/SKILL.md": {
-    "mtime": 1786024427.1949587,
+    "mtime": 1786099445.6604164,
     "ast_hash": "8c850afe541b61595ff2e329ac093802",
     "semantic_hash": "8c850afe541b61595ff2e329ac093802"
   },
   ".codex/skills/solution-review/agents/openai.yaml": {
-    "mtime": 1786024427.1950989,
+    "mtime": 1786099445.6605587,
     "ast_hash": "c525e518113e33673a6a0351e1252ad0",
     "semantic_hash": "c525e518113e33673a6a0351e1252ad0"
   },
   ".codex/skills/task-analysis/SKILL.md": {
-    "mtime": 1786024427.1952367,
+    "mtime": 1786099445.660695,
     "ast_hash": "c24159965e5b2761e5af8fec49daf88a",
     "semantic_hash": "c24159965e5b2761e5af8fec49daf88a"
   },
   ".codex/skills/task-analysis/agents/openai.yaml": {
-    "mtime": 1786024427.1953912,
+    "mtime": 1786099445.6608407,
     "ast_hash": "ab21cda200e6b561f63c60f0e43a3096",
     "semantic_hash": "ab21cda200e6b561f63c60f0e43a3096"
   },
   ".codex/skills/task-to-code/SKILL.md": {
-    "mtime": 1786024427.195545,
+    "mtime": 1786099445.6609895,
     "ast_hash": "f99c0fd082fab13869f424518de0da02",
     "semantic_hash": "f99c0fd082fab13869f424518de0da02"
   },
   ".codex/skills/task-to-code/agents/openai.yaml": {
-    "mtime": 1786024427.1956944,
+    "mtime": 1786099445.6611392,
     "ast_hash": "d8f12d99a9f5af176c39ffc2b4a2ef14",
     "semantic_hash": "d8f12d99a9f5af176c39ffc2b4a2ef14"
   },
   ".cursor/skills/implementation-plan/SKILL.md": {
-    "mtime": 1786024427.1959157,
+    "mtime": 1786099445.661316,
     "ast_hash": "d720890df268758ee97bc7837f094030",
     "semantic_hash": "d720890df268758ee97bc7837f094030"
   },
   ".cursor/skills/pr-description/SKILL.md": {
-    "mtime": 1786024427.1960244,
+    "mtime": 1786099445.6614215,
     "ast_hash": "7fd272023d46cd7e8c26d6a496769d2a",
     "semantic_hash": "7fd272023d46cd7e8c26d6a496769d2a"
   },
   ".cursor/skills/research-scope/SKILL.md": {
-    "mtime": 1786024427.196143,
+    "mtime": 1786099445.6615164,
     "ast_hash": "b8186f543cac7a11e4bfacee0b66e962",
     "semantic_hash": "b8186f543cac7a11e4bfacee0b66e962"
+  },
+  ".claude/settings.json": {
+    "mtime": 1786101802.7153358,
+    "ast_hash": "d29f4c25981ef19c1b0cffaed3135208",
+    "semantic_hash": ""
+  },
+  ".codex/hooks.json": {
+    "mtime": 1786101818.9943693,
+    "ast_hash": "6d4dd6a075dc34772713d4cfffecd282",
+    "semantic_hash": ""
+  },
+  ".cursor/skills/solution-review/SKILL.md": {
+    "mtime": 1786099445.66163,
+    "ast_hash": "e97b156d497d0f10135149c0d05a68c9",
+    "semantic_hash": ""
+  },
+  ".cursor/skills/task-analysis/SKILL.md": {
+    "mtime": 1786099445.6617444,
+    "ast_hash": "4a2d4488b30daeb40366ff8a8a3a1425",
+    "semantic_hash": ""
+  },
+  ".cursor/skills/task-to-code/SKILL.md": {
+    "mtime": 1786099445.6618617,
+    "ast_hash": "63be8e5e985e05a2b76e252a8e61b260",
+    "semantic_hash": ""
+  },
+  ".memory-bank/README.md": {
+    "mtime": 1786105919.9186568,
+    "ast_hash": "35f8a7c7b9501f29e8d694b1d3d3ccec",
+    "semantic_hash": ""
+  },
+  ".memory-bank/api-surface.md": {
+    "mtime": 1786102556.9035099,
+    "ast_hash": "d5b85b1ea3f5b1baa37856fc5bebb37c",
+    "semantic_hash": ""
+  },
+  ".memory-bank/gotchas-and-edge-cases.md": {
+    "mtime": 1786105893.2640245,
+    "ast_hash": "94214cc9eb8e4e0fdc930fcc3cd5864b",
+    "semantic_hash": ""
+  },
+  ".memory-bank/operation-lifecycle.md": {
+    "mtime": 1786105791.6896172,
+    "ast_hash": "9de00a137daa7f32c2700e0bd56b6ec8",
+    "semantic_hash": ""
+  },
+  ".memory-bank/projectbrief.md": {
+    "mtime": 1786105822.3774703,
+    "ast_hash": "ef78df9dc8a0ff887def113e8c04273a",
+    "semantic_hash": ""
+  },
+  ".memory-bank/research/stage-profiler-v2-lifecycle-model.md": {
+    "mtime": 1786105909.3819027,
+    "ast_hash": "8c109e461827657783a11cfad520f7d2",
+    "semantic_hash": ""
+  },
+  ".memory-bank/sync-architecture.md": {
+    "mtime": 1786105861.283268,
+    "ast_hash": "22b1991d75c117a8e552683603c21122",
+    "semantic_hash": ""
+  },
+  ".memory-bank/workflows/implementation-plan.md": {
+    "mtime": 1786099445.6636806,
+    "ast_hash": "858c8d71594c1606e6f7a749e8d35393",
+    "semantic_hash": ""
+  },
+  ".memory-bank/workflows/pr-description.md": {
+    "mtime": 1786099445.6637814,
+    "ast_hash": "aa90348a905b0e3fe2198a8c1834dd33",
+    "semantic_hash": ""
+  },
+  ".memory-bank/workflows/research-scope.md": {
+    "mtime": 1786099445.6638858,
+    "ast_hash": "e0fe565443332e16fb5fa7b145305c10",
+    "semantic_hash": ""
+  },
+  ".memory-bank/workflows/solution-review.md": {
+    "mtime": 1786099445.6639917,
+    "ast_hash": "4af11cfdc447d4fbe6b1ded786e4e347",
+    "semantic_hash": ""
+  },
+  ".memory-bank/workflows/task-analysis.md": {
+    "mtime": 1786099445.6641014,
+    "ast_hash": "f11daaa4e5ffa2baa5b6a769af2f66bb",
+    "semantic_hash": ""
+  },
+  ".memory-bank/workflows/task-to-code.md": {
+    "mtime": 1786099445.664206,
+    "ast_hash": "c1e43252a0844d541a03c6a6f96c2654",
+    "semantic_hash": ""
+  },
+  "AGENTS.md": {
+    "mtime": 1786101818.9941022,
+    "ast_hash": "6a47d64fcc136324ca395065a707ef76",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1786101802.7150853,
+    "ast_hash": "82efb97a359f5c7290bf2513d14686be",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1786102547.767106,
+    "ast_hash": "11ec41bec19f8c51fa704259b1e989ce",
+    "semantic_hash": ""
+  },
+  "docker-compose.yaml": {
+    "mtime": 1769065201.6224859,
+    "ast_hash": "569cafefd9c1640d47db887b20331978",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260806_233106_\u0433\u0434\u0435_\u0444\u043e\u0440\u043c\u0438\u0440\u0443\u044e\u0442\u0441\u044f_v2operationbriefdetails_\u0438_v2operat.md": {
+    "mtime": 1786099445.6697948,
+    "ast_hash": "7edafeae196586bf44aa91d3294f9119",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260807_062710_\u043f\u0435\u0440\u0435\u0438\u043c\u0435\u043d\u043e\u0432\u0430\u0442\u044c_pending_\u0432_unknown__\u0441\u0434\u0435\u043b\u0430\u0442\u044c_type_\u0438_st.md": {
+    "mtime": 1786099445.670126,
+    "ast_hash": "73a9134453d0b7874b93c322ba586faf",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260807_064052_\u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\u044b\u0435_\u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b_\u0434\u043b\u044f_v2operationtype__unknown.md": {
+    "mtime": 1786099445.6703205,
+    "ast_hash": "acf1d8eb64520fadc8a2d93a7b79a1aa",
+    "semantic_hash": ""
+  },
+  "tac-operation-lifecycle-proto/proto/api_config_http.yaml": {
+    "mtime": 1786099445.6741073,
+    "ast_hash": "3d2dfa7d36c122d67a2ef3e6f98c6d8c",
+    "semantic_hash": ""
+  },
+  "tac-operation-lifecycle-proto/swagger/v1/tac-operation-lifecycle.swagger.yaml": {
+    "mtime": 1786105574.8543534,
+    "ast_hash": "040a8d8e9e080e7c1a9515927bfc8e66",
+    "semantic_hash": ""
   }
 }

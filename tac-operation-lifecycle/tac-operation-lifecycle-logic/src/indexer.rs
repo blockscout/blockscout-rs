@@ -921,21 +921,25 @@ impl Indexer {
                 {
                     Ok(operations) if operations.is_empty() => {
                         client.release_v2_probe();
-                        if let Ok(remaining) = database.count_v1_profiled_operations().await {
-                            if remaining == 0 {
-                                if Self::should_report_v2_backfill_convergence(
-                                    &mut convergence_reported,
-                                    remaining,
-                                ) {
-                                    tracing::info!("V2 re-profiling queue is converged");
-                                }
-                            } else {
-                                Self::should_report_v2_backfill_convergence(
-                                    &mut convergence_reported,
-                                    remaining,
+                        if let Ok(remaining) = database.count_v1_operations_for_backfill().await {
+                            // Rows waiting for technical retry are not claimable here, so they
+                            // must not hold back the convergence report; surface them instead.
+                            let awaiting_retry = database
+                                .count_v1_operations_awaiting_retry()
+                                .await
+                                .unwrap_or_default();
+                            if Self::should_report_v2_backfill_convergence(
+                                &mut convergence_reported,
+                                remaining,
+                            ) {
+                                tracing::info!(
+                                    awaiting_retry,
+                                    "V2 re-profiling queue is converged"
                                 );
+                            } else if remaining > 0 {
                                 tracing::debug!(
                                     remaining,
+                                    awaiting_retry,
                                     "V2 re-profiling has no currently claimable operations"
                                 );
                             }

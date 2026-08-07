@@ -738,12 +738,39 @@ impl TacDatabase {
         self.query_operations(&sql).await
     }
 
-    pub async fn count_v1_profiled_operations(&self) -> anyhow::Result<u64> {
-        Ok(operation::Entity::find()
-            .filter(operation::Column::OpType.is_not_null())
-            .filter(operation::Column::ProfilingVersion.eq(PROFILING_VERSION_V1))
+    /// Version-1 rows the backfill worker can still claim.
+    ///
+    /// Uses the same predicate as `query_v1_operations_for_backfill`, so a zero
+    /// here really means "nothing left to convert" and can drive convergence
+    /// reporting. Rows parked in the technical retry stream are deliberately
+    /// excluded and counted separately by
+    /// `count_v1_operations_awaiting_retry` - otherwise a single permanently
+    /// failing legacy row would suppress the convergence report forever.
+    pub async fn count_v1_operations_for_backfill(&self) -> anyhow::Result<u64> {
+        Ok(Self::v1_profiled_operations()
+            .filter(
+                Condition::any()
+                    .add(operation::Column::Status.eq(StatusEnum::Pending))
+                    .add(operation::Column::Status.eq(StatusEnum::Completed)),
+            )
             .count(self.db.as_ref())
             .await?)
+    }
+
+    /// Version-1 rows sitting in the technical retry stream. They are still
+    /// unconverted, but the backfill worker cannot claim them - the retry
+    /// stream re-profiles them and they leave the predicate on success.
+    pub async fn count_v1_operations_awaiting_retry(&self) -> anyhow::Result<u64> {
+        Ok(Self::v1_profiled_operations()
+            .filter(operation::Column::Status.eq(StatusEnum::Failed))
+            .count(self.db.as_ref())
+            .await?)
+    }
+
+    fn v1_profiled_operations() -> Select<operation::Entity> {
+        operation::Entity::find()
+            .filter(operation::Column::OpType.is_not_null())
+            .filter(operation::Column::ProfilingVersion.eq(PROFILING_VERSION_V1))
     }
 
     pub async fn query_failed_operations(
@@ -1595,6 +1622,8 @@ mod tests {
                  NOW(), NULL, 'pending', 0, NOW(), NOW()),
                 ('v1-route-completed', 'TON-TAC', 1, NULL, NULL, NULL,
                  NOW(), NULL, 'completed', 0, NOW(), NOW()),
+                ('v1-awaiting-retry', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NOW(), 'failed', 3, NOW(), NOW()),
                 ('unprofiled', NULL, NULL, NULL, NULL, NULL,
                  NOW(), NULL, 'pending', 0, NOW(), NOW());
             "#,
@@ -1640,6 +1669,63 @@ mod tests {
             ["v1-pending".to_string(), "v1-route-completed".to_string()]
                 .into_iter()
                 .collect()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn backfill_counters_split_claimable_from_awaiting_retry() {
+        let db = TestDbGuard::new::<migration::Migrator>("v2_backfill_counters").await;
+        db.execute_unprepared(
+            r#"
+            INSERT INTO operation
+                (id, op_type, profiling_version, op_status, finalized, rollback,
+                 timestamp, next_retry, status, retry_count, inserted_at, updated_at)
+            VALUES
+                ('claimable-pending', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('claimable-completed', 'TON-TAC', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'completed', 0, NOW(), NOW()),
+                ('awaiting-retry', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NOW(), 'failed', 7, NOW(), NOW()),
+                ('in-flight', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'processing', 0, NOW(), NOW()),
+                ('already-v2', 'TON-TAC', 2, 'success', TRUE, FALSE,
+                 NOW(), NULL, 'completed', 0, NOW(), NOW()),
+                ('unprofiled', NULL, NULL, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW());
+            "#,
+        )
+        .await
+        .unwrap();
+        let database = TacDatabase::new(db.client(), 0);
+
+        // A permanently failing legacy row must not keep the queue from being
+        // reported as converged, so it is excluded from the claimable count.
+        assert_eq!(
+            database.count_v1_operations_for_backfill().await.unwrap(),
+            2
+        );
+        assert_eq!(
+            database.count_v1_operations_awaiting_retry().await.unwrap(),
+            1
+        );
+
+        // Draining every claimable row reports convergence even though one row
+        // is still parked in the retry stream.
+        db.execute_unprepared(
+            "UPDATE operation SET profiling_version = 2, finalized = TRUE, op_status = 'success' \
+             WHERE id IN ('claimable-pending', 'claimable-completed')",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            database.count_v1_operations_for_backfill().await.unwrap(),
+            0
+        );
+        assert_eq!(
+            database.count_v1_operations_awaiting_retry().await.unwrap(),
+            1
         );
     }
 }

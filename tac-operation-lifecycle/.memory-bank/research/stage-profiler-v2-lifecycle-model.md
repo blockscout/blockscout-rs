@@ -57,9 +57,11 @@ The old polling decision was inferred from that overloaded type:
 
 The earlier response overloaded `operationType`: it represented the route, pending state, rollback, and part of the final-outcome logic. The v2 contract separates those concerns.
 
-## Current Codebase Behavior
+## Codebase Behavior Before Adoption (historical)
 
-The current implementation mirrors the old overloaded model end to end:
+> **Status: superseded.** The v2 model has since been adopted on branch `evgenkor/tac/staging-v2`. The section below describes the *pre-adoption* implementation and is kept only to explain why the change touched so many boundaries. For the current behaviour see `.memory-bank/operation-lifecycle.md` and `.memory-bank/api-surface.md`.
+
+The implementation mirrored the old overloaded model end to end:
 
 - The Stage Profiler client deserializes only `operation_type` plus stages. Its `OperationType` enum includes route types, `Pending`, `Rollback`, the locally derived `InsufficientFee`, and an error fallback.
 - The indexer decides whether to stop polling through `OperationType::is_finalized()`. Routes and rollback are terminal; pending and insufficient-fee are not.
@@ -80,7 +82,11 @@ The service currently treats the old type as both business meaning and a polling
 
 ## Open Question
 
-The prior integration stopped polling a `PENDING` operation older than one week. It is not yet confirmed whether Stage Profiler v2 automatically marks such operations as finalized. Until that is established, retain the one-week safeguard as the agreed operational behavior.
+The prior integration stopped polling a `PENDING` operation older than one week. It is not yet confirmed whether Stage Profiler v2 automatically marks such operations as finalized. Until that is established, retain the one-week safeguard as the agreed operational behavior. **Still open** after adoption — the safeguard is retained and only changes the technical work status.
+
+## Adoption Note
+
+One interpretation rule was deliberately *not* carried into the public API: "`finalized=false` means the operation remains in public `PENDING` state". That still holds for Read API v1, but Read API v2 reports `failed` as soon as the outcome is failed, regardless of finality, and does not expose `finalized` at all. `finalized` is treated as an indexer-only signal. Rationale and the full projection are recorded in `.memory-bank/api-surface.md`; the contract facts above remain an accurate description of *upstream*.
 
 ## Source Anchors
 

@@ -1,45 +1,51 @@
-# Graph Report - .  (2026-08-07)
+# Graph Report - tac-operation-lifecycle  (2026-08-07)
 
 ## Corpus Check
-- Corpus is ~24,769 words - fits in a single context window. You may not need a graph.
+- 81 files · ~29,264 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 655 nodes · 1227 edges · 49 communities (36 shown, 13 thin omitted)
+- 803 nodes · 1376 edges · 71 communities (52 shown, 19 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
+## Graph Freshness
+- Built from commit: `09057d2b`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
+
 ## Community Hubs (Navigation)
-- Database Query Mapping
-- Indexer Job Processing
-- Read API Services
-- Profiling API Models
-- Upstream HTTP Client
-- Server Routing
-- Operation Response Models
-- Insufficient Fee Migration
-- Lifecycle Projection
-- TypeScript Package
-- Task Delivery Skills
-- Indexer Configuration
-- Metadata Migration
-- Proto Code Generation
-- Entity Prelude Types
-- Initial Schema Migration
-- Profiler V2 Migration
-- Operation Metadata Entity
-- Migration Registry
-- Operation Entity
-- Schema Migration
-- Interval Entity
-- Operation Stage Entity
-- Transaction Entity
-- Entity Relationship
-- Entity Relationship
-- Entity Relationship
-- Entity Relationship
-- Entity Relationship
-- Watermark Entity
-- Server Entrypoint
+- TacDatabase
+- Indexer
+- OperationsService
+- profiling.rs
+- Client
+- StatisticService
+- Settings
+- tests/mod.rs
+- lifecycle.rs
+- package.json
+- Solution Review Skill
+- tac-operation-lifecycle-logic/src/settings.rs
+- Migration
+- compile
+- prelude.rs
+- m20220101_000001_create_table.rs
+- Gotchas & Edge Cases
+- Model
+- .migrations
+- Model
+- Stage Profiler v2 Lifecycle Model
+- interval.rs
+- Model
+- transaction.rs
+- Entity
+- Entity
+- Entity
+- Entity
+- Entity
+- watermark.rs
+- main
 - Research Scope Skill
 - Implementation Plan Skill
 - PR Description Skill
@@ -47,25 +53,47 @@
 - Implementation Plan Skill
 - PR Description Skill
 - Research Scope Skill
-- SeaORM Active Model
-- SeaORM Active Model
-- SeaORM Active Model
-- SeaORM Active Model
-- SeaORM Active Model
-- SeaORM Active Model
-- SeaORM Active Model
+- ActiveModel
+- ActiveModel
+- ActiveModel
+- ActiveModel
+- ActiveModel
+- ActiveModel
+- ActiveModel
+- Sync Architecture
+- API Surface
+- .memory-bank/README.md
+- Operation Lifecycle: Status Machine & Terminal-State Detection
+- Implementation Plan Workflow
+- Scope Research Workflow
+- Task Analysis Workflow
+- Interpretation of specific states
+- PR Description Workflow
+- Solution Review Workflow
+- Q: Где формируются V2OperationBriefDetails и V2OperationDetails и как на уровне API спроецировать status/type по profiling_version?
+- Q: Переименовать Pending в UNKNOWN; сделать type и status enum и rollback обязательным bool в V2OperationBriefDetails/V2OperationDetails.
+- Q: Допустимые варианты для V2OperationType: UNKNOWN, TON_TAC_TON, TAC_TON, TON_TAC. Других вариантов для v2 быть не может по условиям таска. Другие варианты возможны только в v1
+- Task To Code Workflow
+- README.md
+- Project Brief
+- stage_type.rs
+- AGENTS.md
+- CLAUDE.md
+- solution-review/SKILL.md
+- task-analysis/SKILL.md
+- task-to-code/SKILL.md
 
 ## God Nodes (most connected - your core abstractions)
-1. `TacDatabase` - 56 edges
+1. `TacDatabase` - 58 edges
 2. `Indexer` - 28 edges
 3. `Client` - 27 edges
 4. `OperationsService` - 20 edges
-5. `Settings` - 17 edges
-6. `V1OperationData` - 13 edges
-7. `V2OperationData` - 13 edges
-8. `SourceOperationData` - 13 edges
-9. `ProfilingError` - 12 edges
-10. `Stage` - 10 edges
+5. `Gotchas & Edge Cases` - 18 edges
+6. `Settings` - 17 edges
+7. `V1OperationData` - 13 edges
+8. `V2OperationData` - 13 edges
+9. `SourceOperationData` - 13 edges
+10. `ProfilingError` - 12 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Solution Review Skill` --semantically_similar_to--> `Solution Review Skill`  [INFERRED] [semantically similar]
@@ -87,129 +115,129 @@
 - **PR Description Skill Wrappers** — _claude_skills_pr_description_skill_pr_description, _codex_skills_pr_description_skill_pr_description, _cursor_skills_pr_description_skill_pr_description [INFERRED 0.95]
 - **Research Scope Skill Wrappers** — _claude_skills_research_scope_skill_research_scope, _codex_skills_research_scope_skill_research_scope, _cursor_skills_research_scope_skill_research_scope [INFERRED 0.95]
 
-## Communities (49 total, 13 thin omitted)
+## Communities (71 total, 19 thin omitted)
 
-### Community 0 - "Database Query Mapping"
+### Community 0 - "TacDatabase"
 Cohesion: 0.07
-Nodes (38): ApiOperations, DatabaseConnection, DatabaseTransaction, Entity, Select, EntityStatus, IntervalDbStatistic, JoinedRow (+30 more)
+Nodes (39): ApiOperations, DatabaseConnection, DatabaseTransaction, Entity, Select, backfill_counters_split_claimable_from_awaiting_retry(), EntityStatus, IntervalDbStatistic (+31 more)
 
-### Community 1 - "Indexer Job Processing"
+### Community 1 - "Indexer"
 Cohesion: 0.06
-Nodes (33): BoxStream, JoinHandle, PollNext, BlockchainType, Indexer, IndexerJob, Job, LegacyOperationType (+25 more)
+Nodes (32): BoxStream, JoinHandle, PollNext, BlockchainType, Indexer, IndexerJob, Job, LegacyOperationType (+24 more)
 
-### Community 2 - "Read API Services"
-Cohesion: 0.08
-Nodes (41): GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest, OperationBriefDetails, OperationDetails, OperationsFullResponse, OperationsResponse, OperationWithStages (+33 more)
+### Community 2 - "OperationsService"
+Cohesion: 0.07
+Nodes (45): GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest, OperationBriefDetails, OperationDetails, OperationsFullResponse, OperationsResponse, OperationWithStages (+37 more)
 
-### Community 3 - "Profiling API Models"
-Cohesion: 0.11
-Nodes (37): BlockchainType, D, Address, BlockchainType, deserialize_fee_info(), deserialize_note_to_string(), deserialize_valid_executors(), FeeValue (+29 more)
+### Community 3 - "profiling.rs"
+Cohesion: 0.10
+Nodes (38): BlockchainType, D, Address, BlockchainType, deserialize_fee_info(), deserialize_note_to_string(), deserialize_valid_executors(), FeeValue (+30 more)
 
-### Community 4 - "Upstream HTTP Client"
+### Community 4 - "Client"
 Cohesion: 0.09
 Nodes (28): HttpClient, Instant, Limiter, Mutex, StatusCode, T, ApiResponse, Client (+20 more)
 
-### Community 5 - "Server Routing"
+### Community 5 - "StatisticService"
 Cohesion: 0.06
 Nodes (34): GetFullStatisticRequest, GetFullStatisticResponse, GetIntervalStatisticsRequest, GetIntervalStatisticsResponse, GetOperationStatisticsRequest, GetOperationStatisticsResponse, Health, HealthCheckRequest (+26 more)
 
-### Community 6 - "Operation Response Models"
+### Community 6 - "Settings"
 Cohesion: 0.07
 Nodes (28): ConfigSettings, DatabaseSettings, Deserialize, JaegerSettings, MetricsSettings, ServerSettings, Operation, OperationIdsApiResponse (+20 more)
 
-### Community 7 - "Insufficient Fee Migration"
-Cohesion: 0.11
-Nodes (22): ConnectionTrait, F, fetch_op_type(), Migration, migration_marks_and_reverts_insufficient_fee_operations(), DbErr, MigrationTrait, Option (+14 more)
+### Community 7 - "tests/mod.rs"
+Cohesion: 0.09
+Nodes (28): ConnectionTrait, F, fetch_op_type(), Migration, migration_marks_and_reverts_insufficient_fee_operations(), DbErr, MigrationTrait, Option (+20 more)
 
-### Community 8 - "Lifecycle Projection"
+### Community 8 - "lifecycle.rs"
 Cohesion: 0.14
-Nodes (18): derive_operation_error_reason(), derive_v1_source_type(), error_reason_from_note(), error_reason_supports_content_and_plain_text_notes(), error_reason_uses_latest_failed_stage_and_best_note_field(), failed_stage(), has_insufficient_fee_stages(), insufficient_fee_has_priority_over_other_failed_stage_reasons() (+10 more)
+Nodes (19): derive_operation_error_reason(), derive_v1_source_type(), error_reason_from_note(), error_reason_supports_content_and_plain_text_notes(), error_reason_uses_latest_failed_stage_and_best_note_field(), failed_stage(), has_insufficient_fee_stages(), insufficient_fee_has_priority_over_other_failed_stage_reasons() (+11 more)
 
-### Community 9 - "TypeScript Package"
+### Community 9 - "package.json"
 Cohesion: 0.09
 Nodes (22): ts-proto, bugs, url, description, devDependencies, ts-proto, typescript, homepage (+14 more)
 
-### Community 10 - "Task Delivery Skills"
+### Community 10 - "Solution Review Skill"
 Cohesion: 0.10
 Nodes (21): Solution Review Skill, Solution Review Workflow, Task Analysis Skill, Task Analysis Workflow, Task To Code Skill, Task To Code Workflow, Implementation Plan Agent Interface, Implementation Plan Skill (+13 more)
 
-### Community 11 - "Indexer Configuration"
+### Community 11 - "tac-operation-lifecycle-logic/src/settings.rs"
 Cohesion: 0.22
 Nodes (17): default_catchup_interval(), default_concurrency(), default_enabled(), default_forever_pending_operations_age_sec(), default_intervals_loop_delay_ms(), default_intervals_query_batch(), default_intervals_retry_batch(), default_operations_loop_delay_ms() (+9 more)
 
-### Community 12 - "Metadata Migration"
-Cohesion: 0.27
-Nodes (7): Migration, Operation, OperationMetaInfo, DbErr, MigrationTrait, Result, SchemaManager
-
-### Community 13 - "Proto Code Generation"
-Cohesion: 0.36
-Nodes (8): AsRef, Path, ServiceGenerator, compile(), main(), Box, Error, Result
-
-### Community 14 - "Entity Prelude Types"
-Cohesion: 0.22
-Nodes (4): StatusEnum, Model, Relation, String
-
-### Community 15 - "Initial Schema Migration"
-Cohesion: 0.22
-Nodes (8): Interval, Operation, OperationStage, StageType, StatusEnum, StatusVariants, Transaction, WaterMark
-
-### Community 16 - "Profiler V2 Migration"
-Cohesion: 0.36
-Nodes (6): Migration, preserves_legacy_rows_and_projects_v2_on_down(), DbErr, MigrationTrait, Result, SchemaManager
-
-### Community 17 - "Operation Metadata Entity"
-Cohesion: 0.29
-Nodes (6): Decimal, Model, Relation, Option, String, Vec
-
-### Community 18 - "Migration Registry"
-Cohesion: 0.29
-Nodes (5): MigratorTrait, Migrator, Box, MigrationTrait, Vec
-
-### Community 19 - "Operation Entity"
-Cohesion: 0.33
-Nodes (6): Model, Relation, DateTime, Option, StatusEnum, String
-
-### Community 20 - "Schema Migration"
+### Community 12 - "Migration"
 Cohesion: 0.43
 Nodes (5): Migration, DbErr, MigrationTrait, Result, SchemaManager
 
-### Community 21 - "Interval Entity"
+### Community 13 - "compile"
+Cohesion: 0.36
+Nodes (8): AsRef, Path, ServiceGenerator, compile(), main(), Box, Error, Result
+
+### Community 14 - "prelude.rs"
+Cohesion: 0.25
+Nodes (3): StatusEnum, Operation, OperationMetaInfo
+
+### Community 15 - "m20220101_000001_create_table.rs"
+Cohesion: 0.15
+Nodes (13): Interval, Migration, Operation, OperationStage, DbErr, MigrationTrait, Result, SchemaManager (+5 more)
+
+### Community 16 - "Gotchas & Edge Cases"
+Cohesion: 0.11
+Nodes (18): 10. Down migration requires the new binary to be stopped, 11. README/env-docs defaults drift from code, 12. Realtime thread starts from watermark, not from `Indexer::realtime_boundary`, 13. Realtime boundary only advances on non-empty responses, 14. Stage rewrite is destructive, 15. Raw-SQL claim queries interpolate strings, 16. `error_reason` in the DB and in the API can legitimately differ, 1. `op_type` has a version-dependent meaning — never parse it alone (+10 more)
+
+### Community 17 - "Model"
+Cohesion: 0.29
+Nodes (6): Decimal, Model, Relation, Option, String, Vec
+
+### Community 18 - ".migrations"
+Cohesion: 0.29
+Nodes (5): MigratorTrait, Migrator, Box, MigrationTrait, Vec
+
+### Community 19 - "Model"
+Cohesion: 0.33
+Nodes (6): Model, Relation, DateTime, Option, StatusEnum, String
+
+### Community 20 - "Stage Profiler v2 Lifecycle Model"
+Cohesion: 0.15
+Nodes (13): Adoption Note, Affected Boundaries, Codebase Behavior Before Adoption (historical), Confirmed Interpretation Rules, Contract Facts, Observed Examples, Open Question, Previous Stage Profiler Model (+5 more)
+
+### Community 21 - "interval.rs"
 Cohesion: 0.40
 Nodes (5): Model, Relation, DateTime, Option, StatusEnum
 
-### Community 22 - "Operation Stage Entity"
+### Community 22 - "Model"
 Cohesion: 0.33
 Nodes (5): Model, Relation, DateTime, Option, String
 
-### Community 23 - "Transaction Entity"
+### Community 23 - "transaction.rs"
 Cohesion: 0.40
 Nodes (4): Model, Relation, DateTime, String
 
-### Community 24 - "Entity Relationship"
+### Community 24 - "Entity"
 Cohesion: 0.50
 Nodes (3): Entity, Related, RelationDef
 
-### Community 25 - "Entity Relationship"
+### Community 25 - "Entity"
 Cohesion: 0.50
 Nodes (3): Entity, Related, RelationDef
 
-### Community 26 - "Entity Relationship"
+### Community 26 - "Entity"
 Cohesion: 0.50
 Nodes (3): Entity, Related, RelationDef
 
-### Community 27 - "Entity Relationship"
+### Community 27 - "Entity"
 Cohesion: 0.50
 Nodes (3): Entity, Related, RelationDef
 
-### Community 28 - "Entity Relationship"
+### Community 28 - "Entity"
 Cohesion: 0.50
 Nodes (3): Entity, Related, RelationDef
 
-### Community 29 - "Watermark Entity"
+### Community 29 - "watermark.rs"
 Cohesion: 0.50
 Nodes (3): Model, Relation, DateTime
 
-### Community 30 - "Server Entrypoint"
+### Community 30 - "main"
 Cohesion: 0.50
 Nodes (3): main(), Error, Result
 
@@ -217,25 +245,97 @@ Nodes (3): main(), Error, Result
 Cohesion: 0.67
 Nodes (3): Research Scope Agent Interface, Research Scope Skill, Research Scope Workflow
 
+### Community 49 - "Sync Architecture"
+Cohesion: 0.22
+Nodes (9): Failure handling & retry, Job streams (all infinite async streams polling the DB), Realtime thread (`create_realtime_thread`), Stage Profiler source selection & circuit breaker, Startup sequence (`Indexer::start`), Stream priority (`select_with_strategy`, left-biased), Sync Architecture, Timeline dissection: intervals + watermark (+1 more)
+
+### Community 50 - "API Surface"
+Cohesion: 0.25
+Nodes (7): API Surface, Ordering quirk, Served API (proto v1, `tac-operation-lifecycle.proto`), Served API (proto v2, `proto/v2/tac-operation-lifecycle.proto`), Type mapping (server/src/services/operations.rs), Upstream (consumed): TAC data API (`client/mod.rs`), v2 `status` is a product projection — accepted design, do not "fix"
+
+### Community 52 - "Operation Lifecycle: Status Machine & Terminal-State Detection"
+Cohesion: 0.29
+Nodes (7): Claim predicates (database.rs), Forever-pending cap — a local stop, not a finality rewrite, Full status flow, Operation Lifecycle: Status Machine & Terminal-State Detection, Public projections, The terminal-state decision (`Indexer::operation_work_status`), Three orthogonal dimensions
+
+### Community 53 - "Implementation Plan Workflow"
+Cohesion: 0.29
+Nodes (6): Implementation Plan Workflow, Preconditions, Process, Starting Context, Templates, Validation Policy
+
+### Community 54 - "Scope Research Workflow"
+Cohesion: 0.29
+Nodes (6): Process, Quality Bar, Scope Research Workflow, Starting Context, Stop Conditions, Use for
+
+### Community 55 - "Task Analysis Workflow"
+Cohesion: 0.29
+Nodes (6): Inputs and Artifacts, Process, Starting Context, Task Analysis Workflow, Templates, Use for
+
+### Community 56 - "Interpretation of specific states"
+Cohesion: 0.33
+Nodes (6): `error_reason`, "Failed", "Insufficient fee", Interpretation of specific states, "Pending", "Rollbacked"
+
+### Community 57 - "PR Description Workflow"
+Cohesion: 0.33
+Nodes (5): Inputs and Output, PR Description Workflow, Process, Rules, Template
+
+### Community 58 - "Solution Review Workflow"
+Cohesion: 0.33
+Nodes (5): Inputs and Output, Process, Solution Review Workflow, Starting Context, Template
+
+### Community 59 - "Q: Где формируются V2OperationBriefDetails и V2OperationDetails и как на уровне API спроецировать status/type по profiling_version?"
+Cohesion: 0.40
+Nodes (4): Answer, Outcome, Q: Где формируются V2OperationBriefDetails и V2OperationDetails и как на уровне API спроецировать status/type по profiling_version?, Source Nodes
+
+### Community 60 - "Q: Переименовать Pending в UNKNOWN; сделать type и status enum и rollback обязательным bool в V2OperationBriefDetails/V2OperationDetails."
+Cohesion: 0.40
+Nodes (4): Answer, Outcome, Q: Переименовать Pending в UNKNOWN; сделать type и status enum и rollback обязательным bool в V2OperationBriefDetails/V2OperationDetails., Source Nodes
+
+### Community 61 - "Q: Допустимые варианты для V2OperationType: UNKNOWN, TON_TAC_TON, TAC_TON, TON_TAC. Других вариантов для v2 быть не может по условиям таска. Другие варианты возможны только в v1"
+Cohesion: 0.40
+Nodes (4): Answer, Outcome, Q: Допустимые варианты для V2OperationType: UNKNOWN, TON_TAC_TON, TAC_TON, TON_TAC. Других вариантов для v2 быть не может по условиям таска. Другие варианты возможны только в v1, Source Nodes
+
+### Community 62 - "Task To Code Workflow"
+Cohesion: 0.40
+Nodes (4): Preconditions, Process, Rules, Task To Code Workflow
+
+### Community 63 - "README.md"
+Cohesion: 0.40
+Nodes (4): Configuration Parameters, Dev, Improvements, Intro
+
+### Community 64 - "Project Brief"
+Cohesion: 0.50
+Nodes (4): Data model (Postgres), Project Brief, Two-phase sync, Workspace layout
+
+### Community 65 - "stage_type.rs"
+Cohesion: 0.50
+Nodes (3): Model, Relation, String
+
 ## Knowledge Gaps
-- **70 isolated node(s):** `Relation`, `ActiveModel`, `Relation`, `ActiveModel`, `Relation` (+65 more)
+- **168 isolated node(s):** `Relation`, `ActiveModel`, `Relation`, `ActiveModel`, `Relation` (+163 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+
+## Work-memory lessons
+
+**Preferred sources** — corroborated by past sessions; start here.
+- `services/operations.rs` (2× useful, score=1.992956604) _(code changed — re-verify)_
+- `.convert_full_v2()` (2× useful, score=1.992956604) _(code changed — re-verify)_
+- `V2OperationBriefDetails` (2× useful, score=1.992956604)
+- `V2OperationDetails` (2× useful, score=1.992956604)
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TacDatabase` connect `Database Query Mapping` to `Indexer Job Processing`, `Read API Services`, `Server Routing`?**
-  _High betweenness centrality (0.357) - this node is a cross-community bridge._
-- **Why does `Indexer` connect `Indexer Job Processing` to `Database Query Mapping`, `Indexer Configuration`, `Upstream HTTP Client`?**
-  _High betweenness centrality (0.132) - this node is a cross-community bridge._
-- **Why does `Client` connect `Upstream HTTP Client` to `Indexer Job Processing`, `Server Routing`, `Operation Response Models`?**
-  _High betweenness centrality (0.103) - this node is a cross-community bridge._
+- **Why does `TacDatabase` connect `TacDatabase` to `Indexer`, `OperationsService`, `StatisticService`?**
+  _High betweenness centrality (0.248) - this node is a cross-community bridge._
+- **Why does `Indexer` connect `Indexer` to `TacDatabase`, `tac-operation-lifecycle-logic/src/settings.rs`, `profiling.rs`, `Client`?**
+  _High betweenness centrality (0.090) - this node is a cross-community bridge._
+- **Why does `OperationsService` connect `OperationsService` to `TacDatabase`, `StatisticService`?**
+  _High betweenness centrality (0.071) - this node is a cross-community bridge._
 - **What connects `Relation`, `ActiveModel`, `Relation` to the rest of the system?**
-  _70 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Database Query Mapping` be split into smaller, more focused modules?**
-  _Cohesion score 0.07016229712858926 - nodes in this community are weakly interconnected._
-- **Should `Indexer Job Processing` be split into smaller, more focused modules?**
-  _Cohesion score 0.058823529411764705 - nodes in this community are weakly interconnected._
-- **Should `Read API Services` be split into smaller, more focused modules?**
-  _Cohesion score 0.07662337662337662 - nodes in this community are weakly interconnected._
+  _168 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `TacDatabase` be split into smaller, more focused modules?**
+  _Cohesion score 0.06778868630201028 - nodes in this community are weakly interconnected._
+- **Should `Indexer` be split into smaller, more focused modules?**
+  _Cohesion score 0.059673659673659674 - nodes in this community are weakly interconnected._
+- **Should `OperationsService` be split into smaller, more focused modules?**
+  _Cohesion score 0.07231638418079096 - nodes in this community are weakly interconnected._
