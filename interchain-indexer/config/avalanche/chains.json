@@ -32,20 +32,5 @@
                 }
             }
         ]
-    },
-    {
-        "chain_id": 68414,
-        "name": "Henesys",
-        "icon": "https://cdn.routescan.io/cdn/chains/henesys/logo.png",
-        "explorer": {
-            "url": "https://68414.snowtrace.io/"
-        },
-        "rpcs": [
-            {
-                "msu": {
-                    "url": "https://henesys-rpc.msu.io"
-                }
-            }
-        ]
     }
 ]
