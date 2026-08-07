@@ -42,11 +42,15 @@ The TAC Operation Lifecycle Indexer follows a process describing below:
 * Legacy v1 profiling remains available as an adaptive fallback, and a persistent worker upgrades v1-source rows after v2 recovers
 * If fetching fails, the operation is scheduled for retry
 
-Read API v2 is served under `/api/v2/tac/...` and exposes the independent lifecycle
-fields. Read API v1 remains a compatibility projection. Both API versions are described
-by the same Swagger document, served at `/api/v1/docs/swagger.yaml` and
+Read API v2 is served under `/api/v2/tac/...`. It exposes required enum fields
+for the operation `type` (`UNKNOWN`, `TON_TAC_TON`, `TAC_TON`, or `TON_TAC`) and
+its public `status` projection (`pending`, `success`, or `failed`) derived from
+the stored profiling version without changing the canonical lifecycle fields in
+the database. Until a v2 operation route is known, v2 returns `UNKNOWN`. The
+required `rollback` flag is `true` only when rollback is confirmed; otherwise it
+is `false`. Read API v1 remains a compatibility projection. Both API versions are
+described by the same Swagger document, served at `/api/v1/docs/swagger.yaml` and
 `/api/v2/docs/swagger.yaml`.
-
 
 ```
 +----------------------------------------------------------------------------------------+

@@ -20,6 +20,21 @@ fn compile(
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
+        // actix-prost serializes protobuf enums as SCREAMING_SNAKE_CASE by
+        // default. These explicit variant names keep the v2 status JSON in
+        // sync with its lower-case public API and generated Swagger contract.
+        .field_attribute(
+            ".blockscout.tacOperationLifecycle.v2.V2OperationStatus.pending",
+            "#[serde(rename = \"pending\")]",
+        )
+        .field_attribute(
+            ".blockscout.tacOperationLifecycle.v2.V2OperationStatus.success",
+            "#[serde(rename = \"success\")]",
+        )
+        .field_attribute(
+            ".blockscout.tacOperationLifecycle.v2.V2OperationStatus.failed",
+            "#[serde(rename = \"failed\")]",
+        )
         // .field_attribute(
         //     ".blockscout.tacOperationLifecycle.v1.<MessageName>.<DefaultFieldName>",
         //     "#[serde(default)]"

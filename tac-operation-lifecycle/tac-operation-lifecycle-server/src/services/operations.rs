@@ -6,7 +6,7 @@ use std::{collections::HashSet, sync::Arc};
 use tac_operation_lifecycle_entity::{operation, operation_stage, transaction};
 use tac_operation_lifecycle_logic::{
     database::{LogicPagination, TacDatabase},
-    lifecycle::{project_v1_type, PROFILING_VERSION_V2},
+    lifecycle::{project_v1_type, PROFILING_VERSION_V1, PROFILING_VERSION_V2},
 };
 use v1::tac_service_server::TacService as TacServiceV1;
 use v2::tac_service_v2_server::TacServiceV2;
@@ -26,13 +26,11 @@ type OperationWithStages = (
     Vec<(operation_stage::Model, Vec<transaction::Model>)>,
 );
 
-#[derive(Default)]
 struct V2Lifecycle {
-    r#type: Option<String>,
-    success: Option<bool>,
+    r#type: v2::V2OperationType,
+    status: v2::V2OperationStatus,
     error_reason: Option<String>,
-    finalized: Option<bool>,
-    rollback: Option<bool>,
+    rollback: bool,
 }
 
 impl OperationsService {
@@ -176,40 +174,55 @@ impl OperationsService {
     }
 
     fn v2_lifecycle(operation: &operation::Model) -> V2Lifecycle {
-        if operation.profiling_version != Some(PROFILING_VERSION_V2) {
-            return V2Lifecycle::default();
-        }
-        let success = match operation.op_status.as_deref() {
-            Some("success") => Some(true),
-            Some("failed") => Some(false),
-            _ => None,
+        let status = match operation.profiling_version {
+            None => v2::V2OperationStatus::Pending,
+            Some(PROFILING_VERSION_V1) => match operation.op_type.as_deref() {
+                Some("ROLLBACK" | "INSUFFICIENT-FEE" | "INSUFFICIENT_FEE") => {
+                    v2::V2OperationStatus::Failed
+                }
+                Some("TON-TAC" | "TON-TAC-TON" | "TAC-TON") => v2::V2OperationStatus::Success,
+                _ => v2::V2OperationStatus::Pending,
+            },
+            Some(PROFILING_VERSION_V2) => {
+                match (operation.op_status.as_deref(), operation.finalized) {
+                    (Some("failed"), _) => v2::V2OperationStatus::Failed,
+                    (Some("success"), Some(true)) => v2::V2OperationStatus::Success,
+                    _ => v2::V2OperationStatus::Pending,
+                }
+            }
+            Some(_) => v2::V2OperationStatus::Pending,
         };
-        let error_reason = (success == Some(false))
+        let is_v2 = operation.profiling_version == Some(PROFILING_VERSION_V2);
+        let error_reason = (is_v2 && status == v2::V2OperationStatus::Failed)
             .then(|| operation.error_reason.clone())
             .flatten();
         V2Lifecycle {
-            r#type: operation.op_type.clone(),
-            success,
+            r#type: match operation.op_type.as_deref() {
+                None | Some("UNKNOWN") => v2::V2OperationType::Unknown,
+                Some("TON-TAC-TON") => v2::V2OperationType::TonTacTon,
+                Some("TAC-TON") => v2::V2OperationType::TacTon,
+                Some("TON-TAC") => v2::V2OperationType::TonTac,
+                Some(_) => v2::V2OperationType::Unknown,
+            },
+            status,
             error_reason,
-            finalized: operation.finalized,
-            rollback: operation.rollback,
+            rollback: operation.op_type.as_deref() == Some("ROLLBACK")
+                || (is_v2 && operation.rollback == Some(true)),
         }
     }
 
     fn convert_short_v2(operation: operation::Model) -> v2::V2OperationBriefDetails {
         let V2Lifecycle {
             r#type,
-            success,
+            status,
             error_reason,
-            finalized,
             rollback,
         } = Self::v2_lifecycle(&operation);
         v2::V2OperationBriefDetails {
             operation_id: operation.id.clone(),
-            r#type,
-            success,
+            r#type: r#type as i32,
+            status: status as i32,
             error_reason,
-            finalized,
             rollback,
             timestamp: db_datetime_to_string(operation.timestamp),
             sender: Self::sender_parts(&operation).map(|(address, blockchain)| {
@@ -224,17 +237,15 @@ impl OperationsService {
     fn convert_full_v2((operation, stages): OperationWithStages) -> v2::V2OperationDetails {
         let V2Lifecycle {
             r#type,
-            success,
+            status,
             error_reason,
-            finalized,
             rollback,
         } = Self::v2_lifecycle(&operation);
         v2::V2OperationDetails {
             operation_id: operation.id.clone(),
-            r#type,
-            success,
+            r#type: r#type as i32,
+            status: status as i32,
             error_reason,
-            finalized,
             rollback,
             timestamp: db_datetime_to_string(operation.timestamp),
             sender: Self::sender_parts(&operation).map(|(address, blockchain)| {
@@ -418,15 +429,20 @@ mod tests {
     use super::*;
     use tac_operation_lifecycle_entity::sea_orm_active_enums::StatusEnum;
 
-    fn operation(profiling_version: i16, op_status: Option<&str>) -> operation::Model {
+    fn operation(
+        profiling_version: Option<i16>,
+        op_type: Option<&str>,
+        op_status: Option<&str>,
+        finalized: Option<bool>,
+    ) -> operation::Model {
         let now = chrono::Utc::now().naive_utc();
         operation::Model {
             id: "op".to_string(),
-            op_type: Some("TON-TAC".to_string()),
-            profiling_version: Some(profiling_version),
+            op_type: op_type.map(str::to_string),
+            profiling_version,
             op_status: op_status.map(str::to_string),
             error_reason: None,
-            finalized: Some(true),
+            finalized,
             rollback: Some(false),
             timestamp: now,
             next_retry: None,
@@ -440,64 +456,219 @@ mod tests {
     }
 
     #[test]
-    fn v2_hides_canonical_fields_for_v1_source_rows() {
-        let response = OperationsService::convert_short_v2(operation(1, Some("failed")));
-        assert!(response.r#type.is_none());
-        assert!(response.success.is_none());
-        assert!(response.error_reason.is_none());
-        assert!(response.finalized.is_none());
-        assert!(response.rollback.is_none());
+    fn v2_status_projection_covers_profiling_versions() {
+        let cases = [
+            (None, None, None, None, v2::V2OperationStatus::Pending),
+            (
+                None,
+                Some("TON-TAC"),
+                Some("success"),
+                Some(true),
+                v2::V2OperationStatus::Pending,
+            ),
+            (Some(1), None, None, None, v2::V2OperationStatus::Pending),
+            (
+                Some(1),
+                Some("PENDING"),
+                None,
+                None,
+                v2::V2OperationStatus::Pending,
+            ),
+            (
+                Some(1),
+                Some("ROLLBACK"),
+                None,
+                None,
+                v2::V2OperationStatus::Failed,
+            ),
+            (
+                Some(1),
+                Some("INSUFFICIENT-FEE"),
+                None,
+                None,
+                v2::V2OperationStatus::Failed,
+            ),
+            (
+                Some(1),
+                Some("INSUFFICIENT_FEE"),
+                None,
+                None,
+                v2::V2OperationStatus::Failed,
+            ),
+            (
+                Some(1),
+                Some("TON-TAC"),
+                None,
+                None,
+                v2::V2OperationStatus::Success,
+            ),
+            (
+                Some(1),
+                Some("TON-TAC-TON"),
+                None,
+                None,
+                v2::V2OperationStatus::Success,
+            ),
+            (
+                Some(1),
+                Some("TAC-TON"),
+                None,
+                None,
+                v2::V2OperationStatus::Success,
+            ),
+            (
+                Some(2),
+                Some("TON-TAC"),
+                None,
+                Some(false),
+                v2::V2OperationStatus::Pending,
+            ),
+            (
+                Some(2),
+                Some("TON-TAC"),
+                None,
+                Some(true),
+                v2::V2OperationStatus::Pending,
+            ),
+            (
+                Some(2),
+                Some("TON-TAC"),
+                Some("success"),
+                Some(false),
+                v2::V2OperationStatus::Pending,
+            ),
+            (
+                Some(2),
+                Some("TON-TAC"),
+                Some("failed"),
+                Some(false),
+                v2::V2OperationStatus::Failed,
+            ),
+            (
+                Some(2),
+                Some("TON-TAC"),
+                Some("failed"),
+                Some(true),
+                v2::V2OperationStatus::Failed,
+            ),
+            (
+                Some(2),
+                Some("TON-TAC"),
+                Some("success"),
+                Some(true),
+                v2::V2OperationStatus::Success,
+            ),
+        ];
+
+        for (profiling_version, op_type, op_status, finalized, expected) in cases {
+            let response = OperationsService::convert_short_v2(operation(
+                profiling_version,
+                op_type,
+                op_status,
+                finalized,
+            ));
+            assert_eq!(response.status, expected as i32);
+        }
     }
 
     #[test]
-    fn v2_hides_canonical_fields_for_unprofiled_rows() {
-        let mut operation = operation(1, Some("failed"));
-        operation.profiling_version = None;
-        let response = OperationsService::convert_short_v2(operation);
-        assert!(response.r#type.is_none());
-        assert!(response.success.is_none());
-        assert!(response.error_reason.is_none());
-        assert!(response.finalized.is_none());
-        assert!(response.rollback.is_none());
+    fn v2_type_projection_covers_known_and_unknown_values() {
+        let cases = [
+            (None, v2::V2OperationType::Unknown),
+            (Some("UNKNOWN"), v2::V2OperationType::Unknown),
+            (Some("TON-TAC-TON"), v2::V2OperationType::TonTacTon),
+            (Some("TAC-TON"), v2::V2OperationType::TacTon),
+            (Some("TON-TAC"), v2::V2OperationType::TonTac),
+            (Some("PENDING"), v2::V2OperationType::Unknown),
+            (Some("ROLLBACK"), v2::V2OperationType::Unknown),
+            (Some("INSUFFICIENT-FEE"), v2::V2OperationType::Unknown),
+            (Some("INSUFFICIENT_FEE"), v2::V2OperationType::Unknown),
+            (Some("ERROR"), v2::V2OperationType::Unknown),
+            (Some("NEW-ROUTE"), v2::V2OperationType::Unknown),
+        ];
+
+        for (op_type, expected) in cases {
+            let response = OperationsService::convert_short_v2(operation(
+                Some(PROFILING_VERSION_V1),
+                op_type,
+                None,
+                None,
+            ));
+            assert_eq!(response.r#type, expected as i32);
+        }
     }
 
     #[test]
-    fn v2_exposes_independent_lifecycle_for_v2_rows() {
-        let mut operation = operation(2, Some("failed"));
+    fn v2_uses_unknown_type_until_operation_type_is_known() {
+        let response = OperationsService::convert_short_v2(operation(None, None, None, None));
+
+        assert_eq!(response.r#type, v2::V2OperationType::Unknown as i32);
+        assert_eq!(response.status, v2::V2OperationStatus::Pending as i32);
+        assert!(response.error_reason.is_none());
+        assert!(!response.rollback);
+
+        let response =
+            serde_json::to_value(response).expect("v2 brief operation response must serialize");
+        assert_eq!(response["type"], "UNKNOWN");
+        assert_eq!(response["status"], "pending");
+        assert_eq!(response["rollback"], false);
+    }
+
+    #[test]
+    fn v2_exposes_failed_error_reason_and_rollback_for_v2_rows() {
+        let mut operation = operation(Some(2), Some("TON-TAC"), Some("failed"), Some(false));
         operation.error_reason = Some("Insufficient Fee".to_string());
+        operation.rollback = Some(true);
         let response = OperationsService::convert_short_v2(operation);
-        assert_eq!(response.r#type.as_deref(), Some("TON-TAC"));
-        assert_eq!(response.success, Some(false));
+
+        assert_eq!(response.r#type, v2::V2OperationType::TonTac as i32);
+        assert_eq!(response.status, v2::V2OperationStatus::Failed as i32);
         assert_eq!(response.error_reason.as_deref(), Some("Insufficient Fee"));
-        assert_eq!(response.finalized, Some(true));
-        assert_eq!(response.rollback, Some(false));
+        assert!(response.rollback);
     }
 
     #[test]
-    fn v2_maps_only_known_operation_statuses_to_success() {
-        let mut successful_operation = operation(2, Some("success"));
-        successful_operation.error_reason = Some("must stay hidden".to_string());
-        let successful = OperationsService::convert_short_v2(successful_operation);
-        let mut unknown_operation = operation(2, Some("pending"));
-        unknown_operation.error_reason = Some("must stay hidden".to_string());
-        let unknown = OperationsService::convert_short_v2(unknown_operation);
-        let absent = OperationsService::convert_short_v2(operation(2, None));
+    fn v2_rollback_is_true_only_when_confirmed() {
+        let legacy_rollback = OperationsService::convert_short_v2(operation(
+            Some(PROFILING_VERSION_V1),
+            Some("ROLLBACK"),
+            None,
+            None,
+        ));
+        let mut legacy_route = operation(Some(PROFILING_VERSION_V1), Some("TON-TAC"), None, None);
+        legacy_route.rollback = Some(true);
+        let legacy_route = OperationsService::convert_short_v2(legacy_route);
+        let mut v2_rollback = operation(
+            Some(PROFILING_VERSION_V2),
+            Some("TON-TAC"),
+            Some("failed"),
+            Some(true),
+        );
+        v2_rollback.rollback = Some(true);
+        let v2_rollback = OperationsService::convert_short_v2(v2_rollback);
+        let mut unprofiled = operation(None, None, None, None);
+        unprofiled.rollback = Some(true);
+        let unprofiled = OperationsService::convert_short_v2(unprofiled);
 
-        assert_eq!(successful.success, Some(true));
-        assert_eq!(successful.error_reason, None);
-        assert_eq!(unknown.success, None);
-        assert_eq!(unknown.error_reason, None);
-        assert_eq!(absent.success, None);
-        assert_eq!(absent.error_reason, None);
+        assert!(legacy_rollback.rollback);
+        assert!(!legacy_route.rollback);
+        assert!(v2_rollback.rollback);
+        assert!(!unprofiled.rollback);
+    }
 
-        let successful_json =
-            serde_json::to_value(successful).expect("v2 operation response must serialize");
-        assert_eq!(successful_json["type"], "TON-TAC");
-        assert_eq!(successful_json["success"], true);
+    #[test]
+    fn full_v2_response_uses_the_same_projection_without_legacy_fields() {
+        let response = OperationsService::convert_full_v2((
+            operation(Some(2), None, Some("success"), Some(true)),
+            Vec::new(),
+        ));
+        let response =
+            serde_json::to_value(response).expect("v2 operation response must serialize");
 
-        let unknown_json =
-            serde_json::to_value(unknown).expect("v2 operation response must serialize");
-        assert_eq!(unknown_json["success"], serde_json::Value::Null);
-        assert_eq!(unknown_json["error_reason"], serde_json::Value::Null);
+        assert_eq!(response["type"], "UNKNOWN");
+        assert_eq!(response["status"], "success");
+        assert_eq!(response["rollback"], false);
+        assert!(response.get("success").is_none());
+        assert!(response.get("finalized").is_none());
     }
 }

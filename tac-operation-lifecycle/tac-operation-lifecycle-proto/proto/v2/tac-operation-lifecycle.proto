@@ -29,28 +29,46 @@ message V2GetOperationByTxHashRequest {
   string tx_hash = 1;
 }
 
+enum V2OperationType {
+  UNKNOWN = 0;
+  TON_TAC_TON = 1;
+  TAC_TON = 2;
+  TON_TAC = 3;
+}
+
+// Lower-case names preserve the existing public JSON values.
+enum V2OperationStatus {
+  pending = 0;
+  success = 1;
+  failed = 2;
+}
+
 message V2OperationsResponse {
   repeated V2OperationBriefDetails items = 1;
   optional V2Pagination next_page_params = 2;
 }
 
 message V2OperationBriefDetails {
+  reserved 3, 4;
+  reserved "success", "finalized";
+
   string operation_id = 1;
-  optional string type = 2;
-  optional bool success = 3;
-  optional bool finalized = 4;
-  optional bool rollback = 5;
+  V2OperationType type = 2;
+  V2OperationStatus status = 9;
+  bool rollback = 5;
   string timestamp = 6;
   optional V2BlockchainAddress sender = 7;
   optional string error_reason = 8;
 }
 
 message V2OperationDetails {
+  reserved 3, 4;
+  reserved "success", "finalized";
+
   string operation_id = 1;
-  optional string type = 2;
-  optional bool success = 3;
-  optional bool finalized = 4;
-  optional bool rollback = 5;
+  V2OperationType type = 2;
+  V2OperationStatus status = 10;
+  bool rollback = 5;
   string timestamp = 6;
   optional V2BlockchainAddress sender = 7;
   repeated V2OperationStage status_history = 8;

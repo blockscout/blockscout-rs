@@ -473,11 +473,9 @@ definitions:
       operation_id:
         type: string
       type:
-        type: string
-      success:
-        type: boolean
-      finalized:
-        type: boolean
+        $ref: '#/definitions/v2V2OperationType'
+      status:
+        $ref: '#/definitions/v2V2OperationStatus'
       rollback:
         type: boolean
       timestamp:
@@ -492,11 +490,9 @@ definitions:
       operation_id:
         type: string
       type:
-        type: string
-      success:
-        type: boolean
-      finalized:
-        type: boolean
+        $ref: '#/definitions/v2V2OperationType'
+      status:
+        $ref: '#/definitions/v2V2OperationStatus'
       rollback:
         type: boolean
       timestamp:
@@ -535,6 +531,22 @@ definitions:
           $ref: '#/definitions/v2V2OperationRelatedTransaction'
       note:
         type: string
+  v2V2OperationStatus:
+    type: string
+    enum:
+      - pending
+      - success
+      - failed
+    default: pending
+    description: Lower-case names preserve the existing public JSON values.
+  v2V2OperationType:
+    type: string
+    enum:
+      - UNKNOWN
+      - TON_TAC_TON
+      - TAC_TON
+      - TON_TAC
+    default: UNKNOWN
   v2V2OperationsFullResponse:
     type: object
     properties:
