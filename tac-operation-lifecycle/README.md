@@ -52,6 +52,35 @@ is `false`. Read API v1 remains a compatibility projection. Both API versions ar
 described by the same Swagger document, served at `/api/v1/docs/swagger.yaml` and
 `/api/v2/docs/swagger.yaml`.
 
+The public `status` is a product projection, not a mirror of the upstream
+lifecycle fields. By design:
+
+* **Upstream `finalized` is not exposed.** It exists to tell the indexer whether
+  to keep re-requesting an operation. It is not a user-facing concept, so the v2
+  messages reserve the field name.
+* **`failed` does not wait for finality.** As soon as the operation outcome is
+  `failed`, v2 reports `failed`, even while the indexer still polls it. A user
+  cannot influence such an operation, and reporting it as simultaneously failed
+  and pending would be more confusing than useful. `rollback` and `error_reason`
+  carry the detail.
+* **`error_reason` is a short label, not the raw failure text.** It is only
+  reported for failed version-2 operations and is derived locally from the
+  failed stage notes: an insufficient fee takes priority, otherwise the note of
+  the latest failed stage is used. The derived value is always stored, but the
+  API publishes it only when it fits 16 characters — anything longer is a raw
+  upstream payload that cannot be shown as a label, so a failed operation may
+  come without an `error_reason`. The complete notes are always available per
+  stage in `status_history`.
+* **`success` does require finality** (`op_status=success` and `finalized=true`);
+  a successful but not-yet-final operation reads as `pending`, as does an
+  operation whose stage profiling has not been requested yet.
+* **Legacy (profiling version 1) rows are mapped from the old overloaded
+  `op_type`** rather than reported as unknown: `ROLLBACK`/`INSUFFICIENT-FEE` →
+  `failed`, a concrete route → `success`. The old upstream model could not
+  express a final failure without rollback, so this reproduces what consumers
+  already see today. These rows are transitional — the v2 re-profiling worker
+  converts them once v2 data is available.
+
 ```
 +----------------------------------------------------------------------------------------+
 |                                    TAC OPERATION LIFECYCLE INDEXER                      |

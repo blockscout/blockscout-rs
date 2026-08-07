@@ -11,6 +11,14 @@ use tac_operation_lifecycle_logic::{
 use v1::tac_service_server::TacService as TacServiceV1;
 use v2::tac_service_v2_server::TacServiceV2;
 
+/// Upper bound on a published `error_reason`, in characters.
+///
+/// The database keeps whatever the stage note yielded. Anything longer than
+/// this is a raw upstream payload (serialized revert data, a whole message
+/// body) that the API cannot present as a short label, so it is withheld —
+/// the full note is still available per stage in `status_history`.
+const MAX_ERROR_REASON_LEN: usize = 16;
+
 pub struct OperationsService {
     db: Arc<TacDatabase>,
 }
@@ -173,6 +181,34 @@ impl OperationsService {
             .map_err(map_db_error)
     }
 
+    /// Projects stored lifecycle facts into the public v2 view.
+    ///
+    /// This is an intentional product projection, not a raw field dump. The
+    /// decisions below are deliberate and should not be "corrected" into a
+    /// one-to-one mapping of the upstream Stage Profiler fields:
+    ///
+    /// 1. `failed` ignores finality. Upstream `finalized` tells *the indexer*
+    ///    whether to keep re-requesting an operation; it is not a public
+    ///    concept, and the v2 messages reserve the field. A user cannot act on
+    ///    a failed operation, and "failed and pending at the same time" is not
+    ///    a state worth surfacing, so a failed operation reads as `failed` as
+    ///    soon as upstream says so.
+    /// 2. `pending` is the fallback. It covers rows with no profiling data yet
+    ///    (`profiling_version IS NULL`) and successful-but-not-yet-final
+    ///    operations. A v2 row never carries `finalized=true` without an
+    ///    `op_status`, because both columns are written together from one
+    ///    successful `/v2/stage-profiling` response.
+    /// 3. Legacy `profiling_version = 1` rows are mapped from the old
+    ///    overloaded `op_type` instead of being reported as unknown. The old
+    ///    model could not express a final failure without rollback, so a legacy
+    ///    route reads as `success` - which matches what the current frontend
+    ///    already shows. Legacy rows are transitional: the v2 backfill worker
+    ///    converts them, so this path is a compatibility bridge, not a
+    ///    long-lived contract.
+    /// 4. `error_reason` is a short label, not the raw failure text. It is
+    ///    published only for a failed v2 row, and only when the stored value
+    ///    fits [`MAX_ERROR_REASON_LEN`]; longer values stay in the database and
+    ///    are readable per stage through `status_history`.
     fn v2_lifecycle(operation: &operation::Model) -> V2Lifecycle {
         let status = match operation.profiling_version {
             None => v2::V2OperationStatus::Pending,
@@ -195,7 +231,8 @@ impl OperationsService {
         let is_v2 = operation.profiling_version == Some(PROFILING_VERSION_V2);
         let error_reason = (is_v2 && status == v2::V2OperationStatus::Failed)
             .then(|| operation.error_reason.clone())
-            .flatten();
+            .flatten()
+            .filter(|reason| reason.chars().count() <= MAX_ERROR_REASON_LEN);
         V2Lifecycle {
             r#type: match operation.op_type.as_deref() {
                 None | Some("UNKNOWN") => v2::V2OperationType::Unknown,
@@ -625,6 +662,38 @@ mod tests {
         assert_eq!(response.status, v2::V2OperationStatus::Failed as i32);
         assert_eq!(response.error_reason.as_deref(), Some("Insufficient Fee"));
         assert!(response.rollback);
+    }
+
+    #[test]
+    fn v2_withholds_error_reasons_longer_than_the_limit() {
+        let failed_with = |reason: &str| {
+            let mut model = operation(
+                Some(PROFILING_VERSION_V2),
+                Some("TON-TAC"),
+                Some("failed"),
+                Some(true),
+            );
+            model.error_reason = Some(reason.to_string());
+            OperationsService::convert_short_v2(model)
+        };
+
+        let at_limit = "x".repeat(MAX_ERROR_REASON_LEN);
+        let above_limit = "x".repeat(MAX_ERROR_REASON_LEN + 1);
+
+        assert_eq!(
+            failed_with(&at_limit).error_reason.as_deref(),
+            Some(at_limit.as_str())
+        );
+        assert_eq!(failed_with(&above_limit).error_reason, None);
+        assert_eq!(
+            failed_with("ProxyCallError: default error").error_reason,
+            None
+        );
+        // withholding the label does not change the projected status
+        assert_eq!(
+            failed_with(&above_limit).status,
+            v2::V2OperationStatus::Failed as i32
+        );
     }
 
     #[test]
