@@ -3,6 +3,25 @@
 use sea_orm_migration::prelude::*;
 use see_migration_test_helpers::EmptyStruct;
 
+/// # Rollout / lock window
+///
+/// `up` runs as one transaction and deliberately keeps it that way so the whole
+/// change stays atomic and reversible. That has a cost worth stating explicitly:
+///
+/// - the `profiling_version = 1` backfill is a single `UPDATE` that rewrites
+///   every already-profiled `operation` row and holds row locks for its whole
+///   duration;
+/// - the three `CREATE INDEX` statements are non-concurrent and each takes an
+///   `ACCESS EXCLUSIVE` lock on its table for the duration of the build
+///   (`CREATE INDEX CONCURRENTLY` is not an option here - it cannot run inside a
+///   transaction block).
+///
+/// This is accepted because the documented rollout applies the migration
+/// *before* the new binary starts, so the service is not serving against the
+/// table while it runs. If the `operation` table grows to a size where that
+/// window becomes unacceptable, split this into a batched `UPDATE` plus a
+/// separate non-transactional `CREATE INDEX CONCURRENTLY` step. The
+/// production-sized lock duration has not been measured.
 #[derive(DeriveMigrationName, EmptyStruct)]
 pub struct Migration;
 
@@ -154,6 +173,16 @@ mod tests {
             );
         }
 
+        assert_eq!(
+            index_names(conn.as_ref()).await,
+            vec![
+                "idx_operation_stage_operation_id".to_string(),
+                "idx_operation_v1_backfill".to_string(),
+                "idx_operation_v2_pending".to_string(),
+            ],
+            "up must create all three claim/lookup indexes"
+        );
+
         let unprofiled = conn
             .query_one(Statement::from_sql_and_values(
                 sea_orm_migration::sea_orm::DatabaseBackend::Postgres,
@@ -231,5 +260,25 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(row.try_get::<i64>("", "count").unwrap(), 0);
+
+        assert!(
+            index_names(conn.as_ref()).await.is_empty(),
+            "down must drop every index it created"
+        );
+    }
+
+    async fn index_names(conn: &impl ConnectionTrait) -> Vec<String> {
+        conn.query_all(Statement::from_string(
+            sea_orm_migration::sea_orm::DatabaseBackend::Postgres,
+            "SELECT indexname FROM pg_indexes \
+             WHERE indexname IN ('idx_operation_v2_pending', 'idx_operation_v1_backfill', \
+                                 'idx_operation_stage_operation_id') \
+             ORDER BY indexname",
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.try_get::<String>("", "indexname").unwrap())
+        .collect()
     }
 }

@@ -61,9 +61,13 @@ mod tests {
     use super::*;
     use migration::sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
     use sea_orm::Database;
-    use tac_operation_lifecycle_entity::{interval, sea_orm_active_enums::StatusEnum};
+    use tac_operation_lifecycle_entity::{interval, operation, sea_orm_active_enums::StatusEnum};
     use tac_operation_lifecycle_logic::{
-        client::Client, database::OrderDirection, settings::IndexerSettings, Indexer, IndexerJob,
+        client::{models::profiling::LegacyOperationType, Client},
+        database::OrderDirection,
+        lifecycle::{project_v1_type, PROFILING_VERSION_V2},
+        settings::IndexerSettings,
+        Indexer, IndexerJob,
     };
     use tracing::Instrument;
 
@@ -416,6 +420,11 @@ mod tests {
         .await
         .unwrap();
 
+        // `Indexer::start` normally seeds these; the test drives the streams
+        // directly, and without the stage types every profiling write fails its
+        // foreign key and the operation silently lands in the retry stream.
+        indexer.ensure_stages_types_exist().await.unwrap();
+
         // Save intervals and start indexing
         let intervals_number = indexer
             .generate_historical_intervals(current_epoch)
@@ -486,6 +495,35 @@ mod tests {
                                 "0x33e2ee58e3e8d48f064915a062adb02dcc062c0533fb429c7f703ba3e1fe33fb",
                                 "Unexpected operation ID"
                             );
+
+                            // The mocked /v2/stage-profiling response must land as
+                            // independent lifecycle facts, not as an overloaded type.
+                            let stored = operation::Entity::find_by_id(&operation_job.operation.id)
+                                .one(db.client().as_ref())
+                                .await
+                                .unwrap()
+                                .expect("profiled operation must be persisted");
+
+                            assert_eq!(stored.profiling_version, Some(PROFILING_VERSION_V2));
+                            assert_eq!(stored.op_type.as_deref(), Some("TON-TAC-TON"));
+                            assert_eq!(stored.op_status.as_deref(), Some("success"));
+                            assert_eq!(stored.finalized, Some(true));
+                            assert_eq!(stored.rollback, Some(false));
+                            assert_eq!(stored.error_reason, None);
+
+                            // ...and the unchanged v1 view is derived from them at read time.
+                            assert_eq!(
+                                project_v1_type(
+                                    stored.profiling_version,
+                                    stored.op_type.as_deref(),
+                                    stored.op_status.as_deref(),
+                                    stored.finalized,
+                                    stored.rollback,
+                                    false,
+                                ),
+                                LegacyOperationType::TonTacTon
+                            );
+
                             operation_id_fetched = true;
                             stage_history_fetched = true;
                         }

@@ -6,8 +6,8 @@ use crate::{
         profiling::{BlockchainType, OperationMetaInfo, SourceOperationData},
     },
     lifecycle::{
-        derive_operation_error_reason, derive_v1_source_type, PROFILING_VERSION_V1,
-        PROFILING_VERSION_V2,
+        derive_operation_error_reason, derive_v1_source_type, note_indicates_insufficient_fee,
+        PROFILING_VERSION_V1, PROFILING_VERSION_V2,
     },
     utils::{
         blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address,
@@ -738,20 +738,24 @@ impl TacDatabase {
         self.query_operations(&sql).await
     }
 
-    /// Version-1 rows the backfill worker can still claim.
+    /// Version-1 rows still awaiting conversion.
     ///
-    /// Uses the same predicate as `query_v1_operations_for_backfill`, so a zero
-    /// here really means "nothing left to convert" and can drive convergence
-    /// reporting. Rows parked in the technical retry stream are deliberately
-    /// excluded and counted separately by
-    /// `count_v1_operations_awaiting_retry` - otherwise a single permanently
-    /// failing legacy row would suppress the convergence report forever.
+    /// Extends the `query_v1_operations_for_backfill` predicate with rows that
+    /// are currently `processing`: those are claimed but not yet converted, so
+    /// counting them keeps a zero here meaning "nothing left to convert" instead
+    /// of "nothing claimable at this instant" - otherwise convergence could be
+    /// reported while the last in-flight batch is still being written. Rows
+    /// parked in the technical retry stream are deliberately excluded and
+    /// counted separately by `count_v1_operations_awaiting_retry` - otherwise a
+    /// single permanently failing legacy row would suppress the convergence
+    /// report forever.
     pub async fn count_v1_operations_for_backfill(&self) -> anyhow::Result<u64> {
         Ok(Self::v1_profiled_operations()
             .filter(
                 Condition::any()
                     .add(operation::Column::Status.eq(StatusEnum::Pending))
-                    .add(operation::Column::Status.eq(StatusEnum::Completed)),
+                    .add(operation::Column::Status.eq(StatusEnum::Completed))
+                    .add(operation::Column::Status.eq(StatusEnum::Processing)),
             )
             .count(self.db.as_ref())
             .await?)
@@ -1110,7 +1114,7 @@ impl TacDatabase {
         operation_model.next_retry = Set(Some(
             chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec),
         ));
-        operation_model.retry_count = Set(operation.retry_count + 1);
+        operation_model.retry_count = Set(operation.retry_count.saturating_add(1));
         operation_model.status = Set(StatusEnum::Failed);
         operation_model.updated_at = Set(now);
 
@@ -1504,8 +1508,7 @@ impl TacDatabase {
             .await?
             .into_iter()
             .filter_map(|(operation_id, note)| {
-                let note = note?.to_lowercase();
-                (note.contains("insufficient") && note.contains("fee")).then_some(operation_id)
+                note_indicates_insufficient_fee(note.as_deref()?).then_some(operation_id)
             })
             .collect())
     }
@@ -1606,7 +1609,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn version_specific_claims_are_disjoint_and_backfill_is_complete() {
+    async fn version_specific_claim_predicates_select_expected_rows() {
         let db = TestDbGuard::new::<migration::Migrator>("v2_claims").await;
         db.execute_unprepared(
             r#"
@@ -1672,6 +1675,71 @@ mod tests {
         );
     }
 
+    /// The pending and backfill predicates overlap by design - a version-1 row
+    /// with `op_type = 'PENDING'` satisfies both. What keeps the two streams
+    /// from processing the same operation twice is not the predicate but the
+    /// claim itself: `FOR UPDATE SKIP LOCKED` plus the status flip to
+    /// `processing` inside the same statement. This exercises that, so the
+    /// claims must run back to back without an intervening
+    /// `reset_processing_operations`.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn overlapping_claims_never_return_the_same_row() {
+        let db = TestDbGuard::new::<migration::Migrator>("v2_claim_exclusivity").await;
+        db.execute_unprepared(
+            r#"
+            INSERT INTO operation
+                (id, op_type, profiling_version, op_status, finalized, rollback,
+                 timestamp, next_retry, status, retry_count, inserted_at, updated_at)
+            VALUES
+                ('v1-pending-a', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('v1-pending-b', 'INSUFFICIENT-FEE', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('v1-route-completed', 'TON-TAC', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'completed', 0, NOW(), NOW());
+            "#,
+        )
+        .await
+        .unwrap();
+        let database = TacDatabase::new(db.client(), 0);
+
+        let pending = database
+            .query_pending_operations(10, OrderDirection::LatestFirst)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|operation| operation.id)
+            .collect::<std::collections::HashSet<_>>();
+        // No reset here: this is the whole point of the test.
+        let backfill = database
+            .query_v1_operations_for_backfill(10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|operation| operation.id)
+            .collect::<std::collections::HashSet<_>>();
+
+        assert_eq!(
+            pending,
+            ["v1-pending-a".to_string(), "v1-pending-b".to_string()]
+                .into_iter()
+                .collect(),
+            "both overlapping rows must be claimed by the pending stream first"
+        );
+        assert_eq!(
+            pending.intersection(&backfill).count(),
+            0,
+            "a row claimed by one stream must not be handed to the other: \
+             pending={pending:?}, backfill={backfill:?}"
+        );
+        assert_eq!(
+            backfill,
+            ["v1-route-completed".to_string()].into_iter().collect(),
+            "the backfill claim must still pick up rows the pending stream cannot take"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn backfill_counters_split_claimable_from_awaiting_retry() {
@@ -1701,21 +1769,36 @@ mod tests {
         let database = TacDatabase::new(db.client(), 0);
 
         // A permanently failing legacy row must not keep the queue from being
-        // reported as converged, so it is excluded from the claimable count.
+        // reported as converged, so it is excluded from the count. An in-flight
+        // row is not claimable right now but is still unconverted, so it is
+        // counted.
         assert_eq!(
             database.count_v1_operations_for_backfill().await.unwrap(),
-            2
+            3
         );
         assert_eq!(
             database.count_v1_operations_awaiting_retry().await.unwrap(),
             1
         );
 
-        // Draining every claimable row reports convergence even though one row
-        // is still parked in the retry stream.
+        // Draining the immediately claimable rows is not convergence while the
+        // in-flight row is still version 1.
         db.execute_unprepared(
             "UPDATE operation SET profiling_version = 2, finalized = TRUE, op_status = 'success' \
              WHERE id IN ('claimable-pending', 'claimable-completed')",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            database.count_v1_operations_for_backfill().await.unwrap(),
+            1
+        );
+
+        // Once it lands, convergence is reported even though one row is still
+        // parked in the retry stream.
+        db.execute_unprepared(
+            "UPDATE operation SET profiling_version = 2, finalized = TRUE, op_status = 'success', \
+             status = 'completed'::status_enum WHERE id = 'in-flight'",
         )
         .await
         .unwrap();

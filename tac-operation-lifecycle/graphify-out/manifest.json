@@ -55,9 +55,9 @@
     "semantic_hash": "cffba3ece2618c45ad274b81adbd9997"
   },
   "tac-operation-lifecycle-logic/src/client/mod.rs": {
-    "mtime": 1786099445.6713681,
-    "ast_hash": "611bd2321553413c6aad6e76a021269d",
-    "semantic_hash": "611bd2321553413c6aad6e76a021269d"
+    "mtime": 1786298029.4507966,
+    "ast_hash": "dc63f959441abd5699a4f5915e5d358a",
+    "semantic_hash": ""
   },
   "tac-operation-lifecycle-logic/src/client/models/mod.rs": {
     "mtime": 1780473140.280183,
@@ -70,9 +70,9 @@
     "semantic_hash": "e5a1b39d9d44f8102cffaf1bcf8d3096"
   },
   "tac-operation-lifecycle-logic/src/client/models/profiling.rs": {
-    "mtime": 1786099445.6715925,
-    "ast_hash": "54bc9ed5b631f82d828bf407cd3f9864",
-    "semantic_hash": "54bc9ed5b631f82d828bf407cd3f9864"
+    "mtime": 1786292200.1653674,
+    "ast_hash": "10a234640d76daa7a12814ebc5d855bb",
+    "semantic_hash": ""
   },
   "tac-operation-lifecycle-logic/src/client/settings.rs": {
     "mtime": 1786099445.6717892,
@@ -80,13 +80,13 @@
     "semantic_hash": "3d8172c8be41ae8042d33b6eb5253919"
   },
   "tac-operation-lifecycle-logic/src/database.rs": {
-    "mtime": 1786105586.5461814,
-    "ast_hash": "66fd1c22cbd7552d247fcb0b71bcd3ec",
+    "mtime": 1786292286.1978972,
+    "ast_hash": "4dcd7cb57af054538a56772e969b4dac",
     "semantic_hash": ""
   },
   "tac-operation-lifecycle-logic/src/indexer.rs": {
-    "mtime": 1786105532.6281965,
-    "ast_hash": "a6f556ddd44fba98d331cca03647c6ef",
+    "mtime": 1786292300.3156354,
+    "ast_hash": "924d3a2da2a25a84cc86aeaad16f2928",
     "semantic_hash": ""
   },
   "tac-operation-lifecycle-logic/src/lib.rs": {
@@ -95,9 +95,9 @@
     "semantic_hash": "d1348d746686ad602bee4863522f4802"
   },
   "tac-operation-lifecycle-logic/src/lifecycle.rs": {
-    "mtime": 1786102313.3653553,
-    "ast_hash": "9bb5f75f309653fd5d6f23a604f28ff4",
-    "semantic_hash": "9bb5f75f309653fd5d6f23a604f28ff4"
+    "mtime": 1786292214.665185,
+    "ast_hash": "59642314282082e2eef4ac1d9b6ecb3b",
+    "semantic_hash": ""
   },
   "tac-operation-lifecycle-logic/src/settings.rs": {
     "mtime": 1786099445.6732886,
@@ -130,9 +130,9 @@
     "semantic_hash": "aa1c2ecaeab0d53455748b82a1567590"
   },
   "tac-operation-lifecycle-migration/src/m20260729_000001_add_stage_profiler_v2_lifecycle.rs": {
-    "mtime": 1786099445.6737356,
-    "ast_hash": "dc033c4a59a6451df171ed8e09c3d8e9",
-    "semantic_hash": "dc033c4a59a6451df171ed8e09c3d8e9"
+    "mtime": 1786292329.0477555,
+    "ast_hash": "6960714dd149a3ac7d1b94481f681ebd",
+    "semantic_hash": ""
   },
   "tac-operation-lifecycle-migration/src/main.rs": {
     "mtime": 1780473140.2836006,
@@ -140,8 +140,8 @@
     "semantic_hash": "b9f33d7619bde8226312f4bd77e7ee34"
   },
   "tac-operation-lifecycle-proto/build.rs": {
-    "mtime": 1786099445.6740196,
-    "ast_hash": "190e3e5d5cd1156796a2563501a9699a",
+    "mtime": 1786297593.74971,
+    "ast_hash": "61cafbbd415de64e493f22c51bce9cf8",
     "semantic_hash": ""
   },
   "tac-operation-lifecycle-proto/src/lib.rs": {
@@ -180,8 +180,8 @@
     "semantic_hash": "ddda792c21156705f8140e7be711d638"
   },
   "tac-operation-lifecycle-server/src/services/operations.rs": {
-    "mtime": 1786102508.8834007,
-    "ast_hash": "80e8caa32436548f82727181f662b892",
+    "mtime": 1786297593.7909014,
+    "ast_hash": "b0b7f63dc531b1237bd36e3f8a37c494",
     "semantic_hash": ""
   },
   "tac-operation-lifecycle-server/src/services/statistic.rs": {
@@ -195,9 +195,9 @@
     "semantic_hash": "b6368e73b82fd6a2fafca76fde746444"
   },
   "tac-operation-lifecycle-server/tests/mod.rs": {
-    "mtime": 1786099445.675855,
-    "ast_hash": "14ccc2f8cb1bf3feb3ad601cfeb23276",
-    "semantic_hash": "14ccc2f8cb1bf3feb3ad601cfeb23276"
+    "mtime": 1786297887.8864858,
+    "ast_hash": "64725b8b0b77605a3ab14410e6cc965b",
+    "semantic_hash": ""
   },
   "types/index.ts": {
     "mtime": 1746262599.5971184,
@@ -315,13 +315,13 @@
     "semantic_hash": "b8186f543cac7a11e4bfacee0b66e962"
   },
   ".claude/settings.json": {
-    "mtime": 1786101802.7153358,
-    "ast_hash": "d29f4c25981ef19c1b0cffaed3135208",
+    "mtime": 1786297623.6413093,
+    "ast_hash": "50be8fd622a244a3d7fcd80fd55a5495",
     "semantic_hash": ""
   },
   ".codex/hooks.json": {
-    "mtime": 1786101818.9943693,
-    "ast_hash": "6d4dd6a075dc34772713d4cfffecd282",
+    "mtime": 1786297624.6442664,
+    "ast_hash": "aa7877695dfa7fe134a196ed97c2cd86",
     "semantic_hash": ""
   },
   ".cursor/skills/solution-review/SKILL.md": {
@@ -345,8 +345,8 @@
     "semantic_hash": ""
   },
   ".memory-bank/api-surface.md": {
-    "mtime": 1786102556.9035099,
-    "ast_hash": "d5b85b1ea3f5b1baa37856fc5bebb37c",
+    "mtime": 1786297680.1523967,
+    "ast_hash": "2b3d22ea22ad34729b45890022339873",
     "semantic_hash": ""
   },
   ".memory-bank/gotchas-and-edge-cases.md": {
@@ -385,8 +385,8 @@
     "semantic_hash": ""
   },
   ".memory-bank/workflows/research-scope.md": {
-    "mtime": 1786099445.6638858,
-    "ast_hash": "e0fe565443332e16fb5fa7b145305c10",
+    "mtime": 1786297692.8995917,
+    "ast_hash": "09492938019fee6cb97998a8410ff302",
     "semantic_hash": ""
   },
   ".memory-bank/workflows/solution-review.md": {
@@ -400,23 +400,23 @@
     "semantic_hash": ""
   },
   ".memory-bank/workflows/task-to-code.md": {
-    "mtime": 1786099445.664206,
-    "ast_hash": "c1e43252a0844d541a03c6a6f96c2654",
+    "mtime": 1786297689.8876202,
+    "ast_hash": "b8d443308550e2796481549e2ee1a7ec",
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1786101818.9941022,
-    "ast_hash": "6a47d64fcc136324ca395065a707ef76",
+    "mtime": 1786297652.1683524,
+    "ast_hash": "426ea0ee1e6fbdfd9b6d8e23c403d834",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1786101802.7150853,
-    "ast_hash": "82efb97a359f5c7290bf2513d14686be",
+    "mtime": 1786297644.3224351,
+    "ast_hash": "426ea0ee1e6fbdfd9b6d8e23c403d834",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1786102547.767106,
-    "ast_hash": "11ec41bec19f8c51fa704259b1e989ce",
+    "mtime": 1786297956.090026,
+    "ast_hash": "89ab0489a730127c81aa177b9cb111dd",
     "semantic_hash": ""
   },
   "docker-compose.yaml": {
@@ -444,8 +444,8 @@
     "ast_hash": "3d2dfa7d36c122d67a2ef3e6f98c6d8c",
     "semantic_hash": ""
   },
-  "tac-operation-lifecycle-proto/swagger/v1/tac-operation-lifecycle.swagger.yaml": {
-    "mtime": 1786105574.8543534,
+  "tac-operation-lifecycle-proto/swagger/tac-operation-lifecycle.swagger.yaml": {
+    "mtime": 1786298032.8117867,
     "ast_hash": "040a8d8e9e080e7c1a9515927bfc8e66",
     "semantic_hash": ""
   }

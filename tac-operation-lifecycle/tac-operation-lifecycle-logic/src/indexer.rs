@@ -175,163 +175,6 @@ impl Indexer {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::items_after_test_module)]
-mod tests {
-    use super::*;
-    use crate::client::models::profiling::{
-        OperationRoute, OperationStatus, V1OperationData, V2OperationData,
-    };
-
-    fn operation(timestamp: chrono::NaiveDateTime) -> operation::Model {
-        operation::Model {
-            id: "operation".to_string(),
-            op_type: None,
-            profiling_version: None,
-            op_status: None,
-            error_reason: None,
-            finalized: None,
-            rollback: None,
-            timestamp,
-            next_retry: None,
-            status: StatusEnum::Pending,
-            retry_count: 0,
-            inserted_at: timestamp,
-            updated_at: timestamp,
-            sender_address: None,
-            sender_blockchain: None,
-        }
-    }
-
-    fn v1_data() -> V1OperationData {
-        V1OperationData {
-            operation_type: LegacyOperationType::Pending,
-            meta_info: None,
-            stages: HashMap::new(),
-        }
-    }
-
-    fn v2_data(finalized: bool) -> V2OperationData {
-        V2OperationData {
-            operation_type: OperationRoute::TonTac,
-            status: Some(OperationStatus::Failed),
-            finalized,
-            rollback: true,
-            meta_info: None,
-            stages: HashMap::new(),
-        }
-    }
-
-    #[test]
-    fn v1_partial_recovery_cannot_overwrite_v2_result() {
-        let mut tagged = HashMap::from([
-            (
-                "v2-operation".to_string(),
-                SourceOperationData::V2(v2_data(false)),
-            ),
-            (
-                "other-operation".to_string(),
-                SourceOperationData::V2(v2_data(true)),
-            ),
-        ]);
-        let omitted = HashSet::from(["missing-operation"]);
-        let v1 = HashMap::from([
-            ("v2-operation".to_string(), v1_data()),
-            ("missing-operation".to_string(), v1_data()),
-        ]);
-
-        Indexer::merge_v1_recovery_results(&mut tagged, &omitted, v1);
-
-        assert!(matches!(
-            tagged.get("v2-operation"),
-            Some(SourceOperationData::V2(_))
-        ));
-        assert!(matches!(
-            tagged.get("missing-operation"),
-            Some(SourceOperationData::V1(_))
-        ));
-        assert_eq!(tagged.len(), 3);
-    }
-
-    #[test]
-    fn v2_work_status_uses_finalized_and_preserves_forever_pending_semantics() {
-        let settings = IndexerSettings {
-            forever_pending_operations_age_sec: Duration::from_secs(60),
-            ..Default::default()
-        };
-        let recent = operation(chrono::Utc::now().naive_utc());
-        let old = operation((chrono::Utc::now() - chrono::Duration::minutes(2)).naive_utc());
-
-        assert_eq!(
-            Indexer::operation_work_status(
-                &settings,
-                &recent,
-                &SourceOperationData::V2(v2_data(false))
-            ),
-            StatusEnum::Pending
-        );
-        assert_eq!(
-            Indexer::operation_work_status(
-                &settings,
-                &recent,
-                &SourceOperationData::V2(v2_data(true))
-            ),
-            StatusEnum::Completed
-        );
-        assert_eq!(
-            Indexer::operation_work_status(
-                &settings,
-                &old,
-                &SourceOperationData::V2(v2_data(false))
-            ),
-            StatusEnum::Completed
-        );
-    }
-
-    #[test]
-    fn backfill_convergence_is_reported_once_per_transition() {
-        let mut convergence_reported = false;
-
-        assert!(Indexer::should_report_v2_backfill_convergence(
-            &mut convergence_reported,
-            0
-        ));
-        assert!(!Indexer::should_report_v2_backfill_convergence(
-            &mut convergence_reported,
-            0
-        ));
-        assert!(!Indexer::should_report_v2_backfill_convergence(
-            &mut convergence_reported,
-            1
-        ));
-        assert!(Indexer::should_report_v2_backfill_convergence(
-            &mut convergence_reported,
-            0
-        ));
-    }
-
-    #[test]
-    fn empty_backfill_queue_uses_a_bounded_idle_interval() {
-        let fast_settings = IndexerSettings {
-            retry_interval: Duration::from_secs(1),
-            ..Default::default()
-        };
-        let slow_settings = IndexerSettings {
-            retry_interval: Duration::from_secs(120),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            Indexer::v2_backfill_idle_interval(&fast_settings),
-            Duration::from_secs(60)
-        );
-        assert_eq!(
-            Indexer::v2_backfill_idle_interval(&slow_settings),
-            Duration::from_secs(120)
-        );
-    }
-}
-
 impl Indexer {
     // Revert all intevals and operations in the 'processing' phase into the 'pending' one
     // This should be done on startup to avoid entities oblivion
@@ -886,11 +729,18 @@ impl Indexer {
         settings.retry_interval.max(V2_BACKFILL_MIN_IDLE_INTERVAL)
     }
 
+    /// Backoff applied to every operation retry, scaled by the attempt number so
+    /// a permanently failing row backs off instead of hammering upstream every
+    /// five seconds. Used by both the technical retry path and the v2 backfill
+    /// worker, which cannot reach `retry_operation` because it runs detached.
+    fn retry_delay_sec(operation: &operation::Model) -> i64 {
+        5 * i64::from(operation.retry_count.saturating_add(1))
+    }
+
     async fn retry_operation(&self, operation: &operation::Model) {
-        let attempt = operation.retry_count + 1;
         let _ = self
             .database
-            .set_operation_retry(operation, 5 * i64::from(attempt))
+            .set_operation_retry(operation, Self::retry_delay_sec(operation))
             .await;
     }
 
@@ -969,7 +819,10 @@ impl Indexer {
                                                     "Failed to store re-profiled operation"
                                                 );
                                                 let _ = database
-                                                    .set_operation_retry(&operation, 5)
+                                                    .set_operation_retry(
+                                                        &operation,
+                                                        Self::retry_delay_sec(&operation),
+                                                    )
                                                     .await;
                                             }
                                         }
@@ -978,8 +831,12 @@ impl Indexer {
                                                 operation_id = %operation.id,
                                                 "V2 backfill response omitted requested operation"
                                             );
-                                            let _ =
-                                                database.set_operation_retry(&operation, 5).await;
+                                            let _ = database
+                                                .set_operation_retry(
+                                                    &operation,
+                                                    Self::retry_delay_sec(&operation),
+                                                )
+                                                .await;
                                         }
                                     }
                                 }
@@ -987,7 +844,12 @@ impl Indexer {
                             Err(error) => {
                                 tracing::warn!(%error, "V2 re-profiling batch failed");
                                 for operation in operations {
-                                    let _ = database.set_operation_retry(&operation, 5).await;
+                                    let _ = database
+                                        .set_operation_retry(
+                                            &operation,
+                                            Self::retry_delay_sec(&operation),
+                                        )
+                                        .await;
                                 }
                             }
                         }
@@ -1126,5 +988,161 @@ impl Indexer {
         realtime_thread.await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::models::profiling::{
+        OperationRoute, OperationStatus, V1OperationData, V2OperationData,
+    };
+
+    fn operation(timestamp: chrono::NaiveDateTime) -> operation::Model {
+        operation::Model {
+            id: "operation".to_string(),
+            op_type: None,
+            profiling_version: None,
+            op_status: None,
+            error_reason: None,
+            finalized: None,
+            rollback: None,
+            timestamp,
+            next_retry: None,
+            status: StatusEnum::Pending,
+            retry_count: 0,
+            inserted_at: timestamp,
+            updated_at: timestamp,
+            sender_address: None,
+            sender_blockchain: None,
+        }
+    }
+
+    fn v1_data() -> V1OperationData {
+        V1OperationData {
+            operation_type: LegacyOperationType::Pending,
+            meta_info: None,
+            stages: HashMap::new(),
+        }
+    }
+
+    fn v2_data(finalized: bool) -> V2OperationData {
+        V2OperationData {
+            operation_type: OperationRoute::TonTac,
+            status: Some(OperationStatus::Failed),
+            finalized,
+            rollback: true,
+            meta_info: None,
+            stages: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn v1_partial_recovery_cannot_overwrite_v2_result() {
+        let mut tagged = HashMap::from([
+            (
+                "v2-operation".to_string(),
+                SourceOperationData::V2(v2_data(false)),
+            ),
+            (
+                "other-operation".to_string(),
+                SourceOperationData::V2(v2_data(true)),
+            ),
+        ]);
+        let omitted = HashSet::from(["missing-operation"]);
+        let v1 = HashMap::from([
+            ("v2-operation".to_string(), v1_data()),
+            ("missing-operation".to_string(), v1_data()),
+        ]);
+
+        Indexer::merge_v1_recovery_results(&mut tagged, &omitted, v1);
+
+        assert!(matches!(
+            tagged.get("v2-operation"),
+            Some(SourceOperationData::V2(_))
+        ));
+        assert!(matches!(
+            tagged.get("missing-operation"),
+            Some(SourceOperationData::V1(_))
+        ));
+        assert_eq!(tagged.len(), 3);
+    }
+
+    #[test]
+    fn v2_work_status_uses_finalized_and_preserves_forever_pending_semantics() {
+        let settings = IndexerSettings {
+            forever_pending_operations_age_sec: Duration::from_secs(60),
+            ..Default::default()
+        };
+        let recent = operation(chrono::Utc::now().naive_utc());
+        let old = operation((chrono::Utc::now() - chrono::Duration::minutes(2)).naive_utc());
+
+        assert_eq!(
+            Indexer::operation_work_status(
+                &settings,
+                &recent,
+                &SourceOperationData::V2(v2_data(false))
+            ),
+            StatusEnum::Pending
+        );
+        assert_eq!(
+            Indexer::operation_work_status(
+                &settings,
+                &recent,
+                &SourceOperationData::V2(v2_data(true))
+            ),
+            StatusEnum::Completed
+        );
+        assert_eq!(
+            Indexer::operation_work_status(
+                &settings,
+                &old,
+                &SourceOperationData::V2(v2_data(false))
+            ),
+            StatusEnum::Completed
+        );
+    }
+
+    #[test]
+    fn backfill_convergence_is_reported_once_per_transition() {
+        let mut convergence_reported = false;
+
+        assert!(Indexer::should_report_v2_backfill_convergence(
+            &mut convergence_reported,
+            0
+        ));
+        assert!(!Indexer::should_report_v2_backfill_convergence(
+            &mut convergence_reported,
+            0
+        ));
+        assert!(!Indexer::should_report_v2_backfill_convergence(
+            &mut convergence_reported,
+            1
+        ));
+        assert!(Indexer::should_report_v2_backfill_convergence(
+            &mut convergence_reported,
+            0
+        ));
+    }
+
+    #[test]
+    fn empty_backfill_queue_uses_a_bounded_idle_interval() {
+        let fast_settings = IndexerSettings {
+            retry_interval: Duration::from_secs(1),
+            ..Default::default()
+        };
+        let slow_settings = IndexerSettings {
+            retry_interval: Duration::from_secs(120),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            Indexer::v2_backfill_idle_interval(&fast_settings),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            Indexer::v2_backfill_idle_interval(&slow_settings),
+            Duration::from_secs(120)
+        );
     }
 }

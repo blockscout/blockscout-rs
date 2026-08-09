@@ -14,7 +14,7 @@ fn compile(
     config
         .service_generator(generator)
         .compile_well_known_types()
-        .protoc_arg("--openapiv2_out=swagger/v1")
+        .protoc_arg("--openapiv2_out=swagger")
         .protoc_arg("--openapiv2_opt")
         .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=tac-operation-lifecycle,json_names_for_fields=false")
         .bytes(["."])
@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // (or corresponding http mapping) has been changed.
     println!("cargo:rerun-if-changed=proto/");
 
-    std::fs::create_dir_all("./swagger/v1").unwrap();
+    std::fs::create_dir_all("./swagger").unwrap();
     let gens = Box::new(GeneratorList::new(vec![
         tonic_build::configure().service_generator(),
         Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),

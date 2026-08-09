@@ -6,7 +6,10 @@ use std::{collections::HashSet, sync::Arc};
 use tac_operation_lifecycle_entity::{operation, operation_stage, transaction};
 use tac_operation_lifecycle_logic::{
     database::{LogicPagination, TacDatabase},
-    lifecycle::{project_v1_type, PROFILING_VERSION_V1, PROFILING_VERSION_V2},
+    lifecycle::{
+        note_indicates_insufficient_fee, project_v1_type, PROFILING_VERSION_V1,
+        PROFILING_VERSION_V2,
+    },
 };
 use v1::tac_service_server::TacService as TacServiceV1;
 use v2::tac_service_v2_server::TacServiceV2;
@@ -95,10 +98,10 @@ impl OperationsService {
     ) -> v1::OperationDetails {
         let insufficient_fee = stages.iter().any(|(stage, _)| {
             !stage.success
-                && stage.note.as_ref().is_some_and(|note| {
-                    let note = note.to_lowercase();
-                    note.contains("insufficient") && note.contains("fee")
-                })
+                && stage
+                    .note
+                    .as_deref()
+                    .is_some_and(note_indicates_insufficient_fee)
         });
         let op_type = project_v1_type(
             op.profiling_version,

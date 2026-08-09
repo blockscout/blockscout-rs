@@ -10,16 +10,26 @@ pub const PROFILING_VERSION_V1: i16 = 1;
 pub const PROFILING_VERSION_V2: i16 = 2;
 pub const INSUFFICIENT_FEE_ERROR_REASON: &str = "Insufficient Fee";
 
+/// Single definition of the insufficient-fee heuristic over a failed stage note.
+///
+/// The same predicate is applied to upstream stage payloads, to persisted
+/// `operation_stage` rows in both v1 read paths, and - as `ILIKE '%insufficient%'
+/// AND ILIKE '%fee%'` - by the down migration. Keep those in sync.
+pub fn note_indicates_insufficient_fee(note: &str) -> bool {
+    let note = note.to_lowercase();
+    note.contains("insufficient") && note.contains("fee")
+}
+
 pub fn has_insufficient_fee_stages<'a>(stages: impl IntoIterator<Item = &'a Stage>) -> bool {
     stages
         .into_iter()
         .filter_map(|stage| stage.stage_data.as_ref())
         .any(|stage_data| {
             !stage_data.success
-                && stage_data.note.as_ref().is_some_and(|note| {
-                    let note = note.to_lowercase();
-                    note.contains("insufficient") && note.contains("fee")
-                })
+                && stage_data
+                    .note
+                    .as_deref()
+                    .is_some_and(note_indicates_insufficient_fee)
         })
 }
 

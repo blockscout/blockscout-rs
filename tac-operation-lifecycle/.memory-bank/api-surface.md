@@ -6,10 +6,15 @@ Base URL: `TAC_OPERATION_LIFECYCLE__RPC__URL` (e.g. `https://data.turin.tac.buil
 
 1. `GET /operation-ids?from=&till=&offset=` → `{ response: { total, operations: [{operationId, timestamp}] } }`
    - Used by interval jobs and the realtime thread for discovery. Client auto-paginates via `offset` until `total` reached or empty page.
-2. `POST /stage-profiling` body `{"operationIds": [...]}` → `{ response: { <opId>: OperationData } }`
-   - `OperationData`: `operationType` (SCREAMING_SNAKE / hyphenated, e.g. `TON-TAC-TON`, `PENDING`), `metaInfo` (initialCaller, validExecutors, feeInfo per chain), plus flattened map of 6 stage keys → `{ exists, stageData: { success, timestamp, transactions[], note } }`.
-   - `note` may be a JSON object — coerced to string by `deserialize_note_to_string`.
+2. `POST /v2/stage-profiling` body `{"operationIds": [...]}` → `{ response: { <opId>: V2OperationData } }` — **the default source**, selected by `stage_profiling_mode = prefer_v2`. See [sync-architecture.md](sync-architecture.md) for the fallback/circuit rules and `v2_only` / `v1_only`.
+   - `V2OperationData`: `operationType` is a **route only** (`TON-TAC-TON`, `TAC-TON`, `TON-TAC`, `UNKNOWN`) — it never carries an outcome. The lifecycle comes from separate fields: `status` (`success` | `failed`, optional), `finalized` (bool), `rollback` (bool).
+   - Unknown route strings are preserved as `OperationRoute::Unrecognized(String)` rather than collapsed, so a newly added TAC route is stored verbatim.
+   - `finalized` and `rollback` are **required**: a missing field is a deserialization failure on purpose, which is fallback-eligible and opens the v2 circuit. Defaulting them would silently turn a broken payload into "not final" and re-poll forever.
+3. `POST /stage-profiling` body `{"operationIds": [...]}` → `{ response: { <opId>: V1OperationData } }` — **legacy fallback**, used in `v1_only` and while the v2 circuit is open.
+   - `V1OperationData`: `operationType` is overloaded — a route *or* a state (`PENDING`, `ROLLBACK`), SCREAMING_SNAKE / hyphenated. `INSUFFICIENT-FEE` is never returned by the API; it is derived locally from `PENDING` + a failed stage note (`derive_v1_source_type`).
    - Unknown `operationType` strings deserialize to `ErrorType` via `#[serde(other)]`.
+
+Both profiling responses also carry `metaInfo` (initialCaller, validExecutors, feeInfo per chain) plus a flattened map of 6 stage keys → `{ exists, stageData: { success, timestamp, transactions[], note } }`. `note` may be a JSON object — coerced to string by `deserialize_note_to_string`.
 
 ## Served API (proto v1, `tac-operation-lifecycle.proto`)
 

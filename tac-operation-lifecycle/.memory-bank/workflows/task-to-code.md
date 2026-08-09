@@ -12,14 +12,15 @@ Read `coding-task-X.md` first, then the matching plan and task artifacts when pr
 - Re-check current code before editing, but do not add adjacent fixes, speculative improvements, or unrelated refactors.
 - Reuse existing patterns unless the handoff directs otherwise.
 - Make the requested code, test, schema, migration, configuration, or documentation changes only.
-- Run `just format` after the final edit. Then run the feasible verification named in the handoff; prefer `just test`, `just test-with-db`, `just check`, and `just check-envs` where applicable.
+- Run `just format` after the final edit, then `graphify update .` to keep the code graph current. Then run the feasible verification named in the handoff; prefer `just test`, `just test-with-db`, `just check`, and `just check-envs` where applicable.
 
 ## Process
 
 1. Confirm exact goal, components, verification, acceptance criteria, and existing blockers.
 2. Read the smallest current implementation surface that validates the handoff assumptions.
 3. Implement the requested work in the required sequence.
-4. Format and validate against stated acceptance criteria. Report any unavailable check with its exact reason.
-5. Report implemented scope, formatting result, verification results, acceptance-criteria status, and unresolved ambiguity or drift.
+4. Format, then run `graphify update .`.
+5. Validate against stated acceptance criteria. Report any unavailable check with its exact reason.
+6. Report implemented scope, formatting result, the graphify update result, verification results, acceptance-criteria status, and unresolved ambiguity or drift.
 
-The task is complete only when requested changes are applied, formatting has run or its blocker is stated, and required verification either passed or its gap is explicit.
+The task is complete only when requested changes are applied, formatting has run or its blocker is stated, `graphify update .` has run or its exact blocker is stated, and required verification either passed or its gap is explicit.

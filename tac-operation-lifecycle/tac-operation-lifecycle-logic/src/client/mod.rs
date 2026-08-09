@@ -203,23 +203,21 @@ impl Client {
                         .await
                         .map(ProfilingResponse::V1);
                 }
+                // Circuit state is owned by `get_operations_stages_v2`; this branch
+                // only decides where the outcome is routed, so the state machine
+                // keeps a single writer.
                 match self.get_operations_stages_v2(id.clone()).await {
                     Ok(response) => {
-                        self.close_v2_circuit();
                         tracing::debug!("Selected Stage Profiler v2");
                         Ok(ProfilingResponse::V2(response))
                     }
                     Err(error) if error.is_v2_fallback_eligible() => {
-                        self.open_v2_circuit(&error);
                         tracing::warn!(error = %error, "Stage Profiler v2 unavailable; using v1");
                         self.get_operations_stages_v1(id)
                             .await
                             .map(ProfilingResponse::V1)
                     }
-                    Err(error) => {
-                        self.defer_failed_probe();
-                        Err(error)
-                    }
+                    Err(error) => Err(error),
                 }
             }
         }
@@ -345,7 +343,11 @@ impl Client {
             .unwrap_or(self.rpc.url.as_str())
     }
 
-    async fn make_request(&self, request: Request) -> anyhow::Result<Response> {
+    /// Waits for a rate-limiter permit, retrying up to `num_of_retries` times,
+    /// then executes the request once. The two failure modes stay distinct so
+    /// each caller can map them onto its own error type - in particular a local
+    /// rate-limiter exhaustion must never be mistaken for an upstream failure.
+    async fn execute_rate_limited(&self, request: Request) -> Result<Response, RequestFailure> {
         for attempt in 1..=self.rpc.num_of_retries {
             let permit = timeout(
                 Duration::from_millis(self.rpc.retry_delay_ms.into()),
@@ -359,38 +361,7 @@ impl Client {
                         .http
                         .execute(request)
                         .await
-                        .map_err(|e| anyhow::anyhow!("HTTP request error: {}", e));
-                }
-                Err(_) => {
-                    tracing::info!(
-                        attempt,
-                        MAX_RETRIES =? self.rpc.num_of_retries,
-                        "Rate limiter wait timed out, retrying..."
-                    );
-                }
-            }
-        }
-
-        Err(anyhow::anyhow!(
-            "Exceeded maximum retry attempts ({}) waiting for rate limiter",
-            self.rpc.num_of_retries,
-        ))
-    }
-
-    async fn make_profiling_request(&self, request: Request) -> Result<Response, ProfilingError> {
-        for attempt in 1..=self.rpc.num_of_retries {
-            let permit = timeout(
-                Duration::from_millis(self.rpc.retry_delay_ms.into()),
-                self.limiter.until_ready(),
-            )
-            .await;
-            match permit {
-                Ok(_) => {
-                    return self
-                        .http
-                        .execute(request)
-                        .await
-                        .map_err(ProfilingError::Transport);
+                        .map_err(RequestFailure::Http)
                 }
                 Err(_) => tracing::info!(
                     attempt,
@@ -399,8 +370,39 @@ impl Client {
                 ),
             }
         }
-        Err(ProfilingError::LocalRateLimiter)
+
+        Err(RequestFailure::RateLimiterExhausted)
     }
+
+    async fn make_request(&self, request: Request) -> anyhow::Result<Response> {
+        self.execute_rate_limited(request)
+            .await
+            .map_err(|failure| match failure {
+                RequestFailure::Http(error) => anyhow::anyhow!("HTTP request error: {}", error),
+                RequestFailure::RateLimiterExhausted => anyhow::anyhow!(
+                    "Exceeded maximum retry attempts ({}) waiting for rate limiter",
+                    self.rpc.num_of_retries,
+                ),
+            })
+    }
+
+    async fn make_profiling_request(&self, request: Request) -> Result<Response, ProfilingError> {
+        self.execute_rate_limited(request)
+            .await
+            .map_err(|failure| match failure {
+                RequestFailure::Http(error) => ProfilingError::Transport(error),
+                RequestFailure::RateLimiterExhausted => ProfilingError::LocalRateLimiter,
+            })
+    }
+}
+
+/// Outcome of [`Client::execute_rate_limited`] that the caller must translate.
+enum RequestFailure {
+    /// The request was executed and the HTTP client failed.
+    Http(reqwest::Error),
+    /// No permit was granted within the configured attempts; the request was
+    /// never sent, so this says nothing about upstream availability.
+    RateLimiterExhausted,
 }
 
 #[derive(serde::Deserialize)]

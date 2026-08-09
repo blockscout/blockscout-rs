@@ -84,7 +84,11 @@ pub enum LegacyOperationType {
     ErrorType,
 }
 
-#[derive(Clone, Debug, Serialize, Eq, PartialEq)]
+/// Upstream v2 route. Deliberately not `Serialize`: the value reaches the
+/// database and the v1 projection through [`Display`], and a derived
+/// `Serialize` would emit a different, externally-tagged shape than
+/// [`Deserialize`] accepts.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OperationRoute {
     TonTacTon,
     TacTon,
@@ -99,13 +103,8 @@ impl<'de> Deserialize<'de> for OperationRoute {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Ok(match value.as_str() {
-            "TON-TAC-TON" => Self::TonTacTon,
-            "TAC-TON" => Self::TacTon,
-            "TON-TAC" => Self::TonTac,
-            "UNKNOWN" => Self::Unknown,
-            _ => Self::Unrecognized(value),
-        })
+        // Infallible: unknown routes are preserved as `Unrecognized`.
+        Ok(Self::from_str(&value).unwrap_or(Self::Unknown))
     }
 }
 

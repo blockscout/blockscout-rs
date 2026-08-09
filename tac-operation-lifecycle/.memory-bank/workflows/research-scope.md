@@ -30,7 +30,7 @@ Treat notes as secondary to current source, configuration, schemas, and tests; r
 3. Inspect the authoritative code paths and summarize 3–7 key takeaways, boundaries, and remaining unknowns. Keep discussion concise and provisional.
 4. Continue investigating and correct conclusions through dialogue. Do not produce a near-final note or write a file until explicit instruction.
 5. On an explicit persistence instruction, create a new note or update the strong matching note. If several targets are plausible, ask the human which one to use.
-6. Ground the note in source-of-truth files, distinguish facts, inferences, and open questions, register a new note in `.memory-bank/README.md`, and report its path and source anchors.
+6. Ground the note in source-of-truth files and distinguish facts, inferences, and open questions. Then reconcile `.memory-bank/README.md` with what step 5 actually did: register a new entry for a new note, or update the existing entry when a strong matching note was updated. Report the note path and its source anchors.
 
 ## Quality Bar
 

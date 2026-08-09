@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/evgen/.local/bin/graphify hook-check"
+            "command": "command -v graphify >/dev/null 2>&1 && exec graphify hook-check || exit 0"
           }
         ]
       }
