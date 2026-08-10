@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package blockscout.tacOperationLifecycle.v2;
+
+option go_package = "github.com/blockscout/blockscout-rs/tac-operation-lifecycle";
+
+service TacServiceV2 {
+  rpc GetOperations(V2GetOperationsRequest) returns (V2OperationsResponse) {}
+  rpc GetOperationDetails(V2GetOperationDetailsRequest) returns (V2OperationDetails) {}
+  rpc GetOperationsByTransaction(V2GetOperationByTxHashRequest) returns (V2OperationsFullResponse) {}
+}
+
+message V2Pagination {
+  uint64 page_token = 1;
+  uint32 page_items = 2;
+}
+
+message V2GetOperationsRequest {
+  optional string q = 1;
+  optional uint64 page_token = 2;
+  optional uint64 page_items = 3;
+}
+
+message V2GetOperationDetailsRequest {
+  string operation_id = 1;
+}
+
+message V2GetOperationByTxHashRequest {
+  string tx_hash = 1;
+}
+
+enum V2OperationType {
+  UNKNOWN = 0;
+  TON_TAC_TON = 1;
+  TAC_TON = 2;
+  TON_TAC = 3;
+}
+
+// Public outcome of an operation. Lower-case names preserve the existing public
+// JSON values.
+//
+// `failed` is reported as soon as the operation outcome is known to be failed,
+// including while the indexer still re-requests the operation upstream.
+// `success` additionally requires the operation to be final upstream, so a
+// successful but not-yet-final operation is reported as `pending`, as is an
+// operation whose stage profiling has not been requested yet. The internal
+// upstream finality flag is not part of this contract.
+enum V2OperationStatus {
+  pending = 0;
+  success = 1;
+  failed = 2;
+}
+
+message V2OperationsResponse {
+  repeated V2OperationBriefDetails items = 1;
+  optional V2Pagination next_page_params = 2;
+}
+
+message V2OperationBriefDetails {
+  reserved 3, 4;
+  reserved "success", "finalized";
+
+  string operation_id = 1;
+  V2OperationType type = 2;
+  V2OperationStatus status = 9;
+  bool rollback = 5;
+  string timestamp = 6;
+  optional V2BlockchainAddress sender = 7;
+  optional string error_reason = 8;
+}
+
+message V2OperationDetails {
+  reserved 3, 4;
+  reserved "success", "finalized";
+
+  string operation_id = 1;
+  V2OperationType type = 2;
+  V2OperationStatus status = 10;
+  bool rollback = 5;
+  string timestamp = 6;
+  optional V2BlockchainAddress sender = 7;
+  repeated V2OperationStage status_history = 8;
+  optional string error_reason = 9;
+}
+
+enum V2BlockchainType {
+  TAC = 0;
+  TON = 1;
+  UNKNOWN_BLOCKCHAIN = 2;
+}
+
+message V2BlockchainAddress {
+  string address = 1;
+  V2BlockchainType blockchain = 2;
+}
+
+message V2OperationRelatedTransaction {
+  string hash = 1;
+  V2BlockchainType type = 2;
+}
+
+message V2OperationStage {
+  enum V2StageType {
+    COLLECTED_IN_TAC = 0;
+    INCLUDED_IN_TAC_CONSENSUS = 1;
+    EXECUTED_IN_TAC = 2;
+    COLLECTED_IN_TON = 3;
+    INCLUDED_IN_TON_CONSENSUS = 4;
+    EXECUTED_IN_TON = 5;
+  }
+  V2StageType type = 1;
+  bool is_exist = 2;
+  optional bool is_success = 3;
+  optional string timestamp = 4;
+  repeated V2OperationRelatedTransaction transactions = 5;
+  optional string note = 6;
+}
+
+message V2OperationsFullResponse {
+  repeated V2OperationDetails items = 1;
+}

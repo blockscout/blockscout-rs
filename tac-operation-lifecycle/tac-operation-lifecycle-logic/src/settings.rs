@@ -8,6 +8,8 @@ use std::{thread, time};
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IndexerSettings {
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde(default = "default_concurrency")]
     pub concurrency: u32,
     #[serde(default = "default_start_timestamp")]
@@ -41,6 +43,10 @@ pub struct IndexerSettings {
     #[serde(default = "default_forever_pending_operations_age_sec")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub forever_pending_operations_age_sec: time::Duration,
+}
+
+fn default_enabled() -> bool {
+    true
 }
 
 fn default_concurrency() -> u32 {
@@ -96,6 +102,7 @@ fn default_forever_pending_operations_age_sec() -> time::Duration {
 impl Default for IndexerSettings {
     fn default() -> Self {
         Self {
+            enabled: default_enabled(),
             concurrency: default_concurrency(),
             start_timestamp: default_start_timestamp(),
             polling_interval: default_polling_interval(),

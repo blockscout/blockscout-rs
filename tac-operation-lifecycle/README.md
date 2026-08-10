@@ -36,9 +36,50 @@ The TAC Operation Lifecycle Indexer follows a process describing below:
 4. Operation Processing:
 * For each operation, the indexer fetches detailed stage information
 * Operation stages track the lifecycle of the operation across different blockchains
-* Once stages are fetched, the operation is marked as `finalized`
+* Stage Profiler v2 is preferred and stores route, operation outcome (`op_status`), finality, and rollback independently
+* Upstream `finalized=true` is the normal polling-terminal signal; the technical database `status` remains indexer bookkeeping
+* Non-final operations older than one week stop local polling without changing their canonical `finalized=false` value
+* Legacy v1 profiling remains available as an adaptive fallback, and a persistent worker upgrades v1-source rows after v2 recovers
 * If fetching fails, the operation is scheduled for retry
 
+Read API v2 is served under `/api/v2/tac/...`. It exposes required enum fields
+for the operation `type` (`UNKNOWN`, `TON_TAC_TON`, `TAC_TON`, or `TON_TAC`) and
+its public `status` projection (`pending`, `success`, or `failed`) derived from
+the stored profiling version without changing the canonical lifecycle fields in
+the database. Until a v2 operation route is known, v2 returns `UNKNOWN`. The
+required `rollback` flag is `true` only when rollback is confirmed; otherwise it
+is `false`. Read API v1 remains a compatibility projection. Both API versions are
+described by the same Swagger document, served at `/api/v1/docs/swagger.yaml` and
+`/api/v2/docs/swagger.yaml`.
+
+The public `status` is a product projection, not a mirror of the upstream
+lifecycle fields. By design:
+
+* **Upstream `finalized` is not exposed.** It exists to tell the indexer whether
+  to keep re-requesting an operation. It is not a user-facing concept, so the v2
+  messages reserve the field name.
+* **`failed` does not wait for finality.** As soon as the operation outcome is
+  `failed`, v2 reports `failed`, even while the indexer still polls it. A user
+  cannot influence such an operation, and reporting it as simultaneously failed
+  and pending would be more confusing than useful. `rollback` and `error_reason`
+  carry the detail.
+* **`error_reason` is a short label, not the raw failure text.** It is only
+  reported for failed version-2 operations and is derived locally from the
+  failed stage notes: an insufficient fee takes priority, otherwise the note of
+  the latest failed stage is used. The derived value is always stored, but the
+  API publishes it only when it fits 16 characters — anything longer is a raw
+  upstream payload that cannot be shown as a label, so a failed operation may
+  come without an `error_reason`. The complete notes are always available per
+  stage in `status_history`.
+* **`success` does require finality** (`op_status=success` and `finalized=true`);
+  a successful but not-yet-final operation reads as `pending`, as does an
+  operation whose stage profiling has not been requested yet.
+* **Legacy (profiling version 1) rows are mapped from the old overloaded
+  `op_type`** rather than reported as unknown: `ROLLBACK`/`INSUFFICIENT-FEE` →
+  `failed`, a concrete route → `success`. The old upstream model could not
+  express a final failure without rollback, so this reproduces what consumers
+  already see today. These rows are transitional — the v2 re-profiling worker
+  converts them once v2 data is available.
 
 ```
 +----------------------------------------------------------------------------------------+
@@ -115,6 +156,8 @@ Parameters can be configured either using a `toml` file or environment variables
 | `TAC_OPERATION_LIFECYCLE__RPC__REQUEST_PER_SECOND` | | The rate limit for requests per second. | `100` |
 | `TAC_OPERATION_LIFECYCLE__RPC__NUM_OF_RETRIES` | | The number of retries for each request. A request is considered failed after this number of retries. | `10` |
 | `TAC_OPERATION_LIFECYCLE__RPC__RETRY_DELAY_MS` | | The delay in milliseconds between retries. | `1000` |
+| `TAC_OPERATION_LIFECYCLE__RPC__STAGE_PROFILING_MODE` | | Stage Profiler selection: `prefer_v2`, `v2_only`, or `v1_only`. `prefer_v2` falls back only for v2 availability/compatibility errors. | `prefer_v2` |
+| `TAC_OPERATION_LIFECYCLE__RPC__STAGE_PROFILING_V2_PROBE_INTERVAL` | | Seconds between v2 recovery probes while `prefer_v2` uses v1 fallback. | `60` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CREATE_DATABASE` | | Whether to create the database if it does not exist. | `false` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__RUN_MIGRATIONS` | | Whether to run database migrations on startup. | `false` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT__URL` | | The database connection URL (e.g., `postgres://postgres:postgres@database:5432/blockscout`). | None |
@@ -129,6 +172,7 @@ Parameters can be configured either using a `toml` file or environment variables
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__CONNECT_LAZY` | | Whether to establish database connections lazily. | `false` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_LEVEL` | | The logging level for slow SQL statements. | `off` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_THRESHOLD` | | The threshold (in seconds) for logging slow SQL statements. | `1` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__ENABLED` | | Boolean master switch for the indexer. `true` runs all indexer tasks; `false` starts none of them - no intervals and no operations are fetched, and the read API serves whatever is already in the database. | `true` |
 
 [anchor]: <> (anchors.envs.end.service)
 

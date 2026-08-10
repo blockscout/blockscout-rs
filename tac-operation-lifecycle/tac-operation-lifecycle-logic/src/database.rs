@@ -3,9 +3,11 @@
 use crate::{
     client::models::{
         operations::Operations as ApiOperations,
-        profiling::{
-            BlockchainType, OperationData as ApiOperationData, OperationMetaInfo, OperationType,
-        },
+        profiling::{BlockchainType, OperationMetaInfo, SourceOperationData},
+    },
+    lifecycle::{
+        derive_operation_error_reason, derive_v1_source_type, note_indicates_insufficient_fee,
+        PROFILING_VERSION_V1, PROFILING_VERSION_V2,
     },
     utils::{
         blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address,
@@ -19,8 +21,8 @@ use sea_orm::{
     ActiveEnum, ActiveModelTrait,
     ActiveValue::{self, NotSet},
     ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr,
-    EntityTrait, FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
-    RelationTrait, Select, Set, Statement, TransactionTrait,
+    EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    QueryTrait, RelationTrait, Select, Set, Statement, TransactionTrait,
 };
 use std::{cmp::min, collections::HashMap, fmt, str::FromStr, sync::Arc};
 use tac_operation_lifecycle_entity::{
@@ -105,6 +107,11 @@ struct JoinedRow {
     // operation
     op_id: String,
     op_type: Option<String>,
+    profiling_version: Option<i16>,
+    op_status: Option<String>,
+    error_reason: Option<String>,
+    finalized: Option<bool>,
+    rollback: Option<bool>,
     timestamp: DateTime,
     status: StatusEnum,
     sender_address: Option<String>,
@@ -415,6 +422,11 @@ impl TacDatabase {
             .map(|op| operation::ActiveModel {
                 id: Set(op.id.clone()),
                 op_type: Set(None),
+                profiling_version: Set(None),
+                op_status: Set(None),
+                error_reason: Set(None),
+                finalized: Set(None),
+                rollback: Set(None),
                 timestamp: Set(timestamp_to_naive(op.timestamp as i64)),
                 sender_address: Set(None),
                 sender_blockchain: Set(None),
@@ -555,7 +567,8 @@ impl TacDatabase {
             UPDATE operation 
             SET status = '{new_status}'::status_enum
             WHERE id IN (SELECT id FROM selected_operations)
-            RETURNING id, timestamp, status::text, sender_address, sender_blockchain,
+            RETURNING id, op_type, profiling_version, op_status, error_reason, finalized, rollback,
+                      timestamp, status::text, sender_address, sender_blockchain,
                       next_retry, retry_count, inserted_at, updated_at
             "#,
         )
@@ -667,7 +680,7 @@ impl TacDatabase {
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![
             format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
-            "op_type IS NULL".to_string(),
+            "profiling_version IS NULL".to_string(),
         ];
 
         let sql = self.build_operation_query(
@@ -690,7 +703,9 @@ impl TacDatabase {
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![
             format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
-            "(op_type = 'PENDING' OR op_type = 'INSUFFICIENT-FEE')".to_string(),
+            "((profiling_version = 2 AND finalized = FALSE) OR \
+             (profiling_version = 1 AND op_type IN ('PENDING', 'INSUFFICIENT-FEE')))"
+                .to_string(),
         ];
 
         let sql = self.build_operation_query(
@@ -703,6 +718,63 @@ impl TacDatabase {
         self.query_operations(&sql)
             .instrument(tracing::debug_span!("query pending operations"))
             .await
+    }
+
+    pub async fn query_v1_operations_for_backfill(
+        &self,
+        num: usize,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let conditions = vec![
+            "op_type IS NOT NULL".to_string(),
+            "profiling_version = 1".to_string(),
+            "status IN ('pending'::status_enum, 'completed'::status_enum)".to_string(),
+        ];
+        let sql = self.build_operation_query(
+            conditions,
+            Some(("timestamp", OrderDirection::LatestFirst)),
+            num,
+            &StatusEnum::Processing,
+        );
+        self.query_operations(&sql).await
+    }
+
+    /// Version-1 rows still awaiting conversion.
+    ///
+    /// Extends the `query_v1_operations_for_backfill` predicate with rows that
+    /// are currently `processing`: those are claimed but not yet converted, so
+    /// counting them keeps a zero here meaning "nothing left to convert" instead
+    /// of "nothing claimable at this instant" - otherwise convergence could be
+    /// reported while the last in-flight batch is still being written. Rows
+    /// parked in the technical retry stream are deliberately excluded and
+    /// counted separately by `count_v1_operations_awaiting_retry` - otherwise a
+    /// single permanently failing legacy row would suppress the convergence
+    /// report forever.
+    pub async fn count_v1_operations_for_backfill(&self) -> anyhow::Result<u64> {
+        Ok(Self::v1_profiled_operations()
+            .filter(
+                Condition::any()
+                    .add(operation::Column::Status.eq(StatusEnum::Pending))
+                    .add(operation::Column::Status.eq(StatusEnum::Completed))
+                    .add(operation::Column::Status.eq(StatusEnum::Processing)),
+            )
+            .count(self.db.as_ref())
+            .await?)
+    }
+
+    /// Version-1 rows sitting in the technical retry stream. They are still
+    /// unconverted, but the backfill worker cannot claim them - the retry
+    /// stream re-profiles them and they leave the predicate on success.
+    pub async fn count_v1_operations_awaiting_retry(&self) -> anyhow::Result<u64> {
+        Ok(Self::v1_profiled_operations()
+            .filter(operation::Column::Status.eq(StatusEnum::Failed))
+            .count(self.db.as_ref())
+            .await?)
+    }
+
+    fn v1_profiled_operations() -> Select<operation::Entity> {
+        operation::Entity::find()
+            .filter(operation::Column::OpType.is_not_null())
+            .filter(operation::Column::ProfilingVersion.eq(PROFILING_VERSION_V1))
     }
 
     pub async fn query_failed_operations(
@@ -772,7 +844,7 @@ impl TacDatabase {
     pub async fn set_operation_data(
         &self,
         operation: &operation::Model,
-        operation_data: &ApiOperationData,
+        operation_data: &SourceOperationData,
         new_status: &StatusEnum,
     ) -> anyhow::Result<()> {
         let operation = operation.clone();
@@ -794,8 +866,8 @@ impl TacDatabase {
 
                     Self::store_operation_stages(tx, &operation, &operation_data).await?;
 
-                    if let Some(meta_info) = operation_data.meta_info {
-                        Self::store_operation_metainfo(tx, &operation, &meta_info).await?;
+                    if let Some(meta_info) = operation_data.meta_info() {
+                        Self::store_operation_metainfo(tx, &operation, meta_info).await?;
                     }
 
                     Ok(())
@@ -821,19 +893,34 @@ impl TacDatabase {
     async fn set_operation_base_properties(
         tx: &DatabaseTransaction,
         operation: &operation::Model,
-        operation_data: &ApiOperationData,
+        operation_data: &SourceOperationData,
         new_status: &StatusEnum,
     ) -> Result<(), DbErr> {
         let mut operation_model: operation::ActiveModel = operation.clone().into();
         operation_model.updated_at = Set(chrono::Utc::now().naive_utc());
-        operation_model.op_type = Set(Some(
-            Self::derive_operation_type(operation_data).to_string(),
-        ));
+        operation_model.error_reason = Set(derive_operation_error_reason(operation_data));
+        match operation_data {
+            SourceOperationData::V1(data) => {
+                operation_model.op_type = Set(Some(
+                    derive_v1_source_type(&data.operation_type, &data.stages).to_string(),
+                ));
+                operation_model.profiling_version = Set(Some(PROFILING_VERSION_V1));
+                operation_model.op_status = Set(None);
+                operation_model.finalized = Set(None);
+                operation_model.rollback = Set(None);
+            }
+            SourceOperationData::V2(data) => {
+                operation_model.op_type = Set(Some(data.operation_type.to_string()));
+                operation_model.profiling_version = Set(Some(PROFILING_VERSION_V2));
+                operation_model.op_status = Set(data.status.map(|status| status.to_string()));
+                operation_model.finalized = Set(Some(data.finalized));
+                operation_model.rollback = Set(Some(data.rollback));
+            }
+        }
         operation_model.status = Set(new_status.clone());
 
         if let Some((address, blockchain)) = operation_data
-            .meta_info
-            .as_ref()
+            .meta_info()
             .and_then(|meta| meta.initial_caller.clone())
             .and_then(|caller| {
                 blockchain_address_to_db_format(&caller.address)
@@ -848,6 +935,11 @@ impl TacDatabase {
         }
 
         let new_type = operation_model.op_type.clone();
+        let profiling_version = operation_model.profiling_version.clone();
+        let op_status = operation_model.op_status.clone();
+        let error_reason = operation_model.error_reason.clone();
+        let finalized = operation_model.finalized.clone();
+        let rollback = operation_model.rollback.clone();
         let upd_at = operation_model.updated_at.clone().into_value().unwrap();
 
         operation_model
@@ -856,6 +948,11 @@ impl TacDatabase {
                 "updating operation",
                 op_id = operation.id,
                 op_type =? new_type,
+                profiling_version =? profiling_version,
+                op_status =? op_status,
+                error_reason =? error_reason,
+                finalized =? finalized,
+                rollback =? rollback,
                 updated_at =? upd_at,
                 new_status =? new_status,
             ))
@@ -864,37 +961,12 @@ impl TacDatabase {
         Ok(())
     }
 
-    fn derive_operation_type(operation_data: &ApiOperationData) -> OperationType {
-        let has_insufficient_fee_note = operation_data
-            .stages
-            .values()
-            .filter_map(|stage| stage.stage_data.as_ref())
-            .any(|stage_data| {
-                if stage_data.success {
-                    return false;
-                }
-
-                let note = match stage_data.note.as_ref() {
-                    Some(note) => note.to_lowercase(),
-                    None => return false,
-                };
-
-                note.contains("insufficient") && note.contains("fee")
-            });
-
-        if operation_data.operation_type == OperationType::Pending && has_insufficient_fee_note {
-            OperationType::InsufficientFee
-        } else {
-            operation_data.operation_type.clone()
-        }
-    }
-
     async fn store_operation_stages(
         tx: &DatabaseTransaction,
         operation: &operation::Model,
-        operation_data: &ApiOperationData,
+        operation_data: &SourceOperationData,
     ) -> Result<(), DbErr> {
-        for (stage_type, stage_data) in operation_data.stages.iter() {
+        for (stage_type, stage_data) in operation_data.stages().iter() {
             if let Some(data) = &stage_data.stage_data {
                 // prepare and inserting stage model
                 let stage_model = operation_stage::ActiveModel {
@@ -1042,7 +1114,7 @@ impl TacDatabase {
         operation_model.next_retry = Set(Some(
             chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec),
         ));
-        operation_model.retry_count = Set(operation.retry_count + 1);
+        operation_model.retry_count = Set(operation.retry_count.saturating_add(1));
         operation_model.status = Set(StatusEnum::Failed);
         operation_model.updated_at = Set(now);
 
@@ -1203,7 +1275,8 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
+                o.id as op_id, o.op_type, o.profiling_version, o.op_status, o.error_reason, o.finalized, o.rollback,
+                o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1228,7 +1301,8 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
+                o.id as op_id, o.op_type, o.profiling_version, o.op_status, o.error_reason, o.finalized, o.rollback,
+                o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1330,6 +1404,11 @@ impl TacDatabase {
                     operation::Model {
                         id: row.op_id.clone(),
                         op_type: row.op_type.clone(),
+                        profiling_version: row.profiling_version,
+                        op_status: row.op_status.clone(),
+                        error_reason: row.error_reason.clone(),
+                        finalized: row.finalized,
+                        rollback: row.rollback,
                         timestamp: row.timestamp,
                         next_retry: None,
                         status: row.status.clone(),
@@ -1409,6 +1488,29 @@ impl TacDatabase {
 
         self.query_operations_with_pagination(query, pagination_input, PAGE_SIZE)
             .await
+    }
+
+    pub async fn get_insufficient_fee_operation_ids(
+        &self,
+        operation_ids: &[String],
+    ) -> anyhow::Result<std::collections::HashSet<String>> {
+        if operation_ids.is_empty() {
+            return Ok(Default::default());
+        }
+        Ok(operation_stage::Entity::find()
+            .select_only()
+            .column(operation_stage::Column::OperationId)
+            .column(operation_stage::Column::Note)
+            .filter(operation_stage::Column::OperationId.is_in(operation_ids.to_vec()))
+            .filter(operation_stage::Column::Success.eq(false))
+            .into_tuple::<(String, Option<String>)>()
+            .all(self.db.as_ref())
+            .await?
+            .into_iter()
+            .filter_map(|(operation_id, note)| {
+                note_indicates_insufficient_fee(note.as_deref()?).then_some(operation_id)
+            })
+            .collect())
     }
 
     async fn query_operations_with_pagination(
@@ -1496,5 +1598,217 @@ impl TacDatabase {
             // unknown query string -> return void array without DB interacting
             Ok((vec![], None))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use blockscout_service_launcher::test_database::TestDbGuard;
+    use sea_orm::ConnectionTrait;
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn version_specific_claim_predicates_select_expected_rows() {
+        let db = TestDbGuard::new::<migration::Migrator>("v2_claims").await;
+        db.execute_unprepared(
+            r#"
+            INSERT INTO operation
+                (id, op_type, profiling_version, op_status, finalized, rollback,
+                 timestamp, next_retry, status, retry_count, inserted_at, updated_at)
+            VALUES
+                ('v2-pending', 'TON-TAC', 2, 'failed', FALSE, TRUE,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('v2-final', 'TON-TAC', 2, 'failed', TRUE, FALSE,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('v1-pending', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('v1-route-completed', 'TON-TAC', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'completed', 0, NOW(), NOW()),
+                ('v1-awaiting-retry', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NOW(), 'failed', 3, NOW(), NOW()),
+                ('unprofiled', NULL, NULL, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW());
+            "#,
+        )
+        .await
+        .unwrap();
+        let database = TacDatabase::new(db.client(), 0);
+
+        let new = database
+            .query_new_operations(10, OrderDirection::LatestFirst)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|operation| operation.id)
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(new, ["unprofiled".to_string()].into_iter().collect());
+
+        database.reset_processing_operations().await.unwrap();
+        let pending = database
+            .query_pending_operations(10, OrderDirection::LatestFirst)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|operation| operation.id)
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(
+            pending,
+            ["v2-pending".to_string(), "v1-pending".to_string()]
+                .into_iter()
+                .collect()
+        );
+
+        database.reset_processing_operations().await.unwrap();
+        let backfill = database
+            .query_v1_operations_for_backfill(10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|operation| operation.id)
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(
+            backfill,
+            ["v1-pending".to_string(), "v1-route-completed".to_string()]
+                .into_iter()
+                .collect()
+        );
+    }
+
+    /// The pending and backfill predicates overlap by design - a version-1 row
+    /// with `op_type = 'PENDING'` satisfies both. What keeps the two streams
+    /// from processing the same operation twice is not the predicate but the
+    /// claim itself: `FOR UPDATE SKIP LOCKED` plus the status flip to
+    /// `processing` inside the same statement. This exercises that, so the
+    /// claims must run back to back without an intervening
+    /// `reset_processing_operations`.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn overlapping_claims_never_return_the_same_row() {
+        let db = TestDbGuard::new::<migration::Migrator>("v2_claim_exclusivity").await;
+        db.execute_unprepared(
+            r#"
+            INSERT INTO operation
+                (id, op_type, profiling_version, op_status, finalized, rollback,
+                 timestamp, next_retry, status, retry_count, inserted_at, updated_at)
+            VALUES
+                ('v1-pending-a', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('v1-pending-b', 'INSUFFICIENT-FEE', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('v1-route-completed', 'TON-TAC', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'completed', 0, NOW(), NOW());
+            "#,
+        )
+        .await
+        .unwrap();
+        let database = TacDatabase::new(db.client(), 0);
+
+        let pending = database
+            .query_pending_operations(10, OrderDirection::LatestFirst)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|operation| operation.id)
+            .collect::<std::collections::HashSet<_>>();
+        // No reset here: this is the whole point of the test.
+        let backfill = database
+            .query_v1_operations_for_backfill(10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|operation| operation.id)
+            .collect::<std::collections::HashSet<_>>();
+
+        assert_eq!(
+            pending,
+            ["v1-pending-a".to_string(), "v1-pending-b".to_string()]
+                .into_iter()
+                .collect(),
+            "both overlapping rows must be claimed by the pending stream first"
+        );
+        assert_eq!(
+            pending.intersection(&backfill).count(),
+            0,
+            "a row claimed by one stream must not be handed to the other: \
+             pending={pending:?}, backfill={backfill:?}"
+        );
+        assert_eq!(
+            backfill,
+            ["v1-route-completed".to_string()].into_iter().collect(),
+            "the backfill claim must still pick up rows the pending stream cannot take"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn backfill_counters_split_claimable_from_awaiting_retry() {
+        let db = TestDbGuard::new::<migration::Migrator>("v2_backfill_counters").await;
+        db.execute_unprepared(
+            r#"
+            INSERT INTO operation
+                (id, op_type, profiling_version, op_status, finalized, rollback,
+                 timestamp, next_retry, status, retry_count, inserted_at, updated_at)
+            VALUES
+                ('claimable-pending', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW()),
+                ('claimable-completed', 'TON-TAC', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'completed', 0, NOW(), NOW()),
+                ('awaiting-retry', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NOW(), 'failed', 7, NOW(), NOW()),
+                ('in-flight', 'PENDING', 1, NULL, NULL, NULL,
+                 NOW(), NULL, 'processing', 0, NOW(), NOW()),
+                ('already-v2', 'TON-TAC', 2, 'success', TRUE, FALSE,
+                 NOW(), NULL, 'completed', 0, NOW(), NOW()),
+                ('unprofiled', NULL, NULL, NULL, NULL, NULL,
+                 NOW(), NULL, 'pending', 0, NOW(), NOW());
+            "#,
+        )
+        .await
+        .unwrap();
+        let database = TacDatabase::new(db.client(), 0);
+
+        // A permanently failing legacy row must not keep the queue from being
+        // reported as converged, so it is excluded from the count. An in-flight
+        // row is not claimable right now but is still unconverted, so it is
+        // counted.
+        assert_eq!(
+            database.count_v1_operations_for_backfill().await.unwrap(),
+            3
+        );
+        assert_eq!(
+            database.count_v1_operations_awaiting_retry().await.unwrap(),
+            1
+        );
+
+        // Draining the immediately claimable rows is not convergence while the
+        // in-flight row is still version 1.
+        db.execute_unprepared(
+            "UPDATE operation SET profiling_version = 2, finalized = TRUE, op_status = 'success' \
+             WHERE id IN ('claimable-pending', 'claimable-completed')",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            database.count_v1_operations_for_backfill().await.unwrap(),
+            1
+        );
+
+        // Once it lands, convergence is reported even though one row is still
+        // parked in the retry stream.
+        db.execute_unprepared(
+            "UPDATE operation SET profiling_version = 2, finalized = TRUE, op_status = 'success', \
+             status = 'completed'::status_enum WHERE id = 'in-flight'",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            database.count_v1_operations_for_backfill().await.unwrap(),
+            0
+        );
+        assert_eq!(
+            database.count_v1_operations_awaiting_retry().await.unwrap(),
+            1
+        );
     }
 }
