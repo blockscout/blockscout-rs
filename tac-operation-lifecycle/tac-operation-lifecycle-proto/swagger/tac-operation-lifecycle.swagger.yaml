@@ -6,6 +6,7 @@ tags:
   - name: TacService
   - name: TacStatistic
   - name: Health
+  - name: TacServiceV2
 consumes:
   - application/json
 produces:
@@ -121,6 +122,73 @@ paths:
           type: string
       tags:
         - TacService
+  /api/v2/tac/operations:
+    get:
+      operationId: TacServiceV2_GetOperations
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2V2OperationsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: page_token
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: page_items
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - TacServiceV2
+  /api/v2/tac/operations/{operation_id}:
+    get:
+      operationId: TacServiceV2_GetOperationDetails
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2V2OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacServiceV2
+  /api/v2/tac/operations:byTx/{tx_hash}:
+    get:
+      operationId: TacServiceV2_GetOperationsByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2V2OperationsFullResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacServiceV2
   /health:
     get:
       summary: |-
@@ -154,6 +222,16 @@ definitions:
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
   OperationStageStageType:
+    type: string
+    enum:
+      - COLLECTED_IN_TAC
+      - INCLUDED_IN_TAC_CONSENSUS
+      - EXECUTED_IN_TAC
+      - COLLECTED_IN_TON
+      - INCLUDED_IN_TON_CONSENSUS
+      - EXECUTED_IN_TON
+    default: COLLECTED_IN_TAC
+  V2OperationStageV2StageType:
     type: string
     enum:
       - COLLECTED_IN_TAC
@@ -367,6 +445,136 @@ definitions:
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1Pagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+        format: uint64
+      page_items:
+        type: integer
+        format: int64
+  v2V2BlockchainAddress:
+    type: object
+    properties:
+      address:
+        type: string
+      blockchain:
+        $ref: '#/definitions/v2V2BlockchainType'
+  v2V2BlockchainType:
+    type: string
+    enum:
+      - TAC
+      - TON
+      - UNKNOWN_BLOCKCHAIN
+    default: TAC
+  v2V2OperationBriefDetails:
+    type: object
+    properties:
+      operation_id:
+        type: string
+      type:
+        $ref: '#/definitions/v2V2OperationType'
+      status:
+        $ref: '#/definitions/v2V2OperationStatus'
+      rollback:
+        type: boolean
+      timestamp:
+        type: string
+      sender:
+        $ref: '#/definitions/v2V2BlockchainAddress'
+      error_reason:
+        type: string
+  v2V2OperationDetails:
+    type: object
+    properties:
+      operation_id:
+        type: string
+      type:
+        $ref: '#/definitions/v2V2OperationType'
+      status:
+        $ref: '#/definitions/v2V2OperationStatus'
+      rollback:
+        type: boolean
+      timestamp:
+        type: string
+      sender:
+        $ref: '#/definitions/v2V2BlockchainAddress'
+      status_history:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2V2OperationStage'
+      error_reason:
+        type: string
+  v2V2OperationRelatedTransaction:
+    type: object
+    properties:
+      hash:
+        type: string
+      type:
+        $ref: '#/definitions/v2V2BlockchainType'
+  v2V2OperationStage:
+    type: object
+    properties:
+      type:
+        $ref: '#/definitions/V2OperationStageV2StageType'
+      is_exist:
+        type: boolean
+      is_success:
+        type: boolean
+      timestamp:
+        type: string
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2V2OperationRelatedTransaction'
+      note:
+        type: string
+  v2V2OperationStatus:
+    type: string
+    enum:
+      - pending
+      - success
+      - failed
+    default: pending
+    description: |-
+      Public outcome of an operation. Lower-case names preserve the existing public
+      JSON values.
+
+      `failed` is reported as soon as the operation outcome is known to be failed,
+      including while the indexer still re-requests the operation upstream.
+      `success` additionally requires the operation to be final upstream, so a
+      successful but not-yet-final operation is reported as `pending`, as is an
+      operation whose stage profiling has not been requested yet. The internal
+      upstream finality flag is not part of this contract.
+  v2V2OperationType:
+    type: string
+    enum:
+      - UNKNOWN
+      - TON_TAC_TON
+      - TAC_TON
+      - TON_TAC
+    default: UNKNOWN
+  v2V2OperationsFullResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2V2OperationDetails'
+  v2V2OperationsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2V2OperationBriefDetails'
+      next_page_params:
+        $ref: '#/definitions/v2V2Pagination'
+  v2V2Pagination:
     type: object
     properties:
       page_token:
