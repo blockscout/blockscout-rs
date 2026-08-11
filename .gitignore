@@ -31,3 +31,4 @@ libs/Cargo.lock
 **.dec**
 /tac-operation-lifecycle/database/
 /.claude/settings.local.json
+/graphify-out/
