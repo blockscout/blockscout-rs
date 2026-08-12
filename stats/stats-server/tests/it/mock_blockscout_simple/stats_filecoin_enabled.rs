@@ -156,8 +156,14 @@ async fn test_txns_fee_serves_filecoin_chain_fees_data(base: &Url) {
         // mixed day: understated tips-only value (see the `fevmFeeTips`
         // characterization test in the stats crate)
         ("2023-02-14", "0.0001"),
-        // burn-only day
-        ("2023-03-01", "15000"),
+        // burn plus tips: the 24-hour counter's fixture blocks add two
+        // priced transactions on this day (`COUNTER_END_ANCHOR_BLOCK` and
+        // the window-edge boundary block, both included here since the
+        // server updates at wall-clock time, well after the fixture's last
+        // block — unlike the stats-crate chart test, which freezes
+        // `update_time` exactly on the boundary block and therefore excludes
+        // it; see `fevm_fee_tips.rs`'s test)
+        ("2023-03-01", "3000.0002058"),
     ];
     for (date, value) in expected_points {
         assert_eq!(
@@ -185,9 +191,15 @@ async fn test_filecoin_chain_fees_growth_data(base: &Url) {
         Some("30010000.003450688"),
         "no-data day must carry the cumulative value of 2022-12-01"
     );
+    // moves only by the tips added on `2023-03-01` by the 24-hour counter's
+    // fixture blocks (two priced transactions here — the server updates at
+    // wall-clock time, so the window-edge boundary block is included, unlike
+    // the frozen-clock stats-crate chart test); the burn side is unaffected
+    // by the fixture's *split* of the old burn-only value across
+    // `2023-02-28`/`2023-03-01` because a cumulative sum telescopes over it.
     assert_eq!(
         data.get("2023-03-01").map(String::as_str),
-        Some("30050000.004623346")
+        Some("30050000.004932046")
     );
 }
 

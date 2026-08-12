@@ -222,13 +222,21 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_fevm_fee_tips() {
-        // `2022-11-09` and `2023-03-01` are deliberately omitted: the only
-        // block of each day carries a zero-gas-price transaction, so it keeps
-        // `base_fee_per_gas = NULL` (fixture hazard rule), the day's `SUM` is
-        // NULL and the row is dropped by the outer `value IS NOT NULL` guard.
+        // `2022-11-09` is deliberately omitted: its only block carries a
+        // zero-gas-price transaction, so it keeps `base_fee_per_gas = NULL`
+        // (fixture hazard rule), the day's `SUM` is NULL and the row is
+        // dropped by the outer `value IS NOT NULL` guard.
         // `2023-02-14` is the "mixed" day: its hazard block's tip terms are
         // NULL and skipped by `SUM`, so the stored value is understated (see
         // `mixed_day_value_characterizes_the_undercount`).
+        // `2023-02-28` and `2023-03-01` now carry one priced transaction each
+        // from the 24-hour counter's fixture blocks (`COUNTER_DENSE_BLOCK_2`
+        // and `COUNTER_END_ANCHOR_BLOCK`); `2023-03-01`'s original only block
+        // (12) still keeps `base_fee_per_gas = NULL` (hazard rule) and its
+        // term is skipped by `SUM`, same as the mixed day. The window-edge
+        // boundary block (`COUNTER_WINDOW_EDGE_BLOCK`, dated exactly
+        // `2023-03-01T12:00:00` — this chart's own update range's upper
+        // bound) does not contribute here either.
         simple_test_chart_filecoin_with_migration_variants::<FevmFeeTips>(
             "update_fevm_fee_tips",
             vec![
@@ -239,6 +247,8 @@ mod tests {
                 ("2023-01-01", "0.000021492592569"),
                 ("2023-02-01", "0.001051166665605"),
                 ("2023-02-14", "0.0001"),
+                ("2023-02-28", "0.0001029"),
+                ("2023-03-01", "0.0001029"),
             ],
         )
         .await;

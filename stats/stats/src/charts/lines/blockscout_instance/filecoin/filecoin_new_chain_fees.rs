@@ -221,7 +221,11 @@ mod tests {
     //   reads omit gap days; the filled `0` is asserted at the API level;
     // - `2023-02-14`: mixed day — tips-only, understated (see the
     //   `fevmFeeTips` characterization test);
-    // - `2023-03-01`: burn-only day (f099 row, no counted tips).
+    // - `2023-02-28` and `2023-03-01`: both burn *and* tips now — the
+    //   24-hour counter's fixture blocks split the old `2023-03-01`
+    //   burn-only value (`30,050,000 - 30,035,000 = 15,000` FIL) across the
+    //   two days (`12,000` + `3,000`) and add one priced transaction to
+    //   each (decision record `20260811-1040/finding-03`).
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_filecoin_new_chain_fees() {
@@ -236,7 +240,8 @@ mod tests {
                 ("2023-01-01", "10000.000021492593"),
                 ("2023-02-01", "15000.001051166666"),
                 ("2023-02-14", "0.0001"),
-                ("2023-03-01", "15000"),
+                ("2023-02-28", "12000.0001029"),
+                ("2023-03-01", "3000.0001029"),
             ],
         )
         .await;
