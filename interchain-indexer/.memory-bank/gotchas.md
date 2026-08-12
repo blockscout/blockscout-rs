@@ -1181,3 +1181,35 @@ descending cursor moved on. Rows there are re-derived, not duplicated. Plan floo
 changes as deliberate rescans only in that direction.
 
 ---
+
+## Server Tests Exhaust The Default macOS Descriptor Limit
+
+**Symptom:** every test in a server test binary fails at once with
+`Os { code: 24, kind: Uncategorized, message: "Too many open files" }`, panicking
+inside `actix-server`'s worker loop, followed by
+`Server did not start in time, and did not terminate` from
+`test_server::init_server`. Running the tests serially with `--test-threads=1`
+does not fix it — it only moves which test fails first.
+
+**Root cause:** each test boots the *entire* service through `run()`: an actix
+`HttpServer` (the launcher never calls `.workers(n)`, so actix uses one worker
+per CPU core), a Postgres pool and the RPC provider pools for every configured
+chain. `test_server::init_server` never shuts a server down, so all of that
+stays alive for the rest of the process and the descriptors accumulate across
+the tests of a binary. macOS defaults the *soft* limit to 256
+(`launchctl limit maxfiles`), which is exhausted around the fourth server on a
+14-core machine. Serial execution does not help precisely because the cost is
+cumulative, not concurrent.
+
+**Fix:** the `test` recipe in the `justfile` raises the soft limit to 8192
+before invoking `cargo test`, and `test-with-db` inherits it. Running
+`cargo test` directly still needs `ulimit -n 8192` in the shell first. The hard
+limit is `unlimited` on macOS, so no `sudo` is involved. Measured on a 14-core
+host: 256 fails 5/5, 1024 and above passes.
+
+Related: these tests also assume no reachable RPC ("indexer failed to start" is
+the state they exercise), but `config/omnibridge/chains.json` carries real
+public endpoints — on a developer machine with egress the indexers genuinely
+start and scan mainnet, which adds sockets on top of the baseline above.
+
+---
