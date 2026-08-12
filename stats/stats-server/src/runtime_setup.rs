@@ -505,6 +505,7 @@ impl RuntimeSetup {
             Arc::new(ZetachainCrossChainTxnsGroup),
             // filecoin chain fees
             Arc::new(FilecoinChainFeesGroup),
+            Arc::new(FilecoinChainFees24hGroup),
             // multichain: singletons
             Arc::new(TotalInteropMessagesGroup),
             Arc::new(TotalInteropTransfersGroup),
@@ -804,11 +805,13 @@ impl RuntimeSetup {
 mod tests {
     use super::*;
     use crate::config::types::ResolutionsSettings;
+    use chrono::{TimeZone, Utc};
     use stats::{
         ChartProperties,
-        counters::{TotalAddresses, TotalTxns},
+        counters::{FilecoinChainFees24h, NewTxns24h, TotalAddresses, TotalTxns, TxnsFee24h},
         lines::{AverageTxnFee, FilecoinNewChainFees, NewTxnsWindow, TxnsFee},
     };
+    use std::{path::PathBuf, str::FromStr};
 
     // these tests operate on post-load configs, where chart ids are already
     // camelCase, so they are always spelled via `key().name()`
@@ -1178,5 +1181,108 @@ mod tests {
             .filter_out_waiting_resolutions(&non_waiting)
             .expect("entry must survive unrelated waiting keys");
         assert_eq!(unchanged.resolutions.len(), 4);
+    }
+
+    // regression pin for this *specific* pair and group (Phase 3): renaming
+    // `FilecoinChainFees24hGroup`, moving `FilecoinChainFees24h` into
+    // `FilecoinChainFeesGroup`, or dropping the `implementation` remap for
+    // `txnsFee24h` all become failing tests instead of silent behaviour
+    // changes. The generic remap mechanism itself is already covered by
+    // `remapped_counter_is_served_with_implementation_handle` above.
+    #[test]
+    fn filecoin_chain_fees_24h_is_served_under_txns_fee_24h_with_own_hourly_group() {
+        let public_name = TxnsFee24h::key().into_name();
+        let implementation_name = FilecoinChainFees24h::key().into_name();
+        let sibling_name = NewTxns24h::key().into_name();
+        let setup = runtime_setup(counters_config([
+            (
+                public_name.clone(),
+                chart_settings(true, Some(implementation_name.clone())),
+            ),
+            (sibling_name.clone(), chart_settings(true, None)),
+        ]))
+        .expect("valid remap must not fail startup");
+
+        // 1. `txnsFee24h`'s served entry resolves to the internal handle
+        // `filecoinChainFees24h`
+        let entry = &setup.charts_info[&public_name];
+        let implementation_day_key =
+            ChartKey::new(implementation_name.clone(), ResolutionKind::Day);
+        assert_eq!(entry.get_keys(), vec![implementation_day_key.clone()]);
+        assert_eq!(
+            entry.resolutions[&ResolutionKind::Day].name,
+            implementation_name
+        );
+
+        // 2. `filecoinChainFees24h` is never served under its own id
+        assert!(
+            !setup.charts_info.contains_key(&implementation_name),
+            "implementation must not be served under its own name"
+        );
+
+        // 3. `FilecoinChainFees24hGroup`'s enabled members are exactly
+        // `{ filecoinChainFees24h / Day }`
+        assert_eq!(
+            setup.update_groups["FilecoinChainFees24hGroup"].enabled_members,
+            HashSet::from([implementation_day_key])
+        );
+
+        // 4. `TxnsStats24hGroup`'s enabled members no longer contain
+        // `txnsFee24h / Day`, while its remaining enabled siblings stay
+        let sibling_day_key = ChartKey::new(sibling_name, ResolutionKind::Day);
+        assert_eq!(
+            setup.update_groups["TxnsStats24hGroup"].enabled_members,
+            HashSet::from([sibling_day_key])
+        );
+    }
+
+    // hourly-cadence pin (Phase 3): a missing `update_schedule` entry for
+    // `FilecoinChainFees24hGroup` is legal (many registered groups have
+    // none) and silently falls back to the daily `default_schedule`
+    // (`0 0 1 * * * *`), leaving the 24h value up to a day stale. This test
+    // guards against both that silent fallback and a re-spread of the
+    // config's cron literal into something that is no longer hourly.
+    #[test]
+    fn filecoin_chain_fees_24h_group_schedule_is_hourly() {
+        let update_groups_config = config::read_update_groups_config(&[PathBuf::from_str(
+            "../config/blockscout_instance/update_groups.json",
+        )
+        .unwrap()])
+        .expect("real update_groups.json config must parse");
+
+        let update_groups =
+            RuntimeSetup::init_update_groups(update_groups_config, &BTreeMap::new())
+                .expect("real update_groups.json config must be valid against registered groups");
+
+        let schedule = update_groups["FilecoinChainFees24hGroup"]
+            .update_schedule
+            .clone()
+            .expect(
+                "FilecoinChainFees24hGroup must have an explicit schedule in \
+                update_groups.json; a missing entry silently falls back to \
+                the daily `default_schedule`, leaving the 24h value up to a \
+                day stale",
+            );
+
+        // take ~25 consecutive occurrences from a fixed UTC anchor and
+        // require every consecutive delta to be exactly one hour: one delta
+        // is not enough (a day-of-week-restricted hourly expression yields
+        // one-hour gaps everywhere except the week boundary), a daily
+        // schedule fails on the first delta, and a legitimate re-spread of
+        // the minute slot stays green.
+        let anchor = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let occurrences: Vec<_> = schedule.after(&anchor).take(25).collect();
+        assert_eq!(occurrences.len(), 25, "not enough occurrences generated");
+        for pair in occurrences.windows(2) {
+            let delta = pair[1] - pair[0];
+            assert_eq!(
+                delta,
+                chrono::Duration::hours(1),
+                "FilecoinChainFees24hGroup schedule must fire exactly hourly, \
+                got a {delta} gap between {:?} and {:?}",
+                pair[0],
+                pair[1]
+            );
+        }
     }
 }

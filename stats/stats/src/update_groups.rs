@@ -38,6 +38,9 @@ singleton_groups!(
     ActiveRecurringAccountsMonthlyRecurrence120Days,
     ActiveRecurringAccountsWeeklyRecurrence120Days,
     ActiveRecurringAccountsYearlyRecurrence120Days,
+    // Not a member of `FilecoinChainFeesGroup`: this counter runs hourly and
+    // must not trigger the heavy daily chain.
+    FilecoinChainFees24h,
 );
 
 // According to collected metrics, `TotalTxns` has
