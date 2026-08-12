@@ -400,9 +400,9 @@
     "semantic_hash": "930d363466271ac9d328881800069ee8"
   },
   "interchain-indexer-logic/src/indexer/metrics.rs": {
-    "mtime": 1786450376.4780128,
-    "ast_hash": "67c987e53d241decd9ffaf70a3ae9eba",
-    "semantic_hash": "67c987e53d241decd9ffaf70a3ae9eba"
+    "mtime": 1786459307.3227112,
+    "ast_hash": "3be82afa0318c3cf01630056b2bb2c21",
+    "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/mod.rs": {
     "mtime": 1786450376.478341,
@@ -1245,7 +1245,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1786450379.7219179,
+    "mtime": 1786458399.915158,
     "ast_hash": "2c46367eb12658fc8e4c790dcf258e43",
     "semantic_hash": "2c46367eb12658fc8e4c790dcf258e43"
   },
