@@ -1221,4 +1221,26 @@ The fixture is **not** a fix for the descriptor limit — measured separately, t
 offline harness still fails 5/5 at `ulimit -n 256`, because actix workers, not
 RPC sockets, are what exhausts it.
 
+**The symptom that live RPC produces**, seen on GitHub Actions before the
+fixture landed:
+
+```
+get_indexing_progress_pair_with_no_checkpoint_reports_zero_and_absent_updated_at
+assertion `left == right` failed
+  left: Number(0.000020304127402714295)
+ right: Number(0.0)
+```
+
+`CatchupProgress::compute` returns exactly `0.0` when no checkpoint row exists,
+so a non-zero value means one did. The only writer that can create it during
+that test is `seed_catchup_floor`, called from `build_log_stream_for_chain`
+*after* `get_block_number()` succeeds — a runner with egress reaches the public
+endpoints, the indexer starts, and the row lands as
+`(min = start_block, max = head - 1, realtime = head)`: exactly one scanned
+block out of ~4.9M, which is that percentage. Reproduced bit-for-bit against a
+local mock RPC, and it is a race — the same run passes whenever the HTTP query
+beats the seeding, which is why it looked intermittent. The test now asserts
+the premise (`indexer_checkpoints` empty) so this fails by name instead of by
+float.
+
 ---

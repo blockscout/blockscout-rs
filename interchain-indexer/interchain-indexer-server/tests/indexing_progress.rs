@@ -87,6 +87,25 @@ async fn get_indexing_progress_pair_with_no_checkpoint_reports_zero_and_absent_u
     let db = helpers::init_db("test", "get_indexing_progress_no_checkpoint").await;
     let base = helpers::init_interchain_indexer_server(db.db_url(), |x| x).await;
 
+    // State this test's premise as an assertion instead of assuming it. The
+    // only writer that can create a row here is `seed_catchup_floor`, reached
+    // from `build_log_stream_for_chain` *after* `get_block_number()` succeeds
+    // -- so a row means the harness talked to a live RPC. When it did, the
+    // seeded pair reported one scanned block out of millions and the
+    // percentage assertion below failed with a bare float mismatch
+    // (`0.000020304127402714295 != 0.0`) that named none of this.
+    let seeded = indexer_checkpoints::Entity::find()
+        .all(db.client().as_ref())
+        .await
+        .unwrap();
+    assert!(
+        seeded.is_empty(),
+        "premise broken: an indexer seeded {} checkpoint row(s), so no pair here is \
+         checkpoint-less any more. The harness must boot against \
+         tests/fixtures/chains-offline.json, whose endpoints refuse instantly: {seeded:?}",
+        seeded.len(),
+    );
+
     let resp: serde_json::Value =
         test_server::send_get_request(&base, "/api/v1/status/indexing").await;
     let items = resp["items"].as_array().unwrap();
