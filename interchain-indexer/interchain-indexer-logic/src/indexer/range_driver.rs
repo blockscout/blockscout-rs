@@ -1218,12 +1218,11 @@ mod tests {
         }
 
         /// `max_chunks_per_pass` bounds chunks per tick so a large hole set
-        /// cannot starve the realtime scan sharing this task. The freshly
-        /// recorded row has `attempts == 1`, so the rotation fix (see
-        /// `rotate_by_attempts`) starts this pass's window at chunk index
-        /// `1 % 5 == 1` (`[1000,1999]`), not at the interval's `from` — the
-        /// two attempted chunks resolve, leaving the untouched prefix
-        /// `[0,999]` and suffix `[3000,4999]` as two separate open rows.
+        /// cannot starve the realtime scan sharing this task. A fresh resume
+        /// cursor starts this pass's window at the interval head, so the two
+        /// budgeted chunks (`[0,999]`, `[1000,1999]`) are the ones attempted;
+        /// both resolve, leaving the untouched tail `[2000,4999]` as the single
+        /// remaining open row.
         #[tokio::test]
         #[ignore = "needs database to run"]
         async fn retry_pass_is_bounded_by_max_chunks_per_pass() {

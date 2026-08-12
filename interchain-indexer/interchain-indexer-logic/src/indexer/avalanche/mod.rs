@@ -50,7 +50,7 @@ use crate::{
         failure_ledger::FailureLedger,
         range_driver::{BatchError, RangeDriver, RangeProcessor},
     },
-    log_stream::{LogBatch, LogStream},
+    log_stream::LogBatch,
     message_buffer::{Key, MessageBuffer},
 };
 
@@ -256,56 +256,6 @@ impl AvalancheIndexer {
 
         for chain in &chains {
             let chain_id = chain.chain_id;
-            let start_block = chain.start_block;
-            let provider = chain.provider.clone();
-
-            // Restore checkpoint if it exists for this bridge and chain.
-            let checkpoint = db.get_checkpoint(bridge_id as u64, chain_id as u64).await?;
-
-            let (realtime_cursor, catchup_cursor) = if let Some(cp) = checkpoint {
-                let realtime_cursor = cp.validated_realtime_cursor();
-                let catchup_cursor = cp.validated_catchup_cursor();
-
-                tracing::info!(
-                    bridge_id,
-                    chain_id,
-                    realtime_cursor,
-                    catchup_cursor,
-                    "restored Avalanche indexer checkpoint"
-                );
-
-                (realtime_cursor, catchup_cursor)
-            } else {
-                // No checkpoint yet: start from configuration.
-                let latest_block = provider.get_block_number().await.with_context(|| {
-                    format!("failed to fetch latest block for chain {chain_id}")
-                })?;
-                (latest_block, latest_block.saturating_sub(1))
-            };
-
-            // Seed / heal the durable scan floor for this pair. A failed
-            // write is a `warn`, never a startup blocker: the read-side
-            // guard in `CatchupProgress::compute` makes the stored floor
-            // cosmetic for the correctness of the reported numbers, and
-            // progress reporting must not be able to break ingestion.
-            if let Err(err) = db
-                .seed_catchup_floor(
-                    bridge_id,
-                    chain_id,
-                    start_block,
-                    catchup_cursor,
-                    realtime_cursor,
-                )
-                .await
-            {
-                tracing::warn!(
-                    err = ?err,
-                    bridge_id,
-                    chain_id,
-                    start_block,
-                    "failed to seed catchup floor; progress reporting may understate this pair"
-                );
-            }
 
             let filter = teleporter_log_filter(&chain.contract_addresses)
                 .with_context(|| format!("failed to build log filter for chain {chain_id}"))?;
@@ -314,24 +264,23 @@ impl AvalancheIndexer {
                 bridge_id,
                 chain_id,
                 contract_count = chain.contract_addresses.len(),
-                "configured log stream"
+                "resolved Avalanche contract set for chain"
             );
 
-            let stream = LogStream::builder(provider.clone())
-                .filter(filter)
-                .poll_interval(settings.pull_interval_ms)
-                .batch_size(settings.batch_size)
-                .genesis_block(start_block)
-                .realtime_cursor(realtime_cursor)
-                .catchup_cursor(catchup_cursor)
-                .bridge_id(bridge_id)
-                .chain_id(chain_id)
-                .db(Arc::new(db.clone()))
-                .catchup()
-                .realtime()
-                .build()?
-                .map(move |batch| (chain_id, batch))
-                .boxed();
+            // Checkpoint restore, scan-floor seeding and stream construction
+            // are protocol-independent: one shared builder so Avalanche and
+            // AMB cannot drift on cursor validation or floor seeding.
+            let stream = crate::indexer::evm::build_log_stream_for_chain(
+                chain.provider.clone(),
+                chain_id,
+                bridge_id,
+                filter,
+                chain.start_block,
+                &db,
+                settings.pull_interval_ms,
+                settings.batch_size,
+            )
+            .await?;
 
             combined_stream.push(stream);
         }

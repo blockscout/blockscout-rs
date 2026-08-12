@@ -1155,8 +1155,13 @@ mod tests {
                 serde_json::from_str::<Vec<ChainConfig>>(&content)
                     .unwrap_or_else(|e| panic!("failed to parse {path:?} as chains config: {e}"));
             } else if name.starts_with("bridges") {
-                serde_json::from_str::<Vec<BridgeConfig>>(&content)
+                let bridges: Vec<BridgeConfig> = serde_json::from_str(&content)
                     .unwrap_or_else(|e| panic!("failed to parse {path:?} as bridges config: {e}"));
+                // Structural parsing is not enough: `started_at_block = 0` is
+                // syntactically valid and semantically rejected at load time,
+                // so a committed config carrying it must fail here too.
+                validate_started_at_blocks(&bridges)
+                    .unwrap_or_else(|e| panic!("invalid bridges config {path:?}: {e}"));
             } else {
                 panic!("unexpected config file {path:?}: neither chains* nor bridges*");
             }

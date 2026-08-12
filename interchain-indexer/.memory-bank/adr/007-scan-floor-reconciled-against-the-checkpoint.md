@@ -76,8 +76,11 @@ and the startup coupling it required.
 `catchup_max_cursor` is deliberately untouched. A completed catch-up already left
 it at `old_floor - 1` (`mark_catchup_complete`), which is exactly where the
 reopened descending scan resumes; a catch-up still in progress has it above the
-old floor and simply keeps walking past it. **Lowering a floor therefore causes
-no rescan at all in the current design.**
+old floor and simply keeps walking past it. **Lowering a floor therefore fetches
+exactly `[new_floor, old_floor - 1]` — the newly widened range, and nothing
+else.** No already-scanned block is re-fetched, which is the whole reason
+`catchup_max_cursor` must not be reset along with the floor: resetting it to
+`realtime_cursor` would replay the entire history instead.
 
 Disabled bridges are reconciled too: a bridge can be lowered while disabled and
 re-enabled later, nothing indexes it in the meantime, and

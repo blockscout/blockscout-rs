@@ -83,6 +83,12 @@ separate record, and the two are read together only by the progress endpoint.
 
 Yes — this was the finding, and it is what the ledger now addresses.
 
+*Everything below this line describes the code **as it was before ADR-005**, in
+the present tense it was written in. Read §Status above first: `LogBatch`,
+`FailureLedger`, `RangeDriver` and the live `indexer_failures` rows changed
+"permanent gap" into "recorded hole, replayed with backoff". The residue that
+still holds is listed there, not here.*
+
 Both indexers can advance beyond blocks whose logs were fetched
 successfully but whose receipts, blocks, parsing, correlation, or buffer
 mutations failed afterward.

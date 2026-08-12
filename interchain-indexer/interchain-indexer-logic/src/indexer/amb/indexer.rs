@@ -182,7 +182,7 @@ impl AmbIndexer {
     }
 
     /// Returns `Err(BatchError)` narrowed to the block(s) of any transaction
-    /// that failed to dispatch, rather than swallowing the error and always
+    /// that failed to process, rather than swallowing the error and always
     /// returning `Ok(())`. Swallowing it would let the retry path's
     /// `ledger.resolve` delete the recorded hole for a range whose
     /// transactions actually failed — the messages would be lost *and* the
@@ -206,14 +206,28 @@ impl AmbIndexer {
         let mut last_err: Option<anyhow::Error> = None;
         let mut failed_count = 0usize;
 
-        for (hash, _logs) in logs_by_tx {
+        for (hash, logs) in logs_by_tx {
             let Some(receipt) = receipts.get(&hash) else {
+                // Unreachable while `fetch_receipts_for_transactions` is a
+                // `try_collect` over exactly these hashes — a missing receipt
+                // is an `Err` there, not an absent key. It is still a failure
+                // and not a skip: dropping these logs silently would let the
+                // checkpoint advance past their blocks, and a retry pass would
+                // `resolve` the hole for a range whose logs were never
+                // dispatched. Attribute it to the logs' own blocks; an empty
+                // `attributed` falls back to the whole yielded range.
                 tracing::warn!(
                     bridge_id = ctx.bridge_id,
                     chain_id,
                     tx_hash = %hash,
-                    "missing AMB receipt fetched for transaction"
+                    log_count = logs.len(),
+                    "missing AMB receipt for transaction; attributing its blocks as failed"
                 );
+                failed_blocks.extend(logs.iter().filter_map(|log| log.block_number));
+                failed_count += 1;
+                last_err = Some(anyhow!(
+                    "missing receipt for AMB transaction {hash} on chain {chain_id}"
+                ));
                 continue;
             };
             let event_ctx = EventContext {
@@ -264,7 +278,7 @@ impl AmbIndexer {
 
             return Err(BatchError {
                 error: err.context(format!(
-                    "{failed_count} AMB transaction(s) failed to dispatch"
+                    "{failed_count} AMB transaction(s) failed to process"
                 )),
                 attributed,
             });

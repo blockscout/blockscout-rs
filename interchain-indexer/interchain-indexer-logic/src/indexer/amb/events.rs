@@ -120,7 +120,7 @@ pub(super) async fn dispatch_transaction(
                 // instead of looking like a chain that simply emitted nothing.
                 LogResolution::WrongVersion => {
                     metrics::AMB_LOGS_DROPPED_WRONG_VERSION_TOTAL
-                        .with_label_values(&[&ctx.chain_id.to_string()])
+                        .with_label_values(&[&ctx.bridge_id.to_string(), &ctx.chain_id.to_string()])
                         .inc();
                     tracing::warn!(
                         bridge_id = ctx.bridge_id,

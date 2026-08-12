@@ -75,6 +75,11 @@ impl FailureRetrySettings {
     /// - `max_chunks_per_pass == 0` makes every retry tick attempt zero
     ///   chunks, silently turning off the only recovery path for a recorded
     ///   hole while `enabled` still reads `true`.
+    /// - `record_retry_attempts == 0` is a value the driver cannot honour:
+    ///   `retry_record` is called *after* the first `record` already failed and
+    ///   loops `1..attempts`, so `0` and `1` both mean "no retry" while the
+    ///   escalation message reports "after 0 attempt(s)" for an attempt that
+    ///   did happen. `1` is the honest way to spell it.
     pub fn validate(&self) -> Result<()> {
         ensure!(
             !self.scan_interval.is_zero(),
@@ -86,6 +91,12 @@ impl FailureRetrySettings {
             "failure_retry.max_chunks_per_pass must be greater than zero, or the retry pass \
              — the only recovery path for a recorded processing failure — silently attempts \
              nothing every tick while `enabled` stays true"
+        );
+        ensure!(
+            self.record_retry_attempts >= 1,
+            "failure_retry.record_retry_attempts must be at least 1: one attempt is always \
+             made before the retry loop starts, so 0 only makes the escalation message \
+             misreport how many attempts were performed"
         );
         Ok(())
     }
@@ -169,10 +180,24 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_rejects_zero_record_retry_attempts() {
+        let settings = FailureRetrySettings {
+            record_retry_attempts: 0,
+            ..Default::default()
+        };
+
+        let err = settings
+            .validate()
+            .expect_err("a zero record_retry_attempts must be rejected");
+        assert!(format!("{err:#}").contains("record_retry_attempts"));
+    }
+
+    #[test]
     fn test_validate_accepts_boundary_value_of_one() {
         let settings = FailureRetrySettings {
             scan_interval: Duration::from_secs(1),
             max_chunks_per_pass: 1,
+            record_retry_attempts: 1,
             ..Default::default()
         };
 

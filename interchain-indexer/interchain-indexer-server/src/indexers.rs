@@ -257,7 +257,13 @@ fn amb_contract_configs(
         .iter()
         .filter(|contract| contract.kind.as_deref() == Some(kind))
         .filter_map(|contract| {
-            let address = parse_contract_address(bridge_id, chain_id, kind, &contract.address)?;
+            let address = parse_contract_address(
+                bridge_id,
+                chain_id,
+                Some(kind),
+                contract.version,
+                &contract.address,
+            )?;
             Some(AmbContractConfig {
                 address,
                 version: contract.version,
@@ -268,17 +274,22 @@ fn amb_contract_configs(
         .collect()
 }
 
+/// `kind` is `None` for protocols that do not label their contracts (Avalanche);
+/// `version` is carried so a rejected address can be traced back to one entry in
+/// `bridges.json` even when several versions share a chain.
 fn parse_contract_address(
     bridge_id: i32,
     chain_id: i64,
-    kind: &str,
+    kind: Option<&str>,
+    version: i16,
     address: &[u8],
 ) -> Option<Address> {
     let Ok(address_bytes): Result<[u8; 20], _> = address.try_into() else {
         tracing::error!(
             bridge_id,
             chain_id,
-            kind,
+            kind = kind.unwrap_or("unspecified"),
+            version,
             "Bridge contract address must be 20 bytes"
         );
         return None;
@@ -337,19 +348,19 @@ fn build_avalanche_chain_configs(
             continue;
         };
 
-        let mut contract_addresses = Vec::new();
-        for contract in &plan.contracts {
-            let Ok(address_bytes): Result<[u8; 20], _> = contract.address.clone().try_into() else {
-                tracing::error!(
-                    bridge_id = bridge.bridge_id,
+        let contract_addresses: Vec<Address> = plan
+            .contracts
+            .iter()
+            .filter_map(|contract| {
+                parse_contract_address(
+                    bridge.bridge_id,
                     chain_id,
-                    version = contract.version,
-                    "Bridge contract address must be 20 bytes"
-                );
-                continue;
-            };
-            contract_addresses.push(Address::from(address_bytes));
-        }
+                    contract.kind.as_deref(),
+                    contract.version,
+                    &contract.address,
+                )
+            })
+            .collect();
 
         // Every configured address on this chain is scanned by one stream,
         // from one floor. See `AvalancheChainConfig` for why per-contract

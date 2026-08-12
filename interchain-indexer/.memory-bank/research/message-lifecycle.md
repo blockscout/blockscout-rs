@@ -188,12 +188,15 @@ mechanisms write it:
   it — both walk downward only — so it sits at the configured floor.
 - **Down, by config.** Lowering a contract's `started_at_block` *widens the scope
   of work*; it is not a regression of progress. `GREATEST` refuses it by
-  construction, so a startup reconciliation lowers the stored floor to match,
-  using the previous configured value still held in
-  `bridge_contracts.started_at_block` before `upsert_bridge_contracts` overwrites
-  it. Without this the endpoint reports the widened range as finished for the
-  whole duration of the backfill, and a future bidirectional catchup would skip
-  the range entirely.
+  construction, so the startup pass `reconcile_catchup_floors`
+  (`interchain-indexer-server/src/indexers.rs`) lowers the stored floor to match,
+  comparing the configured floor **directly against `catchup_min_cursor`** —
+  `lower_catchup_floor` is `SET catchup_min_cursor = $new WHERE
+  catchup_min_cursor > $new`. No previous-run value is derived from
+  `bridge_contracts`: that proxy, and the upsert ordering it forced, were removed
+  in ADR-007. Without this the endpoint reports the widened range as finished for
+  the whole duration of the backfill, and a future bidirectional catchup would
+  skip the range entirely.
 
 Reading the column as "only rises" is what produces both of those failures, which
 is why the table above splits the direction cell rather than simplifying it.
@@ -616,8 +619,13 @@ pattern, not a generic contract, but may be reused by future indexers.
 - Filtered messages produce trace-level logs with full context (message ID,
   chains, filter reason)
 - Receipt/block collection is all-or-nothing: one failure aborts the entire
-  fetched batch before event dispatch, and the outer loop logs and continues
-  without requeueing that range
+  fetched batch before event dispatch. The driver does not re-queue the stream
+  item — the batch is not retried in place — but the failure is no longer lost:
+  `AvalancheRangeProcessor::process` returns a `BatchError` with no attribution,
+  which `RangeDriver` records against the *whole* yielded range in
+  `indexer_failures`. The delayed retry is the ledger's replay pass
+  (`failure_retry`), not the stream loop. See ADR-005 and
+  `indexing-gaps-retries-and-checkpoint-safety.md`
 
 ## Edge Cases / Gotchas
 
