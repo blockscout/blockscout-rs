@@ -1207,9 +1207,18 @@ before invoking `cargo test`, and `test-with-db` inherits it. Running
 limit is `unlimited` on macOS, so no `sudo` is involved. Measured on a 14-core
 host: 256 fails 5/5, 1024 and above passes.
 
-Related: these tests also assume no reachable RPC ("indexer failed to start" is
-the state they exercise), but `config/omnibridge/chains.json` carries real
-public endpoints — on a developer machine with egress the indexers genuinely
-start and scan mainnet, which adds sockets on top of the baseline above.
+Related, and now closed: these tests assume no reachable RPC ("indexer failed to
+start" is the state they exercise), which used to be a property of the *machine*
+— `config/omnibridge/chains.json` carries real public endpoints, so on a
+developer machine with egress the indexers genuinely started and scanned
+mainnet. The harness now boots against
+`interchain-indexer-server/tests/fixtures/chains-offline.json` (same chains,
+`http://127.0.0.1:1`), so the state is a property of the fixture instead.
+`test_offline_chains_fixture_matches_the_omnibridge_chains_config` keeps the two
+chain sets in sync; add a chain to one and add it to the other.
+
+The fixture is **not** a fix for the descriptor limit — measured separately, the
+offline harness still fails 5/5 at `ulimit -n 256`, because actix workers, not
+RPC sockets, are what exhausts it.
 
 ---

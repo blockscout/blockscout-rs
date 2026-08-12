@@ -3,13 +3,18 @@
 //! HTTP contract tests for `GET /api/v1/status/indexing`.
 //!
 //! `helpers::init_interchain_indexer_server` boots the full `run()` from
-//! `config/omnibridge/{chains,bridges}.json`: bridge 1 declares contracts on
-//! chains `{1, 100}` (`amb_proxy` `started_at_block` 20812229 / 36145833).
-//! Indexer startup needs `get_block_number()`, which fails in this harness
-//! (no reachable RPC), so "indexer failed to start" is the default state
-//! these tests exercise -- exactly the config-only case
-//! `enumerate_indexing_targets` exists to make visible instead of silently
-//! omitting.
+//! `config/omnibridge/bridges.json` and `tests/fixtures/chains-offline.json`:
+//! bridge 1 declares contracts on chains `{1, 100}` (`amb_proxy`
+//! `started_at_block` 20812229 / 36145833). Indexer startup needs
+//! `get_block_number()`, which the fixture's dead loopback endpoint always
+//! fails, so "indexer failed to start" is the default state these tests
+//! exercise -- exactly the config-only case `enumerate_indexing_targets`
+//! exists to make visible instead of silently omitting.
+//!
+//! That state is a property of the fixture, not of the environment. Pointing
+//! this harness at the deployment chains config instead would make the same
+//! tests start live indexers against Ethereum and Gnosis mainnet on any
+//! machine with egress.
 
 mod helpers;
 

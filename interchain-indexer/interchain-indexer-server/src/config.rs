@@ -1167,4 +1167,51 @@ mod tests {
             }
         }
     }
+
+    /// The server test harness boots `run()` against
+    /// `tests/fixtures/chains-offline.json` instead of the deployment config,
+    /// so that no test starts a live indexer against mainnet. That substitution
+    /// is only sound while the fixture declares the same chains — a chain added
+    /// to `config/omnibridge/chains.json` and not to the fixture would silently
+    /// stop being exercised, and a test asserting "this pair is absent from
+    /// config" would start passing for the wrong reason.
+    #[test]
+    fn test_offline_chains_fixture_matches_the_omnibridge_chains_config() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let read = |path: &Path| -> Vec<ChainConfig> {
+            let content = std::fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
+            serde_json::from_str(&content)
+                .unwrap_or_else(|e| panic!("failed to parse {path:?} as chains config: {e}"))
+        };
+
+        let deployed = read(&manifest_dir.join("../config/omnibridge/chains.json"));
+        let fixture = read(&manifest_dir.join("tests/fixtures/chains-offline.json"));
+
+        let ids = |chains: &[ChainConfig]| {
+            let mut ids: Vec<i64> = chains.iter().map(|chain| chain.chain_id).collect();
+            ids.sort_unstable();
+            ids
+        };
+        assert_eq!(
+            ids(&fixture),
+            ids(&deployed),
+            "tests/fixtures/chains-offline.json must declare the same chains as \
+             config/omnibridge/chains.json"
+        );
+
+        // The point of the fixture is that nothing it names is reachable.
+        for chain in &fixture {
+            for rpc_map in &chain.rpcs {
+                for (name, rpc) in rpc_map {
+                    assert!(
+                        rpc.url.starts_with("http://127.0.0.1:"),
+                        "fixture RPC {name} for chain {} must be a dead loopback endpoint, got {}",
+                        chain.chain_id,
+                        rpc.url,
+                    );
+                }
+            }
+        }
+    }
 }

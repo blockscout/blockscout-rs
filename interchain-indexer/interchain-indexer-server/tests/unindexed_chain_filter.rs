@@ -6,7 +6,8 @@
 //! layer already covered in `interchain-indexer-logic/src/database.rs`.
 //!
 //! `helpers::init_interchain_indexer_server` boots the server from
-//! `config/omnibridge/{chains,bridges}.json`: bridge 1 has contracts on chains
+//! `config/omnibridge/bridges.json` and `tests/fixtures/chains-offline.json`
+//! (same chains, unreachable endpoints): bridge 1 has contracts on chains
 //! `{1, 100}`, so `IndexedChains` is `PerBridge({1: {1, 100}})`.
 
 mod helpers;
