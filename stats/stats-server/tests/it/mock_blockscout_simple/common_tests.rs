@@ -187,6 +187,17 @@ async fn assert_filecoin_charts_disabled_by_default(base: &Url) {
         ],
     )
     .await;
+    // the internal 24h counter must not be served under its own id either
+    // (`test_counters_ok`'s exact-list assertion already pins the rest of
+    // the counters set)
+    let counters: Counters = send_get_request(base, "/api/v1/counters").await;
+    assert!(
+        !counters
+            .counters
+            .iter()
+            .any(|c| c.id == "filecoinChainFees24h"),
+        "filecoinChainFees24h must not appear in /api/v1/counters by default"
+    );
 }
 
 pub async fn test_counters_ok(

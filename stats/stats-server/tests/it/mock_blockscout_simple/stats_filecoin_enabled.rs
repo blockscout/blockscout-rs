@@ -8,6 +8,16 @@
 //! resolutions, and the public `txnsFee` id must serve the
 //! `filecoinNewChainFees` implementation (chain-wide fees); the
 //! implementation id and the intermediate charts stay hidden from the API.
+//!
+//! The same remap shape applies to the 24-hour counter: the public
+//! `txnsFee24h` id serves the `filecoinChainFees24h` implementation, and the
+//! internal id is never exposed under its own name. Unlike the line-chart
+//! remap, the counter's *number* is not checked here — its single value is
+//! defined relative to *now*, and this suite runs at wall-clock time against
+//! a fixture that ends `2023-03-01`, so the 24-hour window is empty and the
+//! counter reads `0` regardless of which implementation serves it. The
+//! arithmetic is proven with the clock frozen by the DB tests in
+//! `filecoin_chain_fees_24h.rs` (stats crate).
 
 use std::collections::HashMap;
 
@@ -17,6 +27,7 @@ use blockscout_service_launcher::{
 };
 use pretty_assertions::assert_eq;
 use stats::{ResolutionKind, tests::init_db::init_db};
+use stats_proto::blockscout::stats::v1::Counters;
 use stats_server::stats;
 use url::Url;
 
@@ -52,13 +63,15 @@ pub async fn run_tests_with_filecoin_charts_enabled() {
     // remaps the existing `txnsFee` instead of adding a second one
     // (blockscout & user ops indexed, zetachain off, filecoin on)
     test_lines_ok(base.clone(), true, true, false, true).await;
-    // counters remain the normal set under the flag: fee counters stay,
-    // no filecoin counter appears (same indexing booleans as above)
+    // counters remain the normal set under the flag: fee counters stay, and
+    // the filecoin implementation is served under the existing `txnsFee24h`
+    // id, so no new counter id appears (same indexing booleans as above)
     test_counters_ok(base.clone(), true, true, false).await;
     test_filecoin_charts_are_listed(&base).await;
     test_txns_fee_serves_filecoin_chain_fees_data(&base).await;
     test_filecoin_chain_fees_growth_data(&base).await;
     test_filecoin_intermediates_are_hidden(&base).await;
+    test_txns_fee_24h_serves_filecoin_chain_fees_24h_implementation(&base).await;
 
     stats_db.close_all_unwrap().await;
     shutdown.cancel_wait_timeout(None).await.unwrap();
@@ -220,4 +233,51 @@ async fn test_filecoin_intermediates_are_hidden(base: &Url) {
             "intermediate chart {chart_name} must not be listed"
         );
     }
+}
+
+/// Proves the counter side of the remap: `txnsFee24h` stays served (its
+/// metadata comes from the public `txns_fee_24h` config entry) and the
+/// internal `filecoinChainFees24h` id never appears, either in the counters
+/// list or as a line chart.
+///
+/// The counter's *number* is deliberately not proven here — unlike the
+/// line-chart remap (`test_txns_fee_serves_filecoin_chain_fees_data`), a
+/// 24-hour counter's single value is defined relative to *now*, and this
+/// suite runs at wall-clock time (`update_time_override: None` on every
+/// server update path) over a fixture that ends `2023-03-01`. So the
+/// 24-hour window is empty for both the remapped and the non-remapped
+/// implementation, and the value below is `"0"` regardless of which one
+/// serves the id: both burn anchors resolve to the same f099 row and no
+/// transaction falls in the interval. The non-zero arithmetic is proven with
+/// the clock frozen by the DB tests in `filecoin_chain_fees_24h.rs` (stats
+/// crate).
+///
+/// Expected log noise, not a defect: at wall-clock time both anchors
+/// resolve to the same f099 row, so the counter's degenerate/missing-anchors
+/// warning fires on every run of this test — the designed behaviour for an
+/// empty window.
+async fn test_txns_fee_24h_serves_filecoin_chain_fees_24h_implementation(base: &Url) {
+    let counters: Counters = send_get_request(base, "/api/v1/counters").await;
+    let txns_fee_24h = counters
+        .counters
+        .iter()
+        .find(|c| c.id == "txnsFee24h")
+        .expect("txnsFee24h must be in the counters response");
+    assert!(!txns_fee_24h.title.is_empty());
+    assert!(!txns_fee_24h.description.is_empty());
+    assert!(!txns_fee_24h.units().is_empty());
+    assert_eq!(
+        txns_fee_24h.value, "0",
+        "empty window at wall-clock time over a fixture ending 2023-03-01 \
+         must yield 0 for either implementation"
+    );
+
+    assert!(
+        !counters
+            .counters
+            .iter()
+            .any(|c| c.id == "filecoinChainFees24h"),
+        "filecoinChainFees24h must not appear in /api/v1/counters"
+    );
+    assert_lines_not_served(base, &["filecoinChainFees24h"]).await;
 }
