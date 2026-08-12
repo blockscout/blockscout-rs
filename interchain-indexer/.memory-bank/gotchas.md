@@ -1182,6 +1182,53 @@ changes as deliberate rescans only in that direction.
 
 ---
 
+## `pull_interval_ms` Paces Historical Catch-Up, Not Just Realtime Polling
+
+**Symptom:** adding a chain to a bridge — or forcing a rescan — takes days
+rather than hours, and the catch-up log lines arrive at a steady, suspiciously
+round rate no matter how empty the ranges are. The name reads like a realtime
+polling knob, so nobody sizes the backfill window against it.
+
+**Root cause:** `LogStream` carries **one** `poll_interval`, fed from the
+indexer's `pull_interval_ms` by `build_log_stream_for_chain`
+(`indexer/evm/log_stream_builder.rs`). `build_catchup_stream` (`log_stream.rs`)
+sleeps for it after **every** batch, and that sleep is unconditional: it runs
+even when `fetch_logs` returned nothing and no `LogBatch` was yielded. So
+catch-up pacing has nothing to do with how much data the range holds — it is
+pure throttle.
+
+The ceiling is therefore `batch_size / pull_interval_ms`:
+
+| Indexer | `BATCH_SIZE` | `PULL_INTERVAL_MS` | Ceiling |
+| --- | --- | --- | --- |
+| Avalanche | `1000` | `10000` | 100 blocks/s ≈ **8.6M blocks/day/chain** |
+| AMB | `1000` | `500` | 2000 blocks/s ≈ 173M blocks/day/chain |
+
+The two defaults differ by 20×, which is why this only bites on the Avalanche
+side. A C-Chain catch-up from the ICTT floor (`42526120` in
+`config/avalanche/bridges.json`) spans tens of millions of blocks — multiple
+days at the Avalanche default, an afternoon at AMB's.
+
+There is no separate catch-up knob, and the setting is per **indexer**, not per
+chain: `run()` hands the same `settings.pull_interval_ms` to every chain's
+stream. Raising catch-up throughput therefore also increases realtime
+`eth_getLogs` / `eth_blockNumber` frequency on every chain of that bridge.
+
+The retry pass is paced independently (`max_chunks_per_pass` / `scan_interval`,
+`indexer/range_driver.rs`) and ignores `poll_interval` entirely — at its
+defaults it is slower still, ~33 blocks/s. Neither number is a scan rate you
+can infer from the other.
+
+**Fix:** size the window from `batch_size / pull_interval_ms` *before* adding a
+chain or planning a rescan, not after. For a one-off backfill, lower
+`PULL_INTERVAL_MS` for the duration and restore it afterwards, bounded by the
+provider's rate limit; `BATCH_SIZE` is the other half of the ratio and raising
+it costs fewer requests for the same span, bounded by the provider's
+`eth_getLogs` range limit. Both are per-bridge, so a deployment that needs one
+chain backfilled fast and another polled gently cannot express that today.
+
+---
+
 ## Server Tests Exhaust The Default macOS Descriptor Limit
 
 **Symptom:** every test in a server test binary fails at once with
