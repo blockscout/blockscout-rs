@@ -456,13 +456,19 @@ mod tests {
     /// suite updates at `Utc::now()`, `update_time_override: None`) cannot
     /// be listed literally — they are covered by the sentinel entry below
     /// instead.
-    const BOUND_EDGES: [&str; 5] = [
+    const BOUND_EDGES: [&str; 7] = [
         // default window: update_time = max_time = 2023-03-01T12:00:00Z
         "2023-02-28T12:00:00",
         "2023-03-01T12:00:00",
         // "no f099 rows in the window" scenario (Phase 2)
         "2022-11-09T12:00:00",
         "2022-11-10T12:00:00",
+        // "degenerate anchors" scenario (Phase 2): update_time =
+        // 2023-03-03T00:00:00, both edges land after the fixture's last
+        // per-block row (COUNTER_WINDOW_EDGE_BLOCK, 2023-03-01T12:00:00),
+        // so both anchors resolve to that same row
+        "2023-03-02T00:00:00",
+        "2023-03-03T00:00:00",
         // Sentinel for the wall-clock class: stands for *every* instant
         // after the fixture's last consensus block. The stats-server
         // integration tests resolve their bounds at the real current time,
