@@ -4,7 +4,10 @@ use serde::Deserialize;
 use serde_with::serde_as;
 use std::time::Duration;
 
-use crate::avalanche_data_api::AvalancheDataApiClientSettings;
+use crate::{
+    avalanche_data_api::AvalancheDataApiClientSettings,
+    indexer::failure_ledger::settings::FailureRetrySettings,
+};
 
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, serde::Serialize)]
@@ -17,6 +20,8 @@ pub struct AvalancheIndexerSettings {
     pub batch_size: u64,
     #[serde(default)]
     pub data_api_client_settings: AvalancheDataApiClientSettings,
+    #[serde(default)]
+    pub failure_retry: FailureRetrySettings,
 }
 
 impl Default for AvalancheIndexerSettings {
@@ -25,6 +30,7 @@ impl Default for AvalancheIndexerSettings {
             pull_interval_ms: default_pull_interval(),
             batch_size: default_batch_size(),
             data_api_client_settings: AvalancheDataApiClientSettings::default(),
+            failure_retry: FailureRetrySettings::default(),
         }
     }
 }

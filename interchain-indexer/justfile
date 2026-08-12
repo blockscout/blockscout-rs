@@ -24,8 +24,18 @@ start-postgres:
 stop-postgres:
     docker kill {{docker-name}}
 
+# The `ulimit` is not incidental. Every server test boots the whole service
+# through `run()` — an actix HttpServer with one worker per CPU core, plus a
+# Postgres pool and the RPC provider pools — and `test_server::init_server`
+# never shuts one down, so descriptors accumulate across the tests of a binary.
+# macOS defaults the soft limit to 256 (`launchctl limit maxfiles`), which
+# EMFILEs around the fourth server and fails every test in the binary with
+# `Os { code: 24, "Too many open files" }` raised from an actix worker.
+# Best effort: `|| true` keeps a host with a lower hard limit from failing the
+# recipe outright. Comments live outside the body because `just` echoes body
+# lines on every run.
 test *args:
-    cargo test {{args}} -- --include-ignored
+    ulimit -n 8192 2>/dev/null || true; cargo test {{args}} -- --include-ignored
 
 test-with-db *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres

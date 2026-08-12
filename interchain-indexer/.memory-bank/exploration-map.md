@@ -193,11 +193,22 @@
 - `interchain-indexer-server/src/services/stats.rs`
   - statistics endpoints
 - `interchain-indexer-server/src/services/status.rs`
-  - indexer status reporting
+  - indexer status reporting, and historical catch-up progress per
+    `(bridge, chain)` (`GET /api/v1/status/indexing`)
+- `interchain-indexer-logic/src/indexer/progress.rs`
+  - the pure cursor arithmetic behind that endpoint — scanned share, blocks
+    remaining, completion. Start here rather than in the service: every clamp
+    has a reason, and the guard `lo = max(catchup_min_cursor, start_block)` is
+    load-bearing
+- `interchain-indexer-server/src/indexers.rs`
+  - config-driven `(bridge, chain)` enumeration for that endpoint, and the
+    startup reconciliation of a lowered `started_at_block`
 - `interchain-indexer-proto/proto/v1/interchain_indexer.proto`
   - core API contract definitions
 - `interchain-indexer-proto/proto/v1/stats.proto`
   - stats API contract definitions
+- `interchain-indexer-proto/proto/v1/status.proto`
+  - status and indexing-progress API contract definitions
 - then continue to:
   - `interchain-indexer-logic/src/database.rs`
 

@@ -12,3 +12,4 @@ pub use health::HealthService;
 pub use interchain_service::InterchainServiceImpl;
 pub use stats::InterchainStatisticsServiceImpl;
 pub use status::StatusServiceImpl;
+pub(crate) use status::collect_indexing_progress;

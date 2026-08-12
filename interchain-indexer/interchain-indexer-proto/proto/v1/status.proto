@@ -9,6 +9,7 @@ import "google/protobuf/struct.proto";
 service StatusService {
     rpc GetFullStatus(GetFullStatusRequest) returns (FullStatus);
     rpc GetStatusByIndexerName(GetStatusRequest) returns (IndexerStatus);
+    rpc GetIndexingProgress(GetIndexingProgressRequest) returns (GetIndexingProgressResponse);
 }
 
 message GetFullStatusRequest { }
@@ -27,4 +28,36 @@ message IndexerStatus {
 
 message FullStatus {
   repeated IndexerStatus indexers = 1;
+}
+
+message GetIndexingProgressRequest {
+  optional int32 bridge_id = 1;
+  optional int64 chain_id  = 2;
+}
+
+message ChainIndexingProgress {
+  int32  bridge_id                = 1;
+  int64  chain_id                 = 2;
+
+  // The unscanned interval is [catchup_min_cursor, catchup_max_cursor], inclusive.
+  // Both are "next block to scan" boundaries, so catch-up can close the interval
+  // from either end. An empty interval means the scan is complete.
+  uint64 start_block              = 3;  // configured started_at_block
+  uint64 catchup_min_cursor       = 4;
+  uint64 catchup_max_cursor       = 5;
+  uint64 realtime_cursor          = 6;
+
+  bool   catchup_scan_complete    = 7;
+  double catchup_progress_percent = 8;  // scanned share, NOT a completeness measure
+  uint64 catchup_blocks_remaining = 9;
+
+  // Blocks inside unresolved holes. A single number on purpose: which ranges
+  // failed and why is operator-side diagnostics, not API surface.
+  uint64 failed_blocks            = 10;
+
+  optional string checkpoint_updated_at = 11;
+}
+
+message GetIndexingProgressResponse {
+  repeated ChainIndexingProgress items = 1;
 }

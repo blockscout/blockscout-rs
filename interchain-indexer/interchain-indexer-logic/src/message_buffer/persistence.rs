@@ -414,6 +414,19 @@ pub(super) async fn upsert_cursors(
                     "LEAST(indexer_checkpoints.catchup_max_cursor, EXCLUDED.catchup_max_cursor)",
                 ),
             )
+            // Monotonicity insurance, not the healing mechanism: this writer
+            // always supplies `0` on insert, and `GREATEST(existing, 0) =
+            // existing` can never lower anything, so this rule alone heals
+            // nothing. The startup seed (`InterchainDatabase::seed_catchup_floor`)
+            // is what heals a stored `0`. The value of this rule is that a
+            // future writer supplying a real floor inherits the correct
+            // conflict behaviour instead of a plain assignment.
+            .value(
+                indexer_checkpoints::Column::CatchupMinCursor,
+                Expr::cust(
+                    "GREATEST(indexer_checkpoints.catchup_min_cursor, EXCLUDED.catchup_min_cursor)",
+                ),
+            )
             .value(
                 indexer_checkpoints::Column::RealtimeCursor,
                 Expr::cust(
@@ -436,7 +449,7 @@ pub(super) async fn upsert_cursors(
 mod tests {
     use chrono::{DateTime, NaiveDateTime};
     use interchain_indexer_entity::{
-        bridges, chains, crosschain_messages, crosschain_transfers,
+        bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
         sea_orm_active_enums::{MessageStatus, TransferType},
         stats_assets,
     };
@@ -955,5 +968,104 @@ mod tests {
         assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
         assert_eq!(transfer.dst_amount, Some(BigDecimal::from(990)));
         assert_eq!(transfer.recipient_address, Some(vec![0x2B]));
+    }
+
+    // --- `upsert_cursors`' `catchup_min_cursor` GREATEST insurance.
+    // This rule alone heals nothing —
+    // `upsert_cursors` always supplies `0` on insert — it only guarantees a
+    // once-seeded floor can never be lowered by a later cursor-maintenance
+    // write. See `InterchainDatabase::seed_catchup_floor` for the healing
+    // mechanism itself. ---
+
+    async fn upsert_cursors_once(db: &InterchainDatabase, cursor: super::Cursor) {
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        let cursors = std::collections::HashMap::from([(
+            (BRIDGE_ID as super::BridgeId, SRC_CHAIN as super::ChainId),
+            cursor,
+        )]);
+        super::upsert_cursors(&tx, &cursors).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    async fn load_checkpoint(db: &InterchainDatabase) -> indexer_checkpoints::Model {
+        db.get_checkpoint(BRIDGE_ID as u64, SRC_CHAIN as u64)
+            .await
+            .unwrap()
+            .expect("checkpoint row must exist")
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_upsert_cursors_zero_min_cursor_is_noop_after_seed_via_own_insert_then_conflict() {
+        let test_db = init_db("upsert_cursors_noop_insert_then_conflict").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        // `upsert_cursors`' own INSERT branch: no row exists yet, so this
+        // creates one with `catchup_min_cursor = 0`.
+        upsert_cursors_once(
+            &db,
+            super::Cursor {
+                backward: 5_000,
+                forward: 5_000,
+            },
+        )
+        .await;
+        assert_eq!(load_checkpoint(&db).await.catchup_min_cursor, 0);
+
+        // A different writer (the startup seed) raises the floor via its own
+        // `GREATEST` conflict rule.
+        db.seed_catchup_floor(BRIDGE_ID, SRC_CHAIN, 1_000, 5_000, 5_000)
+            .await
+            .unwrap();
+        assert_eq!(load_checkpoint(&db).await.catchup_min_cursor, 1_000);
+
+        // `upsert_cursors` runs again for the same pair: this time the row
+        // exists, so it goes through its own ON CONFLICT branch, still
+        // supplying `catchup_min_cursor = 0`. `GREATEST(1000, 0) = 1000`
+        // must leave the floor untouched.
+        upsert_cursors_once(
+            &db,
+            super::Cursor {
+                backward: 4_500,
+                forward: 5_500,
+            },
+        )
+        .await;
+
+        let checkpoint = load_checkpoint(&db).await;
+        assert_eq!(checkpoint.catchup_min_cursor, 1_000);
+        assert_eq!(checkpoint.catchup_max_cursor, 4_500);
+        assert_eq!(checkpoint.realtime_cursor, 5_500);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_upsert_cursors_zero_min_cursor_is_noop_after_seed_via_conflict_only() {
+        let test_db = init_db("upsert_cursors_noop_conflict_only").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        // The row is created entirely by the seed; `upsert_cursors` never
+        // exercises its own INSERT branch for this pair.
+        db.seed_catchup_floor(BRIDGE_ID, SRC_CHAIN, 1_000, 5_000, 5_000)
+            .await
+            .unwrap();
+        assert_eq!(load_checkpoint(&db).await.catchup_min_cursor, 1_000);
+
+        upsert_cursors_once(
+            &db,
+            super::Cursor {
+                backward: 4_500,
+                forward: 5_500,
+            },
+        )
+        .await;
+
+        let checkpoint = load_checkpoint(&db).await;
+        assert_eq!(checkpoint.catchup_min_cursor, 1_000);
+        assert_eq!(checkpoint.catchup_max_cursor, 4_500);
+        assert_eq!(checkpoint.realtime_cursor, 5_500);
     }
 }

@@ -19,6 +19,31 @@ fetch_interval = 1
 # pull_interval_ms = 10000
 # batch_size = 1000
 
+# [avalanche_indexer.failure_retry]
+# enabled = true
+# scan_interval = 60                  # seconds
+# backoff_base = 30                   # seconds
+# backoff_cap = 3600                  # seconds
+# max_chunks_per_pass = 2
+# record_retry_attempts = 3
+# record_retry_initial_backoff = 200  # milliseconds
+
+# AMB indexer settings (all fields optional, these are the defaults)
+# [amb_indexer]
+# pull_interval_ms = 500
+# batch_size = 1000
+# receipt_concurrency = 25
+# clock_skew_tolerance = 300          # seconds
+
+# [amb_indexer.failure_retry]
+# enabled = true
+# scan_interval = 60                  # seconds
+# backoff_base = 30                   # seconds
+# backoff_cap = 3600                  # seconds
+# max_chunks_per_pass = 2
+# record_retry_attempts = 3
+# record_retry_initial_backoff = 200  # milliseconds
+
 [database.connect_options]
 min_connections = 10
 max_connections = 20

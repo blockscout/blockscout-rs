@@ -8,5 +8,5 @@ pub mod settings;
 mod types;
 mod version;
 
-pub use indexer::{AmbChainConfig, AmbIndexer};
+pub use indexer::{AmbChainConfig, AmbContractConfig, AmbIndexer};
 pub use settings::AmbIndexerSettings;

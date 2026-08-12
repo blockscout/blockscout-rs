@@ -18,6 +18,9 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [002](./002-primary-chain-filtering.md) | Primary Chain Filtering for Unknown Chains | Proposed | 2026-02 |
 | [003](./003-amb-event-based-transfers.md) | AMB Transfers Reconstructed From Events; Nullable Transfer Sides | Accepted | 2026-06 |
 | [004](./004-stats-observability-horizon-and-asset-union-find.md) | Stats Eligibility From An Observability Horizon; Asset Identity As Union-Find | Accepted | 2026-07 |
+| [005](./005-failed-range-ledger-and-checkpoint-independence.md) | Failed-Range Ledger, Independent of Checkpoints | Accepted | 2026-08 |
+| [006](./006-contract-versioning-by-block.md) | Contract Versioning Resolved By Block, At Decode Time | Accepted | 2026-08 |
+| [007](./007-scan-floor-reconciled-against-the-checkpoint.md) | The Scan Floor Is Reconciled Against The Checkpoint, Not `bridge_contracts` | Accepted (expires with bidirectional catch-up) | 2026-08 |
 
 ## Creating a New ADR
 

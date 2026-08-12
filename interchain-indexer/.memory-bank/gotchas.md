@@ -911,3 +911,336 @@ here because a false-positive ICTT payload decode would fabricate a bogus
 `crosschain_transfers` row from an arbitrary ICM message.
 
 ---
+
+## A Checkpoint Certifies Scanning, Not Correctness
+
+**Symptom:** `indexer_checkpoints` shows a chain fully caught up, and
+`GET /api/v1/status/indexing` reports `catchup_progress_percent: 100` with
+`catchup_scan_complete: true` — while messages from blocks inside that range are
+missing from the database.
+
+**Root cause:** A checkpoint records that `eth_getLogs` returned successfully for
+a range, plus gaps between known blocks inferred as "scanned but empty". It has
+never meant "every covered block was processed without errors". A range that was
+fetched and then failed downstream leaves no hot barrier, so a later successful
+item moves the frontier straight across it.
+
+**Fix:** Read the two records together. Completeness lives in `indexer_failures`
+(the failed-range ledger), not in the cursors. In the API payload,
+`failed_blocks != 0` is the only completeness signal — the percentage is the
+*scanned* share and reaches 100% with holes still open, by design. Operationally,
+alert on `interchain_indexer_oldest_open_hole_age_seconds`: the retry pass is the
+only recovery path, so a hole that stops draining is invisible otherwise.
+
+**The converse does not hold.** `failed_blocks == 0` means "nothing was
+recorded", not "nothing was lost". A failure only becomes a row if it reaches the
+driver as a `BatchError`, so an error a handler swallows is invisible — and worse,
+a replay covering that range reads as success and `resolve`s an existing hole.
+Malformed input is skipped as data quality on purpose (a log without
+`transaction_hash`, an event without `topic0`, a failed token-enrichment decode),
+and `resolve` runs before the mutation is durable. When adding an indexer or an
+event handler, propagating the failure is what buys you the guarantee; nothing
+else does. See ADR-005 and
+`.memory-bank/research/indexing-gaps-retries-and-checkpoint-safety.md`.
+
+---
+
+## The Failure Ledger's Healthy Path Is DB-Free Only Because One Process Owns A Bridge
+
+**Symptom:** Running two replicas against the same database appears to work, then
+produces overlapping `indexer_failures` rows, over-reported `failed_blocks`, and
+holes that resolve on one replica while another still believes they are open.
+
+**Root cause:** `FailureLedger` keeps an in-memory set of `(bridge_id, chain_id)`
+pairs known to have open holes, so a successful batch on a healthy chain performs
+**zero** database statements. That cache may be stale-*true* (one redundant
+query, harmless) but must never be stale-*false* — which holds only while a single
+process indexes a given bridge. `failed_blocks` also sums row widths directly,
+which is exact only because rows for a pair are disjoint and non-adjacent, an
+invariant maintained by merge-on-write within one writer.
+
+**Fix:** Keep one replica per bridge. The assumption was already implicit in
+checkpointing (`LEAST`/`GREATEST` upserts tolerate concurrency but do not make it
+correct); the ledger simply gives it a second consumer. If multi-writer ever
+becomes real, the ledger needs a database-level non-overlap constraint
+(`EXCLUDE USING gist`) before the cache can be trusted.
+
+---
+
+## The AMB Scan Floor Is The `amb_proxy` Contract's `started_at_block`
+
+**Symptom:** Lowering `omnibridge_mediator`'s `started_at_block` in
+`config/omnibridge/bridges.json` changes nothing — no earlier history is scanned,
+and the progress endpoint's denominator does not move.
+
+**Root cause:** AMB declares two contracts per `(bridge, chain)`, but one log
+stream covers both addresses, and its floor comes from the `amb_proxy` entries
+alone. In the shipped config the mediator's value sits ~7.4M blocks below the
+proxy's on chain 1, so taking `min` across a chain's contracts would understate
+the scan floor by that much.
+
+**Fix:** Change the `amb_proxy` value to reach earlier history. Do not add a
+second place that derives a floor: `ChainPlan`/`plan_bridge`
+(`interchain-indexer-server/src/indexers.rs`) is the one selection rule, and the
+progress denominator, the running indexer's `genesis_block` and the startup
+floor reconciliation all read it. The rule is `min` over the contracts of the
+kind that drives the scan — `amb_proxy` for AMB, all of them otherwise — and
+`min` rather than "the first one" because several versions of the same kind is
+how a contract upgrade is expressed. An AMB chain with no `amb_proxy` yields no
+floor at all rather than falling back to the mediator's: it cannot be indexed,
+and a plausible number for a scan that never runs is worse than none.
+
+A mediator floor *above* the proxy floor is legal — AMB-only operation indexes
+messages without transfers — and both directions of divergence are warned about
+once at startup by `log_amb_floor_divergence`. A chain with **no** mediator is
+also legal and still indexed; a mediator that *is* configured but has a broken
+ABI stays fatal, because that is a config error rather than a choice.
+
+Operator-facing semantics of changing `started_at_block` — what is rescanned,
+what the reported progress does, and why a failed floor reconciliation is a
+`warn` — are in `README.md` → "Changing `started_at_block` on a live
+deployment". Keep the two in step: the README is what an operator reads before
+editing a live config.
+
+---
+
+## A Contract Version Is `(address, block)`, Not `address`
+
+**Symptom:** Adding a second entry for a contract in `bridges.json` — same
+address, higher `version`, a `started_at_block` where the implementation
+changed — changes nothing, or events stop decoding after that block.
+
+**Root cause:** An AMB proxy is upgraded **behind the same address**. That is
+what `bridge_contracts`' `UNIQUE(bridge_id, chain_id, address, version)` and its
+`started_at_block` column ("needed to select proper contract for the concrete
+block") are for. Address alone cannot identify the implementation, and neither
+can `topic0`: it hashes the event signature, which does **not** include which
+parameters are `indexed`, so two versions can share a topic and still decode
+differently.
+
+**Fix:** Resolve at decode time by `(address, block)` —
+`AbiRegistry::resolve_log`. A version is in force from its `started_at_block`
+until the next one's; the last is open-ended.
+
+Deliberately *not* fixed by splitting the `eth_getLogs` call into per-version
+windows. The fetch filter stays a union over every address and every version,
+because narrowing the fetch would have to be mirrored exactly by the retry path,
+and a replay whose filter is narrower than the forward scan resolves holes it
+never re-read — the same class as the Avalanche multi-contract filter bug.
+Version selection at decode costs one lookup and adds no cross-path invariant.
+
+Consequence to watch: a log whose topic belongs to a *different* version window
+than its block is dropped. That is correct only if the configured boundaries are
+right, so it is counted by
+`interchain_indexer_amb_logs_dropped_wrong_version_total` and warned about.
+Non-zero means a `started_at_block` disagrees with the chain and real events are
+being discarded — with no ledger row, because the blocks were scanned.
+
+---
+
+## One Scanner Per `(bridge, chain)`, Never One Per Contract
+
+**Symptom:** A chain with more than one configured contract loses a block range
+after a restart. No `indexer_failures` row, no RPC error, no gap in any log —
+the checkpoint simply sits above blocks that were never scanned for one of the
+addresses.
+
+**Root cause:** `indexer_checkpoints`, `indexer_failures` and the progress API
+are all keyed `(bridge_id, chain_id)`. Give a chain two independent scanners and
+they share one scan frontier while each covers only part of the address set.
+Catch-up completion is the sharpest form: `mark_catchup_complete` lowers
+`catchup_max_cursor` with `LEAST`, so the first scanner to reach its floor
+publishes that floor for the whole pair, and after a restart the other resumes
+below its own remaining work. Realtime has the same shape whenever one scanner
+stalls while another advances the cursor past it.
+
+**Fix:** One `AvalancheChainConfig` (and one `LogStream`) per chain, with every
+configured address in one filter and `min(started_at_block)` as the floor. AMB
+was already built this way; Avalanche was not. When adding a protocol, the
+invariant to hold is that the unit of scanning matches the key of the records
+that describe scanning. Scanning a wider address set or a lower floor than
+strictly needed is free; splitting the scan under a shared key is not.
+
+---
+
+## A Replay Can Only Recover What The Replay Can Still Find
+
+**Symptom:** A recorded `indexer_failures` row disappears after a retry pass
+that "succeeded", but the data it covered is still missing.
+
+**Root cause:** The ledger records *block ranges*, and a replay re-fetches those
+blocks and reprocesses them. Anything the failed attempt consumed from memory —
+an entry taken out of a correlation queue, a lookup removed, a channel drained —
+is not restored by re-fetching the blocks. The replay then finds nothing to do,
+returns `Ok`, and `resolve` deletes the row. The concrete instance: AMB's
+message-hash queue used to `remove` the pending entry before running the
+fallible applies, so a mid-drain failure lost the remainder while the block was
+correctly recorded. Both halves looked right in isolation.
+
+**Fix:** Consume in-memory state **last**. Work on a clone, and remove the
+original only after every fallible step has succeeded. This makes the operation
+at-least-once rather than exactly-once, which is already the regime for any
+replayed range. When reviewing a new adapter, the question is not "is the
+failure recorded" but "will a replay of those blocks reconstruct everything the
+failed attempt consumed".
+
+---
+
+## The Retry Pass Starves The Forward Streams, And That Looks Like RPC Failure
+
+**Symptom:** Catch-up and realtime stop logging for a minute or two, then a burst
+of `RPC request to node failed ... source: TimedOut` warnings appears for *every*
+configured chain at once, and only after that do the forward scans resume.
+Nothing is wrong with the endpoints — the retry pass was making successful
+`eth_getLogs` calls against the same node throughout.
+
+**Root cause:** `RangeDriver::run` is a single task with one `tokio::select!`
+([`range_driver.rs`](../interchain-indexer-logic/src/indexer/range_driver.rs)).
+`run_retry_tick` is awaited *inside* one branch, so while it runs the
+`stream.next()` branch is not polled and the combined log stream cannot advance.
+The pass is a sequential loop of up to `max_chunks_per_pass` chunks, each with an
+awaited `eth_getLogs` plus `process`, so the pause is
+`max_chunks_per_pass × per-chunk latency` — a bound in chunks, not in time.
+
+The timeout burst is a *consequence* of the pause, not a cause. The forward
+requests already in flight had their deadlines registered before the pass began.
+Their timers fire on schedule and wake the driver task, but the task is busy in
+the retry pass, so nothing is polled; the first poll after the pass returns
+`TimedOut` immediately. One warning per in-flight forward request — with N chains
+that is 2N warnings (catch-up plus realtime) inside the same millisecond, which
+is the signature to look for. A `scanning CATCHUP`/`scanning REALTIME` line is
+printed *before* the await, so it means "request issued", never "response
+received".
+
+Observed on Avalanche C-Chain: `max_chunks_per_pass = 16` against
+`api.avax.network` measured ~87s per pass, longer than the 60s `scan_interval`,
+so the tick was already due when the pass returned and two passes ran
+back-to-back with zero forward progress in between.
+
+**Fix:** Keep `max_chunks_per_pass` low — it is the only bound that exists, which
+is why the default is `2`. A low value costs replay throughput and never
+coverage: the sweep's resume cursor continues the backlog on the next tick. The
+real fix is to bound the pass by elapsed time, or to move it off the driver task
+entirely — the latter introduces `process()` running concurrently with the
+forward path (concurrent transactions over the same messages, concurrent AMB
+correlation state) and is a design change of the same class as the alternatives
+rejected in ADR-005.
+
+---
+
+## `catchup_min_cursor` Is A Stored Floor, Not A Frontier — And Code Depends On That
+
+**Symptom:** none yet. This is the precondition a whole startup path silently
+rests on, recorded so the next person to touch cursor semantics sees it before
+they break it.
+
+**Root cause:** the name suggests a moving lower boundary, symmetric with
+`catchup_max_cursor`. It is not. `catchup_min_cursor` never advances with
+progress: `upsert_cursors` always supplies `0` for it and relies on
+`GREATEST(existing, 0)` purely to preserve whatever is stored
+([`message_buffer/persistence.rs`](../interchain-indexer-logic/src/message_buffer/persistence.rs)).
+Exactly two writers move it — `seed_catchup_floor` (raise-only) and
+`lower_catchup_floor` (lower-only) — so its value is the pair's configured scan
+floor and nothing else.
+
+`reconcile_catchup_floors` is licensed by precisely that. It enforces
+`catchup_min_cursor == configured floor` by lowering the stored value whenever
+configuration sits below it, unconditionally, every startup. That is exact only
+because the stored value is a floor. Make it a frontier and the same comparison
+becomes true whenever the ascending walk has progressed, so the pass would reset
+that walk on **every** restart — a loop, not a one-off rescan. ADR-007 states the
+expiry condition and the replacement (a dedicated floor column, plus
+`catchup_max_cursor = old_floor - 1` to bound the rescan); ADR-005 records why
+the failed write is only a `warn` today and why that must change too.
+
+**Fix:** if you make `catchup_min_cursor` a real scan boundary, replace
+`reconcile_catchup_floors` rather than extending it, and read ADR-007 first. The
+tell that you are in this situation: you are adding a writer that raises
+`catchup_min_cursor` for a reason other than a configuration change.
+
+---
+
+## Lowering A Scan Floor Does Not Cause A Rescan
+
+**Symptom:** an operator expects lowering `started_at_block` to re-fetch
+everything above the new floor, and plans a maintenance window for it.
+
+**Root cause:** the descending catch-up resumes from `catchup_max_cursor`, and a
+completed catch-up left that cursor at `old_floor - 1` (`mark_catchup_complete`),
+which is exactly the top of the newly opened range. A catch-up still in progress
+has the cursor above the old floor and simply keeps walking past it to the new
+one. Either way only `[new_floor, old_floor - 1]` is fetched.
+
+The reconciliation deliberately does not touch `catchup_max_cursor` for this
+reason — writing it would at best be a no-op and at worst re-fetch a block.
+
+**Fix:** nothing to do. The case that *does* rescan is the asymmetric one:
+raising a floor and later restoring it re-fetches the range between the two
+floors, because the raise let catch-up complete above the old floor and the
+descending cursor moved on. Rows there are re-derived, not duplicated. Plan floor
+changes as deliberate rescans only in that direction.
+
+---
+
+## Server Tests Exhaust The Default macOS Descriptor Limit
+
+**Symptom:** every test in a server test binary fails at once with
+`Os { code: 24, kind: Uncategorized, message: "Too many open files" }`, panicking
+inside `actix-server`'s worker loop, followed by
+`Server did not start in time, and did not terminate` from
+`test_server::init_server`. Running the tests serially with `--test-threads=1`
+does not fix it — it only moves which test fails first.
+
+**Root cause:** each test boots the *entire* service through `run()`: an actix
+`HttpServer` (the launcher never calls `.workers(n)`, so actix uses one worker
+per CPU core), a Postgres pool and the RPC provider pools for every configured
+chain. `test_server::init_server` never shuts a server down, so all of that
+stays alive for the rest of the process and the descriptors accumulate across
+the tests of a binary. macOS defaults the *soft* limit to 256
+(`launchctl limit maxfiles`), which is exhausted around the fourth server on a
+14-core machine. Serial execution does not help precisely because the cost is
+cumulative, not concurrent.
+
+**Fix:** the `test` recipe in the `justfile` raises the soft limit to 8192
+before invoking `cargo test`, and `test-with-db` inherits it. Running
+`cargo test` directly still needs `ulimit -n 8192` in the shell first. The hard
+limit is `unlimited` on macOS, so no `sudo` is involved. Measured on a 14-core
+host: 256 fails 5/5, 1024 and above passes.
+
+Related, and now closed: these tests assume no reachable RPC ("indexer failed to
+start" is the state they exercise), which used to be a property of the *machine*
+— `config/omnibridge/chains.json` carries real public endpoints, so on a
+developer machine with egress the indexers genuinely started and scanned
+mainnet. The harness now boots against
+`interchain-indexer-server/tests/fixtures/chains-offline.json` (same chains,
+`http://127.0.0.1:1`), so the state is a property of the fixture instead.
+`test_offline_chains_fixture_matches_the_omnibridge_chains_config` keeps the two
+chain sets in sync; add a chain to one and add it to the other.
+
+The fixture is **not** a fix for the descriptor limit — measured separately, the
+offline harness still fails 5/5 at `ulimit -n 256`, because actix workers, not
+RPC sockets, are what exhausts it.
+
+**The symptom that live RPC produces**, seen on GitHub Actions before the
+fixture landed:
+
+```
+get_indexing_progress_pair_with_no_checkpoint_reports_zero_and_absent_updated_at
+assertion `left == right` failed
+  left: Number(0.000020304127402714295)
+ right: Number(0.0)
+```
+
+`CatchupProgress::compute` returns exactly `0.0` when no checkpoint row exists,
+so a non-zero value means one did. The only writer that can create it during
+that test is `seed_catchup_floor`, called from `build_log_stream_for_chain`
+*after* `get_block_number()` succeeds — a runner with egress reaches the public
+endpoints, the indexer starts, and the row lands as
+`(min = start_block, max = head - 1, realtime = head)`: exactly one scanned
+block out of ~4.9M, which is that percentage. Reproduced bit-for-bit against a
+local mock RPC, and it is a race — the same run passes whenever the HTTP query
+beats the seeding, which is why it looked intermittent. The test now asserts
+the premise (`indexer_checkpoints` empty) so this fails by name instead of by
+float.
+
+---

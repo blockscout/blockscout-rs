@@ -197,13 +197,13 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
         AvalancheChainConfig {
             chain_id: chain_id_src as i64,
             provider: provider_src,
-            contract_address,
+            contract_addresses: vec![contract_address],
             start_block: block_number_src,
         },
         AvalancheChainConfig {
             chain_id: chain_id_dest as i64,
             provider: provider_dest,
-            contract_address,
+            contract_addresses: vec![contract_address],
             start_block: block_number_dest,
         },
     ];
@@ -486,13 +486,13 @@ async fn test_receive_only_does_not_promote_message() -> Result<()> {
         AvalancheChainConfig {
             chain_id: chain_id_dest as i64,
             provider: provider_dest,
-            contract_address,
+            contract_addresses: vec![contract_address],
             start_block: block_number_dest,
         },
         AvalancheChainConfig {
             chain_id: chain_id_src as i64,
             provider: provider_src_quiet,
-            contract_address,
+            contract_addresses: vec![contract_address],
             start_block: quiet_src_block,
         },
     ];
@@ -687,13 +687,13 @@ async fn test_send_only_creates_initiated_message() -> Result<()> {
         AvalancheChainConfig {
             chain_id: chain_id_src as i64,
             provider: provider_src,
-            contract_address,
+            contract_addresses: vec![contract_address],
             start_block: block_number_src,
         },
         AvalancheChainConfig {
             chain_id: chain_id_dest as i64,
             provider: provider_dest_quiet,
-            contract_address,
+            contract_addresses: vec![contract_address],
             start_block: quiet_dest_block,
         },
     ];
@@ -851,7 +851,7 @@ async fn test_send_only_processes_unknown_destination_when_allowed() -> Result<(
     let avalanche_chains = vec![AvalancheChainConfig {
         chain_id: chain_id_src as i64,
         provider: provider_src,
-        contract_address,
+        contract_addresses: vec![contract_address],
         start_block: block_number_src,
     }];
 
@@ -1024,7 +1024,7 @@ async fn test_unknown_source_consolidates_with_destination_timestamp() -> Result
     let avalanche_chains = vec![AvalancheChainConfig {
         chain_id: chain_id_dest as i64,
         provider: provider_dest,
-        contract_address,
+        contract_addresses: vec![contract_address],
         start_block: block_number_dest,
     }];
 
@@ -1251,7 +1251,7 @@ async fn test_unknown_source_consolidates_when_allowed_without_home_chain() -> R
     let avalanche_chains = vec![AvalancheChainConfig {
         chain_id: chain_id_dest as i64,
         provider: provider_dest,
-        contract_address,
+        contract_addresses: vec![contract_address],
         start_block: block_number_dest,
     }];
 
@@ -1402,7 +1402,7 @@ async fn test_home_chain_does_not_override_strict_unknown_filter() -> Result<()>
     let avalanche_chains = vec![AvalancheChainConfig {
         chain_id: chain_id_dest as i64,
         provider: provider_dest,
-        contract_address,
+        contract_addresses: vec![contract_address],
         start_block: block_number_dest,
     }];
 
@@ -1599,13 +1599,13 @@ async fn test_configured_source_waits_for_send() -> Result<()> {
         AvalancheChainConfig {
             chain_id: chain_id_dest as i64,
             provider: provider_dest,
-            contract_address,
+            contract_addresses: vec![contract_address],
             start_block: block_number_dest,
         },
         AvalancheChainConfig {
             chain_id: chain_id_src as i64,
             provider: provider_src_quiet,
-            contract_address,
+            contract_addresses: vec![contract_address],
             start_block: quiet_src_block,
         },
     ];
@@ -1760,7 +1760,7 @@ async fn test_home_chain_filters_unknown_source() -> Result<()> {
     let avalanche_chains = vec![AvalancheChainConfig {
         chain_id: chain_id_dest as i64,
         provider: provider_dest,
-        contract_address,
+        contract_addresses: vec![contract_address],
         start_block: block_number_dest,
     }];
 

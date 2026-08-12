@@ -11,8 +11,9 @@ use dashmap::DashMap;
 use crate::message_buffer::{Key, MessageBuffer};
 
 use super::{
-    abi::{AbiRegistry, ContractKind},
+    abi::{AbiRegistry, ContractKind, LogResolution},
     header::parse_amb_header,
+    metrics,
     settings::AmbIndexerSettings,
     types::{
         AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution, DestinationExecutionEvent,
@@ -25,6 +26,10 @@ use super::{
 pub(super) struct EventContext<'a> {
     pub(super) bridge_id: i32,
     pub(super) chain_id: i64,
+    /// The block every log in this context came from. Contract versions are
+    /// resolved by `(address, block)`, so this is not diagnostic metadata —
+    /// without it an upgraded proxy decodes against the wrong ABI.
+    pub(super) block_number: u64,
     pub(super) abi_registry: &'a AbiRegistry,
     pub(super) buffer: &'a Arc<MessageBuffer<Message>>,
     pub(super) message_hash_lookup: &'a Arc<DashMap<B256, Key>>,
@@ -85,16 +90,51 @@ pub(super) async fn dispatch_transaction(
         .map(|dt| dt.naive_utc())
         .context("invalid block timestamp")?;
 
+    // Aggregated rather than early-returned: a handler failure on one event
+    // must not skip the remaining events in this transaction (and their
+    // buffer mutations), so every log is still dispatched before the
+    // aggregate failure (if any) is reported to the caller. Without this,
+    // `dispatch_transaction` always returned `Ok(())` regardless of handler
+    // failures, which made `process_batch`'s `failed_blocks`/`last_err`
+    // collection dead code: no AMB downstream failure ever reached the
+    // failure ledger, and worse, a repeated swallowed failure during a retry
+    // pass could make `RangeDriver` treat the batch as successful and
+    // resolve (delete) a real recorded hole.
+    let mut last_err: Option<anyhow::Error> = None;
+    let mut failed_events = 0usize;
+
     for log in receipt_logs {
         let Some(topic) = log.topic0() else {
             continue;
         };
-        let Some((event, kind)) =
-            ctx.abi_registry
-                .event_for_log(ctx.chain_id, log.address(), topic)
-        else {
-            continue;
-        };
+        let (event, kind) =
+            match ctx
+                .abi_registry
+                .resolve_log(ctx.chain_id, log.address(), topic, ctx.block_number)
+            {
+                LogResolution::Matched(event, kind) => (event, kind),
+                LogResolution::NotConfigured => continue,
+                // This address does declare the topic, in a version window this
+                // block is not in. Dropping is right when the configured windows
+                // are right — and the counter is how a wrong one becomes visible
+                // instead of looking like a chain that simply emitted nothing.
+                LogResolution::WrongVersion => {
+                    metrics::AMB_LOGS_DROPPED_WRONG_VERSION_TOTAL
+                        .with_label_values(&[&ctx.bridge_id.to_string(), &ctx.chain_id.to_string()])
+                        .inc();
+                    tracing::warn!(
+                        bridge_id = ctx.bridge_id,
+                        chain_id = ctx.chain_id,
+                        block_number = ctx.block_number,
+                        tx_hash = ?log.transaction_hash,
+                        log_index = ?log.log_index,
+                        address = %log.address(),
+                        "dropped an AMB log whose topic belongs to a different configured version \
+                         of this contract; check started_at_block for that address"
+                    );
+                    continue;
+                }
+            };
 
         tracing::trace!(
             bridge_id = ctx.bridge_id,
@@ -165,7 +205,12 @@ pub(super) async fn dispatch_transaction(
         };
 
         if let Err(err) = result {
-            tracing::error!(
+            // Downgraded from `error` to `warn`: the aggregate failure
+            // below is now propagated to the caller and logged once, at
+            // `error`, by `RangeDriver` for the whole batch/range —
+            // logging every per-event failure at `error` too would
+            // double-log the same incident.
+            tracing::warn!(
                 bridge_id = ctx.bridge_id,
                 chain_id = ctx.chain_id,
                 tx_hash = ?log.transaction_hash,
@@ -174,6 +219,8 @@ pub(super) async fn dispatch_transaction(
                 err = ?err,
                 "failed to process AMB event"
             );
+            failed_events += 1;
+            last_err = Some(err);
         } else if matches!(kind, ContractKind::AmbProxy { .. }) {
             tracing::debug!(
                 bridge_id = ctx.bridge_id,
@@ -184,6 +231,12 @@ pub(super) async fn dispatch_transaction(
                 "processed AMB event"
             );
         }
+    }
+
+    if let Some(err) = last_err {
+        return Err(err.context(format!(
+            "{failed_events} AMB event handler(s) failed to process"
+        )));
     }
 
     Ok(())
@@ -213,6 +266,7 @@ async fn handle_source_request(
             ctx.chain_id,
             log.address(),
             log.topic0().expect("topic exists"),
+            ctx.block_number,
         )
         .context("source event contract missing from registry")?
     else {
@@ -359,7 +413,7 @@ fn find_tokens_bridging_initiated(
         };
         let Some((event, kind)) =
             ctx.abi_registry
-                .event_for_log(ctx.chain_id, log.address(), topic)
+                .event_for_log(ctx.chain_id, log.address(), topic, ctx.block_number)
         else {
             continue;
         };
@@ -410,6 +464,7 @@ fn find_tokens_bridging_initiated(
 fn find_tokens_bridged(
     abi_registry: &AbiRegistry,
     chain_id: i64,
+    block_number: u64,
     receipt_logs: &[Log],
     message_id: &B256,
 ) -> Option<DestinationTransferDetails> {
@@ -417,7 +472,9 @@ fn find_tokens_bridged(
         let Some(topic) = log.topic0() else {
             continue;
         };
-        let Some((event, kind)) = abi_registry.event_for_log(chain_id, log.address(), topic) else {
+        let Some((event, kind)) =
+            abi_registry.event_for_log(chain_id, log.address(), topic, block_number)
+        else {
             continue;
         };
         if !matches!(kind, ContractKind::OmnibridgeMediator) || event.name != "TokensBridged" {
@@ -555,12 +612,35 @@ async fn handle_collected_signatures(
     }
 }
 
+/// Applies the queued events for `message_hash`, then removes the queue entry.
+///
+/// The entry is deliberately **not** removed up front. Removing first and then
+/// running the fallible applies makes a mid-drain failure unrecoverable: the
+/// remaining confirmations are gone from memory, while the blocks that carried
+/// them were processed successfully at the time and so are not in the failure
+/// ledger. The retry of *this* block then re-enters here, finds nothing
+/// queued, returns `Ok`, and `resolve` deletes a hole whose data was never
+/// restored — a recorded failure that reports itself repaired.
+///
+/// Draining a clone and removing only on success makes the retry path work as
+/// designed: the queue entry survives, the replay re-applies it. The cost is
+/// that a drain is at-least-once rather than exactly-once, which is the regime
+/// every replayed range already runs under, and both applies below are
+/// idempotent — one inserts into a map keyed by validator address, the other
+/// overwrites a single field.
 async fn drain_pending_message_hash_events(
     ctx: &EventContext<'_>,
     message_hash: B256,
     key: Key,
 ) -> Result<()> {
-    let Some((_, pending)) = ctx.pending_message_hash_events.remove(&message_hash) else {
+    // Clone out under a short-lived guard: the `Ref` must not be held across
+    // the `.await`s below (see `.memory-bank/rules/async-patterns.md`). The
+    // temporary guard is released at the end of this statement.
+    let Some(pending) = ctx
+        .pending_message_hash_events
+        .get(&message_hash)
+        .map(|entry| entry.value().clone())
+    else {
         return Ok(());
     };
     let confirmation_count = pending.validator_confirmations.len();
@@ -585,6 +665,8 @@ async fn drain_pending_message_hash_events(
         )
         .await?;
     }
+
+    ctx.pending_message_hash_events.remove(&message_hash);
 
     tracing::debug!(
         bridge_id = ctx.bridge_id,
@@ -664,6 +746,7 @@ async fn handle_destination_execution(
             ctx.chain_id,
             log.address(),
             log.topic0().expect("topic exists"),
+            ctx.block_number,
         )
         .context("destination event contract missing from registry")?;
     let ContractKind::AmbProxy { side, .. } = contract_kind else {
@@ -686,8 +769,13 @@ async fn handle_destination_execution(
         source_chain_id,
         destination_chain_id: ctx.chain_id,
     };
-    let destination_transfer =
-        find_tokens_bridged(ctx.abi_registry, ctx.chain_id, receipt_logs, &message_id);
+    let destination_transfer = find_tokens_bridged(
+        ctx.abi_registry,
+        ctx.chain_id,
+        ctx.block_number,
+        receipt_logs,
+        &message_id,
+    );
 
     tracing::trace!(
         bridge_id = ctx.bridge_id,
@@ -833,7 +921,7 @@ fn expect_uint(value: Option<&DynSolValue>, name: &str) -> Result<alloy::primiti
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, sync::Arc};
 
     use alloy::{
         json_abi::Event,
@@ -842,11 +930,22 @@ mod tests {
     };
     use dashmap::DashMap;
 
-    use super::{find_tokens_bridged, is_canonical_message_hash_lookup};
-    use crate::{
-        indexer::amb::abi::{AbiRegistry, ContractAbi, ContractKind},
-        message_buffer::Key,
+    use super::{
+        AnnotatedEvent, CollectedSignaturesEvent, EventContext, Message,
+        PendingCollectedSignatures, PendingMessageHashEvents, drain_pending_message_hash_events,
+        find_tokens_bridged, is_canonical_message_hash_lookup,
     };
+    use crate::{
+        MessageBufferSettings,
+        indexer::amb::{
+            abi::{AbiRegistry, ContractAbi, ContractKind, ContractVersion},
+            settings::AmbIndexerSettings,
+        },
+        message_buffer::{Key, MessageBuffer},
+    };
+
+    /// Any block at or above the fixtures' single version floor of 0.
+    const BLOCK_NUMBER: u64 = 100;
 
     fn tokens_bridged_event() -> Event {
         serde_json::from_str(
@@ -871,8 +970,11 @@ mod tests {
         AbiRegistry::from_contracts_for_test(vec![ContractAbi {
             chain_id,
             address: mediator,
-            kind: ContractKind::OmnibridgeMediator,
-            events_by_topic,
+            versions: vec![ContractVersion {
+                started_at_block: 0,
+                kind: ContractKind::OmnibridgeMediator,
+                events_by_topic,
+            }],
         }])
     }
 
@@ -921,7 +1023,7 @@ mod tests {
             mediator, token, recipient, message_id, value, &event,
         )];
 
-        let found = find_tokens_bridged(&registry, chain_id, &logs, &message_id)
+        let found = find_tokens_bridged(&registry, chain_id, BLOCK_NUMBER, &logs, &message_id)
             .expect("TokensBridged must match by messageId regardless of executor");
         assert_eq!(found.token, token);
         assert_eq!(found.recipient, recipient);
@@ -945,7 +1047,10 @@ mod tests {
 
         let other_message_id =
             b256!("0000000000000000000000000000000000000000000000000000000000000001");
-        assert!(find_tokens_bridged(&registry, chain_id, &logs, &other_message_id).is_none());
+        assert!(
+            find_tokens_bridged(&registry, chain_id, BLOCK_NUMBER, &logs, &other_message_id)
+                .is_none()
+        );
     }
 
     #[test]
@@ -970,6 +1075,123 @@ mod tests {
         assert!(
             !is_canonical_message_hash_lookup(&lookup, message_hash, displaced_key),
             "a lookup for another key must not drain queued hash events",
+        );
+    }
+
+    /// A queued `signatures_collected` whose block number does not fit `u64`
+    /// makes `apply_collected_signatures` fail before it reaches the buffer —
+    /// a deterministic mid-drain failure with no database involvement, which
+    /// is what these two tests use to observe the removal ordering.
+    fn pending_with_unapplicable_signatures() -> PendingMessageHashEvents {
+        PendingMessageHashEvents {
+            validator_confirmations: HashMap::new(),
+            signatures_collected: Some(PendingCollectedSignatures {
+                chain_id: 1,
+                event: AnnotatedEvent {
+                    event: CollectedSignaturesEvent {
+                        authority_responsible_for_relay: Address::ZERO,
+                        message_hash: B256::ZERO,
+                        count: U256::from(1),
+                    },
+                    transaction_hash: B256::with_last_byte(1),
+                    block_number: -1,
+                    block_timestamp: chrono::DateTime::from_timestamp(0, 0).unwrap().naive_utc(),
+                    source_chain_id: 1,
+                    destination_chain_id: 2,
+                },
+            }),
+        }
+    }
+
+    /// Regression for the drain false-clear: a failure partway through the
+    /// drain must leave the queue entry in place. Removing it first and then
+    /// applying loses the remaining events, while the block *is* recorded in
+    /// the ledger — so the replay re-enters the drain, finds nothing queued,
+    /// reports success and resolves a hole whose data was never restored.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn a_failed_drain_keeps_the_queued_events_for_the_replay() {
+        let db = crate::test_utils::init_db("amb_failed_drain_keeps_pending").await;
+        let interchain_db = crate::database::InterchainDatabase::new(db.client());
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db,
+            MessageBufferSettings {
+                hot_ttl: std::time::Duration::from_secs(60),
+                maintenance_interval: std::time::Duration::from_secs(60),
+            },
+        );
+        let registry = AbiRegistry::default();
+        let lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending: Arc<DashMap<B256, PendingMessageHashEvents>> = Arc::new(DashMap::new());
+        let settings = AmbIndexerSettings::default();
+        let message_hash = B256::with_last_byte(42);
+        pending.insert(message_hash, pending_with_unapplicable_signatures());
+
+        let ctx = EventContext {
+            bridge_id: 1,
+            chain_id: 1,
+            block_number: BLOCK_NUMBER,
+            abi_registry: &registry,
+            buffer: &buffer,
+            message_hash_lookup: &lookup,
+            pending_message_hash_events: &pending,
+            settings: &settings,
+        };
+
+        let result = drain_pending_message_hash_events(&ctx, message_hash, Key::new(1, 1)).await;
+
+        assert!(
+            result.is_err(),
+            "the unapplicable queued event must surface as an error so the block is recorded"
+        );
+        assert!(
+            pending.contains_key(&message_hash),
+            "a failed drain must keep the queue entry so the replay can re-apply it"
+        );
+    }
+
+    /// The other half of the ordering: a drain that applies everything must
+    /// still remove the entry, or the queue grows without bound and every
+    /// later source request re-applies the same events.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn a_successful_drain_removes_the_queue_entry() {
+        let db = crate::test_utils::init_db("amb_successful_drain_removes_pending").await;
+        let interchain_db = crate::database::InterchainDatabase::new(db.client());
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db,
+            MessageBufferSettings {
+                hot_ttl: std::time::Duration::from_secs(60),
+                maintenance_interval: std::time::Duration::from_secs(60),
+            },
+        );
+        let registry = AbiRegistry::default();
+        let lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending: Arc<DashMap<B256, PendingMessageHashEvents>> = Arc::new(DashMap::new());
+        let settings = AmbIndexerSettings::default();
+        let message_hash = B256::with_last_byte(43);
+        // Nothing queued to apply: the drain has no fallible work and must
+        // still clear the entry.
+        pending.insert(message_hash, PendingMessageHashEvents::default());
+
+        let ctx = EventContext {
+            bridge_id: 1,
+            chain_id: 1,
+            block_number: BLOCK_NUMBER,
+            abi_registry: &registry,
+            buffer: &buffer,
+            message_hash_lookup: &lookup,
+            pending_message_hash_events: &pending,
+            settings: &settings,
+        };
+
+        drain_pending_message_hash_events(&ctx, message_hash, Key::new(1, 1))
+            .await
+            .expect("a drain with nothing to apply must succeed");
+
+        assert!(
+            !pending.contains_key(&message_hash),
+            "a successful drain must remove the queue entry"
         );
     }
 }
