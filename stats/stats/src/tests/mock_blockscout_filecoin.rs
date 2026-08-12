@@ -234,8 +234,11 @@ fn mock_address_coin_balance(
 }
 
 /// Builds the blocks, transactions and per-block f099 balance rows of
-/// [`counter_window_fixture`].
-fn counter_window_blocks_transactions_and_balances() -> (
+/// [`counter_window_fixture`], truncated at `max_date` like every other
+/// dated data set of this layer.
+fn counter_window_blocks_transactions_and_balances(
+    max_date: NaiveDate,
+) -> (
     Vec<blocks::ActiveModel>,
     Vec<transactions::ActiveModel>,
     Vec<address_coin_balances::ActiveModel>,
@@ -248,7 +251,15 @@ fn counter_window_blocks_transactions_and_balances() -> (
     let mut new_transactions = Vec::new();
     let mut new_balances = Vec::new();
     for (number, ts, value, has_tx) in counter_window_fixture() {
-        let block = mock_block(number, NaiveDateTime::from_str(ts).unwrap(), true);
+        let ts = NaiveDateTime::from_str(ts).unwrap();
+        // Same rule as `mock_burn_actor_balances`: the layer must not put
+        // blocks or per-block rows after the date the indexer is pretended
+        // to have reached, or the daily and per-block views of the f099
+        // balance stop agreeing.
+        if ts.date() > max_date {
+            continue;
+        }
+        let block = mock_block(number, ts, true);
         if has_tx {
             new_transactions.push(mock_transaction(
                 &block,
@@ -395,9 +406,13 @@ pub async fn fill_mock_blockscout_filecoin_data(
             .unwrap();
     }
 
+    // `2023-02-28` must stay equal to the earliest date in
+    // `counter_window_fixture()`: guard-true then implies at least one row
+    // of each kind survives the `max_date` filter inside the builder, so no
+    // `insert_many` below is ever called with an empty vector.
     if NaiveDate::from_str("2023-02-28").unwrap() <= max_date {
         let (counter_blocks, counter_transactions, counter_balances) =
-            counter_window_blocks_transactions_and_balances();
+            counter_window_blocks_transactions_and_balances(max_date);
         blocks::Entity::insert_many(counter_blocks)
             .exec(blockscout)
             .await

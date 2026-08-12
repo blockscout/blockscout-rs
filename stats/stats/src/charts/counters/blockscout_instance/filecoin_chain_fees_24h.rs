@@ -79,6 +79,15 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
         ];
         // see `statement_denormalized_is_correct` / `statement_non_denormalized_is_correct`
         // for the resulting SQL text
+        //
+        // `from_block_time`/`to_block_time` are scalar subqueries on purpose:
+        // `blocks` has a UNIQUE partial index on `(number) WHERE consensus`
+        // (`one_consensus_block_at_height` in the blockscout-db schema dump),
+        // and `consensus` is NOT NULL, so `consensus = true AND number =
+        // <one value>` matches at most one row by construction. No `LIMIT 1`
+        // — a duplicate here would mean the core Blockscout unique index is
+        // gone, and that should fail loudly rather than be silently papered
+        // over.
         let sql = if completed_migrations.denormalization {
             r#"
                 WITH bound_to AS (
@@ -226,10 +235,14 @@ pub struct FilecoinChainFees24hValue {
     /// Block number of the end anchor (`bound_to`'s last non-null f099
     /// row). `NULL` when no such row exists.
     pub to_block: Option<i64>,
-    /// Timestamp of the start anchor block. `NULL` iff `from_block` is
-    /// `NULL`.
+    /// Timestamp of the start anchor block. `NULL` when `from_block` is
+    /// `NULL` — or, in principle, when the anchor's height currently has no
+    /// consensus block (the anchor CTEs do not filter on the block's
+    /// `consensus` flag); in that shape the burn is still computed and used
+    /// while the update is routed to the degenerate-anchors warning.
     pub from_block_time: Option<NaiveDateTime>,
-    /// Timestamp of the end anchor block. `NULL` iff `to_block` is `NULL`.
+    /// Timestamp of the end anchor block. `NULL` under the same conditions
+    /// as [`from_block_time`](Self::from_block_time), for the end anchor.
     pub to_block_time: Option<NaiveDateTime>,
 }
 
@@ -267,6 +280,12 @@ pub struct CombineBurnAndTips;
 /// block) has a span of exactly `0`, which would *also* satisfy the skew
 /// predicate below — checking degeneracy first keeps that case from firing
 /// both warnings, and at most one warning is ever emitted per update.
+///
+/// Degeneracy is classified by *timestamp*, not block number: two distinct
+/// anchor blocks sharing one timestamp give the window no usable time span,
+/// so they land in the degenerate branch by design — the computed burn is
+/// still used in that shape, which is why the warning carries a `burn`
+/// field instead of asserting a numeric outcome in prose.
 fn warn_on_anchor_issues(value: &FilecoinChainFees24hValue) {
     match (value.from_block_time, value.to_block_time) {
         (Some(from_time), Some(to_time)) if from_time != to_time => {
@@ -292,8 +311,9 @@ fn warn_on_anchor_issues(value: &FilecoinChainFees24hValue) {
                 to_block = value.to_block,
                 from_block_time = ?value.from_block_time,
                 to_block_time = ?value.to_block_time,
+                burn = ?value.burn,
                 tips_txns = value.tips_txns,
-                "the burn anchors are missing or identical; burn contribution falls back to 0"
+                "the burn anchors do not span the window: one or both anchor timestamps are unresolved, or both carry the same block timestamp"
             );
         }
     }
@@ -695,9 +715,23 @@ mod tests {
                 // a zero span deviates from 24h by 24h, which would also
                 // satisfy the skew predicate; this case exists to prove
                 // the skew warning is absent here, i.e. the degenerate
-                // check really does run first and suppress it
-                "equal anchors -> degenerate_anchors only, not anchor_span_skew",
+                // check really does run first and suppress it. Note the
+                // shape: `pulled` fabricates blocks 1 and 2, so these are
+                // *distinct* anchor blocks sharing one timestamp — the
+                // by-design degenerate classification by timestamp.
+                "distinct blocks with equal timestamps -> degenerate_anchors only, not anchor_span_skew",
                 pulled(Some(0.0), Some(1.0), Some(base_from), Some(base_from)),
+                vec![REASON_DEGENERATE_ANCHORS],
+            ),
+            (
+                // the genuine same-block shape: both anchors resolve to one
+                // block, so the block numbers are equal too (unlike the row
+                // above)
+                "same anchor block -> degenerate_anchors",
+                FilecoinChainFees24hValue {
+                    to_block: Some(1),
+                    ..pulled(Some(0.0), Some(1.0), Some(base_from), Some(base_from))
+                },
                 vec![REASON_DEGENERATE_ANCHORS],
             ),
         ];
