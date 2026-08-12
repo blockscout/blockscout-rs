@@ -24,7 +24,7 @@ fetch_interval = 1
 # scan_interval = 60
 # backoff_base = 30
 # backoff_cap = 3600
-# max_chunks_per_pass = 16
+# max_chunks_per_pass = 2
 # record_retry_attempts = 3
 # record_retry_initial_backoff = 200
 
@@ -40,7 +40,7 @@ fetch_interval = 1
 # scan_interval = 60
 # backoff_base = 30
 # backoff_cap = 3600
-# max_chunks_per_pass = 16
+# max_chunks_per_pass = 2
 # record_retry_attempts = 3
 # record_retry_initial_backoff = 200
 

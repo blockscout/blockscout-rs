@@ -8,12 +8,15 @@ use prometheus::{GaugeVec, IntCounterVec, register_gauge_vec, register_int_count
 // chain_id.
 lazy_static! {
     /// Number of blocks currently recorded as failed (open, unresolved) in
-    /// `indexer_failures`, per bridge and chain. Refreshed from the driver's
-    /// retry tick (`RangeDriver::run`), not on every batch — this is a
-    /// periodic snapshot, not a live counter. Reset to `0` for every
-    /// configured chain before applying the latest aggregate, so a pair whose
-    /// last hole was just resolved reports zero instead of a frozen
-    /// last-known value.
+    /// `indexer_failures`, per bridge and chain. Refreshed only by the
+    /// periodic metrics worker (`spawn_indexing_progress_metrics_worker` /
+    /// `refresh_failure_ledger_gauges` in `interchain-indexer-server`), never
+    /// from a driver loop — this is a periodic snapshot, not a live counter.
+    /// The worker is keyed off the configured `(bridge, chain)` targets rather
+    /// than driver liveness, so a pair whose indexer never started still gets
+    /// a series, and a pair whose last hole was just resolved reports an
+    /// explicit `0` instead of a frozen last-known value. A failed totals
+    /// query leaves the previous values in place instead of zeroing them.
     pub static ref FAILED_BLOCKS: GaugeVec = register_gauge_vec!(
         "interchain_indexer_failed_blocks",
         "number of blocks currently recorded as failed in indexer_failures",
@@ -21,9 +24,9 @@ lazy_static! {
     )
     .unwrap();
 
-    /// Age, in seconds, of the oldest still-open failed interval's
-    /// `first_failed_at`, per bridge and chain. Refreshed from the same retry
-    /// tick as `FAILED_BLOCKS`. This is the sole detector for a retry pass
+    /// Age, in seconds, of the oldest still-open failed interval (its
+    /// `created_at`), per bridge and chain. Refreshed by the same metrics
+    /// worker as `FAILED_BLOCKS`. This is the sole detector for a retry pass
     /// that has stopped converging: nothing else observes whether recorded
     /// holes are actually shrinking over time, so an alert on this gauge is
     /// required operational scope, not polish. `0` means no open interval for
