@@ -52,6 +52,7 @@ use crate::{
     },
     log_stream::LogBatch,
     message_buffer::{Key, MessageBuffer},
+    secret::redact_urls,
 };
 
 use abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
@@ -491,8 +492,14 @@ impl CrosschainIndexer for AvalancheIndexer {
 
             if let Err(err) = this.run().await {
                 error_count.fetch_add(1, Ordering::Relaxed);
-                tracing::error!(err = ?err, bridge_id, "Avalanche indexer task stopped with error");
-                *state.write() = CrosschainIndexerState::Failed(format!("{err:#}"));
+                // Redact once and use the same string for both sinks. The log
+                // needs it as much as the state does: a transport error carries
+                // the request URL in its cause chain, which `?err` renders in
+                // full, so logging the raw error here would leak a `query`/`path`
+                // API key to stdout even though the state below is redacted.
+                let redacted = redact_urls(&format!("{err:#}"));
+                tracing::error!(err = %redacted, bridge_id, "Avalanche indexer task stopped with error");
+                *state.write() = CrosschainIndexerState::Failed(redacted);
             }
             // On clean exit without error, the guard will set state to Idle
         });

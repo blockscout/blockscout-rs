@@ -18,6 +18,7 @@ use crate::{
         metrics,
     },
     log_stream::{LogBatch, ScanDirection, fetch_logs},
+    secret::redact_urls,
 };
 
 /// Maximum length of a `reason` string persisted into `indexer_failures`. The
@@ -146,7 +147,7 @@ pub trait RangeProcessor: Send + Sync {
                     None
                 }
                 (Some(_), Err(err)) => {
-                    tracing::error!(err = ?err, bridge_id, chain_id, "failed to build log filter during retry pass");
+                    tracing::error!(err = %redact_urls(&format!("{err:#}")), bridge_id, chain_id, "failed to build log filter during retry pass");
                     None
                 }
                 (Some(provider), Ok(filter)) => Some((provider, filter)),
@@ -196,7 +197,7 @@ pub trait RangeProcessor: Send + Sync {
                             // only here.
                             if let Err(err) = ledger.resolve(bridge_id, chain_id, &[chunk]).await {
                                 tracing::error!(
-                                    err = ?err,
+                                    err = %redact_urls(&format!("{err:#}")),
                                     bridge_id,
                                     chain_id,
                                     chunk_from = chunk.from,
@@ -208,7 +209,7 @@ pub trait RangeProcessor: Send + Sync {
                         }
                         Err(batch_err) => {
                             tracing::warn!(
-                                err = ?batch_err.error,
+                                err = %redact_urls(&format!("{:#}", batch_err.error)),
                                 bridge_id,
                                 chain_id,
                                 chunk_from = chunk.from,
@@ -216,14 +217,15 @@ pub trait RangeProcessor: Send + Sync {
                                 "retried chunk still failing"
                             );
                             let ranges = attributed_ranges(&batch_err, chunk);
-                            let reason = truncate_reason(&format!("{:#}", batch_err.error));
+                            let reason =
+                                truncate_reason(&redact_urls(&format!("{:#}", batch_err.error)));
                             let ranges_with_reason = with_reason(ranges, reason);
                             if let Err(err) = ledger
                                 .record(bridge_id, chain_id, &ranges_with_reason)
                                 .await
                             {
                                 tracing::error!(
-                                    err = ?err,
+                                    err = %redact_urls(&format!("{err:#}")),
                                     bridge_id,
                                     chain_id,
                                     chunk_from = chunk.from,
@@ -237,7 +239,7 @@ pub trait RangeProcessor: Send + Sync {
                 }
                 Err(err) => {
                     tracing::warn!(
-                        err = ?err,
+                        err = %redact_urls(&format!("{err:#}")),
                         bridge_id,
                         chain_id,
                         chunk_from = chunk.from,
@@ -247,12 +249,12 @@ pub trait RangeProcessor: Send + Sync {
                     // An eth_getLogs failure records the chunk as
                     // still-failed and moves on — this is not an
                     // escalation, the range was never re-scanned.
-                    let reason = truncate_reason(&format!("{:#}", err));
+                    let reason = truncate_reason(&redact_urls(&format!("{err:#}")));
                     if let Err(record_err) =
                         ledger.record(bridge_id, chain_id, &[(chunk, reason)]).await
                     {
                         tracing::error!(
-                            err = ?record_err,
+                            err = %redact_urls(&format!("{record_err:#}")),
                             bridge_id,
                             chain_id,
                             chunk_from = chunk.from,
@@ -448,7 +450,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
                 // DB-free.
                 if let Err(err) = self.ledger.resolve(bridge_id, chain_id, &[range]).await {
                     tracing::error!(
-                        err = ?err,
+                        err = %redact_urls(&format!("{err:#}")),
                         bridge_id,
                         chain_id,
                         from_block = range.from,
@@ -460,7 +462,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
             }
             Err(batch_err) => {
                 let ranges = attributed_ranges(&batch_err, range);
-                let reason = truncate_reason(&format!("{:#}", batch_err.error));
+                let reason = truncate_reason(&redact_urls(&format!("{:#}", batch_err.error)));
                 let ranges_with_reason = with_reason(ranges, reason);
 
                 match self
@@ -470,7 +472,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
                 {
                     Ok(()) => {
                         tracing::error!(
-                            err = ?batch_err.error,
+                            err = %redact_urls(&format!("{:#}", batch_err.error)),
                             bridge_id,
                             chain_id,
                             from_block = range.from,
@@ -504,13 +506,14 @@ impl<P: RangeProcessor> RangeDriver<P> {
                             // that; closing it needs the acknowledgement
                             // boundary rejected in ADR-005, where it is
                             // carried as a known limitation.
+                            let redacted_processing_error =
+                                redact_urls(&format!("{:#}", batch_err.error));
                             bail!(
                                 "unable to record indexer failure for bridge {bridge_id} chain {chain_id} \
-                                 range [{}, {}] after {} attempt(s) (processing error: {:#}): {final_err:#}",
+                                 range [{}, {}] after {} attempt(s) (processing error: {redacted_processing_error}): {final_err:#}",
                                 range.from,
                                 range.to,
                                 self.settings.record_retry_attempts,
-                                batch_err.error,
                             );
                         }
                     }
@@ -556,7 +559,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
         let open = match self.ledger.open(pairs).await {
             Ok(open) => open,
             Err(err) => {
-                tracing::error!(err = ?err, bridge_id, "failed to query open indexer failures for retry pass");
+                tracing::error!(err = %redact_urls(&format!("{err:#}")), bridge_id, "failed to query open indexer failures for retry pass");
                 return;
             }
         };
