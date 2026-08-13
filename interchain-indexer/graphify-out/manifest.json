@@ -20,17 +20,17 @@
     "semantic_hash": "ba891cfd6f02b4e4bd15952e8dd08605"
   },
   "config/avalanche/bridges.json": {
-    "mtime": 1786357396.014586,
+    "mtime": 1786537690.2352412,
     "ast_hash": "6580ad8c03f4e589009a76959438717f",
     "semantic_hash": ""
   },
   "config/avalanche/bridges_cut.json": {
-    "mtime": 1778145360.155948,
+    "mtime": 1786537690.2351182,
     "ast_hash": "80e5393909ee671668756e54cd2d1a13",
     "semantic_hash": "80e5393909ee671668756e54cd2d1a13"
   },
   "config/avalanche/chains.json": {
-    "mtime": 1786357396.014918,
+    "mtime": 1786538534.842918,
     "ast_hash": "201b31cced153dd6a3b31f1a8f756d8e",
     "semantic_hash": ""
   },
@@ -680,8 +680,8 @@
     "semantic_hash": "6db1a39b107f90cd311c4acf63127e8f"
   },
   "interchain-indexer-server/src/config.rs": {
-    "mtime": 1786533967.3222537,
-    "ast_hash": "28bbb919e4a010d26b99518b6bf21876",
+    "mtime": 1786623157.455928,
+    "ast_hash": "a6354285e7348552cc7f22e82ad9b048",
     "semantic_hash": ""
   },
   "interchain-indexer-server/src/env_merge.rs": {
@@ -1070,8 +1070,8 @@
     "semantic_hash": "3444ad3ef07802eac7c1f459868679e1"
   },
   ".memory-bank/gotchas.md": {
-    "mtime": 1786536013.6181734,
-    "ast_hash": "f360fe47ed6d4ed44645877c0816badc",
+    "mtime": 1786622980.3508735,
+    "ast_hash": "0a8ded736f6fd46a9a0328c91fcb8a5c",
     "semantic_hash": ""
   },
   ".memory-bank/project-context.md": {
@@ -1100,9 +1100,9 @@
     "semantic_hash": "b789699722fda152a4af0a4964b5d8dc"
   },
   ".memory-bank/research/config-loading-and-validation.md": {
-    "mtime": 1786533967.2613337,
-    "ast_hash": "3b3782748fdcdd8b1a16b514be4b9e93",
-    "semantic_hash": "3b3782748fdcdd8b1a16b514be4b9e93"
+    "mtime": 1786622511.5735626,
+    "ast_hash": "152f83d837eef44092d2377aad0b70aa",
+    "semantic_hash": ""
   },
   ".memory-bank/research/db-schema-and-layer.md": {
     "mtime": 1786533967.2616184,
@@ -1220,9 +1220,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1786533967.2709124,
-    "ast_hash": "7908c45416a34cd04e40e7c6bf424caf",
-    "semantic_hash": "7908c45416a34cd04e40e7c6bf424caf"
+    "mtime": 1786622972.8283439,
+    "ast_hash": "bfd57f59d6518d5b01944377cdaed76b",
+    "semantic_hash": ""
   },
   "docker/README.md": {
     "mtime": 1784105088.7875385,
@@ -1245,7 +1245,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1786533974.3592832,
+    "mtime": 1786623224.4755971,
     "ast_hash": "2c46367eb12658fc8e4c790dcf258e43",
     "semantic_hash": "2c46367eb12658fc8e4c790dcf258e43"
   },
@@ -1257,6 +1257,26 @@
   "interchain-indexer-server/tests/fixtures/chains-offline.json": {
     "mtime": 1786533967.3262463,
     "ast_hash": "c4ba97064503cca7c7d534c72c10a1b2",
+    "semantic_hash": ""
+  },
+  "config/full-mainnet/bridges.json": {
+    "mtime": 1786538160.1571765,
+    "ast_hash": "c597be16bafc4d511e739d30c71ac892",
+    "semantic_hash": ""
+  },
+  "config/full-mainnet/chains.json": {
+    "mtime": 1786622806.106502,
+    "ast_hash": "df01477f310e1905661c0371b4d10c45",
+    "semantic_hash": ""
+  },
+  "config/full-testnet/bridges.json": {
+    "mtime": 1786538256.4221122,
+    "ast_hash": "0be90eb15c8032600feb66f94115b6ab",
+    "semantic_hash": ""
+  },
+  "config/full-testnet/chains.json": {
+    "mtime": 1786538271.5787942,
+    "ast_hash": "1cb52b80006fc2ededbe3d394d25e616",
     "semantic_hash": ""
   }
 }

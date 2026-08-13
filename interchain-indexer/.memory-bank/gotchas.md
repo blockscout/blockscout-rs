@@ -1291,3 +1291,64 @@ the premise (`indexer_checkpoints` empty) so this fails by name instead of by
 float.
 
 ---
+
+## RPC Pool Order Comes From `order`, Never From JSON Key Order
+
+The primary RPC node is element 0 of the pool: `ProviderLayer::layer` sets
+`primary_index: RwLock::new(0)`
+(`interchain-indexer-logic/src/provider_layers.rs`). That element is chosen by
+`ranked_rpc_providers` (`interchain-indexer-server/src/config.rs`), which sorts
+enabled providers by `(order, index in the rpcs array, provider name)` —
+`order` ascending, providers without one last (`u32::MAX`).
+
+The field is `order: Option<u32>`, not `priority`, deliberately: "priority"
+carries no agreed direction (DNS MX/SRV, AWS ALB rules and Envoy locality treat
+lower as preferred; Kubernetes `PriorityClass` and VRRP treat higher as
+preferred), and guessing wrong here silently inverts the pool without failing
+anything. `order` reads as an ascending position. It is unsigned because unset
+already means "rank me last", so a negative order would have no meaning — serde
+rejects one at startup.
+
+**Key order inside an `rpcs` object is not part of that key, because it does not
+survive loading.** `chains[].rpcs` is `Vec<HashMap<String, RpcProviderConfig>>`,
+and every config file is read through `serde_json::Value` (whose `Map` is a
+`BTreeMap` — `preserve_order` is not enabled) before landing in a `HashMap`
+whose iteration order is randomly seeded per process. So the *array* index is
+usable as a tie-break; the object key order is gone by then. Writing providers
+in your preferred order in the JSON and expecting the first one to be primary
+does not work — set `order`.
+
+Before the sort existed, the startup primary was literally whatever the
+`HashMap` yielded: five runs of the equivalent four-key map produced four
+different first keys, so two replicas on one config could disagree and a restart
+could reshuffle away from a node you just fixed.
+`test_ranked_rpc_providers_order_is_stable_across_parses` guards this — distinct
+`HashMap` instances get distinct hasher seeds, so an order-by-iteration
+regression fails it inside a single process run.
+
+Diagnostics: node names are `"<chain name>[<provider key>]"` (e.g.
+`Ethereum[drpc]`). Each chain logs its resolved pool once at startup, at INFO —
+`Created layered provider for chain` carries `primary` (the startup primary) and
+`nodes` (the full order), so the answer to "which node is primary" never
+requires re-deriving the ranking by hand; failures and
+rotations name the node in `RPC request to node failed` and
+`Rotating primary RPC node after repeated failures` (`from`/`to`). URLs are
+never logged — they may embed API keys.
+
+Also worth knowing before chasing a rotation warning: primary is just the
+*scan start*. `pick_node` walks the pool round-robin from `primary_index`,
+skipping nodes in cooldown or over their `max_rps`, and the fallback path picks
+uniformly at random among available nodes ignoring the limiter. So a
+non-primary node serves plenty of traffic, and rotation only fires when the
+failing node *is* the primary (deliberate — see the comment in `mark_error`).
+Rotation is one-way: nothing moves the pointer back to the lowest-`order` node
+except wrapping all the way around — `order` sets the *startup* position, it is
+not a preference the pool drifts back to.
+
+Per-provider rotation knobs (`RpcProviderConfig`): `error_threshold` (default
+3) consecutive errors → cooldown; `cooldown_threshold` (default 1) cooldowns →
+rotate the primary away; `cooldown_secs` (default 60); `enabled: false` drops
+the provider from the pool entirely (and out of the ranking). Pool-wide
+retry/lag settings live in the per-chain `pool_config` (`PoolConfig`).
+
+---

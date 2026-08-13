@@ -322,6 +322,19 @@ pub struct RpcProviderConfig {
     pub url: String,
     #[serde(default = "default_rpc_enabled")]
     pub enabled: bool,
+    /// Position of this provider inside its chain's failover pool, ascending:
+    /// `0` is tried first and becomes the startup primary
+    /// (`PoolState::primary_index`). Providers without an `order` rank after
+    /// every provider that has one, so leaving it unset means "no preference".
+    ///
+    /// `u32` on purpose: a negative order has no meaning — unset already covers
+    /// "put me last" — and `deny_unknown_fields`-style strictness makes a
+    /// negative value fail startup instead of being reinterpreted.
+    ///
+    /// This is the only way to express intent: JSON object key order does not
+    /// survive loading (see [`ranked_rpc_providers`]).
+    #[serde(default)]
+    pub order: Option<u32>,
     #[serde(default = "default_max_rps")]
     max_rps: u32,
     #[serde(default = "default_error_threshold")]
@@ -492,7 +505,8 @@ fn read_config_array(path: &Path, kind: &str) -> Result<serde_json::Value> {
 
 /// Create layered Alloy providers from ChainConfig definitions.
 /// Returns a HashMap mapping chain_id (as i64) to a DynProvider.
-/// Only enabled RPC providers are included in each pool.
+/// Only enabled RPC providers are included in each pool, ordered by
+/// [`ranked_rpc_providers`] — the first node is the pool's primary.
 pub async fn create_provider_pools_from_chains(
     chains: Vec<ChainConfig>,
 ) -> Result<HashMap<i64, DynProvider<Ethereum>>> {
@@ -510,35 +524,37 @@ pub async fn create_provider_pools_from_chains(
 
         let mut node_configs = Vec::new();
 
-        // Extract enabled RPC providers from the chain config
-        for rpc_map in &chain.rpcs {
-            for (provider_name, rpc_config) in rpc_map {
-                // Only include enabled providers
-                if !rpc_config.enabled {
-                    continue;
-                }
+        // Pool order is load-bearing: element 0 is the startup primary and
+        // failover walks the pool from there, so rank before building.
+        for (provider_name, rpc_config) in ranked_rpc_providers(&chain) {
+            // Build the URL (handle API key placeholders if needed)
+            let url = build_rpc_url(&rpc_config.url, &rpc_config.api_key)?;
 
-                // Build the URL (handle API key placeholders if needed)
-                let url = build_rpc_url(&rpc_config.url, &rpc_config.api_key)?;
+            let node_config = NodeConfig {
+                name: format!("{}[{}]", chain.name, provider_name),
+                http_url: url,
+                max_rps: rpc_config.max_rps,
+                error_threshold: rpc_config.error_threshold,
+                cooldown_threshold: rpc_config.cooldown_threshold,
+                cooldown: Duration::from_secs(rpc_config.cooldown_secs),
+                multicall_batching_wait: Duration::from_micros(rpc_config.multicall_batching_us),
+            };
 
-                let node_config = NodeConfig {
-                    name: format!("{}[{}]", chain.name, provider_name),
-                    http_url: url,
-                    max_rps: rpc_config.max_rps,
-                    error_threshold: rpc_config.error_threshold,
-                    cooldown_threshold: rpc_config.cooldown_threshold,
-                    cooldown: Duration::from_secs(rpc_config.cooldown_secs),
-                    multicall_batching_wait: Duration::from_micros(
-                        rpc_config.multicall_batching_us,
-                    ),
-                };
-
-                node_configs.push(node_config);
-            }
+            node_configs.push(node_config);
         }
 
         // Create layered provider for this chain if we have any nodes
         if !node_configs.is_empty() {
+            // Node names carry no secrets (unlike the URLs, which may embed API
+            // keys), and the resolved order — above all which node starts as
+            // primary — is otherwise invisible to operators reading a
+            // `Rotating primary RPC node` warning.
+            let node_names: Vec<String> = node_configs.iter().map(|cfg| cfg.name.clone()).collect();
+            // Non-empty by the branch condition; `first()` keeps startup
+            // panic-free regardless.
+            let primary = node_names.first().map_or("", String::as_str);
+            let pool_order = node_names.join(", ");
+
             // Check for duplicate chain_id in config
             if pools.contains_key(&chain.chain_id) {
                 anyhow::bail!("Duplicate chain_id {} in chains config", chain.chain_id,);
@@ -549,6 +565,11 @@ pub async fn create_provider_pools_from_chains(
                     tracing::info!(
                         chain_id = chain.chain_id,
                         chain_name = chain.name,
+                        // Recorded as strings, not `%`: the joined list contains
+                        // ", " and would otherwise be indistinguishable from
+                        // separate fields in the log line.
+                        primary,
+                        nodes = pool_order,
                         "Created layered provider for chain"
                     );
                     pools.insert(chain.chain_id, provider);
@@ -572,6 +593,52 @@ pub async fn create_provider_pools_from_chains(
     }
 
     Ok(pools)
+}
+
+/// Enabled RPC providers of a chain, in the order the failover pool should try
+/// them: element 0 becomes the primary, and `PoolState::pick_node` walks the
+/// rest round-robin from there.
+///
+/// Ordering key, in precedence order:
+///
+/// 1. `order` — ascending; providers without one rank after all that have one
+///    (`u32::MAX`).
+/// 2. Position of the containing object in the `rpcs` **array** — a JSON array,
+///    so this order does survive loading.
+/// 3. Provider name, alphabetically.
+///
+/// Steps 2 and 3 exist because the order of keys *within* one `rpcs` object is
+/// not recoverable: config loading routes every file through
+/// `serde_json::Value` (whose `Map` is a `BTreeMap` without the `preserve_order`
+/// feature) and then into `HashMap`, whose iteration order is randomly seeded
+/// per process. Sorting on the name instead of the map's iteration order is
+/// what makes the pool — and therefore the startup primary — stable across
+/// restarts and identical across replicas.
+fn ranked_rpc_providers(chain: &ChainConfig) -> Vec<(&String, &RpcProviderConfig)> {
+    let mut ranked: Vec<_> = chain
+        .rpcs
+        .iter()
+        .enumerate()
+        .flat_map(|(map_index, rpc_map)| {
+            rpc_map
+                .iter()
+                .filter(|(_, rpc)| rpc.enabled)
+                .map(move |(name, rpc)| (map_index, name, rpc))
+        })
+        .collect();
+
+    ranked.sort_unstable_by(|(a_index, a_name, a_rpc), (b_index, b_name, b_rpc)| {
+        (a_rpc.order.unwrap_or(u32::MAX), a_index, a_name).cmp(&(
+            b_rpc.order.unwrap_or(u32::MAX),
+            b_index,
+            b_name,
+        ))
+    });
+
+    ranked
+        .into_iter()
+        .map(|(_, name, rpc)| (name, rpc))
+        .collect()
 }
 
 /// Build RPC URL, handling API key placeholders if present.
@@ -927,6 +994,105 @@ mod tests {
         );
         let from_null: BridgeContractConfig = serde_json::from_str(&null_form).unwrap();
         assert_eq!(from_null.abi, None);
+    }
+
+    fn ranked_names(chains_json: &str) -> Vec<String> {
+        let chains: Vec<ChainConfig> = serde_json::from_str(chains_json)
+            .unwrap_or_else(|e| panic!("failed to parse chains fixture: {e}"));
+        ranked_rpc_providers(&chains[0])
+            .into_iter()
+            .map(|(name, _)| name.clone())
+            .collect()
+    }
+
+    #[test]
+    fn test_ranked_rpc_providers_orders_by_explicit_order_ascending() {
+        let names = ranked_names(
+            r#"[{"chain_id":1,"name":"Ethereum","icon":"","rpcs":[{
+                "drpc":       {"url":"https://drpc",       "order": 10},
+                "blockscout": {"url":"https://blockscout", "order": 0},
+                "gateway":    {"url":"https://gateway",    "order": 1}
+            }]}]"#,
+        );
+        assert_eq!(names, ["blockscout", "gateway", "drpc"]);
+    }
+
+    #[test]
+    fn test_ranked_rpc_providers_unordered_rank_after_ordered() {
+        // `1rpc` would win any name-based tie-break; an explicit order on
+        // `gateway` must still place it first.
+        let names = ranked_names(
+            r#"[{"chain_id":1,"name":"Ethereum","icon":"","rpcs":[{
+                "1rpc":    {"url":"https://1rpc"},
+                "zeta":    {"url":"https://zeta"},
+                "gateway": {"url":"https://gateway", "order": 7}
+            }]}]"#,
+        );
+        assert_eq!(names, ["gateway", "1rpc", "zeta"]);
+    }
+
+    #[test]
+    fn test_ranked_rpc_providers_without_order_ranks_by_map_then_name() {
+        // Position in the `rpcs` array outranks the provider name: `beta` sits
+        // in the second object, so it comes after both members of the first.
+        let names = ranked_names(
+            r#"[{"chain_id":1,"name":"Ethereum","icon":"","rpcs":[
+                { "zeta": {"url":"https://zeta"}, "alpha": {"url":"https://alpha"} },
+                { "beta": {"url":"https://beta"} }
+            ]}]"#,
+        );
+        assert_eq!(names, ["alpha", "zeta", "beta"]);
+    }
+
+    #[test]
+    fn test_ranked_rpc_providers_order_is_stable_across_parses() {
+        // Each `HashMap` instance gets its own randomly seeded hasher, so an
+        // implementation that leaned on map iteration order diverges here even
+        // within a single process — let alone across restarts.
+        let json = r#"[{"chain_id":1,"name":"Ethereum","icon":"","rpcs":[{
+            "blockscout": {"url":"https://blockscout"},
+            "gateway":    {"url":"https://gateway"},
+            "drpc":       {"url":"https://drpc"},
+            "1rpc":       {"url":"https://1rpc"}
+        }]}]"#;
+
+        let expected = ["1rpc", "blockscout", "drpc", "gateway"];
+        for _ in 0..64 {
+            assert_eq!(ranked_names(json), expected);
+        }
+    }
+
+    #[test]
+    fn test_ranked_rpc_providers_skips_disabled_providers() {
+        let names = ranked_names(
+            r#"[{"chain_id":1,"name":"Ethereum","icon":"","rpcs":[{
+                "blockscout": {"url":"https://blockscout", "order": 0, "enabled": false},
+                "gateway":    {"url":"https://gateway",    "order": 1}
+            }]}]"#,
+        );
+        assert_eq!(names, ["gateway"], "a disabled provider must not be ranked");
+    }
+
+    #[test]
+    fn test_rpc_provider_order_defaults_to_none() {
+        let chains: Vec<ChainConfig> = serde_json::from_str(CHAINS_FILE).unwrap();
+        assert_eq!(chains[0].rpcs[0]["drpc"].order, None);
+    }
+
+    #[test]
+    fn test_rpc_provider_order_rejects_negative_value() {
+        // Unset already means "rank me last", so a negative order has no
+        // meaning and must fail loudly rather than be reinterpreted.
+        let err = serde_json::from_str::<Vec<ChainConfig>>(
+            r#"[{"chain_id":1,"name":"Ethereum","icon":"","rpcs":[{
+                "drpc": {"url":"https://drpc", "order": -1}
+            }]}]"#,
+        )
+        .expect_err("a negative order must be rejected");
+        assert!(
+            err.to_string().contains("invalid value"),
+            "unexpected error: {err}"
+        );
     }
 
     fn write_temp_json(content: &str) -> tempfile::NamedTempFile {

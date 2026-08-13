@@ -11,6 +11,11 @@
         },
         "rpcs": [
             {
+                "blockscout": {
+                    "order": 0,
+                    "url": "https://rpc.eth.gateway.fm",
+                    "max_rps": 100
+                },
                 "gateway": {
                     "url": "https://rpc.eth.gateway.fm"
                 },
@@ -35,6 +40,11 @@
         },
         "rpcs": [
             {
+                "blockscout": {
+                    "order": 0,
+                    "url": "https://rpc.gnosis.gateway.fm",
+                    "max_rps": 100
+                },
                 "gateway": {
                     "url": "https://rpc.gnosis.gateway.fm"
                 },
@@ -74,7 +84,8 @@
             {
                 "glacier": {
                     "url": "https://glacier-api.avax.network/v1/ext/bc/8021/rpc",
-                    "max_rps": 5
+                    "max_rps": 1,
+                    "multicall_batching_us": 0
                 }
             }
         ]

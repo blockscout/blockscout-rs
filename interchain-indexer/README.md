@@ -49,7 +49,50 @@ Defines the blockchains the indexer knows about. Each entry describes one chain:
 | `name`       | Human-readable chain name. |
 | `icon`       | Optional URL to chain icon. |
 | `explorer`   | Optional explorer base URL and routes: `url`, `custom_tx_route`, `custom_address_route`, `custom_token_route`. |
-| `rpcs`       | RPC config per chain. |
+| `rpcs`       | RPC providers for the chain — see below. |
+| `pool_config` | Optional pool-wide transport settings: `health_period` (ms), `max_block_lag`, `retry_count`, `retry_initial_delay_ms`, `retry_max_delay_ms`. |
+
+#### `rpcs`
+
+An array of objects, each mapping a provider name to its settings. The provider
+name is only a label (it shows up in logs as `<chain name>[<provider name>]`)
+and the env-override key.
+
+| Field | Default | Description |
+| ----- | ------- | ----------- |
+| `url` | — | HTTP endpoint. |
+| `enabled` | `true` | `false` drops the provider from the pool entirely. |
+| `order` | unset | Position in the failover pool, **ascending** — `0` is tried first and is the primary. Providers without an `order` rank after every provider that has one. Must be non-negative. |
+| `max_rps` | `10` | Client-side rate limit. |
+| `error_threshold` | `3` | Consecutive failures before the node is put in cooldown. |
+| `cooldown_threshold` | `1` | Cooldowns before the primary pointer rotates off this node. |
+| `cooldown_secs` | `60` | Cooldown duration. |
+| `multicall_batching_us` | `60` | Multicall batching wait. |
+
+Ordering is fully determined by `order`, then by position in the `rpcs` array,
+then by provider name — **not** by key order inside one object, which does not
+survive config loading. Set `order` explicitly whenever the preference matters:
+
+```json
+"rpcs": [
+    {
+        "blockscout": { "url": "https://rpc.eth.gateway.fm", "order": 0 },
+        "drpc":       { "url": "https://eth.drpc.org", "order": 1 }
+    }
+]
+```
+
+The primary is the *starting point* of node selection, not an exclusive one:
+requests walk the pool round-robin from the primary, skipping nodes in cooldown
+or over their `max_rps`, and repeated primary failures rotate the pointer
+onward (`Rotating primary RPC node after repeated failures`). Each chain logs
+its resolved pool once at startup, at INFO:
+
+```
+Created layered provider for chain chain_id=1 chain_name=Ethereum
+  primary="Ethereum[blockscout]"
+  nodes="Ethereum[blockscout], Ethereum[drpc], Ethereum[gateway], Ethereum[1rpc]"
+```
 
 ### `bridges.json`
 
