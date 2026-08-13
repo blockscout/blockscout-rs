@@ -278,20 +278,88 @@ Note the single underscore before `RPC_API_KEY` — like the `CHAINS`/`BRIDGES`
 override prefixes above, this keeps the family outside the double-underscore
 `INTERCHAIN_INDEXER__*` settings namespace.
 
-**Example** — chain `1`, provider `drpc`, key sent as a header:
+#### Where each `location` puts the key
+
+| `location` | `param_name` means | Key ends up in | `prefix` |
+| ---------- | ------------------ | -------------- | -------- |
+| `header`   | the header name | a request header; the URL is left byte-identical | supported |
+| `query`    | the query parameter name | the request URL, as `?<param_name>=<key>` | rejected |
+| `path`     | the placeholder name | the request URL, replacing `:<param_name>` | rejected |
+
+In all three cases the credential applies to **every** request to that node,
+including the pool's background health probes.
+
+All examples below use chain `1`, so the derived variable is
+`INTERCHAIN_INDEXER_RPC_API_KEY__1__<PROVIDER>`. Hostnames are placeholders —
+check your provider's own documentation for which location it expects.
+
+**`header`** — the preferred location. `prefix` covers the
+`Authorization: Bearer <key>` convention; omit it and the header carries the bare
+key (e.g. `param_name: "x-api-key"`).
 
 ```json
 "rpcs": [
-    { "drpc": { "url": "https://eth.drpc.org", "api_key": { "location": "header", "param_name": "Authorization", "prefix": "Bearer" } } }
+    { "drpc": { "url": "https://rpc.example.org/eth", "api_key": { "location": "header", "param_name": "Authorization", "prefix": "Bearer" } } }
 ]
 ```
 
 ```bash
-INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC=sk-live-...
+INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC=sk-live-abc123
 ```
 
-sends `Authorization: Bearer sk-live-...` on every request to that node,
-including the pool's background health probes.
+Requests go to `https://rpc.example.org/eth` — unchanged — carrying:
+
+```
+Authorization: Bearer sk-live-abc123
+```
+
+**`query`** — the key is appended to the URL as a query parameter. Appending is
+done through a URL parser, so an existing query string is extended with `&`
+rather than overwritten, and the value is percent-encoded.
+
+```json
+"rpcs": [
+    { "gateway": { "url": "https://rpc.example.org/eth", "api_key": { "location": "query", "param_name": "apikey" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__GATEWAY=sk-live-abc123
+```
+
+Requests go to:
+
+```
+https://rpc.example.org/eth?apikey=sk-live-abc123
+```
+
+**`path`** — the key is substituted into a `:<param_name>` placeholder that you
+must put in `url` yourself. The placeholder name and `param_name` have to match;
+if `url` contains no such placeholder the service **fails at startup** rather
+than silently sending an unauthenticated request.
+
+```json
+"rpcs": [
+    { "provider": { "url": "https://rpc.example.org/v1/:api_key/eth", "api_key": { "location": "path", "param_name": "api_key" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__PROVIDER=sk-live-abc123
+```
+
+Requests go to:
+
+```
+https://rpc.example.org/v1/sk-live-abc123/eth
+```
+
+Both URL-embedded locations put the secret in the request URL, which is why
+`header` is preferred: a URL is rendered by code this service does not control
+(notably `alloy-transport-http`'s own debug span), so a `query`/`path` key can
+surface in logs if the log level is raised. Service-owned sinks — the failure
+ledger in Postgres, indexer state served by the status API, and this service's
+own RPC warnings — redact URLs before writing them.
 
 ## Envs
 
