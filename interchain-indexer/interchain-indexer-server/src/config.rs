@@ -10,7 +10,9 @@ use anyhow::{Context, Result, ensure};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
 };
-use interchain_indexer_logic::{NodeConfig, PoolConfig, build_layered_http_provider};
+use interchain_indexer_logic::{
+    CredentialHeader, NodeConfig, PoolConfig, Secret, build_layered_http_provider, redact_urls,
+};
 use sea_orm::{ActiveValue, entity::ActiveEnum};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, path::Path, str::FromStr, time::Duration};
@@ -373,11 +375,128 @@ fn default_multicall_batching_us() -> u64 {
     60
 }
 
+/// Where a provider's API key belongs in the outbound request.
+///
+/// Typed rather than a `String` so a typo fails at startup, like every other
+/// config mistake in this service.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiKeyLocation {
+    /// Sent as a request header. Preferred: the value can be marked sensitive,
+    /// so it stays out of every rendering, including third-party ones.
+    Header,
+    /// Appended as a query parameter. The key becomes part of the URL.
+    Query,
+    /// Substituted into a `:<param_name>` placeholder in `url`.
+    Path,
+}
+
+impl ApiKeyLocation {
+    /// The spelling used in `chains.json`.
+    ///
+    /// Config errors must quote the JSON spelling, not the Rust variant name: an
+    /// operator told `location "Query"` has to guess that the file wants
+    /// `"query"`, which is exactly the guess a config error should remove.
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Header => "header",
+            Self::Query => "query",
+            Self::Path => "path",
+        }
+    }
+}
+
+/// Declares the *shape* of a provider credential. Deliberately holds no value:
+/// the secret comes from the environment, so it cannot be committed to a config
+/// file even by accident.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ApiKeyConfig {
-    pub location: String,
-    pub name: String,
+    pub location: ApiKeyLocation,
+    /// Header name, query parameter name, or path placeholder name.
+    pub param_name: String,
+    /// Optional value prefix, e.g. `Bearer` for `Authorization: Bearer <key>`.
+    /// `header` only — rejected for `query` and `path`.
+    #[serde(default)]
+    pub prefix: Option<String>,
+    /// Environment variable holding the secret. When unset, the variable name is
+    /// derived — see `derived_api_key_env_var`.
+    #[serde(default)]
+    pub value_env: Option<String>,
+}
+
+/// Env var prefix carrying RPC provider API key secrets.
+const RPC_API_KEY_ENV_PREFIX: &str = "INTERCHAIN_INDEXER_RPC_API_KEY";
+
+/// Name of the environment variable holding `provider_name`'s key on `chain_id`.
+///
+/// Mirrors the `<CHAIN_ID>__<PROVIDER>` addressing already used by
+/// `INTERCHAIN_INDEXER_CHAINS__<CHAIN_ID>__RPCS__<PROVIDER>__*`, so an operator
+/// who can address a provider to tune `max_rps` can address it for its key.
+/// Provider names are uppercased and any character outside `[A-Z0-9_]` becomes
+/// `_`, since provider names are free-form labels but env var names are not.
+///
+/// Single underscore before `RPC_API_KEY` is deliberate and load-bearing: the
+/// main `Settings` env source uses
+/// `config::Environment::with_prefix("INTERCHAIN_INDEXER").separator("__")`,
+/// whose effective prefix is `interchain_indexer__` (double underscore), so a
+/// single-underscore sibling prefix is invisible to it. This is the same
+/// argument that makes the existing `INTERCHAIN_INDEXER_CHAINS__` /
+/// `INTERCHAIN_INDEXER_BRIDGES__` prefixes safe.
+fn derived_api_key_env_var(chain_id: i64, provider_name: &str) -> String {
+    let normalized: String = provider_name
+        .to_ascii_uppercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    format!("{RPC_API_KEY_ENV_PREFIX}__{chain_id}__{normalized}")
+}
+
+/// Resolve a provider's API key secret from the environment.
+///
+/// Exactly one variable is consulted — `value_env` when set, otherwise the
+/// derived name. Never a fallback chain: a typo must fail loudly instead of
+/// silently selecting some other variable.
+fn resolve_api_key(
+    chain_id: i64,
+    provider_name: &str,
+    api_key: &ApiKeyConfig,
+    vars: &HashMap<String, String>,
+) -> Result<Secret<String>> {
+    // Validate the declaration itself before touching the environment: a
+    // config mistake must be reported as a config mistake, not sent to the
+    // operator as "the variable is unset" when the variable was never the
+    // problem.
+    ensure!(
+        api_key.prefix.is_none() || matches!(api_key.location, ApiKeyLocation::Header),
+        "chain {chain_id} provider \"{provider_name}\" declares api_key.prefix with \
+         location \"{}\", but prefix is only supported for location \"header\"",
+        api_key.location.as_str(),
+    );
+
+    let env_var = match &api_key.value_env {
+        Some(explicit) => explicit.clone(),
+        None => derived_api_key_env_var(chain_id, provider_name),
+    };
+
+    let value = vars
+        .get(&env_var.to_ascii_uppercase())
+        .map(String::as_str)
+        .unwrap_or_default()
+        .trim();
+    ensure!(
+        !value.is_empty(),
+        "chain {chain_id} provider \"{provider_name}\" declares an api_key but \
+         environment variable {env_var} is unset or empty"
+    );
+
+    Ok(Secret::new(value.to_string()))
 }
 
 /// Env var prefix for overriding/extending the chains config (see README).
@@ -510,7 +629,27 @@ fn read_config_array(path: &Path, kind: &str) -> Result<serde_json::Value> {
 pub async fn create_provider_pools_from_chains(
     chains: Vec<ChainConfig>,
 ) -> Result<HashMap<i64, DynProvider<Ethereum>>> {
+    // `std::env::vars()`'s iterator type holds a non-`Send` guard internally,
+    // so it cannot be part of this `async fn`'s state without breaking the
+    // `Send` bound required of its future (this is `.await`ed from
+    // `server::run`, whose own future must stay `Send`). Collecting first
+    // yields a plain `Send` `Vec` iterator with identical contents.
+    create_provider_pools_impl(chains, std::env::vars().collect::<Vec<_>>().into_iter()).await
+}
+
+/// Same as [`create_provider_pools_from_chains`], but takes its environment
+/// variables as a parameter so tests can inject them without touching the
+/// process environment (`std::env::set_var` is not isolated across the
+/// multi-threaded test binary).
+async fn create_provider_pools_impl(
+    chains: Vec<ChainConfig>,
+    vars: impl Iterator<Item = (String, String)>,
+) -> Result<HashMap<i64, DynProvider<Ethereum>>> {
     let mut pools = HashMap::new();
+    // `to_ascii_uppercase` on both sides of this map — here and at the lookup in
+    // `resolve_api_key`. Unicode-aware `to_uppercase` on one side only would
+    // build a key the other side can never produce.
+    let vars: HashMap<String, String> = vars.map(|(k, v)| (k.to_ascii_uppercase(), v)).collect();
 
     for chain in chains {
         if chain.chain_id < 0 {
@@ -522,26 +661,7 @@ pub async fn create_provider_pools_from_chains(
             continue;
         }
 
-        let mut node_configs = Vec::new();
-
-        // Pool order is load-bearing: element 0 is the startup primary and
-        // failover walks the pool from there, so rank before building.
-        for (provider_name, rpc_config) in ranked_rpc_providers(&chain) {
-            // Build the URL (handle API key placeholders if needed)
-            let url = build_rpc_url(&rpc_config.url, &rpc_config.api_key)?;
-
-            let node_config = NodeConfig {
-                name: format!("{}[{}]", chain.name, provider_name),
-                http_url: url,
-                max_rps: rpc_config.max_rps,
-                error_threshold: rpc_config.error_threshold,
-                cooldown_threshold: rpc_config.cooldown_threshold,
-                cooldown: Duration::from_secs(rpc_config.cooldown_secs),
-                multicall_batching_wait: Duration::from_micros(rpc_config.multicall_batching_us),
-            };
-
-            node_configs.push(node_config);
-        }
+        let node_configs = build_chain_node_configs(&chain, &vars)?;
 
         // Create layered provider for this chain if we have any nodes
         if !node_configs.is_empty() {
@@ -575,6 +695,36 @@ pub async fn create_provider_pools_from_chains(
                     pools.insert(chain.chain_id, provider);
                 }
                 Err(e) => {
+                    // A chain whose providers declare an `api_key` must not
+                    // degrade to "warn and skip". The failures that reach here
+                    // for such a chain are config errors — an invalid header
+                    // name, a value that is not a legal header value, or a URL
+                    // that stopped parsing after key substitution — and
+                    // skipping would leave the service reporting healthy with a
+                    // chain that has no providers at all, surfacing much later
+                    // as `no provider configured for chain_id`. That is the same
+                    // silent-outage shape the hard failure on a missing secret
+                    // exists to prevent, so it fails the same way.
+                    //
+                    // Chains with no `api_key` keep the historical lenient
+                    // behavior: one malformed endpoint should not stop a service
+                    // that has other chains to index.
+                    //
+                    // The cause is rendered through `redact_urls` rather than
+                    // reasoned about site by site: none of these three errors is
+                    // known to carry the URL today, but this message is the one
+                    // place a keyed chain's failure becomes operator-visible
+                    // text, and "it happens not to leak right now" is exactly
+                    // the assumption this change exists to stop relying on.
+                    ensure!(
+                        !chain_declares_api_key(&chain),
+                        "failed to build the RPC provider pool for chain {} (\"{}\"), which \
+                         declares an api_key: {}",
+                        chain.chain_id,
+                        chain.name,
+                        redact_urls(&format!("{e:#}")),
+                    );
+
                     tracing::warn!(
                         chain_id = chain.chain_id,
                         chain_name = chain.name,
@@ -593,6 +743,79 @@ pub async fn create_provider_pools_from_chains(
     }
 
     Ok(pools)
+}
+
+/// Build one chain's ordered [`NodeConfig`] list, resolving every declared
+/// `api_key` from `vars`.
+///
+/// Split out of [`create_provider_pools_impl`] to be testable: that function
+/// returns an opaque `DynProvider`, so the credential wiring — which header a
+/// node ends up carrying, and whether a `query`/`path` key made it into the URL
+/// — is not observable through its result. Here it is a plain return value.
+fn build_chain_node_configs(
+    chain: &ChainConfig,
+    vars: &HashMap<String, String>,
+) -> Result<Vec<NodeConfig>> {
+    let mut node_configs = Vec::new();
+
+    // Pool order is load-bearing: element 0 is the startup primary and
+    // failover walks the pool from there, so rank before building.
+    for (provider_name, rpc_config) in ranked_rpc_providers(chain) {
+        let (secret, credential_header) = match rpc_config.api_key.as_ref() {
+            None => (None, None),
+            Some(api_key) => {
+                let secret = resolve_api_key(chain.chain_id, provider_name, api_key, vars)
+                    .with_context(|| {
+                        format!(
+                            "failed to resolve api_key for chain {} provider \"{provider_name}\"",
+                            chain.chain_id
+                        )
+                    })?;
+                let credential_header = match api_key.location {
+                    ApiKeyLocation::Header => Some(CredentialHeader {
+                        name: api_key.param_name.clone(),
+                        value: Secret::new(match &api_key.prefix {
+                            Some(p) => format!("{p} {}", secret.expose()),
+                            None => secret.expose().clone(),
+                        }),
+                    }),
+                    ApiKeyLocation::Query | ApiKeyLocation::Path => None,
+                };
+                (Some(secret), credential_header)
+            }
+        };
+
+        let node_config = NodeConfig {
+            name: format!("{}[{}]", chain.name, provider_name),
+            http_url: Secret::new(build_rpc_url(
+                &rpc_config.url,
+                rpc_config.api_key.as_ref(),
+                secret.as_ref(),
+            )?),
+            credential_header,
+            max_rps: rpc_config.max_rps,
+            error_threshold: rpc_config.error_threshold,
+            cooldown_threshold: rpc_config.cooldown_threshold,
+            cooldown: Duration::from_secs(rpc_config.cooldown_secs),
+            multicall_batching_wait: Duration::from_micros(rpc_config.multicall_batching_us),
+        };
+
+        node_configs.push(node_config);
+    }
+
+    Ok(node_configs)
+}
+
+/// Whether any *enabled* provider of `chain` declares an `api_key`.
+///
+/// Decides whether a pool-construction failure is fatal: see the `Err` arm in
+/// [`create_provider_pools_impl`]. Reuses [`ranked_rpc_providers`] so it sees
+/// exactly the providers the pool would have been built from — a disabled
+/// provider's stale `api_key` must not make an unrelated failure fatal.
+fn chain_declares_api_key(chain: &ChainConfig) -> bool {
+    ranked_rpc_providers(chain)
+        .iter()
+        .any(|(_, rpc)| rpc.api_key.is_some())
 }
 
 /// Enabled RPC providers of a chain, in the order the failover pool should try
@@ -641,24 +864,48 @@ fn ranked_rpc_providers(chain: &ChainConfig) -> Vec<(&String, &RpcProviderConfig
         .collect()
 }
 
-/// Build RPC URL, handling API key placeholders if present.
-/// Note: This is a simplified implementation. In production, you might want to:
-/// - Read API keys from environment variables
-/// - Support different API key locations (query, header, URL)
-fn build_rpc_url(url: &str, api_key_config: &Option<ApiKeyConfig>) -> Result<String> {
-    let final_url = url.to_string();
+/// Apply a URL-embedded API key to `url`.
+///
+/// `header` keys are not URL-embedded and return `url` unchanged — they are
+/// attached to the transport instead (see `NodeConfig::credential_header`).
+///
+/// Errors must never interpolate `url` or the key: the caller adds chain and
+/// provider context, which is the diagnostic an operator actually needs.
+fn build_rpc_url(
+    url: &str,
+    api_key: Option<&ApiKeyConfig>,
+    secret: Option<&Secret<String>>,
+) -> Result<String> {
+    let Some(api_key) = api_key else {
+        return Ok(url.to_string());
+    };
 
-    // If API key is configured, we need to handle it
-    // For now, we'll just use the URL as-is and log a warning if API key is needed
-    if let Some(api_key) = api_key_config {
-        anyhow::bail!(
-            "API key config ({}/{}) present for {url} but substitution is not implemented",
-            api_key.location,
-            api_key.name
-        );
+    match api_key.location {
+        ApiKeyLocation::Header => Ok(url.to_string()),
+        ApiKeyLocation::Query => {
+            let key = secret
+                .context("api_key.location \"query\" requires a resolved secret")?
+                .expose();
+            let mut parsed = url::Url::parse(url).context("api_key url is not a valid URL")?;
+            parsed
+                .query_pairs_mut()
+                .append_pair(&api_key.param_name, key);
+            Ok(parsed.to_string())
+        }
+        ApiKeyLocation::Path => {
+            let key = secret
+                .context("api_key.location \"path\" requires a resolved secret")?
+                .expose();
+            let placeholder = format!(":{}", api_key.param_name);
+            ensure!(
+                url.contains(&placeholder),
+                "api_key location \"path\" declared with param_name \"{}\" but the url \
+                 contains no \"{placeholder}\" placeholder",
+                api_key.param_name,
+            );
+            Ok(url.replace(&placeholder, key))
+        }
     }
-
-    Ok(final_url)
 }
 
 #[cfg(test)]
@@ -1093,6 +1340,422 @@ mod tests {
             err.to_string().contains("invalid value"),
             "unexpected error: {err}"
         );
+    }
+
+    // --- api_key: derived env var name ---
+
+    #[test]
+    fn test_derived_api_key_env_var_plain_name() {
+        assert_eq!(
+            derived_api_key_env_var(1, "drpc"),
+            "INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC"
+        );
+    }
+
+    #[test]
+    fn test_derived_api_key_env_var_mixed_case() {
+        assert_eq!(
+            derived_api_key_env_var(1, "DrPc"),
+            "INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC"
+        );
+    }
+
+    #[test]
+    fn test_derived_api_key_env_var_replaces_non_alphanumeric_characters() {
+        assert_eq!(
+            derived_api_key_env_var(1, "my-node.io"),
+            "INTERCHAIN_INDEXER_RPC_API_KEY__1__MY_NODE_IO"
+        );
+    }
+
+    #[test]
+    fn test_derived_api_key_env_var_leading_digit() {
+        // `1rpc` exists in config/full-mainnet/chains.json.
+        assert_eq!(
+            derived_api_key_env_var(1, "1rpc"),
+            "INTERCHAIN_INDEXER_RPC_API_KEY__1__1RPC"
+        );
+    }
+
+    // --- api_key: build_rpc_url ---
+
+    const FAKE_KEY: &str = "test-key-not-a-secret";
+
+    fn api_key(location: ApiKeyLocation, param_name: &str, prefix: Option<&str>) -> ApiKeyConfig {
+        ApiKeyConfig {
+            location,
+            param_name: param_name.to_string(),
+            prefix: prefix.map(str::to_string),
+            value_env: None,
+        }
+    }
+
+    #[test]
+    fn test_build_rpc_url_no_api_key_returns_url_unchanged() {
+        let url = build_rpc_url("https://drpc.example/rpc", None, None).unwrap();
+        assert_eq!(url, "https://drpc.example/rpc");
+    }
+
+    #[test]
+    fn test_build_rpc_url_header_location_returns_url_unchanged() {
+        let cfg = api_key(ApiKeyLocation::Header, "Authorization", None);
+        let secret = Secret::new(FAKE_KEY.to_string());
+
+        // This is the property that makes `header` the safe location: the URL
+        // never carries the key, so nothing here ever needs redaction.
+        let url = build_rpc_url("https://drpc.example/rpc", Some(&cfg), Some(&secret)).unwrap();
+        assert_eq!(url, "https://drpc.example/rpc");
+    }
+
+    #[test]
+    fn test_build_rpc_url_query_location_appends_param() {
+        let cfg = api_key(ApiKeyLocation::Query, "apikey", None);
+        let secret = Secret::new(FAKE_KEY.to_string());
+
+        let url = build_rpc_url("https://drpc.example/rpc", Some(&cfg), Some(&secret)).unwrap();
+        assert!(
+            url.contains(&format!("?apikey={FAKE_KEY}")),
+            "unexpected url: {url}"
+        );
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_replaces_placeholder() {
+        let cfg = api_key(ApiKeyLocation::Path, "api_key", None);
+        let secret = Secret::new(FAKE_KEY.to_string());
+
+        let url = build_rpc_url(
+            "https://drpc.example/:api_key/rpc",
+            Some(&cfg),
+            Some(&secret),
+        )
+        .unwrap();
+        assert_eq!(url, format!("https://drpc.example/{FAKE_KEY}/rpc"));
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_missing_placeholder_errors() {
+        let cfg = api_key(ApiKeyLocation::Path, "api_key", None);
+        let secret = Secret::new(FAKE_KEY.to_string());
+
+        let err = build_rpc_url("https://drpc.example/rpc", Some(&cfg), Some(&secret))
+            .expect_err("a path key with no placeholder in the url must fail");
+        assert!(
+            err.to_string().contains(":api_key"),
+            "unexpected error: {err}"
+        );
+    }
+
+    // --- api_key: resolve_api_key ---
+
+    #[test]
+    fn test_resolve_api_key_prefix_on_query_errors() {
+        let cfg = api_key(ApiKeyLocation::Query, "apikey", Some("Bearer"));
+        let vars = HashMap::new();
+
+        let err = resolve_api_key(1, "drpc", &cfg, &vars)
+            .expect_err("prefix is header-only and must be rejected for query");
+        assert!(
+            err.to_string().contains("prefix"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_api_key_prefix_on_path_errors() {
+        let cfg = api_key(ApiKeyLocation::Path, "api_key", Some("Bearer"));
+        let vars = HashMap::new();
+
+        let err = resolve_api_key(1, "drpc", &cfg, &vars)
+            .expect_err("prefix is header-only and must be rejected for path");
+        assert!(
+            err.to_string().contains("prefix"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_api_key_prefix_error_takes_precedence_over_missing_variable() {
+        // No variable is set at all: if the env lookup ran first, this would
+        // report "unset or empty" and send the operator to fix a deployment
+        // when the actual bug is the `prefix` on a `query` key in the JSON.
+        let cfg = api_key(ApiKeyLocation::Query, "apikey", Some("Bearer"));
+        let vars = HashMap::new();
+
+        let err = resolve_api_key(1, "drpc", &cfg, &vars).expect_err("must fail");
+        assert!(
+            err.to_string().contains("prefix"),
+            "expected the prefix/location error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_api_key_missing_variable_errors_with_details() {
+        let cfg = api_key(ApiKeyLocation::Header, "Authorization", None);
+        let vars = HashMap::new();
+
+        let err = resolve_api_key(1, "drpc", &cfg, &vars).expect_err("must fail");
+        let message = err.to_string();
+        assert!(message.contains('1'), "missing chain id: {message}");
+        assert!(message.contains("drpc"), "missing provider name: {message}");
+        assert!(
+            message.contains("INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC"),
+            "missing variable name: {message}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_api_key_empty_variable_errors() {
+        let cfg = api_key(ApiKeyLocation::Header, "Authorization", None);
+        let vars = fixture_vars(&[("INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC", "")])
+            .collect::<HashMap<_, _>>();
+
+        resolve_api_key(1, "drpc", &cfg, &vars).expect_err("an empty variable must be rejected");
+    }
+
+    #[test]
+    fn test_resolve_api_key_whitespace_only_variable_errors() {
+        let cfg = api_key(ApiKeyLocation::Header, "Authorization", None);
+        let vars = fixture_vars(&[("INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC", "   ")])
+            .collect::<HashMap<_, _>>();
+
+        resolve_api_key(1, "drpc", &cfg, &vars)
+            .expect_err("a whitespace-only variable must be rejected");
+    }
+
+    #[test]
+    fn test_resolve_api_key_value_env_overrides_derived_name() {
+        let mut cfg = api_key(ApiKeyLocation::Header, "Authorization", None);
+        cfg.value_env = Some("MY_CUSTOM_VAR".to_string());
+        let vars = fixture_vars(&[
+            ("INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC", "derived-value"),
+            ("MY_CUSTOM_VAR", "explicit-value"),
+        ])
+        .collect::<HashMap<_, _>>();
+
+        let secret = resolve_api_key(1, "drpc", &cfg, &vars).unwrap();
+        assert_eq!(secret.expose(), "explicit-value");
+    }
+
+    // --- api_key: node config wiring ---
+    //
+    // These go through `build_chain_node_configs`, the seam that decides what a
+    // node actually carries. `create_provider_pools_impl` returns an opaque
+    // `DynProvider`, so asserting on the credential and the final URL is only
+    // possible here.
+
+    /// One chain, one `drpc` provider. `extra` is spliced into the provider
+    /// object so a test can attach an `"api_key"` entry.
+    fn chain_fixture(url: &str, extra: &str) -> ChainConfig {
+        let json = format!(
+            r#"[{{"chain_id":1,"name":"Ethereum","icon":"","rpcs":[{{
+                "drpc": {{"url":"{url}"{extra}}}
+            }}]}}]"#
+        );
+        serde_json::from_str::<Vec<ChainConfig>>(&json)
+            .expect("fixture chain must parse")
+            .pop()
+            .expect("fixture has one chain")
+    }
+
+    /// Already uppercased, matching what `create_provider_pools_impl` hands
+    /// down. The normalization itself is covered separately, through that
+    /// function.
+    fn uppercased_vars(vars: &[(&str, &str)]) -> HashMap<String, String> {
+        vars.iter()
+            .map(|(k, v)| (k.to_ascii_uppercase(), v.to_string()))
+            .collect()
+    }
+
+    const DERIVED_VAR: &str = "INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC";
+
+    #[test]
+    fn test_build_chain_node_configs_header_prefix_produces_prefixed_value() {
+        let chain = chain_fixture(
+            "https://drpc.example/rpc",
+            r#","api_key":{"location":"header","param_name":"Authorization","prefix":"Bearer"}"#,
+        );
+        let vars = uppercased_vars(&[(DERIVED_VAR, FAKE_KEY)]);
+
+        let nodes = build_chain_node_configs(&chain, &vars).unwrap();
+
+        let credential = nodes[0]
+            .credential_header
+            .as_ref()
+            .expect("a header api_key must produce a credential");
+        assert_eq!(credential.name, "Authorization");
+        assert_eq!(credential.value.expose(), &format!("Bearer {FAKE_KEY}"));
+        // A header key must leave the URL alone — that is what makes `header`
+        // the location whose secret never reaches URL-rendering code.
+        assert_eq!(nodes[0].http_url.expose(), "https://drpc.example/rpc");
+    }
+
+    #[test]
+    fn test_build_chain_node_configs_header_without_prefix_uses_the_bare_key() {
+        let chain = chain_fixture(
+            "https://drpc.example/rpc",
+            r#","api_key":{"location":"header","param_name":"X-Api-Key"}"#,
+        );
+        let vars = uppercased_vars(&[(DERIVED_VAR, FAKE_KEY)]);
+
+        let nodes = build_chain_node_configs(&chain, &vars).unwrap();
+
+        let credential = nodes[0].credential_header.as_ref().unwrap();
+        assert_eq!(credential.value.expose(), FAKE_KEY);
+    }
+
+    #[test]
+    fn test_build_chain_node_configs_query_embeds_key_in_url_and_sets_no_header() {
+        let chain = chain_fixture(
+            "https://drpc.example/rpc",
+            r#","api_key":{"location":"query","param_name":"apikey"}"#,
+        );
+        let vars = uppercased_vars(&[(DERIVED_VAR, FAKE_KEY)]);
+
+        let nodes = build_chain_node_configs(&chain, &vars).unwrap();
+
+        assert!(nodes[0].credential_header.is_none());
+        assert_eq!(
+            nodes[0].http_url.expose(),
+            &format!("https://drpc.example/rpc?apikey={FAKE_KEY}")
+        );
+    }
+
+    #[test]
+    fn test_build_chain_node_configs_path_substitutes_and_sets_no_header() {
+        let chain = chain_fixture(
+            "https://drpc.example/v1/:api_key/rpc",
+            r#","api_key":{"location":"path","param_name":"api_key"}"#,
+        );
+        let vars = uppercased_vars(&[(DERIVED_VAR, FAKE_KEY)]);
+
+        let nodes = build_chain_node_configs(&chain, &vars).unwrap();
+
+        assert!(nodes[0].credential_header.is_none());
+        assert_eq!(
+            nodes[0].http_url.expose(),
+            &format!("https://drpc.example/v1/{FAKE_KEY}/rpc")
+        );
+    }
+
+    #[test]
+    fn test_build_chain_node_configs_without_api_key_changes_nothing() {
+        let chain = chain_fixture("https://drpc.example/rpc", "");
+
+        let nodes = build_chain_node_configs(&chain, &HashMap::new()).unwrap();
+
+        assert!(nodes[0].credential_header.is_none());
+        assert_eq!(nodes[0].http_url.expose(), "https://drpc.example/rpc");
+    }
+
+    #[test]
+    fn test_build_chain_node_configs_missing_secret_fails_with_context() {
+        let chain = chain_fixture(
+            "https://drpc.example/rpc",
+            r#","api_key":{"location":"header","param_name":"X-Api-Key"}"#,
+        );
+
+        // `.err().expect(...)` rather than `expect_err`: the latter needs
+        // `Debug` on the success type, and `NodeConfig` deliberately has none.
+        let err = build_chain_node_configs(&chain, &HashMap::new())
+            .err()
+            .expect("a declared api_key with no secret must fail");
+
+        let rendered = format!("{err:#}");
+        assert!(rendered.contains("drpc"), "unexpected error: {rendered}");
+        assert!(
+            rendered.contains(DERIVED_VAR),
+            "unexpected error: {rendered}"
+        );
+    }
+
+    #[test]
+    fn test_chain_declares_api_key_ignores_disabled_providers() {
+        // A disabled provider's leftover api_key must not make an unrelated
+        // pool failure fatal: it is not in the pool at all.
+        let chain = chain_fixture(
+            "https://drpc.example/rpc",
+            r#","enabled":false,"api_key":{"location":"header","param_name":"X-Api-Key"}"#,
+        );
+
+        assert!(!chain_declares_api_key(&chain));
+    }
+
+    #[tokio::test]
+    async fn test_create_provider_pools_impl_normalizes_env_var_case() {
+        // The operator's variable arrives lowercase; the derived name is
+        // uppercase. The pool must still build, which is what pins the two
+        // sides of the lookup to the same normalization.
+        let chain = chain_fixture(
+            "https://drpc.example/rpc",
+            r#","api_key":{"location":"header","param_name":"X-Api-Key"}"#,
+        );
+        let lowercased = DERIVED_VAR.to_lowercase();
+        // Collected up front: `fixture_vars` borrows its input, and the
+        // iterator would otherwise outlive the temporary array across the
+        // `.await` — the same reason `create_provider_pools_from_chains`
+        // collects `std::env::vars()` before handing it down.
+        let vars: Vec<(String, String)> = fixture_vars(&[(&lowercased, FAKE_KEY)]).collect();
+
+        let pools = create_provider_pools_impl(vec![chain], vars.into_iter())
+            .await
+            .unwrap();
+
+        assert!(pools.contains_key(&1));
+    }
+
+    #[tokio::test]
+    async fn test_create_provider_pools_impl_keyed_chain_fails_on_invalid_header_name() {
+        // A space is not legal in a header name. For a chain that declares an
+        // api_key this must abort startup rather than warn and skip: skipping
+        // would leave the service healthy with a chain that has no providers,
+        // which only surfaces later as `no provider configured for chain_id`.
+        let chain = chain_fixture(
+            "https://drpc.example/rpc",
+            r#","api_key":{"location":"header","param_name":"X Api Key"}"#,
+        );
+        let vars: Vec<(String, String)> = fixture_vars(&[(DERIVED_VAR, FAKE_KEY)]).collect();
+
+        let err = create_provider_pools_impl(vec![chain], vars.into_iter())
+            .await
+            .expect_err("an invalid header name on a keyed chain must fail startup");
+
+        let rendered = format!("{err:#}");
+        assert!(
+            rendered.contains("declares an api_key"),
+            "unexpected error: {rendered}"
+        );
+        assert!(
+            !rendered.contains(FAKE_KEY),
+            "the failure must not render the key: {rendered}"
+        );
+    }
+
+    // --- api_key: deserialization ---
+
+    #[test]
+    fn test_api_key_config_rejects_unknown_field() {
+        let err = serde_json::from_str::<ApiKeyConfig>(
+            r#"{"location":"header","param_name":"Authorization","bogus":true}"#,
+        )
+        .expect_err("unknown field must be rejected");
+        assert!(err.to_string().contains("bogus"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn test_api_key_config_rejects_invalid_location() {
+        serde_json::from_str::<ApiKeyConfig>(
+            r#"{"location":"cookie","param_name":"Authorization"}"#,
+        )
+        .expect_err("an unknown location must be rejected");
+    }
+
+    #[test]
+    fn test_api_key_config_rejects_old_name_field() {
+        // The pre-feature `ApiKeyConfig` used `name`; it was renamed to
+        // `param_name` and must not silently accept the old spelling.
+        serde_json::from_str::<ApiKeyConfig>(r#"{"location":"header","name":"Authorization"}"#)
+            .expect_err("the old `name` field must be rejected");
     }
 
     fn write_temp_json(content: &str) -> tempfile::NamedTempFile {

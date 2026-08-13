@@ -1352,3 +1352,66 @@ the provider from the pool entirely (and out of the ranking). Pool-wide
 retry/lag settings live in the per-chain `pool_config` (`PoolConfig`).
 
 ---
+
+## An RPC URL Reaches Postgres and the Public Status API Through `reqwest::Error` Rendering
+
+**Symptom:** A secret embedded in an RPC URL (an API key in the path, query, or
+userinfo) ends up persisted in the database and served by a public endpoint,
+even though nothing in this codebase ever logs a URL on purpose.
+
+**Root cause:** `reqwest::Error` renders the full request URL in **both**
+`Display` (`" for url ({url})"`) and `Debug` (a literal `url` field). `alloy`
+boxes it verbatim in `TransportErrorKind::Custom(Box<dyn Error>)` under
+`#[derive(Debug, Error)]` with `#[error("{0}")]`, so both `{:?}` and `{:#}` of a
+transport error expose the URL — `without_url()` is unreachable through the
+box. Two sinks pick this text up and persist/serve it:
+
+- `range_driver.rs` builds `indexer_failures.reason` from `{:#}` of the
+  processing error before calling `FailureLedger::record` — a **Postgres**
+  column.
+- `avalanche/mod.rs` and `amb/indexer.rs` build
+  `CrosschainIndexerState::Failed(format!("{err:#}"))` — rendered into
+  `IndexerStatus.state` and returned by the **public** `GetFullStatus` /
+  `GetStatusByIndexerName` endpoints.
+
+**Fix:** `interchain-indexer-logic/src/secret.rs`'s `redact_urls` is the
+required boundary at both sinks — it reduces every URL in a string to
+`scheme://host[:port]/<redacted>`, dropping path, query, fragment, and
+userinfo, with no regex dependency. **Redact before `truncate_reason`, never
+after** — truncation can otherwise cut a URL mid-redaction and leave a
+fragment (`range_driver.rs`'s `MAX_REASON_LEN` truncation runs after
+`redact_urls` for exactly this reason).
+
+For the API-key feature (`interchain-indexer-server/src/config.rs`'s
+`ApiKeyConfig`/`ApiKeyLocation`), this is why `header` is the preferred
+location and `NodeConfig`/`CredentialHeader`
+(`interchain-indexer-logic/src/provider_layers.rs`) carry the key as a
+`Secret<String>` rather than URL-embedded: `HeaderValue::set_sensitive(true)`
+gives free redaction even from renderers this codebase does not control (it is
+called exactly once, in `credential_header_map`). `query`/`path` keys have no
+equivalent — they are part of the URL by construction, so they remain visible
+at `RUST_LOG=debug` through `alloy-transport-http`'s own `debug_span!`, which
+cannot be patched from this repo. The only reason that span is not currently
+visible in normal operation is the `alloy_transport_http=warn` filter in
+`justfile` and `docker/docker-compose.yml` — that is an incidental default, not
+a policy this code enforces, so do not rely on it if the log level is ever
+raised.
+
+`NodeConfig` deliberately derives `Clone` only, never `Debug` — a derived
+`Debug` on a struct holding a `Secret<String>` `http_url` would still be safe
+(`Secret`'s own `Debug` redacts unconditionally), but the struct comment exists
+so a future field addition doesn't assume otherwise.
+
+**Known residual channel — `redact_urls` is URL-shaped, not value-shaped.** It
+finds URLs, not secrets. If a node echoes the key back inside the *text* of a
+JSON-RPC error (`{"error":{"message":"invalid api key abc123"}}`), that string is
+not a URL, so it passes through unredacted into `failover_error`
+(`provider_layers.rs`), the failure ledger, and indexer state. Closing it would
+mean a process-wide registry of resolved secrets, scrubbing every error string by
+value — much more surface than the leak it removes, so it was consciously not
+built. Treat it as a reason to prefer `header` (a node cannot echo a header it
+was never sent in a URL) and to read a provider's error semantics before pointing
+production at it. Do not "fix" this by widening `redact_urls`: dropping arbitrary
+tokens from error text would destroy the diagnostics the ledger exists for.
+
+---

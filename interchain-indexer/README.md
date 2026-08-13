@@ -68,6 +68,7 @@ and the env-override key.
 | `cooldown_threshold` | `1` | Cooldowns before the primary pointer rotates off this node. |
 | `cooldown_secs` | `60` | Cooldown duration. |
 | `multicall_batching_us` | `60` | Multicall batching wait. |
+| `api_key` | unset | Optional credential: `{"location": "header"\|"query"\|"path", "param_name": "...", "prefix": "...", "value_env": "..."}`. The object declares the credential's *shape* only — never a value; the secret comes from an environment variable (see "RPC provider API keys" below). `location: "header"` is preferred: a URL-embedded key (`query`/`path`) can be exposed by third-party debug logging this service does not control. `prefix` (e.g. `Bearer`) is supported for `header` only. |
 
 Ordering is fully determined by `order`, then by position in the `rpcs` array,
 then by provider name — **not** by key order inside one object, which does not
@@ -254,6 +255,43 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 # …or add a new contract *version* for the same chain+address (appends a new entry)
 INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d__8__STARTED_AT_BLOCK=19000000
 ```
+
+### RPC provider API keys
+
+An `rpcs` entry's `api_key` object (see `#### rpcs` above) declares only the
+*shape* of a provider credential — `location`, `param_name`, optional `prefix`,
+optional `value_env` — never the value. The secret always comes from the
+environment, so it cannot end up committed to a config file even by accident:
+
+- **Derived variable** (default): `INTERCHAIN_INDEXER_RPC_API_KEY__<CHAIN_ID>__<PROVIDER>`,
+  where `<PROVIDER>` is the provider's map key, uppercased, with every
+  character outside `[A-Z0-9_]` replaced by `_`.
+- **Explicit override**: set `value_env` to name a different variable instead.
+
+Exactly one variable is consulted per provider — the derived name, or
+`value_env` when set. There is no fallback chain: a typo in `value_env` fails
+startup rather than silently reading some other variable. A missing or empty
+(including whitespace-only) value also fails startup, naming the chain, the
+provider, and the exact variable that was checked.
+
+Note the single underscore before `RPC_API_KEY` — like the `CHAINS`/`BRIDGES`
+override prefixes above, this keeps the family outside the double-underscore
+`INTERCHAIN_INDEXER__*` settings namespace.
+
+**Example** — chain `1`, provider `drpc`, key sent as a header:
+
+```json
+"rpcs": [
+    { "drpc": { "url": "https://eth.drpc.org", "api_key": { "location": "header", "param_name": "Authorization", "prefix": "Bearer" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC=sk-live-...
+```
+
+sends `Authorization: Bearer sk-live-...` on every request to that node,
+including the pool's background health probes.
 
 ## Envs
 
