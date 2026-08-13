@@ -70,6 +70,9 @@ pub use yesterday_txns::{
 
 pub(crate) use arbitrum_total_operational_txns::CalculateOperationalTxns;
 pub(crate) use filecoin_chain_fees_24h::FilecoinChainFees24hValue;
+// consumed by the test module of `tests::mock_blockscout_filecoin`
+#[cfg(test)]
+pub(crate) use filecoin_chain_fees_24h::bound_subquery_sql;
 pub(crate) use total_blocks::TotalBlocksInt;
 pub(crate) use total_txns::TotalTxnsInt;
 pub(crate) use txns_stats_24h::{TxnsStatsValue, new_txns_24h::NewTxns24hInt};

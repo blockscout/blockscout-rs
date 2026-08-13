@@ -12,12 +12,43 @@
 //! Together with the per-day burn delta (see `burn_actor_balance`) it
 //! forms the chain-wide fees total.
 //!
+//! The per-transaction tip term is shared, via [`fevm_tip_term`], with the
+//! 24-hour counter `filecoinChainFees24h`
+//! (`counters/blockscout_instance/filecoin_chain_fees_24h.rs`) — the daily
+//! line and the counter must never disagree about tip semantics.
+//!
 //! Internal-only chart: never exposed through the API (stays disabled),
 //! updated transitively as a dependency of the public Filecoin charts.
 
 use std::{collections::HashSet, ops::Range};
 
 use crate::{chart_prelude::*, utils::ETHER};
+
+/// The per-transaction FEVM miner tip, floored at zero, as a SQL
+/// expression: `(gas_price - base_fee_per_gas) * gas_used`, or `0` when the
+/// transaction underbids the base fee. The floor is a `CASE` rather than
+/// `GREATEST(diff, 0)` so that a NULL `base_fee_per_gas` keeps the term
+/// NULL — see the rationale comment in
+/// [`FevmFeeTipsStatement`]'s `get_statement`.
+///
+/// Caller contract: the expression reads `{alias}.gas_price`,
+/// `{alias}.gas_used` and `b.base_fee_per_gas`, so the caller owns the
+/// `blocks b` join and the `consensus` / `!= to_timestamp(0)` guards on
+/// both sides of it.
+///
+/// Consumers: [`FevmFeeTipsStatement`] (both migration branches) and
+/// `FilecoinChainFees24hStatement` (the 24h counter's `tips` CTE). The term
+/// exists exactly once so the two can never drift apart (decision record
+/// `.ai/pr-review/1722/comments/decisions/20260812-1725/tips-cte-fevm-duplication.md`).
+pub fn fevm_tip_term(transactions_alias: &str) -> String {
+    format!(
+        "CASE
+            WHEN {a}.gas_price < b.base_fee_per_gas THEN 0
+            ELSE ({a}.gas_price - b.base_fee_per_gas) * {a}.gas_used
+        END",
+        a = transactions_alias
+    )
+}
 
 pub struct FevmFeeTipsStatement;
 impl_db_choice!(FevmFeeTipsStatement, UsePrimaryDB);
@@ -49,16 +80,14 @@ impl StatementFromRange for FevmFeeTipsStatement {
             let (block_filter, new_args) =
                 produce_filter_and_values(range.clone(), "b.timestamp", args.len() + 1);
             args.extend(new_args);
+            let tip_term = fevm_tip_term("t_filtered");
             let sql = format!(
                 r#"
                     SELECT date, value FROM (
                         SELECT
                             DATE(b.timestamp) as date,
                             (SUM(
-                                CASE
-                                    WHEN t_filtered.gas_price < b.base_fee_per_gas THEN 0
-                                    ELSE (t_filtered.gas_price - b.base_fee_per_gas) * t_filtered.gas_used
-                                END
+                                {tip_term}
                             ) / $1)::FLOAT as value
                         FROM (
                             SELECT * from transactions t
@@ -84,10 +113,7 @@ impl StatementFromRange for FevmFeeTipsStatement {
                         SELECT
                             DATE(b.timestamp) as date,
                             (SUM(
-                                CASE
-                                    WHEN t.gas_price < b.base_fee_per_gas THEN 0
-                                    ELSE (t.gas_price - b.base_fee_per_gas) * t.gas_used
-                                END
+                                {tip_term}
                             ) / $1)::FLOAT as value
                         FROM transactions t
                         JOIN blocks       b ON t.block_hash = b.hash
@@ -100,7 +126,8 @@ impl StatementFromRange for FevmFeeTipsStatement {
                 "#,
                 [ETHER.into()],
                 "b.timestamp",
-                range
+                range,
+                tip_term = fevm_tip_term("t")
             )
         }
     }

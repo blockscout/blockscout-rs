@@ -38,8 +38,16 @@ singleton_groups!(
     ActiveRecurringAccountsMonthlyRecurrence120Days,
     ActiveRecurringAccountsWeeklyRecurrence120Days,
     ActiveRecurringAccountsYearlyRecurrence120Days,
-    // Not a member of `FilecoinChainFeesGroup`: this counter runs hourly and
-    // must not trigger the heavy daily chain.
+    // Deliberately a singleton, in neither sibling group:
+    // - not in `FilecoinChainFeesGroup`: this counter runs hourly and must
+    //   not trigger that heavy daily dependency chain;
+    // - not in `TxnsStats24hGroup`, although it is also hourly and its tips
+    //   CTE scans the same trailing-24h transactions window: merging would
+    //   save ~60-85 ms of DB CPU per hour (measured on the Filecoin mainnet
+    //   indexer, fully from shared-buffer cache, no disk reads) at the cost
+    //   of teaching the generic 24h statement filecoin-specific columns.
+    //   Consciously accepted; decision record
+    //   `.ai/pr-review/1722/comments/decisions/20260812-1725/tips-cte-duplicate-24h-scan.md`.
     FilecoinChainFees24h,
 );
 

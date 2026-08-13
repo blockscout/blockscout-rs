@@ -14,7 +14,9 @@
 //!   two *anchor blocks* — the last per-block `address_coin_balances` row at
 //!   or before each edge of the window;
 //! - the **tips** part is the sum of FEVM miner tips over the *exact*
-//!   timestamp interval, same as `fevmFeeTips`.
+//!   timestamp interval, same as `fevmFeeTips` — literally: the
+//!   per-transaction tip term is [`fevm_tip_term`], shared with that
+//!   chart's statement.
 //!
 //! An anchor is therefore always a little older than its edge. On Filecoin
 //! mainnet (handoff §4) the resulting skew is minutes-scale, two-sided (each
@@ -53,10 +55,41 @@ use std::{collections::HashSet, ops::Range};
 
 use tracing::warn;
 
-use crate::{chart_prelude::*, lines::BURN_ACTOR_HASH_HEX, utils::ETHER};
+use crate::{
+    chart_prelude::*,
+    lines::{BURN_ACTOR_HASH_HEX, fevm_tip_term},
+    utils::ETHER,
+};
 
 pub struct FilecoinChainFees24hStatement;
 impl_db_choice!(FilecoinChainFees24hStatement, UsePrimaryDB);
+
+/// The counter's bound sub-query: "the last consensus block strictly before
+/// `edge`". Single source of truth — used by both bound CTEs of the
+/// assembled statement and by `block_numbers_follow_time_at_counter_edges`
+/// (`tests/mock_blockscout_filecoin.rs`), which pins it against an
+/// independently written `max(number)` reference at every edge the counter
+/// tests resolve. A function rather than a `const` because the call sites
+/// need different parameter placeholders.
+///
+/// Ordered by timestamp (with a `number DESC` tiebreak so the pick stays
+/// deterministic if a chain ever puts two consensus blocks on one
+/// timestamp), **not** `max(number)` under the same filter: the `max()`
+/// form scans the number index backwards, fetching and rejecting every
+/// consensus block newer than the edge (~2,880 rows per hour at 30-second
+/// epochs; measured with `EXPLAIN (ANALYZE, BUFFERS)` on production
+/// Filecoin databases at 1.3-3.4 ms and 9.5-14% of this query's buffer
+/// traffic), while `blocks_timestamp_index` resolves the same row in O(1)
+/// pages. Decision records
+/// `.ai/pr-review/1722/comments/decisions/20260812-1725/bound-cte-max-number-antipattern.md`
+/// and `detached-bound-sql-copy.md` (same directory).
+pub(crate) fn bound_subquery_sql(edge_placeholder: &str) -> String {
+    format!(
+        "SELECT number FROM blocks \
+         WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < {edge_placeholder} \
+         ORDER BY timestamp DESC, number DESC LIMIT 1"
+    )
+}
 
 impl StatementFromRange for FilecoinChainFees24hStatement {
     fn get_statement(
@@ -71,12 +104,69 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
             "FilecoinChainFees24hStatement is only ever driven by PullOne24hCached, \
              which always supplies a concrete range",
         );
+        // $1 = wei per FIL, $2 = f099 address, $3 = window start (inclusive,
+        // `>=`), $4 = window end (exclusive, `<`). Start before end is the
+        // service-wide convention (`utils::produce_filter_and_values`); see
+        // decision record
+        // `comments/decisions/20260812-1725/range-filter-arg-order.md`.
         let args = vec![
             ETHER.into(),
             BURN_ACTOR_HASH_HEX.into(),
-            range.end.into(),
             range.start.into(),
+            range.end.into(),
         ];
+        // the `tips` CTE is the only part that differs between migration
+        // states: before denormalization the transaction-side filters have
+        // no columns to stand on, so the row set is narrowed through
+        // `blocks` alone. Everything else — the bound/anchor CTEs and the
+        // reporting SELECT — is shared and written once below, so a change
+        // to it cannot reach one migration state only. The tip term itself
+        // is `fevm_tip_term`, shared with `fevmFeeTips`: the daily line and
+        // this counter must never disagree about tip semantics.
+        let tips_cte = if completed_migrations.denormalization {
+            format!(
+                r#"tips AS (
+                    SELECT
+                        SUM(
+                            {tip_term}
+                        ) AS wei,
+                        COUNT(*) AS txns
+                    FROM (
+                        SELECT * FROM transactions t
+                        WHERE
+                            t.block_consensus = true AND
+                            t.block_timestamp != to_timestamp(0) AND
+                            t.block_timestamp < $4 AND
+                            t.block_timestamp >= $3
+                    ) AS t_filtered
+                    JOIN blocks b ON t_filtered.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true AND
+                        b.timestamp < $4 AND
+                        b.timestamp >= $3
+                )"#,
+                tip_term = fevm_tip_term("t_filtered"),
+            )
+        } else {
+            format!(
+                r#"tips AS (
+                    SELECT
+                        SUM(
+                            {tip_term}
+                        ) AS wei,
+                        COUNT(*) AS txns
+                    FROM transactions t
+                    JOIN blocks b ON t.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true AND
+                        b.timestamp < $4 AND
+                        b.timestamp >= $3
+                )"#,
+                tip_term = fevm_tip_term("t"),
+            )
+        };
         // see `statement_denormalized_is_correct` / `statement_non_denormalized_is_correct`
         // for the resulting SQL text
         //
@@ -88,15 +178,13 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
         // — a duplicate here would mean the core Blockscout unique index is
         // gone, and that should fail loudly rather than be silently papered
         // over.
-        let sql = if completed_migrations.denormalization {
+        let sql = format!(
             r#"
                 WITH bound_to AS (
-                    SELECT max(number) AS number FROM blocks
-                    WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < $3
+                    {bound_to}
                 ),
                 bound_from AS (
-                    SELECT max(number) AS number FROM blocks
-                    WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < $4
+                    {bound_from}
                 ),
                 anchor_to AS (
                     SELECT block_number, value FROM address_coin_balances
@@ -112,30 +200,7 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
                         AND block_number <= (SELECT number FROM bound_from)
                     ORDER BY block_number DESC LIMIT 1
                 ),
-                tips AS (
-                    SELECT
-                        SUM(
-                            CASE
-                                WHEN t_filtered.gas_price < b.base_fee_per_gas THEN 0
-                                ELSE (t_filtered.gas_price - b.base_fee_per_gas) * t_filtered.gas_used
-                            END
-                        ) AS wei,
-                        COUNT(*) AS txns
-                    FROM (
-                        SELECT * FROM transactions t
-                        WHERE
-                            t.block_consensus = true AND
-                            t.block_timestamp != to_timestamp(0) AND
-                            t.block_timestamp < $3 AND
-                            t.block_timestamp >= $4
-                    ) AS t_filtered
-                    JOIN blocks b ON t_filtered.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true AND
-                        b.timestamp < $3 AND
-                        b.timestamp >= $4
-                )
+                {tips_cte}
                 SELECT
                     ((SELECT value FROM anchor_to) - (SELECT value FROM anchor_from))::float / $1 AS burn,
                     (SELECT wei FROM tips)::float / $1 AS tips,
@@ -143,63 +208,15 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
                     (SELECT block_number FROM anchor_from) AS from_block,
                     (SELECT block_number FROM anchor_to) AS to_block,
                     (SELECT timestamp FROM blocks
-                        WHERE consensus = true AND number = (SELECT block_number FROM anchor_from)) AS from_block_time,
+                        WHERE consensus = true AND timestamp != to_timestamp(0)
+                            AND number = (SELECT block_number FROM anchor_from)) AS from_block_time,
                     (SELECT timestamp FROM blocks
-                        WHERE consensus = true AND number = (SELECT block_number FROM anchor_to)) AS to_block_time
-            "#
-        } else {
-            r#"
-                WITH bound_to AS (
-                    SELECT max(number) AS number FROM blocks
-                    WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < $3
-                ),
-                bound_from AS (
-                    SELECT max(number) AS number FROM blocks
-                    WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < $4
-                ),
-                anchor_to AS (
-                    SELECT block_number, value FROM address_coin_balances
-                    WHERE address_hash = decode($2, 'hex')
-                        AND value IS NOT NULL
-                        AND block_number <= (SELECT number FROM bound_to)
-                    ORDER BY block_number DESC LIMIT 1
-                ),
-                anchor_from AS (
-                    SELECT block_number, value FROM address_coin_balances
-                    WHERE address_hash = decode($2, 'hex')
-                        AND value IS NOT NULL
-                        AND block_number <= (SELECT number FROM bound_from)
-                    ORDER BY block_number DESC LIMIT 1
-                ),
-                tips AS (
-                    SELECT
-                        SUM(
-                            CASE
-                                WHEN t.gas_price < b.base_fee_per_gas THEN 0
-                                ELSE (t.gas_price - b.base_fee_per_gas) * t.gas_used
-                            END
-                        ) AS wei,
-                        COUNT(*) AS txns
-                    FROM transactions t
-                    JOIN blocks b ON t.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true AND
-                        b.timestamp < $3 AND
-                        b.timestamp >= $4
-                )
-                SELECT
-                    ((SELECT value FROM anchor_to) - (SELECT value FROM anchor_from))::float / $1 AS burn,
-                    (SELECT wei FROM tips)::float / $1 AS tips,
-                    (SELECT txns FROM tips) AS tips_txns,
-                    (SELECT block_number FROM anchor_from) AS from_block,
-                    (SELECT block_number FROM anchor_to) AS to_block,
-                    (SELECT timestamp FROM blocks
-                        WHERE consensus = true AND number = (SELECT block_number FROM anchor_from)) AS from_block_time,
-                    (SELECT timestamp FROM blocks
-                        WHERE consensus = true AND number = (SELECT block_number FROM anchor_to)) AS to_block_time
-            "#
-        };
+                        WHERE consensus = true AND timestamp != to_timestamp(0)
+                            AND number = (SELECT block_number FROM anchor_to)) AS to_block_time
+            "#,
+            bound_to = bound_subquery_sql("$4"),
+            bound_from = bound_subquery_sql("$3"),
+        );
         Statement::from_sql_and_values(DbBackend::Postgres, sql, args)
     }
 }
@@ -237,9 +254,11 @@ pub struct FilecoinChainFees24hValue {
     pub to_block: Option<i64>,
     /// Timestamp of the start anchor block. `NULL` when `from_block` is
     /// `NULL` — or, in principle, when the anchor's height currently has no
-    /// consensus block (the anchor CTEs do not filter on the block's
-    /// `consensus` flag); in that shape the burn is still computed and used
-    /// while the update is routed to the degenerate-anchors warning.
+    /// consensus block, or the block there carries the epoch placeholder
+    /// timestamp (`to_timestamp(0)`) — the anchor CTEs filter on neither
+    /// property of the anchor's own block; in either shape the burn is
+    /// still computed and used while the update is routed to the
+    /// degenerate-anchors warning.
     pub from_block_time: Option<NaiveDateTime>,
     /// Timestamp of the end anchor block. `NULL` under the same conditions
     /// as [`from_block_time`](Self::from_block_time), for the end anchor.
@@ -272,41 +291,97 @@ pub const ANCHOR_SPAN_SKEW_WARNING_THRESHOLD_MINUTES: i64 = 60;
 
 pub struct CombineBurnAndTips;
 
-/// Emits a warning about the burn anchors, if warranted, then returns
-/// `(burn, tips)` each with a missing summand replaced by `0.0`.
-///
-/// The two conditions are checked in a fixed order: degenerate/missing
-/// anchors first. A degenerate window (both anchors resolve to the same
-/// block) has a span of exactly `0`, which would *also* satisfy the skew
-/// predicate below — checking degeneracy first keeps that case from firing
-/// both warnings, and at most one warning is ever emitted per update.
+/// Anchor-shape problem detected in one pulled row, driving which warning
+/// [`warn_on_anchor_issues`] emits. At most one variant applies per update
+/// by construction (`Option<AnchorIssue>`), replacing what used to be a
+/// branch-ordering rule.
 ///
 /// Degeneracy is classified by *timestamp*, not block number: two distinct
 /// anchor blocks sharing one timestamp give the window no usable time span,
-/// so they land in the degenerate branch by design — the computed burn is
-/// still used in that shape, which is why the warning carries a `burn`
-/// field instead of asserting a numeric outcome in prose.
-fn warn_on_anchor_issues(value: &FilecoinChainFees24hValue) {
+/// so they land in [`AnchorIssue::DegenerateAnchors`] by design — the
+/// computed burn is still used in that shape, which is why the degenerate
+/// warning carries a `burn` field instead of asserting a numeric outcome in
+/// prose.
+enum AnchorIssue {
+    /// Both anchor timestamps resolve to distinct instants, but their span
+    /// deviates from the nominal 24 hours by more than
+    /// [`ANCHOR_SPAN_SKEW_WARNING_THRESHOLD_MINUTES`]. Carries the inputs of
+    /// that verdict so the emitter re-derives nothing.
+    SpanSkew {
+        from_time: NaiveDateTime,
+        to_time: NaiveDateTime,
+        span: TimeDelta,
+    },
+    /// One or both anchor timestamps are unresolved, or both carry the same
+    /// block timestamp. A degenerate window has a span of exactly `0`, which
+    /// would *also* satisfy the skew predicate — classification checks
+    /// degeneracy first, so this shape never reads as skew.
+    DegenerateAnchors,
+}
+
+impl AnchorIssue {
+    /// The machine-readable `reason` selector of the corresponding warning —
+    /// the single source of truth shared by the production `warn!` calls and
+    /// the classification test.
+    fn reason(&self) -> &'static str {
+        match self {
+            AnchorIssue::SpanSkew { .. } => REASON_ANCHOR_SPAN_SKEW,
+            AnchorIssue::DegenerateAnchors => REASON_DEGENERATE_ANCHORS,
+        }
+    }
+}
+
+/// Pure classification of the burn anchors' shape: `None` when the anchors
+/// span a plausible 24-hour window, otherwise the [`AnchorIssue`] that
+/// [`warn_on_anchor_issues`] should report. Split from emission so the
+/// warning contract is testable without a tracing subscriber
+/// (`warning_kind_matches_anchor_shape`).
+fn classify_anchor_issue(value: &FilecoinChainFees24hValue) -> Option<AnchorIssue> {
     match (value.from_block_time, value.to_block_time) {
         (Some(from_time), Some(to_time)) if from_time != to_time => {
             let span = to_time - from_time;
             let deviation_from_24h = (span - TimeDelta::hours(24)).abs();
             if deviation_from_24h > TimeDelta::minutes(ANCHOR_SPAN_SKEW_WARNING_THRESHOLD_MINUTES) {
-                warn!(
-                    reason = REASON_ANCHOR_SPAN_SKEW,
-                    from_block = value.from_block,
-                    to_block = value.to_block,
-                    from_block_time = %from_time,
-                    to_block_time = %to_time,
-                    span_seconds = span.num_seconds(),
-                    tips_txns = value.tips_txns,
-                    "the two burn anchors span noticeably more or less than 24 hours"
-                );
+                Some(AnchorIssue::SpanSkew {
+                    from_time,
+                    to_time,
+                    span,
+                })
+            } else {
+                None
             }
         }
-        _ => {
+        _ => Some(AnchorIssue::DegenerateAnchors),
+    }
+}
+
+/// Emits the warning matching [`classify_anchor_issue`]'s verdict, if any.
+/// Thin by design: every decision lives in the pure classifier, this only
+/// attaches the log fields.
+fn warn_on_anchor_issues(value: &FilecoinChainFees24hValue) {
+    let Some(issue) = classify_anchor_issue(value) else {
+        return;
+    };
+    match &issue {
+        AnchorIssue::SpanSkew {
+            from_time,
+            to_time,
+            span,
+        } => {
             warn!(
-                reason = REASON_DEGENERATE_ANCHORS,
+                reason = issue.reason(),
+                from_block = value.from_block,
+                to_block = value.to_block,
+                from_block_time = %from_time,
+                to_block_time = %to_time,
+                span_seconds = span.num_seconds(),
+                tips_txns = value.tips_txns,
+                "the two burn anchors span noticeably more or less than 24 hours"
+            );
+        }
+        AnchorIssue::DegenerateAnchors => {
+            warn!(
+                reason = issue.reason(),
                 from_block = value.from_block,
                 to_block = value.to_block,
                 from_block_time = ?value.from_block_time,
@@ -376,17 +451,15 @@ pub type FilecoinChainFees24h =
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashSet,
-        sync::{Arc, Mutex},
-    };
+    use std::collections::HashSet;
 
     use pretty_assertions::assert_eq;
-    use tracing::field::{Field, Visit};
-    use tracing_subscriber::layer::{Context, SubscriberExt};
 
     use super::*;
     use crate::tests::{
+        mock_blockscout_filecoin::{
+            COUNTER_DEFAULT_WINDOW_END, COUNTER_DEGENERATE_WINDOW_END, COUNTER_NO_ROWS_WINDOW_END,
+        },
         normalize_sql,
         point_construction::dt,
         simple_test::{
@@ -403,12 +476,14 @@ mod tests {
         );
         let expected = r#"
             WITH bound_to AS (
-                SELECT max(number) AS number FROM blocks
+                SELECT number FROM blocks
                 WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < '2023-01-02 00:00:00.000000 +00:00'
+                ORDER BY timestamp DESC, number DESC LIMIT 1
             ),
             bound_from AS (
-                SELECT max(number) AS number FROM blocks
+                SELECT number FROM blocks
                 WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < '2023-01-01 00:00:00.000000 +00:00'
+                ORDER BY timestamp DESC, number DESC LIMIT 1
             ),
             anchor_to AS (
                 SELECT block_number, value FROM address_coin_balances
@@ -455,9 +530,11 @@ mod tests {
                 (SELECT block_number FROM anchor_from) AS from_block,
                 (SELECT block_number FROM anchor_to) AS to_block,
                 (SELECT timestamp FROM blocks
-                    WHERE consensus = true AND number = (SELECT block_number FROM anchor_from)) AS from_block_time,
+                    WHERE consensus = true AND timestamp != to_timestamp(0)
+                        AND number = (SELECT block_number FROM anchor_from)) AS from_block_time,
                 (SELECT timestamp FROM blocks
-                    WHERE consensus = true AND number = (SELECT block_number FROM anchor_to)) AS to_block_time
+                    WHERE consensus = true AND timestamp != to_timestamp(0)
+                        AND number = (SELECT block_number FROM anchor_to)) AS to_block_time
         "#;
         assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()));
     }
@@ -471,12 +548,14 @@ mod tests {
         );
         let expected = r#"
             WITH bound_to AS (
-                SELECT max(number) AS number FROM blocks
+                SELECT number FROM blocks
                 WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < '2023-01-02 00:00:00.000000 +00:00'
+                ORDER BY timestamp DESC, number DESC LIMIT 1
             ),
             bound_from AS (
-                SELECT max(number) AS number FROM blocks
+                SELECT number FROM blocks
                 WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < '2023-01-01 00:00:00.000000 +00:00'
+                ORDER BY timestamp DESC, number DESC LIMIT 1
             ),
             anchor_to AS (
                 SELECT block_number, value FROM address_coin_balances
@@ -516,9 +595,11 @@ mod tests {
                 (SELECT block_number FROM anchor_from) AS from_block,
                 (SELECT block_number FROM anchor_to) AS to_block,
                 (SELECT timestamp FROM blocks
-                    WHERE consensus = true AND number = (SELECT block_number FROM anchor_from)) AS from_block_time,
+                    WHERE consensus = true AND timestamp != to_timestamp(0)
+                        AND number = (SELECT block_number FROM anchor_from)) AS from_block_time,
                 (SELECT timestamp FROM blocks
-                    WHERE consensus = true AND number = (SELECT block_number FROM anchor_to)) AS to_block_time
+                    WHERE consensus = true AND timestamp != to_timestamp(0)
+                        AND number = (SELECT block_number FROM anchor_to)) AS to_block_time
         "#;
         assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()));
     }
@@ -589,78 +670,25 @@ mod tests {
         assert_eq!(combine(pulled(None, Some(3.0), some_from, some_to)), 3.0);
     }
 
-    /// Collects the `reason` field of every event emitted while the
-    /// subscriber is installed. Implemented from scratch (rather than
-    /// reusing `request_id_layer.rs`'s model) because that model's
-    /// `regex`/`serde_json` layers are not available in `stats` — this
-    /// only needs one field's string value, not a full log line.
-    #[derive(Default, Clone)]
-    struct ReasonCollector {
-        reasons: Arc<Mutex<Vec<String>>>,
-    }
-
-    struct ReasonVisitor<'a>(&'a mut Option<String>);
-
-    impl Visit for ReasonVisitor<'_> {
-        fn record_str(&mut self, field: &Field, value: &str) {
-            if field.name() == "reason" {
-                *self.0 = Some(value.to_string());
-            }
-        }
-
-        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-            if field.name() == "reason" {
-                *self.0 = Some(format!("{value:?}"));
-            }
-        }
-    }
-
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for ReasonCollector {
-        fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-            let mut reason = None;
-            event.record(&mut ReasonVisitor(&mut reason));
-            if let Some(reason) = reason {
-                self.reasons.lock().unwrap().push(reason);
-            }
-        }
-    }
-
-    /// Runs [`CombineBurnAndTips::function`] under a subscriber that
-    /// records every `reason` field emitted, and returns the list in
-    /// emission order. Does **not** snapshot message text or field
-    /// formatting: the `reason` strings are the same `const`s the
-    /// production `warn!` calls use, so this only breaks if the production
-    /// behavior actually changes.
-    fn reasons_emitted(value: FilecoinChainFees24hValue) -> Vec<String> {
-        let collector = ReasonCollector::default();
-        let reasons = collector.reasons.clone();
-        let subscriber = tracing_subscriber::registry().with(collector);
-        tracing::subscriber::with_default(subscriber, || {
-            combine(value);
-        });
-        // `.lock()` rather than `Arc::try_unwrap`: other callsite-interest
-        // bookkeeping inside `tracing` may briefly hold its own clone of a
-        // just-uninstalled subscriber when many other tests in this binary
-        // exercise `tracing` concurrently, so the strong count here is not
-        // reliably 1 the moment `with_default`'s scope ends. The lock is
-        // all this needs.
-        reasons.lock().unwrap().clone()
-    }
-
     /// Table-driven, and deliberately a **separate** `#[test]` from
     /// [`combine_burn_and_tips_clamps_and_treats_null_as_zero`]: value
     /// assertions and warning assertions must be able to fail
-    /// independently. Spans are derived from
+    /// independently. Asserts on [`classify_anchor_issue`] — the pure
+    /// decision behind the `warn!` calls — via the same `REASON_*` consts
+    /// the production emitter uses, so no tracing subscriber is involved
+    /// and "at most one warning per update" holds by construction
+    /// (`Option`). Spans are derived from
     /// [`ANCHOR_SPAN_SKEW_WARNING_THRESHOLD_MINUTES`], never as literals,
     /// so re-calibrating the constant moves the cases with it (decision
-    /// record `comments/decisions/20260811-1435/finding-03-warning-contracts.md`).
+    /// records `comments/decisions/20260811-1435/finding-03-warning-contracts.md`,
+    /// `comments/decisions/20260812-1725/reason-collector-machinery.md`).
     #[test]
     fn warning_kind_matches_anchor_shape() {
         let base_from = dt("2023-01-01T00:00:00");
         let threshold = TimeDelta::minutes(ANCHOR_SPAN_SKEW_WARNING_THRESHOLD_MINUTES);
         let at = |delta: TimeDelta| base_from + TimeDelta::hours(24) + delta;
 
-        let cases: Vec<(&str, FilecoinChainFees24hValue, Vec<&str>)> = vec![
+        let cases: Vec<(&str, FilecoinChainFees24hValue, Option<&'static str>)> = vec![
             (
                 "span exactly 24h -> no warning",
                 pulled(
@@ -669,17 +697,17 @@ mod tests {
                     Some(base_from),
                     Some(at(TimeDelta::zero())),
                 ),
-                vec![],
+                None,
             ),
             (
                 "span 24h + threshold -> no warning (boundary is inclusive of the pass)",
                 pulled(Some(1.0), Some(1.0), Some(base_from), Some(at(threshold))),
-                vec![],
+                None,
             ),
             (
                 "span 24h - threshold -> no warning",
                 pulled(Some(1.0), Some(1.0), Some(base_from), Some(at(-threshold))),
-                vec![],
+                None,
             ),
             (
                 "span 24h + threshold + 1min -> anchor_span_skew",
@@ -689,7 +717,7 @@ mod tests {
                     Some(base_from),
                     Some(at(threshold + TimeDelta::minutes(1))),
                 ),
-                vec![REASON_ANCHOR_SPAN_SKEW],
+                Some(REASON_ANCHOR_SPAN_SKEW),
             ),
             (
                 "span 24h - threshold - 1min -> anchor_span_skew",
@@ -699,17 +727,17 @@ mod tests {
                     Some(base_from),
                     Some(at(-threshold - TimeDelta::minutes(1))),
                 ),
-                vec![REASON_ANCHOR_SPAN_SKEW],
+                Some(REASON_ANCHOR_SPAN_SKEW),
             ),
             (
                 "missing start anchor -> degenerate_anchors",
                 pulled(None, Some(1.0), None, Some(base_from)),
-                vec![REASON_DEGENERATE_ANCHORS],
+                Some(REASON_DEGENERATE_ANCHORS),
             ),
             (
                 "missing end anchor -> degenerate_anchors",
                 pulled(Some(1.0), None, Some(base_from), None),
-                vec![REASON_DEGENERATE_ANCHORS],
+                Some(REASON_DEGENERATE_ANCHORS),
             ),
             (
                 // a zero span deviates from 24h by 24h, which would also
@@ -721,7 +749,7 @@ mod tests {
                 // by-design degenerate classification by timestamp.
                 "distinct blocks with equal timestamps -> degenerate_anchors only, not anchor_span_skew",
                 pulled(Some(0.0), Some(1.0), Some(base_from), Some(base_from)),
-                vec![REASON_DEGENERATE_ANCHORS],
+                Some(REASON_DEGENERATE_ANCHORS),
             ),
             (
                 // the genuine same-block shape: both anchors resolve to one
@@ -732,14 +760,13 @@ mod tests {
                     to_block: Some(1),
                     ..pulled(Some(0.0), Some(1.0), Some(base_from), Some(base_from))
                 },
-                vec![REASON_DEGENERATE_ANCHORS],
+                Some(REASON_DEGENERATE_ANCHORS),
             ),
         ];
 
-        for (name, value, expected_reasons) in cases {
-            let actual: Vec<String> = reasons_emitted(value);
-            let expected: Vec<String> = expected_reasons.into_iter().map(String::from).collect();
-            assert_eq!(actual, expected, "case: {name}");
+        for (name, value, expected_reason) in cases {
+            let actual = classify_anchor_issue(&value).map(|issue| issue.reason());
+            assert_eq!(actual, expected_reason, "case: {name}");
         }
     }
 
@@ -774,10 +801,15 @@ mod tests {
         // hand-written schema forms (model: `update_fevm_fee_tips`;
         // decision record
         // `comments/decisions/20260811-1435/finding-01-half-open-window-precision.md`).
+        //
+        // The update time is passed explicitly even though it equals the
+        // harness default (`max_time`): the window-end constant is what the
+        // fixture derives its bound-order coverage from, and passing it here
+        // keeps the value *used* by a test rather than merely described.
         simple_test_counter_filecoin_with_migration_variants::<FilecoinChainFees24h>(
             "update_filecoin_chain_fees_24h_default_window",
             "13000.0002058",
-            None,
+            Some(dt(COUNTER_DEFAULT_WINDOW_END)),
         )
         .await;
     }
@@ -790,7 +822,9 @@ mod tests {
         // per-block fixture starts at block 200, dated 2023-02-28), so both
         // anchors are NULL and burn falls back to 0 via the NULL->0 rule —
         // not a confident wrong number computed from an out-of-window
-        // anchor. Both edges of this window are listed in `BOUND_EDGES`.
+        // anchor. Both edges of this window enter the fixture's bound-order
+        // coverage automatically, derived from `COUNTER_NO_ROWS_WINDOW_END`
+        // (see `bound_edges` in `mock_blockscout_filecoin.rs`).
         //
         // The window is not otherwise empty: the shared fixture's
         // contract-creation transactions land two of its blocks (0 and 1,
@@ -801,7 +835,7 @@ mod tests {
         simple_test_counter_filecoin::<FilecoinChainFees24h>(
             "update_filecoin_chain_fees_24h_no_rows_in_window",
             "0.000042985185138",
-            Some(dt("2022-11-10T12:00:00")),
+            Some(dt(COUNTER_NO_ROWS_WINDOW_END)),
         )
         .await;
     }
@@ -815,11 +849,14 @@ mod tests {
         // resolve to that same row (value 30_050_000 FIL) — burn falls back
         // to `max(0, 0) = 0` via the equal-anchors path, not the
         // missing-anchor path. No transactions fall in this window either,
-        // so tips is also 0. Both edges are listed in `BOUND_EDGES`.
+        // so tips is also 0. Both edges enter the fixture's bound-order
+        // coverage automatically, derived from
+        // `COUNTER_DEGENERATE_WINDOW_END` (see `bound_edges` in
+        // `mock_blockscout_filecoin.rs`).
         simple_test_counter_filecoin::<FilecoinChainFees24h>(
             "update_filecoin_chain_fees_24h_degenerate_anchors",
             "0",
-            Some(dt("2023-03-03T00:00:00")),
+            Some(dt(COUNTER_DEGENERATE_WINDOW_END)),
         )
         .await;
     }
@@ -847,7 +884,7 @@ mod tests {
         fill_mock_blockscout_data(&indexer, max_date).await;
         fill_mock_blockscout_filecoin_data(&indexer, max_date).await;
 
-        let update_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+        let update_time = dt(COUNTER_DEFAULT_WINDOW_END).and_utc();
         let parameters =
             UpdateParameters::default_test_query_parameters(&db, &indexer, Some(update_time));
         let cx = UpdateContext::from_params_now_or_override(parameters);

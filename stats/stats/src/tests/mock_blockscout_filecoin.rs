@@ -90,15 +90,16 @@ pub fn mixed_day_complete_tips_fil() -> f64 {
 // (`simple_test.rs:567`, `:696`), so the counter's default test window is
 // `[2023-02-28T12:00, 2023-03-01T12:00)`. The block numbers below are chosen
 // deliberately, not just placed "far outside" the shared fixture's `0..=12`:
-// the anchor CTEs of the counter's SQL find their bound as
-// `max(blocks.number)` *inside* a timestamp filter, so number order and
-// time order must agree at every edge a test resolves a bound at. Block 12
-// (`2023-03-01T10:00`) is newer than `MIXED_DAY` blocks 100/101
+// the counter's SQL resolves its bound by *time* (the last consensus block
+// strictly before the edge, `bound_subquery_sql`), while the anchor CTEs
+// then order the per-block f099 rows by *block number* — so number order
+// and time order must agree at every edge a test resolves a bound at.
+// Block 12 (`2023-03-01T10:00`) is newer than `MIXED_DAY` blocks 100/101
 // (`2023-02-14`), so every new consensus block below is numbered **above
 // 101** and increases with its timestamp; at least one of them
 // ([`COUNTER_END_ANCHOR_BLOCK`]) sits in `(2023-03-01T10:00,
 // 2023-03-01T12:00)`, so the newest block before the window's end is also
-// the highest-numbered one. See [`BOUND_EDGES`] and
+// the highest-numbered one. See [`COUNTER_WINDOW_ENDS`] and
 // `block_numbers_follow_time_at_counter_edges`, which prove this property at
 // the edges tests actually resolve.
 
@@ -148,6 +149,30 @@ const COUNTER_WINDOW_EDGE_BLOCK: i64 = 207;
 const COUNTER_TX_GAS_PRICE: i64 = 5_000_000_000;
 /// Gas used by the counter-window fixture's priced transactions.
 const COUNTER_TX_GAS_USED: i64 = 21_000;
+
+/// Upper edge of the counter's default test window. Equals the `max_time`
+/// the counter harness hard-codes (`simple_test.rs`); passed explicitly by
+/// the default-window counter tests so the value is *used* by a test, not
+/// merely described here.
+pub const COUNTER_DEFAULT_WINDOW_END: &str = "2023-03-01T12:00:00";
+/// Upper edge of the "no f099 rows in the window" counter scenario.
+pub const COUNTER_NO_ROWS_WINDOW_END: &str = "2022-11-10T12:00:00";
+/// Upper edge of the "degenerate anchors" counter scenario: both edges of
+/// that window land after the fixture's last per-block f099 row.
+pub const COUNTER_DEGENERATE_WINDOW_END: &str = "2023-03-03T00:00:00";
+
+/// Every 24-hour window a counter test resolves anchor bounds in, by its
+/// upper edge. **A new counter scenario belongs here** — that is the whole
+/// registration step, and it is the same constant the scenario's test reads
+/// its update time from, so the list and the tests cannot drift:
+/// `block_numbers_follow_time_at_counter_edges` derives *both* edges of
+/// every window from this array (decision record
+/// `.ai/pr-review/1722/comments/decisions/20260812-1725/bound-edges-manual-registry.md`).
+pub const COUNTER_WINDOW_ENDS: [&str; 3] = [
+    COUNTER_DEFAULT_WINDOW_END,
+    COUNTER_NO_ROWS_WINDOW_END,
+    COUNTER_DEGENERATE_WINDOW_END,
+];
 
 /// The counter-window fixture: `(block number, block timestamp, f099
 /// balance in FIL, carries a priced transaction)`. Reproduces the six
@@ -454,47 +479,50 @@ pub async fn fill_mock_blockscout_filecoin_data(
 mod tests {
     use std::collections::{HashMap, HashSet};
 
+    use chrono::TimeDelta;
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::tests::{init_db::init_db_blockscout, mock_blockscout::fill_mock_blockscout_data};
+    use crate::{
+        counters::bound_subquery_sql,
+        tests::{init_db::init_db_blockscout, mock_blockscout::fill_mock_blockscout_data},
+    };
 
-    /// Timestamps at which a counter test resolves an anchor bound: the
-    /// start and end of every 24-hour window a test asks for. The bound is
-    /// `max(blocks.number)` under a `timestamp < edge` filter (handoff §8),
-    /// so at each of these instants the highest-numbered consensus block
-    /// must also be the newest one — otherwise the anchors describe a chain
-    /// that cannot exist. See `block_numbers_follow_time_at_counter_edges`.
+    /// Stands for *every* instant after the fixture's last consensus block:
+    /// the fixture is static, so all post-fixture edges induce the same
+    /// qualifying block set and this one entry covers them all. The date is
+    /// symbolic. Covers the stats-server integration suite, which resolves
+    /// its bounds at the real current time (`update_time_override: None`) —
+    /// an instant no test can name literally; the proof transfers because
+    /// its DB is built by the same fill functions with the same `max_date`
+    /// (`mock_blockscout_simple/mod.rs:48-59`).
+    const WALL_CLOCK_BOUND_SENTINEL: &str = "2100-01-01T00:00:00";
+
+    /// Timestamps at which a counter test resolves an anchor bound,
+    /// **derived** from [`COUNTER_WINDOW_ENDS`]: the counter's window is the
+    /// half-open `[T-24h, T)` (decision record
+    /// `20260811-1435/finding-01-half-open-window-precision.md`), so every
+    /// window contributes its upper edge and its lower edge 24 hours
+    /// earlier. Nothing here is hand-listed, so a new scenario is covered
+    /// the moment its window end joins that array. The static
+    /// [`WALL_CLOCK_BOUND_SENTINEL`] is appended as the one entry of a
+    /// different kind.
     ///
-    /// Add both edges of any new **literal** `update_time` used by a
-    /// counter test. **Wall-clock** windows (the stats-server integration
-    /// suite updates at `Utc::now()`, `update_time_override: None`) cannot
-    /// be listed literally — they are covered by the sentinel entry below
-    /// instead.
-    const BOUND_EDGES: [&str; 7] = [
-        // default window: update_time = max_time = 2023-03-01T12:00:00Z
-        "2023-02-28T12:00:00",
-        "2023-03-01T12:00:00",
-        // "no f099 rows in the window" scenario (Phase 2)
-        "2022-11-09T12:00:00",
-        "2022-11-10T12:00:00",
-        // "degenerate anchors" scenario (Phase 2): update_time =
-        // 2023-03-03T00:00:00, both edges land after the fixture's last
-        // per-block row (COUNTER_WINDOW_EDGE_BLOCK, 2023-03-01T12:00:00),
-        // so both anchors resolve to that same row
-        "2023-03-02T00:00:00",
-        "2023-03-03T00:00:00",
-        // Sentinel for the wall-clock class: stands for *every* instant
-        // after the fixture's last consensus block. The stats-server
-        // integration tests resolve their bounds at the real current time,
-        // which cannot be listed literally — but the fixture is static, so
-        // all post-fixture edges induce the same qualifying block set and
-        // this one entry covers them all. The date is symbolic. The proof
-        // transfers to the integration suite because its DB is built by the
-        // same fill functions with the same `max_date`
-        // (`mock_blockscout_simple/mod.rs:48-59`).
-        "2100-01-01T00:00:00",
-    ];
+    /// Edges later than the fixture's last consensus block form a single
+    /// equivalence class already covered by the sentinel — the degenerate
+    /// scenario contributes two such edges, which is free redundancy, not
+    /// an oversight.
+    fn bound_edges() -> Vec<NaiveDateTime> {
+        let mut edges: Vec<NaiveDateTime> = COUNTER_WINDOW_ENDS
+            .iter()
+            .flat_map(|end| {
+                let end = NaiveDateTime::from_str(end).unwrap();
+                [end - TimeDelta::hours(24), end]
+            })
+            .collect();
+        edges.push(NaiveDateTime::from_str(WALL_CLOCK_BOUND_SENTINEL).unwrap());
+        edges
+    }
 
     #[test]
     fn burn_actor_balances_are_consistent() {
@@ -616,13 +644,16 @@ mod tests {
         assert!(f099_rows > 0);
     }
 
-    /// Proves, independently of the counter's own SQL, that at every edge in
-    /// [`BOUND_EDGES`] the anchor CTEs' `max(blocks.number)` bound agrees
-    /// with the block that is actually newest by timestamp. A violation
-    /// means the fixture's block numbers and timestamps disagree at that
-    /// edge, so the anchors the counter would pick describe a chain that
-    /// cannot exist (decision record `20260811-1040/finding-05`,
-    /// `20260811-1040/finding-06`).
+    /// Proves that at every edge in [`bound_edges`] the counter's own bound
+    /// sub-query — the time-ordered [`bound_subquery_sql`], interpolated
+    /// here from the same single source the production statement is
+    /// assembled from — agrees with an independently written `max(number)`
+    /// reference, which exists by hand in this one place and nowhere else.
+    /// A violation means the fixture's block numbers and timestamps
+    /// disagree at that edge, so the anchors the counter would pick
+    /// describe a chain that cannot exist (decision records
+    /// `20260811-1040/finding-05`, `20260811-1040/finding-06`,
+    /// `20260812-1725/detached-bound-sql-copy`).
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn block_numbers_follow_time_at_counter_edges() {
@@ -631,30 +662,21 @@ mod tests {
         fill_mock_blockscout_data(&blockscout, max_date).await;
         fill_mock_blockscout_filecoin_data(&blockscout, max_date).await;
 
-        for edge in BOUND_EDGES {
-            let edge_ts = NaiveDateTime::from_str(edge).unwrap();
-            // left: the bound the counter's SQL computes; right: the same
-            // bound derived from the semantic rule ("last consensus block
-            // before this instant"), independently of `number`.
+        // left: `max(number)`, written here and nowhere else — the
+        // independent reference; right: the counter's own bound sub-query,
+        // interpolated from the single source the statement is assembled
+        // from.
+        let sql = format!(
+            "SELECT ({by_number}) AS by_number, ({by_time}) AS by_time",
+            by_number = "SELECT max(number) FROM blocks \
+                         WHERE consensus = true AND timestamp != to_timestamp(0) AND timestamp < $1",
+            by_time = bound_subquery_sql("$1"),
+        );
+        for edge_ts in bound_edges() {
             let row = blockscout
                 .query_one(Statement::from_sql_and_values(
                     DbBackend::Postgres,
-                    r#"
-                        SELECT
-                            (
-                                SELECT max(number) FROM blocks
-                                WHERE consensus = true
-                                  AND timestamp != to_timestamp(0)
-                                  AND timestamp < $1
-                            ) AS by_number,
-                            (
-                                SELECT number FROM blocks
-                                WHERE consensus = true
-                                  AND timestamp != to_timestamp(0)
-                                  AND timestamp < $1
-                                ORDER BY timestamp DESC, number DESC LIMIT 1
-                            ) AS by_time
-                    "#,
+                    &sql,
                     vec![edge_ts.into()],
                 ))
                 .await
@@ -666,9 +688,9 @@ mod tests {
             // counter gets a NULL bound and falls back — a tested scenario.
             assert_eq!(
                 by_number, by_time,
-                "at {edge} the highest-numbered consensus block is not the \
-                 newest one: the anchor bounds would describe an impossible \
-                 chain",
+                "at {edge_ts} the highest-numbered consensus block is not \
+                 the newest one: the anchor bounds would describe an \
+                 impossible chain",
             );
         }
     }

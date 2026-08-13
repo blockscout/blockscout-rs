@@ -85,10 +85,12 @@ pub struct Settings {
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
     /// Enable the Filecoin-specific API surface: `filecoinChainFeesGrowth`
-    /// is enabled under its own id, and the public `txnsFee` id is
-    /// force-enabled and served with the `filecoinNewChainFees`
-    /// implementation (chain-wide fees); `filecoinNewChainFees` is never
-    /// exposed as a public chart id.
+    /// is enabled under its own id; the public `txnsFee` id is force-enabled
+    /// and served with the `filecoinNewChainFees` implementation (chain-wide
+    /// fees), and the public `txnsFee24h` id is force-enabled and served
+    /// with the `filecoinChainFees24h` implementation (24h burn + tips);
+    /// under this flag, `filecoinNewChainFees` and `filecoinChainFees24h`
+    /// are never exposed as public chart ids.
     pub enable_all_filecoin: bool,
     /// Filter by chain ids for multichain mode.
     /// TODO: recalculate statistics data when multichain_filter has been changed
@@ -294,6 +296,38 @@ fn enable_charts(
     }
 }
 
+/// Sets `implementation` on the entry served under `public_id`, unless the
+/// operator already configured one — an explicit operator-provided mapping
+/// wins over a flag. Probes both sections, like [`enable_charts`]: chart ids
+/// are unique across counters and line charts
+/// (`RuntimeSetup::build_charts_info` rejects a collision), so at most one
+/// of them can hold the entry; warns and continues when neither does.
+fn set_default_implementation(
+    charts: &mut config::charts::Config<AllChartSettings>,
+    public_id: &str,
+    implementation_id: String,
+    charts_name_for_logs: &str,
+) {
+    let settings = match (
+        charts.lines.get_mut(public_id),
+        charts.counters.get_mut(public_id),
+    ) {
+        (Some(settings), _) => settings,
+        (_, Some(settings)) => settings,
+        _ => {
+            warn!(
+                "Could not remap '{charts_name_for_logs}'-specific chart {public_id}: \
+                chart not found in settings. \
+                This should not be a problem for running the service.",
+            );
+            return;
+        }
+    };
+    if settings.implementation.is_none() {
+        settings.implementation = Some(implementation_id);
+    }
+}
+
 pub fn handle_enable_all_arbitrum(
     enable_all: bool,
     charts: &mut config::charts::Config<AllChartSettings>,
@@ -357,8 +391,10 @@ pub fn handle_enable_all_eip_7702(
 /// configured. Likewise force-enables the public `txnsFee24h` id, serving it
 /// with the `filecoinChainFees24h` implementation (the 24h burn + tips
 /// counter) unless an explicit `implementation` is already configured.
-/// `filecoinNewChainFees` and `filecoinChainFees24h` are never exposed as
-/// public chart ids. The intermediate charts (`burnActorBalance`,
+/// Under this flag, `filecoinNewChainFees` and `filecoinChainFees24h` are
+/// never exposed as public chart ids (both have `layout.json` slots and may
+/// be explicitly enabled standalone without the flag). The intermediate
+/// charts (`burnActorBalance`,
 /// `fevmFeeTips`) stay disabled — hidden from the API — and are updated
 /// transitively as dependencies of the public charts.
 pub fn handle_enable_all_filecoin(
@@ -379,18 +415,18 @@ pub fn handle_enable_all_filecoin(
             "filecoin",
         );
         // config keys are camelCase at this point (post config load)
-        if let Some(txns_fee) = charts.lines.get_mut(TxnsFee::key().name()) {
-            // an explicit operator-provided mapping wins over the flag
-            if txns_fee.implementation.is_none() {
-                txns_fee.implementation = Some(FilecoinNewChainFees::key().into_name());
-            }
-        }
-        if let Some(txns_fee_24h) = charts.counters.get_mut(TxnsFee24h::key().name()) {
-            // an explicit operator-provided mapping wins over the flag
-            if txns_fee_24h.implementation.is_none() {
-                txns_fee_24h.implementation = Some(FilecoinChainFees24h::key().into_name());
-            }
-        }
+        set_default_implementation(
+            charts,
+            TxnsFee::key().name(),
+            FilecoinNewChainFees::key().into_name(),
+            "filecoin",
+        );
+        set_default_implementation(
+            charts,
+            TxnsFee24h::key().name(),
+            FilecoinChainFees24h::key().into_name(),
+            "filecoin",
+        );
     }
 }
 
@@ -742,6 +778,48 @@ mod tests {
             .into_iter()
             .collect(),
         }
+    }
+
+    /// The one property the four Filecoin flag tests cannot express: the
+    /// remap helper locates the public entry **regardless of which section
+    /// holds it**. This is the assertion that fails on the classic
+    /// copy-paste mistake the helper exists to prevent — a new remap block
+    /// hard-coding the wrong map (lines vs counters), which at HEAD before
+    /// the helper would silently set nothing (decision record
+    /// `.ai/pr-review/1722/comments/decisions/20260812-1725/settings-remap-copy-paste.md`).
+    #[test]
+    fn set_default_implementation_finds_entry_in_either_section() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings::default());
+
+        // a line-chart id and a counter id, through the same call
+        set_default_implementation(
+            &mut charts,
+            TxnsFee::key().name(),
+            "someImpl".into(),
+            "test",
+        );
+        set_default_implementation(
+            &mut charts,
+            TxnsFee24h::key().name(),
+            "someOtherImpl".into(),
+            "test",
+        );
+        assert_eq!(
+            charts.lines[TxnsFee::key().name()]
+                .implementation
+                .as_deref(),
+            Some("someImpl")
+        );
+        assert_eq!(
+            charts.counters[TxnsFee24h::key().name()]
+                .implementation
+                .as_deref(),
+            Some("someOtherImpl")
+        );
+
+        // an id present in neither section warns and continues — no panic,
+        // no change
+        set_default_implementation(&mut charts, "absentChart", "ignored".into(), "test");
     }
 
     #[test]
