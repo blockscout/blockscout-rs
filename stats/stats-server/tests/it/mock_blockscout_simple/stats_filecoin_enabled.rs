@@ -204,12 +204,16 @@ async fn test_filecoin_chain_fees_growth_data(base: &Url) {
         Some("30010000.003450688"),
         "no-data day must carry the cumulative value of 2022-12-01"
     );
-    // moves only by the tips added on `2023-03-01` by the 24-hour counter's
-    // fixture blocks (two priced transactions here — the server updates at
-    // wall-clock time, so the window-edge boundary block is included, unlike
-    // the frozen-clock stats-crate chart test); the burn side is unaffected
-    // by the fixture's *split* of the old burn-only value across
-    // `2023-02-28`/`2023-03-01` because a cumulative sum telescopes over it.
+    // moves from the old `30050000.004623346` by all three tips the 24-hour
+    // counter's fixture blocks added: `3 * 0.0001029 = 0.0003087` — block 202
+    // on `2023-02-28`, plus blocks 206 and 207 on `2023-03-01`. Block 207 is
+    // dated exactly `2023-03-01T12:00:00` and counts only because the server
+    // updates at wall-clock time; the frozen-clock stats-crate test excludes
+    // it and therefore pins `30050000.004829146` instead (see
+    // `filecoin_chain_fees_growth.rs`) — that value is *not* this one. The
+    // burn side is unaffected by the fixture's *split* of the old burn-only
+    // value across `2023-02-28`/`2023-03-01` because a cumulative sum
+    // telescopes over it.
     assert_eq!(
         data.get("2023-03-01").map(String::as_str),
         Some("30050000.004932046")

@@ -64,7 +64,7 @@ mod tests {
     // Running totals = cumsum of the `filecoinNewChainFees` values over the
     // Filecoin fixture layer. The genuine no-data day (`2022-12-15`) records
     // no chart_data row, so it is absent from the unfilled output — the
-    // surrounding days (`2022-12-01`, `2023-01-01`) pin that the running
+    // surrounding days (`2022-12-01`, `2022-12-20`) pin that the running
     // total carried across the gap correctly; the filled "previous day's
     // cumulative" behavior is asserted at the API level. `2022-11-11`
     // (tips-only) and `2023-02-14` (mixed, understated tips-only) advance
@@ -86,6 +86,7 @@ mod tests {
                 ("2022-11-11", "30001000.00177722"),
                 ("2022-11-12", "30003500.00256677"),
                 ("2022-12-01", "30010000.003450688"),
+                ("2022-12-20", "30012000.003450688"),
                 ("2023-01-01", "30020000.00347218"),
                 ("2023-02-01", "30035000.004523344"),
                 ("2023-02-14", "30035000.004623346"),

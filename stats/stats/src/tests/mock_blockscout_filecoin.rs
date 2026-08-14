@@ -351,20 +351,31 @@ fn mixed_day_blocks_and_transactions() -> (Vec<blocks::ActiveModel>, Vec<transac
 /// - `2022-12-15` has neither an f099 row nor any block — the genuine
 ///   no-data day asserted by absence at chart level and by filled values
 ///   at the API level;
+/// - `2022-12-20` has an f099 row and no block at all: the only day where
+///   the burn side moves by an ordinary day-over-day delta while the tips
+///   side is absent *by construction*. `2022-11-09` is burn-only too, but
+///   it is the first day, where `Delta` has no prior row and the whole
+///   starting balance is the value — a different arithmetic path. Keep
+///   this day block-free, or the combination stops being pinned (decision
+///   record
+///   `.ai/pr-review/1722/comments/decisions/20260813-1537/mid-series-burn-only-coverage.md`);
 /// - `2023-02-28` is [`COUNTER_DOMINANT_BLOCK`]'s day: the value is that
 ///   block's per-block reading, the last one of the day — required to
 ///   agree with [`counter_window_fixture`] (decision record
 ///   `20260811-1040/finding-03`);
-/// - `2023-03-01` has a row while its *original* only block (12) keeps
-///   `base_fee_per_gas = NULL` (see the hazard rule below) — a natural
-///   "burn-only" day; the value now equals [`COUNTER_WINDOW_EDGE_BLOCK`]'s
-///   per-block reading, the last one of the day.
+/// - `2023-03-01` has a row and is no longer a burn-only day: its
+///   *original* only block (12) still keeps `base_fee_per_gas = NULL`
+///   (see the hazard rule below), but [`counter_window_fixture`] added
+///   priced blocks to that day, so it behaves like [`MIXED_DAY`] now;
+///   the value equals [`COUNTER_WINDOW_EDGE_BLOCK`]'s per-block reading,
+///   the last one of the day.
 fn burn_actor_balances_fil() -> Vec<(NaiveDate, i128)> {
     [
         ("2022-11-09", 30_000_000),
         ("2022-11-10", 30_001_000),
         ("2022-11-12", 30_003_500),
         ("2022-12-01", 30_010_000),
+        ("2022-12-20", 30_012_000),
         ("2023-01-01", 30_020_000),
         ("2023-02-01", 30_035_000),
         ("2023-02-28", 30_047_000),
@@ -405,11 +416,15 @@ fn mock_burn_actor_balances(max_date: NaiveDate) -> Vec<address_coin_balances_da
 /// under a zero-priced fixture transaction would produce a negative tip,
 /// which the charts' per-transaction tip floor would clamp to 0 anyway —
 /// keeping such blocks NULL instead exercises the NULL-handling paths.
-/// Hazard blocks that are the only block of their day (block 0 on
-/// `2022-11-09`, block 12 on `2023-03-01`) leave all tip terms of their
-/// day NULL, so the day is dropped by the `value IS NOT NULL` guard of
-/// `fevmFeeTips`; the hazard block of [`MIXED_DAY`] shares its day with a
-/// priced block, so that day survives with an understated sum.
+/// A hazard block that is the only block of its day (block 0 on
+/// `2022-11-09`) leaves every tip term of that day NULL, so the day is
+/// dropped by the `value IS NOT NULL` guard of `fevmFeeTips`. A hazard
+/// block that shares its day with a priced block produces a "mixed" day
+/// instead: `SUM` skips the NULL terms and the day survives with an
+/// understated sum. [`MIXED_DAY`] is the deliberate case; `2023-03-01`
+/// became a second one when [`counter_window_fixture`] put priced blocks
+/// ([`COUNTER_END_ANCHOR_BLOCK`], [`COUNTER_WINDOW_EDGE_BLOCK`]) beside
+/// block 12.
 pub async fn fill_mock_blockscout_filecoin_data(
     blockscout: &DatabaseConnection,
     max_date: NaiveDate,
@@ -557,11 +572,18 @@ mod tests {
         // series as `burn_actor_balances_fil`, just read per-block). Prove
         // both explicitly rather than only asserting them in a comment.
         let per_block = counter_window_fixture();
+        let numbers: Vec<i64> = per_block.iter().map(|(number, _, _, _)| *number).collect();
         assert!(
-            per_block.windows(2).all(|w| w[0].0 < w[1].0
-                && NaiveDateTime::from_str(w[0].1).unwrap()
-                    < NaiveDateTime::from_str(w[1].1).unwrap()),
-            "counter_window_fixture must be sorted by increasing block number and timestamp"
+            numbers.windows(2).all(|w| w[0] < w[1]),
+            "counter_window_fixture must be sorted by increasing block number"
+        );
+        let timestamps: Vec<NaiveDateTime> = per_block
+            .iter()
+            .map(|(_, ts, _, _)| NaiveDateTime::from_str(ts).unwrap())
+            .collect();
+        assert!(
+            timestamps.windows(2).all(|w| w[0] < w[1]),
+            "counter_window_fixture must be sorted by increasing block timestamp"
         );
         assert!(
             per_block

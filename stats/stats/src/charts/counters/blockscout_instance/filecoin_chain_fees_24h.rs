@@ -91,6 +91,52 @@ pub(crate) fn bound_subquery_sql(edge_placeholder: &str) -> String {
     )
 }
 
+/// The counter's anchor sub-query: "the last f099 per-block balance row at or
+/// before the block `bound_cte` resolved to". Single source of truth for both
+/// anchors of the assembled statement — the burn delta is a difference of two
+/// rows chosen by *the same* rule, and this function is what makes "the same
+/// rule" a fact about the code rather than about two adjacent copies.
+fn anchor_subquery_sql(bound_cte: &str) -> String {
+    format!(
+        "SELECT block_number, value FROM address_coin_balances \
+         WHERE address_hash = decode($2, 'hex') AND value IS NOT NULL \
+         AND block_number <= (SELECT number FROM {bound_cte}) \
+         ORDER BY block_number DESC LIMIT 1"
+    )
+}
+
+/// The counter's `tips` CTE: the miner-tip sum and the transaction count over
+/// the window's exact timestamp interval. Single source of truth for both
+/// migration states — everything about the CTE except its transactions source
+/// is shared, so a change to the aggregate header or the `blocks`-side guards
+/// cannot reach one migration state only.
+///
+/// `transactions_source` is a table expression (a pre-filtered sub-select once
+/// the denormalized columns exist, the bare table before that);
+/// `transactions_alias` is the name that expression exposes, and is what both
+/// the join predicate and [`fevm_tip_term`] read their columns from. The two
+/// are one fact split across two arguments, which is why every call site passes
+/// them adjacent.
+fn tips_cte_sql(transactions_source: &str, transactions_alias: &str) -> String {
+    format!(
+        r#"tips AS (
+                    SELECT
+                        SUM(
+                            {tip_term}
+                        ) AS wei,
+                        COUNT(*) AS txns
+                    FROM {transactions_source}
+                    JOIN blocks b ON {transactions_alias}.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true AND
+                        b.timestamp < $4 AND
+                        b.timestamp >= $3
+                )"#,
+        tip_term = fevm_tip_term(transactions_alias),
+    )
+}
+
 impl StatementFromRange for FilecoinChainFees24hStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
@@ -115,57 +161,32 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
             range.start.into(),
             range.end.into(),
         ];
-        // the `tips` CTE is the only part that differs between migration
-        // states: before denormalization the transaction-side filters have
-        // no columns to stand on, so the row set is narrowed through
-        // `blocks` alone. Everything else — the bound/anchor CTEs and the
-        // reporting SELECT — is shared and written once below, so a change
-        // to it cannot reach one migration state only. The tip term itself
-        // is `fevm_tip_term`, shared with `fevmFeeTips`: the daily line and
-        // this counter must never disagree about tip semantics.
+        // only two things differ between migration states, and they are the
+        // two arguments of `tips_cte_sql` below: the transactions source (a
+        // pre-filtered sub-select once the denormalized columns exist — before
+        // denormalization the transaction-side filters have no columns to
+        // stand on, so the row set is narrowed through `blocks` alone) and
+        // the alias that source exposes. The CTE's own scaffolding — the
+        // aggregate header and the `blocks`-side guards — and everything
+        // around it (the bound/anchor CTEs, the reporting SELECT) are written
+        // once, so a change to any of it cannot reach one migration state
+        // only. The tip term itself is `fevm_tip_term`, shared with
+        // `fevmFeeTips`: the daily line and this counter must never disagree
+        // about tip semantics.
         let tips_cte = if completed_migrations.denormalization {
-            format!(
-                r#"tips AS (
-                    SELECT
-                        SUM(
-                            {tip_term}
-                        ) AS wei,
-                        COUNT(*) AS txns
-                    FROM (
+            tips_cte_sql(
+                r#"(
                         SELECT * FROM transactions t
                         WHERE
                             t.block_consensus = true AND
                             t.block_timestamp != to_timestamp(0) AND
                             t.block_timestamp < $4 AND
                             t.block_timestamp >= $3
-                    ) AS t_filtered
-                    JOIN blocks b ON t_filtered.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true AND
-                        b.timestamp < $4 AND
-                        b.timestamp >= $3
-                )"#,
-                tip_term = fevm_tip_term("t_filtered"),
+                    ) AS t_filtered"#,
+                "t_filtered",
             )
         } else {
-            format!(
-                r#"tips AS (
-                    SELECT
-                        SUM(
-                            {tip_term}
-                        ) AS wei,
-                        COUNT(*) AS txns
-                    FROM transactions t
-                    JOIN blocks b ON t.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true AND
-                        b.timestamp < $4 AND
-                        b.timestamp >= $3
-                )"#,
-                tip_term = fevm_tip_term("t"),
-            )
+            tips_cte_sql("transactions t", "t")
         };
         // see `statement_denormalized_is_correct` / `statement_non_denormalized_is_correct`
         // for the resulting SQL text
@@ -187,18 +208,10 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
                     {bound_from}
                 ),
                 anchor_to AS (
-                    SELECT block_number, value FROM address_coin_balances
-                    WHERE address_hash = decode($2, 'hex')
-                        AND value IS NOT NULL
-                        AND block_number <= (SELECT number FROM bound_to)
-                    ORDER BY block_number DESC LIMIT 1
+                    {anchor_to}
                 ),
                 anchor_from AS (
-                    SELECT block_number, value FROM address_coin_balances
-                    WHERE address_hash = decode($2, 'hex')
-                        AND value IS NOT NULL
-                        AND block_number <= (SELECT number FROM bound_from)
-                    ORDER BY block_number DESC LIMIT 1
+                    {anchor_from}
                 ),
                 {tips_cte}
                 SELECT
@@ -216,6 +229,8 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
             "#,
             bound_to = bound_subquery_sql("$4"),
             bound_from = bound_subquery_sql("$3"),
+            anchor_to = anchor_subquery_sql("bound_to"),
+            anchor_from = anchor_subquery_sql("bound_from"),
         );
         Statement::from_sql_and_values(DbBackend::Postgres, sql, args)
     }
@@ -276,6 +291,9 @@ pub const REASON_ANCHOR_SPAN_SKEW: &str = "anchor_span_skew";
 /// Machine-readable selector for the degenerate/missing-anchors warning
 /// (see [`CombineBurnAndTips`]).
 pub const REASON_DEGENERATE_ANCHORS: &str = "degenerate_anchors";
+/// Machine-readable selector for the negative-burn warning (see
+/// [`CombineBurnAndTips`]).
+pub const REASON_NEGATIVE_BURN: &str = "negative_burn";
 
 /// Warning threshold, in minutes, for how far the span between the two burn
 /// anchors' timestamps may deviate from the nominal 24 hours before
@@ -292,9 +310,10 @@ pub const ANCHOR_SPAN_SKEW_WARNING_THRESHOLD_MINUTES: i64 = 60;
 pub struct CombineBurnAndTips;
 
 /// Anchor-shape problem detected in one pulled row, driving which warning
-/// [`warn_on_anchor_issues`] emits. At most one variant applies per update
-/// by construction (`Option<AnchorIssue>`), replacing what used to be a
-/// branch-ordering rule.
+/// [`warn_on_anchor_issues`] emits. At most one *anchor* warning applies per
+/// update by construction (`Option<AnchorIssue>`), replacing what used to be
+/// a branch-ordering rule; the negative-burn warning
+/// ([`warn_on_negative_burn`]) is an independent axis and may accompany one.
 ///
 /// Degeneracy is classified by *timestamp*, not block number: two distinct
 /// anchor blocks sharing one timestamp give the window no usable time span,
@@ -394,6 +413,27 @@ fn warn_on_anchor_issues(value: &FilecoinChainFees24hValue) {
     }
 }
 
+/// Emits [`REASON_NEGATIVE_BURN`] when the pulled burn is negative — the
+/// shape [`CombineBurnAndTips`] clamps to zero. An independent axis from the
+/// anchor warnings: a negative burn can arrive between two perfectly healthy,
+/// 24-hours-apart anchors (a reorg or backfill artifact), which
+/// [`classify_anchor_issue`] deliberately does not inspect.
+fn warn_on_negative_burn(value: &FilecoinChainFees24hValue) {
+    if value.burn.is_some_and(|burn| burn < 0.0) {
+        warn!(
+            reason = REASON_NEGATIVE_BURN,
+            burn = ?value.burn,
+            from_block = value.from_block,
+            to_block = value.to_block,
+            from_block_time = ?value.from_block_time,
+            to_block_time = ?value.to_block_time,
+            tips_txns = value.tips_txns,
+            "negative burn between the two f099 anchors, clamped to zero; the burn actor's \
+             balance only grows on-chain, so this can only be a data artifact"
+        );
+    }
+}
+
 impl MapFunction<TimespanValue<NaiveDate, FilecoinChainFees24hValue>> for CombineBurnAndTips {
     type Output = TimespanValue<NaiveDate, f64>;
 
@@ -402,11 +442,15 @@ impl MapFunction<TimespanValue<NaiveDate, FilecoinChainFees24hValue>> for Combin
     ) -> Result<Self::Output, ChartError> {
         let TimespanValue { timespan, value } = inner_data;
         warn_on_anchor_issues(&value);
+        warn_on_negative_burn(&value);
         // each summand contributes 0 independently of the other when
         // missing, matching `txnsFee24h`'s `UnwrapOr<_, Zero>` semantics;
         // the burn side is additionally floored at zero, since the f099
-        // balance only ever grows on-chain (mirrors `ClampNonNegative` over
-        // `filecoin_new_chain_fees`'s burn delta)
+        // balance only ever grows on-chain — clamp *and* warn
+        // ([`warn_on_negative_burn`] above), mirroring `ClampNonNegative`
+        // over `filecoin_new_chain_fees`'s burn delta in full; the warning
+        // is emitted locally because the combinator clamps a whole point
+        // post-sum and is not reachable for one summand of this pulled row
         let burn = value.burn.unwrap_or(0.0).max(0.0);
         let tips = value.tips.unwrap_or(0.0);
         Ok(TimespanValue {

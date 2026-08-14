@@ -271,26 +271,36 @@ pub fn handle_disable_internal_transactions(
     }
 }
 
+/// Finds the entry served under `id` in either config section. Chart ids are
+/// unique across counters and line charts *among enabled entries* only —
+/// `RuntimeSetup::build_charts_info` drops disabled entries before its
+/// collision check — so for a duplicate id whose other side is disabled the
+/// `lines` probe below wins (decision record
+/// `.ai/pr-review/1722/comments/decisions/20260813-1537/disabled-duplicate-shadowing.md`).
+fn find_chart_settings_mut<'a>(
+    charts: &'a mut config::charts::Config<AllChartSettings>,
+    id: &str,
+) -> Option<&'a mut AllChartSettings> {
+    match (charts.lines.get_mut(id), charts.counters.get_mut(id)) {
+        (Some(settings), _) => Some(settings),
+        (_, Some(settings)) => Some(settings),
+        _ => None,
+    }
+}
+
 fn enable_charts(
     to_enable: &[&str],
     charts: &mut config::charts::Config<AllChartSettings>,
     charts_name_for_logs: &str,
 ) {
     for enable_key in to_enable {
-        let settings = match (
-            charts.lines.get_mut(*enable_key),
-            charts.counters.get_mut(*enable_key),
-        ) {
-            (Some(settings), _) => settings,
-            (_, Some(settings)) => settings,
-            _ => {
-                warn!(
-                    "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
-                    chart not found in settings. \
-                    This should not be a problem for running the service.",
-                );
-                continue;
-            }
+        let Some(settings) = find_chart_settings_mut(charts, enable_key) else {
+            warn!(
+                "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
+                chart not found in settings. \
+                This should not be a problem for running the service.",
+            );
+            continue;
         };
         settings.enabled = true;
     }
@@ -298,30 +308,21 @@ fn enable_charts(
 
 /// Sets `implementation` on the entry served under `public_id`, unless the
 /// operator already configured one — an explicit operator-provided mapping
-/// wins over a flag. Probes both sections, like [`enable_charts`]: chart ids
-/// are unique across counters and line charts
-/// (`RuntimeSetup::build_charts_info` rejects a collision), so at most one
-/// of them can hold the entry; warns and continues when neither does.
+/// wins over a flag. Looks the entry up in both sections via
+/// [`find_chart_settings_mut`]; warns and continues when neither holds it.
 fn set_default_implementation(
     charts: &mut config::charts::Config<AllChartSettings>,
     public_id: &str,
     implementation_id: String,
     charts_name_for_logs: &str,
 ) {
-    let settings = match (
-        charts.lines.get_mut(public_id),
-        charts.counters.get_mut(public_id),
-    ) {
-        (Some(settings), _) => settings,
-        (_, Some(settings)) => settings,
-        _ => {
-            warn!(
-                "Could not remap '{charts_name_for_logs}'-specific chart {public_id}: \
-                chart not found in settings. \
-                This should not be a problem for running the service.",
-            );
-            return;
-        }
+    let Some(settings) = find_chart_settings_mut(charts, public_id) else {
+        warn!(
+            "Could not remap '{charts_name_for_logs}'-specific chart {public_id}: \
+            chart not found in settings. \
+            Nothing will be served under this public id; the service starts without it.",
+        );
+        return;
     };
     if settings.implementation.is_none() {
         settings.implementation = Some(implementation_id);
@@ -392,8 +393,11 @@ pub fn handle_enable_all_eip_7702(
 /// with the `filecoinChainFees24h` implementation (the 24h burn + tips
 /// counter) unless an explicit `implementation` is already configured.
 /// Under this flag, `filecoinNewChainFees` and `filecoinChainFees24h` are
-/// never exposed as public chart ids (both have `layout.json` slots and may
-/// be explicitly enabled standalone without the flag). The intermediate
+/// never exposed as public chart ids. Both have `layout.json` slots and may
+/// be explicitly enabled standalone only while this flag is off: the flag
+/// makes each of them a remap target, and a remap target that is also
+/// enabled under its own id is rejected at startup
+/// (`RuntimeSetup::validate_implementation_mappings`). The intermediate
 /// charts (`burnActorBalance`,
 /// `fevmFeeTips`) stay disabled — hidden from the API — and are updated
 /// transitively as dependencies of the public charts.
