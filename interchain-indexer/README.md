@@ -77,8 +77,8 @@ survive config loading. Set `order` explicitly whenever the preference matters:
 ```json
 "rpcs": [
     {
-        "blockscout": { "url": "https://rpc.eth.gateway.fm", "order": 0 },
-        "drpc":       { "url": "https://eth.drpc.org", "order": 1 }
+        "gateway": { "url": "https://rpc.eth.gateway.fm", "order": 0 },
+        "drpc":    { "url": "https://eth.drpc.org", "order": 1 }
     }
 ]
 ```
@@ -91,8 +91,8 @@ its resolved pool once at startup, at INFO:
 
 ```
 Created layered provider for chain chain_id=1 chain_name=Ethereum
-  primary="Ethereum[blockscout]"
-  nodes="Ethereum[blockscout], Ethereum[drpc], Ethereum[gateway], Ethereum[1rpc]"
+  primary="Ethereum[gateway]"
+  nodes="Ethereum[gateway], Ethereum[drpc], Ethereum[1rpc]"
 ```
 
 ### `bridges.json`
