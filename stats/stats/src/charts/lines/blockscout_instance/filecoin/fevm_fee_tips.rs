@@ -38,8 +38,7 @@ use crate::{chart_prelude::*, utils::ETHER};
 ///
 /// Consumers: [`FevmFeeTipsStatement`] (both migration branches) and
 /// `FilecoinChainFees24hStatement` (the 24h counter's `tips` CTE). The term
-/// exists exactly once so the two can never drift apart (decision record
-/// `.ai/pr-review/1722/comments/decisions/20260812-1725/tips-cte-fevm-duplication.md`).
+/// exists exactly once so the two can never drift apart.
 pub fn fevm_tip_term(transactions_alias: &str) -> String {
     format!(
         "CASE

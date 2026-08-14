@@ -16,8 +16,7 @@
 //!   series of consensus blocks inside and around the 24-hour counter's
 //!   default test window (`2023-02-28T11:50` .. `2023-03-01T12:00`,
 //!   [`counter_window_fixture`]) — the counter is the first consumer of the
-//!   per-block table in the service (decision record
-//!   `test-fixture-for-address-coin-balances.md`).
+//!   per-block table in the service.
 //!
 //! The layer is applied as an *additional* fill step so the data seen by
 //! every existing test stays byte-for-byte unchanged; only tests that opt
@@ -109,8 +108,7 @@ pub fn mixed_day_complete_tips_fil() -> f64 {
 /// the window, so in-window blocks alone cannot fix the start anchor.
 /// Without this block the anchor would stay on block 101
 /// (`2023-02-14T12:00`, [`MIXED_DAY_HAZARD_BLOCK`]) and the burn would span
-/// 14 days instead of ~24 hours (decision record
-/// `20260811-1040/finding-03`).
+/// 14 days instead of ~24 hours.
 const COUNTER_START_ANCHOR_BLOCK: i64 = 200;
 /// First of two consecutive, closely-spaced blocks (five minutes apart) —
 /// the "dense" density of fixture property 3.
@@ -123,8 +121,7 @@ const COUNTER_DENSE_BLOCK_2: i64 = 202;
 const COUNTER_SPARSE_NULL_BLOCK_1: i64 = 203;
 /// Carries most of the window's burn delta (fixture property 4); its value
 /// is also the last per-block reading of `2023-02-28`, so it must equal the
-/// day's `address_coin_balances_daily` row (decision record
-/// `20260811-1040/finding-03`).
+/// day's `address_coin_balances_daily` row.
 const COUNTER_DOMINANT_BLOCK: i64 = 204;
 /// Second `value IS NULL` row, on `2023-03-01`.
 const COUNTER_SPARSE_NULL_BLOCK_2: i64 = 205;
@@ -141,7 +138,7 @@ const COUNTER_END_ANCHOR_BLOCK: i64 = 206;
 /// last *in-window* row of `2023-03-01` ([`COUNTER_END_ANCHOR_BLOCK`]) to be
 /// strictly smaller. This block exists **to be excluded**: the counter's
 /// half-open `[T-24h, T)` window must drop it from both the burn anchor and
-/// the tips sum (decision record `20260811-1435/finding-01`).
+/// the tips sum.
 const COUNTER_WINDOW_EDGE_BLOCK: i64 = 207;
 
 /// Gas price of the counter-window fixture's priced transactions. Strictly
@@ -166,8 +163,7 @@ pub const COUNTER_DEGENERATE_WINDOW_END: &str = "2023-03-03T00:00:00";
 /// registration step, and it is the same constant the scenario's test reads
 /// its update time from, so the list and the tests cannot drift:
 /// `block_numbers_follow_time_at_counter_edges` derives *both* edges of
-/// every window from this array (decision record
-/// `.ai/pr-review/1722/comments/decisions/20260812-1725/bound-edges-manual-registry.md`).
+/// every window from this array.
 pub const COUNTER_WINDOW_ENDS: [&str; 3] = [
     COUNTER_DEFAULT_WINDOW_END,
     COUNTER_NO_ROWS_WINDOW_END,
@@ -175,9 +171,8 @@ pub const COUNTER_WINDOW_ENDS: [&str; 3] = [
 ];
 
 /// The counter-window fixture: `(block number, block timestamp, f099
-/// balance in FIL, carries a priced transaction)`. Reproduces the six
-/// measured properties of decision record
-/// `test-fixture-for-address-coin-balances.md` §7:
+/// balance in FIL, carries a priced transaction)`. Reproduces six measured
+/// properties of the counter's default window:
 ///
 /// 1. balance rows on blocks inside the counter's default window;
 /// 2. anchors ([`COUNTER_START_ANCHOR_BLOCK`], [`COUNTER_END_ANCHOR_BLOCK`])
@@ -356,13 +351,10 @@ fn mixed_day_blocks_and_transactions() -> (Vec<blocks::ActiveModel>, Vec<transac
 ///   side is absent *by construction*. `2022-11-09` is burn-only too, but
 ///   it is the first day, where `Delta` has no prior row and the whole
 ///   starting balance is the value — a different arithmetic path. Keep
-///   this day block-free, or the combination stops being pinned (decision
-///   record
-///   `.ai/pr-review/1722/comments/decisions/20260813-1537/mid-series-burn-only-coverage.md`);
+///   this day block-free, or the combination stops being pinned;
 /// - `2023-02-28` is [`COUNTER_DOMINANT_BLOCK`]'s day: the value is that
 ///   block's per-block reading, the last one of the day — required to
-///   agree with [`counter_window_fixture`] (decision record
-///   `20260811-1040/finding-03`);
+///   agree with [`counter_window_fixture`];
 /// - `2023-03-01` has a row and is no longer a burn-only day: its
 ///   *original* only block (12) still keeps `base_fee_per_gas = NULL`
 ///   (see the hazard rule below), but [`counter_window_fixture`] added
@@ -515,13 +507,11 @@ mod tests {
 
     /// Timestamps at which a counter test resolves an anchor bound,
     /// **derived** from [`COUNTER_WINDOW_ENDS`]: the counter's window is the
-    /// half-open `[T-24h, T)` (decision record
-    /// `20260811-1435/finding-01-half-open-window-precision.md`), so every
-    /// window contributes its upper edge and its lower edge 24 hours
-    /// earlier. Nothing here is hand-listed, so a new scenario is covered
-    /// the moment its window end joins that array. The static
-    /// [`WALL_CLOCK_BOUND_SENTINEL`] is appended as the one entry of a
-    /// different kind.
+    /// half-open `[T-24h, T)`, so every window contributes its upper edge
+    /// and its lower edge 24 hours earlier. Nothing here is hand-listed, so
+    /// a new scenario is covered the moment its window end joins that
+    /// array. The static [`WALL_CLOCK_BOUND_SENTINEL`] is appended as the
+    /// one entry of a different kind.
     ///
     /// Edges later than the fixture's last consensus block form a single
     /// equivalence class already covered by the sentinel — the degenerate
@@ -560,9 +550,8 @@ mod tests {
         assert!(!unique_days.contains(&no_data_day));
 
         // the per-block series and the daily series are two views of one
-        // monotonic balance (decision record
-        // `test-fixture-for-address-coin-balances.md` §3.5): the daily
-        // value of a day must equal the last per-block value of that day.
+        // monotonic balance: the daily value of a day must equal the last
+        // per-block value of that day.
         let daily: HashMap<NaiveDate, i128> = balances.into_iter().collect();
 
         // The day-by-day agreement check below relies on
@@ -673,9 +662,7 @@ mod tests {
     /// reference, which exists by hand in this one place and nowhere else.
     /// A violation means the fixture's block numbers and timestamps
     /// disagree at that edge, so the anchors the counter would pick
-    /// describe a chain that cannot exist (decision records
-    /// `20260811-1040/finding-05`, `20260811-1040/finding-06`,
-    /// `20260812-1725/detached-bound-sql-copy`).
+    /// describe a chain that cannot exist.
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn block_numbers_follow_time_at_counter_edges() {

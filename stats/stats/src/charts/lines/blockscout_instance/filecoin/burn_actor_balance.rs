@@ -162,8 +162,7 @@ mod tests {
                 ("2023-01-01", "30020000"),
                 ("2023-02-01", "30035000"),
                 // last per-block value of the day, forced by the 24-hour
-                // counter's fixture blocks (decision record
-                // `20260811-1040/finding-03`)
+                // counter's fixture blocks
                 ("2023-02-28", "30047000"),
                 ("2023-03-01", "30050000"),
             ],

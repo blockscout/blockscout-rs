@@ -7,8 +7,7 @@
 //! ## Two different window boundaries, on purpose
 //!
 //! The two summands do **not** share the same interval boundary, and this is
-//! deliberate, not an oversight (decision record
-//! `pre-plan-handoff/burn-tips-window-skew.md`):
+//! deliberate, not an oversight:
 //!
 //! - the **burn** part is the balance growth of the f099 burn actor between
 //!   two *anchor blocks* — the last per-block `address_coin_balances` row at
@@ -19,7 +18,7 @@
 //!   chart's statement.
 //!
 //! An anchor is therefore always a little older than its edge. On Filecoin
-//! mainnet (handoff §4) the resulting skew is minutes-scale, two-sided (each
+//! mainnet the resulting skew is minutes-scale, two-sided (each
 //! anchor lags independently, so the errors tend to cancel), and
 //! self-correcting: the counter recomputes over a fresh window every hour,
 //! so minutes that fall outside one window's anchors fall inside the next
@@ -32,9 +31,7 @@
 //! Never exposed under its own id (its `charts.json` entry stays
 //! `"enabled": false`, mirroring `fevm_fee_tips.rs`'s status): it is served
 //! under the existing public id `txns_fee_24h` through the `implementation`
-//! remap, on instances with `STATS__ENABLE_ALL_FILECOIN=true` (Phase 3/4 of
-//! this plan; decision record
-//! `pre-plan-handoff/public-id-remap-vs-own-entry.md`).
+//! remap, on instances with `STATS__ENABLE_ALL_FILECOIN=true`.
 //!
 //! ## The half-open window `[T-24h, T)`
 //!
@@ -47,9 +44,8 @@
 //! `T+1ns` back down to `T` on the wire. So the effective window is
 //! `[T-24h, T)`. A block dated exactly `T` must therefore be excluded from
 //! both the burn anchor and the tips sum — the fixture's
-//! `COUNTER_WINDOW_EDGE_BLOCK` (Phase 1) exists to prove exactly that (see
-//! the default-window DB test below and decision record
-//! `comments/decisions/20260811-1435/finding-01-half-open-window-precision.md`).
+//! `COUNTER_WINDOW_EDGE_BLOCK` exists to prove exactly that (see the
+//! default-window DB test below).
 
 use std::{collections::HashSet, ops::Range};
 
@@ -80,9 +76,7 @@ impl_db_choice!(FilecoinChainFees24hStatement, UsePrimaryDB);
 /// epochs; measured with `EXPLAIN (ANALYZE, BUFFERS)` on production
 /// Filecoin databases at 1.3-3.4 ms and 9.5-14% of this query's buffer
 /// traffic), while `blocks_timestamp_index` resolves the same row in O(1)
-/// pages. Decision records
-/// `.ai/pr-review/1722/comments/decisions/20260812-1725/bound-cte-max-number-antipattern.md`
-/// and `detached-bound-sql-copy.md` (same directory).
+/// pages.
 pub(crate) fn bound_subquery_sql(edge_placeholder: &str) -> String {
     format!(
         "SELECT number FROM blocks \
@@ -152,9 +146,7 @@ impl StatementFromRange for FilecoinChainFees24hStatement {
         );
         // $1 = wei per FIL, $2 = f099 address, $3 = window start (inclusive,
         // `>=`), $4 = window end (exclusive, `<`). Start before end is the
-        // service-wide convention (`utils::produce_filter_and_values`); see
-        // decision record
-        // `comments/decisions/20260812-1725/range-filter-arg-order.md`.
+        // service-wide convention (`utils::produce_filter_and_values`).
         let args = vec![
             ETHER.into(),
             BURN_ACTOR_HASH_HEX.into(),
@@ -299,12 +291,11 @@ pub const REASON_NEGATIVE_BURN: &str = "negative_burn";
 /// anchors' timestamps may deviate from the nominal 24 hours before
 /// [`CombineBurnAndTips`] logs [`REASON_ANCHOR_SPAN_SKEW`].
 ///
-/// Calibrated from Filecoin **mainnet** anchor lags (handoff §4: 4 minutes
-/// median, 16 minutes p90, 47 minutes maximum, sampled over 26.3 hours on
-/// the f099 burn actor) — deliberately *not* from testnet, whose
-/// one-row-per-block density (decision record
-/// `pre-plan-handoff/test-fixture-for-address-coin-balances.md` §3.2) would
-/// suggest a threshold roughly 40x tighter than mainnet actually needs.
+/// Calibrated from Filecoin **mainnet** anchor lags (4 minutes median, 16
+/// minutes p90, 47 minutes maximum, sampled over 26.3 hours on the f099
+/// burn actor) — deliberately *not* from testnet, whose one-row-per-block
+/// density would suggest a threshold roughly 40x tighter than mainnet
+/// actually needs.
 pub const ANCHOR_SPAN_SKEW_WARNING_THRESHOLD_MINUTES: i64 = 60;
 
 pub struct CombineBurnAndTips;
@@ -480,11 +471,10 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     // Keeps the public id `txns_fee_24h` from waiting on the indexer on
-    // Filecoin alone: under the `implementation` remap (Phase 3/4) the
-    // remapped public entry runs with *this* struct's requirement, not
-    // `txns_fee_24h.rs`'s own — and every other 24-hour counter in the
-    // service already states this same value (decision record
-    // `pre-plan-handoff/indexing-status-requirement-least-restrictive-vs-default.md`).
+    // Filecoin alone: under the `implementation` remap the remapped public
+    // entry runs with *this* struct's requirement, not `txns_fee_24h.rs`'s
+    // own — and every other 24-hour counter in the service already states
+    // this same value.
     fn indexing_status_requirement() -> IndexingStatus {
         IndexingStatus::LEAST_RESTRICTIVE
     }
@@ -723,9 +713,7 @@ mod tests {
     /// and "at most one warning per update" holds by construction
     /// (`Option`). Spans are derived from
     /// [`ANCHOR_SPAN_SKEW_WARNING_THRESHOLD_MINUTES`], never as literals,
-    /// so re-calibrating the constant moves the cases with it (decision
-    /// records `comments/decisions/20260811-1435/finding-03-warning-contracts.md`,
-    /// `comments/decisions/20260812-1725/reason-collector-machinery.md`).
+    /// so re-calibrating the constant moves the cases with it.
     #[test]
     fn warning_kind_matches_anchor_shape() {
         let base_from = dt("2023-01-01T00:00:00");
@@ -842,9 +830,7 @@ mod tests {
         //
         // Run through the migration-variants runner so the tips filter's
         // strict `<` at the window's upper edge is proven in both
-        // hand-written schema forms (model: `update_fevm_fee_tips`;
-        // decision record
-        // `comments/decisions/20260811-1435/finding-01-half-open-window-precision.md`).
+        // hand-written schema forms (model: `update_fevm_fee_tips`).
         //
         // The update time is passed explicitly even though it equals the
         // harness default (`max_time`): the window-end constant is what the
@@ -906,11 +892,9 @@ mod tests {
     }
 
     /// Pins the *chosen anchors*, not only the final value: a sum-only test
-    /// can pass on two compensating errors (decision record
-    /// `pre-plan-handoff/test-fixture-for-address-coin-balances.md` §8).
-    /// Queries [`PullOne24hCached`] directly, independently of
-    /// [`CombineBurnAndTips`], against a database built the same way
-    /// [`simple_test_counter_filecoin`] builds one.
+    /// can pass on two compensating errors. Queries [`PullOne24hCached`]
+    /// directly, independently of [`CombineBurnAndTips`], against a database
+    /// built the same way [`simple_test_counter_filecoin`] builds one.
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn default_window_anchors_are_pinned() {

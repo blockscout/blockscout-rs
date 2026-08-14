@@ -275,8 +275,7 @@ pub fn handle_disable_internal_transactions(
 /// unique across counters and line charts *among enabled entries* only —
 /// `RuntimeSetup::build_charts_info` drops disabled entries before its
 /// collision check — so for a duplicate id whose other side is disabled the
-/// `lines` probe below wins (decision record
-/// `.ai/pr-review/1722/comments/decisions/20260813-1537/disabled-duplicate-shadowing.md`).
+/// `lines` probe below wins.
 fn find_chart_settings_mut<'a>(
     charts: &'a mut config::charts::Config<AllChartSettings>,
     id: &str,
@@ -789,8 +788,7 @@ mod tests {
     /// holds it**. This is the assertion that fails on the classic
     /// copy-paste mistake the helper exists to prevent — a new remap block
     /// hard-coding the wrong map (lines vs counters), which at HEAD before
-    /// the helper would silently set nothing (decision record
-    /// `.ai/pr-review/1722/comments/decisions/20260812-1725/settings-remap-copy-paste.md`).
+    /// the helper would silently set nothing.
     #[test]
     fn set_default_implementation_finds_entry_in_either_section() {
         let mut charts = filecoin_charts_config(config::types::AllChartSettings::default());

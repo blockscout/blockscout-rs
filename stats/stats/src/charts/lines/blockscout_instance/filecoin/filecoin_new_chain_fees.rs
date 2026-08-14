@@ -230,7 +230,7 @@ mod tests {
     //   24-hour counter's fixture blocks split the old `2023-03-01`
     //   burn-only value (`30,050,000 - 30,035,000 = 15,000` FIL) across the
     //   two days (`12,000` + `3,000`) and add one priced transaction to
-    //   each (decision record `20260811-1040/finding-03`).
+    //   each.
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_filecoin_new_chain_fees() {
@@ -247,7 +247,7 @@ mod tests {
                 // split: the last digit differs from the old
                 // `10000.000021492593` rendering because f64 addition against
                 // a smaller burn term rounds differently (recomputed from a
-                // real DB run, per the decision record)
+                // real DB run)
                 ("2023-01-01", "8000.000021492592"),
                 ("2023-02-01", "15000.001051166666"),
                 ("2023-02-14", "0.0001"),
