@@ -1,6 +1,6 @@
 # ENVs — `config/full-mainnet`
 
-AMB/Omnibridge between Ethereum and Gnosis, plus Avalanche ICM/ICTT across C-Chain, NUMINE and Henesys. The set the `just run` recipe uses.
+AMB/Omnibridge between Ethereum and Gnosis, plus Avalanche ICM/ICTT on C-Chain. The set the `just run` recipe uses.
 
 Grammar, merge semantics, field reference and traps: [`config/ENVs.md`](../ENVs.md). Here — only this set's variables, with their actual values, in two interchangeable forms per entity: one JSON variable, or one variable per field.
 
@@ -11,13 +11,20 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 | `1` | Ethereum | `gateway`, `drpc`, `1rpc` |
 | `100` | Gnosis | `gateway`, `gnosis_official` |
 | `43114` | Avalanche C-Chain | `avalanche` |
-| `8021` | NUMINE Mainnet | `glacier` |
-| `68414` | Henesys | `msu` |
 
 | Bridge | Name | `type` / `indexer_type` | Contracts |
 | --- | --- | --- | --- |
 | `1` | AMB/Omnibridge | `amb` / `amb` | 4 |
-| `2` | Avalanche ICTT | `avalanche_native` / `icm_ictt` | 3 |
+| `2` | Avalanche ICTT | `avalanche_native` / `icm_ictt` | 1 |
+
+The Avalanche side ships with C-Chain only, deliberately: bridge `2` has
+`process_unknown_chains: true`, so subnets are indexed through their C-Chain
+counterpart even when unconfigured, and each subnet is then added per deployment
+through the environment — see [Optional subnets](#optional-subnets-added-per-deployment).
+An instance can therefore drop a subnet by removing its variables, without a config
+file changing under it. The subnets that were previously here live in
+[`config/avalanche`](../avalanche/ENVs.md), which is the set that indexes them from a
+file.
 
 ## Config files
 
@@ -98,69 +105,12 @@ INTERCHAIN_INDEXER_CHAINS__43114__EXPLORER__CUSTOM_TOKEN_ROUTE='/token/{hash}'
 INTERCHAIN_INDEXER_CHAINS__43114__RPCS__AVALANCHE__URL=https://api.avax.network/ext/bc/C/rpc
 ```
 
-### Chain `8021` — NUMINE Mainnet
-
-One variable:
-
-```bash
-INTERCHAIN_INDEXER_CHAINS__8021='{"name":"NUMINE Mainnet","icon":"https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png","explorer":{"url":"https://subnets.avax.network/numi"},"rpcs":[{"glacier":{"url":"https://glacier-api.avax.network/v1/ext/bc/8021/rpc","max_rps":1,"multicall_batching_us":0}}]}'
-```
-
-Field by field:
-
-```bash
-INTERCHAIN_INDEXER_CHAINS__8021__NAME='NUMINE Mainnet'
-INTERCHAIN_INDEXER_CHAINS__8021__ICON=https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png
-INTERCHAIN_INDEXER_CHAINS__8021__EXPLORER__URL=https://subnets.avax.network/numi
-# rpc provider "glacier" (optionally credentialed — see "RPC provider secrets")
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__URL=https://glacier-api.avax.network/v1/ext/bc/8021/rpc
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MAX_RPS=1
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MULTICALL_BATCHING_US=0
-```
-
-### Chain `68414` — Henesys
-
-One variable:
-
-```bash
-INTERCHAIN_INDEXER_CHAINS__68414='{"name":"Henesys","icon":"https://cdn.routescan.io/cdn/chains/henesys/logo.png","explorer":{"url":"https://68414.snowtrace.io/"},"rpcs":[{"msu":{"url":"https://henesys-rpc.msu.io"}}]}'
-```
-
-Field by field:
-
-```bash
-INTERCHAIN_INDEXER_CHAINS__68414__NAME=Henesys
-INTERCHAIN_INDEXER_CHAINS__68414__ICON=https://cdn.routescan.io/cdn/chains/henesys/logo.png
-INTERCHAIN_INDEXER_CHAINS__68414__EXPLORER__URL=https://68414.snowtrace.io/
-# rpc provider "msu"
-INTERCHAIN_INDEXER_CHAINS__68414__RPCS__MSU__URL=https://henesys-rpc.msu.io
-```
-
 ## RPC provider secrets
 
-No provider in `chains.json` declares an `api_key`, so **this set needs no secret to
-start**. A credential is opt-in, declared entirely through the environment — which is
-also what keeps a deployment that has no key from being blocked by a config file it
-does not own.
-
-Glacier accepts an `x-glacier-api-key` header and rate-limits harder without one. To
-use a key, declare the credential's shape *and* supply its value — all three variables
-together, since a declared `api_key` whose value is unset, empty or whitespace-only
-fails startup by design:
-
-```bash
-# chain 8021 (NUMINE Mainnet), provider glacier
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION=header
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__PARAM_NAME=x-glacier-api-key
-INTERCHAIN_INDEXER_RPC_API_KEY__8021__GLACIER=<secret>
-```
-
-Raising `MAX_RPS` above the file's `1` usually goes with the key.
-
-Locally, all three go in `.env` (see [`.env.example`](../../.env.example)) and the
-service is started with `just run-dev`. Nothing loads `.env` implicitly — deliberately,
-since a globally loaded `.env` would also reach `just test`, whose fixture declares
-chains `1` and `100` only and fails on a partial chain `8021` appended to it.
+No provider in `chains.json` declares an `api_key`, and no chain in this set needs one,
+so **the set starts with no secret at all**. The one credential that comes up here
+belongs to an optional subnet — see
+[Optional subnets](#optional-subnets-added-per-deployment).
 
 ## Bridges
 
@@ -242,10 +192,10 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 
 ### Bridge `2` — Avalanche ICTT
 
-One variable — all 3 contracts included, since `contracts` is replaced wholesale:
+One variable — the single contract included, since `contracts` is replaced wholesale:
 
 ```bash
-INTERCHAIN_INDEXER_BRIDGES__2='{"name":"Avalanche ICTT","type":"avalanche_native","indexer_type":"icm_ictt","enabled":true,"api_url":null,"ui_url":null,"docs_url":null,"process_unknown_chains":true,"home_chain_id":null,"contracts":[{"chain_id":43114,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":42526120},{"chain_id":8021,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":4},{"chain_id":68414,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":4}]}'
+INTERCHAIN_INDEXER_BRIDGES__2='{"name":"Avalanche ICTT","type":"avalanche_native","indexer_type":"icm_ictt","enabled":true,"api_url":null,"ui_url":null,"docs_url":null,"process_unknown_chains":true,"home_chain_id":null,"contracts":[{"chain_id":43114,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":42526120}]}'
 ```
 
 Field by field:
@@ -269,12 +219,88 @@ INTERCHAIN_INDEXER_BRIDGES__2__HOME_CHAIN_ID=null
 INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__43114__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=42526120
 ```
 
+## Optional subnets, added per deployment
+
+Neither subnet below is in `chains.json` or `bridges.json`. Each deployment adds the
+ones it wants through the environment, and drops one by removing its variables — no
+config file changes under a running instance, which is the point of keeping them out.
+
+Adding a subnet takes **two** blocks: the chain, so the indexer has an RPC and explorer
+for it, and a bridge `2` contract entry, so its own ICTT contract is scanned. Contract
+entries merge per-entry (`…__CONTRACTS__<CHAIN>__<ADDRESS>__<VERSION>__…`), so adding
+one leaves the C-Chain entry alone — unlike `…__CONTRACTS='[…]'`, which replaces the
+array wholesale.
+
+Leaving a subnet out does not hide its messages: bridge `2` sets
+`process_unknown_chains: true`, so ICTT traffic to and from an unconfigured chain is
+still indexed from the C-Chain side. What the subnet's own entry adds is scanning that
+chain directly.
+
+Both subnets are indexed from a file — no environment needed — by
+[`config/avalanche`](../avalanche/ENVs.md).
+
+### Chain `8021` — NUMINE Mainnet
+
+One variable:
+
 ```bash
-# chain 8021, version 1
+INTERCHAIN_INDEXER_CHAINS__8021='{"name":"NUMINE Mainnet","icon":"https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png","explorer":{"url":"https://subnets.avax.network/numi"},"rpcs":[{"glacier":{"url":"https://glacier-api.avax.network/v1/ext/bc/8021/rpc","max_rps":1,"multicall_batching_us":0}}]}'
+```
+
+Field by field:
+
+```bash
+INTERCHAIN_INDEXER_CHAINS__8021__NAME='NUMINE Mainnet'
+INTERCHAIN_INDEXER_CHAINS__8021__ICON=https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png
+INTERCHAIN_INDEXER_CHAINS__8021__EXPLORER__URL=https://subnets.avax.network/numi
+# rpc provider "glacier"
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__URL=https://glacier-api.avax.network/v1/ext/bc/8021/rpc
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MAX_RPS=1
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MULTICALL_BATCHING_US=0
+```
+
+Its bridge `2` contract:
+
+```bash
 INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__8021__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=4
 ```
 
+Glacier accepts an `x-glacier-api-key` header and rate-limits harder without one. The
+credential is optional; supply the shape *and* the value together, since a declared
+`api_key` whose value is unset, empty or whitespace-only fails startup by design:
+
 ```bash
-# chain 68414, version 1
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION=header
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__PARAM_NAME=x-glacier-api-key
+INTERCHAIN_INDEXER_RPC_API_KEY__8021__GLACIER=<secret>
+```
+
+Raising `MAX_RPS` above `1` usually goes with the key. Locally all of this goes in
+`.env` (see [`.env.example`](../../.env.example)) and the service is started with
+`just run-dev`. Nothing loads `.env` implicitly — deliberately, since a globally loaded
+`.env` would also reach `just test`, whose fixture declares chains `1` and `100` only
+and fails on a partial chain `8021` appended to it.
+
+### Chain `68414` — Henesys
+
+One variable:
+
+```bash
+INTERCHAIN_INDEXER_CHAINS__68414='{"name":"Henesys","icon":"https://cdn.routescan.io/cdn/chains/henesys/logo.png","explorer":{"url":"https://68414.snowtrace.io/"},"rpcs":[{"msu":{"url":"https://henesys-rpc.msu.io"}}]}'
+```
+
+Field by field:
+
+```bash
+INTERCHAIN_INDEXER_CHAINS__68414__NAME=Henesys
+INTERCHAIN_INDEXER_CHAINS__68414__ICON=https://cdn.routescan.io/cdn/chains/henesys/logo.png
+INTERCHAIN_INDEXER_CHAINS__68414__EXPLORER__URL=https://68414.snowtrace.io/
+# rpc provider "msu"
+INTERCHAIN_INDEXER_CHAINS__68414__RPCS__MSU__URL=https://henesys-rpc.msu.io
+```
+
+Its bridge `2` contract:
+
+```bash
 INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__68414__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=4
 ```

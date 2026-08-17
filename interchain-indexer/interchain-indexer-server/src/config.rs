@@ -2036,13 +2036,13 @@ mod tests {
     /// The counterpart: a provider that carries no `api_key` in the file can be
     /// credentialed entirely from the environment — the `api_key` object is
     /// created by the env merge on demand, and its value comes from the derived
-    /// secret variable. This is the arrangement `config/full-mainnet` documents
-    /// for Glacier, pinned against the real file so a config edit cannot break
-    /// it silently.
+    /// secret variable. This is the arrangement `config/avalanche` documents for
+    /// Glacier, pinned against the real file so a config edit cannot break it
+    /// silently.
     #[test]
     fn test_env_declared_api_key_credentials_a_provider_from_a_committed_config() {
         let chains_path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../config/full-mainnet/chains.json");
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../config/avalanche/chains.json");
 
         let bare = load_chains_impl(&chains_path, fixture_vars(&[])).unwrap();
         let glacier = |chains: &[ChainConfig]| {

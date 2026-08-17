@@ -1,6 +1,6 @@
 # ENVs — `config/avalanche`
 
-Avalanche ICM/ICTT only: C-Chain and the NUMINE subnet, NUMINE as the bridge's home chain.
+Avalanche ICM/ICTT only: C-Chain plus the NUMINE and Henesys subnets, NUMINE as the bridge's home chain.
 
 Grammar, merge semantics, field reference and traps: [`config/ENVs.md`](../ENVs.md). Here — only this set's variables, with their actual values, in two interchangeable forms per entity: one JSON variable, or one variable per field.
 
@@ -9,11 +9,12 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 | Chain | Name | RPC providers |
 | --- | --- | --- |
 | `43114` | Avalanche C-Chain | `avalanche` |
-| `8021` | NUMINE Mainnet | `avalanche` |
+| `8021` | NUMINE Mainnet | `glacier` |
+| `68414` | Henesys | `msu` |
 
 | Bridge | Name | `type` / `indexer_type` | Contracts |
 | --- | --- | --- | --- |
-| `2` | Avalanche ICTT | `avalanche_native` / `icm_ictt` | 2 |
+| `2` | Avalanche ICTT | `avalanche_native` / `icm_ictt` | 3 |
 
 ## Config files
 
@@ -50,7 +51,7 @@ INTERCHAIN_INDEXER_CHAINS__43114__RPCS__AVALANCHE__URL=https://api.avax.network/
 One variable:
 
 ```bash
-INTERCHAIN_INDEXER_CHAINS__8021='{"name":"NUMINE Mainnet","icon":"https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png","explorer":{"url":"https://subnets.avax.network/numi"},"rpcs":[{"avalanche":{"url":"https://subnets.avax.network/numi/mainnet/rpc","multicall_batching_us":0}}]}'
+INTERCHAIN_INDEXER_CHAINS__8021='{"name":"NUMINE Mainnet","icon":"https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png","explorer":{"url":"https://subnets.avax.network/numi"},"rpcs":[{"glacier":{"url":"https://glacier-api.avax.network/v1/ext/bc/8021/rpc","max_rps":1,"multicall_batching_us":0}}]}'
 ```
 
 Field by field:
@@ -59,19 +60,58 @@ Field by field:
 INTERCHAIN_INDEXER_CHAINS__8021__NAME='NUMINE Mainnet'
 INTERCHAIN_INDEXER_CHAINS__8021__ICON=https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png
 INTERCHAIN_INDEXER_CHAINS__8021__EXPLORER__URL=https://subnets.avax.network/numi
-# rpc provider "avalanche"
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__AVALANCHE__URL=https://subnets.avax.network/numi/mainnet/rpc
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__AVALANCHE__MULTICALL_BATCHING_US=0
+# rpc provider "glacier" (optionally credentialed — see "RPC provider secrets")
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__URL=https://glacier-api.avax.network/v1/ext/bc/8021/rpc
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MAX_RPS=1
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MULTICALL_BATCHING_US=0
 ```
+
+### Chain `68414` — Henesys
+
+One variable:
+
+```bash
+INTERCHAIN_INDEXER_CHAINS__68414='{"name":"Henesys","icon":"https://cdn.routescan.io/cdn/chains/henesys/logo.png","explorer":{"url":"https://68414.snowtrace.io/"},"rpcs":[{"msu":{"url":"https://henesys-rpc.msu.io"}}]}'
+```
+
+Field by field:
+
+```bash
+INTERCHAIN_INDEXER_CHAINS__68414__NAME=Henesys
+INTERCHAIN_INDEXER_CHAINS__68414__ICON=https://cdn.routescan.io/cdn/chains/henesys/logo.png
+INTERCHAIN_INDEXER_CHAINS__68414__EXPLORER__URL=https://68414.snowtrace.io/
+# rpc provider "msu"
+INTERCHAIN_INDEXER_CHAINS__68414__RPCS__MSU__URL=https://henesys-rpc.msu.io
+```
+
+## RPC provider secrets
+
+No provider in `chains.json` declares an `api_key`, so **this set needs no secret to
+start**. A credential is opt-in, declared entirely through the environment.
+
+Glacier (chain `8021`) accepts an `x-glacier-api-key` header and rate-limits harder
+without one. To use a key, declare the credential's shape *and* supply its value — all
+three variables together, since a declared `api_key` whose value is unset, empty or
+whitespace-only fails startup by design:
+
+```bash
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION=header
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__PARAM_NAME=x-glacier-api-key
+INTERCHAIN_INDEXER_RPC_API_KEY__8021__GLACIER=<secret>
+```
+
+Raising `MAX_RPS` above the file's `1` usually goes with the key. Locally all three go
+in `.env` (see [`.env.example`](../../.env.example)) and the service is started with
+`just run-dev`.
 
 ## Bridges
 
 ### Bridge `2` — Avalanche ICTT
 
-One variable — all 2 contracts included, since `contracts` is replaced wholesale:
+One variable — all 3 contracts included, since `contracts` is replaced wholesale:
 
 ```bash
-INTERCHAIN_INDEXER_BRIDGES__2='{"name":"Avalanche ICTT","type":"avalanche_native","indexer_type":"icm_ictt","enabled":true,"api_url":null,"ui_url":null,"docs_url":null,"process_unknown_chains":false,"home_chain_id":8021,"contracts":[{"chain_id":43114,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":42526120},{"chain_id":8021,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":4}]}'
+INTERCHAIN_INDEXER_BRIDGES__2='{"name":"Avalanche ICTT","type":"avalanche_native","indexer_type":"icm_ictt","enabled":true,"api_url":null,"ui_url":null,"docs_url":null,"process_unknown_chains":false,"home_chain_id":8021,"contracts":[{"chain_id":43114,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":42526120},{"chain_id":8021,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":4},{"chain_id":68414,"address":"0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf","version":1,"started_at_block":4}]}'
 ```
 
 Field by field:
@@ -100,11 +140,17 @@ INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__43114__0x253b2784c75e510dD0fF1da844684
 INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__8021__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=4
 ```
 
+```bash
+# chain 68414, version 1
+INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__68414__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=4
+```
+
 ## Variant: `bridges_cut.json`
 
-Same bridge with higher catch-up floors (shorter backfill for local runs) — two variables on top of the set above:
+Same bridge with higher catch-up floors (shorter backfill for local runs) — three variables on top of the set above.
 
 ```bash
-INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__43114__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=7000000
-INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__8021__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=210955
+INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__43114__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=88000000
+INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__8021__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=899998
+INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__68414__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=16176032
 ```

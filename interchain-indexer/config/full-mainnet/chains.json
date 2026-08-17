@@ -62,37 +62,5 @@
                 }
             }
         ]
-    },
-    {
-        "chain_id": 8021,
-        "name": "NUMINE Mainnet",
-        "icon": "https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png",
-        "explorer": {
-            "url": "https://subnets.avax.network/numi"
-        },
-        "rpcs": [
-            {
-                "glacier": {
-                    "url": "https://glacier-api.avax.network/v1/ext/bc/8021/rpc",
-                    "max_rps": 1,
-                    "multicall_batching_us": 0
-                }
-            }
-        ]
-    },
-    {
-        "chain_id": 68414,
-        "name": "Henesys",
-        "icon": "https://cdn.routescan.io/cdn/chains/henesys/logo.png",
-        "explorer": {
-            "url": "https://68414.snowtrace.io/"
-        },
-        "rpcs": [
-            {
-                "msu": {
-                    "url": "https://henesys-rpc.msu.io"
-                }
-            }
-        ]
     }
 ]

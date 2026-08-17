@@ -22,6 +22,12 @@
                 "address": "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf",
                 "version": 1,
                 "started_at_block": 4
+            },
+            {
+                "chain_id": 68414,
+                "address": "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf",
+                "version": 1,
+                "started_at_block": 4
             }
         ]
     }
