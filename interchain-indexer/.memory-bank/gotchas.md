@@ -1415,3 +1415,45 @@ production at it. Do not "fix" this by widening `redact_urls`: dropping arbitrar
 tokens from error text would destroy the diagnostics the ledger exists for.
 
 ---
+
+## `.env` Is Loaded By `just run-dev` Only — Never Add `set dotenv-load`
+
+`justfile` deliberately does **not** set `dotenv-load`. The one recipe that runs
+the service with `.env` is the pre-existing `run-dev`:
+
+```just
+run-dev:
+    dotenv -f .env run just run
+```
+
+`set dotenv-load := true` is a **global** setting — just has no per-recipe scope
+for it, and neither `dotenv-path` nor `dotenv-filename` changes that. Globally
+loaded, `.env` also reaches `just test` and `just test-with-db`, and that breaks
+them: the server tests boot the real `run()` against
+`interchain-indexer-server/tests/fixtures/chains-offline.json` (chains `1` and
+`100` only), and `load_chains_from_file` applies process-env overrides to
+*whatever* file it was given. An override addressing any other chain does not
+"not match" — per the env-merge rules it **appends a new entry** with the id
+injected, so an `INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION`
+line in `.env` creates a chain `8021` carrying an `api_key` and nothing else,
+failing the typed parse with `missing field name` in every server test in the
+binary, from a file none of them mention.
+
+Consequences worth keeping straight:
+
+- Because `.env` is opt-in per invocation, it can hold both halves of a
+  credential — the `…__RPCS__<PROVIDER>__API_KEY__*` shape and its
+  `INTERCHAIN_INDEXER_RPC_API_KEY__*` value — which is what keeps `api_key` out of
+  the committed config entirely. `just run` then starts the same service without
+  the key, and `just run-dev` with it.
+- `dotenv` puts the variables in the environment *before* `just` starts, so they
+  also feed just's own `env_var_or_default` — `DB_*`, `RUST_LOG`, `DOCKER_NAME`
+  work from `.env` under `run-dev`. Sourcing inside a recipe would not do that.
+- Adding `set dotenv-load := true` reintroduces the fixture breakage above — and
+  silently, since an override for a chain that *does* exist in the fixture (`1` or
+  `100`) parses fine and merely changes what the "offline" tests talk to.
+- No committed file under `config/` or `docker/` may declare an `api_key` at all:
+  it would make the secret mandatory for every deployment reading that file.
+  `test_no_repo_config_file_declares_an_api_key` enforces this.
+
+---

@@ -1,7 +1,10 @@
-# Secrets (RPC provider API keys) live in `.env`, which is gitignored — see
-# `.env.example`. Loading it here is what keeps them out of this file and out
-# of the shell history, while `just run` still works with no wrapper.
-set dotenv-load := true
+# Secrets and deployment-local overrides live in `.env`, which is gitignored —
+# see `.env.example`. Use `just run-dev` to run with it; `just run` ignores it.
+#
+# Do not add `set dotenv-load := true` here. That setting is global — just has no
+# per-recipe scope for it — so `.env` would also reach `just test`, where an
+# `INTERCHAIN_INDEXER_CHAINS__*` override lands on the offline fixture and fails
+# the typed load (see `.memory-bank/gotchas.md`).
 
 default:
     just --list --unsorted

@@ -103,7 +103,7 @@ INTERCHAIN_INDEXER_CHAINS__43114__RPCS__AVALANCHE__URL=https://api.avax.network/
 One variable:
 
 ```bash
-INTERCHAIN_INDEXER_CHAINS__8021='{"name":"NUMINE Mainnet","icon":"https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png","explorer":{"url":"https://subnets.avax.network/numi"},"rpcs":[{"glacier":{"url":"https://glacier-api.avax.network/v1/ext/bc/8021/rpc","max_rps":1,"multicall_batching_us":0,"api_key":{"location":"header","param_name":"x-glacier-api-key"}}}]}'
+INTERCHAIN_INDEXER_CHAINS__8021='{"name":"NUMINE Mainnet","icon":"https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png","explorer":{"url":"https://subnets.avax.network/numi"},"rpcs":[{"glacier":{"url":"https://glacier-api.avax.network/v1/ext/bc/8021/rpc","max_rps":1,"multicall_batching_us":0}}]}'
 ```
 
 Field by field:
@@ -112,12 +112,10 @@ Field by field:
 INTERCHAIN_INDEXER_CHAINS__8021__NAME='NUMINE Mainnet'
 INTERCHAIN_INDEXER_CHAINS__8021__ICON=https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png
 INTERCHAIN_INDEXER_CHAINS__8021__EXPLORER__URL=https://subnets.avax.network/numi
-# rpc provider "glacier" (secret in INTERCHAIN_INDEXER_RPC_API_KEY__8021__GLACIER)
+# rpc provider "glacier" (optionally credentialed — see "RPC provider secrets")
 INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__URL=https://glacier-api.avax.network/v1/ext/bc/8021/rpc
 INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MAX_RPS=1
 INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MULTICALL_BATCHING_US=0
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION=header
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__PARAM_NAME=x-glacier-api-key
 ```
 
 ### Chain `68414` — Henesys
@@ -140,12 +138,29 @@ INTERCHAIN_INDEXER_CHAINS__68414__RPCS__MSU__URL=https://henesys-rpc.msu.io
 
 ## RPC provider secrets
 
-Required — startup fails if unset, empty or whitespace-only.
+No provider in `chains.json` declares an `api_key`, so **this set needs no secret to
+start**. A credential is opt-in, declared entirely through the environment — which is
+also what keeps a deployment that has no key from being blocked by a config file it
+does not own.
+
+Glacier accepts an `x-glacier-api-key` header and rate-limits harder without one. To
+use a key, declare the credential's shape *and* supply its value — all three variables
+together, since a declared `api_key` whose value is unset, empty or whitespace-only
+fails startup by design:
 
 ```bash
-# chain 8021 (NUMINE Mainnet), provider glacier: header x-glacier-api-key
+# chain 8021 (NUMINE Mainnet), provider glacier
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION=header
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__PARAM_NAME=x-glacier-api-key
 INTERCHAIN_INDEXER_RPC_API_KEY__8021__GLACIER=<secret>
 ```
+
+Raising `MAX_RPS` above the file's `1` usually goes with the key.
+
+Locally, all three go in `.env` (see [`.env.example`](../../.env.example)) and the
+service is started with `just run-dev`. Nothing loads `.env` implicitly — deliberately,
+since a globally loaded `.env` would also reach `just test`, whose fixture declares
+chains `1` and `100` only and fails on a partial chain `8021` appended to it.
 
 ## Bridges
 

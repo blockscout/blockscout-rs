@@ -553,7 +553,7 @@ delta against canonical eligibility, not against stale aggregates.
 ## Dev
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.
-+ Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
++ Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli) — used by `just run-dev` to run with `.env`
 + Execute `just` to see available dev commands
 
 ```bash
@@ -592,6 +592,11 @@ or run with ENVs from .env current
     ```
     just run-dev
     ```
+
+`.env` (see [`.env.example`](.env.example)) is read by `just run-dev` and by nothing
+else — no recipe loads it implicitly. That is why an RPC provider's `api_key` shape
+can live there safely: `set dotenv-load := true` would also hand it to `just test`,
+where a chains override for a chain outside the offline fixture fails the config load.
 
 ## Troubleshooting
 

@@ -1997,6 +1997,102 @@ mod tests {
         }
     }
 
+    /// No committed config file may declare an `api_key`. A declared credential
+    /// makes its secret variable mandatory — startup fails without it — so
+    /// putting one in a shared file blocks every deployment that does not hold
+    /// that key. The credential's shape belongs in the environment next to its
+    /// value (see `config/full-mainnet/ENVs.md`), which is what the next test
+    /// exercises.
+    #[test]
+    fn test_no_repo_config_file_declares_an_api_key() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut files = Vec::new();
+        collect_json_files(&repo_root.join("config"), &mut files);
+        collect_json_files(&repo_root.join("docker/config"), &mut files);
+
+        for path in files {
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            if !name.starts_with("chains") {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path).unwrap();
+            let chains: Vec<ChainConfig> = serde_json::from_str(&content).unwrap();
+            for chain in chains {
+                for provider in chain.rpcs.iter().flatten() {
+                    let (provider_name, rpc_config) = provider;
+                    assert!(
+                        rpc_config.api_key.is_none(),
+                        "{path:?}: chain {} provider \"{provider_name}\" declares an api_key, \
+                         which makes {} mandatory for everyone using this file — declare it \
+                         through the environment instead",
+                        chain.chain_id,
+                        derived_api_key_env_var(chain.chain_id, provider_name),
+                    );
+                }
+            }
+        }
+    }
+
+    /// The counterpart: a provider that carries no `api_key` in the file can be
+    /// credentialed entirely from the environment — the `api_key` object is
+    /// created by the env merge on demand, and its value comes from the derived
+    /// secret variable. This is the arrangement `config/full-mainnet` documents
+    /// for Glacier, pinned against the real file so a config edit cannot break
+    /// it silently.
+    #[test]
+    fn test_env_declared_api_key_credentials_a_provider_from_a_committed_config() {
+        let chains_path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../config/full-mainnet/chains.json");
+
+        let bare = load_chains_impl(&chains_path, fixture_vars(&[])).unwrap();
+        let glacier = |chains: &[ChainConfig]| {
+            chains
+                .iter()
+                .find(|c| c.chain_id == 8021)
+                .expect("chain 8021 must be present")
+                .clone()
+        };
+        assert!(
+            glacier(&bare).rpcs[0]["glacier"].api_key.is_none(),
+            "the file itself must not declare the credential"
+        );
+
+        let keyed = load_chains_impl(
+            &chains_path,
+            fixture_vars(&[
+                (
+                    "INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION",
+                    "header",
+                ),
+                (
+                    "INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__PARAM_NAME",
+                    "x-glacier-api-key",
+                ),
+            ]),
+        )
+        .unwrap();
+        let chain = glacier(&keyed);
+        let api_key = chain.rpcs[0]["glacier"]
+            .api_key
+            .as_ref()
+            .expect("the env override must create the api_key object");
+        assert_eq!(api_key.location, ApiKeyLocation::Header);
+        assert_eq!(api_key.param_name, "x-glacier-api-key");
+
+        let vars = uppercased_vars(&[("INTERCHAIN_INDEXER_RPC_API_KEY__8021__GLACIER", FAKE_KEY)]);
+        let nodes = build_chain_node_configs(&chain, &vars).unwrap();
+        let credential = nodes[0]
+            .credential_header
+            .as_ref()
+            .expect("a header api_key must produce a credential");
+        assert_eq!(credential.name, "x-glacier-api-key");
+        assert_eq!(credential.value.expose(), FAKE_KEY);
+        assert_eq!(
+            nodes[0].http_url.expose(),
+            "https://glacier-api.avax.network/v1/ext/bc/8021/rpc"
+        );
+    }
+
     /// The server test harness boots `run()` against
     /// `tests/fixtures/chains-offline.json` instead of the deployment config,
     /// so that no test starts a live indexer against mainnet. That substitution
