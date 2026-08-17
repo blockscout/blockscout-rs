@@ -1,3 +1,8 @@
+# Secrets (RPC provider API keys) live in `.env`, which is gitignored — see
+# `.env.example`. Loading it here is what keeps them out of this file and out
+# of the shell history, while `just run` still works with no wrapper.
+set dotenv-load := true
+
 default:
     just --list --unsorted
 
@@ -51,7 +56,6 @@ run:
     INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json \
     INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE=500 \
     INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS=5000 \
-    INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN=true \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS=8021 \
     cargo run --bin interchain-indexer-server
