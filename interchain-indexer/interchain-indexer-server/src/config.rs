@@ -6,7 +6,7 @@ use alloy::{
     primitives::{Address, ChainId},
     providers::DynProvider,
 };
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
 };
@@ -728,7 +728,7 @@ async fn create_provider_pools_impl(
                     tracing::warn!(
                         chain_id = chain.chain_id,
                         chain_name = chain.name,
-                        err = ?e,
+                        err = %redact_urls(&format!("{e:#}")),
                         "Failed to create layered provider for chain, skipping"
                     );
                 }
@@ -897,15 +897,77 @@ fn build_rpc_url(
                 .context("api_key.location \"path\" requires a resolved secret")?
                 .expose();
             let placeholder = format!(":{}", api_key.param_name);
-            ensure!(
-                url.contains(&placeholder),
-                "api_key location \"path\" declared with param_name \"{}\" but the url \
-                 contains no \"{placeholder}\" placeholder",
-                api_key.param_name,
-            );
-            Ok(url.replace(&placeholder, key))
+            // The key is spliced into the path, so it has to be encoded as
+            // exactly one segment. An unescaped `/` would silently restructure
+            // the path and an unescaped `?`/`#` would truncate it into a query
+            // or fragment — either way the request goes to a different
+            // endpoint than the operator configured, which surfaces as a
+            // confusing 404 rather than an auth failure.
+            let encoded_key = encode_path_segment(key)?;
+            let Some(substituted) = replace_path_placeholder(url, &placeholder, &encoded_key)
+            else {
+                bail!(
+                    "api_key location \"path\" declared with param_name \"{}\" but the url \
+                     contains no \"{placeholder}\" placeholder",
+                    api_key.param_name,
+                );
+            };
+            Ok(substituted)
         }
     }
+}
+
+/// Percent-encode `value` so it occupies exactly one URL path segment.
+///
+/// Encoding is delegated to the `url` crate's own path-segment set rather than
+/// a hand-maintained `AsciiSet`: characters that would restructure the URL
+/// (`/`, `?`, `#`, `%`, controls) are escaped, while the unreserved and
+/// sub-delimiter characters providers legitimately use in keys are preserved.
+fn encode_path_segment(value: &str) -> Result<String> {
+    const BASE: &str = "http://api-key-encoding.invalid/";
+
+    let mut probe = url::Url::parse(BASE).context("failed to build the api_key encoding url")?;
+    probe
+        .path_segments_mut()
+        .map_err(|()| anyhow!("failed to build the api_key encoding url"))?
+        .clear()
+        .push(value);
+
+    Ok(probe
+        .path()
+        .strip_prefix('/')
+        .unwrap_or(probe.path())
+        .to_string())
+}
+
+/// Substitute every *complete* `placeholder` occurrence in `url` with `value`.
+///
+/// A plain `str::replace` also rewrites longer placeholders that merely start
+/// with this name — `:api` would corrupt a `:api_key` placeholder into
+/// `<key>_key` — so a match only counts when the next character cannot itself
+/// be part of a placeholder name. Returns `None` when no complete placeholder
+/// is present, which is the caller's startup-failure signal.
+fn replace_path_placeholder(url: &str, placeholder: &str, value: &str) -> Option<String> {
+    let mut out = String::with_capacity(url.len());
+    let mut rest = url;
+    let mut replaced = false;
+
+    while let Some(at) = rest.find(placeholder) {
+        let (before, from_match) = rest.split_at(at);
+        let tail = &from_match[placeholder.len()..];
+        let complete = tail
+            .chars()
+            .next()
+            .is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_' && c != '-');
+
+        out.push_str(before);
+        out.push_str(if complete { value } else { placeholder });
+        replaced |= complete;
+        rest = tail;
+    }
+    out.push_str(rest);
+
+    replaced.then_some(out)
 }
 
 #[cfg(test)]
@@ -1431,6 +1493,120 @@ mod tests {
         )
         .unwrap();
         assert_eq!(url, format!("https://drpc.example/{FAKE_KEY}/rpc"));
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_encodes_reserved_characters() {
+        let cfg = api_key(ApiKeyLocation::Path, "api_key", None);
+        // A key carrying the three characters that would restructure the URL:
+        // `/` adds a path segment, `?` starts a query, `#` starts a fragment.
+        let secret = Secret::new("ab/cd?ef#gh".to_string());
+
+        let url = build_rpc_url(
+            "https://drpc.example/:api_key/rpc",
+            Some(&cfg),
+            Some(&secret),
+        )
+        .unwrap();
+
+        assert_eq!(url, "https://drpc.example/ab%2Fcd%3Fef%23gh/rpc");
+
+        // The key must stay one segment, and the path after it must survive.
+        let parsed = url::Url::parse(&url).unwrap();
+        let segments: Vec<_> = parsed.path_segments().unwrap().collect();
+        assert_eq!(segments, vec!["ab%2Fcd%3Fef%23gh", "rpc"]);
+        assert_eq!(parsed.query(), None);
+        assert_eq!(parsed.fragment(), None);
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_preserves_provider_allowed_characters() {
+        let cfg = api_key(ApiKeyLocation::Path, "api_key", None);
+        // Unreserved plus sub-delimiters: real provider keys use these and they
+        // are safe inside a segment, so encoding must leave them alone.
+        let secret = Secret::new("aZ09-_.~!$&'()*+,;=:@".to_string());
+
+        let url = build_rpc_url(
+            "https://drpc.example/:api_key/rpc",
+            Some(&cfg),
+            Some(&secret),
+        )
+        .unwrap();
+        assert_eq!(url, "https://drpc.example/aZ09-_.~!$&'()*+,;=:@/rpc");
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_percent_in_key_is_escaped() {
+        let cfg = api_key(ApiKeyLocation::Path, "api_key", None);
+        // A literal `%` must not be left to read as the start of an escape.
+        let secret = Secret::new("ab%2Fcd".to_string());
+
+        let url = build_rpc_url(
+            "https://drpc.example/:api_key/rpc",
+            Some(&cfg),
+            Some(&secret),
+        )
+        .unwrap();
+        assert_eq!(url, "https://drpc.example/ab%252Fcd/rpc");
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_shorter_name_does_not_match_longer_placeholder() {
+        let cfg = api_key(ApiKeyLocation::Path, "api", None);
+        let secret = Secret::new(FAKE_KEY.to_string());
+
+        // `:api` is a prefix of `:api_key`; a naive `str::replace` would emit
+        // `<key>_key` here and silently send a malformed key.
+        let err = build_rpc_url(
+            "https://drpc.example/:api_key/rpc",
+            Some(&cfg),
+            Some(&secret),
+        )
+        .expect_err("\":api\" must not match the \":api_key\" placeholder");
+        assert!(err.to_string().contains(":api"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_replaces_only_the_complete_placeholder() {
+        let cfg = api_key(ApiKeyLocation::Path, "api", None);
+        let secret = Secret::new(FAKE_KEY.to_string());
+
+        // Both spellings are present: only the standalone `:api` is a match.
+        let url = build_rpc_url(
+            "https://drpc.example/:api_key/:api/rpc",
+            Some(&cfg),
+            Some(&secret),
+        )
+        .unwrap();
+        assert_eq!(url, format!("https://drpc.example/:api_key/{FAKE_KEY}/rpc"));
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_replaces_every_occurrence() {
+        let cfg = api_key(ApiKeyLocation::Path, "api_key", None);
+        let secret = Secret::new(FAKE_KEY.to_string());
+
+        let url = build_rpc_url(
+            "https://drpc.example/:api_key/rpc/:api_key",
+            Some(&cfg),
+            Some(&secret),
+        )
+        .unwrap();
+        assert_eq!(
+            url,
+            format!("https://drpc.example/{FAKE_KEY}/rpc/{FAKE_KEY}")
+        );
+    }
+
+    #[test]
+    fn test_build_rpc_url_path_location_matches_placeholder_at_url_end() {
+        let cfg = api_key(ApiKeyLocation::Path, "api_key", None);
+        let secret = Secret::new(FAKE_KEY.to_string());
+
+        // End-of-string is a valid terminator, not a truncated placeholder.
+        let url =
+            build_rpc_url("https://drpc.example/:api_key", Some(&cfg), Some(&secret)).unwrap();
+        assert_eq!(url, format!("https://drpc.example/{FAKE_KEY}"));
     }
 
     #[test]

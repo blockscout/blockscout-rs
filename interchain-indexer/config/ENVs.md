@@ -1,6 +1,6 @@
 # ENVs — `config` (empty base set)
 
-`config/chains.json` and `config/bridges.json` are both `[]` — the neutral base for a **file-less deployment**. Nothing is indexed until environment variables supply entries, and everything they supply is created from scratch rather than merged into existing values.
+`config/chains.json` and `config/bridges.json` are both `[]` — the neutral base for an **environment-defined deployment**: the configuration files exist but are empty. Nothing is indexed until environment variables supply entries, and everything they supply is created from scratch rather than merged into existing values.
 
 This file doubles as the shared reference for the whole `config/` tree: grammar, the complete field catalogue, and the traps. Each populated set has its own document listing that set's parameters verbatim:
 

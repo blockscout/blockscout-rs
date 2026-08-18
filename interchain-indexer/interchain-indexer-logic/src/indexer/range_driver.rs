@@ -208,8 +208,9 @@ pub trait RangeProcessor: Send + Sync {
                             }
                         }
                         Err(batch_err) => {
+                            let redacted_error = redact_urls(&format!("{:#}", batch_err.error));
                             tracing::warn!(
-                                err = %redact_urls(&format!("{:#}", batch_err.error)),
+                                err = %redacted_error,
                                 bridge_id,
                                 chain_id,
                                 chunk_from = chunk.from,
@@ -217,8 +218,7 @@ pub trait RangeProcessor: Send + Sync {
                                 "retried chunk still failing"
                             );
                             let ranges = attributed_ranges(&batch_err, chunk);
-                            let reason =
-                                truncate_reason(&redact_urls(&format!("{:#}", batch_err.error)));
+                            let reason = truncate_reason(&redacted_error);
                             let ranges_with_reason = with_reason(ranges, reason);
                             if let Err(err) = ledger
                                 .record(bridge_id, chain_id, &ranges_with_reason)
@@ -238,8 +238,9 @@ pub trait RangeProcessor: Send + Sync {
                     }
                 }
                 Err(err) => {
+                    let redacted_error = redact_urls(&format!("{err:#}"));
                     tracing::warn!(
-                        err = %redact_urls(&format!("{err:#}")),
+                        err = %redacted_error,
                         bridge_id,
                         chain_id,
                         chunk_from = chunk.from,
@@ -249,7 +250,7 @@ pub trait RangeProcessor: Send + Sync {
                     // An eth_getLogs failure records the chunk as
                     // still-failed and moves on — this is not an
                     // escalation, the range was never re-scanned.
-                    let reason = truncate_reason(&redact_urls(&format!("{err:#}")));
+                    let reason = truncate_reason(&redacted_error);
                     if let Err(record_err) =
                         ledger.record(bridge_id, chain_id, &[(chunk, reason)]).await
                     {
@@ -461,8 +462,9 @@ impl<P: RangeProcessor> RangeDriver<P> {
                 }
             }
             Err(batch_err) => {
+                let redacted_processing_error = redact_urls(&format!("{:#}", batch_err.error));
                 let ranges = attributed_ranges(&batch_err, range);
-                let reason = truncate_reason(&redact_urls(&format!("{:#}", batch_err.error)));
+                let reason = truncate_reason(&redacted_processing_error);
                 let ranges_with_reason = with_reason(ranges, reason);
 
                 match self
@@ -472,7 +474,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
                 {
                     Ok(()) => {
                         tracing::error!(
-                            err = %redact_urls(&format!("{:#}", batch_err.error)),
+                            err = %redacted_processing_error,
                             bridge_id,
                             chain_id,
                             from_block = range.from,
@@ -506,11 +508,11 @@ impl<P: RangeProcessor> RangeDriver<P> {
                             // that; closing it needs the acknowledgement
                             // boundary rejected in ADR-005, where it is
                             // carried as a known limitation.
-                            let redacted_processing_error =
-                                redact_urls(&format!("{:#}", batch_err.error));
+                            let redacted_record_error = redact_urls(&format!("{final_err:#}"));
                             bail!(
                                 "unable to record indexer failure for bridge {bridge_id} chain {chain_id} \
-                                 range [{}, {}] after {} attempt(s) (processing error: {redacted_processing_error}): {final_err:#}",
+                                 range [{}, {}] after {} attempt(s) (processing error: {redacted_processing_error}): \
+                                 {redacted_record_error}",
                                 range.from,
                                 range.to,
                                 self.settings.record_retry_attempts,

@@ -89,7 +89,7 @@ or over their `max_rps`, and repeated primary failures rotate the pointer
 onward (`Rotating primary RPC node after repeated failures`). Each chain logs
 its resolved pool once at startup, at INFO:
 
-```
+```text
 Created layered provider for chain chain_id=1 chain_name=Ethereum
   primary="Ethereum[gateway]"
   nodes="Ethereum[gateway], Ethereum[drpc], Ethereum[1rpc]"
@@ -174,7 +174,7 @@ separate from the main `INTERCHAIN_INDEXER__*` settings:
 
 **Path grammar** (segments are separated by `__` and are case-insensitive):
 
-```
+```text
 <PREFIX>                                  = whole-config array patch (value must be a JSON array)
 <PREFIX>__<ID>                            = one entry (value: JSON object fragment)
 <PREFIX>__<ID>__<FIELD>[__<FIELD>…]       = one field (value: scalar or JSON fragment)
@@ -309,7 +309,7 @@ INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC=sk-live-abc123
 
 Requests go to `https://rpc.example.org/eth` — unchanged — carrying:
 
-```
+```text
 Authorization: Bearer sk-live-abc123
 ```
 
@@ -329,7 +329,7 @@ INTERCHAIN_INDEXER_RPC_API_KEY__1__GATEWAY=sk-live-abc123
 
 Requests go to:
 
-```
+```text
 https://rpc.example.org/eth?apikey=sk-live-abc123
 ```
 
@@ -350,7 +350,7 @@ INTERCHAIN_INDEXER_RPC_API_KEY__1__PROVIDER=sk-live-abc123
 
 Requests go to:
 
-```
+```text
 https://rpc.example.org/v1/sk-live-abc123/eth
 ```
 
@@ -602,7 +602,7 @@ where a chains override for a chain outside the offline fixture fails the config
 
 1. Invalid tonic version
 
-```
+```text
 `Router` and `Router` have similar names, but are actually distinct types
 ```
 
