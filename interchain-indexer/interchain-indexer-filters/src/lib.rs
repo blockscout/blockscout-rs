@@ -1,4 +1,11 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
+//! The read-time chain/bridge filter shared by `interchain-indexer` and the
+//! `stats` service.
+//!
+//! This lives in its own leaf crate (depending only on
+//! `interchain-indexer-entity` and `sea-orm`) so that `stats` can apply the
+//! *same* predicate rather than maintaining a mirror of the truth table.
+//! Any change here changes both services: review it against both.
 
 use interchain_indexer_entity::{crosschain_messages, crosschain_transfers};
 use sea_orm::{ColumnTrait, Condition, sea_query::Expr};

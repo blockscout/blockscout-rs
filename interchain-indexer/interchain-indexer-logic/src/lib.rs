@@ -6,7 +6,13 @@ mod bulk;
 mod chain_info;
 mod database;
 mod error;
-pub mod filters;
+/// Moved to the `interchain-indexer-filters` leaf crate so that the `stats`
+/// service can share the exact same predicate. Re-exported here so existing
+/// `crate::filters::…` and `interchain_indexer_logic::ChainBridgeFilter`
+/// paths keep resolving.
+pub mod filters {
+    pub use interchain_indexer_filters::ChainBridgeFilter;
+}
 mod message_buffer;
 mod provider_layers;
 pub mod secret;
