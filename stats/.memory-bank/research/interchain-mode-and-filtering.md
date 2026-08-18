@@ -5,6 +5,26 @@
 > down anywhere; **[Q]** = open question that needs a human decision or a
 > runtime experiment. All paths are repo-relative to `blockscout-rs/`.
 
+> **Status — read this first.** Sections 1, 2, 4, 5, 6 and 8-10 describe machinery
+> that is still current. **Section 3 and the table in section 6.7 describe the
+> mechanism as it was *before* configurable read filtering landed**, and are kept
+> as the baseline the change was designed against, not as a description of the
+> code today. What replaced them:
+>
+> | was | is now |
+> |---|---|
+> | one scalar `STATS__INTERCHAIN_PRIMARY_ID` | six `STATS__INTERCHAIN_FILTER__*` variables mirroring the indexer read API, with `INTERCHAIN_PRIMARY_ID` honoured as a deprecated alias for `HOME_CHAIN_ID` |
+> | three hand-rolled predicate shapes per chart | one `ChainBridgeFilter` from the shared `interchain-indexer-filters` crate, applied by every chart and counter |
+> | 4 of 15 chart families unfiltered | none — coverage is asserted by a test |
+> | transfers filtered through the joined message's route | transfers filtered on their own `token_src_chain_id` / `token_dst_chain_id` / `bridge_id` |
+> | `ON t.message_id = m.id` | composite `(message_id, bridge_id)` join |
+> | no observability horizon | horizon resolved per update cycle from `bridges` + `bridge_contracts`, on by default |
+> | changing the filter silently mixed two regimes in one history | filter fingerprint stored per point; a change clears the chart and recomputes |
+>
+> Landed in `c65e886b`, `020d210d`, `d3ae7378` (docs in `69a52f22`), on top of the
+> test-harness change in `ae228842`. Section 6.8 records what still diverges from
+> the indexer and what a local end-to-end run measured.
+
 ## Scope
 
 Covered:
@@ -33,8 +53,9 @@ schema and enables a small, self-contained chart set: **7 counters and 8 line
 charts** (each line chart in day/week/month/year resolutions). All of them read
 only two indexer tables, `crosschain_messages` and `crosschain_transfers`.
 
-Filtering today is a **single scalar knob**, `Settings.interchain_primary_id:
-Option<u64>` (`STATS__INTERCHAIN_PRIMARY_ID`). It is an **update-time**
+Filtering *as this note found it* was a **single scalar knob**,
+`Settings.interchain_primary_id: Option<u64>` (`STATS__INTERCHAIN_PRIMARY_ID`)
+— see the status header for what replaced it. It is an **update-time**
 (write-into-stats-DB) concern only: it is threaded into `UpdateContext` and
 spliced into the remote SQL each chart builds; it is hard-coded to `None` on the
 read path, so serving stored chart data never sees it. When set, it produces one
@@ -52,14 +73,17 @@ joining to the parent message. That is the core of the parity gap.
 
 - Any stats number shown next to an interchain-indexer API number can disagree,
   and the disagreement is structural rather than a bug in one query.
-- `interchain_primary_id` is a deploy-time constant baked into stored
-  aggregates; changing it does not invalidate anything already written
-  (`stats-server/src/settings.rs:100` carries the `TODO` admitting this), so a
-  changed value silently yields a chart whose history mixes two filter regimes.
-- The stats test harness defines its **own** approximation of the indexer schema,
+- `interchain_primary_id` was a deploy-time constant baked into stored
+  aggregates; changing it did not invalidate anything already written
+  (`stats-server/src/settings.rs:100` carried the `TODO` admitting this), so a
+  changed value silently yielded a chart whose history mixed two filter regimes.
+  **Resolved** by the filter fingerprint in `d3ae7378`: a config change now
+  clears the affected charts and recomputes them.
+- The stats test harness defined its **own** approximation of the indexer schema,
   so the columns and cardinalities that the real parity work depends on
-  (`bridge_id`, `token_src_chain_id`, nullable `dst_chain_id`) do not exist in
-  any current test.
+  (`bridge_id`, `token_src_chain_id`, nullable `dst_chain_id`) existed in no test.
+  **Resolved** by `ae228842`: the interchain test schema is now built by the
+  indexer's own migrator.
 
 ## Source-of-Truth Files
 
@@ -242,7 +266,12 @@ that regime is frozen into the rows of the stats DB.
 
 ---
 
-## 3. The Current Filtering Mechanism, In Depth
+## 3. The Pre-Change Filtering Mechanism, In Depth
+
+> **Superseded** by `c65e886b` / `020d210d` / `d3ae7378` — see the status header.
+> Kept because the parity work was specified against exactly these shapes, and
+> because the deprecated `STATS__INTERCHAIN_PRIMARY_ID` still resolves to the
+> `home_chain_id` arm described here.
 
 ### 3.1 Where it enters and how it threads through
 
@@ -816,9 +845,12 @@ configuration**, never from the `bridge_contracts` table."*
 > endpoint exposing `configured_pairs` / accept the approximation / declare the
 > horizon out of scope for stats) is a design decision no code answers today.
 
-### 6.7 The parity gap, itemised
+### 6.7 The parity gap as it stood before the change
 
-| dimension | interchain-indexer read API | stats today |
+> The "stats" column below is the **pre-change** state. Section 6.8 gives the
+> current one.
+
+| dimension | interchain-indexer read API | stats before this work |
 |---|---|---|
 | focal `home_chain_id` | per request, 4-case truth table | one global `interchain_primary_id`; only `total_interchain_transfer_users` renders an OR |
 | `counterparty_chain_ids` | supported, incl. `(None, Some(s))` within-set | **absent** |
@@ -838,6 +870,64 @@ why the indexer has separate columns and why PR #1708 called it out), stats'
 `new_transfers_sent_interchain` / `new_transfers_received_interchain` /
 `total_interchain_transfer_users` answer a *different question* than the
 indexer's transfer counters — not a coarser version of the same one.
+
+### 6.8 What closed, what remains, and what a live run measured
+
+**[F]** Every row of the 6.7 table is closed except the last two, which were
+closed by *decision* rather than by change:
+
+- **"when the filter is applied"** stays update-time. The filter is a deployment
+  property, not a request parameter; the read path still never sees it. The
+  consequence is the fingerprint mechanism (`d3ae7378`): a config change clears
+  and recomputes rather than reinterpreting stored points.
+- **"totals"** — the four previously-unfiltered families are now filtered, but
+  `total_interchain_transfer_users` still carries **no** directional term even
+  with a home chain set (a user is a user on either side of a route), and the
+  transfer charts' directional term is on the transfer's own
+  `token_src_chain_id`, not the message's `src_chain_id`. Both are deliberate;
+  the second is the one place in the family where the two differ.
+
+**[F]** One genuine divergence remains, and it is a consequence of *where* the
+horizon comes from. The indexer builds `only_indexed_by_bridge` from its config
+files and therefore omits a bridge that has been deleted from config, which the
+shared predicate treats as the permissive arm — its history stays visible. Stats
+resolves the same list from `bridges LEFT JOIN bridge_contracts`, and every
+message's `bridge_id` is an FK into `bridges`, so **the permissive arm is
+unreachable in stats**: a bridge dropped from the indexer's config keeps its rows
+in the API but has them tested against whatever chain set its `bridge_contracts`
+rows still describe. Nothing in the current deployment triggers this; it needs a
+config deletion.
+
+**[F]** Local end-to-end parity run (2026-08-19), stats and a dev
+interchain-indexer over one frozen 92,976-message / 72,733-transfer database
+(Omnibridge on chains 1+100, Avalanche ICTT on 43114 + 8021 + 68414, plus seven
+chains that appear in messages but that no bridge indexes):
+
+- the horizon sets agreed exactly — the indexer's config-derived
+  `indexed_chain_ids` from `GET /api/v1/interchain/bridges` versus stats'
+  DB-derived resolution — including the two chains added through env vars;
+- for six filter shapes (unfiltered, focal, focal+counterparty, within-set
+  conjunction, directional+bridge, horizon off) the indexer's own list endpoints
+  and stats' counters returned identical totals, and ~22,500 point-level
+  comparisons of every counter, daily series, cumulative series and
+  week/month/year rollup against hand-written SQL found no discrepancy;
+- the horizon excluded 824 of 92,976 messages, so it is load-bearing on real data
+  rather than a no-op;
+- the whole 131-chart first computation took **1.9 s**, which retires the
+  unattended-first-run cost concern at this volume. Plans: the focal
+  `(src = N OR dst = N)` term is index-driven (BitmapOr over
+  `crosschain_messages_src_chain_ts_idx` / `…_dst_chain_ts_idx`); the horizon
+  disjunction is a heap filter with no index support, so a horizon-only
+  configuration is a sequential scan (35 ms here) that grows linearly with the
+  table.
+
+**[I]** Two things the live data could **not** exercise, and which therefore rest
+on fixtures alone: no message id is reused across bridges in this dataset (so the
+composite-join fix is indistinguishable from the `message_id`-only join here),
+and no row has a NULL destination. Both were checked by inserting synthetic rows
+— the NULL-destination row and a row addressed to an unindexed chain were both
+correctly excluded by the horizon, and by the incremental (non-clearing) update
+path as well as the full one.
 
 ---
 
@@ -1035,18 +1125,22 @@ transfer's token chains differ from its message's chains.
 
 ## 11. Open Questions
 
-1. **[Q]** Does any production interchain-indexer instance stats reads from host
-   more than one bridge? If yes, the non-bridge-qualified join in §3.4 is
-   already over-counting today, independent of any new filtering design.
-2. **[Q]** Should the four "total indexed" families follow a future filter, or
-   keep describing the whole indexer DB? The code and config express no intent.
-3. **[Q]** Must stats reproduce the observability horizon
-   (`include_unindexed_chains = false`) to be considered at parity? Without it,
-   stats totals structurally exceed default indexer API totals. With it, stats
-   needs an input it does not have (§6.6).
-4. **[Q]** If the horizon is in scope, which input does stats get — the bridges
-   config file, a new indexer endpoint publishing `configured_pairs`, a
-   deliberately-approximate `bridges ⋈ bridge_contracts` read, or something else?
+Questions 1-4 were settled by the implementation; the answers are recorded here
+rather than deleted, because each one shaped a decision.
+
+1. **Answered.** Yes — the dev instance this note was written against already
+   hosts two bridges (AMB/Omnibridge and Avalanche ICTT), so the
+   non-bridge-qualified join was a live over-counting risk. The join is now
+   composite. No message id is in fact reused across the two bridges in that
+   dataset, so the bug never fired there; the fixture carries a deliberate
+   collision instead (§6.8).
+2. **Answered — yes, all of them.** Every counter and chart follows the filter,
+   and a coverage test asserts it, so a new chart cannot quietly opt out.
+3. **Answered — yes.** The horizon is part of the parity target and is on by
+   default, matching the API's default.
+4. **Answered — `bridges ⋈ bridge_contracts`**, resolved per update cycle from
+   the indexer DB. No config file and no new endpoint. The residual inaccuracy
+   this accepts is the deleted-bridge case in §6.8.
 5. **[Q]** Does the `TIMESTAMPTZ` (test) vs `TIMESTAMP` (production) column type
    change any day-boundary bucketing? Needs a DB experiment; not answerable from
    source.
