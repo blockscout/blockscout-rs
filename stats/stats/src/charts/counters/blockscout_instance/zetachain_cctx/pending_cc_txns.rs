@@ -111,7 +111,6 @@ mod tests {
             stats_db: &db,
             mode: crate::Mode::Zetachain,
             multichain_filter: None,
-            interchain_primary_id: None,
             interchain_filter: InterchainFilter::default(),
             indexer_db: &blockscout,
             indexer_applied_migrations: IndexerMigrations::latest(),

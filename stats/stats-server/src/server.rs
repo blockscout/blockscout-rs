@@ -98,11 +98,6 @@ pub async fn stats(
             status_listener,
             mode: settings.mode,
             multichain_filter: settings.multichain_filter,
-            // temporary bridge: the 13 statements still read this; removed in the
-            // statement-conversion change
-            interchain_primary_id: settings
-                .interchain_primary_id
-                .or(settings.interchain_filter.home_chain_id),
             interchain_filter,
         })
         .await?,

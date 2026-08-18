@@ -109,7 +109,7 @@ multi-chart groups); `update_groups_interchain.rs` and
 Location: `stats/src/data_source/types.rs`
 
 `UpdateParameters` is the caller-supplied bundle (stats DB, indexer DB(s),
-`Mode`, `multichain_filter`, `interchain_primary_id`,
+`Mode`, `multichain_filter`, `interchain_filter`,
 `enabled_update_charts_recursive`, `force_full`, optional time override).
 `UpdateContext::from_params_now_or_override` derives the actual update/query
 context, resolving the update time once (`Utc::now()` unless overridden) and

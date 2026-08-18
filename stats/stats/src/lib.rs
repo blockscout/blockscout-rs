@@ -23,7 +23,9 @@ pub use charts::{
     ChartError, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject, MissingDatePolicy,
     Named, ResolutionKind, counters,
     db_interaction::{
-        filters::interchain::{InterchainFilter, InterchainFilterConfig},
+        filters::interchain::{
+            InterchainFilter, InterchainFilterConfig, InterchainFilterTarget, InterchainFiltered,
+        },
         read::{
             ApproxUnsignedDiff, QueryFullIndexerTimestampRange, ReadError, RequestedPointsLimit,
             interchain::resolve_only_indexed_by_bridge,

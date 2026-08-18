@@ -107,7 +107,6 @@ mod tests {
             stats_db: &db,
             mode: crate::Mode::MultichainAggregator,
             multichain_filter: None,
-            interchain_primary_id: None,
             interchain_filter: InterchainFilter::default(),
             indexer_db: &indexer,
             second_indexer_db: None,

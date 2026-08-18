@@ -4,33 +4,64 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{NaiveDateTime, Utc};
-use interchain_indexer_entity::{bridge_contracts, bridges};
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, Statement};
+use interchain_indexer_entity::{bridge_contracts, bridges, crosschain_messages};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect,
+    sea_query::Func,
+};
+
+use crate::charts::db_interaction::filters::interchain::InterchainFilter;
 
 #[derive(FromQueryResult, Debug)]
 struct MinTimestamp {
     min_timestamp: Option<NaiveDateTime>,
 }
 
-/// Earliest date available in the crosschain_messages table.
+/// Earliest message timestamp **inside the configured slice**.
+///
+/// `min` of the message-filtered minimum and the transfer-filtered minimum,
+/// because a transfer can satisfy `transfers_condition()` while its own message
+/// fails `messages_condition()` — a transfer's token chains need not equal its
+/// message's route. Using the message minimum alone would silently truncate the
+/// transfer charts' history.
+///
+/// Two queries and a `min` in Rust rather than a `LEAST` of two subqueries: this
+/// runs a handful of times per group update, and it keeps the builders readable.
+///
+/// Filtering this floor is not cosmetic. It is the start of every batched
+/// backfill, so an unfiltered minimum makes a filtered deployment begin at a
+/// foreign date and burn a long run of provably empty batches — and on a
+/// universal indexer whose history predates the configured slice, that run is
+/// the first thing the service does after deployment, unattended.
 pub async fn get_min_date_interchain(
     interchain: &DatabaseConnection,
+    filter: &InterchainFilter,
 ) -> Result<NaiveDateTime, DbErr> {
-    let query = r#"
-        SELECT MIN(init_timestamp::timestamp) AS min_timestamp
-        FROM crosschain_messages
-    "#;
+    async fn min_init_timestamp<E: EntityTrait>(
+        query: sea_orm::Select<E>,
+        interchain: &DatabaseConnection,
+    ) -> Result<Option<NaiveDateTime>, DbErr> {
+        Ok(query
+            .select_only()
+            .expr_as(
+                Func::min(crosschain_messages::Column::InitTimestamp.into_expr()),
+                "min_timestamp",
+            )
+            .into_model::<MinTimestamp>()
+            .one(interchain)
+            .await?
+            .and_then(|row| row.min_timestamp))
+    }
 
-    let result = MinTimestamp::find_by_statement(Statement::from_string(
-        sea_orm::DatabaseBackend::Postgres,
-        query.to_owned(),
-    ))
-    .one(interchain)
-    .await?
-    .and_then(|r| r.min_timestamp)
-    .unwrap_or_else(|| Utc::now().naive_utc());
+    let messages_min = min_init_timestamp(filter.messages_query(), interchain).await?;
+    // the joined query, because `init_timestamp` lives on the message
+    let transfers_min = min_init_timestamp(filter.transfers_joined_query(), interchain).await?;
 
-    Ok(result)
+    Ok([messages_min, transfers_min]
+        .into_iter()
+        .flatten()
+        .min()
+        .unwrap_or_else(|| Utc::now().naive_utc()))
 }
 
 /// InterchainIndexer does not have block information; we return i64::MAX so that

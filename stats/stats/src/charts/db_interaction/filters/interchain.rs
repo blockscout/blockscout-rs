@@ -17,7 +17,7 @@ use interchain_indexer_entity::{crosschain_messages, crosschain_transfers};
 use interchain_indexer_filters::ChainBridgeFilter;
 use sea_orm::{
     Condition, DbBackend, EntityTrait, JoinType, QueryFilter, QuerySelect, QueryTrait,
-    RelationTrait, Select,
+    RelationTrait, Select, Statement,
 };
 
 /// The interchain read filter as the update pipeline sees it.
@@ -92,6 +92,35 @@ impl Default for InterchainFilter {
     fn default() -> Self {
         Self::unfiltered()
     }
+}
+
+/// Which of the two predicates an interchain statement is required to apply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InterchainFilterTarget {
+    Messages,
+    Transfers,
+}
+
+/// Implemented by every interchain remote statement, so a test can prove the
+/// filter is applied — and applied exactly as often as declared.
+///
+/// This is the coverage guard, and it is deliberately not a source grep. Four of
+/// fifteen chart families were unfiltered before this change precisely because
+/// coverage was procedural. See [`crate::charts::interchain_filter_coverage`]
+/// for the registry and the two tests that consume this trait, including an
+/// honest statement of what they do and do not enforce.
+pub trait InterchainFiltered {
+    /// Which of the two predicates this statement is required to apply.
+    const TARGET: InterchainFilterTarget;
+    /// How many times the predicate appears in the rendered SQL. `1` for twelve
+    /// of the thirteen; `2` for `totalInterchainTransferUsers`, whose UNION has
+    /// two arms over the same table.
+    const EXPECTED_APPLICATIONS: usize = 1;
+    /// The public chart id this statement serves.
+    const CHART_NAME: &'static str;
+    /// Render with an explicit filter, so the test needs no `UpdateContext` and
+    /// therefore no database connections. Line charts pass `None` for the range.
+    fn render(filter: &InterchainFilter) -> Statement;
 }
 
 /// The operator-configured half of the filter, resolved from settings once at

@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-//! Cumulative total number of interchain messages sent (by associated message: src_tx_hash set).
+//! Cumulative interchain messages sent, within the configured interchain slice.
+//!
+//! Has no SQL of its own: it is the running total of
+//! [`super::new_messages_sent_interchain`]'s stored rows, and therefore inherits
+//! that chart's read filter transitively. `interchain_filter_coverage` lists it
+//! in `DERIVED_WITHOUT_OWN_STATEMENT` on exactly that basis.
 
 use super::new_messages_sent_interchain::NewMessagesSentInterchainInt;
 use crate::chart_prelude::*;
@@ -57,7 +62,13 @@ pub type MessagesGrowthSentInterchainYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart_interchain;
+    use crate::{
+        charts::db_interaction::filters::interchain::InterchainFilter,
+        tests::{
+            mock_interchain::test_interchain_home_chain_filter,
+            simple_test::simple_test_chart_interchain,
+        },
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -75,9 +86,13 @@ mod tests {
                 ("2023-01-20", "11"),
                 ("2023-01-21", "12"),
                 ("2023-02-01", "14"),
-                ("2023-02-10", "15"),
+                ("2023-02-06", "16"),
+                ("2023-02-07", "17"),
+                ("2023-02-08", "18"),
+                ("2023-02-09", "19"),
+                ("2023-02-10", "20"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
 
@@ -92,9 +107,13 @@ mod tests {
                 ("2023-01-10", "7"),
                 ("2023-01-20", "8"),
                 ("2023-02-01", "10"),
-                ("2023-02-10", "11"),
+                ("2023-02-06", "11"),
+                ("2023-02-07", "12"),
+                ("2023-02-08", "13"),
+                ("2023-02-09", "14"),
+                ("2023-02-10", "15"),
             ],
-            Some(1),
+            test_interchain_home_chain_filter(1),
         )
         .await;
     }
@@ -111,9 +130,9 @@ mod tests {
                 ("2023-01-09", "10"),
                 ("2023-01-16", "12"),
                 ("2023-01-30", "14"),
-                ("2023-02-06", "15"),
+                ("2023-02-06", "20"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
     }
@@ -126,9 +145,9 @@ mod tests {
             vec![
                 ("2022-12-01", "5"),
                 ("2023-01-01", "12"),
-                ("2023-02-01", "15"),
+                ("2023-02-01", "20"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
     }
@@ -138,8 +157,8 @@ mod tests {
     async fn update_messages_growth_sent_interchain_yearly() {
         simple_test_chart_interchain::<MessagesGrowthSentInterchainYearly>(
             "update_messages_growth_sent_interchain_yearly",
-            vec![("2022-01-01", "5"), ("2023-01-01", "15")],
-            None,
+            vec![("2022-01-01", "5"), ("2023-01-01", "20")],
+            InterchainFilter::default(),
         )
         .await;
     }

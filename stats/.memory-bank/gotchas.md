@@ -226,3 +226,31 @@ The doc comment is still worth writing — it is what a developer reading
 `settings.rs` sees — but it is a *separate* artifact from the README row, and
 the two have to be kept in sync by hand. Keep the Rust doc comment and the
 README cell saying the same thing.
+
+## `Expr::col(Column::X)` Renders **Unqualified**; `ColumnTrait` Methods Don't
+
+**Symptom:** A SeaORM query that joins `crosschain_transfers` to
+`crosschain_messages` compiles, but Postgres rejects it with
+`column reference "bridge_id" is ambiguous` — or worse, it *runs* and silently
+reads the wrong table's column.
+
+**Root cause:** `sea_query::Expr::col(Column::X)` renders the bare identifier
+(`"bridge_id"`), because a `Column` alone carries no table. Every `ColumnTrait`
+method — `eq`, `is_in`, `is_not_null`, `lt`, `into_expr`, … — goes through
+`as_column_ref()` and renders the qualified pair
+(`"crosschain_transfers"."bridge_id"`). On a single-table query the two are
+indistinguishable, which is why the mistake survives review.
+
+This bites hardest on the interchain transfer charts: `crosschain_messages` and
+`crosschain_transfers` **both** declare `id`, `bridge_id`, `created_at`,
+`updated_at`, `sender_address` and `recipient_address`, and every transfer chart
+joins the two. `interchain-indexer-filters` sidesteps it by building transfer
+predicates from `Expr::col((Entity, Column))` *tuples*, which do qualify.
+
+**Fix:** In any query that joins, reach a column through a `ColumnTrait` method
+or `Column::X.into_expr()`, never `Expr::col(Column::X)`. If you genuinely need
+`Expr::col`, pass the `(Entity, Column)` tuple. `Expr::col(Alias::new("date"))`
+is the sanctioned exception — it names a `SELECT` output alias in `GROUP BY`,
+not a table column. `charts::interchain_filter_coverage`'s
+`transfer_predicates_are_table_qualified` asserts the qualification survives
+future revisions of the shared filter crate.

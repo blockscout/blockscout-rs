@@ -1,65 +1,80 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-//! New interchain transfers sent line chart (transfers whose message has src_tx_hash set, per day).
-//! When interchain_primary_id is set, filters by message's src_chain_id; otherwise counts all sent.
+//! New interchain transfers sent per day, within the configured interchain
+//! slice.
+//!
+//! Counts transfers admitted by the shared read filter whose parent message's
+//! source event was indexed (`crosschain_messages.src_tx_hash IS NOT NULL`).
+//!
+//! The join to `crosschain_messages` exists only to reach that message's
+//! `init_timestamp` (the time axis — a transfer has no timestamp of its own) and
+//! `src_tx_hash`. The filter and the directional term both stay on the
+//! transfer's own token columns: with
+//! `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID` set, "sent" means
+//! `token_src_chain_id = home`. See
+//! [`crate::counters::TotalInterchainTransfersSent`]'s module docs for why.
+//! The join is composite (`(message_id, bridge_id)`) via the declared SeaORM
+//! relation.
 
 use std::ops::Range;
 
+use interchain_indexer_entity::{crosschain_messages, crosschain_transfers};
+
 use crate::{
     chart_prelude::*,
-    charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-            },
-        },
-        types::UpdateContext,
+    charts::db_interaction::filters::interchain::{
+        InterchainFilter, InterchainFilterTarget, InterchainFiltered,
     },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
 };
-use chrono::{DateTime, NaiveDate, Utc};
-use sea_orm::{DbBackend, Statement};
 
 pub struct NewTransfersSentInterchainStatement;
+impl_db_choice!(NewTransfersSentInterchainStatement, UsePrimaryDB);
+
+impl NewTransfersSentInterchainStatement {
+    /// Split out from `get_statement_with_context` so tests can render it with an
+    /// explicit filter and no `UpdateContext` (hence no database connections).
+    fn build(filter: &InterchainFilter, range: Option<Range<DateTime<Utc>>>) -> Statement {
+        const DATE: &str = "date";
+        let time_axis = crosschain_messages::Column::InitTimestamp;
+        let query = filter
+            .transfers_joined_query()
+            .select_only()
+            .expr_as(time_axis.into_expr().cast_as(DATE), DATE)
+            .expr_as(
+                Func::count(Asterisk.into_column_ref()).cast_as("TEXT"),
+                "value",
+            )
+            .filter(crosschain_messages::Column::SrcTxHash.is_not_null())
+            .apply_if(filter.home_chain_id(), |query, home| {
+                query.filter(crosschain_transfers::Column::TokenSrcChainId.eq(home))
+            });
+        let query = match &range {
+            Some(range) => datetime_range_filter(query, time_axis, range),
+            None => query,
+        };
+        query
+            .group_by(Expr::col(Alias::new(DATE)))
+            .build(DbBackend::Postgres)
+    }
+}
 
 impl StatementFromRange for NewTransfersSentInterchainStatement {
     fn get_statement_with_context(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTime<Utc>>>,
     ) -> Statement {
-        let (chain_condition, values) = match cx.interchain_primary_id {
-            Some(primary_id) => (
-                " AND m.src_chain_id = $1".into(),
-                vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
-            ),
-            None => (String::new(), vec![]),
-        };
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
-                SELECT
-                    m.init_timestamp::date AS date,
-                    COUNT(*)::TEXT AS value
-                FROM crosschain_transfers t
-                INNER JOIN crosschain_messages m ON t.message_id = m.id
-                WHERE m.src_tx_hash IS NOT NULL {chain_condition} {filter}
-                GROUP BY m.init_timestamp::date
-            "#,
-            values,
-            "m.init_timestamp::timestamp",
-            range,
-            chain_condition = chain_condition,
-        )
+        Self::build(&cx.interchain_filter, range)
     }
 }
 
-impl_db_choice!(NewTransfersSentInterchainStatement, UsePrimaryDB);
+impl InterchainFiltered for NewTransfersSentInterchainStatement {
+    const TARGET: InterchainFilterTarget = InterchainFilterTarget::Transfers;
+    const CHART_NAME: &'static str = "newTransfersSentInterchain";
+
+    fn render(filter: &InterchainFilter) -> Statement {
+        Self::build(filter, None)
+    }
+}
 
 pub type NewTransfersSentInterchainRemote = RemoteDatabaseSource<
     PullAllWithAndSort<
@@ -119,7 +134,10 @@ pub type NewTransfersSentInterchainYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart_interchain;
+    use crate::tests::{
+        mock_interchain::test_interchain_home_chain_filter,
+        simple_test::simple_test_chart_interchain,
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -137,11 +155,19 @@ mod tests {
                 ("2023-01-20", "1"),
                 ("2023-01-21", "3"),
                 ("2023-02-01", "7"),
+                ("2023-02-06", "3"),
+                ("2023-02-07", "1"),
+                ("2023-02-08", "1"),
+                ("2023-02-09", "1"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
 
+        // 2023-02-09 is absent here and only here: message 24's transfer has
+        // `token_src_chain_id = 3` on a `1 → 2` route, so the directional term on
+        // the transfer's own column excludes it where the old
+        // `m.src_chain_id = 1` shape would have kept it.
         simple_test_chart_interchain::<NewTransfersSentInterchain>(
             "update_new_transfers_sent_interchain_primary_1",
             vec![
@@ -152,8 +178,11 @@ mod tests {
                 ("2023-01-10", "2"),
                 ("2023-01-20", "1"),
                 ("2023-02-01", "7"),
+                ("2023-02-06", "2"),
+                ("2023-02-07", "1"),
+                ("2023-02-08", "1"),
             ],
-            Some(1),
+            test_interchain_home_chain_filter(1),
         )
         .await;
     }
@@ -170,8 +199,9 @@ mod tests {
                 ("2023-01-09", "6"),
                 ("2023-01-16", "4"),
                 ("2023-01-30", "7"),
+                ("2023-02-06", "6"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
     }
@@ -184,9 +214,9 @@ mod tests {
             vec![
                 ("2022-12-01", "14"),
                 ("2023-01-01", "16"),
-                ("2023-02-01", "7"),
+                ("2023-02-01", "13"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
     }
@@ -196,8 +226,8 @@ mod tests {
     async fn update_new_transfers_sent_interchain_yearly() {
         simple_test_chart_interchain::<NewTransfersSentInterchainYearly>(
             "update_new_transfers_sent_interchain_yearly",
-            vec![("2022-01-01", "14"), ("2023-01-01", "23")],
-            None,
+            vec![("2022-01-01", "14"), ("2023-01-01", "29")],
+            InterchainFilter::default(),
         )
         .await;
     }

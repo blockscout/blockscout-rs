@@ -33,7 +33,6 @@ pub struct UpdateServiceConfig {
     pub status_listener: Option<IndexingStatusListener>,
     pub mode: Mode,
     pub multichain_filter: Option<Vec<u64>>,
-    pub interchain_primary_id: Option<u64>,
     pub interchain_filter: InterchainFilterConfig,
 }
 
@@ -43,7 +42,6 @@ pub struct UpdateService {
     second_indexer_db: Option<Arc<DatabaseConnection>>,
     mode: Mode,
     multichain_filter: Option<Vec<u64>>,
-    interchain_primary_id: Option<u64>,
     interchain_filter: InterchainFilterConfig,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
@@ -82,7 +80,6 @@ impl UpdateService {
             second_indexer_db: config.second_indexer_db,
             mode: config.mode,
             multichain_filter: config.multichain_filter,
-            interchain_primary_id: config.interchain_primary_id,
             interchain_filter: config.interchain_filter,
             charts: config.charts,
             status_listener: config.status_listener,
@@ -461,7 +458,6 @@ impl UpdateService {
             stats_db: &self.db,
             mode: self.mode,
             multichain_filter: self.multichain_filter.clone(),
-            interchain_primary_id: self.interchain_primary_id,
             interchain_filter,
             indexer_db: &self.indexer_db,
             second_indexer_db: self.second_indexer_db.as_deref(),

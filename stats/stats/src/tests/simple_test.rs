@@ -53,7 +53,7 @@ where
         IndexerMigrations::latest(),
         Mode::Blockscout,
         None,
-        None,
+        InterchainFilter::default(),
         false,
     )
     .await;
@@ -81,7 +81,7 @@ where
         IndexerMigrations::latest(),
         Mode::Blockscout,
         None,
-        None,
+        InterchainFilter::default(),
         true,
     )
     .await;
@@ -106,7 +106,7 @@ pub async fn simple_test_chart_filecoin_with_migration_variants<C>(
             migrations,
             Mode::Blockscout,
             None,
-            None,
+            InterchainFilter::default(),
             true,
         )
         .await;
@@ -128,17 +128,20 @@ where
         IndexerMigrations::latest(),
         Mode::MultichainAggregator,
         multichain_filter,
-        None,
+        InterchainFilter::default(),
         false,
     )
     .await
 }
 
-/// Chart test with interchain indexer DB (crosschain_messages). Pass interchain_primary_id to filter by chain.
+/// Chart test with the interchain indexer DB. `interchain_filter` is the fully
+/// resolved read filter the update pipeline would carry — build it with
+/// [`crate::tests::mock_interchain::test_interchain_filter`] and friends, or pass
+/// [`InterchainFilter::default`] for an unfiltered run.
 pub async fn simple_test_chart_interchain<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
-    interchain_primary_id: Option<u64>,
+    interchain_filter: InterchainFilter,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
@@ -150,7 +153,7 @@ where
         IndexerMigrations::latest(),
         Mode::Interchain,
         None,
-        interchain_primary_id,
+        interchain_filter,
         false,
     )
     .await
@@ -178,7 +181,7 @@ pub async fn simple_test_chart_with_migration_variants<C>(
             migrations,
             Mode::Blockscout,
             None,
-            None,
+            InterchainFilter::default(),
             false,
         )
         .await;
@@ -202,7 +205,7 @@ where
         IndexerMigrations::latest(),
         Mode::Zetachain,
         None,
-        None,
+        InterchainFilter::default(),
         false,
     )
     .await;
@@ -223,7 +226,7 @@ async fn simple_test_chart_inner<C>(
     migrations: IndexerMigrations,
     mode: Mode,
     multichain_filter: Option<Vec<u64>>,
-    interchain_primary_id: Option<u64>,
+    interchain_filter: InterchainFilter,
     fill_filecoin: bool,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
@@ -244,8 +247,7 @@ where
         stats_db: &db,
         mode,
         multichain_filter,
-        interchain_primary_id,
-        interchain_filter: InterchainFilter::default(),
+        interchain_filter,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: zetachain_cctx.as_deref(),
@@ -300,7 +302,6 @@ pub async fn dirty_force_update_and_check<C>(
         stats_db: db,
         mode: Mode::Blockscout,
         multichain_filter: None,
-        interchain_primary_id: None,
         interchain_filter: InterchainFilter::default(),
         indexer_db: blockscout,
         indexer_applied_migrations: IndexerMigrations::latest(),
@@ -404,7 +405,6 @@ async fn ranged_test_chart_inner<C>(
         stats_db: &db,
         mode: Mode::Blockscout,
         multichain_filter: None,
-        interchain_primary_id: None,
         interchain_filter: InterchainFilter::default(),
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
@@ -452,7 +452,7 @@ pub async fn simple_test_counter<C>(
         IndexerMigrations::latest(),
         Mode::Blockscout,
         None,
-        None,
+        InterchainFilter::default(),
     )
     .await;
 }
@@ -473,18 +473,22 @@ pub async fn simple_test_counter_multichain<C>(
         IndexerMigrations::latest(),
         Mode::MultichainAggregator,
         multichain_filter,
-        None,
+        InterchainFilter::default(),
     )
     .await;
 }
 
 /// `test_name` must be unique to avoid db clashes.
-/// Uses interchain indexer DB (crosschain_messages). Pass interchain_primary_id to filter by chain.
+///
+/// Uses the interchain indexer DB. `interchain_filter` is the fully resolved read
+/// filter the update pipeline would carry — build it with
+/// [`crate::tests::mock_interchain::test_interchain_filter`] and friends, or pass
+/// [`InterchainFilter::default`] for an unfiltered run.
 pub async fn simple_test_counter_interchain<C>(
     test_name: &str,
     expected: &str,
     update_time: Option<NaiveDateTime>,
-    interchain_primary_id: Option<u64>,
+    interchain_filter: InterchainFilter,
 ) where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
@@ -495,7 +499,7 @@ pub async fn simple_test_counter_interchain<C>(
         IndexerMigrations::latest(),
         Mode::Interchain,
         None,
-        interchain_primary_id,
+        interchain_filter,
     )
     .await;
 }
@@ -516,7 +520,7 @@ where
         IndexerMigrations::latest(),
         Mode::Zetachain,
         None,
-        None,
+        InterchainFilter::default(),
     )
     .await;
     (
@@ -549,7 +553,7 @@ pub async fn simple_test_counter_with_migration_variants<C>(
             migrations,
             Mode::Blockscout,
             None,
-            None,
+            InterchainFilter::default(),
         )
         .await;
     }
@@ -562,7 +566,7 @@ async fn simple_test_counter_inner<C>(
     migrations: IndexerMigrations,
     mode: Mode,
     multichain_filter: Option<Vec<u64>>,
-    interchain_primary_id: Option<u64>,
+    interchain_filter: InterchainFilter,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
@@ -575,8 +579,7 @@ where
         stats_db: &db,
         mode,
         multichain_filter,
-        interchain_primary_id,
-        interchain_filter: InterchainFilter::default(),
+        interchain_filter,
         indexer_db: &indexer,
         indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
@@ -623,7 +626,6 @@ where
         stats_db: &db,
         mode: Mode::Blockscout,
         multichain_filter: None,
-        interchain_primary_id: None,
         interchain_filter: InterchainFilter::default(),
         indexer_db: &blockscout,
         indexer_applied_migrations: IndexerMigrations::latest(),
