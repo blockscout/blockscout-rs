@@ -320,3 +320,44 @@ design. That is safe — `BatchUpdate` also calls `update_metadata` after every
 batch, so a crash mid-rebuild leaves `last_updated_at` exactly at the end of the
 last committed batch and the next run resumes from there — but it does mean the
 chart serves a partially rebuilt series while the backfill runs.
+
+---
+
+## The Shared Filter's Permissive "Absent Bridge" Arm Is Unreachable From Stats
+
+**Symptom:** you read `ChainBridgeFilter::messages_condition` in
+`interchain-indexer-filters`, see the permissive arm
+(`bridge_id NOT IN (listed) AND dst_chain_id IS NOT NULL`) that keeps a
+decommissioned bridge's history visible, and assume stats inherits that
+behaviour because it shares the predicate. It does not — and a bridge removed
+from the indexer's configuration can therefore be visible through the indexer
+API and partly missing from stats, even though both run the same code.
+
+**Root cause:** the arm's reachability depends on the *input*, not the
+predicate. The indexer builds `only_indexed_by_bridge` from its in-memory
+`bridges.json`, so a removed bridge is genuinely absent from the pair list and
+its rows take the permissive arm. Stats builds the same list in
+`read::interchain::resolve_only_indexed_by_bridge` from `bridges` LEFT JOIN
+`bridge_contracts`, and there:
+
+- every `bridges` row survives the LEFT JOIN, contract-less ones included
+  (that is the point of the outer join); and
+- every `crosschain_messages.bridge_id` is a foreign key into `bridges`
+  (`crosschain_messages::Relation::Bridges`).
+
+So every row's bridge is always *listed*, `bridge_id NOT IN (listed)` is never
+true, and the permissive disjunct is dead code. A removed bridge's rows are
+still tested against the chain set recorded for it — `upsert_bridge_contracts`
+never deletes, so that set is a superset of its last configured one — and any
+row with an endpoint outside it is dropped.
+
+Pruning to `STATS__INTERCHAIN_FILTER__BRIDGE_IDS` does not resurrect the arm
+either: the pruned bridges are excluded anyway by the separate
+`bridge_id IN (bridge_ids)` term in the outer AND.
+
+**Fix:** none — this is the one named divergence in the parity claim, recorded
+in `README.md`'s "Interchain read filtering" section. Closing it needs the
+indexer to publish its effective `configured_pairs` (an API or a table), not a
+stats-side workaround. Do not "fix" it by dropping contract-less bridges from
+the resolver: that flips the contract-less-bridge case from restrictive to
+permissive, which ADR-004 Decision 5 calls load-bearing in the other direction.

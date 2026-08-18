@@ -3,65 +3,65 @@
   "counters": {
     "total_interchain_messages": {
       "title": "Total interchain messages",
-      "description": "Total indexed inter-chain messages"
+      "description": "Total interchain messages within the configured chain and bridge scope"
     },
     "total_interchain_messages_sent": {
       "title": "Total interchain messages sent",
-      "description": "Total inter-chain messages sent"
+      "description": "Interchain messages with an indexed source transaction, within the configured chain and bridge scope. With a home chain set, only those sent from it"
     },
     "total_interchain_messages_received": {
       "title": "Total interchain messages received",
-      "description": "Total inter-chain messages received"
+      "description": "Interchain messages with an indexed destination transaction, within the configured chain and bridge scope. With a home chain set, only those received on it"
     },
     "total_interchain_transfers": {
       "title": "Total interchain transfers",
-      "description": "Total indexed inter-chain transfers"
+      "description": "Total interchain transfers within the configured chain and bridge scope, matched on the token's own source and destination chains"
     },
     "total_interchain_transfers_sent": {
       "title": "Total interchain transfers sent",
-      "description": "Total inter-chain transfers sent"
+      "description": "Interchain transfers with an indexed source transaction, within the configured chain and bridge scope. With a home chain set, only tokens sent from it"
     },
     "total_interchain_transfers_received": {
       "title": "Total interchain transfers received",
-      "description": "Total inter-chain transfers received"
+      "description": "Interchain transfers with an indexed destination transaction, within the configured chain and bridge scope. With a home chain set, only tokens received on it"
     },
     "total_interchain_transfer_users": {
       "title": "Total interchain transfer users",
-      "description": "Number of unique addresses that sent or received interchain transfers"
+      "description": "Unique addresses that sent or received interchain transfers within the configured chain and bridge scope"
     }
   },
   "line_charts": {
     "new_messages_interchain": {
       "title": "New interchain messages",
-      "description": "Number of new interchain messages indexed per day"
+      "description": "Number of new interchain messages per day, within the configured chain and bridge scope"
     },
     "new_messages_sent_interchain": {
       "title": "New messages sent",
-      "description": "Number of new interchain messages sent per day"
+      "description": "Interchain messages per day with an indexed source transaction, within the configured chain and bridge scope. With a home chain set, only those sent from it"
     },
     "new_messages_received_interchain": {
       "title": "New messages received",
-      "description": "Number of new interchain messages received per day"
+      "description": "Interchain messages per day with an indexed destination transaction, within the configured chain and bridge scope. With a home chain set, only those received on it"
     },
     "messages_growth_sent_interchain": {
       "title": "Cumulative messages sent",
-      "description": "Cumulative total of interchain messages sent"
+      "description": "Cumulative total of interchain messages sent, within the configured chain and bridge scope"
     },
     "messages_growth_received_interchain": {
       "title": "Cumulative messages received",
-      "description": "Cumulative total of interchain messages received"
+      "description": "Cumulative total of interchain messages received, within the configured chain and bridge scope"
     },
     "new_transfers_interchain": {
       "title": "New interchain transfers",
-      "description": "Number of new interchain transfers indexed per day"
+      "description": "Number of new interchain transfers per day, within the configured chain and bridge scope, matched on the token's own source and destination chains"
     },
     "new_transfers_sent_interchain": {
       "title": "New transfers sent",
-      "description": "Number of new interchain transfers sent per day"
+      "description": "Interchain transfers per day with an indexed source transaction, within the configured chain and bridge scope. With a home chain set, only tokens sent from it"
     },
     "new_transfers_received_interchain": {
       "title": "New transfers received",
-      "description": "Number of new interchain transfers received per day"
+      "description": "Interchain transfers per day with an indexed destination transaction, within the configured chain and bridge scope. With a home chain set, only tokens received there"
     }
   }
 }

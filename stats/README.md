@@ -125,6 +125,68 @@ In order to prevent incorrect statistics from being collected, there is an optio
 
 The service will periodically check the enabled start conditions and start updating charts once they are satisfied.
 
+##### Interchain read filtering
+
+In `interchain` mode the service reads a *universal* interchain indexer: one database that can hold every chain and every bridge that indexer can reach. The `STATS__INTERCHAIN_FILTER__*` variables select the subset a given stats deployment counts.
+
+Two properties follow from that, and they drive everything else in this section:
+
+- **The filter is applied when charts are computed, not when they are served.** One stats deployment materialises exactly one subset into its own database. There is no per-request filtering; a second subset needs a second deployment.
+- **Stats configuration and an indexer API request must describe the same subset**, or the dashboard and the list view behind it will disagree with each other while both are internally correct — they were simply asked different questions.
+
+Each variable mirrors an indexer read-API query parameter of the same name, including its default. The predicate is not a re-implementation: stats depends on the indexer's `interchain-indexer-filters` crate and evaluates the same code, so the two cannot drift apart silently.
+
+| Stats env variable | Indexer API query parameter |
+| ------------------ | --------------------------- |
+| `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID` | `home_chain_id` |
+| `STATS__INTERCHAIN_FILTER__COUNTERPARTY_CHAIN_IDS` | `counterparty_chain_ids` |
+| `STATS__INTERCHAIN_FILTER__SRC_CHAIN_IDS` | `src_chain_ids` |
+| `STATS__INTERCHAIN_FILTER__DST_CHAIN_IDS` | `dst_chain_ids` |
+| `STATS__INTERCHAIN_FILTER__BRIDGE_IDS` | `bridge_ids` |
+| `STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS` | `include_unindexed_chains` |
+
+At startup the service logs the effective filter once, as the SQL `WHERE` clause it is about to apply (`effective interchain read filter: …`, or `<unfiltered>`). That log line is the quickest way to confirm what a deployment is actually counting, and it is worth reading after every configuration change.
+
+###### Things that surprise people
+
+- **`COUNTERPARTY_CHAIN_IDS` without `HOME_CHAIN_ID` is a conjunction, not a focal `OR`.** With a home chain it restricts the *other* endpoint: `(src = home AND dst IN set) OR (dst = home AND src IN set)`. Without one it means `src IN set AND dst IN set` — only routes with **both** endpoints inside the set survive. That is the indexer API's behaviour too, and the service warns about it at startup.
+- **`INCLUDE_UNINDEXED_CHAINS` defaults to `false`, and that default excludes rows.** It matches the indexer API's own default, so an unconfigured stats instance and an unparameterised API request answer the same question. What it excludes is every row its own bridge could not have observed from both sides — in particular **every message whose destination is still unknown** (`dst_chain_id IS NULL`), plus any row with an endpoint outside its bridge's indexed chain set. Set it to `true` to count everything the indexer stored.
+- **The "indexed chain set" comes from the indexer's database, not from stats configuration.** Stats re-derives it from the indexer's own `bridges` / `bridge_contracts` tables at the start of every update cycle in which the restriction is enabled. There is no stats variable for it, and there is deliberately none: it is the indexer's fact about itself, and stats must not be able to disagree. If that read fails, the update group is **skipped** and retried on its next schedule, rather than computed without the restriction.
+- **`STATS__INTERCHAIN_PRIMARY_ID` is deprecated.** It is still honoured and means exactly `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`. Setting both to the *same* value logs a deprecation warning; setting them to **different** values is a hard startup error, not a silent precedence rule.
+- **Changing the filter rebuilds the affected charts by itself.** A fingerprint of the configured filter is stored alongside every interchain point; on the next update a mismatch clears the stored series and recomputes it. Budget for one full backfill after a filter change; no manual intervention is needed, and none should be attempted.
+
+###### Parity, and its one known divergence
+
+For any `STATS__INTERCHAIN_FILTER__*` configuration there is an equivalent indexer API request that returns the same subset, and vice versa — with one exception, which is a consequence of where the indexed chain set comes from.
+
+The indexer builds that set from its in-memory bridges configuration, so a bridge that has been **removed from that configuration** is unknown to it, and the API deliberately keeps such a bridge's already-indexed history visible rather than reinterpreting what it could once observe. Stats builds the set from the `bridges` and `bridge_contracts` tables, where the removed bridge still has a row — the indexer's upserts never delete. Stats therefore keeps testing that bridge's rows against the chain set recorded for it, instead of admitting them unconditionally, and drops any of its rows whose endpoints fall outside that recorded set.
+
+In short: after a bridge is dropped from the indexer's configuration, the API keeps showing its history and stats may show less of it. This is documented rather than fixed; closing it needs the indexer to publish its effective set, not a workaround on the stats side.
+
+###### One kind of staleness that is not detected
+
+The stored fingerprint covers the configured chain and bridge lists plus whether the indexed-chain restriction is enabled. It deliberately does **not** cover the resolved chain set itself, because that set grows on its own whenever the indexer gains a bridge or a bridge contract — hashing it would rebuild every interchain chart on every upstream bridge addition.
+
+The cost of that choice: when the indexer's set **widens** — a redeploy that adds a bridge or a bridge contract — points already computed under the narrower one stay narrower than freshly computed points, and nothing detects the difference. A one-off restart with `STATS__FORCE_UPDATE_ON_START=true` makes the history uniform again in that direction.
+
+It does **not** repair a *narrowing*, which is reachable mainly by starting stats before the indexer has populated `bridges` at all: a forced update recomputes and overwrites, but never deletes, so days that now yield no rows keep the values they had. Recovering from that means clearing the affected charts' stored data; only a filter-fingerprint change does that on its own.
+
+###### Migrating an existing deployment
+
+```bash
+# was: STATS__INTERCHAIN_PRIMARY_ID=<P>
+STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID=<P>
+STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS=true   # keep the old, wider scope
+```
+
+That reproduces the old scope as closely as the new model can, but some numbers still move:
+
+- **The four unscoped charts become scoped.** `totalInterchainMessages`, `totalInterchainTransfers`, `newMessagesInterchain` and `newTransfersInterchain` previously counted everything the indexer held, ignoring `STATS__INTERCHAIN_PRIMARY_ID` entirely. They keep their ids and now count within the configured scope, so with a home chain set they narrow to routes touching it.
+- **The message `*_sent` / `*_received` charts do not move on account of the focal predicate.** With only a home chain configured, the filter's `src = P OR dst = P` is absorbed by the chart's own `src = P` (or `dst = P`) term, so the result is the same predicate as before. They move only if another filter dimension is also set, or if the indexed-chain restriction is left enabled.
+- **The transfer `*_sent` / `*_received` charts move regardless**, for two independent reasons. Their scope is now the transfer's own token source/destination chains rather than its parent message's route — the two answer genuinely different questions, not coarser and finer versions of one. And their join to the parent message is now on `(message_id, bridge_id)` rather than `message_id` alone, which corrects an over-count that occurred whenever two bridges reused the same numeric message id. The second reason applies with no filter configured at all. `totalInterchainTransferUsers` moves for the same two reasons; it no longer joins to messages at all.
+
+How large that movement is for a particular deployment is characterised by the test fixtures rather than measured against production. There is no deployment in the target (universal, multi-bridge) configuration to measure: today's deployments read indexers that already filter at write time, where the indexed-chain restriction is close to a no-op, so numbers taken from them would describe a dataset that does not resemble the one this feature exists for.
+
 <details><summary>Server settings</summary>
 <p>
 
