@@ -9,6 +9,7 @@ mod error;
 pub mod filters;
 mod message_buffer;
 mod provider_layers;
+pub mod secret;
 pub mod settings;
 pub mod stats;
 mod stats_chains_query;
@@ -33,6 +34,7 @@ pub use error::ApiError;
 pub use filters::ChainBridgeFilter;
 pub use indexer::*;
 pub use provider_layers::*;
+pub use secret::{Secret, redact_urls, sanitize_transport_error};
 pub use settings::MessageBufferSettings;
 pub use stats::{
     BridgedTokenListRow, IndexedChains, StatsChainListRow, StatsListQuery, StatsReadSettings,

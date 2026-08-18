@@ -1,0 +1,66 @@
+[
+    {
+        "chain_id": 1,
+        "name": "Ethereum",
+        "icon": "https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg",
+        "explorer": {
+            "url": "https://eth.blockscout.com",
+            "custom_tx_route": "/tx/{hash}",
+            "custom_address_route": "/address/{hash}",
+            "custom_token_route": "/token/{hash}"
+        },
+        "rpcs": [
+            {
+                "gateway": {
+                    "url": "https://rpc.eth.gateway.fm"
+                },
+                "drpc": {
+                    "url": "https://eth.drpc.org"
+                },
+                "1rpc": {
+                    "url": "https://1rpc.io/eth"
+                }
+            }
+        ]
+    },
+    {
+        "chain_id": 100,
+        "name": "Gnosis",
+        "icon": "https://blockscout-icons.s3.us-east-1.amazonaws.com/gnosis.svg",
+        "explorer": {
+            "url": "https://gnosis.blockscout.com",
+            "custom_tx_route": "/tx/{hash}",
+            "custom_address_route": "/address/{hash}",
+            "custom_token_route": "/token/{hash}"
+        },
+        "rpcs": [
+            {
+                "gateway": {
+                    "url": "https://rpc.gnosis.gateway.fm"
+                },
+                "gnosis_official": {
+                    "url": "https://rpc.gnosischain.com",
+                    "max_rps": 2
+                }
+            }
+        ]
+    },
+    {
+        "chain_id": 43114,
+        "name": "Avalanche C-Chain",
+        "icon": "https://images.ctfassets.net/gcj8jwzm6086/5VHupNKwnDYJvqMENeV7iJ/3e4b8ff10b69bfa31e70080a4b142cd0/avalanche-avax-logo.svg",
+        "explorer": {
+            "url": "https://subnets.avax.network/c-chain",
+            "custom_tx_route": "/tx/{hash}",
+            "custom_address_route": "/address/{hash}",
+            "custom_token_route": "/token/{hash}"
+        },
+        "rpcs": [
+            {
+                "avalanche": {
+                    "url": "https://api.avax.network/ext/bc/C/rpc"
+                }
+            }
+        ]
+    }
+]

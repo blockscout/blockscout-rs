@@ -1,46 +1,46 @@
-# Graph Report - interchain-indexer  (2026-08-12)
+# Graph Report - interchain-indexer  (2026-08-18)
 
 ## Corpus Check
-- 238 files · ~229,961 words
+- 249 files · ~243,993 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3340 nodes · 7919 edges · 203 communities (176 shown, 27 thin omitted)
-- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 554 edges (avg confidence: 0.83)
+- 3499 nodes · 8230 edges · 226 communities (198 shown, 28 thin omitted)
+- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 557 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8e88205a`
+- Built from commit: `cb34e9ca`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- Key
+- handle_source_request
 - provider_layers.rs
 - StatsService
-- fill_mock_interchain_database
+- .new
 - persistence.rs
 - indexed_chains.rs
 - InterchainDatabase
 - init_db
 - amb/abi.rs
 - .new
-- Result
-- ExampleIndexer
+- src/utils.rs
+- ictt_payload.rs
 - projection.rs
 - env_merge.rs
 - config.rs
 - log_stream.rs
 - ChainInfoService
-- Settings
+- BlockscoutTokenInfoClient
 - bridged_tokens_query.rs
 - list_stats_chains
-- .new
+- .upsert_chains
 - ADR-007: The Scan Floor Is Reconciled Against The Checkpoint, Not Against bridge_contracts (Accepted, with stated expiry)
 - filters.rs
 - InterchainServiceImpl
 - TestRangeProcessor
-- indexers.rs
+- reconcile_catchup_floors
 - Avalanche Bridge Filtering
 - avalanche/consolidation.rs
 - MessageBuffer
@@ -50,43 +50,43 @@
 - .new
 - Status
 - AmbIndexer
-- ictt_payload.rs
-- TokenTransfer
 - TokenInfoService
+- TokenTransfer
+- fixture_vars
 - services/utils.rs
 - Workflow: implementation-plan.md
 - avalanche_e2e.rs
 - Codex Skill: gh-issue-publish
 - Glossary
-- BridgeConfig
-- InterchainStatisticsService
+- build_chain_node_configs
+- Exposed REST Endpoints and Swagger URL
 - package.json
-- Codex Skill: implementation-plan
+- amb/consolidation.rs
 - bridge_contracts Is a Proxy, Not the Membership Set
-- spawn_configured_indexers
-- unindexed_chain_filter.rs
+- Settings
+- try_reconstruct_transfer
 - MaintenancePlan
 - amb/indexer.rs
 - .new
-- FailureLedger
+- Key
 - progress.rs
-- TokenInfoService and Token Metadata Enrichment Flow
+- ExampleIndexer
 - InterchainService
 - MessageBuffer (Tiered Storage)
-- .fetch_token_info
+- MessageBufferSettings
 - Rust Style Rules
-- range_driver.rs
+- ChainConfig
 - BatchError
 - Stats Projection
-- try_reconstruct_transfer
-- SourceData
+- .fetch_token_info
+- Indexing Gaps, Retries, and Checkpoint Safety
 - AvalancheIndexer
 - failure_ledger/settings.rs
-- Runtime Verification Runbook
-- BlockRange
-- policy.rs
-- run
-- BufferItem
+- Expected Skips Inside a Shared Transaction
+- Result
+- FailureLedger
+- Async Patterns Rules
+- Codex Skill: implementation-plan
 - workflows/ Tool-Agnostic Task Procedures
 - Memory Bank
 - interchain-indexer service
@@ -95,20 +95,20 @@
 - AmbDispatchMockService
 - prelude.rs
 - Checkpoint
-- Database Subsystem: Schema and DB Interaction Layer
-- Project Context
+- TokenInfoService and Token Metadata Enrichment Flow
+- SourceData
 - Architectural Decision Records Index
-- BridgeType
+- bridges.rs
 - fetch_receipts_for_transactions
 - Codex Task Analysis Skill
 - compile
 - bridge_model_to_proto
-- MockLogsService
-- BridgeContractConfig
-- Codex Skill: research-scope
+- stats_chains.rs
+- indexers.rs
+- stats.rs
 - .check
 - Model
-- BridgedTokensPaginationLogic
+- OutputPagination
 - Interchain Indexer
 - from_sql
 - ADR-004: Observability Horizon and Asset Union-Find
@@ -116,32 +116,32 @@
 - FailureLedger
 - BlockchainIdResolver
 - AmbIndexerSettings
-- src/utils.rs
-- Indexing Gaps, Retries, and Checkpoint Safety
+- ActiveValue
+- range_driver.rs
 - Model
-- Layer 2: Avalanche Reference Realization
-- PaginationDirection
+- CrosschainIndexerState
+- policy.rs
 - Testing Rules
 - Model
 - .record_indexer_failures
-- AvalancheIndexerSettings
-- .get_checkpoint
+- BlockRange
+- Bridges
 - Migration
 - Migration
 - Migration
 - Migration
 - Tiered Message Buffer Storage
-- MessageStatus
+- Testnet set
 - AbiRegistry
-- BufferItem<T>
+- BufferItem
 - Model
 - Model
-- .run
-- build_bounded_message_paths_query
-- Consolidate
+- IndexedChains
+- ENVs — `config/full-mainnet`
+- chain_unindexed_condition
 - group_logs_by_transaction
-- Exposed REST Endpoints and Swagger URL
-- MessageBufferSettings
+- GET /api/v1/status/indexers
+- events.rs
 - Model
 - Model
 - Model
@@ -149,7 +149,7 @@
 - Model
 - Asset Identity as Union-Find
 - ApiError
-- stats_messages_days.rs
+- ENVs — `config` (empty base set)
 - stats_asset_tokens.rs
 - Gotcha: PostgreSQL Bind Parameter Limit (65535 per statement)
 - Gotcha: Token Info Is Eventually Consistent and Reads Can Write Back
@@ -168,11 +168,12 @@
 - Entity
 - Entity
 - Entity
-- resolve-blockchain-id.rs
+- BlockscoutTokenInfoClientSettings
 - Entity
 - Entity
 - Entity
 - indexer_checkpoints::Model
+- MockLogsService
 - bigdecimal_rename.sh
 - Gotcha: Config Env Overrides — Null Replaces, JSON Quoting, Zero-Padded Numbers
 - Gotcha: Filter Params Must Not Reuse Pagination Cursor Field Names
@@ -199,6 +200,28 @@
 - gh-issue-publish.sh
 - update_migration.sh
 - Gotcha: Indexer Cleanup Guard Runs on Panic (IndexerCleanupGuard Drop)
+- stats_messages_days.rs
+- Codex Skill: research-scope
+- .run
+- PaginationDirection
+- secret.rs
+- Exploration Map
+- ENVs — `config/avalanche`
+- ENVs — `config/full-testnet`
+- Configuration Loading and Validation
+- Mainnet set
+- Field reference
+- CleanupGuard
+- Gotcha: Recoverable Message Fields Are Not A "Never Mirror" Case
+- .create_stats_asset
+- AvalancheIndexerSettings
+- CrosschainIndexer Worker
+- ChainInfoServiceSettings
+- .recompute_stats_chains
+- ExampleIndexerSettings
+- JoinedTransfer
+- Consolidate
+- .to_active_model
 
 ## God Nodes (most connected - your core abstractions)
 1. `init_db()` - 231 edges
@@ -215,14 +238,14 @@
 ## Surprising Connections (you probably didn't know these)
 - `Cursor Task Analysis Skill` --semantically_similar_to--> `Codex Task Analysis Skill`  [INFERRED] [semantically similar]
   .cursor/skills/task-analysis/SKILL.md → .codex/skills/task-analysis/SKILL.md
-- `Projection-Invalidating Migration Deployment Runbook` --semantically_similar_to--> `Runtime Verification Runbook`  [INFERRED] [semantically similar]
-  README.md → .memory-bank/runbooks/runtime-verification.md
 - `Claude Skill: implementation-plan` --semantically_similar_to--> `Codex Skill: implementation-plan`  [INFERRED] [semantically similar]
   .claude/skills/implementation-plan/SKILL.md → .codex/skills/implementation-plan/SKILL.md
 - `Claude Skill: gh-issue-bug` --semantically_similar_to--> `Codex Skill: gh-issue-bug`  [INFERRED] [semantically similar]
   .claude/skills/gh-issue-bug/SKILL.md → .codex/skills/gh-issue-bug/SKILL.md
 - `Claude Skill: gh-issue-publish` --semantically_similar_to--> `Codex Skill: gh-issue-publish`  [INFERRED] [semantically similar]
   .claude/skills/gh-issue-publish/SKILL.md → .codex/skills/gh-issue-publish/SKILL.md
+- `Claude Skill: research-scope` --semantically_similar_to--> `Codex Skill: research-scope`  [INFERRED] [semantically similar]
+  .claude/skills/research-scope/SKILL.md → .codex/skills/research-scope/SKILL.md
 
 ## Import Cycles
 - None detected.
@@ -242,39 +265,39 @@
 - **Stats projection: one eligibility predicate, observability-based deferral, merge-based asset identity, sticky edge side, and ICTT-address token identity** — _memory_bank_gotchas_stats_eligibility_observability_not_terminality, _memory_bank_gotchas_stats_asset_mapping_conflicts_merge, _memory_bank_gotchas_stats_transfer_backfill_failed_amb_eligibility_resolved, _memory_bank_gotchas_stats_edge_amount_side_follows_source_presence, _memory_bank_gotchas_token_identity_stats_asset_tokens_ictt_address, _memory_bank_gotchas_indexed_chains_may_observe [EXTRACTED 1.00]
 - **Agent Task Lifecycle: analysis to plan to code to review to PR** — _cursor_skills_task_analysis_skill_task_analysis, _cursor_skills_implementation_plan_skill_implementation_plan, _cursor_skills_task_to_code_skill_task_to_code, _cursor_skills_solution_review_skill_solution_review, _cursor_skills_pr_description_skill_pr_description, _codex_skills_solution_review_skill_task_folder_artifacts [EXTRACTED 1.00]
 
-## Communities (203 total, 27 thin omitted)
+## Communities (226 total, 28 thin omitted)
 
-### Community 0 - "Key"
-Cohesion: 0.05
-Nodes (115): DynSolValue, addr(), amount_to_decimal(), build_destination_only(), build_destination_only_transfer(), build_source_led(), build_transfer(), destination() (+107 more)
+### Community 0 - "handle_source_request"
+Cohesion: 0.29
+Nodes (21): DynSolValue, dispatch_transaction(), expect_address(), expect_b256(), expect_bool(), expect_bytes(), expect_uint(), handle_collected_signatures() (+13 more)
 
 ### Community 1 - "provider_layers.rs"
 Cohesion: 0.06
-Nodes (61): Context, DefaultClock, InMemoryState, base_node(), block_number_packet(), build_layered_http_provider(), build_layered_provider_from_services(), build_mock_error_response() (+53 more)
+Nodes (66): Context, DefaultClock, HeaderMap, InMemoryState, base_node(), block_number_packet(), build_layered_http_provider(), build_layered_provider_from_services() (+58 more)
 
 ### Community 2 - "StatsService"
 Cohesion: 0.13
-Nodes (15): MessagePathStatsRow, BridgedTokenListRow, kickoff_enrichment_no_token_service_is_noop(), Arc, DatabaseTransaction, DbErr, Default, NaiveDate (+7 more)
+Nodes (16): BridgedTokenListRow, kickoff_enrichment_no_token_service_is_noop(), Arc, DatabaseTransaction, DbErr, Default, NaiveDate, Option (+8 more)
 
-### Community 3 - "fill_mock_interchain_database"
-Cohesion: 0.07
-Nodes (62): build_pagination_from_messages(), build_pagination_from_transfers(), counters_cover_all_filters(), default_filter(), InterchainTotalCounters, message_ids(), mock_indexed_chains(), NaiveDateTime (+54 more)
+### Community 3 - ".new"
+Cohesion: 0.08
+Nodes (67): counters_cover_all_filters(), default_filter(), indexer_failures_and_mark_catchup_complete_are_independent_records(), InterchainTotalCounters, list_indexer_checkpoints_filters_and_orders_deterministically(), lower_catchup_floor_is_idempotent_and_never_raises_or_touches_max_cursor(), mark_catchup_complete_upserts_empty_range_checkpoint(), mark_catchup_complete_without_safe_realtime_cursor_does_not_insert() (+59 more)
 
 ### Community 4 - "persistence.rs"
 Cohesion: 0.07
 Nodes (70): A, batch_size_for_width(), batched_upsert(), ConnectionTrait, DbErr, F, OnConflict, Result (+62 more)
 
 ### Community 5 - "indexed_chains.rs"
-Cohesion: 0.06
-Nodes (48): Column, Entity, chain_unindexed_condition(), cols(), IndexedChains, message_countable_condition(), render(), Clone (+40 more)
+Cohesion: 0.11
+Nodes (27): Item, Self, test_chain_ids_for_absent_bridge_is_empty(), test_chain_ids_for_multi_chain_bridge_is_sorted(), test_chain_ids_for_present_but_empty_bridge_is_empty(), test_configured_pairs_no_bridges_is_some_empty(), test_configured_pairs_present_but_empty_bridge_is_not_dropped(), test_configured_pairs_restrict_to_keeps_only_listed_bridges() (+19 more)
 
 ### Community 6 - "InterchainDatabase"
-Cohesion: 0.09
-Nodes (24): BackfillStatsReport, CrosschainMessageLookup, expect_found(), get_crosschain_message_native_collision_is_ambiguous_until_qualified(), get_crosschain_message_numeric_collision_is_ambiguous_until_qualified(), get_crosschain_message_unique_ids_return_found(), InterchainDatabase, mock_db_works() (+16 more)
+Cohesion: 0.07
+Nodes (38): Fn, BackfillStatsReport, build_all_time_message_paths_query(), build_bounded_message_paths_query(), build_pagination_from_messages(), CrosschainMessageLookup, expect_found(), get_crosschain_message_native_collision_is_ambiguous_until_qualified() (+30 more)
 
 ### Community 7 - "init_db"
-Cohesion: 0.10
-Nodes (65): completed_message(), completed_message_at(), completed_message_without_indexed_source(), insert_already_processed_bridging_transfer(), message_paths_invalid_or_empty_range_returns_empty(), ActiveModel, DatabaseConnection, seed_bridge5_backlog() (+57 more)
+Cohesion: 0.11
+Nodes (65): completed_message(), completed_message_at(), completed_message_without_indexed_source(), insert_already_processed_bridging_transfer(), load_native_id_map_filters_missing_native_ids(), message_paths_invalid_or_empty_range_returns_empty(), ActiveModel, DatabaseConnection (+57 more)
 
 ### Community 8 - "amb/abi.rs"
 Cohesion: 0.07
@@ -284,49 +307,49 @@ Nodes (47): AbiRegistry, amb_side_for_abi(), amb_side_for_abi_infers_side_from_c
 Cohesion: 0.06
 Nodes (51): ChainIndexingProgress, FailureTotalsResult, FullStatus, GaugeValue, GetFullStatusRequest, GetIndexingProgressRequest, GetIndexingProgressResponse, GetStatusRequest (+43 more)
 
-### Community 10 - "Result"
-Cohesion: 0.10
-Nodes (16): BridgedTokensListPagination, ListMarker, MessagesPaginationLogic, OutputPagination<P>, Default, NaiveDateTime, Option, Result (+8 more)
+### Community 10 - "src/utils.rs"
+Cohesion: 0.49
+Nodes (8): bytes_to_naive_datetime(), naive_datetime_to_bytes(), naive_datetime_to_nanos(), nanos_to_naive_datetime(), NaiveDateTime, Result, test_naive_datetime_to_bytes_round_trip(), u64_from_hex_prefixed()
 
-### Community 11 - "ExampleIndexer"
-Cohesion: 0.05
-Nodes (38): CleanupGuard, Arc, AtomicBool, Drop, JoinHandle, Option, RwLock, CrosschainIndexerState (+30 more)
+### Community 11 - "ictt_payload.rs"
+Cohesion: 0.11
+Nodes (21): ictt_completeness(), CreditExpectation, decode_inner(), decode_transferrer_message(), IcttPayload, mainnet_bytes(), PayloadRejection, Result (+13 more)
 
 ### Community 12 - "projection.rs"
-Cohesion: 0.12
-Nodes (50): EdgeKey, EdgeAmountSide, Model, Relation, BigDecimal, DateTime, Option, asset_has_token_on_chain() (+42 more)
+Cohesion: 0.07
+Nodes (63): EdgeKey, EdgeAmountSide, Model, Relation, BigDecimal, DateTime, Option, asset_has_token_on_chain() (+55 more)
 
 ### Community 13 - "env_merge.rs"
 Cohesion: 0.13
 Nodes (51): AppliedOverride, apply(), apply_env_overrides(), apply_patch(), apply_to_keyed_array(), apply_to_named_map_array(), ArrayRule, ArrayRules (+43 more)
 
 ### Community 14 - "config.rs"
-Cohesion: 0.09
-Nodes (21): fixture_vars(), load_bridges_impl(), load_chains_impl(), log_applied_overrides(), read_config_array(), Item, Iterator, Path (+13 more)
+Cohesion: 0.06
+Nodes (29): api_key(), build_rpc_url(), derived_api_key_env_var(), IndexerType, ranked_names(), resolve_api_key(), test_build_rpc_url_header_location_returns_url_unchanged(), test_build_rpc_url_no_api_key_returns_url_unchanged() (+21 more)
 
 ### Community 15 - "log_stream.rs"
 Cohesion: 0.07
 Nodes (34): build_log_stream_for_chain(), BoxStream, Duration, DynProvider, Ethereum, Filter, Result, fetch_logs() (+26 more)
 
 ### Community 16 - "ChainInfoService"
-Cohesion: 0.08
-Nodes (31): Entity, Model, Relation, DateTime, Json, Option, Related, RelationDef (+23 more)
+Cohesion: 0.09
+Nodes (26): Entity, Model, Relation, DateTime, Json, Option, Related, RelationDef (+18 more)
 
-### Community 17 - "Settings"
-Cohesion: 0.06
-Nodes (46): Client, DatabaseSettings, Deserialize, BlockscoutTokenInfo, BlockscoutTokenInfoClient, BlockscoutTokenInfoError, CachedIconResult, Arc (+38 more)
+### Community 17 - "BlockscoutTokenInfoClient"
+Cohesion: 0.16
+Nodes (17): Client, BlockscoutTokenInfo, BlockscoutTokenInfoClient, BlockscoutTokenInfoError, CachedIconResult, Arc, Error, HashMap (+9 more)
 
 ### Community 18 - "bridged_tokens_query.rs"
-Cohesion: 0.18
-Nodes (39): add_asset_edges_on_bridge(), bridged_tokens_aggregation_input_output_total(), bridged_tokens_default_excludes_edge_unindexed_for_its_bridge(), bridged_tokens_empty_configured_pairs_restricts_nothing(), bridged_tokens_last_page(), bridged_tokens_name_sort_nulls_and_empty_last(), bridged_tokens_opt_in_returns_same_rows_until_projection_widens(), bridged_tokens_pagination_after_bridge_collapse() (+31 more)
+Cohesion: 0.16
+Nodes (41): add_asset_edges_on_bridge(), bridged_tokens_aggregation_input_output_total(), bridged_tokens_default_excludes_edge_unindexed_for_its_bridge(), bridged_tokens_empty_configured_pairs_restricts_nothing(), bridged_tokens_last_page(), bridged_tokens_name_sort_nulls_and_empty_last(), bridged_tokens_opt_in_returns_same_rows_until_projection_widens(), bridged_tokens_pagination_after_bridge_collapse() (+33 more)
 
 ### Community 19 - "list_stats_chains"
-Cohesion: 0.17
-Nodes (27): forward_order_clause(), inverse_order_clause(), list_stats_chains(), ConnectionTrait, DatabaseConnection, DbErr, Result, seed_chain_named() (+19 more)
-
-### Community 20 - ".new"
 Cohesion: 0.15
-Nodes (40): load_native_id_map_filters_missing_native_ids(), message_paths_bounded_queries_apply_open_and_half_open_ranges(), message_paths_bounded_queries_sum_daily_rows_and_order_deterministically(), message_paths_default_excludes_pair_unindexed_for_its_bridge(), message_paths_empty_configured_pairs_restricts_nothing(), message_paths_include_zero_bounded_counterparty_expands_requested_known_rows_only(), message_paths_include_zero_bounded_queries_expand_known_chains(), message_paths_include_zero_counterparty_expands_requested_known_rows_only() (+32 more)
+Nodes (32): cursor_where_next(), cursor_where_prev(), forward_order_clause(), inverse_order_clause(), list_stats_chains(), ConnectionTrait, DatabaseConnection, DbErr (+24 more)
+
+### Community 20 - ".upsert_chains"
+Cohesion: 0.16
+Nodes (33): message_paths_bounded_queries_apply_open_and_half_open_ranges(), message_paths_bounded_queries_sum_daily_rows_and_order_deterministically(), message_paths_default_excludes_pair_unindexed_for_its_bridge(), message_paths_empty_configured_pairs_restricts_nothing(), message_paths_include_zero_bounded_counterparty_expands_requested_known_rows_only(), message_paths_include_zero_bounded_queries_expand_known_chains(), message_paths_include_zero_counterparty_expands_requested_known_rows_only(), message_paths_include_zero_incoming_all_time_expands_known_chains() (+25 more)
 
 ### Community 21 - "ADR-007: The Scan Floor Is Reconciled Against The Checkpoint, Not Against bridge_contracts (Accepted, with stated expiry)"
 Cohesion: 0.08
@@ -338,27 +361,27 @@ Nodes (34): ChainBridgeFilter, messages_where(), Condition, Option, String, Vec,
 
 ### Community 23 - "InterchainServiceImpl"
 Cohesion: 0.12
-Nodes (27): AddressInfo, BridgeInfo, CrosschainMessageModel, CrosschainTransferModel, DbMessageStatus, JoinedTransfer, BigDecimal, Decimal (+19 more)
+Nodes (25): AddressInfo, BridgeInfo, CrosschainMessageModel, CrosschainTransferModel, DbMessageStatus, GetMessageDetailsRequest, hex_string_opt(), Option (+17 more)
 
 ### Community 24 - "TestRangeProcessor"
-Cohesion: 0.22
+Cohesion: 0.21
 Nodes (13): AtomicUsize, mock_provider(), retry_pass_chunking_leaves_only_the_failing_remainder(), retry_pass_fairness_reaches_chunks_beyond_a_permanently_failing_prefix(), retry_pass_fetch_failure_re_records_the_chunk_without_escalating(), retry_pass_is_bounded_by_max_chunks_per_pass(), retry_pass_resolves_a_chunk_that_returns_zero_logs(), DynProvider (+5 more)
 
-### Community 25 - "indexers.rs"
-Cohesion: 0.21
-Nodes (23): enumerate_indexing_targets(), init_db(), omnibridge_config_path(), progress_for(), reconcile_catchup_floors(), reconcile_catchup_floors_amb_pair_only_resets_on_amb_proxy_lowered(), reconcile_catchup_floors_disabled_bridge_lowered_then_reenabled_ends_up_lowered(), reconcile_catchup_floors_failed_write_is_warn_only_and_retried_next_startup() (+15 more)
+### Community 25 - "reconcile_catchup_floors"
+Cohesion: 0.30
+Nodes (16): init_db(), progress_for(), reconcile_catchup_floors(), reconcile_catchup_floors_amb_pair_only_resets_on_amb_proxy_lowered(), reconcile_catchup_floors_disabled_bridge_lowered_then_reenabled_ends_up_lowered(), reconcile_catchup_floors_failed_write_is_warn_only_and_retried_next_startup(), reconcile_catchup_floors_is_independent_of_the_contracts_upsert_order(), reconcile_catchup_floors_lowers_stored_floor_and_fixes_completion() (+8 more)
 
 ### Community 26 - "Avalanche Bridge Filtering"
-Cohesion: 0.10
-Nodes (28): Codebase Review, Complexity Hotspots, Onboarding Friction, Recommended Research Priorities, Home Chain, Unknown Chain, Avalanche Data API, External Systems (+20 more)
+Cohesion: 0.12
+Nodes (24): Codebase Review, Complexity Hotspots, Onboarding Friction, Recommended Research Priorities, Message Lifecycle Entrypoints, Avalanche Data API, External Systems, Avalanche Blockchain ID Resolution (+16 more)
 
 ### Community 27 - "avalanche/consolidation.rs"
 Cohesion: 0.26
 Nodes (30): Bytes, addr(), call_outcome_transfer(), encode_transferrer(), execution_failed(), execution_succeeded(), key(), message_id() (+22 more)
 
 ### Community 28 - "MessageBuffer"
-Cohesion: 0.13
-Nodes (26): ActiveValue, FnOnce, T, set_value(), DummyMessage, MessageBuffer, MessageBuffer<T>, new_buffer() (+18 more)
+Cohesion: 0.15
+Nodes (23): FnOnce, DummyMessage, MessageBuffer, MessageBuffer<T>, new_buffer(), Arc, BlockNumber, ChainId (+15 more)
 
 ### Community 29 - "cursor.rs"
 Cohesion: 0.16
@@ -369,32 +392,32 @@ Cohesion: 0.19
 Nodes (29): gate_receiver_ictt_arm(), handle_log(), handle_message_executed(), handle_message_execution_failed(), handle_receive_cross_chain_message(), handle_send_cross_chain_message(), LogHandleContext, parse_execution_outcome_log() (+21 more)
 
 ### Community 31 - "Interchain Indexer Service README"
-Cohesion: 0.10
-Nodes (28): Functional Style for Boolean Logic, pending_messages Cold Storage Retention Is Load-Bearing, Query F — Incoming ICTT Reconstruction Diagnostic, Query G — pending_messages Backlog Trend, reconstruct_incoming_ictt_transfers Kill Switch, database service (UBI stack), interchain-indexer service (UBI stack, built from Dockerfile), ./config Mounted into /app/config (+20 more)
+Cohesion: 0.09
+Nodes (30): Config Structs Use deny_unknown_fields, Functional Style for Boolean Logic, pending_messages Cold Storage Retention Is Load-Bearing, Query F — Incoming ICTT Reconstruction Diagnostic, Query G — pending_messages Backlog Trend, reconstruct_incoming_ictt_transfers Kill Switch, database service (UBI stack), interchain-indexer service (UBI stack, built from Dockerfile) (+22 more)
 
 ### Community 32 - ".new"
-Cohesion: 0.14
-Nodes (20): GetBridgesRequest, GetBridgesResponse, GetChainsRequest, GetChainsResponse, GetMessageDetailsRequest, GetMessagesByAddressRequest, GetMessagesByTransactionRequest, GetMessagesRequest (+12 more)
+Cohesion: 0.15
+Nodes (19): GetBridgesRequest, GetBridgesResponse, GetChainsRequest, GetChainsResponse, GetMessagesByAddressRequest, GetMessagesByTransactionRequest, GetMessagesRequest, GetMessagesResponse (+11 more)
 
 ### Community 33 - "Status"
-Cohesion: 0.09
-Nodes (31): GetBridgedTokensRequest, GetBridgedTokensResponse, GetChainsStatsRequest, GetChainsStatsResponse, GetCommonStatisticsRequest, GetCommonStatisticsResponse, GetDailyStatisticsRequest, GetDailyStatisticsResponse (+23 more)
+Cohesion: 0.14
+Nodes (24): GetBridgedTokensRequest, GetBridgedTokensResponse, GetChainsStatsRequest, GetChainsStatsResponse, GetCommonStatisticsRequest, GetCommonStatisticsResponse, GetDailyStatisticsRequest, GetDailyStatisticsResponse (+16 more)
 
 ### Community 34 - "AmbIndexer"
-Cohesion: 0.14
-Nodes (14): AmbIndexer, Arc, AtomicBool, AtomicU64, Filter, Message, NaiveDateTime, Result (+6 more)
+Cohesion: 0.13
+Nodes (16): AmbIndexer, Arc, AtomicBool, AtomicU64, DashMap, Filter, JoinHandle, Message (+8 more)
 
-### Community 35 - "ictt_payload.rs"
-Cohesion: 0.11
-Nodes (21): ictt_completeness(), CreditExpectation, decode_inner(), decode_transferrer_message(), IcttPayload, mainnet_bytes(), PayloadRejection, Result (+13 more)
+### Community 35 - "TokenInfoService"
+Cohesion: 0.18
+Nodes (17): Arc, Box, DateTime, DynProvider, Ethereum, HashMap, HashSet, Mutex (+9 more)
 
 ### Community 36 - "TokenTransfer"
 Cohesion: 0.10
 Nodes (26): CallFailed, CallSucceeded, AnnotatedEvent, AnnotatedICTTSource, CallOutcome, Message, MessageExecutionOutcome, Address (+18 more)
 
-### Community 37 - "TokenInfoService"
-Cohesion: 0.18
-Nodes (17): Arc, Box, DateTime, DynProvider, Ethereum, HashMap, HashSet, Mutex (+9 more)
+### Community 37 - "fixture_vars"
+Cohesion: 0.11
+Nodes (37): D, collect_json_files(), deserialize_abi(), deserialize_address(), deserialize_bridge_type(), fixture_vars(), load_bridges_from_file(), load_bridges_impl() (+29 more)
 
 ### Community 38 - "services/utils.rs"
 Cohesion: 0.13
@@ -413,96 +436,96 @@ Cohesion: 0.15
 Nodes (24): Hook: allow-tmp-dirs.py (PreToolUse Bash), Hook: allow-tmp-writes.py (PreToolUse Write|Edit), Claude Skill: gh-issue-bug, Claude Skill: gh-issue-improvement, Claude Skill: gh-issue-publish, Codex Agent Interface: GitHub Issue Bug, Bug vs Improvement Issue Separation, Codex Skill: gh-issue-bug (+16 more)
 
 ### Community 42 - "Glossary"
+Cohesion: 0.09
+Nodes (24): Incoming ICTT Reconstruction / ICM Payload Decoding Entrypoints, Bridge, Bridge Contract, Configured Chain, Consolidation, Cross-Chain Message, Cross-Chain Transfer, Destination-Indexed Data (+16 more)
+
+### Community 43 - "build_chain_node_configs"
+Cohesion: 0.22
+Nodes (18): build_chain_node_configs(), chain_fixture(), create_provider_pools_from_chains(), create_provider_pools_impl(), DynProvider, Ethereum, HashMap, test_build_chain_node_configs_header_prefix_produces_prefixed_value() (+10 more)
+
+### Community 44 - "Exposed REST Endpoints and Swagger URL"
 Cohesion: 0.10
-Nodes (22): Incoming ICTT Reconstruction / ICM Payload Decoding Entrypoints, Bridge, Bridge Contract, Configured Chain, Consolidation, Cross-Chain Message, Cross-Chain Transfer, Destination-Indexed Data (+14 more)
-
-### Community 43 - "BridgeConfig"
-Cohesion: 0.20
-Nodes (15): ApiKeyConfig, BridgeConfig, bridges::ActiveModel, build_rpc_url(), ChainConfig, chains::ActiveModel, ExplorerConfig, IndexerType (+7 more)
-
-### Community 44 - "InterchainStatisticsService"
-Cohesion: 0.14
-Nodes (17): just check-envs / just generate-envs Requirement on ENV Changes, GET /api/v1/stats/chain/{chain_id}/bridged-tokens, GET /api/v1/stats/chains, GET /api/v1/stats/daily, GET /api/v1/stats/chain/{chain_id}/messages-paths/received, GET /api/v1/stats/chain/{chain_id}/messages-paths/sent, InterchainStatisticsService, v1GetBridgedTokensResponse (+9 more)
+Nodes (23): Proto Build Serde Attributes Are Behavior, just check-envs / just generate-envs Requirement on ENV Changes, Exposed REST Endpoints and Swagger URL, api_config_http.yaml — gRPC-to-HTTP Rule Map, GET /api/v1/stats/chains, GET /api/v1/stats/common, GET /api/v1/stats/daily, GET /api/v1/stats/chain/{chain_id}/messages-paths/received (+15 more)
 
 ### Community 45 - "package.json"
 Cohesion: 0.09
 Nodes (22): ts-proto, bugs, url, description, devDependencies, ts-proto, typescript, homepage (+14 more)
 
-### Community 46 - "Codex Skill: implementation-plan"
-Cohesion: 0.16
-Nodes (22): Claude Code Overrides (project CLAUDE.md), Handoff Preparation, Not Re-Analysis, Claude Skill: implementation-plan, Reviewer-Facing PR Description (not a changelog), Claude Skill: pr-description, Claude Skill: solution-review, Verification Gap Reporting, Claude Skill: task-analysis (+14 more)
+### Community 46 - "amb/consolidation.rs"
+Cohesion: 0.09
+Nodes (65): addr(), amount_to_decimal(), build_destination_only(), build_destination_only_transfer(), build_source_led(), build_transfer(), destination(), destination_anomaly() (+57 more)
 
 ### Community 47 - "bridge_contracts Is a Proxy, Not the Membership Set"
+Cohesion: 0.14
+Nodes (20): Runtime Verification Runbook, ADR-004 Stats Observability Horizon and Asset Union-Find, bridge_contracts Is a Proxy, Not the Membership Set, Canary vs Diagnostic Classification, IndexedChains::may_observe (in-memory eligibility), Observability Horizon Eligibility Rule, Query C — Hard Invariants Canary, Query D — Deferred Transfers Classified by Reason (+12 more)
+
+### Community 48 - "Settings"
 Cohesion: 0.13
-Nodes (19): bridge_contracts Is a Proxy, Not the Membership Set, IndexedChains::may_observe (in-memory eligibility), Observability Horizon Eligibility Rule, Query C — Hard Invariants Canary, Query D — Deferred Transfers Classified by Reason, Query E — Unindexed-Chain Edges Diagnostic, Reading stats_asset_id NULL Against stats_processed, upsert_bridge_contracts (insert/update only, never deletes) (+11 more)
+Nodes (17): DatabaseSettings, Deserialize, default_stats_chains_recalculation_period_secs(), default_stats_include_zero_chains(), default_swagger_path(), Default, PathBuf, Self (+9 more)
 
-### Community 48 - "spawn_configured_indexers"
+### Community 49 - "try_reconstruct_transfer"
 Cohesion: 0.19
-Nodes (23): bridge(), build_amb_chain_configs(), build_avalanche_chain_configs(), chain_config_fixture(), ChainPlan, dummy_provider(), group_contracts_by_chain(), log_amb_floor_divergence() (+15 more)
-
-### Community 49 - "unindexed_chain_filter.rs"
-Cohesion: 0.10
-Nodes (13): get_raw(), init_db(), init_interchain_indexer_server(), F, String, TestDbGuard, Url, Value (+5 more)
+Nodes (19): build_reconstructed_transfer(), ClassifiedPayload, classify_payload(), destination_arm(), destination_arm_amount(), DestinationArm, dst_token_address(), Message (+11 more)
 
 ### Community 50 - "MaintenancePlan"
-Cohesion: 0.13
-Nodes (18): Add, BridgeCounts, Counts, HotEvictionReason, MaintenancePlan, MessageBuffer<T>, record_bridge_metrics(), BridgeId (+10 more)
+Cohesion: 0.11
+Nodes (23): Add, BridgeCounts, classify_item(), ConsolidationOutcome, Counts, HotEvictionReason, MaintenancePlan, MessageBuffer<T> (+15 more)
 
 ### Community 51 - "amb/indexer.rs"
-Cohesion: 0.18
-Nodes (23): amb_handler_failure_creates_indexer_failure_row_for_the_failing_block(), AmbChainConfig, AmbContractConfig, chain_config(), mock_block(), mock_provider(), mock_receipt(), registry_with_event() (+15 more)
+Cohesion: 0.24
+Nodes (19): amb_handler_failure_creates_indexer_failure_row_for_the_failing_block(), AmbChainConfig, AmbContractConfig, chain_config(), mock_block(), mock_provider(), mock_receipt(), registry_with_event() (+11 more)
 
 ### Community 52 - ".new"
 Cohesion: 0.19
 Nodes (12): AvalancheChainConfig, AvalancheRangeProcessor, chain(), log_filter_covers_every_configured_contract_address_for_a_chain_with_several(), process_batch(), Address, ChainId, DynProvider (+4 more)
 
-### Community 53 - "FailureLedger"
-Cohesion: 0.12
-Nodes (13): FailureLedger, Arc, HashSet, Result, RwLock, Self, String, Vec (+5 more)
+### Community 53 - "Key"
+Cohesion: 0.22
+Nodes (15): alter_amb(), apply_collected_signatures(), apply_validator_confirmation(), drain_pending_message_hash_events(), EventContext, find_tokens_bridging_initiated(), is_canonical_message_hash_lookup(), Arc (+7 more)
 
 ### Community 54 - "progress.rs"
 Cohesion: 0.24
 Nodes (19): CatchupProgress, CheckpointCursors, cursors(), Option, Self, test_compute_backward_compatible_with_one_directional_formula_when_m_equals_s(), test_compute_blocks_remaining_equals_interval_width(), test_compute_blocks_remaining_is_zero_once_complete() (+11 more)
 
-### Community 55 - "TokenInfoService and Token Metadata Enrichment Flow"
-Cohesion: 0.11
-Nodes (20): ChainInfoService, TokenInfoService, Union-Find Asset Merge, merge_assets / ensure_asset_for_transfer — weighted union-find over stats_assets, Gotcha: Stats Asset Mapping Conflicts Merge; Only Same-Chain Collisions Skip, Gotcha: Token Identity In stats_asset_tokens Is The ICTT Contract Address, Not The Wrapped ERC-20, avalanche_icm_blockchain_ids Table, Runtime Metadata Writes (+12 more)
+### Community 55 - "ExampleIndexer"
+Cohesion: 0.14
+Nodes (17): ExampleIndexer, Arc, AtomicBool, AtomicU64, DynProvider, Error, Ethereum, Filter (+9 more)
 
 ### Community 56 - "InterchainService"
-Cohesion: 0.13
-Nodes (21): GET /api/v1/interchain/chains, GET /api/v1/interchain/messages/{message_id}, GET /api/v1/interchain/messages, GET /api/v1/interchain/messages:byAddress/{address}, GET /api/v1/interchain/messages:byTx/{tx_hash}, GET /api/v1/interchain/transfers, GET /api/v1/interchain/transfers:byAddress/{address}, GET /api/v1/interchain/transfers:byTx/{tx_hash} (+13 more)
+Cohesion: 0.11
+Nodes (24): GET /api/v1/interchain/bridges, GET /api/v1/interchain/chains, GET /api/v1/interchain/messages/{message_id}, GET /api/v1/interchain/messages, GET /api/v1/interchain/messages:byAddress/{address}, GET /api/v1/interchain/messages:byTx/{tx_hash}, GET /api/v1/interchain/transfers, GET /api/v1/interchain/transfers:byAddress/{address} (+16 more)
 
 ### Community 57 - "MessageBuffer (Tiered Storage)"
 Cohesion: 0.12
-Nodes (18): upsert_cursors — GREATEST-only cursor maintenance writer (cannot lower a floor), MessageBuffer (Tiered Storage), Bridge Filtering Entrypoints, Message Buffer, Gotcha: AMB Collision Replacement Must Delete Before Insert, Gotcha: AMB Source and Destination Events Can Arrive Out of Order, Gotcha: AMB Header Sender Is Not The Source Transaction Initiator, Gotcha: AMB Transfer Sides Are Nullable and Never Mirrored (+10 more)
+Nodes (20): upsert_cursors — GREATEST-only cursor maintenance writer (cannot lower a floor), AvalancheIndexer, High-Level Data Flow, LogStream, MessageBuffer (Tiered Storage), Bridge Filtering Entrypoints, Message Buffer, Teleporter / ICM (+12 more)
 
-### Community 58 - ".fetch_token_info"
-Cohesion: 0.11
-Nodes (16): Erc20TokenInfoFetcher, DynProvider, Ethereum, Result, Vec, Erc20TokenHomeInfoFetcher, DynProvider, Ethereum (+8 more)
+### Community 58 - "MessageBufferSettings"
+Cohesion: 0.43
+Nodes (6): default_hot_ttl(), default_maintenance_interval(), MessageBufferSettings, Default, Duration, Self
 
 ### Community 59 - "Rust Style Rules"
-Cohesion: 0.08
-Nodes (28): Error Handling Rules, anyhow::Result for Internal Code, API Error Sanitization, Checked/Saturating Arithmetic and Euclidean Division, Always Add Context When Propagating, Log Errors at the Handling Point, Panic Avoidance in Runtime Paths, thiserror for Public API Error Types (+20 more)
+Cohesion: 0.12
+Nodes (20): Error Handling Rules, anyhow::Result for Internal Code, API Error Sanitization, Checked/Saturating Arithmetic and Euclidean Division, Always Add Context When Propagating, Log Errors at the Handling Point, Panic Avoidance in Runtime Paths, thiserror for Public API Error Types (+12 more)
 
-### Community 60 - "range_driver.rs"
-Cohesion: 0.18
-Nodes (15): a_budget_covering_the_whole_queue_attempts_each_position_once(), chunk_range(), chunk_range_clamps_a_zero_batch_size_to_one(), chunk_range_narrower_than_batch_size_yields_one_chunk(), chunk_range_splits_into_batch_size_pieces_with_a_narrower_last_chunk(), interval(), resume_index(), resume_index_re_attempts_the_chunk_a_cursor_lands_inside() (+7 more)
+### Community 60 - "ChainConfig"
+Cohesion: 0.16
+Nodes (16): ApiKeyConfig, ApiKeyLocation, bridges::ActiveModel, chain_declares_api_key(), ChainConfig, chains::ActiveModel, encode_path_segment(), ExplorerConfig (+8 more)
 
 ### Community 61 - "BatchError"
-Cohesion: 0.15
+Cohesion: 0.14
 Nodes (13): attributed_ranges(), BatchError, RangeDriver<P>, Error, Filter, From, Poll, Result (+5 more)
 
 ### Community 62 - "Stats Projection"
-Cohesion: 0.10
-Nodes (29): ADR-004: Stats Observability Horizon; Asset Identity As Union-Find, IndexedChains (Stats Eligibility), API Serving Entrypoints, Avalanche Indexing Entrypoints, Common Indexer Architecture Entrypoints, Config Loading Entrypoints, Database Schema and Migrations Entrypoints, Exploration Map (+21 more)
+Cohesion: 0.16
+Nodes (19): ADR-004: Stats Observability Horizon; Asset Identity As Union-Find, IndexedChains (Stats Eligibility), Runtime Verification Runbook, Stats Entrypoints, Countable / Deferred (Stats), IndexedChains (glossary), Observability Horizon, Projection (+11 more)
 
-### Community 63 - "try_reconstruct_transfer"
-Cohesion: 0.19
-Nodes (19): build_reconstructed_transfer(), ClassifiedPayload, classify_payload(), destination_arm(), destination_arm_amount(), DestinationArm, dst_token_address(), Message (+11 more)
+### Community 63 - ".fetch_token_info"
+Cohesion: 0.11
+Nodes (16): Erc20TokenInfoFetcher, DynProvider, Ethereum, Result, Vec, Erc20TokenHomeInfoFetcher, DynProvider, Ethereum (+8 more)
 
-### Community 64 - "SourceData"
-Cohesion: 0.18
-Nodes (16): build_transfer(), AnnotatedEvent, ChainId, NaiveDateTime, ReceiveCrossChainMessage, Result, Self, SendCrossChainMessage (+8 more)
+### Community 64 - "Indexing Gaps, Retries, and Checkpoint Safety"
+Cohesion: 0.25
+Nodes (9): ADR-005: Failed-Range Ledger, Independent of Checkpoints, RangeDriver::run / run_retry_tick (indexer/range_driver.rs), Gotcha: The Retry Pass Starves The Forward Streams, And That Looks Like RPC Failure, AMB In-Memory Correlation Maps, FailureLedger / indexer_failures, Indexing Gaps, Retries, and Checkpoint Safety, LogBatch (Named Range), RangeDriver Retry Pass (+1 more)
 
 ### Community 65 - "AvalancheIndexer"
 Cohesion: 0.14
@@ -512,25 +535,25 @@ Nodes (13): AvalancheIndexer, BatchProcessContext, IndexerCleanupGuard, Arc, Ato
 Cohesion: 0.20
 Nodes (16): default_backoff_base(), default_backoff_cap(), default_enabled(), default_max_chunks_per_pass(), default_record_retry_attempts(), default_record_retry_initial_backoff(), default_scan_interval(), FailureRetrySettings (+8 more)
 
-### Community 67 - "Runtime Verification Runbook"
-Cohesion: 0.14
-Nodes (18): DecimalsConflict Domain Marker Type, Expected Skips Inside a Shared Transaction, Maintenance Transaction (messages, transfers, stats, cursor), Detect Conflicts with SELECT, Never a Failing INSERT, Never Assert a Delta on a Process-Wide Metric, STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study), Runtime Verification Runbook, ADR-004 Stats Observability Horizon and Asset Union-Find (+10 more)
+### Community 67 - "Expected Skips Inside a Shared Transaction"
+Cohesion: 0.13
+Nodes (17): DecimalsConflict Domain Marker Type, Expected Skips Inside a Shared Transaction, Maintenance Transaction (messages, transfers, stats, cursor), Detect Conflicts with SELECT, Never a Failing INSERT, Never Assert a Delta on a Process-Wide Metric, STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study), Asset-Identity Union-Find Merge, A Successful Asset Merge Is Nearly Invisible in SQL (+9 more)
 
-### Community 68 - "BlockRange"
-Cohesion: 0.25
-Nodes (13): BlockRange, difference_produces_expected_pieces(), fold_adjacent(), merge_bounds(), overlaps(), overlaps_or_adjacent(), pre_union(), range() (+5 more)
+### Community 68 - "Result"
+Cohesion: 0.11
+Nodes (15): BridgedTokensListPagination, ListMarker, MessagesPaginationLogic, OutputPagination<P>, Default, NaiveDateTime, Option, Result (+7 more)
 
-### Community 69 - "policy.rs"
-Cohesion: 0.22
-Nodes (16): FailedInterval, NaiveDateTime, Option, String, base_ts(), capped_backoff_does_not_overflow_at_extreme_attempts(), capped_backoff_secs(), capped_backoff_widens_strictly_until_the_cap() (+8 more)
+### Community 69 - "FailureLedger"
+Cohesion: 0.12
+Nodes (13): FailureLedger, Arc, HashSet, Result, RwLock, Self, String, Vec (+5 more)
 
-### Community 70 - "run"
+### Community 70 - "Async Patterns Rules"
+Cohesion: 0.29
+Nodes (8): CrosschainIndexer Trait, IndexerCleanupGuard Drop Guard, Async Patterns Rules, Graceful Shutdown and Cleanup Guards, Shared State (Arc RwLock), Start/Stop Invariants, Task Spawning and JoinHandle Rule, Async Trait Methods Rule
+
+### Community 71 - "Codex Skill: implementation-plan"
 Cohesion: 0.16
-Nodes (19): D, collect_json_files(), create_provider_pools_from_chains(), deserialize_abi(), deserialize_address(), deserialize_bridge_type(), load_bridges_from_file(), load_chains_from_file() (+11 more)
-
-### Community 71 - "BufferItem"
-Cohesion: 0.20
-Nodes (11): BufferItem, now_naive_utc(), BTreeSet, HashMap, NaiveDateTime, classify_item(), ConsolidationOutcome, MaintenancePlan<T> (+3 more)
+Nodes (22): Claude Code Overrides (project CLAUDE.md), Handoff Preparation, Not Re-Analysis, Claude Skill: implementation-plan, Reviewer-Facing PR Description (not a changelog), Claude Skill: pr-description, Claude Skill: solution-review, Verification Gap Reporting, Claude Skill: task-analysis (+14 more)
 
 ### Community 72 - "workflows/ Tool-Agnostic Task Procedures"
 Cohesion: 0.16
@@ -545,40 +568,40 @@ Cohesion: 0.19
 Nodes (16): docker-compose.yml Full Stack, backend service (Blockscout API), caddy service, db service (postgres:17), db-init service, frontend service, interchain-indexer service, redis-db service (+8 more)
 
 ### Community 75 - "Layer 1: Generic Pipeline"
-Cohesion: 0.17
-Nodes (15): Consolidate Trait, Maintenance Task, Operational Risks, Pre-Buffer Storage Gate, Canonical Indexing Write Path, indexer_checkpoints Semantics, Cursor Gap Bridging, Database Outage Followed By Recovery Leap (+7 more)
+Cohesion: 0.11
+Nodes (22): Consolidate Trait, Maintenance Task, Operational Risks, Union-Find Asset Merge, merge_assets / ensure_asset_for_transfer — weighted union-find over stats_assets, Gotcha: Stats Asset Mapping Conflicts Merge; Only Same-Chain Collisions Skip, Gotcha: Token Identity In stats_asset_tokens Is The ICTT Contract Address, Not The Wrapped ERC-20, Pre-Buffer Storage Gate (+14 more)
 
 ### Community 76 - "AvalancheDataApiClient"
-Cohesion: 0.28
-Nodes (10): ClientWithMiddleware, AvalancheDataApiClient, AvalancheDataApiClientSettings, AvalancheDataApiNetwork, GetBlockchainByIdResponse, Option, Result, Self (+2 more)
+Cohesion: 0.18
+Nodes (15): ClientWithMiddleware, AvalancheDataApiClient, AvalancheDataApiClientSettings, AvalancheDataApiNetwork, GetBlockchainByIdResponse, Option, Result, Self (+7 more)
 
 ### Community 77 - "AmbDispatchMockService"
-Cohesion: 0.17
-Nodes (11): Id, AmbDispatchMockService, json_response(), Error, Future, Poll, RequestPacket, ResponsePacket (+3 more)
+Cohesion: 0.14
+Nodes (13): Id, AmbDispatchMockService, json_response(), Block, Error, Future, Poll, RequestPacket (+5 more)
 
 ### Community 78 - "prelude.rs"
-Cohesion: 0.18
-Nodes (6): Model, Relation, DateTime, Model, Relation, DateTime
+Cohesion: 0.15
+Nodes (9): Model, Relation, DateTime, Option, Vec, MessageStatus, Model, Relation (+1 more)
 
 ### Community 79 - "Checkpoint"
 Cohesion: 0.20
 Nodes (14): A failed floor write stays a warn (today), Checkpoint, Gotcha: AMB Queued Events Must Preserve Their Emitting Chain, Gotcha: A Checkpoint Certifies Scanning, Not Correctness, Gotcha: Checkpoint Stall When All Events Are Perpetually Filtered, FailureLedger — in-memory open-hole cache over indexer_failures, Gotcha: The Failure Ledger's Healthy Path Is DB-Free Only Because One Process Owns A Bridge, indexer_failures — the failed-range ledger (+6 more)
 
-### Community 80 - "Database Subsystem: Schema and DB Interaction Layer"
-Cohesion: 0.15
-Nodes (14): Database Schema, Unindexed-Chain Read Filter, batched_upsert / run_in_batches, Database Subsystem: Schema and DB Interaction Layer, Hybrid Database Layer, InterchainDatabase Facade, Table Families, Unindexed-Chain Read Filter (+6 more)
+### Community 80 - "TokenInfoService and Token Metadata Enrichment Flow"
+Cohesion: 0.08
+Nodes (27): ChainInfoService, Database Schema, TokenInfoService, Unindexed-Chain Read Filter, avalanche_icm_blockchain_ids Table, batched_upsert / run_in_batches, Database Subsystem: Schema and DB Interaction Layer, Hybrid Database Layer (+19 more)
 
-### Community 81 - "Project Context"
-Cohesion: 0.12
-Nodes (18): AvalancheIndexer, High-Level Data Flow, LogStream, Whole-System Entrypoints, Teleporter / ICM, Configuration Model, Crate Map, Local Development Flow (+10 more)
+### Community 81 - "SourceData"
+Cohesion: 0.18
+Nodes (16): build_transfer(), AnnotatedEvent, ChainId, NaiveDateTime, ReceiveCrossChainMessage, Result, Self, SendCrossChainMessage (+8 more)
 
 ### Community 82 - "Architectural Decision Records Index"
 Cohesion: 0.17
 Nodes (13): ADR-001: Message Buffer Tiered Storage, ADR-002: Primary Chain Filtering for Unknown Chains, ADR-003: AMB Transfers Reconstructed From Events; Nullable Transfer Sides, ADR-006: Contract Versioning Resolved By Block, At Decode Time, Architectural Decision Records Index, ADR Template, AMB / Omnibridge Token Transfer Reconstruction, build_transfer / build_destination_only_transfer (+5 more)
 
-### Community 83 - "BridgeType"
-Cohesion: 0.16
-Nodes (9): Entity, Model, Relation, DateTime, Option, Related, RelationDef, String (+1 more)
+### Community 83 - "bridges.rs"
+Cohesion: 0.17
+Nodes (8): Entity, Model, Relation, DateTime, Option, Related, RelationDef, String
 
 ### Community 84 - "fetch_receipts_for_transactions"
 Cohesion: 0.18
@@ -596,17 +619,17 @@ Nodes (11): AsRef, compile(), dedupe_actix_duplicate_chain_info_internal(), main
 Cohesion: 0.32
 Nodes (11): Bridge, BridgeModel, bridge_model_to_proto(), model(), Result, test_bridge_model_to_proto_multi_chain_is_sorted(), test_bridge_model_to_proto_no_configured_chains_is_empty(), test_bridge_model_to_proto_ordering_is_deterministic_across_insertion_orders() (+3 more)
 
-### Community 88 - "MockLogsService"
-Cohesion: 0.21
-Nodes (10): build_logs_response(), MockLogsAction, MockLogsService, Future, Log, Mutex, RequestPacket, ResponsePacket (+2 more)
+### Community 88 - "stats_chains.rs"
+Cohesion: 0.50
+Nodes (3): Model, Relation, DateTime
 
-### Community 89 - "BridgeContractConfig"
-Cohesion: 0.19
-Nodes (12): BridgeContractConfig, ActiveModel, test_bridge_contract_config_to_active_model(), amb_contract_configs(), contract(), contract_with_address(), parse_contract_abi(), parse_contract_address() (+4 more)
+### Community 89 - "indexers.rs"
+Cohesion: 0.11
+Nodes (44): BridgeType, BridgeConfig, BridgeContractConfig, ChainId, amb_contract_configs(), bridge(), build_amb_chain_configs(), build_avalanche_chain_configs() (+36 more)
 
-### Community 90 - "Codex Skill: research-scope"
-Cohesion: 0.22
-Nodes (11): Claude Skill: research-scope, Plan Review Gate Before Coding Task, Codex Agent Interface: Research Scope, Explicit Human Confirmation Before Persisting Research, Codex Skill: research-scope, Memory Bank: exploration-map.md, Memory Bank: research/README.md, Scope Research Workflow (+3 more)
+### Community 90 - "stats.rs"
+Cohesion: 0.18
+Nodes (6): i64_to_u64_nonneg(), map_stats_error(), parse_optional_utc_date_rejects_malformed(), Error, stats_chain_row_to_proto(), StatsChainRow
 
 ### Community 91 - ".check"
 Cohesion: 0.18
@@ -616,9 +639,9 @@ Nodes (7): Health, HealthCheckRequest, HealthCheckResponse, HealthService, Reque
 Cohesion: 0.20
 Nodes (8): Entity, Model, Relation, DateTime, Option, Related, RelationDef, String
 
-### Community 93 - "BridgedTokensPaginationLogic"
-Cohesion: 0.19
-Nodes (16): BridgedTokenAggDbRow, build_pagination_from_bridged_tokens(), count_column(), cursor_where_next(), cursor_where_prev(), forward_order_clause(), inverse_order_clause(), String (+8 more)
+### Community 93 - "OutputPagination"
+Cohesion: 0.18
+Nodes (16): BridgedTokenAggDbRow, build_pagination_from_bridged_tokens(), count_column(), cursor_where_next(), cursor_where_prev(), String, Value, BridgedTokensPaginationLogic (+8 more)
 
 ### Community 94 - "Interchain Indexer"
 Cohesion: 0.15
@@ -648,25 +671,25 @@ Nodes (7): Cache, CacheKey, CacheValue, BlockchainIdResolver, resolves_native_id
 Cohesion: 0.36
 Nodes (8): AmbIndexerSettings, default_batch_size(), default_clock_skew_tolerance(), default_pull_interval(), default_receipt_concurrency(), Default, Duration, Self
 
-### Community 101 - "src/utils.rs"
-Cohesion: 0.49
-Nodes (8): bytes_to_naive_datetime(), naive_datetime_to_bytes(), naive_datetime_to_nanos(), nanos_to_naive_datetime(), NaiveDateTime, Result, test_naive_datetime_to_bytes_round_trip(), u64_from_hex_prefixed()
+### Community 101 - "ActiveValue"
+Cohesion: 0.67
+Nodes (3): ActiveValue, T, set_value()
 
-### Community 102 - "Indexing Gaps, Retries, and Checkpoint Safety"
-Cohesion: 0.25
-Nodes (9): ADR-005: Failed-Range Ledger, Independent of Checkpoints, RangeDriver::run / run_retry_tick (indexer/range_driver.rs), Gotcha: The Retry Pass Starves The Forward Streams, And That Looks Like RPC Failure, AMB In-Memory Correlation Maps, FailureLedger / indexer_failures, Indexing Gaps, Retries, and Checkpoint Safety, LogBatch (Named Range), RangeDriver Retry Pass (+1 more)
+### Community 102 - "range_driver.rs"
+Cohesion: 0.18
+Nodes (15): a_budget_covering_the_whole_queue_attempts_each_position_once(), chunk_range(), chunk_range_clamps_a_zero_batch_size_to_one(), chunk_range_narrower_than_batch_size_yields_one_chunk(), chunk_range_splits_into_batch_size_pieces_with_a_narrower_last_chunk(), interval(), resume_index(), resume_index_re_attempts_the_chunk_a_cursor_lands_inside() (+7 more)
 
 ### Community 103 - "Model"
-Cohesion: 0.22
+Cohesion: 0.25
 Nodes (8): Model, Relation, BigDecimal, DateTime, Decimal, Option, Vec, TransferType
 
-### Community 104 - "Layer 2: Avalanche Reference Realization"
-Cohesion: 0.22
-Nodes (10): CrosschainIndexer Trait, IndexerCleanupGuard Drop Guard, Layer 2: Avalanche Reference Realization, Transaction-Grouped Processing, Async Patterns Rules, Graceful Shutdown and Cleanup Guards, Shared State (Arc RwLock), Start/Stop Invariants (+2 more)
+### Community 104 - "CrosschainIndexerState"
+Cohesion: 0.14
+Nodes (9): CrosschainIndexerState, CrosschainIndexerStatus, Display, Formatter, HashMap, NaiveDateTime, Result, String (+1 more)
 
-### Community 105 - "PaginationDirection"
+### Community 105 - "policy.rs"
 Cohesion: 0.22
-Nodes (12): PaginationDirection, Display, Formatter, StatsChainsPaginationLogic, build_pagination(), cursor_where_next(), cursor_where_prev(), Option (+4 more)
+Nodes (16): FailedInterval, NaiveDateTime, Option, String, base_ts(), capped_backoff_does_not_overflow_at_extreme_attempts(), capped_backoff_secs(), capped_backoff_widens_strictly_until_the_cap() (+8 more)
 
 ### Community 106 - "Testing Rules"
 Cohesion: 0.29
@@ -680,13 +703,13 @@ Nodes (7): Model, Relation, DateTime, Json, Option, String, Vec
 Cohesion: 0.28
 Nodes (11): indexer_failure_totals_sums_blocks_and_reports_the_oldest_created_at(), indexer_failures_rows_for(), open_indexer_failures_is_a_pure_read_with_no_side_effects(), pre_union_with_reason(), record_indexer_failures_disjointness_holds_after_mixed_merges(), record_indexer_failures_does_not_merge_across_a_real_gap(), record_indexer_failures_growth_bound_for_consecutive_realtime_failures(), record_indexer_failures_merges_overlapping_and_adjacent_ranges_into_one_row() (+3 more)
 
-### Community 109 - "AvalancheIndexerSettings"
-Cohesion: 0.39
-Nodes (6): AvalancheIndexerSettings, default_batch_size(), default_pull_interval(), Default, Duration, Self
+### Community 109 - "BlockRange"
+Cohesion: 0.25
+Nodes (13): BlockRange, difference_produces_expected_pieces(), fold_adjacent(), merge_bounds(), overlaps(), overlaps_or_adjacent(), pre_union(), range() (+5 more)
 
-### Community 110 - ".get_checkpoint"
-Cohesion: 0.23
-Nodes (10): indexer_failures_and_mark_catchup_complete_are_independent_records(), list_indexer_checkpoints_filters_and_orders_deterministically(), lower_catchup_floor_is_idempotent_and_never_raises_or_touches_max_cursor(), mark_catchup_complete_upserts_empty_range_checkpoint(), mark_catchup_complete_without_safe_realtime_cursor_does_not_insert(), seed_catchup_floor_conflict_clause_touches_only_the_floor_and_is_idempotent(), seed_catchup_floor_does_not_lower_an_already_advanced_floor(), seed_catchup_floor_heals_a_stored_zero() (+2 more)
+### Community 110 - "Bridges"
+Cohesion: 0.40
+Nodes (5): Bridge `1` — AMB/Omnibridge, Bridge `2` — Avalanche ICTT, Bridges, Contracts of bridge `1`, Contracts of bridge `2`
 
 ### Community 111 - "Migration"
 Cohesion: 0.36
@@ -708,17 +731,17 @@ Nodes (5): Migration, DbErr, MigrationTrait, Result, SchemaManager
 Cohesion: 0.33
 Nodes (7): Cold Tier (pending_messages table), Entry Versioning for Cursor Tracking, Hot Tier (In-Memory DashMap), Tiered Message Buffer Storage, TTL-Based Eviction and Cache-Miss Restoration, catchup_min_cursor, Checkpoint/Ledger Independence
 
-### Community 116 - "MessageStatus"
-Cohesion: 0.33
-Nodes (6): Model, Relation, DateTime, Option, Vec, MessageStatus
+### Community 116 - "Testnet set"
+Cohesion: 0.25
+Nodes (8): Bridge `1` — AMB/Omnibridge, Bridges, Chain `10200` — Chiado, Chain `11155111` — Sepolia, Chains, Config files, Contracts of bridge `1`, Testnet set
 
 ### Community 117 - "AbiRegistry"
 Cohesion: 0.29
 Nodes (7): interchain_indexer_oldest_open_hole_age_seconds, Cyclic Retry-Pass Sweep with Shared Chunk Budget, AbiRegistry, AmbChainConfig (amb_proxies, mediators lists), resolve_log(chain_id, address, topic, block_number), topic0 Cannot Substitute for Block Resolution, interchain_indexer_amb_logs_dropped_wrong_version_total
 
-### Community 118 - "BufferItem<T>"
-Cohesion: 0.21
-Nodes (7): BufferItem<T>, BlockNumber, BufferItemVersion, ChainId, Result, Self, T
+### Community 118 - "BufferItem"
+Cohesion: 0.12
+Nodes (15): BufferItem, BufferItem<T>, now_naive_utc(), BlockNumber, BTreeSet, BufferItemVersion, ChainId, HashMap (+7 more)
 
 ### Community 119 - "Model"
 Cohesion: 0.29
@@ -728,29 +751,29 @@ Nodes (6): Model, Relation, DateTime, Option, String, Vec
 Cohesion: 0.29
 Nodes (6): Model, Relation, DateTime, Option, String, Vec
 
-### Community 121 - ".run"
+### Community 121 - "IndexedChains"
+Cohesion: 0.18
+Nodes (5): IndexedChains, HashMap, HashSet, Option, Vec
+
+### Community 122 - "ENVs — `config/full-mainnet`"
+Cohesion: 0.20
+Nodes (10): Chain `100` — Gnosis, Chain `1` — Ethereum, Chain `43114` — Avalanche C-Chain, Chain `68414` — Henesys, Chain `8021` — NUMINE Mainnet, Chains, Config files, ENVs — `config/full-mainnet` (+2 more)
+
+### Community 123 - "chain_unindexed_condition"
 Cohesion: 0.22
-Nodes (6): RangeProcessor, Item, Send, Sync, Stream, Unpin
-
-### Community 122 - "build_bounded_message_paths_query"
-Cohesion: 0.14
-Nodes (20): Fn, build_all_time_message_paths_query(), build_bounded_message_paths_query(), InterchainDailyCounters, MessagePathDirection, push_in_predicate(), push_indexed_pairs_predicate(), push_zero_chains_guard_predicate() (+12 more)
-
-### Community 123 - "Consolidate"
-Cohesion: 0.25
-Nodes (7): Option, TransferDummyMessage, Consolidate, Clone, Send, Sync, Serialize
+Nodes (16): Column, Entity, chain_unindexed_condition(), cols(), message_countable_condition(), render(), Clone, Condition (+8 more)
 
 ### Community 124 - "group_logs_by_transaction"
 Cohesion: 0.38
 Nodes (6): group_logs_by_transaction(), B256, HashMap, Log, Vec, test_group_logs_by_transaction_preserves_input_order()
 
-### Community 125 - "Exposed REST Endpoints and Swagger URL"
-Cohesion: 0.13
-Nodes (16): Proto Build Serde Attributes Are Behavior, Exposed REST Endpoints and Swagger URL, api_config_http.yaml — gRPC-to-HTTP Rule Map, GET /api/v1/stats/common, GET /api/v1/status/indexers, GET /api/v1/status/indexing, GET /api/v1/status/indexers/{indexer_name}, Health service (+8 more)
+### Community 125 - "GET /api/v1/status/indexers"
+Cohesion: 0.33
+Nodes (7): GET /api/v1/status/indexers, GET /api/v1/status/indexing, GET /api/v1/status/indexers/{indexer_name}, StatusService, v1FullStatus, v1GetIndexingProgressResponse, v1IndexerStatus
 
-### Community 126 - "MessageBufferSettings"
-Cohesion: 0.43
-Nodes (6): default_hot_ttl(), default_maintenance_interval(), MessageBufferSettings, Default, Duration, Self
+### Community 126 - "events.rs"
+Cohesion: 0.20
+Nodes (14): a_failed_drain_keeps_the_queued_events_for_the_replay(), a_successful_drain_removes_the_queue_entry(), DestinationKind, find_tokens_bridged(), find_tokens_bridged_ignores_other_message_ids(), find_tokens_bridged_matches_by_message_id_independent_of_executor(), pending_with_unapplicable_signatures(), PendingCollectedSignatures (+6 more)
 
 ### Community 127 - "Model"
 Cohesion: 0.33
@@ -780,9 +803,9 @@ Nodes (7): Maintenance Task and Consolidation Pass, Asset Identity as Union-Find
 Cohesion: 0.40
 Nodes (4): ApiError, Error, Self, String
 
-### Community 135 - "stats_messages_days.rs"
-Cohesion: 0.40
-Nodes (4): Date, Model, Relation, DateTime
+### Community 135 - "ENVs — `config` (empty base set)"
+Cohesion: 0.25
+Nodes (6): ENVs — `config` (empty base set), Gotchas, Long form — one variable per field, Prefixes and grammar, Short form — JSON values, Which files the service reads
 
 ### Community 136 - "stats_asset_tokens.rs"
 Cohesion: 0.40
@@ -856,9 +879,9 @@ Nodes (3): Entity, Related, RelationDef
 Cohesion: 0.50
 Nodes (3): Entity, Related, RelationDef
 
-### Community 154 - "resolve-blockchain-id.rs"
-Cohesion: 0.48
-Nodes (5): main(), parse_args(), parse_blockchain_id(), Result, String
+### Community 154 - "BlockscoutTokenInfoClientSettings"
+Cohesion: 0.26
+Nodes (11): BlockscoutTokenInfoClientSettings, default_icon_retry_interval(), default_ignore_chains(), default_onchain_retry_interval(), Default, Duration, Option, Self (+3 more)
 
 ### Community 155 - "Entity"
 Cohesion: 0.50
@@ -872,25 +895,113 @@ Nodes (3): Entity, Related, RelationDef
 Cohesion: 0.50
 Nodes (3): Entity, Related, RelationDef
 
+### Community 159 - "MockLogsService"
+Cohesion: 0.21
+Nodes (10): build_logs_response(), MockLogsAction, MockLogsService, Future, Log, Mutex, RequestPacket, ResponsePacket (+2 more)
+
+### Community 204 - "stats_messages_days.rs"
+Cohesion: 0.40
+Nodes (4): Date, Model, Relation, DateTime
+
+### Community 205 - "Codex Skill: research-scope"
+Cohesion: 0.22
+Nodes (11): Claude Skill: research-scope, Plan Review Gate Before Coding Task, Codex Agent Interface: Research Scope, Explicit Human Confirmation Before Persisting Research, Codex Skill: research-scope, Memory Bank: exploration-map.md, Memory Bank: research/README.md, Scope Research Workflow (+3 more)
+
+### Community 206 - ".run"
+Cohesion: 0.22
+Nodes (9): empty_batch(), escalates_and_stops_consuming_when_record_keeps_failing(), RangeProcessor, records_a_failed_batch_and_resolves_it_on_a_later_success(), Item, Send, Sync, Stream (+1 more)
+
+### Community 207 - "PaginationDirection"
+Cohesion: 0.24
+Nodes (8): PaginationDirection, Display, Formatter, StatsChainsPaginationLogic, StatsChainsSortField, build_pagination(), Option, StatsChainListRow
+
+### Community 208 - "secret.rs"
+Cohesion: 0.11
+Nodes (20): Debug, E, redact_urls(), redact_urls_does_not_panic_on_multi_byte_input(), redact_urls_handles_a_realistic_transport_error_rendering(), redact_urls_handles_two_urls_in_one_string(), redact_urls_strips_a_path_embedded_secret(), redact_urls_strips_a_query_embedded_secret() (+12 more)
+
+### Community 209 - "Exploration Map"
+Cohesion: 0.20
+Nodes (10): API Serving Entrypoints, Avalanche Indexing Entrypoints, Common Indexer Architecture Entrypoints, Config Loading Entrypoints, Database Schema and Migrations Entrypoints, Exploration Map, Whole-System Entrypoints, Crate Map (+2 more)
+
+### Community 210 - "ENVs — `config/avalanche`"
+Cohesion: 0.18
+Nodes (11): Bridge `2` — Avalanche ICTT, Bridges, Chain `43114` — Avalanche C-Chain, Chain `68414` — Henesys, Chain `8021` — NUMINE Mainnet, Chains, Config files, Contracts of bridge `2` (+3 more)
+
+### Community 211 - "ENVs — `config/full-testnet`"
+Cohesion: 0.22
+Nodes (8): Bridge `1` — AMB/Omnibridge, Bridges, Chain `10200` — Chiado, Chain `11155111` — Sepolia, Chains, Config files, Contracts of bridge `1`, ENVs — `config/full-testnet`
+
+### Community 212 - "Configuration Loading and Validation"
+Cohesion: 0.20
+Nodes (12): Home Chain, Configuration Model, home_chain_id Flag, ArrayRules Id-Key Merge Table, Configuration Loading and Validation, DB Seeding via Upserts, deny_unknown_fields Pervasiveness, env_merge.rs Deep-Merge Override Layer (+4 more)
+
+### Community 213 - "Mainnet set"
+Cohesion: 0.20
+Nodes (9): Bridge `1` — AMB/Omnibridge, Bridges, Chain `100` — Gnosis, Chain `1` — Ethereum, Chains, Config files, Contracts of bridge `1`, ENVs — `config/omnibridge` (+1 more)
+
+### Community 214 - "Field reference"
+Cohesion: 0.33
+Nodes (6): `bridges[]`, `bridges[].contracts[]`, `chains[]`, `chains[].rpcs[<provider>]`, `chains[].rpcs[<provider>].api_key`, Field reference
+
+### Community 215 - "CleanupGuard"
+Cohesion: 0.25
+Nodes (7): CleanupGuard, Arc, AtomicBool, Drop, JoinHandle, Option, RwLock
+
+### Community 216 - "Gotcha: Recoverable Message Fields Are Not A "Never Mirror" Case"
+Cohesion: 0.25
+Nodes (8): Gotcha: AMB Collision Replacement Must Delete Before Insert, Gotcha: AMB Source and Destination Events Can Arrive Out of Order, Gotcha: AMB Header Sender Is Not The Source Transaction Initiator, Gotcha: AMB Transfer Sides Are Nullable and Never Mirrored, crosschain_messages_on_conflict — keep_existing_if_terminal vs prefer_incoming (message_buffer/persistence.rs), Gotcha: recipient_address On A Terminal crosschain_messages Row Can Never Be Patched Later, Gotcha: Recoverable Message Fields Are Not A "Never Mirror" Case, SourceData::from_receive / from_execution (indexer/avalanche/consolidation.rs)
+
+### Community 217 - ".create_stats_asset"
+Cohesion: 0.36
+Nodes (6): stats_asset_delete_cascades(), stats_asset_insert_and_get(), stats_link_token_without_tokens_row(), stats_migration_applies(), stats_reject_same_token_two_assets(), stats_reject_two_tokens_same_chain_one_asset()
+
+### Community 218 - "AvalancheIndexerSettings"
+Cohesion: 0.39
+Nodes (6): AvalancheIndexerSettings, default_batch_size(), default_pull_interval(), Default, Duration, Self
+
+### Community 219 - "CrosschainIndexer Worker"
+Cohesion: 0.40
+Nodes (6): Project-Specific Naming Conventions, BridgeContractIndexer Worker, Common Design Principles, CrosschainIndexer Worker, MessageCollector Worker, TokenFetcher Worker
+
+### Community 220 - "ChainInfoServiceSettings"
+Cohesion: 0.43
+Nodes (5): ChainInfoServiceSettings, default_cooldown_interval(), Default, Duration, Self
+
+### Community 221 - ".recompute_stats_chains"
+Cohesion: 0.33
+Nodes (5): recompute_stats_chains_distinct_users_and_merges_message_transfer_sides(), select_stats_chains_message_user_counts(), select_stats_chains_transfer_user_counts(), stats_chains_upsert(), SelectStatement
+
+### Community 222 - "ExampleIndexerSettings"
+Cohesion: 0.43
+Nodes (5): default_fetch_interval(), ExampleIndexerSettings, Default, Duration, Self
+
+### Community 223 - "JoinedTransfer"
+Cohesion: 0.40
+Nodes (5): build_pagination_from_transfers(), JoinedTransfer, BigDecimal, Decimal, transfer_ids()
+
+### Community 224 - "Consolidate"
+Cohesion: 0.40
+Nodes (5): Consolidate, Clone, Send, Sync, Serialize
+
 ## Knowledge Gaps
-- **187 isolated node(s):** `gh-issue-publish.sh script`, `Relation`, `ActiveModel`, `Relation`, `ActiveModel` (+182 more)
+- **225 isolated node(s):** `gh-issue-publish.sh script`, `Relation`, `ActiveModel`, `Relation`, `ActiveModel` (+220 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **27 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **28 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `InterchainDatabase` connect `InterchainDatabase` to `StatsService`, `fill_mock_interchain_database`, `persistence.rs`, `init_db`, `.new`, `ExampleIndexer`, `log_stream.rs`, `ChainInfoService`, `.new`, `InterchainServiceImpl`, `indexers.rs`, `MessageBuffer`, `.new`, `AmbIndexer`, `TokenInfoService`, `FailureLedger`, `AvalancheIndexer`, `BlockchainIdResolver`, `.record_indexer_failures`, `.get_checkpoint`, `build_bounded_message_paths_query`?**
-  _High betweenness centrality (0.221) - this node is a cross-community bridge._
-- **Why does `Key` connect `Key` to `SourceData`, `AmbIndexer`, `persistence.rs`, `BufferItem`, `Consolidate`, `MaintenancePlan`, `FailureLedger`, `avalanche/consolidation.rs`, `MessageBuffer`, `avalanche/mod.rs`, `try_reconstruct_transfer`?**
-  _High betweenness centrality (0.065) - this node is a cross-community bridge._
-- **Why does `IndexedChains` connect `indexed_chains.rs` to `.new`, `Status`, `StatsService`, `fill_mock_interchain_database`, `InterchainDatabase`, `init_db`, `services/utils.rs`, `projection.rs`, `bridged_tokens_query.rs`, `.new`, `InterchainServiceImpl`, `bridge_model_to_proto`?**
-  _High betweenness centrality (0.064) - this node is a cross-community bridge._
+- **Why does `InterchainDatabase` connect `InterchainDatabase` to `StatsService`, `.new`, `persistence.rs`, `init_db`, `.new`, `log_stream.rs`, `ChainInfoService`, `.upsert_chains`, `InterchainServiceImpl`, `reconcile_catchup_floors`, `MessageBuffer`, `.new`, `AmbIndexer`, `TokenInfoService`, `ExampleIndexer`, `AvalancheIndexer`, `FailureLedger`, `PaginationDirection`, `.create_stats_asset`, `indexers.rs`, `.recompute_stats_chains`, `OutputPagination`, `BlockchainIdResolver`, `.record_indexer_failures`?**
+  _High betweenness centrality (0.217) - this node is a cross-community bridge._
+- **Why does `Key` connect `Key` to `handle_source_request`, `AmbIndexer`, `persistence.rs`, `FailureLedger`, `amb/consolidation.rs`, `try_reconstruct_transfer`, `SourceData`, `MaintenancePlan`, `BufferItem`, `avalanche/consolidation.rs`, `MessageBuffer`, `avalanche/mod.rs`?**
+  _High betweenness centrality (0.058) - this node is a cross-community bridge._
+- **Why does `AmbIndexer` connect `AmbIndexer` to `AmbIndexerSettings`, `InterchainDatabase`, `amb/abi.rs`, `CrosschainIndexerState`, `.new`, `amb/indexer.rs`, `Key`, `MessageBuffer`, `events.rs`?**
+  _High betweenness centrality (0.056) - this node is a cross-community bridge._
 - **Are the 229 inferred relationships involving `init_db()` (e.g. with `bridged_tokens_aggregation_input_output_total()` and `bridged_tokens_default_excludes_edge_unindexed_for_its_bridge()`) actually correct?**
   _`init_db()` has 229 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 79 inferred relationships involving `fill_mock_interchain_database()` (e.g. with `counters_cover_all_filters()` and `get_crosschain_message_native_collision_is_ambiguous_until_qualified()`) actually correct?**
   _`fill_mock_interchain_database()` has 79 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `gh-issue-publish.sh script`, `Relation`, `ActiveModel` to the rest of the system?**
-  _187 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Key` be split into smaller, more focused modules?**
-  _Cohesion score 0.05428796223446106 - nodes in this community are weakly interconnected._
+  _225 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `provider_layers.rs` be split into smaller, more focused modules?**
+  _Cohesion score 0.05934065934065934 - nodes in this community are weakly interconnected._

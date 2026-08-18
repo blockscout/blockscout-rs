@@ -10,6 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::secret::{Secret, sanitize_transport_error};
 use alloy::{
     network::Ethereum,
     providers::{DynProvider, Provider, ProviderBuilder},
@@ -18,7 +19,10 @@ use alloy::{
         TransportError, TransportErrorKind, TransportFut,
         http::{
             Http,
-            reqwest::{Client, Url},
+            reqwest::{
+                Client, Url,
+                header::{HeaderMap, HeaderName, HeaderValue},
+            },
         },
     },
 };
@@ -37,11 +41,28 @@ use serde_with::serde_as;
 use tokio::time::sleep;
 use tower::{Layer, Service, ServiceBuilder};
 
+/// A static credential header attached to every request to one node.
+///
+/// Plain `String`s on purpose: this type crosses the crate boundary from the
+/// server crate, and keeping `http`/`reqwest` types out of that boundary avoids
+/// any chance of mixing the two `reqwest` versions in the dependency graph.
+#[derive(Clone)]
+pub struct CredentialHeader {
+    pub name: String,
+    pub value: Secret<String>,
+}
+
 /// Per-node static config describing a transport endpoint.
+///
+/// Deliberately derives `Clone` only — never `Debug`: `http_url` and
+/// `credential_header` can carry a secret, and a derived `Debug` would render
+/// it (see `Secret`'s own doc comment for why that matters).
 #[derive(Clone)]
 pub struct NodeConfig {
     pub name: String,
-    pub http_url: String,
+    /// Secret because a `query`/`path` API key is embedded here.
+    pub http_url: Secret<String>,
+    pub credential_header: Option<CredentialHeader>,
     pub max_rps: u32,
     pub error_threshold: u32,
     pub cooldown_threshold: u32,
@@ -98,19 +119,52 @@ pub fn build_layered_http_provider(
     cfg: PoolConfig,
 ) -> Result<DynProvider<Ethereum>> {
     let mut transports = Vec::with_capacity(node_cfgs.len());
-    let client = Client::builder()
+    let shared_client = Client::builder()
         .timeout(RPC_HTTP_TIMEOUT)
         .build()
         .context("failed to build RPC HTTP client")?;
 
-    for cfg in &node_cfgs {
-        let url = Url::parse(&cfg.http_url)?;
-        transports.push(Http::with_client(client.clone(), url));
+    for node in &node_cfgs {
+        // A credentialed node needs its own client: the header is attached at the
+        // client level so it applies to *every* call path, including the health
+        // task's direct `service.call` in `PoolState::health_tick`, which bypasses
+        // `dispatch`. Attaching in `dispatch` instead would leave health probes
+        // unauthenticated and mark every keyed node permanently lagged.
+        //
+        // Nodes are distinct hosts, so a shared client buys no cross-node
+        // connection pooling anyway — a per-node client costs almost nothing.
+        let client = match &node.credential_header {
+            None => shared_client.clone(),
+            Some(credential) => Client::builder()
+                .timeout(RPC_HTTP_TIMEOUT)
+                .default_headers(credential_header_map(credential)?)
+                .build()
+                .context("failed to build RPC HTTP client with credential header")?,
+        };
+
+        let url = Url::parse(node.http_url.expose())?;
+        transports.push(Http::with_client(client, url));
     }
 
     Ok(build_layered_provider_from_services(
         transports, node_cfgs, cfg,
     ))
+}
+
+/// One-header `HeaderMap` with the value marked sensitive, so `http`'s own
+/// `Debug` renders it as `Sensitive` instead of the secret — redaction we get for
+/// free even if a `HeaderMap` is printed by code we do not control.
+fn credential_header_map(credential: &CredentialHeader) -> Result<HeaderMap> {
+    let name = HeaderName::from_bytes(credential.name.as_bytes())
+        .with_context(|| format!("invalid api_key header name '{}'", credential.name))?;
+    let mut value = HeaderValue::from_str(credential.value.expose())
+        // No context interpolating the value: it is the secret.
+        .context("api_key value is not a valid HTTP header value")?;
+    value.set_sensitive(true);
+
+    let mut headers = HeaderMap::new();
+    headers.insert(name, value);
+    Ok(headers)
 }
 
 /// Build a provider from arbitrary transport services.
@@ -368,7 +422,7 @@ where
                 tracing::warn!(
                     node = %node.config.name,
                     fallback = ignore_limiter,
-                    err = ?err,
+                    err = %sanitize_transport_error(&err),
                     "RPC request to node failed"
                 );
                 self.mark_error(&node);
@@ -616,6 +670,7 @@ fn is_benign_server_error(message: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::secret::redact_urls;
     use alloy::providers::Provider;
     use alloy_json_rpc::{ErrorPayload, Id, Response, ResponsePayload};
     use parking_lot::Mutex;
@@ -725,7 +780,8 @@ mod tests {
     fn base_node(id: u32) -> NodeConfig {
         NodeConfig {
             name: format!("node{id}"),
-            http_url: format!("http://localhost:{id}"),
+            http_url: Secret::new(format!("http://localhost:{id}")),
+            credential_header: None,
             max_rps: 10,
             error_threshold: 1,
             cooldown_threshold: 2,
@@ -869,7 +925,8 @@ mod tests {
             .map(|i| {
                 let cfg = NodeConfig {
                     name: format!("node{i}"),
-                    http_url: format!("http://localhost:{i}"),
+                    http_url: Secret::new(format!("http://localhost:{i}")),
+                    credential_header: None,
                     max_rps: 10,
                     error_threshold,
                     cooldown_threshold,
@@ -940,5 +997,43 @@ mod tests {
             2,
             "rotation should skip the node currently in cooldown"
         );
+    }
+
+    /// A `NodeConfig`/`CredentialHeader` carrying a literal secret must never
+    /// render it, through any of the paths a future refactor might introduce:
+    /// `Secret`'s own `Debug`, and the `HeaderMap` built for the outbound
+    /// request (proving `set_sensitive` actually works). The last assertion
+    /// lives here rather than in `config.rs` because `credential_header_map`
+    /// is private to this module.
+    #[test]
+    fn node_config_and_credential_header_never_render_the_secret() {
+        let credential = CredentialHeader {
+            name: "Authorization".to_string(),
+            value: Secret::new("Bearer SECRET123".to_string()),
+        };
+        let node_config = NodeConfig {
+            name: "node[drpc]".to_string(),
+            http_url: Secret::new("https://host/v1/SECRET123".to_string()),
+            credential_header: Some(credential.clone()),
+            max_rps: 10,
+            error_threshold: 1,
+            cooldown_threshold: 1,
+            cooldown: Duration::ZERO,
+            multicall_batching_wait: Duration::ZERO,
+        };
+
+        assert!(!format!("{:?}", node_config.http_url).contains("SECRET123"));
+        assert!(!format!("{:?}", credential.value).contains("SECRET123"));
+
+        let headers = credential_header_map(&credential).expect("valid header");
+        assert!(!format!("{headers:?}").contains("SECRET123"));
+
+        let synthetic_error = format!(
+            "{:#}",
+            anyhow::anyhow!(
+                "request to https://user:SECRET123@host/v1/SECRET123?apikey=SECRET123 failed"
+            )
+        );
+        assert!(!redact_urls(&synthetic_error).contains("SECRET123"));
     }
 }

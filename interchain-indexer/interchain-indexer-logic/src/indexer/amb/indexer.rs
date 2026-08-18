@@ -28,6 +28,7 @@ use crate::{
     },
     log_stream::LogBatch,
     message_buffer::{Key, MessageBuffer},
+    secret::redact_urls,
 };
 
 use super::{
@@ -382,8 +383,13 @@ impl CrosschainIndexer for AmbIndexer {
 
             if let Err(err) = Self::run(run_ctx).await {
                 error_count.fetch_add(1, Ordering::Relaxed);
-                tracing::error!(err = ?err, bridge_id, "AMB indexer task stopped with error");
-                *state.write() = CrosschainIndexerState::Failed(format!("{err:#}"));
+                // Redact once and use the same string for both sinks — see the
+                // matching comment in the Avalanche indexer: `?err` renders a
+                // transport error's cause chain, URL included, so an unredacted
+                // log here defeats the redaction applied to the state.
+                let redacted = redact_urls(&format!("{err:#}"));
+                tracing::error!(err = %redacted, bridge_id, "AMB indexer task stopped with error");
+                *state.write() = CrosschainIndexerState::Failed(redacted);
             }
         });
 

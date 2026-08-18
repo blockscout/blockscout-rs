@@ -1182,6 +1182,53 @@ changes as deliberate rescans only in that direction.
 
 ---
 
+## `pull_interval_ms` Paces Historical Catch-Up, Not Just Realtime Polling
+
+**Symptom:** adding a chain to a bridge — or forcing a rescan — takes days
+rather than hours, and the catch-up log lines arrive at a steady, suspiciously
+round rate no matter how empty the ranges are. The name reads like a realtime
+polling knob, so nobody sizes the backfill window against it.
+
+**Root cause:** `LogStream` carries **one** `poll_interval`, fed from the
+indexer's `pull_interval_ms` by `build_log_stream_for_chain`
+(`indexer/evm/log_stream_builder.rs`). `build_catchup_stream` (`log_stream.rs`)
+sleeps for it after **every** batch, and that sleep is unconditional: it runs
+even when `fetch_logs` returned nothing and no `LogBatch` was yielded. So
+catch-up pacing has nothing to do with how much data the range holds — it is
+pure throttle.
+
+The ceiling is therefore `batch_size / pull_interval_ms`:
+
+| Indexer | `BATCH_SIZE` | `PULL_INTERVAL_MS` | Ceiling |
+| --- | --- | --- | --- |
+| Avalanche | `1000` | `10000` | 100 blocks/s ≈ **8.6M blocks/day/chain** |
+| AMB | `1000` | `500` | 2000 blocks/s ≈ 173M blocks/day/chain |
+
+The two defaults differ by 20×, which is why this only bites on the Avalanche
+side. A C-Chain catch-up from the ICTT floor (`42526120` in
+`config/avalanche/bridges.json`) spans tens of millions of blocks — multiple
+days at the Avalanche default, an afternoon at AMB's.
+
+There is no separate catch-up knob, and the setting is per **indexer**, not per
+chain: `run()` hands the same `settings.pull_interval_ms` to every chain's
+stream. Raising catch-up throughput therefore also increases realtime
+`eth_getLogs` / `eth_blockNumber` frequency on every chain of that bridge.
+
+The retry pass is paced independently (`max_chunks_per_pass` / `scan_interval`,
+`indexer/range_driver.rs`) and ignores `poll_interval` entirely — at its
+defaults it is slower still, ~33 blocks/s. Neither number is a scan rate you
+can infer from the other.
+
+**Fix:** size the window from `batch_size / pull_interval_ms` *before* adding a
+chain or planning a rescan, not after. For a one-off backfill, lower
+`PULL_INTERVAL_MS` for the duration and restore it afterwards, bounded by the
+provider's rate limit; `BATCH_SIZE` is the other half of the ratio and raising
+it costs fewer requests for the same span, bounded by the provider's
+`eth_getLogs` range limit. Both are per-bridge, so a deployment that needs one
+chain backfilled fast and another polled gently cannot express that today.
+
+---
+
 ## Server Tests Exhaust The Default macOS Descriptor Limit
 
 **Symptom:** every test in a server test binary fails at once with
@@ -1242,5 +1289,171 @@ local mock RPC, and it is a race — the same run passes whenever the HTTP query
 beats the seeding, which is why it looked intermittent. The test now asserts
 the premise (`indexer_checkpoints` empty) so this fails by name instead of by
 float.
+
+---
+
+## RPC Pool Order Comes From `order`, Never From JSON Key Order
+
+The primary RPC node is element 0 of the pool: `ProviderLayer::layer` sets
+`primary_index: RwLock::new(0)`
+(`interchain-indexer-logic/src/provider_layers.rs`). That element is chosen by
+`ranked_rpc_providers` (`interchain-indexer-server/src/config.rs`), which sorts
+enabled providers by `(order, index in the rpcs array, provider name)` —
+`order` ascending, providers without one last (`u32::MAX`).
+
+The field is `order: Option<u32>`, not `priority`, deliberately: "priority"
+carries no agreed direction (DNS MX/SRV, AWS ALB rules and Envoy locality treat
+lower as preferred; Kubernetes `PriorityClass` and VRRP treat higher as
+preferred), and guessing wrong here silently inverts the pool without failing
+anything. `order` reads as an ascending position. It is unsigned because unset
+already means "rank me last", so a negative order would have no meaning — serde
+rejects one at startup.
+
+**Key order inside an `rpcs` object is not part of that key, because it does not
+survive loading.** `chains[].rpcs` is `Vec<HashMap<String, RpcProviderConfig>>`,
+and every config file is read through `serde_json::Value` (whose `Map` is a
+`BTreeMap` — `preserve_order` is not enabled) before landing in a `HashMap`
+whose iteration order is randomly seeded per process. So the *array* index is
+usable as a tie-break; the object key order is gone by then. Writing providers
+in your preferred order in the JSON and expecting the first one to be primary
+does not work — set `order`.
+
+Before the sort existed, the startup primary was literally whatever the
+`HashMap` yielded: five runs of the equivalent four-key map produced four
+different first keys, so two replicas on one config could disagree and a restart
+could reshuffle away from a node you just fixed.
+`test_ranked_rpc_providers_order_is_stable_across_parses` guards this — distinct
+`HashMap` instances get distinct hasher seeds, so an order-by-iteration
+regression fails it inside a single process run.
+
+Diagnostics: node names are `"<chain name>[<provider key>]"` (e.g.
+`Ethereum[drpc]`). Each chain logs its resolved pool once at startup, at INFO —
+`Created layered provider for chain` carries `primary` (the startup primary) and
+`nodes` (the full order), so the answer to "which node is primary" never
+requires re-deriving the ranking by hand; failures and
+rotations name the node in `RPC request to node failed` and
+`Rotating primary RPC node after repeated failures` (`from`/`to`). URLs are
+never logged — they may embed API keys.
+
+Also worth knowing before chasing a rotation warning: primary is just the
+*scan start*. `pick_node` walks the pool round-robin from `primary_index`,
+skipping nodes in cooldown or over their `max_rps`, and the fallback path picks
+uniformly at random among available nodes ignoring the limiter. So a
+non-primary node serves plenty of traffic, and rotation only fires when the
+failing node *is* the primary (deliberate — see the comment in `mark_error`).
+Rotation is one-way: nothing moves the pointer back to the lowest-`order` node
+except wrapping all the way around — `order` sets the *startup* position, it is
+not a preference the pool drifts back to.
+
+Per-provider rotation knobs (`RpcProviderConfig`): `error_threshold` (default
+3) consecutive errors → cooldown; `cooldown_threshold` (default 1) cooldowns →
+rotate the primary away; `cooldown_secs` (default 60); `enabled: false` drops
+the provider from the pool entirely (and out of the ranking). Pool-wide
+retry/lag settings live in the per-chain `pool_config` (`PoolConfig`).
+
+---
+
+## An RPC URL Reaches Postgres and the Public Status API Through `reqwest::Error` Rendering
+
+**Symptom:** A secret embedded in an RPC URL (an API key in the path, query, or
+userinfo) ends up persisted in the database and served by a public endpoint,
+even though nothing in this codebase ever logs a URL on purpose.
+
+**Root cause:** `reqwest::Error` renders the full request URL in **both**
+`Display` (`" for url ({url})"`) and `Debug` (a literal `url` field). `alloy`
+boxes it verbatim in `TransportErrorKind::Custom(Box<dyn Error>)` under
+`#[derive(Debug, Error)]` with `#[error("{0}")]`, so both `{:?}` and `{:#}` of a
+transport error expose the URL — `without_url()` is unreachable through the
+box. Two sinks pick this text up and persist/serve it:
+
+- `range_driver.rs` builds `indexer_failures.reason` from `{:#}` of the
+  processing error before calling `FailureLedger::record` — a **Postgres**
+  column.
+- `avalanche/mod.rs` and `amb/indexer.rs` build
+  `CrosschainIndexerState::Failed(format!("{err:#}"))` — rendered into
+  `IndexerStatus.state` and returned by the **public** `GetFullStatus` /
+  `GetStatusByIndexerName` endpoints.
+
+**Fix:** `interchain-indexer-logic/src/secret.rs`'s `redact_urls` is the
+required boundary at both sinks — it reduces every URL in a string to
+`scheme://host[:port]/<redacted>`, dropping path, query, fragment, and
+userinfo, with no regex dependency. **Redact before `truncate_reason`, never
+after** — truncation can otherwise cut a URL mid-redaction and leave a
+fragment (`range_driver.rs`'s `MAX_REASON_LEN` truncation runs after
+`redact_urls` for exactly this reason).
+
+For the API-key feature (`interchain-indexer-server/src/config.rs`'s
+`ApiKeyConfig`/`ApiKeyLocation`), this is why `header` is the preferred
+location and `NodeConfig`/`CredentialHeader`
+(`interchain-indexer-logic/src/provider_layers.rs`) carry the key as a
+`Secret<String>` rather than URL-embedded: `HeaderValue::set_sensitive(true)`
+gives free redaction even from renderers this codebase does not control (it is
+called exactly once, in `credential_header_map`). `query`/`path` keys have no
+equivalent — they are part of the URL by construction, so they remain visible
+at `RUST_LOG=debug` through `alloy-transport-http`'s own `debug_span!`, which
+cannot be patched from this repo. The only reason that span is not currently
+visible in normal operation is the `alloy_transport_http=warn` filter in
+`justfile` and `docker/docker-compose.yml` — that is an incidental default, not
+a policy this code enforces, so do not rely on it if the log level is ever
+raised.
+
+`NodeConfig` deliberately derives `Clone` only, never `Debug` — a derived
+`Debug` on a struct holding a `Secret<String>` `http_url` would still be safe
+(`Secret`'s own `Debug` redacts unconditionally), but the struct comment exists
+so a future field addition doesn't assume otherwise.
+
+**Known residual channel — `redact_urls` is URL-shaped, not value-shaped.** It
+finds URLs, not secrets. If a node echoes the key back inside the *text* of a
+JSON-RPC error (`{"error":{"message":"invalid api key abc123"}}`), that string is
+not a URL, so it passes through unredacted into `failover_error`
+(`provider_layers.rs`), the failure ledger, and indexer state. Closing it would
+mean a process-wide registry of resolved secrets, scrubbing every error string by
+value — much more surface than the leak it removes, so it was consciously not
+built. Treat it as a reason to prefer `header` (a node cannot echo a header it
+was never sent in a URL) and to read a provider's error semantics before pointing
+production at it. Do not "fix" this by widening `redact_urls`: dropping arbitrary
+tokens from error text would destroy the diagnostics the ledger exists for.
+
+---
+
+## `.env` Is Loaded By `just run-dev` Only — Never Add `set dotenv-load`
+
+`justfile` deliberately does **not** set `dotenv-load`. The one recipe that runs
+the service with `.env` is the pre-existing `run-dev`:
+
+```just
+run-dev:
+    dotenv -f .env run just run
+```
+
+`set dotenv-load := true` is a **global** setting — just has no per-recipe scope
+for it, and neither `dotenv-path` nor `dotenv-filename` changes that. Globally
+loaded, `.env` also reaches `just test` and `just test-with-db`, and that breaks
+them: the server tests boot the real `run()` against
+`interchain-indexer-server/tests/fixtures/chains-offline.json` (chains `1` and
+`100` only), and `load_chains_from_file` applies process-env overrides to
+*whatever* file it was given. An override addressing any other chain does not
+"not match" — per the env-merge rules it **appends a new entry** with the id
+injected, so an `INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION`
+line in `.env` creates a chain `8021` carrying an `api_key` and nothing else,
+failing the typed parse with `missing field name` in every server test in the
+binary, from a file none of them mention.
+
+Consequences worth keeping straight:
+
+- Because `.env` is opt-in per invocation, it can hold both halves of a
+  credential — the `…__RPCS__<PROVIDER>__API_KEY__*` shape and its
+  `INTERCHAIN_INDEXER_RPC_API_KEY__*` value — which is what keeps `api_key` out of
+  the committed config entirely. `just run` then starts the same service without
+  the key, and `just run-dev` with it.
+- `dotenv` puts the variables in the environment *before* `just` starts, so they
+  also feed just's own `env_var_or_default` — `DB_*`, `RUST_LOG`, `DOCKER_NAME`
+  work from `.env` under `run-dev`. Sourcing inside a recipe would not do that.
+- Adding `set dotenv-load := true` reintroduces the fixture breakage above — and
+  silently, since an override for a chain that *does* exist in the fixture (`1` or
+  `100`) parses fine and merely changes what the "offline" tests talk to.
+- No committed file under `config/` or `docker/` may declare an `api_key` at all:
+  it would make the secret mandatory for every deployment reading that file.
+  `test_no_repo_config_file_declares_an_api_key` enforces this.
 
 ---

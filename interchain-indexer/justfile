@@ -1,3 +1,11 @@
+# Secrets and deployment-local overrides live in `.env`, which is gitignored —
+# see `.env.example`. Use `just run-dev` to run with it; `just run` ignores it.
+#
+# Do not add `set dotenv-load := true` here. That setting is global — just has no
+# per-recipe scope for it — so `.env` would also reach `just test`, where an
+# `INTERCHAIN_INDEXER_CHAINS__*` override lands on the offline fixture and fails
+# the typed load (see `.memory-bank/gotchas.md`).
+
 default:
     just --list --unsorted
 
@@ -47,9 +55,10 @@ stop-test-postgres:
 run:
     INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
     INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
-    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/omnibridge/chains-testnet.json \
-    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/omnibridge/bridges-testnet.json \
-    INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN=true \
+    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/full-mainnet/chains.json \
+    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json \
+    INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE=500 \
+    INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS=5000 \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS=8021 \
     cargo run --bin interchain-indexer-server

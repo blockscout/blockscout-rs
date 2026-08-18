@@ -49,7 +49,51 @@ Defines the blockchains the indexer knows about. Each entry describes one chain:
 | `name`       | Human-readable chain name. |
 | `icon`       | Optional URL to chain icon. |
 | `explorer`   | Optional explorer base URL and routes: `url`, `custom_tx_route`, `custom_address_route`, `custom_token_route`. |
-| `rpcs`       | RPC config per chain. |
+| `rpcs`       | RPC providers for the chain — see below. |
+| `pool_config` | Optional pool-wide transport settings: `health_period` (ms), `max_block_lag`, `retry_count`, `retry_initial_delay_ms`, `retry_max_delay_ms`. |
+
+#### `rpcs`
+
+An array of objects, each mapping a provider name to its settings. The provider
+name is only a label (it shows up in logs as `<chain name>[<provider name>]`)
+and the env-override key.
+
+| Field | Default | Description |
+| ----- | ------- | ----------- |
+| `url` | — | HTTP endpoint. |
+| `enabled` | `true` | `false` drops the provider from the pool entirely. |
+| `order` | unset | Position in the failover pool, **ascending** — `0` is tried first and is the primary. Providers without an `order` rank after every provider that has one. Must be non-negative. |
+| `max_rps` | `10` | Client-side rate limit. |
+| `error_threshold` | `3` | Consecutive failures before the node is put in cooldown. |
+| `cooldown_threshold` | `1` | Cooldowns before the primary pointer rotates off this node. |
+| `cooldown_secs` | `60` | Cooldown duration. |
+| `multicall_batching_us` | `60` | Multicall batching wait. |
+| `api_key` | unset | Optional credential: `{"location": "header"\|"query"\|"path", "param_name": "...", "prefix": "...", "value_env": "..."}`. The object declares the credential's *shape* only — never a value; the secret comes from an environment variable (see "RPC provider API keys" below). `location: "header"` is preferred: a URL-embedded key (`query`/`path`) can be exposed by third-party debug logging this service does not control. `prefix` (e.g. `Bearer`) is supported for `header` only. |
+
+Ordering is fully determined by `order`, then by position in the `rpcs` array,
+then by provider name — **not** by key order inside one object, which does not
+survive config loading. Set `order` explicitly whenever the preference matters:
+
+```json
+"rpcs": [
+    {
+        "gateway": { "url": "https://rpc.eth.gateway.fm", "order": 0 },
+        "drpc":    { "url": "https://eth.drpc.org", "order": 1 }
+    }
+]
+```
+
+The primary is the *starting point* of node selection, not an exclusive one:
+requests walk the pool round-robin from the primary, skipping nodes in cooldown
+or over their `max_rps`, and repeated primary failures rotate the pointer
+onward (`Rotating primary RPC node after repeated failures`). Each chain logs
+its resolved pool once at startup, at INFO:
+
+```text
+Created layered provider for chain chain_id=1 chain_name=Ethereum
+  primary="Ethereum[gateway]"
+  nodes="Ethereum[gateway], Ethereum[drpc], Ethereum[1rpc]"
+```
 
 ### `bridges.json`
 
@@ -130,7 +174,7 @@ separate from the main `INTERCHAIN_INDEXER__*` settings:
 
 **Path grammar** (segments are separated by `__` and are case-insensitive):
 
-```
+```text
 <PREFIX>                                  = whole-config array patch (value must be a JSON array)
 <PREFIX>__<ID>                            = one entry (value: JSON object fragment)
 <PREFIX>__<ID>__<FIELD>[__<FIELD>…]       = one field (value: scalar or JSON fragment)
@@ -211,6 +255,111 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 # …or add a new contract *version* for the same chain+address (appends a new entry)
 INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d__8__STARTED_AT_BLOCK=19000000
 ```
+
+### RPC provider API keys
+
+An `rpcs` entry's `api_key` object (see `#### rpcs` above) declares only the
+*shape* of a provider credential — `location`, `param_name`, optional `prefix`,
+optional `value_env` — never the value. The secret always comes from the
+environment, so it cannot end up committed to a config file even by accident:
+
+- **Derived variable** (default): `INTERCHAIN_INDEXER_RPC_API_KEY__<CHAIN_ID>__<PROVIDER>`,
+  where `<PROVIDER>` is the provider's map key, uppercased, with every
+  character outside `[A-Z0-9_]` replaced by `_`.
+- **Explicit override**: set `value_env` to name a different variable instead.
+
+Exactly one variable is consulted per provider — the derived name, or
+`value_env` when set. There is no fallback chain: a typo in `value_env` fails
+startup rather than silently reading some other variable. A missing or empty
+(including whitespace-only) value also fails startup, naming the chain, the
+provider, and the exact variable that was checked.
+
+Note the single underscore before `RPC_API_KEY` — like the `CHAINS`/`BRIDGES`
+override prefixes above, this keeps the family outside the double-underscore
+`INTERCHAIN_INDEXER__*` settings namespace.
+
+#### Where each `location` puts the key
+
+| `location` | `param_name` means | Key ends up in | `prefix` |
+| ---------- | ------------------ | -------------- | -------- |
+| `header`   | the header name | a request header; the URL is left byte-identical | supported |
+| `query`    | the query parameter name | the request URL, as `?<param_name>=<key>` | rejected |
+| `path`     | the placeholder name | the request URL, replacing `:<param_name>` | rejected |
+
+In all three cases the credential applies to **every** request to that node,
+including the pool's background health probes.
+
+All examples below use chain `1`, so the derived variable is
+`INTERCHAIN_INDEXER_RPC_API_KEY__1__<PROVIDER>`. Hostnames are placeholders —
+check your provider's own documentation for which location it expects.
+
+**`header`** — the preferred location. `prefix` covers the
+`Authorization: Bearer <key>` convention; omit it and the header carries the bare
+key (e.g. `param_name: "x-api-key"`).
+
+```json
+"rpcs": [
+    { "drpc": { "url": "https://rpc.example.org/eth", "api_key": { "location": "header", "param_name": "Authorization", "prefix": "Bearer" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC=sk-live-abc123
+```
+
+Requests go to `https://rpc.example.org/eth` — unchanged — carrying:
+
+```text
+Authorization: Bearer sk-live-abc123
+```
+
+**`query`** — the key is appended to the URL as a query parameter. Appending is
+done through a URL parser, so an existing query string is extended with `&`
+rather than overwritten, and the value is percent-encoded.
+
+```json
+"rpcs": [
+    { "gateway": { "url": "https://rpc.example.org/eth", "api_key": { "location": "query", "param_name": "apikey" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__GATEWAY=sk-live-abc123
+```
+
+Requests go to:
+
+```text
+https://rpc.example.org/eth?apikey=sk-live-abc123
+```
+
+**`path`** — the key is substituted into a `:<param_name>` placeholder that you
+must put in `url` yourself. The placeholder name and `param_name` have to match;
+if `url` contains no such placeholder the service **fails at startup** rather
+than silently sending an unauthenticated request.
+
+```json
+"rpcs": [
+    { "provider": { "url": "https://rpc.example.org/v1/:api_key/eth", "api_key": { "location": "path", "param_name": "api_key" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__PROVIDER=sk-live-abc123
+```
+
+Requests go to:
+
+```text
+https://rpc.example.org/v1/sk-live-abc123/eth
+```
+
+Both URL-embedded locations put the secret in the request URL, which is why
+`header` is preferred: a URL is rendered by code this service does not control
+(notably `alloy-transport-http`'s own debug span), so a `query`/`path` key can
+surface in logs if the log level is raised. Service-owned sinks — the failure
+ledger in Postgres, indexer state served by the status API, and this service's
+own RPC warnings — redact URLs before writing them.
 
 ## Envs
 
@@ -404,7 +553,7 @@ delta against canonical eligibility, not against stale aggregates.
 ## Dev
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.
-+ Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
++ Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli) — used by `just run-dev` to run with `.env`
 + Execute `just` to see available dev commands
 
 ```bash
@@ -444,11 +593,16 @@ or run with ENVs from .env current
     just run-dev
     ```
 
+`.env` (see [`.env.example`](.env.example)) is read by `just run-dev` and by nothing
+else — no recipe loads it implicitly. That is why an RPC provider's `api_key` shape
+can live there safely: `set dotenv-load := true` would also hand it to `just test`,
+where a chains override for a chain outside the offline fixture fails the config load.
+
 ## Troubleshooting
 
 1. Invalid tonic version
 
-```
+```text
 `Router` and `Router` have similar names, but are actually distinct types
 ```
 
