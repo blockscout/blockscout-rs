@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Analysis"
+  short_description: "Analyze a task and recommend an implementation path"
+  default_prompt: "Use $task-analysis to review a task against the current codebase, write the task analysis artifacts, and recommend a path."
