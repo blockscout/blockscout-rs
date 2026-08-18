@@ -41,6 +41,12 @@
             "description": "Sum of {{native_coin_symbol}} spent on gas fees within the last 24 hours",
             "units": "{{native_coin_symbol}}"
         },
+        "filecoin_chain_fees_24h": {
+            "enabled": false,
+            "title": "Chain fees (24h)",
+            "description": "Sum of {{native_coin_symbol}} spent on chain-wide fees within the last 24 hours: base-fee burn + over-estimation burn (captured via the f099 burn-actor balance change) + FEVM miner tips",
+            "units": "{{native_coin_symbol}}"
+        },
         "average_txn_fee_24h": {
             "title": "Avg. transaction fee (24h)",
             "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction within the last 24 hours",

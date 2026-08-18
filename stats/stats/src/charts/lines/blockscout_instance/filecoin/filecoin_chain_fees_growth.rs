@@ -64,12 +64,17 @@ mod tests {
     // Running totals = cumsum of the `filecoinNewChainFees` values over the
     // Filecoin fixture layer. The genuine no-data day (`2022-12-15`) records
     // no chart_data row, so it is absent from the unfilled output — the
-    // surrounding days (`2022-12-01`, `2023-01-01`) pin that the running
+    // surrounding days (`2022-12-01`, `2022-12-20`) pin that the running
     // total carried across the gap correctly; the filled "previous day's
     // cumulative" behavior is asserted at the API level. `2022-11-11`
-    // (tips-only), `2023-02-14` (mixed, understated tips-only) and
-    // `2023-03-01` (burn-only) advance the total by exactly that single
-    // contribution.
+    // (tips-only) and `2023-02-14` (mixed, understated tips-only) advance
+    // the total by exactly that single contribution. `2023-02-28` and
+    // `2023-03-01` each add their own burn-plus-tips share (see
+    // `filecoin_new_chain_fees`'s test); the final cumulative total,
+    // `30050000.004829146`, is unchanged by the 24-hour counter's fixture
+    // blocks' *split* of the old burn-only value across the two days — a
+    // cumulative sum telescopes over the split — and moves only by the two
+    // days' added tips (`2 * 0.0001029` more than before).
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_filecoin_chain_fees_growth() {
@@ -81,10 +86,12 @@ mod tests {
                 ("2022-11-11", "30001000.00177722"),
                 ("2022-11-12", "30003500.00256677"),
                 ("2022-12-01", "30010000.003450688"),
+                ("2022-12-20", "30012000.003450688"),
                 ("2023-01-01", "30020000.00347218"),
                 ("2023-02-01", "30035000.004523344"),
                 ("2023-02-14", "30035000.004623346"),
-                ("2023-03-01", "30050000.004623346"),
+                ("2023-02-28", "30047000.004726246"),
+                ("2023-03-01", "30050000.004829146"),
             ],
         )
         .await;

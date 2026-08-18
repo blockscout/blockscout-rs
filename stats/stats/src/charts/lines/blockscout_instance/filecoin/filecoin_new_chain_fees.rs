@@ -219,9 +219,18 @@ mod tests {
     // - `2022-11-11`: tips-only day (no f099 row — balance carried over);
     // - `2022-12-15`: genuine no-data day, asserted **by absence** — unfilled
     //   reads omit gap days; the filled `0` is asserted at the API level;
+    // - `2022-12-20`: the mid-series burn-only day — an f099 row and no
+    //   block at all, so the burn side moves by an ordinary day-over-day
+    //   delta while tips are absent by construction (see
+    //   `burn_actor_balances_fil`'s doc; unlike `2022-11-09`, `Delta` has a
+    //   prior row here);
     // - `2023-02-14`: mixed day — tips-only, understated (see the
     //   `fevmFeeTips` characterization test);
-    // - `2023-03-01`: burn-only day (f099 row, no counted tips).
+    // - `2023-02-28` and `2023-03-01`: both burn *and* tips now — the
+    //   24-hour counter's fixture blocks split the old `2023-03-01`
+    //   burn-only value (`30,050,000 - 30,035,000 = 15,000` FIL) across the
+    //   two days (`12,000` + `3,000`) and add one priced transaction to
+    //   each.
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_filecoin_new_chain_fees() {
@@ -233,10 +242,17 @@ mod tests {
                 ("2022-11-11", "0.001193214813588"),
                 ("2022-11-12", "2500.000789548147"),
                 ("2022-12-01", "6500.0008839185175"),
-                ("2023-01-01", "10000.000021492593"),
+                ("2022-12-20", "2000"),
+                // `2000` + the same tips sum as before the `2022-12-20`
+                // split: the last digit differs from the old
+                // `10000.000021492593` rendering because f64 addition against
+                // a smaller burn term rounds differently (recomputed from a
+                // real DB run)
+                ("2023-01-01", "8000.000021492592"),
                 ("2023-02-01", "15000.001051166666"),
                 ("2023-02-14", "0.0001"),
-                ("2023-03-01", "15000"),
+                ("2023-02-28", "12000.0001029"),
+                ("2023-03-01", "3000.0001029"),
             ],
         )
         .await;
