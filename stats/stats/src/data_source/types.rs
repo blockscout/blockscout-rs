@@ -14,7 +14,8 @@ use tokio::sync::Mutex;
 use tracing::warn;
 
 use crate::{
-    ChartKey, counters::TxnsStatsValue, mode::Mode, types::new_txns::NewTxnsCombinedPoint,
+    ChartKey, charts::db_interaction::filters::interchain::InterchainFilter,
+    counters::TxnsStatsValue, mode::Mode, types::new_txns::NewTxnsCombinedPoint,
 };
 
 #[derive(Clone)]
@@ -25,7 +26,12 @@ pub struct UpdateParameters<'a> {
     /// Chain IDs to filter by in MultichainAggregator mode
     pub multichain_filter: Option<Vec<u64>>,
     /// If the primary chain set, send/receive counters and charts will be built around it
+    ///
+    /// DEPRECATED, removed once every interchain statement reads `interchain_filter`.
     pub interchain_primary_id: Option<u64>,
+    /// Read filter applied to the interchain indexer DB, fully resolved for this
+    /// update cycle (operator configuration + the observability horizon).
+    pub interchain_filter: InterchainFilter,
     /// Indexer database (blockscout, multichain, or interchain)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
@@ -60,6 +66,8 @@ impl<'a> UpdateParameters<'a> {
             mode,
             multichain_filter: None,     // only used when updating the DB
             interchain_primary_id: None, // only used when updating the DB
+            // only used when updating the DB
+            interchain_filter: InterchainFilter::default(),
             indexer_db: indexer,
             indexer_applied_migrations,
             second_indexer_db: second_indexer,
@@ -89,6 +97,7 @@ impl<'a> UpdateParameters<'a> {
             mode: Mode::Blockscout,
             multichain_filter: None,
             interchain_primary_id: None,
+            interchain_filter: InterchainFilter::default(),
             indexer_db: indexer,
             indexer_applied_migrations: IndexerMigrations::latest(),
             second_indexer_db: None,
@@ -125,7 +134,11 @@ pub struct UpdateContext<'a> {
     pub stats_db: &'a DatabaseConnection,
     pub mode: Mode,
     pub multichain_filter: Option<Vec<u64>>,
+    /// DEPRECATED, removed once every interchain statement reads `interchain_filter`.
     pub interchain_primary_id: Option<u64>,
+    /// Read filter applied to the interchain indexer DB, fully resolved for this
+    /// update cycle (operator configuration + the observability horizon).
+    pub interchain_filter: InterchainFilter,
     /// Indexer database (blockscout, multichain, or interchain depending on mode)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
@@ -146,6 +159,7 @@ impl<'a> UpdateContext<'a> {
             mode: value.mode,
             multichain_filter: value.multichain_filter,
             interchain_primary_id: value.interchain_primary_id,
+            interchain_filter: value.interchain_filter,
             indexer_db: value.indexer_db,
             indexer_applied_migrations: value.indexer_applied_migrations,
             second_indexer_db: value.second_indexer_db,

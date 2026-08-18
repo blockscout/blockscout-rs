@@ -10,7 +10,7 @@ use super::{
     mock_zetachain_cctx::fill_mock_zetachain_cctx_data,
 };
 use crate::{
-    ChartProperties, Mode,
+    ChartProperties, InterchainFilter, Mode,
     data_source::{
         source::DataSource,
         types::{IndexerMigrations, UpdateContext, UpdateParameters},
@@ -245,6 +245,7 @@ where
         mode,
         multichain_filter,
         interchain_primary_id,
+        interchain_filter: InterchainFilter::default(),
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: zetachain_cctx.as_deref(),
@@ -300,6 +301,7 @@ pub async fn dirty_force_update_and_check<C>(
         mode: Mode::Blockscout,
         multichain_filter: None,
         interchain_primary_id: None,
+        interchain_filter: InterchainFilter::default(),
         indexer_db: blockscout,
         indexer_applied_migrations: IndexerMigrations::latest(),
         second_indexer_db: None,
@@ -403,6 +405,7 @@ async fn ranged_test_chart_inner<C>(
         mode: Mode::Blockscout,
         multichain_filter: None,
         interchain_primary_id: None,
+        interchain_filter: InterchainFilter::default(),
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: None,
@@ -573,6 +576,7 @@ where
         mode,
         multichain_filter,
         interchain_primary_id,
+        interchain_filter: InterchainFilter::default(),
         indexer_db: &indexer,
         indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
@@ -620,6 +624,7 @@ where
         mode: Mode::Blockscout,
         multichain_filter: None,
         interchain_primary_id: None,
+        interchain_filter: InterchainFilter::default(),
         indexer_db: &blockscout,
         indexer_applied_migrations: IndexerMigrations::latest(),
         second_indexer_db: None,

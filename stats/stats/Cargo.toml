@@ -29,6 +29,8 @@ entity = { path = "./entity" }
 futures = "0.3"
 hex = { workspace = true }
 hex-literal = { version = "0.4.1", optional = true }
+interchain-indexer-entity = { workspace = true }
+interchain-indexer-filters = { workspace = true }
 interchain-indexer-migration = { workspace = true }
 itertools = "0.13.0"
 lazy_static = "1.4"

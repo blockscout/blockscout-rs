@@ -1,0 +1,570 @@
+// SPDX-License-Identifier: LicenseRef-Blockscout
+
+//! The interchain read filter.
+//!
+//! The predicate itself is NOT defined here. It lives in the
+//! `interchain-indexer-filters` crate, shared verbatim with
+//! `interchain-indexer`'s read API, so that "stats and the API return the same
+//! subset" is a property of the build graph rather than a claim a reviewer
+//! re-checks. If the predicate needs to change, change it there and review the
+//! change against both services.
+//!
+//! What lives here is stats-specific: the wrapper that update contexts carry,
+//! the three sanctioned query entry points, and the fingerprint that detects a
+//! configuration change against already-stored chart data.
+
+use interchain_indexer_entity::{crosschain_messages, crosschain_transfers};
+use interchain_indexer_filters::ChainBridgeFilter;
+use sea_orm::{
+    Condition, DbBackend, EntityTrait, JoinType, QueryFilter, QuerySelect, QueryTrait,
+    RelationTrait, Select,
+};
+
+/// The interchain read filter as the update pipeline sees it.
+///
+/// `condition_source` is fully resolved: the operator-configured dimensions plus
+/// the observability horizon read from the indexer DB for this update cycle.
+/// `fingerprint` is deliberately NOT derived from it — see [`filter_fingerprint`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterchainFilter {
+    pub condition_source: ChainBridgeFilter,
+    pub fingerprint: i64,
+}
+
+impl InterchainFilter {
+    /// No filter at all — every predicate absent.
+    ///
+    /// Note the fingerprint is a real hash, not `0`: a deployment that goes from
+    /// filtered to unfiltered must still be detected as a change.
+    pub fn unfiltered() -> Self {
+        let condition_source = ChainBridgeFilter::default();
+        Self {
+            fingerprint: filter_fingerprint(&condition_source, false),
+            condition_source,
+        }
+    }
+
+    pub fn messages_condition(&self) -> Condition {
+        self.condition_source.messages_condition()
+    }
+
+    pub fn transfers_condition(&self) -> Condition {
+        self.condition_source.transfers_condition()
+    }
+
+    pub fn home_chain_id(&self) -> Option<i64> {
+        self.condition_source.home_chain_id
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.condition_source.is_empty()
+    }
+
+    /// Start a `crosschain_messages` query with the filter already applied.
+    /// Interchain statements MUST start from one of these three methods and must
+    /// never call `crosschain_messages::Entity::find()` directly.
+    pub fn messages_query(&self) -> Select<crosschain_messages::Entity> {
+        crosschain_messages::Entity::find().filter(self.messages_condition())
+    }
+
+    /// Start a `crosschain_transfers` query with the filter already applied.
+    /// No join: [`Self::transfers_condition`] touches only the transfer's own
+    /// columns.
+    pub fn transfers_query(&self) -> Select<crosschain_transfers::Entity> {
+        crosschain_transfers::Entity::find().filter(self.transfers_condition())
+    }
+
+    /// As [`Self::transfers_query`], plus the composite join to the parent
+    /// message. The join exists ONLY to reach `crosschain_messages.init_timestamp`
+    /// (transfers have no timestamp of their own) and `src_tx_hash`/`dst_tx_hash`.
+    /// The filter stays on the transfer's own columns. The declared relation
+    /// emits both halves of `(message_id, bridge_id) = (id, bridge_id)`; never
+    /// hand-write this join.
+    pub fn transfers_joined_query(&self) -> Select<crosschain_transfers::Entity> {
+        self.transfers_query().join(
+            JoinType::InnerJoin,
+            crosschain_transfers::Relation::CrosschainMessages.def(),
+        )
+    }
+}
+
+impl Default for InterchainFilter {
+    fn default() -> Self {
+        Self::unfiltered()
+    }
+}
+
+/// The operator-configured half of the filter, resolved from settings once at
+/// startup. The observability horizon is added per update cycle by
+/// [`Self::with_horizon`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterchainFilterConfig {
+    /// `only_indexed_by_bridge` is always `None` here.
+    configured: ChainBridgeFilter,
+    include_unindexed_chains: bool,
+    fingerprint: i64,
+}
+
+impl InterchainFilterConfig {
+    pub fn new(configured: ChainBridgeFilter, include_unindexed_chains: bool) -> Self {
+        debug_assert!(
+            configured.only_indexed_by_bridge.is_none(),
+            "the horizon is resolved per update cycle, not carried in the config"
+        );
+        let fingerprint = filter_fingerprint(&configured, !include_unindexed_chains);
+        Self {
+            configured,
+            include_unindexed_chains,
+            fingerprint,
+        }
+    }
+
+    /// No filter at all: nothing configured, and the horizon restriction
+    /// disabled. Equivalent to [`InterchainFilter::unfiltered`] after
+    /// [`Self::with_horizon`] — including the fingerprint.
+    pub fn unfiltered() -> Self {
+        Self::new(ChainBridgeFilter::default(), true)
+    }
+
+    pub fn include_unindexed_chains(&self) -> bool {
+        self.include_unindexed_chains
+    }
+
+    pub fn bridge_ids(&self) -> Option<&[i32]> {
+        self.configured.bridge_ids.as_deref()
+    }
+
+    /// Merge the horizon resolved for this update cycle. The fingerprint is
+    /// carried through unchanged.
+    pub fn with_horizon(
+        &self,
+        only_indexed_by_bridge: Option<Vec<(i32, Vec<i64>)>>,
+    ) -> InterchainFilter {
+        InterchainFilter {
+            condition_source: ChainBridgeFilter {
+                only_indexed_by_bridge,
+                ..self.configured.clone()
+            },
+            fingerprint: self.fingerprint,
+        }
+    }
+
+    /// The effective filter rendered as a SQL `WHERE` clause, for the startup
+    /// log.
+    ///
+    /// The horizon is rendered as `None`, because it is not known until the
+    /// first update cycle reads it from the indexer DB.
+    pub fn render_for_log(&self) -> String {
+        let filter = self.with_horizon(None);
+        if filter.is_empty() {
+            return "<unfiltered>".to_owned();
+        }
+        let sql = filter
+            .messages_query()
+            .build(DbBackend::Postgres)
+            .to_string();
+        sql.split_once(" WHERE ")
+            .map(|(_, where_clause)| where_clause.to_owned())
+            .unwrap_or(sql)
+    }
+}
+
+impl Default for InterchainFilterConfig {
+    fn default() -> Self {
+        Self::unfiltered()
+    }
+}
+
+/// Stable 63-bit hash of the *operator-configured* filter dimensions.
+///
+/// Deliberately NOT `std::hash::DefaultHasher`: std's hash outputs carry no
+/// cross-version stability guarantee, and this value is persisted in
+/// `chart_data.min_blockscout_block` and compared on the next run.
+///
+/// `configured.only_indexed_by_bridge` is `None` by construction, and the
+/// horizon's *contents* are excluded on purpose: they are DB-derived and grow on
+/// their own as bridges and contracts appear upstream, with no stats config
+/// change. Hashing them would make every upstream bridge addition wipe and
+/// rebuild all 39 interchain charts. Whether the restriction is *enabled*
+/// (`horizon_enabled`) is a configuration statement and IS hashed — without it,
+/// flipping `include_unindexed_chains` would leave the fingerprint unchanged
+/// while moving every number.
+///
+/// The result is always a strictly positive `BIGINT` and never `i64::MAX` — the
+/// constant every interchain row carries today (`get_min_block_interchain`). The
+/// first update after this change therefore always detects a mismatch and
+/// rebuilds, which is intended.
+///
+/// Note that masking to 63 bits alone does *not* give that: `0x7fff_ffff_ffff_ffff`
+/// **is** `i64::MAX`, so the mask makes the one forbidden value reachable rather
+/// than unreachable (and `0` reachable too). Both are remapped explicitly below,
+/// so the guarantee holds for every input rather than for the ones a test
+/// happens to sample.
+pub fn filter_fingerprint(configured: &ChainBridgeFilter, horizon_enabled: bool) -> i64 {
+    /// Feeding a version tag first lets a future change to this encoding force a
+    /// deliberate rebuild.
+    const VERSION_TAG: &[u8] = b"interchain-filter-v1";
+
+    let mut hasher = Fnv1a::new();
+    hasher.write(VERSION_TAG);
+    // The presence byte AND the element count are both required: without them
+    // `None` / `Some([])` / `Some([1, 2])` / `Some([12])` could collide.
+    hasher.write_optional_i64(configured.home_chain_id);
+    for list in [
+        &configured.counterparty_chain_ids,
+        &configured.src_chain_ids,
+        &configured.dst_chain_ids,
+    ] {
+        hasher.write_optional_list(list.as_deref(), |h, id| h.write(&id.to_le_bytes()));
+    }
+    hasher.write_optional_list(configured.bridge_ids.as_deref(), |h, id| {
+        h.write(&id.to_le_bytes())
+    });
+    hasher.write(&[horizon_enabled as u8]);
+    match (hasher.finish() & 0x7fff_ffff_ffff_ffff) as i64 {
+        // 2 of 2^63 outputs, but they are the two that would break the callers:
+        // `0` is falsy-looking in a nullable BIGINT column, and `i64::MAX` is the
+        // sentinel already stored on every interchain row.
+        0 | i64::MAX => 1,
+        fingerprint => fingerprint,
+    }
+}
+
+/// FNV-1a 64, spelled out rather than pulled in as a dependency: the whole
+/// algorithm is three lines and the *stability* of the output is the point.
+struct Fnv1a(u64);
+
+impl Fnv1a {
+    const OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    fn new() -> Self {
+        Self(Self::OFFSET_BASIS)
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for byte in bytes {
+            self.0 ^= u64::from(*byte);
+            self.0 = self.0.wrapping_mul(Self::PRIME);
+        }
+    }
+
+    fn write_optional_i64(&mut self, value: Option<i64>) {
+        match value {
+            Some(value) => {
+                self.write(&[1]);
+                self.write(&value.to_le_bytes());
+            }
+            None => self.write(&[0]),
+        }
+    }
+
+    fn write_optional_list<T>(
+        &mut self,
+        list: Option<&[T]>,
+        write_element: impl Fn(&mut Self, &T),
+    ) {
+        match list {
+            Some(elements) => {
+                self.write(&[1]);
+                self.write(&(elements.len() as u32).to_le_bytes());
+                for element in elements {
+                    write_element(self, element);
+                }
+            }
+            None => self.write(&[0]),
+        }
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+    use sea_orm::QueryTrait;
+
+    use super::*;
+    use crate::tests::normalize_sql;
+
+    fn configured(
+        home_chain_id: Option<i64>,
+        counterparty_chain_ids: Option<Vec<i64>>,
+        src_chain_ids: Option<Vec<i64>>,
+        dst_chain_ids: Option<Vec<i64>>,
+        bridge_ids: Option<Vec<i32>>,
+    ) -> ChainBridgeFilter {
+        ChainBridgeFilter {
+            home_chain_id,
+            counterparty_chain_ids,
+            src_chain_ids,
+            dst_chain_ids,
+            bridge_ids,
+            only_indexed_by_bridge: None,
+        }
+    }
+
+    #[test]
+    fn fingerprint_is_stable_across_calls() {
+        let filter = configured(Some(1), Some(vec![2, 3]), None, None, Some(vec![7]));
+        assert_eq!(
+            filter_fingerprint(&filter, false),
+            filter_fingerprint(&filter, false)
+        );
+    }
+
+    #[test]
+    fn fingerprint_is_always_a_positive_bigint() {
+        let candidates = [
+            ChainBridgeFilter::default(),
+            configured(Some(i64::MAX), None, None, None, None),
+            configured(Some(i64::MIN), None, None, None, None),
+            configured(
+                Some(-1),
+                Some(vec![i64::MIN, i64::MAX]),
+                Some(vec![0]),
+                Some(vec![i64::MAX]),
+                Some(vec![i32::MIN, i32::MAX]),
+            ),
+        ];
+        for filter in candidates {
+            for horizon_enabled in [false, true] {
+                let fingerprint = filter_fingerprint(&filter, horizon_enabled);
+                assert!(fingerprint > 0, "not positive: {fingerprint} ({filter:?})");
+                assert_ne!(fingerprint, i64::MAX, "collides with today's constant");
+            }
+        }
+    }
+
+    #[test]
+    fn fingerprint_changes_with_every_dimension() {
+        let base = ChainBridgeFilter::default();
+        let variants = [
+            ("home_chain_id", configured(Some(1), None, None, None, None)),
+            (
+                "counterparty_chain_ids",
+                configured(None, Some(vec![1]), None, None, None),
+            ),
+            (
+                "src_chain_ids",
+                configured(None, None, Some(vec![1]), None, None),
+            ),
+            (
+                "dst_chain_ids",
+                configured(None, None, None, Some(vec![1]), None),
+            ),
+            (
+                "bridge_ids",
+                configured(None, None, None, None, Some(vec![1])),
+            ),
+        ];
+        let base_fingerprint = filter_fingerprint(&base, false);
+        let mut seen = vec![base_fingerprint];
+        for (dimension, variant) in variants {
+            let fingerprint = filter_fingerprint(&variant, false);
+            assert!(
+                !seen.contains(&fingerprint),
+                "{dimension} did not change the fingerprint"
+            );
+            seen.push(fingerprint);
+        }
+        // the sixth dimension is not a `ChainBridgeFilter` field
+        let horizon_flipped = filter_fingerprint(&base, true);
+        assert!(
+            !seen.contains(&horizon_flipped),
+            "flipping include_unindexed_chains did not change the fingerprint"
+        );
+    }
+
+    #[test]
+    fn fingerprint_distinguishes_none_empty_and_element_grouping() {
+        let variants = [
+            None,
+            Some(vec![]),
+            Some(vec![1, 2]),
+            Some(vec![12]),
+            Some(vec![2, 1]),
+        ];
+        let fingerprints: Vec<i64> = variants
+            .iter()
+            .map(|list| {
+                filter_fingerprint(&configured(None, list.clone(), None, None, None), false)
+            })
+            .collect();
+        for (i, left) in fingerprints.iter().enumerate() {
+            for (j, right) in fingerprints.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        left, right,
+                        "{:?} and {:?} collide",
+                        variants[i], variants[j]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unfiltered_fingerprint_matches_the_default_configuration_without_horizon() {
+        assert_eq!(
+            InterchainFilter::default().fingerprint,
+            filter_fingerprint(&ChainBridgeFilter::default(), false)
+        );
+        assert_eq!(
+            InterchainFilterConfig::unfiltered()
+                .with_horizon(None)
+                .fingerprint,
+            filter_fingerprint(&ChainBridgeFilter::default(), false)
+        );
+    }
+
+    #[test]
+    fn config_new_hashes_the_horizon_flag_inverted() {
+        let filter = configured(Some(1), None, None, None, None);
+        assert_eq!(
+            InterchainFilterConfig::new(filter.clone(), false).fingerprint,
+            filter_fingerprint(&filter, true)
+        );
+        assert_eq!(
+            InterchainFilterConfig::new(filter.clone(), true).fingerprint,
+            filter_fingerprint(&filter, false)
+        );
+    }
+
+    #[test]
+    fn with_horizon_keeps_the_configured_dimensions_and_the_fingerprint() {
+        let config = InterchainFilterConfig::new(
+            configured(Some(1), None, None, None, Some(vec![7])),
+            false,
+        );
+        let filter = config.with_horizon(Some(vec![(7, vec![1, 2])]));
+        assert_eq!(filter.home_chain_id(), Some(1));
+        assert_eq!(
+            filter.condition_source.bridge_ids.as_deref(),
+            Some(&[7][..])
+        );
+        assert_eq!(
+            filter.condition_source.only_indexed_by_bridge,
+            Some(vec![(7, vec![1, 2])])
+        );
+        assert_eq!(filter.fingerprint, config.fingerprint);
+    }
+
+    fn where_clause(sql: &str) -> String {
+        normalize_sql(
+            sql.split_once(" WHERE ")
+                .map(|(_, where_clause)| where_clause)
+                .unwrap_or(""),
+        )
+    }
+
+    #[test]
+    fn entry_points_apply_the_predicate() {
+        let filter = InterchainFilterConfig::new(
+            configured(Some(1), Some(vec![2, 3]), None, None, Some(vec![7])),
+            false,
+        )
+        .with_horizon(Some(vec![(7, vec![1, 2, 3])]));
+
+        let messages = where_clause(
+            &filter
+                .messages_query()
+                .build(DbBackend::Postgres)
+                .to_string(),
+        );
+        assert!(
+            messages.contains("\"src_chain_id\" = 1")
+                && messages.contains("\"dst_chain_id\" IN (2, 3)")
+                && messages.contains("\"bridge_id\" IN (7)"),
+            "messages_query lost the predicate: {messages}"
+        );
+
+        for (name, sql) in [
+            (
+                "transfers_query",
+                filter
+                    .transfers_query()
+                    .build(DbBackend::Postgres)
+                    .to_string(),
+            ),
+            (
+                "transfers_joined_query",
+                filter
+                    .transfers_joined_query()
+                    .build(DbBackend::Postgres)
+                    .to_string(),
+            ),
+        ] {
+            let transfers = where_clause(&sql);
+            assert!(
+                transfers.contains("\"token_src_chain_id\" = 1")
+                    && transfers.contains("\"token_dst_chain_id\" IN (2, 3)")
+                    && transfers.contains("\"bridge_id\" IN (7)"),
+                "{name} lost the predicate: {transfers}"
+            );
+        }
+    }
+
+    #[test]
+    fn transfers_joined_query_renders_both_halves_of_the_composite_join() {
+        let sql = normalize_sql(
+            &InterchainFilter::default()
+                .transfers_joined_query()
+                .build(DbBackend::Postgres)
+                .to_string(),
+        );
+        assert!(
+            sql.contains(
+                r#"INNER JOIN "crosschain_messages" ON "crosschain_transfers"."message_id" = "crosschain_messages"."id" AND "crosschain_transfers"."bridge_id" = "crosschain_messages"."bridge_id""#
+            ),
+            "composite join not rendered in full: {sql}"
+        );
+    }
+
+    #[test]
+    fn default_filter_adds_no_chain_or_bridge_term() {
+        for (name, sql) in [
+            (
+                "messages_query",
+                InterchainFilter::default()
+                    .messages_query()
+                    .build(DbBackend::Postgres)
+                    .to_string(),
+            ),
+            (
+                "transfers_query",
+                InterchainFilter::default()
+                    .transfers_query()
+                    .build(DbBackend::Postgres)
+                    .to_string(),
+            ),
+        ] {
+            let where_clause = where_clause(&sql).to_ascii_lowercase();
+            assert!(
+                !where_clause.contains("chain_id") && !where_clause.contains("bridge_id"),
+                "{name} added a predicate for the unfiltered case: {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn render_for_log_reports_the_where_clause_or_unfiltered() {
+        assert_eq!(
+            InterchainFilterConfig::unfiltered().render_for_log(),
+            "<unfiltered>"
+        );
+        let rendered = InterchainFilterConfig::new(
+            configured(Some(1), None, None, None, None),
+            // the horizon is not part of the rendered clause: it is unknown
+            // until the first update cycle
+            false,
+        )
+        .render_for_log();
+        assert!(
+            rendered.contains("\"src_chain_id\" = 1") && rendered.contains("\"dst_chain_id\" = 1"),
+            "unexpected rendering: {rendered}"
+        );
+    }
+}

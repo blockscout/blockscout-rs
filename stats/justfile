@@ -95,6 +95,12 @@ run-multichain:
     STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152 \
     cargo run --bin stats-server
 
+# The commented-out `STATS__INTERCHAIN_FILTER__*` lines are the full read-filter
+# surface; they mirror the indexer read API's parameters of the same names.
+# Uncomment to restrict what the interchain charts count. Note two traps:
+# without HOME_CHAIN_ID, COUNTERPARTY_CHAIN_IDS means `src IN set AND dst IN set`
+# (a conjunction, not a focal OR); and INCLUDE_UNINDEXED_CHAINS defaults to
+# `false`, which drops every message with no known destination.
 run-interchain:
     STATS__MODE=interchain \
     STATS__CHARTS_CONFIG=config/interchain/charts.json \
@@ -106,4 +112,10 @@ run-interchain:
     STATS__RUN_MIGRATIONS=true \
     STATS__SERVER__HTTP__ENABLED=true \
     STATS__SERVER__HTTP__ADDR=0.0.0.0:8080 \
+    `# STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID=1` \
+    `# STATS__INTERCHAIN_FILTER__COUNTERPARTY_CHAIN_IDS=10,137` \
+    `# STATS__INTERCHAIN_FILTER__SRC_CHAIN_IDS=1` \
+    `# STATS__INTERCHAIN_FILTER__DST_CHAIN_IDS=10,137` \
+    `# STATS__INTERCHAIN_FILTER__BRIDGE_IDS=1` \
+    `# STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS=false` \
     cargo run --bin stats-server

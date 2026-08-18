@@ -2477,9 +2477,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
 
 [[package]]
+name = "interchain-indexer-entity"
+version = "0.0.0"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=58d861876900a900d64d7337d9f9ba095e5f6e11#58d861876900a900d64d7337d9f9ba095e5f6e11"
+dependencies = [
+ "sea-orm",
+]
+
+[[package]]
+name = "interchain-indexer-filters"
+version = "0.0.0"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=58d861876900a900d64d7337d9f9ba095e5f6e11#58d861876900a900d64d7337d9f9ba095e5f6e11"
+dependencies = [
+ "interchain-indexer-entity",
+ "sea-orm",
+]
+
+[[package]]
 name = "interchain-indexer-migration"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?rev=9561218f0eed49baa0ce76c3747b4e3048e5a5e5#9561218f0eed49baa0ce76c3747b4e3048e5a5e5"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=58d861876900a900d64d7337d9f9ba095e5f6e11#58d861876900a900d64d7337d9f9ba095e5f6e11"
 dependencies = [
  "async-std",
  "sea-orm-migration",
@@ -4854,6 +4871,8 @@ dependencies = [
  "futures",
  "hex",
  "hex-literal",
+ "interchain-indexer-entity",
+ "interchain-indexer-filters",
  "interchain-indexer-migration",
  "itertools 0.13.0",
  "lazy_static",
@@ -4920,6 +4939,7 @@ dependencies = [
  "convert_case 0.6.0",
  "cron",
  "futures",
+ "interchain-indexer-filters",
  "itertools 0.13.0",
  "liquid-json",
  "paste",

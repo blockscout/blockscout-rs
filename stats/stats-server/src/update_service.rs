@@ -16,8 +16,9 @@ use crate::{
     settings::Mode,
 };
 use stats::{
-    ChartKey,
+    ChartKey, InterchainFilterConfig,
     data_source::types::{IndexerMigrations, UpdateParameters},
+    resolve_only_indexed_by_bridge,
 };
 
 use std::{collections::HashSet, sync::Arc};
@@ -33,6 +34,7 @@ pub struct UpdateServiceConfig {
     pub mode: Mode,
     pub multichain_filter: Option<Vec<u64>>,
     pub interchain_primary_id: Option<u64>,
+    pub interchain_filter: InterchainFilterConfig,
 }
 
 pub struct UpdateService {
@@ -42,6 +44,7 @@ pub struct UpdateService {
     mode: Mode,
     multichain_filter: Option<Vec<u64>>,
     interchain_primary_id: Option<u64>,
+    interchain_filter: InterchainFilterConfig,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
     init_update_tracker: InitialUpdateTracker,
@@ -80,6 +83,7 @@ impl UpdateService {
             mode: config.mode,
             multichain_filter: config.multichain_filter,
             interchain_primary_id: config.interchain_primary_id,
+            interchain_filter: config.interchain_filter,
             charts: config.charts,
             status_listener: config.status_listener,
             init_update_tracker,
@@ -428,11 +432,37 @@ impl UpdateService {
             return;
         };
 
+        // Resolve the observability horizon for this update cycle. Once per group
+        // update, alongside the migrations probe — same shape, same failure handling.
+        //
+        // On error the group is SKIPPED rather than computed without the horizon:
+        // the operator asked for the restriction, and computing without it would
+        // write silently-too-large values under a fingerprint claiming they are
+        // filtered. The next scheduled run retries.
+        let interchain_filter = if self.mode == Mode::Interchain
+            && !self.interchain_filter.include_unindexed_chains()
+        {
+            let Ok(horizon) = resolve_only_indexed_by_bridge(
+                &self.indexer_db,
+                self.interchain_filter.bridge_ids(),
+            )
+            .await
+            .inspect_err(|err| {
+                tracing::error!("error resolving the interchain observability horizon: {err:?}")
+            }) else {
+                return;
+            };
+            self.interchain_filter.with_horizon(horizon)
+        } else {
+            self.interchain_filter.with_horizon(None)
+        };
+
         let update_parameters = UpdateParameters {
             stats_db: &self.db,
             mode: self.mode,
             multichain_filter: self.multichain_filter.clone(),
             interchain_primary_id: self.interchain_primary_id,
+            interchain_filter,
             indexer_db: &self.indexer_db,
             second_indexer_db: self.second_indexer_db.as_deref(),
             indexer_applied_migrations: active_migrations,

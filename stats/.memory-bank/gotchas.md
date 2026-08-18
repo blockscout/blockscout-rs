@@ -200,3 +200,29 @@ the flip side: a naive `NaiveDateTime` bound to a `TIMESTAMPTZ` column is
 interpreted as UTC, so fixtures and production data must genuinely mean UTC.
 If you ever need a non-UTC session, it has to be set explicitly per
 connection; it will not come from the server config.
+
+---
+
+## The Env-Docs Generator Does *Not* Derive Descriptions From Rust Doc Comments
+
+**Symptom:** You add a settings field (or a whole nested settings struct) with
+a carefully worded doc comment, run `just generate-envs`, and the new
+`README.md` rows appear with an **empty description column**. Rewriting the
+doc comment and regenerating changes nothing.
+
+**Root cause:** `env-docs-generation` (`env-docs-generation/src/main.rs`) drives
+`env_collector` from `blockscout-service-launcher`, which reflects over
+`Settings` only for the *variable name* and the *default value* — it
+serializes `Settings::default()`, it does not read source. The description
+column is human-authored prose that the generator **preserves** across runs by
+matching on the variable name. That is why
+`STATS__INTERCHAIN_PRIMARY_ID`'s README description has never matched its Rust
+doc comment. `just check-envs` validates names and defaults only, so a row with
+an empty description passes validation.
+
+**Fix:** Write the description directly into the `README.md` table cell, then
+run `just generate-envs` (to normalise column padding) and `just check-envs`.
+The doc comment is still worth writing — it is what a developer reading
+`settings.rs` sees — but it is a *separate* artifact from the README row, and
+the two have to be kept in sync by hand. Keep the Rust doc comment and the
+README cell saying the same thing.

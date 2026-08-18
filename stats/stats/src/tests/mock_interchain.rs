@@ -19,7 +19,14 @@
 //!   message's `init_timestamp`. `index` is the transfer's 0-based position
 //!   within its message, which `UNIQUE (message_id, bridge_id, index)` requires.
 //!
-//! `bridge_contracts` is deliberately left empty — no chart reads it.
+//! - `bridge_contracts` — one contract for [`MOCK_BRIDGE_ID`] on each of
+//!   [`MOCK_CHAIN_IDS`]. No chart reads this table directly, but
+//!   `resolve_only_indexed_by_bridge` derives the observability horizon from
+//!   `bridges LEFT JOIN bridge_contracts`, and an empty `bridge_contracts` would
+//!   fold the single fixture bridge to `(1, [])` — a bridge that observes
+//!   nothing, which excludes **every** fixture row once the horizon reaches the
+//!   chart statements. Seeding all three chains makes the horizon a no-op here,
+//!   which is what lets a filtered and an unfiltered run be compared.
 //!
 //! Invariants this fixture deliberately maintains, because the expected chart
 //! values depend on them:
@@ -181,6 +188,29 @@ pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_dat
             Value::Int(Some(MOCK_BRIDGE_ID)),
             Value::String(Some(Box::new(format!("mock_bridge_{MOCK_BRIDGE_ID}")))),
         ],
+    )
+    .await;
+
+    // One contract per mock chain, so that the observability horizon derived from
+    // `bridges LEFT JOIN bridge_contracts` is `[(1, [1, 2, 3])]` — the set that
+    // covers every route in this fixture. See the module docs for why a
+    // contract-less bridge would instead exclude every row.
+    let contract_values: Vec<Value> = MOCK_CHAIN_IDS
+        .iter()
+        .flat_map(|chain_id| {
+            [
+                Value::Int(Some(MOCK_BRIDGE_ID)),
+                Value::BigInt(Some(*chain_id)),
+                Value::Bytes(Some(Box::new(vec![*chain_id as u8; 20]))),
+                Value::SmallInt(Some(1)),
+            ]
+        })
+        .collect();
+    bulk_insert(
+        interchain,
+        "bridge_contracts",
+        &["bridge_id", "chain_id", "address", "version"],
+        contract_values,
     )
     .await;
 
