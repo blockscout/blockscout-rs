@@ -2477,6 +2477,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
 
 [[package]]
+name = "interchain-indexer-migration"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=9561218f0eed49baa0ce76c3747b4e3048e5a5e5#9561218f0eed49baa0ce76c3747b4e3048e5a5e5"
+dependencies = [
+ "async-std",
+ "sea-orm-migration",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4845,6 +4854,7 @@ dependencies = [
  "futures",
  "hex",
  "hex-literal",
+ "interchain-indexer-migration",
  "itertools 0.13.0",
  "lazy_static",
  "migration",

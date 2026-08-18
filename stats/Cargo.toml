@@ -13,6 +13,9 @@ members = [
 blockscout-client = { git = "https://github.com/blockscout/blockscout-rs/", rev = "d02877c" }
 blockscout-service-launcher = { version = "0.19.0" }
 hex = "0.4.3"
+# todo: repoint to the merge commit / a tag once the interchain filter work lands
+# (the three interchain deps should end up on a single shared rev)
+interchain-indexer-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "9561218f0eed49baa0ce76c3747b4e3048e5a5e5", package = "interchain-indexer-migration" }
 # todo: update to tag >1.6.0 once released (can't compile for some reason)
 multichain-aggregator-entity = { git = "https://github.com/blockscout/blockscout-rs/", rev = "096c4c140375e5a1802413e9a037c35f84aeaa42", package = "multichain-aggregator-entity" }
 multichain-aggregator-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "096c4c140375e5a1802413e9a037c35f84aeaa42", package = "multichain-aggregator-migration" }

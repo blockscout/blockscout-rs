@@ -2,10 +2,40 @@
 
 #![cfg(any(feature = "test-utils", test))]
 
-//! Mock data for interchain indexer DB (crosschain_messages, crosschain_transfers).
-//! Messages: id, init_timestamp, src_chain_id, dst_chain_id, src_tx_hash, dst_tx_hash.
-//! Transfers: id, message_id (no init_timestamp; date comes from message's init_timestamp).
-//! Each message has 0..=5 associated transfers (last field in mock_rows).
+//! Mock data for the interchain indexer DB, whose schema is created by the
+//! indexer's own migrator (`interchain_indexer_migration::Migrator`, see
+//! [`crate::tests::init_db::init_db_interchain`]).
+//!
+//! Tables filled here:
+//! - `chains` — reference rows for [`MOCK_CHAIN_IDS`]; every chain-id column in
+//!   the tables below is a foreign key into it.
+//! - `bridges` — a single row, [`MOCK_BRIDGE_ID`].
+//! - `crosschain_messages` — `(id, bridge_id, init_timestamp, src_chain_id,
+//!   dst_chain_id, src_tx_hash, dst_tx_hash)`; every other column keeps its
+//!   default or stays NULL.
+//! - `crosschain_transfers` — `(id, message_id, bridge_id, index,
+//!   token_src_chain_id, token_dst_chain_id, sender_address, recipient_address)`.
+//!   A transfer has no timestamp of its own: its date comes from the parent
+//!   message's `init_timestamp`. `index` is the transfer's 0-based position
+//!   within its message, which `UNIQUE (message_id, bridge_id, index)` requires.
+//!
+//! `bridge_contracts` is deliberately left empty — no chart reads it.
+//!
+//! Invariants this fixture deliberately maintains, because the expected chart
+//! values depend on them:
+//! - there is exactly **one bridge**, so joining transfers to messages on
+//!   `message_id` alone still resolves 1:1 even though the real key is
+//!   `(message_id, bridge_id)`;
+//! - every message has a **non-NULL `dst_chain_id`**;
+//! - a transfer's `token_src_chain_id`/`token_dst_chain_id` always **equal its
+//!   message's** `src_chain_id`/`dst_chain_id`.
+//!
+//! These are intentional, not incidental. A later change will break them on
+//! purpose (a second bridge, a NULL destination, transfers whose token chains
+//! diverge from their message route) in order to exercise the read filters —
+//! and doing so will move existing expected values.
+//!
+//! Each message has 0..=5 associated transfers (last field in [`mock_rows`]).
 //!
 //! Covers at least two weeks, months and years with holes (gaps in dates).
 //! Dates: late Dec 2022, Jan 2023, early Feb 2023.
@@ -14,6 +44,37 @@ use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value};
+
+/// Chain ids used by the fixture. Inserted into `chains` so that the
+/// `crosschain_messages.{src,dst}_chain_id` and
+/// `crosschain_transfers.token_{src,dst}_chain_id` foreign keys resolve.
+pub const MOCK_CHAIN_IDS: [i64; 3] = [1, 2, 3];
+
+/// The single bridge every fixture message and transfer belongs to.
+pub const MOCK_BRIDGE_ID: i32 = 1;
+
+/// `index` is an unreserved keyword in Postgres, so it needs no quoting here
+/// (the schema itself declares the column unquoted).
+const MESSAGE_COLUMNS: [&str; 7] = [
+    "id",
+    "bridge_id",
+    "init_timestamp",
+    "src_chain_id",
+    "dst_chain_id",
+    "src_tx_hash",
+    "dst_tx_hash",
+];
+
+const TRANSFER_COLUMNS: [&str; 8] = [
+    "id",
+    "message_id",
+    "bridge_id",
+    "index",
+    "token_src_chain_id",
+    "token_dst_chain_id",
+    "sender_address",
+    "recipient_address",
+];
 
 /// One row: (init_timestamp, src_chain_id, dst_chain_id, src_tx_hash set?, dst_tx_hash set?, num_transfers)
 fn mock_rows() -> Vec<(NaiveDateTime, i64, i64, bool, bool, u8)> {
@@ -47,113 +108,138 @@ fn mock_rows() -> Vec<(NaiveDateTime, i64, i64, bool, bool, u8)> {
     ]
 }
 
-/// Fills crosschain_messages and crosschain_transfers with bulk INSERTs.
+/// Builds `($1, ..., $n), ($n+1, ..., $2n), ...` for `rows` rows of `columns`
+/// columns each.
+fn placeholders(rows: usize, columns: usize) -> String {
+    (0..rows)
+        .map(|row| {
+            let row_placeholders: Vec<String> = (0..columns)
+                .map(|column| format!("${}", row * columns + column + 1))
+                .collect();
+            format!("({})", row_placeholders.join(", "))
+        })
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
+/// Bulk-inserts `values` into `table`. `values` is row-major, with exactly
+/// `columns.len()` entries per row.
+async fn bulk_insert(
+    interchain: &DatabaseConnection,
+    table: &str,
+    columns: &[&str],
+    values: Vec<Value>,
+) {
+    if values.is_empty() {
+        return;
+    }
+    assert_eq!(
+        values.len() % columns.len(),
+        0,
+        "{table}: {} values do not divide into rows of {} columns",
+        values.len(),
+        columns.len()
+    );
+    let sql = format!(
+        "INSERT INTO {table} ({}) VALUES {}",
+        columns.join(", "),
+        placeholders(values.len() / columns.len(), columns.len())
+    );
+    interchain
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DbBackend::Postgres,
+            &sql,
+            values,
+        ))
+        .await
+        .unwrap();
+}
+
+/// Fills the interchain indexer DB with the mock fixture described in the
+/// module docs.
 pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_date: NaiveDate) {
     let rows = mock_rows();
-    let n = rows.len();
 
-    // Bulk insert messages: VALUES ($1..$6), ($7..$12), ...
-    let mut msg_values: Vec<Value> = Vec::with_capacity(n * 6);
+    // Reference rows first, so the foreign keys of the two canonical tables
+    // resolve. `chains.name` and `bridges.name` are both `TEXT NOT NULL UNIQUE`.
+    let chain_values: Vec<Value> = MOCK_CHAIN_IDS
+        .iter()
+        .flat_map(|chain_id| {
+            [
+                Value::BigInt(Some(*chain_id)),
+                Value::String(Some(Box::new(format!("mock_chain_{chain_id}")))),
+            ]
+        })
+        .collect();
+    bulk_insert(interchain, "chains", &["id", "name"], chain_values).await;
+
+    bulk_insert(
+        interchain,
+        "bridges",
+        &["id", "name"],
+        vec![
+            Value::Int(Some(MOCK_BRIDGE_ID)),
+            Value::String(Some(Box::new(format!("mock_bridge_{MOCK_BRIDGE_ID}")))),
+        ],
+    )
+    .await;
+
+    let mut msg_values: Vec<Value> = Vec::with_capacity(rows.len() * MESSAGE_COLUMNS.len());
     for (i, (ts, src_chain_id, dst_chain_id, has_src_tx, has_dst_tx, _num_transfers)) in
         rows.iter().enumerate()
     {
-        let src_tx_hash = if *has_src_tx {
-            Some(vec![(i + 1) as u8; 32])
-        } else {
-            None
-        };
-        let dst_tx_hash = if *has_dst_tx {
-            Some(vec![(i + 100) as u8; 32])
-        } else {
-            None
-        };
-        msg_values.push(Value::BigInt(Some((i + 1) as i64)));
-        msg_values.push(Value::ChronoDateTime(Some(Box::new(*ts))));
-        msg_values.push(Value::BigInt(Some(*src_chain_id)));
-        msg_values.push(Value::BigInt(Some(*dst_chain_id)));
-        msg_values.push(
-            src_tx_hash
-                .map(|v| Value::Bytes(Some(Box::new(v))))
-                .unwrap_or(Value::Bytes(None)),
-        );
-        msg_values.push(
-            dst_tx_hash
-                .map(|v| Value::Bytes(Some(Box::new(v))))
-                .unwrap_or(Value::Bytes(None)),
-        );
+        let src_tx_hash = has_src_tx.then(|| vec![(i + 1) as u8; 32]);
+        let dst_tx_hash = has_dst_tx.then(|| vec![(i + 100) as u8; 32]);
+        msg_values.extend([
+            Value::BigInt(Some((i + 1) as i64)),
+            Value::Int(Some(MOCK_BRIDGE_ID)),
+            Value::ChronoDateTime(Some(Box::new(*ts))),
+            Value::BigInt(Some(*src_chain_id)),
+            Value::BigInt(Some(*dst_chain_id)),
+            Value::Bytes(src_tx_hash.map(Box::new)),
+            Value::Bytes(dst_tx_hash.map(Box::new)),
+        ]);
     }
-    let msg_placeholders: Vec<String> = (0..n)
-        .map(|i| {
-            let b = i * 6 + 1;
-            format!(
-                "(${}, ${}, ${}, ${}, ${}, ${})",
-                b,
-                b + 1,
-                b + 2,
-                b + 3,
-                b + 4,
-                b + 5
-            )
-        })
-        .collect();
-    let msg_sql = format!(
-        r#"INSERT INTO crosschain_messages (id, init_timestamp, src_chain_id, dst_chain_id, src_tx_hash, dst_tx_hash) VALUES {}"#,
-        msg_placeholders.join(", ")
-    );
-    interchain
-        .execute(Statement::from_sql_and_values(
-            sea_orm::DbBackend::Postgres,
-            &msg_sql,
-            msg_values,
-        ))
-        .await
-        .unwrap();
+    bulk_insert(
+        interchain,
+        "crosschain_messages",
+        &MESSAGE_COLUMNS,
+        msg_values,
+    )
+    .await;
 
-    // Bulk insert transfers: (id, message_id, sender_address, recipient_address).
-    // Use 8 distinct 20-byte addresses so totalInterchainTransferUsers = 8.
-    let mut transfer_rows: Vec<(i64, i64, Vec<u8>, Vec<u8>)> = Vec::new();
+    // Transfers. `index` counts within the parent message (required by
+    // `UNIQUE (message_id, bridge_id, index)`), while the address cycling uses
+    // the *global* transfer id so that exactly 8 distinct 20-byte addresses
+    // appear — which is what `totalInterchainTransferUsers = 8` relies on.
+    let mut transfer_values: Vec<Value> = Vec::new();
     let mut transfer_id: i64 = 1;
-    for (i, (_ts, _src, _dst, _has_src, _has_dst, num_transfers)) in rows.iter().enumerate() {
+    for (i, (_ts, src_chain_id, dst_chain_id, _has_src_tx, _has_dst_tx, num_transfers)) in
+        rows.iter().enumerate()
+    {
         let message_id = (i + 1) as i64;
-        for _ in 0..*num_transfers {
+        for index in 0..*num_transfers {
             let sender_idx = ((transfer_id - 1) % 8) as u8;
             let recipient_idx = ((transfer_id + 2) % 8) as u8;
-            transfer_rows.push((
-                transfer_id,
-                message_id,
-                vec![sender_idx; 20],
-                vec![recipient_idx; 20],
-            ));
+            transfer_values.extend([
+                Value::BigInt(Some(transfer_id)),
+                Value::BigInt(Some(message_id)),
+                Value::Int(Some(MOCK_BRIDGE_ID)),
+                Value::SmallInt(Some(index as i16)),
+                // token chains == the message's route; see the module docs.
+                Value::BigInt(Some(*src_chain_id)),
+                Value::BigInt(Some(*dst_chain_id)),
+                Value::Bytes(Some(Box::new(vec![sender_idx; 20]))),
+                Value::Bytes(Some(Box::new(vec![recipient_idx; 20]))),
+            ]);
             transfer_id += 1;
         }
     }
-    if transfer_rows.is_empty() {
-        return;
-    }
-    let t = transfer_rows.len();
-    let transfer_placeholders: Vec<String> = (0..t)
-        .map(|i| {
-            let b = i * 4 + 1;
-            format!("(${}, ${}, ${}, ${})", b, b + 1, b + 2, b + 3)
-        })
-        .collect();
-    let mut transfer_values: Vec<Value> = Vec::with_capacity(t * 4);
-    for (id, message_id, sender, recipient) in transfer_rows {
-        transfer_values.push(Value::BigInt(Some(id)));
-        transfer_values.push(Value::BigInt(Some(message_id)));
-        transfer_values.push(Value::Bytes(Some(Box::new(sender))));
-        transfer_values.push(Value::Bytes(Some(Box::new(recipient))));
-    }
-    let transfer_sql = format!(
-        r#"INSERT INTO crosschain_transfers (id, message_id, sender_address, recipient_address) VALUES {}"#,
-        transfer_placeholders.join(", ")
-    );
-    interchain
-        .execute(Statement::from_sql_and_values(
-            sea_orm::DbBackend::Postgres,
-            &transfer_sql,
-            transfer_values,
-        ))
-        .await
-        .unwrap();
+    bulk_insert(
+        interchain,
+        "crosschain_transfers",
+        &TRANSFER_COLUMNS,
+        transfer_values,
+    )
+    .await;
 }

@@ -170,3 +170,33 @@ bug; it's expected for the most recent, still-in-progress timespan(s). If a
 chart genuinely needs zero approximate trailing points (e.g. because it's
 already a lagging aggregate), override `approximate_trailing_points()`
 explicitly rather than working around the default elsewhere.
+
+---
+
+## Session Timezone Is Always UTC, So `TIMESTAMPTZ`/`TIMESTAMP` Casts Can't Drift
+
+**Symptom:** A raw-SQL chart casts an indexer column with
+`init_timestamp::date` / `::timestamp` (see
+`stats/src/charts/lines/interchain/*.rs` and
+`stats/src/charts/db_interaction/read/interchain.rs`). Those casts are
+session-timezone-dependent when the underlying column is `TIMESTAMPTZ`, which
+looks like it makes day bucketing depend on where the service (or CI, or a
+developer's Postgres) runs.
+
+**Root cause / why it can't actually drift:** every connection SeaORM opens
+goes through `sqlx-postgres`, which pins `("TimeZone", "UTC")` in the startup
+packet (`sqlx-postgres-0.8.6/src/connection/establish.rs:33`, alongside
+`DateStyle=ISO, MDY` and `client_encoding=UTF8`). A server-level
+`timezone = …` in `postgresql.conf` (or `docker run … -c timezone=…`) is
+therefore overridden per session and never reaches a query. Verified by
+running the interchain suite against a `postgres:17.5` started with
+`-c timezone=Pacific/Kiritimati` (UTC+14): all 40 tests produce the same
+values as against a UTC server.
+
+**Fix:** Don't add defensive `AT TIME ZONE 'UTC'` wrappers to indexer-DB
+queries, and don't treat a `TIMESTAMPTZ` → `TIMESTAMP` schema change as a
+bucketing risk — the round trip through a pinned-UTC session cancels. Do note
+the flip side: a naive `NaiveDateTime` bound to a `TIMESTAMPTZ` column is
+interpreted as UTC, so fixtures and production data must genuinely mean UTC.
+If you ever need a non-UTC session, it has to be set explicitly per
+connection; it will not come from the server config.
