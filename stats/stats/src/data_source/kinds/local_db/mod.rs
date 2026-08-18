@@ -36,8 +36,9 @@ use crate::{
             read::{
                 get_chart_metadata, get_min_block_blockscout, interchain::get_min_block_interchain,
                 last_accurate_point, multichain::get_min_block_multichain,
+                recorded_min_indexer_block,
             },
-            write::set_last_updated_at,
+            write::{clear_all_chart_data, set_last_updated_at},
         },
     },
     data_source::{
@@ -186,7 +187,7 @@ where
         }
         let chart_id = metadata.id;
         let min_indexer_block = match cx.mode {
-            Mode::Interchain => get_min_block_interchain(cx.indexer_db)
+            Mode::Interchain => get_min_block_interchain(&cx.interchain_filter)
                 .await
                 .map_err(ChartError::IndexerDB)?,
             Mode::MultichainAggregator => get_min_block_multichain(cx.indexer_db)
@@ -196,6 +197,38 @@ where
                 .await
                 .map_err(ChartError::IndexerDB)?,
         };
+        // Interchain only, where `min_indexer_block` is the filter fingerprint
+        // rather than a block number. `last_accurate_point` below already forces a
+        // full recompute when the recorded fingerprint differs, but
+        // `insert_data_many` is an upsert on (chart_id, date) with no delete
+        // (`write.rs`) — so a *narrowed* filter would leave stale non-zero rows on
+        // days that now yield no row at all. Those days read as `0` under
+        // `FillZero`, and for the cumulative `messagesGrowth*` series a stale
+        // prefix propagates through everything after it. Delete first.
+        //
+        // Deliberately NOT gated on `!cx.force_full`: if the fingerprint changed
+        // the delete is wanted either way, and `force_full` skips
+        // `last_accurate_point`'s read but not the staleness problem. Deliberately
+        // NOT extended to other modes: there `min_blockscout_block` means an actual
+        // block number and the existing reindex semantics depend on it.
+        if cx.mode == Mode::Interchain
+            // no stored rows ⇒ nothing to clear. A NULL recorded value counts as a
+            // mismatch: interchain never writes one, so this should be
+            // unreachable, and treating it as a mismatch is the safe direction.
+            && let Some(recorded) = recorded_min_indexer_block(cx.stats_db, chart_id).await?
+            && recorded != Some(min_indexer_block)
+        {
+            tracing::warn!(
+                chart =% ChartProps::key(),
+                recorded =? recorded,
+                observed = min_indexer_block,
+                "interchain filter fingerprint changed; clearing stored chart data \
+                 before recomputing"
+            );
+            clear_all_chart_data(cx.stats_db, chart_id)
+                .await
+                .map_err(ChartError::StatsDB)?;
+        }
         let last_accurate_point = last_accurate_point::<ChartProps, Query>(
             chart_id,
             min_indexer_block,

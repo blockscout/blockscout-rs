@@ -254,3 +254,69 @@ is the sanctioned exception — it names a `SELECT` output alias in `GROUP BY`,
 not a table column. `charts::interchain_filter_coverage`'s
 `transfer_predicates_are_table_qualified` asserts the qualification survives
 future revisions of the shared filter crate.
+
+---
+
+## In `Interchain` Mode, `chart_data.min_blockscout_block` Is Not a Block Number
+
+**Symptom:** You read `chart_data.min_blockscout_block` on an interchain
+deployment expecting a block height and get an arbitrary 63-bit integer. Or you
+"generalise" the interchain clear-on-mismatch branch in
+`update_itself_inner` to the other modes and every Blockscout chart starts
+deleting its history on the first reindex.
+
+**Root cause:** the interchain indexer has no block numbers, so that column is
+reused as the *interchain filter fingerprint*
+(`charts::db_interaction::filters::interchain::filter_fingerprint`, returned by
+`read::interchain::get_min_block_interchain`). `last_accurate_point` already
+compares the recorded value against the observed one on every update, so
+stamping the fingerprint there turns that comparison into "was this history
+computed under the currently configured filter?" for free — no migration, no
+new column. In `Blockscout`/`Zetachain`/`MultichainAggregator` mode the column
+still means an actual minimum indexed block and the reindex semantics depend on
+it.
+
+Two consequences that are easy to get wrong:
+
+- The fingerprint hashes only the five operator-configured id lists **plus a
+  boolean** for whether the observability-horizon restriction is enabled — never
+  the horizon's resolved `(bridge, chain)` pairs. Those are DB-derived and grow
+  on their own, so hashing them would rebuild all interchain series every time
+  the indexer gained a bridge or a bridge contract. The flip side is that an
+  upstream horizon change is **not** detected — `filter_fingerprint`'s own doc
+  comment states the trade.
+- The fingerprint is remapped away from `0` and `i64::MAX`. Masking to 63 bits
+  makes `i64::MAX` *reachable*, and `i64::MAX` is exactly the sentinel every
+  pre-existing interchain row carries, so an unlucky hash would silently look
+  like "unchanged".
+
+**Fix:** keep the clear gated on `cx.mode == Mode::Interchain`, and treat the
+column as mode-dependent whenever you touch it.
+
+---
+
+## `insert_data_many` Is an Upsert With No Delete — Narrowing a Filter Corrupts History
+
+**Symptom:** you narrow a read filter (interchain or multichain), the charts
+recompute, and days that should now be empty keep their old non-zero values.
+On a cumulative chart (`DailyCumulativeLocalDbChartSource`) the stale prefix
+propagates through every later point, so the whole series is wrong, not just
+those days.
+
+**Root cause:** `write::insert_data_many` is `ON CONFLICT (chart_id, date) DO
+UPDATE`. A recompute only ever *overwrites* days that still produce a row; a day
+that now produces no row is simply never written, so the previous regime's value
+survives. Forcing a full recompute (`force_full` /
+`STATS__FORCE_UPDATE_ON_START=true`) does **not** help — it skips
+`last_accurate_point`, not the missing delete. Widening is self-correcting;
+narrowing is not.
+
+**Fix:** an explicit `write::clear_all_chart_data` before the recompute.
+Interchain does this automatically on a fingerprint change
+(`LocalDbChartSource::update_itself_inner`). `ClearAllAndPassVec` is the other
+place that deletes, and it wraps the delete plus the rewrite in one
+transaction. The interchain clear cannot: `BatchUpdate` commits per batch by
+design. That is safe — `BatchUpdate` also calls `update_metadata` after every
+batch, so a crash mid-rebuild leaves `last_updated_at` exactly at the end of the
+last committed batch and the next run resumes from there — but it does mean the
+chart serves a partially rebuilt series while the backfill runs.

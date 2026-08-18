@@ -106,6 +106,11 @@ pub struct Settings {
     /// Read filter applied to the interchain indexer DB in `Interchain` mode.
     /// Mirrors the indexer's own read API parameters, so a stats deployment and
     /// the equivalent API request return the same subset.
+    ///
+    /// Changing any of these values (or `interchain_primary_id`) is detected
+    /// automatically: the filter fingerprint stored in
+    /// `chart_data.min_blockscout_block` forces a clear-and-rebuild of every
+    /// interchain chart on the next update.
     pub interchain_filter: InterchainFilterSettings,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,

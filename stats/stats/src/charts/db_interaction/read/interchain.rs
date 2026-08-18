@@ -64,10 +64,27 @@ pub async fn get_min_date_interchain(
         .unwrap_or_else(|| Utc::now().naive_utc()))
 }
 
-/// InterchainIndexer does not have block information; we return i64::MAX so that
-/// last_accurate_point logic does not trigger reupdates based on block.
-pub async fn get_min_block_interchain(_interchain: &DatabaseConnection) -> Result<i64, DbErr> {
-    Ok(i64::MAX)
+/// The interchain indexer has no block numbers. This slot in the update
+/// pipeline — persisted as `chart_data.min_blockscout_block` and compared by
+/// `last_accurate_point` — is reused as the *filter fingerprint*: "was the
+/// stored history computed under the currently configured filter?", which is
+/// exactly the question that comparison answers.
+///
+/// It used to be the constant `i64::MAX`, which made the channel inert and is
+/// what the `TODO: recalculate statistics data when …` comment in
+/// `stats-server/src/settings.rs` was about.
+///
+/// The fingerprint covers only the operator-configured dimensions, never the
+/// DB-derived observability horizon's contents — see
+/// [`crate::charts::db_interaction::filters::interchain::filter_fingerprint`].
+///
+/// Kept `async` and `Result`-returning, and kept inside the `match cx.mode`
+/// dispatch in [`crate::data_source::kinds::local_db`], per
+/// `.memory-bank/rules/database.md`'s mode-dispatching-read-helper convention,
+/// even though it no longer touches the database and cannot fail: uniformity at
+/// the call site is worth more than removing an `async`.
+pub async fn get_min_block_interchain(filter: &InterchainFilter) -> Result<i64, DbErr> {
+    Ok(filter.fingerprint)
 }
 
 #[derive(FromQueryResult, Debug)]

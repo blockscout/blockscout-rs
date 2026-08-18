@@ -639,6 +639,104 @@ where
     assert_ne!("0", data.value);
 }
 
+/// Stats + interchain indexer DBs filled with the shared fixture and `C`
+/// initialized, with **no** update run yet.
+///
+/// The assert-only harnesses ([`simple_test_chart_interchain`],
+/// [`simple_test_counter_interchain`]) run their two updates with identical
+/// parameters, so they cannot express a *filter change* between updates. This
+/// hands the test the raw handles instead; drive them with
+/// [`update_and_query_interchain_chart`] /
+/// [`update_and_query_interchain_counter`].
+///
+/// Returns `(init_time, stats_db, indexer_db)`.
+pub async fn prepare_interchain_chart_test<C: DataSource + ChartProperties>(
+    test_name: &str,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let (init_time, db, indexer, zetachain_cctx) =
+        prepare_simple_any_test::<C>(test_name, None, max_time, Mode::Interchain, false).await;
+    assert!(
+        zetachain_cctx.is_none(),
+        "zetachain cctx db was initialized needlessly"
+    );
+    (init_time, db, indexer)
+}
+
+/// Parameters for one interchain update of `C` under `interchain_filter`.
+///
+/// `update_time` must strictly advance between updates on the same databases:
+/// `update_itself_inner` short-circuits when the chart's `last_updated_at`
+/// already equals the update timestamp, so a filter change re-applied at the
+/// same instant would silently do nothing.
+fn interchain_update_parameters<'a, C: DataSource>(
+    stats_db: &'a DatabaseConnection,
+    indexer_db: &'a DatabaseConnection,
+    interchain_filter: InterchainFilter,
+    update_time: DateTime<Utc>,
+) -> UpdateParameters<'a> {
+    UpdateParameters {
+        stats_db,
+        mode: Mode::Interchain,
+        multichain_filter: None,
+        interchain_filter,
+        indexer_db,
+        indexer_applied_migrations: IndexerMigrations::latest(),
+        second_indexer_db: None,
+        enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
+        update_time_override: Some(update_time),
+        // the point of these helpers is what happens *without* a forced rebuild
+        force_full: false,
+    }
+}
+
+/// One interchain update of line chart `C`, then the full stored series.
+/// See [`prepare_interchain_chart_test`] and [`interchain_update_parameters`].
+pub async fn update_and_query_interchain_chart<C>(
+    stats_db: &DatabaseConnection,
+    indexer_db: &DatabaseConnection,
+    interchain_filter: InterchainFilter,
+    update_time: DateTime<Utc>,
+) -> Vec<(String, String)>
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let cx = UpdateContext::from_params_now_or_override(interchain_update_parameters::<C>(
+        stats_db,
+        indexer_db,
+        interchain_filter,
+        update_time,
+    ));
+    C::update_recursively(&cx).await.unwrap();
+    chart_output_to_expected(
+        C::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap(),
+    )
+}
+
+/// One interchain update of counter `C`, then its current value.
+/// See [`prepare_interchain_chart_test`] and [`interchain_update_parameters`].
+pub async fn update_and_query_interchain_counter<C>(
+    stats_db: &DatabaseConnection,
+    indexer_db: &DatabaseConnection,
+    interchain_filter: InterchainFilter,
+    update_time: DateTime<Utc>,
+) -> String
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    let cx = UpdateContext::from_params_now_or_override(interchain_update_parameters::<C>(
+        stats_db,
+        indexer_db,
+        interchain_filter,
+        update_time,
+    ));
+    C::update_recursively(&cx).await.unwrap();
+    get_counter::<C>(&cx).await.value
+}
+
 pub async fn prepare_blockscout_chart_test<C: DataSource + ChartProperties>(
     test_name: &str,
     init_time: Option<NaiveDateTime>,

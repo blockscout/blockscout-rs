@@ -423,6 +423,31 @@ struct SyncInfo {
     pub min_blockscout_block: Option<i64>,
 }
 
+/// The `min_blockscout_block` recorded on this chart's newest stored point.
+///
+/// The outer [`Option`] is "does the chart have any stored data at all"; the
+/// inner one is the nullable column.
+///
+/// Factored out of [`last_accurate_point`] (which calls it) because the
+/// interchain clear-on-fingerprint-change path in
+/// [`crate::data_source::kinds::local_db`] needs the raw recorded value, not the
+/// derived "is it still accurate" answer — and the two must never drift.
+pub async fn recorded_min_indexer_block(
+    db: &DatabaseConnection,
+    chart_id: i32,
+) -> Result<Option<Option<i64>>, ChartError> {
+    let row: Option<SyncInfo> = chart_data::Entity::find()
+        .select_only()
+        .column(chart_data::Column::MinBlockscoutBlock)
+        .filter(chart_data::Column::ChartId.eq(chart_id))
+        .order_by_desc(chart_data::Column::Date)
+        .into_model()
+        .one(db)
+        .await
+        .map_err(ChartError::StatsDB)?;
+    Ok(row.map(|row| row.min_blockscout_block))
+}
+
 /// Get last 'finalized' row (for which no recomputations needed).
 ///
 /// In case of inconsistencies or set `force_full`, returns `None`.
@@ -444,20 +469,12 @@ where
         tracing::info!("running full update due to force override");
         None
     } else {
-        let recorded_min_indexer_block: Option<SyncInfo> = chart_data::Entity::find()
-            .select_only()
-            .column(chart_data::Column::MinBlockscoutBlock)
-            .filter(chart_data::Column::ChartId.eq(chart_id))
-            .order_by_desc(chart_data::Column::Date)
-            .into_model()
-            .one(db)
-            .await
-            .map_err(ChartError::StatsDB)?;
+        let recorded = recorded_min_indexer_block(db, chart_id).await?;
 
-        match recorded_min_indexer_block {
-            Some(SyncInfo {
-                min_blockscout_block: Some(recorded_min_indexer_block),
-            }) if recorded_min_indexer_block == observed_min_indexer_block => {
+        match recorded {
+            Some(Some(recorded_min_indexer_block))
+                if recorded_min_indexer_block == observed_min_indexer_block =>
+            {
                 let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
                 let Some(last_updated_at) = metadata.last_updated_at else {
                     // data is present, but `last_updated_at` is not set
@@ -523,18 +540,14 @@ where
                 }
             }
             // != min_indexer_block
-            Some(SyncInfo {
-                min_blockscout_block: Some(block),
-            }) => {
+            Some(Some(block)) => {
                 tracing::info!(
                     min_chart_block = block,
                     "running full update due to min blocks mismatch"
                 );
                 None
             }
-            Some(SyncInfo {
-                min_blockscout_block: None,
-            }) => {
+            Some(None) => {
                 tracing::info!("running full update due to lack of saved min block");
                 None
             }

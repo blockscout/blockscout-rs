@@ -94,7 +94,10 @@ mod tests {
             test_interchain_home_chain_filter,
         },
         normalize_sql,
-        simple_test::simple_test_counter_interchain,
+        simple_test::{
+            prepare_interchain_chart_test, simple_test_counter_interchain,
+            update_and_query_interchain_counter,
+        },
     };
 
     #[test]
@@ -131,6 +134,38 @@ mod tests {
             test_interchain_home_chain_filter(1),
         )
         .await;
+    }
+
+    /// A counter is a [`DirectPointLocalDbChartSource`]: it recomputes its single
+    /// point from scratch on every update, so it is self-healing across a filter
+    /// change even without the clear-on-fingerprint-change. This asserts the new
+    /// clear path did not *break* that while fixing the line charts — each value
+    /// is the one [`simple_test_counter_interchain`] computes from scratch for
+    /// the same filter (`20` unfiltered, `15` with `home_chain_id = 1`).
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn total_interchain_messages_sent_filter_change_is_self_healing() {
+        let (init_time, db, indexer) =
+            prepare_interchain_chart_test::<TotalInterchainMessagesSent>(
+                "total_msgs_sent_filter_change",
+            )
+            .await;
+        for (offset_seconds, filter, expected) in [
+            (0, InterchainFilter::default(), "20"),
+            (1, test_interchain_home_chain_filter(1), "15"),
+            (2, InterchainFilter::default(), "20"),
+        ] {
+            assert_eq!(
+                update_and_query_interchain_counter::<TotalInterchainMessagesSent>(
+                    &db,
+                    &indexer,
+                    filter,
+                    init_time + chrono::TimeDelta::seconds(offset_seconds),
+                )
+                .await,
+                expected
+            );
+        }
     }
 
     #[tokio::test]

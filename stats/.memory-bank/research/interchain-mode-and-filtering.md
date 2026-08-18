@@ -590,11 +590,27 @@ later. Result: correct values, wasted batches (the first N batches return no
 rows). If a future design adds `only_indexed_by_bridge`-style narrowing, this
 gets worse, not better.
 
+> **Resolved.** `get_min_date_interchain` now takes the resolved filter and
+> `min`s the message-filtered and transfer-filtered floors, so a filtered
+> deployment starts its backfill at the first date inside its own slice.
+
 **[I]** Because `min_indexer_block` is a constant and the filter is not part of
 any stored fingerprint, changing `STATS__INTERCHAIN_PRIMARY_ID` **cannot**
 trigger a re-update. Existing rows keep the old regime; only newly computed
 timespans use the new one. The `TODO` at `settings.rs:100` is the only
 acknowledgement of this.
+
+> **Resolved.** `min_indexer_block` is no longer a constant in `Interchain`
+> mode: `get_min_block_interchain` returns
+> `filters::interchain::filter_fingerprint`, which is stamped onto every
+> `chart_data` row and compared by `last_accurate_point` on every update. A
+> mismatch additionally triggers `clear_all_chart_data` before the recompute,
+> because `insert_data_many` has no delete and a *narrowed* filter would
+> otherwise leave stale rows on days that now produce none. The fingerprint
+> deliberately excludes the observability horizon's resolved pairs (only the
+> "is the horizon enabled" boolean is hashed), so an upstream bridge or
+> bridge-contract change is still **not** detected — that gap is real and
+> unmitigated. See `.memory-bank/gotchas.md`.
 
 ---
 
