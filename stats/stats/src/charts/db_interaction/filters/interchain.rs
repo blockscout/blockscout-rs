@@ -178,11 +178,15 @@ impl InterchainFilterConfig {
         }
     }
 
-    /// The effective filter rendered as a SQL `WHERE` clause, for the startup
-    /// log.
+    /// The **operator-configured** half of the filter, rendered as a SQL `WHERE`
+    /// clause for the startup log.
     ///
-    /// The horizon is rendered as `None`, because it is not known until the
-    /// first update cycle reads it from the indexer DB.
+    /// Not the effective predicate: the horizon is rendered as `None` because it
+    /// is not known until the first update cycle reads it from the indexer DB.
+    /// With `include_unindexed_chains = false` — the default — the applied
+    /// predicate is therefore strictly narrower than this, and an otherwise
+    /// unconfigured filter renders `<unfiltered>` while still restricting rows.
+    /// The caller must not describe this as what the service will count.
     pub fn render_for_log(&self) -> String {
         let filter = self.with_horizon(None);
         if filter.is_empty() {

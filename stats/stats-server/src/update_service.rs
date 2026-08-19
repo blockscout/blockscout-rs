@@ -449,7 +449,15 @@ impl UpdateService {
             }) else {
                 return;
             };
-            self.interchain_filter.with_horizon(horizon)
+            // The startup log can only show the operator-configured half of the
+            // filter; the horizon is not known until this read. Logging it here is
+            // the only way an operator can confirm the scope actually applied.
+            tracing::debug!(
+                update_group = group_entry.group.name(),
+                horizon =? horizon,
+                "resolved the interchain observability horizon for this cycle"
+            );
+            self.interchain_filter.with_horizon(Some(horizon))
         } else {
             self.interchain_filter.with_horizon(None)
         };

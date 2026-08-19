@@ -145,7 +145,7 @@ Each variable mirrors an indexer read-API query parameter of the same name, incl
 | `STATS__INTERCHAIN_FILTER__BRIDGE_IDS` | `bridge_ids` |
 | `STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS` | `include_unindexed_chains` |
 
-At startup the service logs the effective filter once, as the SQL `WHERE` clause it is about to apply (`effective interchain read filter: …`, or `<unfiltered>`). That log line is the quickest way to confirm what a deployment is actually counting, and it is worth reading after every configuration change.
+At startup the service logs the configured filter once, as a SQL `WHERE` clause (`configured interchain read filter: …`, or `<unfiltered>`), and it is worth reading after every configuration change. Read it as what you configured, not as what will be counted: the indexed-chain restriction is read from the indexer database on each update cycle and so cannot appear on that line, which means an otherwise unconfigured deployment logs `<unfiltered>` while still excluding rows. The line carries `include_unindexed_chains` as a field so the restriction's *presence* is visible; its resolved contents are logged per cycle at `DEBUG` (`resolved the interchain observability horizon for this cycle`).
 
 ###### Things that surprise people
 
@@ -155,21 +155,24 @@ At startup the service logs the effective filter once, as the SQL `WHERE` clause
 - **`STATS__INTERCHAIN_PRIMARY_ID` is deprecated.** It is still honoured and means exactly `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`. Setting both to the *same* value logs a deprecation warning; setting them to **different** values is a hard startup error, not a silent precedence rule.
 - **Changing the filter rebuilds the affected charts by itself.** A fingerprint of the configured filter is stored alongside every interchain point; on the next update a mismatch clears the stored series and recomputes it. Budget for one full backfill after a filter change; no manual intervention is needed, and none should be attempted.
 
-###### Parity, and its one known divergence
+###### Parity, and its two known divergences
 
-For any `STATS__INTERCHAIN_FILTER__*` configuration there is an equivalent indexer API request that returns the same subset, and vice versa — with one exception, which is a consequence of where the indexed chain set comes from.
+For any `STATS__INTERCHAIN_FILTER__*` configuration there is an equivalent indexer API request that returns the same subset, and vice versa — except after something is **removed** from the indexer's bridges configuration. Both exceptions have the same single cause: the indexer derives its indexed chain set from its in-memory configuration, while stats derives it from the `bridges` and `bridge_contracts` tables, and the indexer's upserts into those tables never delete. A removal therefore shrinks the indexer's set and leaves stats' set as it was. Which way the numbers then diverge depends on *what* was removed, and the two directions are opposite:
 
-The indexer builds that set from its in-memory bridges configuration, so a bridge that has been **removed from that configuration** is unknown to it, and the API deliberately keeps such a bridge's already-indexed history visible rather than reinterpreting what it could once observe. Stats builds the set from the `bridges` and `bridge_contracts` tables, where the removed bridge still has a row — the indexer's upserts never delete. Stats therefore keeps testing that bridge's rows against the chain set recorded for it, instead of admitting them unconditionally, and drops any of its rows whose endpoints fall outside that recorded set.
+- **A bridge contract removed from a bridge that still exists ⇒ stats counts more than the API.** The API stops admitting that bridge's rows whose endpoint is the dropped chain; stats still has the `bridge_contracts` row, so it keeps admitting them.
+- **A whole bridge removed ⇒ stats counts less than the API.** The bridge is simply absent from the API's restriction, and the shared predicate deliberately admits an absent bridge's rows unconditionally — its already-indexed history must not be reinterpreted (only messages with an unknown destination stay excluded). Stats still has the bridge's `bridges` row, so it keeps testing its rows against the chain set recorded for it and drops any that fall outside.
 
-In short: after a bridge is dropped from the indexer's configuration, the API keeps showing its history and stats may show less of it. This is documented rather than fixed; closing it needs the indexer to publish its effective set, not a workaround on the stats side.
+Neither is repaired by a forced recompute: it re-reads the same stale tables. Both are documented rather than fixed; closing them needs the indexer to publish its effective set, not a workaround on the stats side. Neither is reachable without an edit to the indexer's configuration — a steady-state deployment is at parity.
 
-###### One kind of staleness that is not detected
+###### Staleness the fingerprint does not cover
 
 The stored fingerprint covers the configured chain and bridge lists plus whether the indexed-chain restriction is enabled. It deliberately does **not** cover the resolved chain set itself, because that set grows on its own whenever the indexer gains a bridge or a bridge contract — hashing it would rebuild every interchain chart on every upstream bridge addition.
 
 The cost of that choice: when the indexer's set **widens** — a redeploy that adds a bridge or a bridge contract — points already computed under the narrower one stay narrower than freshly computed points, and nothing detects the difference. A one-off restart with `STATS__FORCE_UPDATE_ON_START=true` makes the history uniform again in that direction.
 
 It does **not** repair a *narrowing*, which is reachable mainly by starting stats before the indexer has populated `bridges` at all: a forced update recomputes and overwrites, but never deletes, so days that now yield no rows keep the values they had. Recovering from that means clearing the affected charts' stored data; only a filter-fingerprint change does that on its own.
+
+**Rolling back to a pre-filter build needs the same manual clear, and is the one case where it is easy to forget.** The old build stores a constant where the new one stores a fingerprint, so it does see a mismatch and does recompute from scratch — but it recomputes with the *old* predicate, and the recompute only overwrites. Any day whose sole row is admitted by the new predicate and rejected by the old one therefore keeps its new value, and the series ends up mixing the two definitions with nothing to indicate it. This is reachable, not theoretical: the transfer `*_sent` / `*_received` charts changed which columns they scope on, so a transfer whose token source chain is the home chain while its parent message's route is not is exactly such a row. **Clear the interchain charts' stored data as part of the rollback**, before the old build's first update cycle; do not rely on it to clean up after itself.
 
 ###### Migrating an existing deployment
 

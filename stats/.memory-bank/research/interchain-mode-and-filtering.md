@@ -769,7 +769,7 @@ the truth table in its doc comment at L69-75):
 
 | case | `may_observe` | effect on the read filter |
 |---|---|---|
-| `AllIndexed` (no config) | `true` | `configured_pairs` returns `None` → no restriction |
+| `AllIndexed` (the enum's `Default`) | `true` | `configured_pairs` returns `None` → no restriction |
 | bridge in map, chain in its set | `true` | row visible |
 | bridge in map, chain not in its set | `false` | row hidden |
 | bridge **absent** from map (removed from config) | `true` | **permissive** — rows stay visible |
@@ -779,6 +779,16 @@ The last two rows are deliberately opposite (ADR-004 Decision 5): *absent* means
 decommissioned and must not have its history reinterpreted; *present-and-empty*
 means misconfigured, and `server.rs:312-320` warns per bridge (plus a hard
 `anyhow::ensure!` at L325-332 that rejects a config with bridges but zero pairs).
+
+**[F]** The first row does **not** describe a no-bridges config, despite reading
+that way. `server.rs` is the only production construction and always calls
+`IndexedChains::from_bridges`, which builds `PerBridge` even from an empty
+iterator; and its `ensure!` explicitly permits `bridges.is_empty()`. So an empty
+config yields `PerBridge({})` → `configured_pairs` → `Some([])`, whose message
+predicate is `(TRUE AND dst IS NOT NULL)` — not the unrestricted `None`.
+`AllIndexed` is reachable only from the indexer's own tests and embedders. Stats'
+resolver mirrors this: it returns an empty list for an empty `bridges` table, not
+"no restriction".
 
 **[F]** `has_unindexed_chain` on list responses is a **computed field**
 (`indexed_chains.rs:235` `message_has_unindexed` / `:240`
@@ -887,16 +897,22 @@ closed by *decision* rather than by change:
   `token_src_chain_id`, not the message's `src_chain_id`. Both are deliberate;
   the second is the one place in the family where the two differ.
 
-**[F]** One genuine divergence remains, and it is a consequence of *where* the
-horizon comes from. The indexer builds `only_indexed_by_bridge` from its config
-files and therefore omits a bridge that has been deleted from config, which the
-shared predicate treats as the permissive arm — its history stays visible. Stats
-resolves the same list from `bridges LEFT JOIN bridge_contracts`, and every
-message's `bridge_id` is an FK into `bridges`, so **the permissive arm is
-unreachable in stats**: a bridge dropped from the indexer's config keeps its rows
-in the API but has them tested against whatever chain set its `bridge_contracts`
-rows still describe. Nothing in the current deployment triggers this; it needs a
-config deletion.
+**[F]** Two genuine divergences remain, with one cause and opposite signs. The
+indexer builds `only_indexed_by_bridge` from its config; stats resolves it from
+`bridges LEFT JOIN bridge_contracts`, and `upsert_bridges` /
+`upsert_bridge_contracts` never delete (`database.rs:1914`). A *removal* from
+config therefore shrinks the indexer's set and leaves stats' set unchanged:
+
+- **a bridge contract removed, bridge kept** ⇒ stats' set for that bridge is a
+  superset ⇒ **stats admits rows the API now excludes**;
+- **a whole bridge removed** ⇒ the API sees it as absent and the shared predicate
+  admits its rows unconditionally (the permissive arm), while every message's
+  `bridge_id` is an FK into `bridges` so **that arm is unreachable in stats** ⇒
+  stats keeps testing its rows against the stale set ⇒ **stats admits fewer rows
+  than the API**.
+
+Neither is repaired by a forced recompute — it re-reads the same tables. Nothing
+in the current deployment triggers either; both need a config deletion.
 
 **[F]** Local end-to-end parity run (2026-08-19), stats and a dev
 interchain-indexer over one frozen 92,976-message / 72,733-transfer database

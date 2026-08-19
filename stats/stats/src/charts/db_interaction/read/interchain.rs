@@ -121,23 +121,30 @@ struct BridgeChainPair {
 ///   the permissive arm's `NOT IN` list, which is exactly what pruning the pair
 ///   list achieves.
 ///
-/// Returns `None` when `bridges` is empty: that is the DB image of an empty
-/// bridges config, which the indexer models as `IndexedChains::AllIndexed` and
-/// for which `configured_pairs` returns `None`. (`Some(vec![])` restricts
-/// nothing either — its permissive arm covers every bridge — but it renders a
-/// dead `(TRUE …)` block instead of no predicate, and for messages that block
-/// still carries `dst IS NOT NULL`.)
+/// Always returns a list, never "no restriction" — including for an empty
+/// `bridges` table, which yields `vec![]`. That is what `configured_pairs`
+/// does: the indexer's only production construction is
+/// `IndexedChains::from_bridges` (`interchain-indexer-server/src/server.rs`),
+/// which builds `PerBridge` even from an empty iterator, and its startup guard
+/// (`ensure!(bridges.is_empty() || pair_count() > 0)`) deliberately *allows* the
+/// no-bridges config through. So `AllIndexed` — the variant whose
+/// `configured_pairs` returns `None` — is reachable only in the indexer's own
+/// tests and embedders, never in a deployment stats could be reading.
 ///
-/// Pruning to a `bridge_ids` that matches nothing is a *different* case and
-/// still returns `Some(vec![])`, exactly as `configured_pairs` does: only
-/// `AllIndexed` maps to `None` there. It is unobservable in the result either
-/// way — the caller separately ANDs `bridge_id IN (bridge_ids)`, which is
-/// already empty — but keeping the two cases distinct keeps this function a
-/// faithful mirror rather than an approximation.
+/// The distinction is not cosmetic: for messages, an empty pair list renders
+/// `(TRUE AND dst IS NOT NULL)` while no list at all renders nothing, so the two
+/// disagree about a message with an unknown destination. Under the schema's
+/// foreign keys an empty `bridges` table implies no messages, which makes them
+/// result-equivalent today; returning the empty list keeps them equivalent by
+/// construction instead of by that invariant.
+///
+/// "Pruned to nothing" by `bridge_ids` returns `vec![]` for the same reason, and
+/// is unobservable either way — the caller separately ANDs
+/// `bridge_id IN (bridge_ids)`, which is already empty.
 pub async fn resolve_only_indexed_by_bridge(
     interchain: &DatabaseConnection,
     bridge_ids: Option<&[i32]>,
-) -> Result<Option<Vec<(i32, Vec<i64>)>>, DbErr> {
+) -> Result<Vec<(i32, Vec<i64>)>, DbErr> {
     let rows = bridges::Entity::find()
         .select_only()
         .column_as(bridges::Column::Id, "bridge_id")
@@ -164,21 +171,14 @@ pub async fn resolve_only_indexed_by_bridge(
         }
     }
 
-    // no bridge at all ⇒ `AllIndexed` ⇒ no restriction. Checked *before* pruning,
-    // so that "pruned to nothing" stays the distinct `Some(vec![])` case.
-    if horizon.is_empty() {
-        return Ok(None);
-    }
     if let Some(bridge_ids) = bridge_ids {
         horizon.retain(|bridge_id, _| bridge_ids.contains(bridge_id));
     }
 
-    Ok(Some(
-        horizon
-            .into_iter()
-            .map(|(bridge_id, chains)| (bridge_id, chains.into_iter().collect()))
-            .collect(),
-    ))
+    Ok(horizon
+        .into_iter()
+        .map(|(bridge_id, chains)| (bridge_id, chains.into_iter().collect()))
+        .collect())
 }
 
 #[cfg(test)]
@@ -239,15 +239,20 @@ mod tests {
             .unwrap();
     }
 
+    /// An empty `bridges` table is the DB image of a no-bridges config, which the
+    /// indexer's startup guard allows and turns into `PerBridge(empty)` — so
+    /// `configured_pairs` gives an empty list, not "no restriction". Mirroring
+    /// that matters for the one row type the two would disagree about: a message
+    /// with a NULL destination, which the empty list excludes.
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn resolve_horizon_empty_bridges_table_is_unrestricted() {
+    async fn resolve_horizon_empty_bridges_table_mirrors_per_bridge_empty() {
         let interchain = init_db_interchain("resolve_horizon_empty_bridges_table").await;
         assert_eq!(
             resolve_only_indexed_by_bridge(&interchain, None)
                 .await
                 .unwrap(),
-            None
+            vec![]
         );
     }
 
@@ -280,13 +285,13 @@ mod tests {
             resolve_only_indexed_by_bridge(&interchain, None)
                 .await
                 .unwrap(),
-            Some(vec![
+            vec![
                 (1, vec![1, 3]),
                 // a contract-less bridge survives as `(b, vec![])` — dropping it would
                 // promote it to the permissive "absent" case, the opposite treatment
                 (2, vec![]),
                 (3, vec![2]),
-            ])
+            ]
         );
     }
 
@@ -306,15 +311,15 @@ mod tests {
             resolve_only_indexed_by_bridge(&interchain, Some(&[2]))
                 .await
                 .unwrap(),
-            Some(vec![(2, vec![2])])
+            vec![(2, vec![2])]
         );
-        // pruning everything away is `Some(vec![])`, not `None`: only an empty
-        // `bridges` table means "no per-bridge config at all"
+        // pruning everything away leaves an empty list, which is also what an
+        // empty `bridges` table gives — neither is "no restriction"
         assert_eq!(
             resolve_only_indexed_by_bridge(&interchain, Some(&[404]))
                 .await
                 .unwrap(),
-            Some(vec![])
+            vec![]
         );
     }
 }

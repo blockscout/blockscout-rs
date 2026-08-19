@@ -114,7 +114,7 @@ fn non_empty_sorted<T: Ord + Copy>(ids: &mut Vec<T>) -> Option<Vec<T>> {
     }
 }
 
-/// Fail fast on nonsense, warn on the merely surprising, and log the effective
+/// Fail fast on nonsense, warn on the merely surprising, and log the configured
 /// filter once. Called from `server.rs` next to
 /// `check_if_unsupported_charts_are_enabled`, before anything is spawned.
 ///
@@ -223,9 +223,14 @@ pub async fn validate_interchain_filter(
         );
     }
 
+    // "configured", not "effective": with `include_unindexed_chains = false` the
+    // update cycle ANDs an observability horizon that this line cannot show,
+    // because it is read from the indexer DB and is not known yet — so the
+    // rendered clause can read `<unfiltered>` while the applied predicate is
+    // restrictive. `update_service` logs the resolved horizon at DEBUG.
     tracing::info!(
         include_unindexed_chains = config.include_unindexed_chains(),
-        "effective interchain read filter: {}",
+        "configured interchain read filter: {}",
         config.render_for_log()
     );
 
