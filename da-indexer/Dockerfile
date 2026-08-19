@@ -15,7 +15,7 @@ COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release
 
-FROM ubuntu:22.04 as run
+FROM ubuntu:24.04 as run
 RUN apt-get update && apt-get upgrade -y && apt-get install -y libssl3 libssl-dev ca-certificates
 
 WORKDIR /app
