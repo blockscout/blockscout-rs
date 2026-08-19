@@ -124,7 +124,7 @@ message GetStatusRequest {}
 message IndexerStatus {
   bool finished_past_indexing = 1;
   EntryPointIndexerStatus v06 = 2;
-  EntryPointIndexerStatus v07_v08 = 3;
+  EntryPointIndexerStatus v07_v09 = 3;
 }
 
 message EntryPointIndexerStatus {
