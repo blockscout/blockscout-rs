@@ -2,7 +2,10 @@ default:
     just --list --unsorted
 
 db-host := env_var_or_default('DB_HOST', "localhost")
-db-port := env_var_or_default('DB_PORT', "5432")
+# 5434, not 5432: the sibling interchain-indexer's `just start-postgres` publishes
+# its own database on 5432, and `run-interchain` reads it. Defaulting the stats DB
+# elsewhere makes every recipe here work alongside that indexer with no overrides.
+db-port := env_var_or_default('DB_PORT', "5434")
 db-user := env_var_or_default('DB_USER', "postgres")
 db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "stats")
@@ -13,9 +16,6 @@ export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "0")
 docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9439")
 
-# The sibling interchain-indexer's own `just start-postgres` publishes on 5432 —
-# the same default as `db-port` above. Running both services locally therefore
-# needs the stats DB moved: `just db-port=5434 run-interchain`.
 interchain-db-port := env_var_or_default('INTERCHAIN_DB_PORT', "5432")
 interchain-db-name := env_var_or_default('INTERCHAIN_DB_NAME', "interchain_indexer")
 
@@ -103,10 +103,9 @@ run-multichain:
 
 # Reads the interchain indexer DB at `interchain-db-port`/`interchain-db-name`
 # (5432/interchain_indexer — the sibling service's `just start-postgres`
-# defaults). 5432 is also this justfile's own `db-port` default, so the stats DB
-# needs its own port:
-#   just db-port=5434 start-postgres
-#   just db-port=5434 run-interchain
+# defaults), and writes the stats DB at `db-port` (5434). Nothing to override:
+#   just start-postgres      # stats DB on 5434
+#   just run-interchain
 #
 # The commented-out `STATS__INTERCHAIN_FILTER__*` lines are the full read-filter
 # surface; they mirror the indexer read API's parameters of the same names.

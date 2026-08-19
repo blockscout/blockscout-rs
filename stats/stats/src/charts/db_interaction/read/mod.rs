@@ -59,7 +59,7 @@ impl RemoteQueryBehaviour for QueryFullIndexerTimestampRange {
 /// [`get_min_date_interchain`].
 pub async fn get_min_date(cx: &UpdateContext<'_>) -> Result<NaiveDateTime, DbErr> {
     match cx.mode {
-        Mode::Interchain => get_min_date_interchain(cx.indexer_db, &cx.interchain_filter).await,
+        Mode::Interchain => get_min_date_interchain(cx).await,
         Mode::MultichainAggregator => get_min_date_multichain(cx.indexer_db).await,
         Mode::Blockscout | Mode::Zetachain => get_min_date_blockscout(cx.indexer_db).await,
     }

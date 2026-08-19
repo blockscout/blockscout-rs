@@ -6,11 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use chrono::{NaiveDateTime, Utc};
 use interchain_indexer_entity::{bridge_contracts, bridges, crosschain_messages};
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect,
-    sea_query::Func,
+    ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QuerySelect,
+    QueryTrait, sea_query::Func,
 };
 
-use crate::charts::db_interaction::filters::interchain::InterchainFilter;
+use crate::{
+    charts::db_interaction::filters::interchain::InterchainFilter, data_source::UpdateContext,
+};
 
 #[derive(FromQueryResult, Debug)]
 struct MinTimestamp {
@@ -25,37 +27,50 @@ struct MinTimestamp {
 /// message's route. Using the message minimum alone would silently truncate the
 /// transfer charts' history.
 ///
-/// Two queries and a `min` in Rust rather than a `LEAST` of two subqueries: this
-/// runs a handful of times per group update, and it keeps the builders readable.
+/// Two queries and a `min` in Rust rather than a `LEAST` of two subqueries: it
+/// keeps the builders readable, and both results are memoised in
+/// [`UpdateContext::cache`], so the pair runs once per group update however many
+/// charts ask for the floor. That matters because the transfer query joins the
+/// whole `crosschain_transfers` table and the horizon disjunction has no index
+/// support, so an unmemoised floor was a sequential scan per chart — during
+/// exactly the full rebuild a filter change triggers. The cache is per group
+/// update, not per cycle, so a rebuild still pays one pair per group.
 ///
 /// Filtering this floor is not cosmetic. It is the start of every batched
 /// backfill, so an unfiltered minimum makes a filtered deployment begin at a
 /// foreign date and burn a long run of provably empty batches — and on a
 /// universal indexer whose history predates the configured slice, that run is
 /// the first thing the service does after deployment, unattended.
-pub async fn get_min_date_interchain(
-    interchain: &DatabaseConnection,
-    filter: &InterchainFilter,
-) -> Result<NaiveDateTime, DbErr> {
+pub async fn get_min_date_interchain(cx: &UpdateContext<'_>) -> Result<NaiveDateTime, DbErr> {
     async fn min_init_timestamp<E: EntityTrait>(
         query: sea_orm::Select<E>,
-        interchain: &DatabaseConnection,
+        cx: &UpdateContext<'_>,
     ) -> Result<Option<NaiveDateTime>, DbErr> {
-        Ok(query
-            .select_only()
-            .expr_as(
-                Func::min(crosschain_messages::Column::InitTimestamp.into_expr()),
-                "min_timestamp",
-            )
+        let query = query.select_only().expr_as(
+            Func::min(crosschain_messages::Column::InitTimestamp.into_expr()),
+            "min_timestamp",
+        );
+        // `UpdateCache` keys on the statement text, which encodes the whole
+        // predicate — including the horizon resolved for this cycle — so the key is
+        // complete for the cache's lifetime even though the filter *fingerprint*
+        // deliberately excludes the horizon's contents.
+        let statement = query.build(DbBackend::Postgres);
+        if let Some(cached) = cx.cache.get::<Option<NaiveDateTime>>(&statement).await {
+            return Ok(cached);
+        }
+        let min = query
             .into_model::<MinTimestamp>()
-            .one(interchain)
+            .one(cx.indexer_db)
             .await?
-            .and_then(|row| row.min_timestamp))
+            .and_then(|row| row.min_timestamp);
+        cx.cache.insert(&statement, min).await;
+        Ok(min)
     }
 
-    let messages_min = min_init_timestamp(filter.messages_query(), interchain).await?;
+    let filter = &cx.interchain_filter;
+    let messages_min = min_init_timestamp(filter.messages_query(), cx).await?;
     // the joined query, because `init_timestamp` lives on the message
-    let transfers_min = min_init_timestamp(filter.transfers_joined_query(), interchain).await?;
+    let transfers_min = min_init_timestamp(filter.transfers_joined_query(), cx).await?;
 
     Ok([messages_min, transfers_min]
         .into_iter()
@@ -175,6 +190,39 @@ pub async fn resolve_only_indexed_by_bridge(
         horizon.retain(|bridge_id, _| bridge_ids.contains(bridge_id));
     }
 
+    // A bridge present in `bridges` with no `bridge_contracts` rows is the most
+    // restrictive entry the horizon can produce: the shared predicate renders its
+    // arm as `1 = 2`, excluding every one of that bridge's rows. That is the
+    // intended treatment of a bridge configured to observe nothing (ADR-004
+    // Decision 5), and this resolver cannot tell it apart from a bridge whose
+    // contracts are simply not written yet — the indexer upserts `bridges` and
+    // `bridge_contracts` in two separate calls (`server.rs`), so a cycle landing
+    // between them sees exactly this shape.
+    //
+    // The difference matters because a cycle that reads the transient shape writes
+    // under-counted points, and nothing later repairs them: the fingerprint
+    // deliberately excludes the horizon's contents, so the next cycle sees no
+    // mismatch and only updates forward from `last_accurate_point`. Warn rather
+    // than second-guess the data — narrowing here is the behaviour that matches
+    // the indexer's own API, and a stats-side override would break the parity this
+    // filter exists for.
+    let observing_nothing: Vec<i32> = horizon
+        .iter()
+        .filter(|(_, chains)| chains.is_empty())
+        .map(|(bridge_id, _)| *bridge_id)
+        .collect();
+    if !observing_nothing.is_empty() {
+        tracing::warn!(
+            bridges =? observing_nothing,
+            "bridges present in `bridges` with no `bridge_contracts` rows: every row of \
+             theirs is excluded from the interchain charts this cycle. Expected if they are \
+             configured to observe nothing; if instead the indexer is mid-startup between \
+             its `bridges` and `bridge_contracts` upserts, points written this cycle are \
+             under-counted and will not be recomputed on their own — force a full update \
+             once the contracts are in"
+        );
+    }
+
     Ok(horizon
         .into_iter()
         .map(|(bridge_id, chains)| (bridge_id, chains.into_iter().collect()))
@@ -187,7 +235,11 @@ mod tests {
     use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 
     use super::*;
-    use crate::tests::init_db::init_db_interchain;
+    use crate::tests::{
+        init_db::init_db_interchain,
+        mock_interchain::{fill_mock_interchain_data, mock_interchain_horizon},
+        point_construction::dt,
+    };
 
     /// `chains` / `bridges` / `bridge_contracts` are all FK-linked, so the
     /// reference rows have to exist before the contracts do. `bridges.name` and
@@ -237,6 +289,34 @@ mod tests {
             ))
             .await
             .unwrap();
+    }
+
+    /// The shared fixture's tables must resolve to the horizon its constant
+    /// advertises.
+    ///
+    /// Around ten `*_horizon` chart tests pass [`mock_interchain_horizon`] in
+    /// explicitly, so the whole horizon dimension is otherwise asserted against a
+    /// hand-written literal rather than against the resolver the service actually
+    /// runs. Edit the fixture's `bridge_contracts` rows — give the second bridge a
+    /// contract, drop a chain from `MOCK_BRIDGE_CONTRACT_CHAIN_IDS` — and every one
+    /// of those tests would keep passing while asserting values for a horizon the
+    /// fixture no longer produces. The three `resolve_horizon_*` tests above seed
+    /// their own rows, so they do not close that gap.
+    ///
+    /// This is also the only place the production default path is exercised:
+    /// `include_unindexed_chains = false` with the horizon read from the DB rather
+    /// than injected.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn fixture_tables_resolve_to_mock_interchain_horizon() {
+        let interchain = init_db_interchain("fixture_resolves_to_mock_horizon").await;
+        fill_mock_interchain_data(&interchain, dt("2023-03-01T00:00:00").date()).await;
+        assert_eq!(
+            resolve_only_indexed_by_bridge(&interchain, None)
+                .await
+                .unwrap(),
+            mock_interchain_horizon()
+        );
     }
 
     /// An empty `bridges` table is the DB image of a no-bridges config, which the

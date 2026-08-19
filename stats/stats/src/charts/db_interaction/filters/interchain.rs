@@ -136,7 +136,14 @@ pub struct InterchainFilterConfig {
 
 impl InterchainFilterConfig {
     pub fn new(configured: ChainBridgeFilter, include_unindexed_chains: bool) -> Self {
-        debug_assert!(
+        // `assert!`, not `debug_assert!`: this runs once, at startup, so the check
+        // costs nothing, and both consequences of violating it are silent in a
+        // release build. `with_horizon` would overwrite the field, dropping a
+        // caller-supplied horizon so the restriction never applies; and
+        // `filter_fingerprint` would hash the horizon's *contents*, so every
+        // upstream bridge addition would clear and rebuild every interchain chart —
+        // the outcome the fingerprint is explicitly designed to avoid.
+        assert!(
             configured.only_indexed_by_bridge.is_none(),
             "the horizon is resolved per update cycle, not carried in the config"
         );

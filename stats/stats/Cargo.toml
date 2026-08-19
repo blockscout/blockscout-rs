@@ -73,6 +73,9 @@ blockscout-service-launcher = { workspace = true, features = [
     "database-1",
     "test-database",
 ] }
+# same version stats-server uses for the production charts.json key mapping, so
+# the coverage guard converts config keys exactly as the server does
+convert_case = "0.6.0"
 hex-literal = "0.4.1"
 
 # test-utils

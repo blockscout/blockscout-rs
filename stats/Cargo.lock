@@ -4867,6 +4867,7 @@ dependencies = [
  "blockscout-metrics-tools",
  "blockscout-service-launcher",
  "chrono",
+ "convert_case 0.6.0",
  "entity",
  "futures",
  "hex",

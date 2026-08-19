@@ -6,7 +6,7 @@ use std::{
 };
 
 use blockscout_db::entity::migrations_status;
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 use sea_orm::{
     DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement, TryGetable,
 };
@@ -265,6 +265,7 @@ impl IndexerMigrations {
 pub enum CacheValue {
     ValueString(String),
     ValueOptionF64(Option<f64>),
+    ValueOptionNaiveDateTime(Option<NaiveDateTime>),
     ValueTxnsStats(TxnsStatsValue),
     ValueNewTxnsCombined(NewTxnsCombinedPoint),
     VecTxnWindow(Vec<NewTxnsCombinedPoint>),
@@ -303,6 +304,7 @@ impl_cacheable!(Vec<NewTxnsCombinedPoint>, VecTxnWindow);
 // for testing
 impl_cacheable!(String, ValueString);
 impl_cacheable!(Option<f64>, ValueOptionF64);
+impl_cacheable!(Option<NaiveDateTime>, ValueOptionNaiveDateTime);
 
 // To allow using the scalar(?) types in context requiring
 // `FromQueryResult`

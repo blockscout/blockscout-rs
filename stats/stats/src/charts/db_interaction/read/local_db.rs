@@ -451,10 +451,16 @@ pub async fn recorded_min_indexer_block(
 /// Get last 'finalized' row (for which no recomputations needed).
 ///
 /// In case of inconsistencies or set `force_full`, returns `None`.
+///
+/// `recorded` is what [`recorded_min_indexer_block`] returned for this chart,
+/// read by the caller rather than here: the caller needs the same value first
+/// (the interchain fingerprint gate in `local_db::update_itself_inner`), and two
+/// reads of one row invited the two to disagree — which is exactly what the
+/// helper was extracted to prevent. Ignored entirely when `force_full`.
 #[instrument(level="info", skip_all, fields(min_indexer_block = observed_min_indexer_block, chart =? ChartProps::key()))]
 pub async fn last_accurate_point<ChartProps, Query>(
-    chart_id: i32,
     observed_min_indexer_block: i64,
+    recorded: Option<Option<i64>>,
     db: &DatabaseConnection,
     force_full: bool,
     approximate_trailing_points: u64,
@@ -469,8 +475,6 @@ where
         tracing::info!("running full update due to force override");
         None
     } else {
-        let recorded = recorded_min_indexer_block(db, chart_id).await?;
-
         match recorded {
             Some(Some(recorded_min_indexer_block))
                 if recorded_min_indexer_block == observed_min_indexer_block =>
@@ -1137,7 +1141,7 @@ mod tests {
         assert_eq!(
             last_accurate_point::<NewTxns, DefaultQueryVec<NewTxns>>(
                 1,
-                1,
+                recorded_min_indexer_block(&db, 1).await.unwrap(),
                 &db,
                 false,
                 0,
@@ -1153,7 +1157,7 @@ mod tests {
         assert_eq!(
             last_accurate_point::<NewTxns, DefaultQueryVec<NewTxns>>(
                 1,
-                1,
+                recorded_min_indexer_block(&db, 1).await.unwrap(),
                 &db,
                 false,
                 1,
@@ -1169,7 +1173,7 @@ mod tests {
         assert_eq!(
             last_accurate_point::<NewTxns, DefaultQueryVec<NewTxns>>(
                 1,
-                1,
+                recorded_min_indexer_block(&db, 1).await.unwrap(),
                 &db,
                 false,
                 2,
@@ -1187,8 +1191,8 @@ mod tests {
         assert!(chart_id_matches_key(&db, 4, &TxnsGrowth::name(), ResolutionKind::Day).await);
         assert_eq!(
             last_accurate_point::<TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
-                4,
                 1,
+                recorded_min_indexer_block(&db, 4).await.unwrap(),
                 &db,
                 false,
                 0,
@@ -1203,8 +1207,8 @@ mod tests {
         );
         assert_eq!(
             last_accurate_point::<TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
-                4,
                 1,
+                recorded_min_indexer_block(&db, 4).await.unwrap(),
                 &db,
                 false,
                 1,
@@ -1219,8 +1223,8 @@ mod tests {
         );
         assert_eq!(
             last_accurate_point::<TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
-                4,
                 1,
+                recorded_min_indexer_block(&db, 4).await.unwrap(),
                 &db,
                 false,
                 2,
@@ -1245,8 +1249,8 @@ mod tests {
         assert!(chart_id_matches_key(&db, 5, &TxnsGrowth::name(), ResolutionKind::Month).await);
         assert_eq!(
             last_accurate_point::<TxnsGrowthMonthly, DefaultQueryVec<TxnsGrowthMonthly>>(
-                5,
                 1,
+                recorded_min_indexer_block(&db, 5).await.unwrap(),
                 &db,
                 false,
                 1,
@@ -1261,8 +1265,8 @@ mod tests {
         );
         assert_eq!(
             last_accurate_point::<TxnsGrowthMonthly, DefaultQueryVec<TxnsGrowthMonthly>>(
-                5,
                 1,
+                recorded_min_indexer_block(&db, 5).await.unwrap(),
                 &db,
                 false,
                 0,
@@ -1277,8 +1281,8 @@ mod tests {
         );
         assert_eq!(
             last_accurate_point::<TxnsGrowthMonthly, DefaultQueryVec<TxnsGrowthMonthly>>(
-                5,
                 1,
+                recorded_min_indexer_block(&db, 5).await.unwrap(),
                 &db,
                 false,
                 0,
@@ -1305,7 +1309,7 @@ mod tests {
         assert_eq!(
             last_accurate_point::<ActiveAccounts, DefaultQueryVec<ActiveAccounts>>(
                 1,
-                1,
+                recorded_min_indexer_block(&db, 1).await.unwrap(),
                 &db,
                 false,
                 1,

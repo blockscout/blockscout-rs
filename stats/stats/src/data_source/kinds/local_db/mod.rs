@@ -38,7 +38,7 @@ use crate::{
                 last_accurate_point, multichain::get_min_block_multichain,
                 recorded_min_indexer_block,
             },
-            write::{clear_all_chart_data, set_last_updated_at},
+            write::{clear_chart_data_and_updated_at, set_last_updated_at},
         },
     },
     data_source::{
@@ -211,11 +211,22 @@ where
         // `last_accurate_point`'s read but not the staleness problem. Deliberately
         // NOT extended to other modes: there `min_blockscout_block` means an actual
         // block number and the existing reindex semantics depend on it.
+        // Read once per chart per cycle. Both the interchain gate just below and
+        // `last_accurate_point` further down need this value, and each used to
+        // query it separately — the same row, twice. Skipped only in the one
+        // combination where nobody looks at it: `force_full` makes
+        // `last_accurate_point` ignore it, and outside interchain mode there is no
+        // gate.
+        let recorded = if cx.force_full && cx.mode != Mode::Interchain {
+            None
+        } else {
+            recorded_min_indexer_block(cx.stats_db, chart_id).await?
+        };
         if cx.mode == Mode::Interchain
             // no stored rows ⇒ nothing to clear. A NULL recorded value counts as a
             // mismatch: interchain never writes one, so this should be
             // unreachable, and treating it as a mismatch is the safe direction.
-            && let Some(recorded) = recorded_min_indexer_block(cx.stats_db, chart_id).await?
+            && let Some(recorded) = recorded
             && recorded != Some(min_indexer_block)
         {
             tracing::warn!(
@@ -225,13 +236,22 @@ where
                 "interchain filter fingerprint changed; clearing stored chart data \
                  before recomputing"
             );
-            clear_all_chart_data(cx.stats_db, chart_id)
+            // Clears `last_updated_at` together with the rows, in one transaction.
+            // `update_metadata` below runs only if `update_values` succeeds, so a
+            // rebuild interrupted in between (indexer hiccup, pod eviction — and the
+            // window is at its widest on the cycle that first applies a new filter,
+            // when all interchain charts rebuild at once) would otherwise leave the
+            // chart empty while still carrying its pre-clear freshness: an empty
+            // series that nothing reports as stale. Interchain-only, like the
+            // fingerprint itself; every other mode keeps reaching
+            // `clear_all_chart_data` through the in-place paths only.
+            clear_chart_data_and_updated_at(cx.stats_db, chart_id)
                 .await
                 .map_err(ChartError::StatsDB)?;
         }
         let last_accurate_point = last_accurate_point::<ChartProps, Query>(
-            chart_id,
             min_indexer_block,
+            recorded,
             cx.stats_db,
             cx.force_full,
             ChartProps::approximate_trailing_points(),

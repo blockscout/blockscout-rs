@@ -195,6 +195,13 @@ fn every_interchain_statement_applies_the_filter() {
 ///
 /// A new interchain chart must appear in `config/interchain/charts.json` to be
 /// enabled at all, so adding one without registering it fails here.
+///
+/// What an entry *serves* is its `implementation` when present, not its key —
+/// gotcha 3 in this repo's `CLAUDE.md`. `stats-server`'s
+/// `config::read::charts::From` camel-cases both, and enable/disable is keyed on
+/// the served id, so a key/`implementation` pair is checked here on the
+/// `implementation`: otherwise an entry remapping a registered key onto an
+/// unregistered chart would pass this guard while running unfiltered.
 #[test]
 fn registry_covers_every_configured_interchain_chart() {
     let config: serde_json::Value = serde_json::from_str(include_str!(concat!(
@@ -210,20 +217,33 @@ fn registry_covers_every_configured_interchain_chart() {
             .get(section)
             .and_then(|s| s.as_object())
             .unwrap_or_else(|| panic!("charts.json has no `{section}` object"));
-        configured.extend(charts.keys().cloned());
+        for (key, settings) in charts {
+            // the served id, exactly as `config::read::charts` resolves it
+            let served = settings
+                .get("implementation")
+                .and_then(|i| i.as_str())
+                .unwrap_or(key.as_str());
+            configured.push((key.clone(), served.to_owned()));
+        }
     }
     assert!(
         !configured.is_empty(),
         "charts.json parsed to no charts at all"
     );
 
-    for config_key in configured {
-        let chart_name = snake_to_camel(&config_key);
+    for (config_key, served_key) in configured {
+        let chart_name = snake_to_camel(&served_key);
+        let via = if served_key == config_key {
+            String::new()
+        } else {
+            format!(" (via `implementation: {served_key}`)")
+        };
         assert!(
             registered.contains(&chart_name.as_str())
-                || DERIVED_WITHOUT_OWN_STATEMENT.contains(&config_key.as_str()),
-            "interchain chart `{config_key}` (chart id `{chart_name}`) is enabled by \
-             config/interchain/charts.json but is not covered by the filter registry.\n\
+                || DERIVED_WITHOUT_OWN_STATEMENT.contains(&served_key.as_str()),
+            "interchain chart `{config_key}`{via} serves chart id `{chart_name}`, which is \
+             enabled by config/interchain/charts.json but is not covered by the filter \
+             registry.\n\
              Either implement `InterchainFiltered` for its statement and add it to \
              `registry()` in this file, or — if it has no SQL of its own and reads another \
              interchain chart's stored rows — add it to `DERIVED_WITHOUT_OWN_STATEMENT`."
@@ -232,20 +252,14 @@ fn registry_covers_every_configured_interchain_chart() {
 }
 
 /// `charts.json` keys are snake_case; chart ids (`Named::name`) are camelCase.
+///
+/// Delegates to the same `convert_case` conversion `stats-server` applies when it
+/// loads the config, rather than re-implementing it: a hand-rolled version and
+/// the production one disagreeing (on digits, for instance) would make this guard
+/// check ids that no deployment ever produces.
 fn snake_to_camel(key: &str) -> String {
-    let mut out = String::with_capacity(key.len());
-    let mut capitalize = false;
-    for c in key.chars() {
-        if c == '_' {
-            capitalize = true;
-        } else if capitalize {
-            out.extend(c.to_uppercase());
-            capitalize = false;
-        } else {
-            out.push(c);
-        }
-    }
-    out
+    use convert_case::{Case, Casing};
+    key.from_case(Case::Snake).to_case(Case::Camel)
 }
 
 /// The parity matrix — the shape properties `interchain-indexer-filters` asserts

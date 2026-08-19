@@ -311,15 +311,29 @@ survives. Forcing a full recompute (`force_full` /
 `last_accurate_point`, not the missing delete. Widening is self-correcting;
 narrowing is not.
 
-**Fix:** an explicit `write::clear_all_chart_data` before the recompute.
-Interchain does this automatically on a fingerprint change
-(`LocalDbChartSource::update_itself_inner`). `ClearAllAndPassVec` is the other
-place that deletes, and it wraps the delete plus the rewrite in one
-transaction. The interchain clear cannot: `BatchUpdate` commits per batch by
-design. That is safe — `BatchUpdate` also calls `update_metadata` after every
-batch, so a crash mid-rebuild leaves `last_updated_at` exactly at the end of the
-last committed batch and the next run resumes from there — but it does mean the
-chart serves a partially rebuilt series while the backfill runs.
+**Fix:** an explicit delete before the recompute. Interchain does this
+automatically on a fingerprint change (`LocalDbChartSource::update_itself_inner`)
+via `write::clear_chart_data_and_updated_at`; `ClearAllAndPassVec` and the
+windowed batch step are the other two places that delete, and they use plain
+`write::clear_all_chart_data`.
+
+The interchain clear is **not** atomic with the rebuild, and cannot be:
+`BatchUpdate` commits per batch by design, and wrapping a full universal-indexer
+backfill in one transaction trades this problem for a worse one. What it does
+instead is clear `charts.last_updated_at` in the same transaction as the delete,
+so the window is *honest* rather than absent:
+
+- `BatchUpdate` calls `update_metadata` after **every** batch, so once the first
+  batch commits, `last_updated_at` tracks the rebuild and the next run resumes
+  from there. The chart serves a partially rebuilt series while the backfill runs
+  — by design.
+- Before the first batch commits, the chart has zero rows. Without the timestamp
+  reset it would also still carry its **pre-clear** `last_updated_at` — i.e. read
+  as "empty, and fresh as of yesterday", with nothing reporting it stale. With
+  the reset it reads as never updated, which is what it is.
+
+So: an interrupted interchain rebuild still serves an empty or partial series.
+The guarantee is only that it no longer claims to be up to date while doing so.
 
 ---
 
@@ -355,9 +369,48 @@ Pruning to `STATS__INTERCHAIN_FILTER__BRIDGE_IDS` does not resurrect the arm
 either: the pruned bridges are excluded anyway by the separate
 `bridge_id IN (bridge_ids)` term in the outer AND.
 
-**Fix:** none — this is the one named divergence in the parity claim, recorded
-in `README.md`'s "Interchain read filtering" section. Closing it needs the
+There is a second, opposite divergence from the same cause. `upsert_bridges` and
+`upsert_bridge_contracts` never delete, so removing a *contract* from a bridge
+that still exists shrinks the indexer's set and leaves stats' a superset: stats
+then admits rows the API excludes. Removing a *whole bridge* goes the other way,
+as above. Both are in `README.md`'s "Parity, and its two known divergences".
+
+**Fix:** none — these are the two named divergences in the parity claim. Closing it needs the
 indexer to publish its effective `configured_pairs` (an API or a table), not a
 stats-side workaround. Do not "fix" it by dropping contract-less bridges from
 the resolver: that flips the contract-less-bridge case from restrictive to
 permissive, which ADR-004 Decision 5 calls load-bearing in the other direction.
+
+## "Directional" Interchain Charts Are Detected by a Substring Match on the Chart Id
+
+`stats-server/src/interchain_filter.rs`'s startup validation warns when
+`STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID` is unset while directional charts are
+enabled. It finds those charts with
+
+```rust
+.filter(|name| name.contains("Sent") || name.contains("Received"))
+```
+
+over the enabled chart keys. Two consequences, both deliberate for now:
+
+- **The warning fires on the documented default.** No home chain *is* the
+  default, so a default interchain deployment logs a `warn!` listing eight chart
+  ids at every startup. It is kept at `warn!` on purpose: the configuration it
+  describes is genuinely ambiguous (those charts degrade to "source-side
+  observed" / "destination-side observed" rather than a direction relative to any
+  chain), and `info!` would bury that. Do not read this particular warning as a
+  defect report.
+- **It silently stops covering.** A future directional chart named
+  `newMessagesOutboundInterchain` or `transfersFromHome` is missed, and a
+  non-directional chart whose id happens to contain `Sent`/`Received` is falsely
+  included. Nothing fails — the warning just becomes wrong.
+
+"Does this chart's meaning depend on a focal chain?" is a fact about the chart,
+so the structurally correct home for it is `ChartProperties` (next to
+`indexing_status_requirement()`) or a const on the `InterchainFiltered` impls,
+which already exist for all thirteen statements. That was considered and
+**deliberately not done**: it means exporting a chart-key → directional mapping
+from `stats` to `stats-server` for the sake of a startup log line. If you are
+adding a directional interchain chart whose id carries neither word, either
+rename it or do that refactor then — the substring list is not somewhere to add
+a special case.

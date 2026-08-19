@@ -134,7 +134,9 @@ Two properties follow from that, and they drive everything else in this section:
 - **The filter is applied when charts are computed, not when they are served.** One stats deployment materialises exactly one subset into its own database. There is no per-request filtering; a second subset needs a second deployment.
 - **Stats configuration and an indexer API request must describe the same subset**, or the dashboard and the list view behind it will disagree with each other while both are internally correct — they were simply asked different questions.
 
-Each variable mirrors an indexer read-API query parameter of the same name, including its default. The predicate is not a re-implementation: stats depends on the indexer's `interchain-indexer-filters` crate and evaluates the same code, so the two cannot drift apart silently.
+Each variable mirrors an indexer read-API query parameter of the same name, including its default. The predicate is not a re-implementation: stats depends on the indexer's `interchain-indexer-filters` crate and evaluates the same code, so no one has to keep two copies of the truth table in agreement.
+
+That guarantee is **per revision**, not permanent. `stats/Cargo.toml` pins those crates to one git rev, so stats keeps rendering the predicate as of that rev; if the deployed indexer runs a newer one with a changed filter — a new dimension, a different focal truth table, a changed NULL rule — the two disagree until the pin is bumped, and each looks internally correct while doing so. **Treat bumping that pin as a release step whenever the indexer's filter changes**, and keep the deployed indexer's revision in mind when comparing a stats number against an API response.
 
 | Stats env variable | Indexer API query parameter |
 | ------------------ | --------------------------- |
