@@ -2,7 +2,10 @@ default:
     just --list --unsorted
 
 db-host := env_var_or_default('DB_HOST', "localhost")
-db-port := env_var_or_default('DB_PORT', "5432")
+# 5434, not 5432: the sibling interchain-indexer's `just start-postgres` publishes
+# its own database on 5432, and `run-interchain` reads it. Defaulting the stats DB
+# elsewhere makes every recipe here work alongside that indexer with no overrides.
+db-port := env_var_or_default('DB_PORT', "5434")
 db-user := env_var_or_default('DB_USER', "postgres")
 db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "stats")
@@ -12,6 +15,9 @@ export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "0")
 
 docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9439")
+
+interchain-db-port := env_var_or_default('INTERCHAIN_DB_PORT', "5432")
+interchain-db-name := env_var_or_default('INTERCHAIN_DB_NAME', "interchain_indexer")
 
 docker-build-dev *args:
     docker compose -f docker-compose.dev.yml build
@@ -95,15 +101,35 @@ run-multichain:
     STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152 \
     cargo run --bin stats-server
 
+# Reads the interchain indexer DB at `interchain-db-port`/`interchain-db-name`
+# (5432/interchain_indexer — the sibling service's `just start-postgres`
+# defaults), and writes the stats DB at `db-port` (5434). Nothing to override:
+#   just start-postgres      # stats DB on 5434
+#   just run-interchain
+#
+# The commented-out `STATS__INTERCHAIN_FILTER__*` lines are the full read-filter
+# surface; they mirror the indexer read API's parameters of the same names.
+# Uncomment to restrict what the interchain charts count. Note two traps:
+# without HOME_CHAIN_ID, COUNTERPARTY_CHAIN_IDS means `src IN set AND dst IN set`
+# (a conjunction, not a focal OR); and INCLUDE_UNINDEXED_CHAINS defaults to
+# `false`, which drops every message with no known destination.
+#
+# Serve interchain charts from a local interchain-indexer DB
 run-interchain:
     STATS__MODE=interchain \
     STATS__CHARTS_CONFIG=config/interchain/charts.json \
     STATS__LAYOUT_CONFIG=config/interchain/layout.json \
     STATS__UPDATE_GROUPS_CONFIG=config/interchain/update_groups.json \
     STATS__DB_URL={{DATABASE_URL}} \
-    STATS__INDEXER_DB_URL=postgresql://postgres:admin@localhost:5433/interchain_indexer \
+    STATS__INDEXER_DB_URL=postgresql://{{db-user}}:{{db-password}}@{{db-host}}:{{interchain-db-port}}/{{interchain-db-name}} \
     STATS__CREATE_DATABASE=true \
     STATS__RUN_MIGRATIONS=true \
     STATS__SERVER__HTTP__ENABLED=true \
     STATS__SERVER__HTTP__ADDR=0.0.0.0:8080 \
+    `# STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID=1` \
+    `# STATS__INTERCHAIN_FILTER__COUNTERPARTY_CHAIN_IDS=10,137` \
+    `# STATS__INTERCHAIN_FILTER__SRC_CHAIN_IDS=1` \
+    `# STATS__INTERCHAIN_FILTER__DST_CHAIN_IDS=10,137` \
+    `# STATS__INTERCHAIN_FILTER__BRIDGE_IDS=1` \
+    `# STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS=false` \
     cargo run --bin stats-server
