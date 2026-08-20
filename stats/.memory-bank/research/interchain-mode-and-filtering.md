@@ -429,6 +429,11 @@ interchain main-page endpoint does exactly that: `total_interchain_messages`
 "total" charts follow the new filter, or keep describing the whole DB? That is a
 product decision, not something the code answers.
 
+> **Settled since.** All of them follow the filter (§11, question 2). Their
+> `charts.json` descriptions were *not* updated to match — see
+> `gotchas.md`, "Interchain Chart Titles *and Descriptions* … Are Frozen UI
+> Strings".
+
 ### 3.4 Two structural properties of shape B worth naming
 
 **[F]** The join condition is `ON t.message_id = m.id` — **`bridge_id` is not

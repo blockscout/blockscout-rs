@@ -414,3 +414,35 @@ from `stats` to `stats-server` for the sake of a startup log line. If you are
 adding a directional interchain chart whose id carries neither word, either
 rename it or do that refactor then — the substring list is not somewhere to add
 a special case.
+
+## Interchain Chart Titles *and Descriptions* in `charts.json` Are Frozen UI Strings
+
+`config/interchain/charts.json`'s `title` and `description` are rendered in the
+Blockscout UI. They are **product copy, not documentation**, and are not to be
+rewritten as a side effect of a code change — even when the change makes them
+less precise.
+
+This is a live example. The read filter (`InterchainFiltered`) means the four
+`total_*`/`new_*_interchain` charts no longer count every indexed row, so
+descriptions like `"Total indexed inter-chain messages"` now overstate their
+scope. A rewrite around *"within the configured chain and bridge scope"* was
+made and then **deliberately reverted**: churning strings the UI already shows
+costs more than the imprecision it fixes.
+
+Where to put the caveat instead:
+
+- **For operators of one deployment** — the per-chart env override, which layers
+  on top of whatever the JSON ships and is mode-independent
+  (`config/read/mod.rs:read_json_override_from_env_config`):
+  `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__DESCRIPTION`,
+  `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__DESCRIPTION`.
+- **For the semantics themselves** — `README.md`'s interchain operator section
+  and `.memory-bank/research/interchain-mode-and-filtering.md`, which is where
+  the six filter dimensions and the horizon are actually explained.
+
+Note that the imprecision is not an open question hiding behind the strings.
+"Should the `total_*` charts follow the filter, or keep describing the whole
+DB?" was raised in the research note's §3.3 and **answered — all of them
+follow it** (§11, question 2; a coverage test asserts it). So the descriptions
+are plainly stale rather than debatable, and leaving them stale is a deliberate
+UI-stability call. Changing them is a product decision, not a cleanup.
