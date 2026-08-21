@@ -297,6 +297,7 @@ impl AvalancheIndexer {
             blockchain_id_resolver,
             buffer,
             batch_size: settings.batch_size,
+            receipt_concurrency: settings.receipt_concurrency,
         };
 
         RangeDriver::new(processor, ledger, settings.failure_retry.clone())
@@ -322,6 +323,7 @@ struct AvalancheRangeProcessor {
     blockchain_id_resolver: Arc<BlockchainIdResolver>,
     buffer: Arc<MessageBuffer<Message>>,
     batch_size: u64,
+    receipt_concurrency: u64,
 }
 
 impl AvalancheRangeProcessor {
@@ -416,6 +418,7 @@ impl RangeProcessor for AvalancheRangeProcessor {
 
         let ctx = BatchProcessContext {
             bridge_id: self.bridge_id,
+            receipt_concurrency: self.receipt_concurrency.max(1) as usize,
             chain_ids: &self.chain_ids,
             home_chain: self.home_chain,
             process_unknown_chains: self.process_unknown_chains,
@@ -609,6 +612,8 @@ struct BatchProcessContext<'a> {
     reconstruct_incoming_ictt_transfers: bool,
     blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
+    /// Concurrent receipt + block fetches inside one batch.
+    receipt_concurrency: usize,
 }
 
 /// Process a batch of logs for a single chain.
@@ -648,7 +653,7 @@ async fn process_batch(
             let logs = receipt.inner.logs().to_vec();
             Ok::<(B256, (Vec<Log>, Block)), anyhow::Error>((hash, (logs, block)))
         })
-        .buffer_unordered(25)
+        .buffer_unordered(ctx.receipt_concurrency.max(1))
         .try_collect()
         .await?;
 
@@ -1861,6 +1866,7 @@ mod tests {
                 },
             ),
             batch_size: 1000,
+            receipt_concurrency: 25,
         };
 
         let filter = processor

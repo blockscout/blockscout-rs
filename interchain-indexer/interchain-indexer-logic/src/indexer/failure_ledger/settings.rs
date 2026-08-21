@@ -125,8 +125,19 @@ fn default_backoff_cap() -> Duration {
     Duration::from_secs(3600)
 }
 
+/// Raised from 2 once the retry pass stopped being a `select!` branch. The old
+/// value existed to bound a *pause*: the pass ran to completion with nothing
+/// else polled, so every chunk was forward progress the whole bridge lost. As a
+/// sibling future it bounds replay RPC load per pass instead, and starving the
+/// backlog is now the only cost of keeping it low — at `scan_interval = 60s`
+/// and `batch_size = 1000`, draining a 100k-block hole took ~50 passes at 2.
+///
+/// Not measured under a real backlog: no retry pass ran during the throughput
+/// benchmarks, because they produced no holes. 8 is a deliberate step rather
+/// than a tuned optimum; raise it further only with replay measurements in
+/// hand, and remember it is shared across every due interval on every chain.
 fn default_max_chunks_per_pass() -> usize {
-    2
+    8
 }
 
 fn default_record_retry_attempts() -> u32 {

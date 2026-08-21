@@ -40,7 +40,7 @@ INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json
 One variable:
 
 ```bash
-INTERCHAIN_INDEXER_CHAINS__1='{"name":"Ethereum","icon":"https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg","explorer":{"url":"https://eth.blockscout.com","custom_tx_route":"/tx/{hash}","custom_address_route":"/address/{hash}","custom_token_route":"/token/{hash}"},"rpcs":[{"gateway":{"url":"https://rpc.eth.gateway.fm"},"drpc":{"url":"https://eth.drpc.org"},"1rpc":{"url":"https://1rpc.io/eth"}}]}'
+INTERCHAIN_INDEXER_CHAINS__1='{"name":"Ethereum","icon":"https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg","explorer":{"url":"https://eth.blockscout.com","custom_tx_route":"/tx/{hash}","custom_address_route":"/address/{hash}","custom_token_route":"/token/{hash}"},"rpcs":[{"drpc":{"url":"https://eth.drpc.org","max_rps":2},"mevblocker":{"url":"https://rpc.mevblocker.io","max_rps":2}}]}'
 ```
 
 Field by field:
@@ -52,12 +52,12 @@ INTERCHAIN_INDEXER_CHAINS__1__EXPLORER__URL=https://eth.blockscout.com
 INTERCHAIN_INDEXER_CHAINS__1__EXPLORER__CUSTOM_TX_ROUTE='/tx/{hash}'
 INTERCHAIN_INDEXER_CHAINS__1__EXPLORER__CUSTOM_ADDRESS_ROUTE='/address/{hash}'
 INTERCHAIN_INDEXER_CHAINS__1__EXPLORER__CUSTOM_TOKEN_ROUTE='/token/{hash}'
-# rpc provider "gateway"
-INTERCHAIN_INDEXER_CHAINS__1__RPCS__GATEWAY__URL=https://rpc.eth.gateway.fm
 # rpc provider "drpc"
 INTERCHAIN_INDEXER_CHAINS__1__RPCS__DRPC__URL=https://eth.drpc.org
-# rpc provider "1rpc"
-INTERCHAIN_INDEXER_CHAINS__1__RPCS__1RPC__URL=https://1rpc.io/eth
+INTERCHAIN_INDEXER_CHAINS__1__RPCS__DRPC__MAX_RPS=2
+# rpc provider "mevblocker"
+INTERCHAIN_INDEXER_CHAINS__1__RPCS__MEVBLOCKER__URL=https://rpc.mevblocker.io
+INTERCHAIN_INDEXER_CHAINS__1__RPCS__MEVBLOCKER__MAX_RPS=2
 ```
 
 ### Chain `100` — Gnosis
@@ -65,7 +65,7 @@ INTERCHAIN_INDEXER_CHAINS__1__RPCS__1RPC__URL=https://1rpc.io/eth
 One variable:
 
 ```bash
-INTERCHAIN_INDEXER_CHAINS__100='{"name":"Gnosis","icon":"https://blockscout-icons.s3.us-east-1.amazonaws.com/gnosis.svg","explorer":{"url":"https://gnosis.blockscout.com","custom_tx_route":"/tx/{hash}","custom_address_route":"/address/{hash}","custom_token_route":"/token/{hash}"},"rpcs":[{"gateway":{"url":"https://rpc.gnosis.gateway.fm"},"gnosis_official":{"url":"https://rpc.gnosischain.com","max_rps":2}}]}'
+INTERCHAIN_INDEXER_CHAINS__100='{"name":"Gnosis","icon":"https://blockscout-icons.s3.us-east-1.amazonaws.com/gnosis.svg","explorer":{"url":"https://gnosis.blockscout.com","custom_tx_route":"/tx/{hash}","custom_address_route":"/address/{hash}","custom_token_route":"/token/{hash}"},"rpcs":[{"gnosis_official":{"url":"https://rpc.gnosischain.com","max_rps":5},"drpc":{"url":"https://gnosis.drpc.org","max_rps":5}}]}'
 ```
 
 Field by field:
@@ -77,11 +77,12 @@ INTERCHAIN_INDEXER_CHAINS__100__EXPLORER__URL=https://gnosis.blockscout.com
 INTERCHAIN_INDEXER_CHAINS__100__EXPLORER__CUSTOM_TX_ROUTE='/tx/{hash}'
 INTERCHAIN_INDEXER_CHAINS__100__EXPLORER__CUSTOM_ADDRESS_ROUTE='/address/{hash}'
 INTERCHAIN_INDEXER_CHAINS__100__EXPLORER__CUSTOM_TOKEN_ROUTE='/token/{hash}'
-# rpc provider "gateway"
-INTERCHAIN_INDEXER_CHAINS__100__RPCS__GATEWAY__URL=https://rpc.gnosis.gateway.fm
 # rpc provider "gnosis_official"
 INTERCHAIN_INDEXER_CHAINS__100__RPCS__GNOSIS_OFFICIAL__URL=https://rpc.gnosischain.com
-INTERCHAIN_INDEXER_CHAINS__100__RPCS__GNOSIS_OFFICIAL__MAX_RPS=2
+INTERCHAIN_INDEXER_CHAINS__100__RPCS__GNOSIS_OFFICIAL__MAX_RPS=5
+# rpc provider "drpc"
+INTERCHAIN_INDEXER_CHAINS__100__RPCS__DRPC__URL=https://gnosis.drpc.org
+INTERCHAIN_INDEXER_CHAINS__100__RPCS__DRPC__MAX_RPS=5
 ```
 
 ### Chain `43114` — Avalanche C-Chain

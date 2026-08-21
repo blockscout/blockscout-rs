@@ -68,14 +68,24 @@ run:
     INTERCHAIN_INDEXER__CHAINS_CONFIG=config/full-mainnet/chains.json \
     INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json \
     INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE=500 \
-    INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS=500 \
-    INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE=200 \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS=8021 \
     cargo run --bin interchain-indexer-server
 
+run-testnet:
+    INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
+    INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
+    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/full-testnet/chains.json \
+    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-testnet/bridges.json \
+    INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE=500 \
+    INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
+    cargo run --bin interchain-indexer-server
+
 run-dev:
     dotenv -f .env run just run
+
+run-dev-testnet:
+    dotenv -f .env-testnet run just run-testnet
 
 generate-entities *args:
     sea-orm-cli generate entity -o interchain-indexer-entity/src/codegen
