@@ -992,7 +992,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "bridges.rs"
     },
     {
@@ -1003,7 +1003,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_model",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "model"
     },
     {
@@ -1014,7 +1014,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_rs_string",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "string"
     },
     {
@@ -1025,7 +1025,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_rs_option",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "option"
     },
     {
@@ -1036,7 +1036,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_rs_datetime",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "datetime"
     },
     {
@@ -1047,7 +1047,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_relation",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "relation"
     },
     {
@@ -1058,7 +1058,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_entity",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "entity"
     },
     {
@@ -1069,7 +1069,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_rs_related",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "related"
     },
     {
@@ -1080,7 +1080,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_entity_to",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": ".to()"
     },
     {
@@ -1091,7 +1091,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_rs_relationdef",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "relationdef"
     },
     {
@@ -1102,7 +1102,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_bridges_entity_via",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": ".via()"
     },
     {
@@ -1289,7 +1289,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_crosschain_messages",
       "community": 154,
-      "community_name": "MessageStatus",
+      "community_name": "Model",
       "norm_label": "crosschain_messages.rs"
     },
     {
@@ -1300,7 +1300,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_crosschain_messages_model",
       "community": 154,
-      "community_name": "MessageStatus",
+      "community_name": "Model",
       "norm_label": "model"
     },
     {
@@ -1311,7 +1311,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_crosschain_messages_rs_option",
       "community": 154,
-      "community_name": "MessageStatus",
+      "community_name": "Model",
       "norm_label": "option"
     },
     {
@@ -1322,7 +1322,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_crosschain_messages_rs_datetime",
       "community": 154,
-      "community_name": "MessageStatus",
+      "community_name": "Model",
       "norm_label": "datetime"
     },
     {
@@ -1333,7 +1333,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_crosschain_messages_rs_vec",
       "community": 154,
-      "community_name": "MessageStatus",
+      "community_name": "Model",
       "norm_label": "vec"
     },
     {
@@ -1344,7 +1344,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_crosschain_messages_relation",
       "community": 154,
-      "community_name": "MessageStatus",
+      "community_name": "Model",
       "norm_label": "relation"
     },
     {
@@ -1992,8 +1992,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_sea_orm_active_enums_bridgetype",
-      "community": 83,
-      "community_name": "BridgeType",
+      "community": 25,
+      "community_name": "indexers.rs",
       "norm_label": "bridgetype"
     },
     {
@@ -2014,8 +2014,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "interchain_indexer_entity_src_codegen_sea_orm_active_enums_messagestatus",
-      "community": 154,
-      "community_name": "MessageStatus",
+      "community": 23,
+      "community_name": "InterchainServiceImpl",
       "norm_label": "messagestatus"
     },
     {
@@ -3620,8 +3620,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bin_resolve_blockchain_id",
-      "community": 123,
-      "community_name": "resolve-blockchain-id.rs",
+      "community": 76,
+      "community_name": "AvalancheDataApiClient",
       "norm_label": "resolve-blockchain-id.rs"
     },
     {
@@ -3631,8 +3631,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bin_resolve_blockchain_id_usage",
-      "community": 123,
-      "community_name": "resolve-blockchain-id.rs",
+      "community": 76,
+      "community_name": "AvalancheDataApiClient",
       "norm_label": "usage()"
     },
     {
@@ -3642,8 +3642,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bin_resolve_blockchain_id_parse_args",
-      "community": 123,
-      "community_name": "resolve-blockchain-id.rs",
+      "community": 76,
+      "community_name": "AvalancheDataApiClient",
       "norm_label": "parse_args()"
     },
     {
@@ -3653,8 +3653,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bin_resolve_blockchain_id_rs_result",
-      "community": 123,
-      "community_name": "resolve-blockchain-id.rs",
+      "community": 76,
+      "community_name": "AvalancheDataApiClient",
       "norm_label": "result"
     },
     {
@@ -3664,8 +3664,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bin_resolve_blockchain_id_rs_string",
-      "community": 123,
-      "community_name": "resolve-blockchain-id.rs",
+      "community": 76,
+      "community_name": "AvalancheDataApiClient",
       "norm_label": "string"
     },
     {
@@ -3675,8 +3675,8 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bin_resolve_blockchain_id_parse_blockchain_id",
-      "community": 123,
-      "community_name": "resolve-blockchain-id.rs",
+      "community": 76,
+      "community_name": "AvalancheDataApiClient",
       "norm_label": "parse_blockchain_id()"
     },
     {
@@ -3686,8 +3686,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bin_resolve_blockchain_id_main",
-      "community": 123,
-      "community_name": "resolve-blockchain-id.rs",
+      "community": 76,
+      "community_name": "AvalancheDataApiClient",
       "norm_label": "main()"
     },
     {
@@ -3709,7 +3709,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_bridgedtokenaggdbrow",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "bridgedtokenaggdbrow"
     },
     {
@@ -3731,7 +3731,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_rs_string",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "string"
     },
     {
@@ -3742,7 +3742,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_bridgedtokenaggdbrow_marker",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": ".marker()"
     },
     {
@@ -3774,8 +3774,8 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_forward_order_clause",
-      "community": 18,
-      "community_name": "bridged_tokens_query.rs",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "forward_order_clause()"
     },
     {
@@ -3785,8 +3785,8 @@
       "source_location": "L95",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_inverse_order_clause",
-      "community": 18,
-      "community_name": "bridged_tokens_query.rs",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "inverse_order_clause()"
     },
     {
@@ -3797,7 +3797,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_count_column",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "count_column()"
     },
     {
@@ -3808,7 +3808,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_cursor_where_next",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "cursor_where_next()"
     },
     {
@@ -3819,7 +3819,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_rs_value",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "value"
     },
     {
@@ -3830,7 +3830,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_cursor_where_prev",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "cursor_where_prev()"
     },
     {
@@ -3841,7 +3841,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_build_pagination_from_bridged_tokens",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "build_pagination_from_bridged_tokens()"
     },
     {
@@ -4775,8 +4775,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaintotalcounters",
-      "community": 3,
-      "community_name": "init_db",
+      "community": 212,
+      "community_name": ".get_daily_counters",
       "norm_label": "interchaintotalcounters"
     },
     {
@@ -4786,8 +4786,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_rs_naivedatetime",
-      "community": 3,
-      "community_name": "init_db",
+      "community": 212,
+      "community_name": ".get_daily_counters",
       "norm_label": "naivedatetime"
     },
     {
@@ -4797,8 +4797,8 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindailycounters",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 212,
+      "community_name": ".get_daily_counters",
       "norm_label": "interchaindailycounters"
     },
     {
@@ -5259,8 +5259,8 @@
       "source_location": "L1055",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_create_stats_asset",
-      "community": 132,
-      "community_name": ".create_stats_asset",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": ".create_stats_asset()"
     },
     {
@@ -5270,8 +5270,8 @@
       "source_location": "L1082",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_link_token_to_stats_asset",
-      "community": 132,
-      "community_name": ".create_stats_asset",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": ".link_token_to_stats_asset()"
     },
     {
@@ -5677,8 +5677,8 @@
       "source_location": "L3340",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_total_counters",
-      "community": 3,
-      "community_name": "init_db",
+      "community": 212,
+      "community_name": ".get_daily_counters",
       "norm_label": ".get_total_counters()"
     },
     {
@@ -5688,8 +5688,8 @@
       "source_location": "L3376",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_daily_counters",
-      "community": 3,
-      "community_name": "init_db",
+      "community": 212,
+      "community_name": ".get_daily_counters",
       "norm_label": ".get_daily_counters()"
     },
     {
@@ -5754,8 +5754,8 @@
       "source_location": "L3536",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_list_stats_chains",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": ".list_stats_chains()"
     },
     {
@@ -5776,8 +5776,8 @@
       "source_location": "L3581",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_build_pagination_from_messages",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "build_pagination_from_messages()"
     },
     {
@@ -5787,8 +5787,8 @@
       "source_location": "L3621",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_build_pagination_from_transfers",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "build_pagination_from_transfers()"
     },
     {
@@ -6040,8 +6040,8 @@
       "source_location": "L4378",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_record_indexer_failures_merges_overlapping_and_adjacent_ranges_into_one_row",
-      "community": 102,
-      "community_name": ".record_indexer_failures",
+      "community": 3,
+      "community_name": "init_db",
       "norm_label": "record_indexer_failures_merges_overlapping_and_adjacent_ranges_into_one_row()"
     },
     {
@@ -6051,8 +6051,8 @@
       "source_location": "L4454",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_record_indexer_failures_does_not_merge_across_a_real_gap",
-      "community": 102,
-      "community_name": ".record_indexer_failures",
+      "community": 3,
+      "community_name": "init_db",
       "norm_label": "record_indexer_failures_does_not_merge_across_a_real_gap()"
     },
     {
@@ -6062,8 +6062,8 @@
       "source_location": "L4499",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_record_indexer_failures_growth_bound_for_consecutive_realtime_failures",
-      "community": 102,
-      "community_name": ".record_indexer_failures",
+      "community": 3,
+      "community_name": "init_db",
       "norm_label": "record_indexer_failures_growth_bound_for_consecutive_realtime_failures()"
     },
     {
@@ -6194,8 +6194,8 @@
       "source_location": "L5291",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_counters_cover_all_filters",
-      "community": 3,
-      "community_name": "init_db",
+      "community": 212,
+      "community_name": ".get_daily_counters",
       "norm_label": "counters_cover_all_filters()"
     },
     {
@@ -6216,8 +6216,8 @@
       "source_location": "L5342",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_transfer_ids",
-      "community": 3,
-      "community_name": "init_db",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "transfer_ids()"
     },
     {
@@ -6513,8 +6513,8 @@
       "source_location": "L6080",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_migration_applies",
-      "community": 132,
-      "community_name": ".create_stats_asset",
+      "community": 3,
+      "community_name": "init_db",
       "norm_label": "stats_migration_applies()"
     },
     {
@@ -6524,8 +6524,8 @@
       "source_location": "L6093",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_asset_insert_and_get",
-      "community": 132,
-      "community_name": ".create_stats_asset",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "stats_asset_insert_and_get()"
     },
     {
@@ -6535,8 +6535,8 @@
       "source_location": "L6119",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_link_token_without_tokens_row",
-      "community": 132,
-      "community_name": ".create_stats_asset",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "stats_link_token_without_tokens_row()"
     },
     {
@@ -6546,8 +6546,8 @@
       "source_location": "L6149",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_reject_same_token_two_assets",
-      "community": 132,
-      "community_name": ".create_stats_asset",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "stats_reject_same_token_two_assets()"
     },
     {
@@ -6557,8 +6557,8 @@
       "source_location": "L6181",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_reject_two_tokens_same_chain_one_asset",
-      "community": 132,
-      "community_name": ".create_stats_asset",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "stats_reject_two_tokens_same_chain_one_asset()"
     },
     {
@@ -7041,8 +7041,8 @@
       "source_location": "L9231",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_asset_delete_cascades",
-      "community": 132,
-      "community_name": ".create_stats_asset",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "stats_asset_delete_cascades()"
     },
     {
@@ -8955,8 +8955,8 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_pendingmessagehashevents",
-      "community": 46,
-      "community_name": "events.rs",
+      "community": 121,
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "pendingmessagehashevents"
     },
     {
@@ -8966,8 +8966,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_rs_hashmap",
-      "community": 46,
-      "community_name": "events.rs",
+      "community": 121,
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "hashmap"
     },
     {
@@ -8999,8 +8999,8 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_pendingvalidatorconfirmation",
-      "community": 46,
-      "community_name": "events.rs",
+      "community": 121,
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "pendingvalidatorconfirmation"
     },
     {
@@ -9011,7 +9011,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_pendingcollectedsignatures",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "pendingcollectedsignatures"
     },
     {
@@ -9022,7 +9022,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_rs_annotatedevent",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "annotatedevent"
     },
     {
@@ -9154,7 +9154,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_collected_signatures_identity",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "collected_signatures_identity()"
     },
     {
@@ -9165,7 +9165,7 @@
       "_origin": "ast",
       "id": "collectedsignaturesidentity",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "collectedsignaturesidentity"
     },
     {
@@ -9176,7 +9176,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_remove_drained_events",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "remove_drained_events()"
     },
     {
@@ -9440,7 +9440,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_confirmation_for",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "confirmation_for()"
     },
     {
@@ -9451,7 +9451,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_signatures_collected_with_tx_hash",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "signatures_collected_with_tx_hash()"
     },
     {
@@ -9462,7 +9462,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_remove_drained_events_keeps_a_confirmation_queued_during_the_drain",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "remove_drained_events_keeps_a_confirmation_queued_during_the_drain()"
     },
     {
@@ -9473,7 +9473,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_remove_drained_events_keeps_a_replaced_signatures_collected",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "remove_drained_events_keeps_a_replaced_signatures_collected()"
     },
     {
@@ -9484,7 +9484,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_remove_drained_events_reports_the_entry_empty_when_only_the_drained_events_were_queued",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "remove_drained_events_reports_the_entry_empty_when_only_the_drained_events_were_queued()"
     },
     {
@@ -9494,8 +9494,8 @@
       "source_location": "L1371",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_pending_with_unapplicable_signatures",
-      "community": 46,
-      "community_name": "events.rs",
+      "community": 121,
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "pending_with_unapplicable_signatures()"
     },
     {
@@ -9505,8 +9505,8 @@
       "source_location": "L1399",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_a_failed_drain_keeps_the_queued_events_for_the_replay",
-      "community": 46,
-      "community_name": "events.rs",
+      "community": 121,
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "a_failed_drain_keeps_the_queued_events_for_the_replay()"
     },
     {
@@ -9528,7 +9528,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_events_a_drain_keeps_events_queued_during_its_awaits",
       "community": 121,
-      "community_name": "remove_drained_events",
+      "community_name": "PendingMessageHashEvents",
       "norm_label": "a_drain_keeps_events_queued_during_its_awaits()"
     },
     {
@@ -9538,8 +9538,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header",
-      "community": 159,
-      "community_name": "parse_amb_header",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "header.rs"
     },
     {
@@ -9549,8 +9549,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header_ambheader",
-      "community": 60,
-      "community_name": "amb/types.rs",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "ambheader"
     },
     {
@@ -9560,8 +9560,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header_rs_b256",
-      "community": 60,
-      "community_name": "amb/types.rs",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "b256"
     },
     {
@@ -9571,8 +9571,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header_rs_address",
-      "community": 60,
-      "community_name": "amb/types.rs",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "address"
     },
     {
@@ -9582,8 +9582,8 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header_parse_amb_header",
-      "community": 159,
-      "community_name": "parse_amb_header",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "parse_amb_header()"
     },
     {
@@ -9593,8 +9593,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header_rs_result",
-      "community": 159,
-      "community_name": "parse_amb_header",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "result"
     },
     {
@@ -9604,8 +9604,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header_parse_modern_header",
-      "community": 159,
-      "community_name": "parse_amb_header",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "parse_modern_header()"
     },
     {
@@ -9615,8 +9615,8 @@
       "source_location": "L70",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header_parse_chain_id",
-      "community": 159,
-      "community_name": "parse_amb_header",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "parse_chain_id()"
     },
     {
@@ -9626,8 +9626,8 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_header_test_parse_modern_header_extracts_chain_ids_and_payload_offset",
-      "community": 159,
-      "community_name": "parse_amb_header",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "test_parse_modern_header_extracts_chain_ids_and_payload_offset()"
     },
     {
@@ -10649,8 +10649,8 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_types_ambheaderdata_from",
-      "community": 60,
-      "community_name": "amb/types.rs",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": ".from()"
     },
     {
@@ -10660,8 +10660,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_types_rs_self",
-      "community": 60,
-      "community_name": "amb/types.rs",
+      "community": 8,
+      "community_name": "amb/abi.rs",
       "norm_label": "self"
     },
     {
@@ -12178,7 +12178,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "avalanche/mod.rs"
     },
@@ -12267,7 +12267,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_option",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "option"
     },
     {
@@ -12277,8 +12277,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_message",
-      "community": 48,
-      "community_name": "AvalancheIndexer",
+      "community": 30,
+      "community_name": "avalanche/mod.rs",
       "norm_label": "message"
     },
     {
@@ -12322,7 +12322,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_naivedatetime",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "naivedatetime"
     },
     {
@@ -12399,7 +12399,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_result",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "result"
     },
     {
@@ -12454,7 +12454,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_hashset",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "hashset"
     },
     {
@@ -12475,7 +12475,7 @@
       "source_location": "L347",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_validate_chain_configs",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "validate_chain_configs()"
     },
@@ -12663,7 +12663,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_should_process_message",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "should_process_message()"
     },
     {
@@ -12674,7 +12674,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_parse_message_key",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "parse_message_key()"
     },
     {
@@ -12685,7 +12685,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_b256",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "b256"
     },
     {
@@ -12695,8 +12695,8 @@
       "source_location": "L604",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_batchprocesscontext",
-      "community": 48,
-      "community_name": "AvalancheIndexer",
+      "community": 30,
+      "community_name": "avalanche/mod.rs",
       "norm_label": "batchprocesscontext"
     },
     {
@@ -12718,7 +12718,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_log",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "log"
     },
     {
@@ -12729,7 +12729,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_parse_sender_ictt_log",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "parse_sender_ictt_log()"
     },
     {
@@ -12740,7 +12740,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_parse_receiver_ictt_logs",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "parse_receiver_ictt_logs()"
     },
     {
@@ -12751,7 +12751,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_parse_receiver_ictt_log",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "parse_receiver_ictt_log()"
     },
     {
@@ -12761,7 +12761,7 @@
       "source_location": "L919",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_gate_receiver_ictt_arm",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "gate_receiver_ictt_arm()"
     },
@@ -12773,7 +12773,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_loghandlecontext",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "loghandlecontext"
     },
     {
@@ -12784,7 +12784,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_handle_log",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "handle_log()"
     },
     {
@@ -12795,7 +12795,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_handle_send_cross_chain_message",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "handle_send_cross_chain_message()"
     },
     {
@@ -12806,7 +12806,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_parse_execution_outcome_log",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "parse_execution_outcome_log()"
     },
     {
@@ -12817,7 +12817,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_handle_receive_cross_chain_message",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "handle_receive_cross_chain_message()"
     },
     {
@@ -12828,7 +12828,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_handle_message_executed",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "handle_message_executed()"
     },
     {
@@ -12839,7 +12839,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_handle_message_execution_failed",
       "community": 30,
-      "community_name": "Result",
+      "community_name": "avalanche/mod.rs",
       "norm_label": "handle_message_execution_failed()"
     },
     {
@@ -12849,7 +12849,7 @@
       "source_location": "L1491",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_shouldprocessmessagecase",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "shouldprocessmessagecase"
     },
@@ -12860,7 +12860,7 @@
       "source_location": "L1626",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_should_process_message_cases",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "should_process_message_cases()"
     },
@@ -12871,7 +12871,7 @@
       "source_location": "L1651",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_source_less_withdrawn_arm",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "source_less_withdrawn_arm()"
     },
@@ -12882,7 +12882,7 @@
       "source_location": "L1662",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_test_gate_receiver_ictt_arm_disabled_source_unknown_drops_arm",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "test_gate_receiver_ictt_arm_disabled_source_unknown_drops_arm()"
     },
@@ -12893,7 +12893,7 @@
       "source_location": "L1681",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_test_gate_receiver_ictt_arm_disabled_source_configured_preserves_arm",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "test_gate_receiver_ictt_arm_disabled_source_configured_preserves_arm()"
     },
@@ -12904,7 +12904,7 @@
       "source_location": "L1696",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_test_gate_receiver_ictt_arm_enabled_preserves_arm_either_way",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "test_gate_receiver_ictt_arm_enabled_preserves_arm_either_way()"
     },
@@ -12915,7 +12915,7 @@
       "source_location": "L1723",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_test_gate_receiver_ictt_arm_disabled_source_unknown_no_arm_does_not_increment",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "test_gate_receiver_ictt_arm_disabled_source_unknown_no_arm_does_not_increment()"
     },
@@ -12937,7 +12937,7 @@
       "source_location": "L1762",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_accepts_one_config_per_chain_with_addresses",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "accepts_one_config_per_chain_with_addresses()"
     },
@@ -12948,7 +12948,7 @@
       "source_location": "L1777",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rejects_a_chain_with_no_contract_address",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "rejects_a_chain_with_no_contract_address()"
     },
@@ -12959,7 +12959,7 @@
       "source_location": "L1793",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rejects_the_same_chain_configured_twice",
-      "community": 89,
+      "community": 30,
       "community_name": "avalanche/mod.rs",
       "norm_label": "rejects_the_same_chain_configured_twice()"
     },
@@ -16534,8 +16534,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_lib",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 68,
+      "community_name": "Result",
       "norm_label": "interchain-indexer-logic/src/lib.rs"
     },
     {
@@ -19053,8 +19053,8 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_types_consolidate",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 88,
+      "community_name": "Key",
       "norm_label": "consolidate"
     },
     {
@@ -19064,8 +19064,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_types_rs_clone",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 88,
+      "community_name": "Key",
       "norm_label": "clone"
     },
     {
@@ -19075,8 +19075,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_types_rs_send",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 88,
+      "community_name": "Key",
       "norm_label": "send"
     },
     {
@@ -19086,8 +19086,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_types_rs_sync",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 88,
+      "community_name": "Key",
       "norm_label": "sync"
     },
     {
@@ -19097,8 +19097,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "serialize",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 88,
+      "community_name": "Key",
       "norm_label": "serialize"
     },
     {
@@ -19108,8 +19108,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "deserialize",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 225,
+      "community_name": "AvalancheIndexerSettings",
       "norm_label": "deserialize"
     },
     {
@@ -19119,8 +19119,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "pagination.rs"
     },
     {
@@ -19152,8 +19152,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_outputpagination",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "outputpagination"
     },
     {
@@ -19174,8 +19174,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_rs_p",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "p"
     },
     {
@@ -19229,8 +19229,8 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_paginationdirection",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "paginationdirection"
     },
     {
@@ -19284,8 +19284,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_rs_display",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "display"
     },
     {
@@ -19505,7 +19505,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_bridgedtokenssortfield",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "bridgedtokenssortfield"
     },
     {
@@ -19515,8 +19515,8 @@
       "source_location": "L308",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_bridgedtokenssortfield_from_proto_sort",
-      "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community": 68,
+      "community_name": "Result",
       "norm_label": ".from_proto_sort()"
     },
     {
@@ -19526,8 +19526,8 @@
       "source_location": "L322",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_statschainssortfield",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "statschainssortfield"
     },
     {
@@ -19537,8 +19537,8 @@
       "source_location": "L329",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_statschainssortfield_from_proto_sort",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": ".from_proto_sort()"
     },
     {
@@ -19548,8 +19548,8 @@
       "source_location": "L340",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_statssortorder",
-      "community": 19,
-      "community_name": "list_stats_chains",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "statssortorder"
     },
     {
@@ -19571,7 +19571,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_bridgedtokenspaginationlogic",
       "community": 93,
-      "community_name": "BridgedTokensPaginationLogic",
+      "community_name": "PaginationDirection",
       "norm_label": "bridgedtokenspaginationlogic"
     },
     {
@@ -19702,8 +19702,8 @@
       "source_location": "L613",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_stats_chains_sort_wire_values_match_proto",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "stats_chains_sort_wire_values_match_proto()"
     },
     {
@@ -19713,8 +19713,8 @@
       "source_location": "L625",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_bridged_tokens_sort_wire_values_match_proto",
-      "community": 68,
-      "community_name": "Result",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "bridged_tokens_sort_wire_values_match_proto()"
     },
     {
@@ -20736,8 +20736,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_secret_secret",
-      "community": 14,
-      "community_name": "config.rs",
+      "community": 1,
+      "community_name": "provider_layers.rs",
       "norm_label": "secret"
     },
     {
@@ -21132,8 +21132,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": "indexedchains"
     },
     {
@@ -21143,8 +21143,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_hashmap",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": "hashmap"
     },
     {
@@ -21154,8 +21154,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_hashset",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": "hashset"
     },
     {
@@ -21198,8 +21198,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_vec",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": "vec"
     },
     {
@@ -21231,8 +21231,8 @@
       "source_location": "L94",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_may_observe",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".may_observe()"
     },
     {
@@ -21242,8 +21242,8 @@
       "source_location": "L104",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_bridge_count",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".bridge_count()"
     },
     {
@@ -21253,8 +21253,8 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_pair_count",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".pair_count()"
     },
     {
@@ -21264,8 +21264,8 @@
       "source_location": "L121",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_is_empty_config",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".is_empty_config()"
     },
     {
@@ -21275,8 +21275,8 @@
       "source_location": "L128",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_bridge_chain_counts",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".bridge_chain_counts()"
     },
     {
@@ -21286,8 +21286,8 @@
       "source_location": "L138",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_record_metrics",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".record_metrics()"
     },
     {
@@ -21297,8 +21297,8 @@
       "source_location": "L161",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_configured_pairs",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".configured_pairs()"
     },
     {
@@ -21308,8 +21308,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_option",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": "option"
     },
     {
@@ -21319,8 +21319,8 @@
       "source_location": "L196",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_chain_ids_for",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".chain_ids_for()"
     },
     {
@@ -21330,8 +21330,8 @@
       "source_location": "L216",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_configured_union",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".configured_union()"
     },
     {
@@ -21341,8 +21341,8 @@
       "source_location": "L235",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_message_has_unindexed",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".message_has_unindexed()"
     },
     {
@@ -21352,8 +21352,8 @@
       "source_location": "L240",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_transfer_has_unindexed",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".transfer_has_unindexed()"
     },
     {
@@ -21363,8 +21363,8 @@
       "source_location": "L251",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_chain_unindexed_condition",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "chain_unindexed_condition()"
     },
     {
@@ -21374,8 +21374,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "intocolumnref",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "intocolumnref"
     },
     {
@@ -21385,8 +21385,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_clone",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "clone"
     },
     {
@@ -21396,8 +21396,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_condition",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "condition"
     },
     {
@@ -21407,8 +21407,8 @@
       "source_location": "L300",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_message_countable_condition",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "message_countable_condition()"
     },
     {
@@ -21418,8 +21418,8 @@
       "source_location": "L318",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_transfer_identity_ready_condition",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "transfer_identity_ready_condition()"
     },
     {
@@ -21429,8 +21429,8 @@
       "source_location": "L369",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_render",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "render()"
     },
     {
@@ -21440,8 +21440,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_string",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "string"
     },
     {
@@ -21528,8 +21528,8 @@
       "source_location": "L439",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_cols",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "cols()"
     },
     {
@@ -21539,8 +21539,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "entity",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "entity"
     },
     {
@@ -21550,8 +21550,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "column",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "column"
     },
     {
@@ -21561,8 +21561,8 @@
       "source_location": "L456",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_all_indexed_renders_false",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_all_indexed_renders_false()"
     },
     {
@@ -21572,8 +21572,8 @@
       "source_location": "L467",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_zero_bridges_renders_false",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_zero_bridges_renders_false()"
     },
     {
@@ -21583,8 +21583,8 @@
       "source_location": "L478",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_absent_bridge_renders_no_disjunct",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_absent_bridge_renders_no_disjunct()"
     },
     {
@@ -21594,8 +21594,8 @@
       "source_location": "L494",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_present_but_empty_renders_bare_bridge_eq",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_present_but_empty_renders_bare_bridge_eq()"
     },
     {
@@ -21605,8 +21605,8 @@
       "source_location": "L507",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_per_bridge_renders_not_in",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 89,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_per_bridge_renders_not_in()"
     },
     {
@@ -21847,8 +21847,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query",
-      "community": 19,
-      "community_name": "list_stats_chains",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "list_query.rs"
     },
     {
@@ -21858,8 +21858,8 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query_statslistquery",
-      "community": 19,
-      "community_name": "list_stats_chains",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "statslistquery"
     },
     {
@@ -21869,8 +21869,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query_rs_s",
-      "community": 19,
-      "community_name": "list_stats_chains",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "s"
     },
     {
@@ -21880,8 +21880,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query_rs_option",
-      "community": 19,
-      "community_name": "list_stats_chains",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "option"
     },
     {
@@ -21891,8 +21891,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query_rs_p",
-      "community": 19,
-      "community_name": "list_stats_chains",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": "p"
     },
     {
@@ -22430,8 +22430,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": "stats/service.rs"
     },
     {
@@ -22463,8 +22463,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsreadsettings",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": "statsreadsettings"
     },
     {
@@ -22474,8 +22474,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_rs_default",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": "default"
     },
     {
@@ -22485,8 +22485,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsreadsettings_default",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": ".default()"
     },
     {
@@ -22496,8 +22496,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_rs_self",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": "self"
     },
     {
@@ -22540,8 +22540,8 @@
       "source_location": "L56",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsservice_new",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": ".new()"
     },
     {
@@ -22584,8 +22584,8 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsservice_read_settings",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": ".read_settings()"
     },
     {
@@ -22595,8 +22595,8 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsservice_indexed_chains",
-      "community": 2,
-      "community_name": "StatsService",
+      "community": 55,
+      "community_name": "IndexedChains",
       "norm_label": ".indexed_chains()"
     },
     {
@@ -22606,8 +22606,8 @@
       "source_location": "L101",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsservice_apply_stats_for_flushed_batch",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": ".apply_stats_for_flushed_batch()"
     },
     {
@@ -22617,8 +22617,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_rs_databasetransaction",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": "databasetransaction"
     },
     {
@@ -22639,8 +22639,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_rs_dberr",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": "dberr"
     },
     {
@@ -22716,8 +22716,8 @@
       "source_location": "L252",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsservice_get_stats_chains",
-      "community": 2,
-      "community_name": "StatsService",
+      "community": 93,
+      "community_name": "PaginationDirection",
       "norm_label": ".get_stats_chains()"
     },
     {
@@ -22760,8 +22760,8 @@
       "source_location": "L334",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_kickoff_enrichment_no_token_service_is_noop",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": "kickoff_enrichment_no_token_service_is_noop()"
     },
     {
@@ -22771,8 +22771,8 @@
       "source_location": "L354",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_test_partial_flush_reaches_stats_hook_and_counts_unindexed_destination",
-      "community": 108,
-      "community_name": ".new",
+      "community": 2,
+      "community_name": "StatsService",
       "norm_label": "test_partial_flush_reaches_stats_hook_and_counts_unindexed_destination()"
     },
     {
@@ -22826,8 +22826,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_statschainlistrow_marker",
-      "community": 68,
-      "community_name": "Result",
+      "community": 19,
+      "community_name": "list_stats_chains",
       "norm_label": ".marker()"
     },
     {
@@ -22903,8 +22903,8 @@
       "source_location": "L100",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_build_pagination",
-      "community": 68,
-      "community_name": "Result",
+      "community": 19,
+      "community_name": "list_stats_chains",
       "norm_label": "build_pagination()"
     },
     {
@@ -23289,7 +23289,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "blockscout_tokeninfo.rs"
     },
     {
@@ -23300,7 +23300,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfo",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "blockscouttokeninfo"
     },
     {
@@ -23311,7 +23311,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_string",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "string"
     },
     {
@@ -23322,7 +23322,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_option",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "option"
     },
     {
@@ -23333,7 +23333,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfo_icon_url",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".icon_url()"
     },
     {
@@ -23344,7 +23344,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfo_is_valid",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".is_valid()"
     },
     {
@@ -23355,7 +23355,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoerror",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "blockscouttokeninfoerror"
     },
     {
@@ -23366,7 +23366,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_error",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "error"
     },
     {
@@ -23377,7 +23377,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_cachediconresult",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "cachediconresult"
     },
     {
@@ -23388,7 +23388,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_instant",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "instant"
     },
     {
@@ -23399,7 +23399,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoclient",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "blockscouttokeninfoclient"
     },
     {
@@ -23410,7 +23410,7 @@
       "_origin": "ast",
       "id": "client",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "client"
     },
     {
@@ -23421,7 +23421,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_arc",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "arc"
     },
     {
@@ -23432,7 +23432,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_rwlock",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "rwlock"
     },
     {
@@ -23443,7 +23443,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_hashmap",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "hashmap"
     },
     {
@@ -23454,7 +23454,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_tokenkey",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "tokenkey"
     },
     {
@@ -23465,7 +23465,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_mutex",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "mutex"
     },
     {
@@ -23476,7 +23476,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoclient_new",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".new()"
     },
     {
@@ -23487,7 +23487,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_self",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "self"
     },
     {
@@ -23498,7 +23498,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoclient_get_cached_icon",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".get_cached_icon()"
     },
     {
@@ -23509,7 +23509,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoclient_cache_icon_result",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".cache_icon_result()"
     },
     {
@@ -23520,7 +23520,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoclient_get_lock_for_key",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".get_lock_for_key()"
     },
     {
@@ -23531,7 +23531,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoclient_remove_lock_for_key",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".remove_lock_for_key()"
     },
     {
@@ -23542,7 +23542,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoclient_get_token_info",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".get_token_info()"
     },
     {
@@ -23553,7 +23553,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_result",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "result"
     },
     {
@@ -23564,7 +23564,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_blockscouttokeninfoclient_get_token_icon",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": ".get_token_icon()"
     },
     {
@@ -23575,7 +23575,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_blockscout_tokeninfo_rs_vec",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "vec"
     },
     {
@@ -23839,7 +23839,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_mod",
       "community": 17,
-      "community_name": "Settings",
+      "community_name": "BlockscoutTokenInfoClient",
       "norm_label": "token_info/mod.rs"
     },
     {
@@ -24190,8 +24190,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "token_info/settings.rs"
     },
     {
@@ -24201,8 +24201,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_blockscouttokeninfoclientsettings",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "blockscouttokeninfoclientsettings"
     },
     {
@@ -24212,8 +24212,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_option",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "option"
     },
     {
@@ -24223,8 +24223,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_string",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "string"
     },
     {
@@ -24234,8 +24234,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_vec",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "vec"
     },
     {
@@ -24245,8 +24245,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_duration",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "duration"
     },
     {
@@ -24256,8 +24256,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_default_ignore_chains",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "default_ignore_chains()"
     },
     {
@@ -24267,8 +24267,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_default_icon_retry_interval",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "default_icon_retry_interval()"
     },
     {
@@ -24278,8 +24278,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_default",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "default"
     },
     {
@@ -24289,8 +24289,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_blockscouttokeninfoclientsettings_default",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": ".default()"
     },
     {
@@ -24300,8 +24300,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_self",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "self"
     },
     {
@@ -24311,8 +24311,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_tokeninfoservicesettings",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "tokeninfoservicesettings"
     },
     {
@@ -24322,8 +24322,8 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_default_onchain_retry_interval",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "default_onchain_retry_interval()"
     },
     {
@@ -24333,8 +24333,8 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_tokeninfoservicesettings_default",
-      "community": 17,
-      "community_name": "Settings",
+      "community": 123,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": ".default()"
     },
     {
@@ -25170,7 +25170,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_bin_interchain_indexer_server",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "interchain-indexer-server.rs"
     },
     {
@@ -25181,7 +25181,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_bin_interchain_indexer_server_main",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "main()"
     },
     {
@@ -25192,7 +25192,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_bin_interchain_indexer_server_rs_result",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "result"
     },
     {
@@ -25203,7 +25203,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_bin_interchain_indexer_server_rs_error",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "error"
     },
     {
@@ -25224,8 +25224,8 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_indexertype",
-      "community": 14,
-      "community_name": "config.rs",
+      "community": 71,
+      "community_name": "BridgeConfig",
       "norm_label": "indexertype"
     },
     {
@@ -25246,8 +25246,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_rs_string",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "string"
     },
     {
@@ -25257,8 +25257,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_rs_option",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "option"
     },
     {
@@ -25301,8 +25301,8 @@
       "source_location": "L68",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_bridgecontractconfig",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 25,
+      "community_name": "indexers.rs",
       "norm_label": "bridgecontractconfig"
     },
     {
@@ -25444,8 +25444,8 @@
       "source_location": "L161",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_bridgecontractconfig_to_active_model",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 215,
+      "community_name": ".to_active_model",
       "norm_label": ".to_active_model()"
     },
     {
@@ -25455,8 +25455,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_rs_activemodel",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 215,
+      "community_name": ".to_active_model",
       "norm_label": "activemodel"
     },
     {
@@ -25521,8 +25521,8 @@
       "source_location": "L300",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_explorerconfig",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "explorerconfig"
     },
     {
@@ -25543,8 +25543,8 @@
       "source_location": "L323",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_rpcproviderconfig",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "rpcproviderconfig"
     },
     {
@@ -25642,8 +25642,8 @@
       "source_location": "L414",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_apikeyconfig",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "apikeyconfig"
     },
     {
@@ -25862,8 +25862,8 @@
       "source_location": "L815",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_chain_declares_api_key",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "chain_declares_api_key()"
     },
     {
@@ -25873,8 +25873,8 @@
       "source_location": "L840",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_ranked_rpc_providers",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "ranked_rpc_providers()"
     },
     {
@@ -25895,8 +25895,8 @@
       "source_location": "L926",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_encode_path_segment",
-      "community": 37,
-      "community_name": "fixture_vars",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "encode_path_segment()"
     },
     {
@@ -25906,8 +25906,8 @@
       "source_location": "L950",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_replace_path_placeholder",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 14,
+      "community_name": "config.rs",
       "norm_label": "replace_path_placeholder()"
     },
     {
@@ -25961,8 +25961,8 @@
       "source_location": "L1093",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_config_test_bridge_contract_config_to_active_model",
-      "community": 71,
-      "community_name": "BridgeConfig",
+      "community": 215,
+      "community_name": ".to_active_model",
       "norm_label": "test_bridge_contract_config_to_active_model()"
     },
     {
@@ -27578,8 +27578,8 @@
       "source_location": "L681",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors()"
     },
     {
@@ -27798,8 +27798,8 @@
       "source_location": "L1124",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_init_db",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "init_db()"
     },
     {
@@ -27809,8 +27809,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_rs_testdbguard",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "testdbguard"
     },
     {
@@ -27831,8 +27831,8 @@
       "source_location": "L1145",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_seed_bridge_and_chain",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "seed_bridge_and_chain()"
     },
     {
@@ -27842,8 +27842,8 @@
       "source_location": "L1166",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_store_bridge_contract",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "store_bridge_contract()"
     },
     {
@@ -27864,8 +27864,8 @@
       "source_location": "L1197",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_upsert_configured_contracts",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "upsert_configured_contracts()"
     },
     {
@@ -27875,8 +27875,8 @@
       "source_location": "L1210",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_progress_for",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "progress_for()"
     },
     {
@@ -27886,8 +27886,8 @@
       "source_location": "L1236",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_lowers_stored_floor_and_fixes_completion",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_lowers_stored_floor_and_fixes_completion()"
     },
     {
@@ -27897,8 +27897,8 @@
       "source_location": "L1294",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_new_lower_floor_identity_is_applied_on_the_first_startup",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_new_lower_floor_identity_is_applied_on_the_first_startup()"
     },
     {
@@ -27908,8 +27908,8 @@
       "source_location": "L1354",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_is_independent_of_the_contracts_upsert_order",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_is_independent_of_the_contracts_upsert_order()"
     },
     {
@@ -27919,8 +27919,8 @@
       "source_location": "L1386",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_stale_contract_rows_cannot_influence_the_floor",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_stale_contract_rows_cannot_influence_the_floor()"
     },
     {
@@ -27930,8 +27930,8 @@
       "source_location": "L1420",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_unchanged_config_value_writes_nothing",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_unchanged_config_value_writes_nothing()"
     },
     {
@@ -27941,8 +27941,8 @@
       "source_location": "L1446",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_raised_config_value_is_left_to_the_seed",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_raised_config_value_is_left_to_the_seed()"
     },
     {
@@ -27952,8 +27952,8 @@
       "source_location": "L1482",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_amb_pair_only_resets_on_amb_proxy_lowered",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_amb_pair_only_resets_on_amb_proxy_lowered()"
     },
     {
@@ -27963,8 +27963,8 @@
       "source_location": "L1536",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_failed_write_is_warn_only_and_retried_next_startup",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_failed_write_is_warn_only_and_retried_next_startup()"
     },
     {
@@ -27974,8 +27974,8 @@
       "source_location": "L1589",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_indexers_reconcile_catchup_floors_disabled_bridge_lowered_then_reenabled_ends_up_lowered",
-      "community": 25,
-      "community_name": "indexers.rs",
+      "community": 108,
+      "community_name": "reconcile_catchup_floors",
       "norm_label": "reconcile_catchup_floors_disabled_bridge_lowered_then_reenabled_ends_up_lowered()"
     },
     {
@@ -28920,8 +28920,8 @@
       "source_location": "L455",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_message_details",
-      "community": 23,
-      "community_name": "InterchainServiceImpl",
+      "community": 32,
+      "community_name": ".new",
       "norm_label": ".get_message_details()"
     },
     {
@@ -28931,8 +28931,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "getmessagedetailsrequest",
-      "community": 23,
-      "community_name": "InterchainServiceImpl",
+      "community": 32,
+      "community_name": ".new",
       "norm_label": "getmessagedetailsrequest"
     },
     {
@@ -29184,8 +29184,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "stats.rs"
     },
     {
@@ -29514,8 +29514,8 @@
       "source_location": "L391",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_stats_chain_row_to_proto",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "stats_chain_row_to_proto()"
     },
     {
@@ -29525,8 +29525,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "statschainrow",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "statschainrow"
     },
     {
@@ -29536,8 +29536,8 @@
       "source_location": "L410",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_bridged_row_to_proto",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "bridged_row_to_proto()"
     },
     {
@@ -29547,8 +29547,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "statsbridgedtokenrow",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "statsbridgedtokenrow"
     },
     {
@@ -29558,8 +29558,8 @@
       "source_location": "L435",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_i64_to_u64_nonneg",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "i64_to_u64_nonneg()"
     },
     {
@@ -29569,8 +29569,8 @@
       "source_location": "L439",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_map_stats_error",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "map_stats_error()"
     },
     {
@@ -29580,8 +29580,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_rs_error",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "error"
     },
     {
@@ -29591,8 +29591,8 @@
       "source_location": "L448",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_parse_optional_utc_date_accepts_valid_yyyy_mm_dd",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "parse_optional_utc_date_accepts_valid_yyyy_mm_dd()"
     },
     {
@@ -29602,8 +29602,8 @@
       "source_location": "L456",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_parse_optional_utc_date_accepts_none_and_blank",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "parse_optional_utc_date_accepts_none_and_blank()"
     },
     {
@@ -29613,8 +29613,8 @@
       "source_location": "L463",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_parse_optional_utc_date_rejects_malformed",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "parse_optional_utc_date_rejects_malformed()"
     },
     {
@@ -29624,8 +29624,8 @@
       "source_location": "L470",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_normalize_stats_q_none_and_blank",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "normalize_stats_q_none_and_blank()"
     },
     {
@@ -29635,8 +29635,8 @@
       "source_location": "L477",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_stats_normalize_stats_q_trims_non_empty",
-      "community": 51,
-      "community_name": "stats.rs",
+      "community": 33,
+      "community_name": "Status",
       "norm_label": "normalize_stats_q_trims_non_empty()"
     },
     {
@@ -30317,7 +30317,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "interchain-indexer-server/src/settings.rs"
     },
@@ -30328,7 +30328,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_settings",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "settings"
     },
@@ -30339,7 +30339,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_rs_pathbuf",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "pathbuf"
     },
@@ -30350,7 +30350,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "serversettings",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "serversettings"
     },
@@ -30361,7 +30361,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "metricssettings",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "metricssettings"
     },
@@ -30372,7 +30372,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "tracingsettings",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "tracingsettings"
     },
@@ -30383,7 +30383,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "jaegersettings",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "jaegersettings"
     },
@@ -30394,7 +30394,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "databasesettings",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "databasesettings"
     },
@@ -30406,7 +30406,7 @@
       "_origin": "ast",
       "id": "configsettings",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "configsettings"
     },
     {
@@ -30416,7 +30416,7 @@
       "source_location": "L65",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_default_swagger_path",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "default_swagger_path()"
     },
@@ -30427,7 +30427,7 @@
       "source_location": "L69",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_default_stats_chains_recalculation_period_secs",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "default_stats_chains_recalculation_period_secs()"
     },
@@ -30438,7 +30438,7 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_default_stats_include_zero_chains",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "default_stats_include_zero_chains()"
     },
@@ -30449,7 +30449,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_statssettings",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "statssettings"
     },
@@ -30460,7 +30460,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_rs_default",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "default"
     },
@@ -30471,7 +30471,7 @@
       "source_location": "L109",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_statssettings_default",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": ".default()"
     },
@@ -30482,7 +30482,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_rs_self",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "self"
     },
@@ -30493,7 +30493,7 @@
       "source_location": "L119",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_settings_default",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": ".default()"
     },
@@ -30504,7 +30504,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_rs_string",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "string"
     },
@@ -30515,7 +30515,7 @@
       "source_location": "L154",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_statssettingswrapper",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "statssettingswrapper"
     },
@@ -30526,7 +30526,7 @@
       "source_location": "L160",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_settings_default_populates_nested_stats_defaults",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "settings_default_populates_nested_stats_defaults()"
     },
@@ -30537,7 +30537,7 @@
       "source_location": "L166",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_stats_settings_empty_config_uses_nested_defaults",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "stats_settings_empty_config_uses_nested_defaults()"
     },
@@ -30548,7 +30548,7 @@
       "source_location": "L173",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_stats_settings_deserializes_nested_overrides",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": "stats_settings_deserializes_nested_overrides()"
     },
@@ -30570,7 +30570,7 @@
       "source_location": "L205",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_settings_apisettings_default",
-      "community": 17,
+      "community": 40,
       "community_name": "Settings",
       "norm_label": ".default()"
     },
@@ -30582,7 +30582,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "avalanche_e2e.rs"
     },
     {
@@ -30593,7 +30593,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_decode_blockchain_id",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "decode_blockchain_id()"
     },
     {
@@ -30604,7 +30604,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_rs_vec",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "vec"
     },
     {
@@ -30615,7 +30615,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_to_hex",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "to_hex()"
     },
     {
@@ -30626,7 +30626,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_rs_option",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "option"
     },
     {
@@ -30637,7 +30637,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_rs_string",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "string"
     },
     {
@@ -30648,7 +30648,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_parse_message_id_from_native_id",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "parse_message_id_from_native_id()"
     },
     {
@@ -30659,7 +30659,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_forked_provider",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "forked_provider()"
     },
     {
@@ -30670,7 +30670,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_rs_dynprovider",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "dynprovider"
     },
     {
@@ -30681,7 +30681,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_rs_ethereum",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "ethereum"
     },
     {
@@ -30692,7 +30692,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_icm_and_ictt_are_indexed",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_icm_and_ictt_are_indexed()"
     },
     {
@@ -30703,7 +30703,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_rs_result",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "result"
     },
     {
@@ -30714,7 +30714,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_receive_only_does_not_promote_message",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_receive_only_does_not_promote_message()"
     },
     {
@@ -30725,7 +30725,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_send_only_creates_initiated_message",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_send_only_creates_initiated_message()"
     },
     {
@@ -30736,7 +30736,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_send_only_processes_unknown_destination_when_allowed",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_send_only_processes_unknown_destination_when_allowed()"
     },
     {
@@ -30747,7 +30747,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_unknown_source_consolidates_with_destination_timestamp",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_unknown_source_consolidates_with_destination_timestamp()"
     },
     {
@@ -30758,7 +30758,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_unknown_source_consolidates_when_allowed_without_home_chain",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_unknown_source_consolidates_when_allowed_without_home_chain()"
     },
     {
@@ -30769,7 +30769,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_home_chain_does_not_override_strict_unknown_filter",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_home_chain_does_not_override_strict_unknown_filter()"
     },
     {
@@ -30780,7 +30780,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_configured_source_waits_for_send",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_configured_source_waits_for_send()"
     },
     {
@@ -30791,7 +30791,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_avalanche_e2e_test_home_chain_filters_unknown_source",
       "community": 40,
-      "community_name": "avalanche_e2e.rs",
+      "community_name": "Settings",
       "norm_label": "test_home_chain_filters_unknown_source()"
     },
     {
@@ -30802,7 +30802,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_bridges_endpoint",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "bridges_endpoint.rs"
     },
     {
@@ -30813,7 +30813,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_tests_bridges_endpoint_get_bridges_reports_configured_chains_sorted_and_empty_for_removed_bridge",
       "community": 83,
-      "community_name": "BridgeType",
+      "community_name": "bridges.rs",
       "norm_label": "get_bridges_reports_configured_chains_sorted_and_empty_for_removed_bridge()"
     },
     {
@@ -31531,6 +31531,127 @@
       "community": 45,
       "community_name": "package.json",
       "norm_label": "typescript"
+    },
+    {
+      "label": "008-per-chain-concurrency-within-a-bridge.md",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "008-per-chain-concurrency-within-a-bridge.md"
+    },
+    {
+      "label": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_adr_008_per_chain_concurrency_within_a_bridge_cooperative_and_single_task",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "adr-008: per-chain concurrency within a bridge, cooperative and single-task"
+    },
+    {
+      "label": "Context",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_context",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "context"
+    },
+    {
+      "label": "Decision",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L39",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_decision",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "decision"
+    },
+    {
+      "label": "Alternatives Considered",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L88",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_alternatives_considered",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "alternatives considered"
+    },
+    {
+      "label": "Alternative 1: One `RangeDriver` per chain, joined at the call site",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L90",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_alternative_1_one_rangedriver_per_chain_joined_at_the_call_site",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "alternative 1: one `rangedriver` per chain, joined at the call site"
+    },
+    {
+      "label": "Alternative 2: `tokio::spawn` per chain, with a supervisor",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L115",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_alternative_2_tokio_spawn_per_chain_with_a_supervisor",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "alternative 2: `tokio::spawn` per chain, with a supervisor"
+    },
+    {
+      "label": "Consequences",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L138",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_consequences",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "consequences"
+    },
+    {
+      "label": "Positive",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L140",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_positive",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "positive"
+    },
+    {
+      "label": "Negative / accepted",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L153",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_negative_accepted",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "negative / accepted"
+    },
+    {
+      "label": "Verification",
+      "file_type": "document",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L175",
+      "_origin": "ast",
+      "id": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_verification",
+      "community": 132,
+      "community_name": "ADR-008: Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task",
+      "norm_label": "verification"
     },
     {
       "label": "indexing-concurrency-model.md",
@@ -32485,8 +32606,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "config_omnibridge_envs",
-      "community": 116,
-      "community_name": "Testnet set",
+      "community": 213,
+      "community_name": "Mainnet set",
       "norm_label": "omnibridge/envs.md"
     },
     {
@@ -32496,8 +32617,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "config_omnibridge_envs_envs_config_omnibridge",
-      "community": 116,
-      "community_name": "Testnet set",
+      "community": 213,
+      "community_name": "Mainnet set",
       "norm_label": "envs \u2014 `config/omnibridge`"
     },
     {
@@ -32806,8 +32927,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 26,
+      "community_name": "Avalanche Bridge Filtering",
       "norm_label": "home_chain_id flag",
       "_origin": "semantic",
       "id": "_memory_bank_research_avalanche_bridge_filtering_home_chain_id"
@@ -33566,7 +33687,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "avalanche_icm_blockchain_ids table",
       "_origin": "semantic",
@@ -34453,7 +34574,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "post-commit hooks (token enrichment, cas eviction)",
       "_origin": "semantic",
@@ -35159,7 +35280,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "never assert a delta on a process-wide metric",
       "_origin": "semantic",
       "id": "_memory_bank_rules_testing_never_assert_process_wide_metric_delta"
@@ -35174,7 +35295,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "stats_edge_decimals_conflict_total (test-isolation case study)",
       "_origin": "semantic",
       "id": "_memory_bank_rules_testing_stats_edge_decimals_conflict_total"
@@ -35429,8 +35550,8 @@
       "captured_at": null,
       "author": null,
       "contributor": "@EvgenKor",
-      "community": 98,
-      "community_name": "FailureLedger",
+      "community": 159,
+      "community_name": "Asset Identity as Union-Find",
       "norm_label": "drain must not clear its queue before writes succeed",
       "_origin": "semantic",
       "id": "_memory_bank_adr_005_failed_range_ledger_and_checkpoint_independence_drain_ordering_requirement"
@@ -35684,8 +35805,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community": 44,
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1getbridgedtokensresponse",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1getbridgedtokensresponse"
@@ -35699,8 +35820,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community": 44,
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1statsbridgedtokenrow",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1statsbridgedtokenrow"
@@ -35999,8 +36120,8 @@
       "captured_at": null,
       "author": null,
       "contributor": "@EvgenKor",
-      "community": 98,
-      "community_name": "FailureLedger",
+      "community": 159,
+      "community_name": "Asset Identity as Union-Find",
       "norm_label": "asset identity as union-find",
       "_origin": "semantic",
       "id": "_memory_bank_adr_004_stats_observability_horizon_and_asset_union_find_asset_union_find"
@@ -36014,8 +36135,8 @@
       "captured_at": null,
       "author": null,
       "contributor": "@EvgenKor",
-      "community": 98,
-      "community_name": "FailureLedger",
+      "community": 159,
+      "community_name": "Asset Identity as Union-Find",
       "norm_label": "eager weighted asset merge",
       "_origin": "semantic",
       "id": "_memory_bank_adr_004_stats_observability_horizon_and_asset_union_find_eager_merge"
@@ -36029,8 +36150,8 @@
       "captured_at": null,
       "author": null,
       "contributor": "@EvgenKor",
-      "community": 98,
-      "community_name": "FailureLedger",
+      "community": 159,
+      "community_name": "Asset Identity as Union-Find",
       "norm_label": "fragmented assets defect",
       "_origin": "semantic",
       "id": "_memory_bank_adr_004_stats_observability_horizon_and_asset_union_find_fragmented_assets"
@@ -36044,8 +36165,8 @@
       "captured_at": null,
       "author": null,
       "contributor": "@EvgenKor",
-      "community": 98,
-      "community_name": "FailureLedger",
+      "community": 159,
+      "community_name": "Asset Identity as Union-Find",
       "norm_label": "stats_processed counting marker",
       "_origin": "semantic",
       "id": "_memory_bank_adr_004_stats_observability_horizon_and_asset_union_find_stats_processed"
@@ -36104,8 +36225,8 @@
       "captured_at": null,
       "author": null,
       "contributor": "@EvgenKor",
-      "community": 98,
-      "community_name": "FailureLedger",
+      "community": 159,
+      "community_name": "Asset Identity as Union-Find",
       "norm_label": "conflicts are refusals, never transaction errors",
       "_origin": "semantic",
       "id": "_memory_bank_adr_004_stats_observability_horizon_and_asset_union_find_refusal_not_err"
@@ -36119,8 +36240,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 26,
+      "community_name": "Avalanche Bridge Filtering",
       "norm_label": "configuration loading and validation",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_config_loading_and_validation"
@@ -36134,8 +36255,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "two-channel config system",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_two_channel_config"
@@ -36149,8 +36270,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "env_merge.rs deep-merge override layer",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_env_merge_layer"
@@ -36164,8 +36285,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "arrayrules id-key merge table",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_array_rules"
@@ -36179,8 +36300,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 26,
+      "community_name": "Avalanche Bridge Filtering",
       "norm_label": "deny_unknown_fields pervasiveness",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_deny_unknown_fields"
@@ -36194,8 +36315,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 26,
+      "community_name": "Avalanche Bridge Filtering",
       "norm_label": "db seeding via upserts",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_db_seeding_upserts"
@@ -36210,8 +36331,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 26,
+      "community_name": "Avalanche Bridge Filtering",
       "norm_label": "late semantic validation",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_late_validation"
@@ -36225,8 +36346,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 26,
+      "community_name": "Avalanche Bridge Filtering",
       "norm_label": "stats service env-patching pattern (cross-reference)",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_stats_service_env_pattern"
@@ -36270,8 +36391,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community": 47,
+      "community_name": "bridge_contracts Is a Proxy, Not the Membership Set",
       "norm_label": "runtime verification runbook",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification"
@@ -36285,8 +36406,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community": 47,
+      "community_name": "bridge_contracts Is a Proxy, Not the Membership Set",
       "norm_label": "canary vs diagnostic classification",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_canary_vs_diagnostic"
@@ -36300,8 +36421,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community": 47,
+      "community_name": "bridge_contracts Is a Proxy, Not the Membership Set",
       "norm_label": "every runbook query must be a plain select",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_read_only_query_invariant"
@@ -36361,7 +36482,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "a successful asset merge is nearly invisible in sql",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_invisible_asset_merge"
@@ -36376,7 +36497,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "no exact sum invariant between processed transfers and edge counts",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_no_exact_edge_count_invariant"
@@ -36421,7 +36542,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "query a \u2014 split-asset detector canary",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_query_a_split_asset_detector"
@@ -36436,7 +36557,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "query b \u2014 merge refusal legitimacy diagnostic",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_query_b_refusal_legitimacy"
@@ -36526,7 +36647,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "asset-identity union-find merge",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_asset_union_find_merge"
@@ -36541,7 +36662,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "refused_chain_collision merge outcome",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_refused_chain_collision"
@@ -36556,7 +36677,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "stats subsystem prometheus metrics reference",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_stats_metrics_table"
@@ -36570,8 +36691,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community": 47,
+      "community_name": "bridge_contracts Is a Proxy, Not the Membership Set",
       "norm_label": "adr-004 stats observability horizon and asset union-find",
       "_origin": "semantic",
       "id": "_memory_bank_runbooks_runtime_verification_adr_004"
@@ -37337,8 +37458,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community": 44,
+      "community_name": "InterchainStatisticsService",
       "norm_label": "get /api/v1/stats/chain/{chain_id}/bridged-tokens",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_get_bridged_tokens"
@@ -37503,8 +37624,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 75,
-      "community_name": "Layer 1: Generic Pipeline",
+      "community": 51,
+      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "asset identity as union-find with eager merge",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_asset_identity_union_find"
@@ -37535,7 +37656,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "unindexed-chain read filter",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_unindexed_chain_read_filter"
@@ -37549,8 +37670,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 75,
-      "community_name": "Layer 1: Generic Pipeline",
+      "community": 51,
+      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "decimals conflict skip on the counting path",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_decimals_conflict_skip"
@@ -37774,8 +37895,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 98,
-      "community_name": "FailureLedger",
+      "community": 159,
+      "community_name": "Asset Identity as Union-Find",
       "norm_label": "maintenance task and consolidation pass",
       "_origin": "semantic",
       "id": "_memory_bank_adr_001_message_buffer_tiered_storage_maintenance_task"
@@ -37850,8 +37971,8 @@
       "author": null,
       "contributor": null,
       "rationale": "Treating 'no destination TokensWithdrawn/CallSucceeded/CallFailed' as incomplete is wrong for two shapes that will never get one (incoming ICTT from an unconfigured chain, multi-hop first leg that routes onward). Both stayed Partial forever and never left pending_messages. Discriminating on the decoded TeleporterMessage payload kind (SINGLE_HOP_SEND/CALL still wait; REGISTER_REMOTE/MULTI_HOP_SEND/CALL complete on available evidence) is what lets completeness rest on the evidence that can actually exist.",
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "gotcha: message finality is complex \u2014 icm payload kind decides ictt completeness",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_message_finality_is_complex"
@@ -37865,8 +37986,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "ictt_completeness / classify_payload (consolidation.rs)",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_ictt_completeness_classify_payload"
@@ -37880,8 +38001,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "ictt_payload.rs \u2014 teleportermessage payload decoder (decode_transferrer_message / decode_inner)",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_ictt_payload_rs"
@@ -38244,8 +38365,8 @@
       "author": null,
       "contributor": null,
       "rationale": "Asset identity is an incrementally discovered connected-component problem \u2014 disjoint components {A,B} and {C,D} are legitimate until a later B->C transfer joins them \u2014 so merging is the correct default rather than a conflict. merge_assets is a transactional weighted validate-then-mutate union in the same transaction as the triggering transfer. The one genuine refusal is a merge that would put two different tokens of one chain into one stats_asset, because that cannot be forced without corrupting the chain-uniqueness invariant. Decimals conflict is a separate non-corrupting skip on the counting path only, and never aborts the batch. Skipped rows are marked processed so they do not re-warn every cycle.",
-      "community": 75,
-      "community_name": "Layer 1: Generic Pipeline",
+      "community": 51,
+      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "gotcha: stats asset mapping conflicts merge; only same-chain collisions skip",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_stats_asset_mapping_conflicts_merge"
@@ -38259,8 +38380,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 75,
-      "community_name": "Layer 1: Generic Pipeline",
+      "community": 51,
+      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "merge_assets / ensure_asset_for_transfer \u2014 weighted union-find over stats_assets",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_merge_assets"
@@ -38477,8 +38598,8 @@
       "author": null,
       "contributor": null,
       "rationale": "Intentional modelling: ICTT keys chain-local token identity by the TokenTransferrer (Home/Remote bridge) contract address, not the wrapped ERC-20. When Home and Remote are deployed at the same address via CREATE2 the two chain-local rows legitimately carry the same address \u2014 one asset on two chains, not a collision. Owner-confirmed (observed on NUMI/WTTC). Do not eyeball address equality; use the split detector, which correctly does not flag it.",
-      "community": 75,
-      "community_name": "Layer 1: Generic Pipeline",
+      "community": 51,
+      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "gotcha: token identity in stats_asset_tokens is the ictt contract address, not the wrapped erc-20",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_token_identity_stats_asset_tokens_ictt_address"
@@ -38588,8 +38709,8 @@
       "author": null,
       "contributor": null,
       "rationale": "alloy_sol_types::SolValue::abi_decode_validate only type-checks the tokens it reads and never verifies the input slice was fully consumed, so non-canonical offsets and trailing garbage both pass. The explicit canonicity round trip \u2014 re-encode and compare byte-for-byte \u2014 is the layer that actually rejects them. It matters here because a false-positive ICTT payload decode would fabricate a bogus crosschain_transfers row from an arbitrary ICM message.",
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "gotcha: abi_decode_validate does not reject trailing bytes",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_abi_decode_validate_trailing_bytes"
@@ -38927,8 +39048,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 26,
+      "community_name": "Avalanche Bridge Filtering",
       "norm_label": "home chain",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_home_chain"
@@ -39017,8 +39138,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "finality",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_finality"
@@ -39107,8 +39228,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 75,
-      "community_name": "Layer 1: Generic Pipeline",
+      "community": 51,
+      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "union-find asset merge",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_union_find_asset_merge"
@@ -39183,7 +39304,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "unindexed-chain read filter",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_unindexed_chain_read_filter"
@@ -39542,7 +39663,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "chaininfoservice",
       "_origin": "semantic",
@@ -39557,7 +39678,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "tokeninfoservice",
       "_origin": "semantic",
@@ -39573,7 +39694,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "database schema",
       "_origin": "semantic",
       "id": "_memory_bank_architecture_database_schema"
@@ -40173,8 +40294,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "configuration model",
       "_origin": "semantic",
       "id": "_memory_bank_project_context_configuration_model"
@@ -40218,8 +40339,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "current constraints",
       "_origin": "semantic",
       "id": "_memory_bank_project_context_current_constraints"
@@ -40445,7 +40566,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "database subsystem: schema and db interaction layer",
       "_origin": "semantic",
       "id": "_memory_bank_research_db_schema_and_layer_db_subsystem"
@@ -40460,7 +40581,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "interchaindatabase facade",
       "_origin": "semantic",
       "id": "_memory_bank_research_db_schema_and_layer_interchain_database_facade"
@@ -40475,7 +40596,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "table families",
       "_origin": "semantic",
       "id": "_memory_bank_research_db_schema_and_layer_table_families"
@@ -40491,7 +40612,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "hybrid database layer",
       "_origin": "semantic",
       "id": "_memory_bank_research_db_schema_and_layer_hybrid_db_layer"
@@ -40506,7 +40627,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "batched_upsert / run_in_batches",
       "_origin": "semantic",
       "id": "_memory_bank_research_db_schema_and_layer_batching_helpers"
@@ -40535,7 +40656,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "runtime metadata writes",
       "_origin": "semantic",
@@ -40730,7 +40851,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "per-key locking (dashmap caveats)",
       "_origin": "semantic",
@@ -41196,7 +41317,7 @@
       "author": null,
       "contributor": null,
       "community": 67,
-      "community_name": "Runtime Verification Runbook",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "norm_label": "metrics env settings (prometheus)",
       "_origin": "semantic",
       "id": "readme_metrics_settings"
@@ -41525,8 +41646,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 209,
+      "community_name": "Exploration Map",
       "norm_label": "incoming ictt reconstruction / icm payload decoding entrypoints",
       "_origin": "semantic",
       "id": "_memory_bank_exploration_map_ictt_reconstruction_entrypoints"
@@ -41675,7 +41796,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "tokeninfoservice and token metadata enrichment flow",
       "_origin": "semantic",
@@ -41690,7 +41811,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "request-time lookup (cache, db, async fallback)",
       "_origin": "semantic",
@@ -41705,7 +41826,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "background metadata fetch (on-chain plus icon)",
       "_origin": "semantic",
@@ -41720,7 +41841,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "negative error cache",
       "_origin": "semantic",
@@ -41735,7 +41856,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "kickoff_token_enrichment_for_flushed",
       "_origin": "semantic",
@@ -41750,7 +41871,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "reads can write back (icon refresh)",
       "_origin": "semantic",
@@ -41765,8 +41886,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 75,
-      "community_name": "Layer 1: Generic Pipeline",
+      "community": 51,
+      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "stats-driven enrichment fetch condition",
       "_origin": "semantic",
       "id": "_memory_bank_research_token_info_service_stats_enrichment_condition"
@@ -41780,7 +41901,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 80,
+      "community": 51,
       "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
       "norm_label": "tokens table",
       "_origin": "semantic",
@@ -41796,7 +41917,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "database rules",
       "_origin": "semantic",
       "id": "_memory_bank_rules_database_database_rules"
@@ -41810,8 +41931,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 55,
-      "community_name": "Configuration Loading and Validation",
+      "community": 26,
+      "community_name": "Avalanche Bridge Filtering",
       "norm_label": "upsert pattern (on_conflict)",
       "_origin": "semantic",
       "id": "_memory_bank_rules_database_upsert_pattern"
@@ -41826,7 +41947,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "batching against the bind parameter limit",
       "_origin": "semantic",
       "id": "_memory_bank_rules_database_batching"
@@ -41841,7 +41962,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "entity generation (codegen vs manual)",
       "_origin": "semantic",
       "id": "_memory_bank_rules_database_entity_generation"
@@ -41856,7 +41977,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "cursor-based pagination (listmarker)",
       "_origin": "semantic",
       "id": "_memory_bank_rules_database_pagination"
@@ -41871,7 +41992,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "client-facing db error sanitization",
       "_origin": "semantic",
       "id": "_memory_bank_rules_database_client_facing_db_errors"
@@ -41887,7 +42008,7 @@
       "author": null,
       "contributor": null,
       "community": 80,
-      "community_name": "TokenInfoService and Token Metadata Enrichment Flow",
+      "community_name": "Database Subsystem: Schema and DB Interaction Layer",
       "norm_label": "hand-built positional sql placeholders must advance the counter",
       "_origin": "semantic",
       "id": "_memory_bank_rules_database_placeholder_counter_rule"
@@ -128638,6 +128759,116 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_adr_008_per_chain_concurrency_within_a_bridge_cooperative_and_single_task",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L88",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_adr_008_per_chain_concurrency_within_a_bridge_cooperative_and_single_task",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_alternatives_considered",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L138",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_adr_008_per_chain_concurrency_within_a_bridge_cooperative_and_single_task",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_consequences",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_adr_008_per_chain_concurrency_within_a_bridge_cooperative_and_single_task",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_context",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_adr_008_per_chain_concurrency_within_a_bridge_cooperative_and_single_task",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_decision",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L90",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_alternatives_considered",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_alternative_1_one_rangedriver_per_chain_joined_at_the_call_site",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L115",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_alternatives_considered",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_alternative_2_tokio_spawn_per_chain_with_a_supervisor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L153",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_consequences",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_negative_accepted",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L140",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_consequences",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_positive",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md",
+      "source_location": "L175",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_consequences",
+      "target": "memory_bank_adr_008_per_chain_concurrency_within_a_bridge_verification",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": ".memory-bank/research/indexing-concurrency-model.md",
       "source_location": "L1",
       "weight": 1.0,
@@ -139647,5 +139878,5 @@
       "source_file": ".cursor/skills/implementation-plan/SKILL.md"
     }
   ],
-  "built_at_commit": "8a94ee283367705a9a5889c6fb24adba8b8318bd"
+  "built_at_commit": "f4b7b76c2f3709ecb28d348d29a99ad39779b5a2"
 }

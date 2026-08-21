@@ -152,7 +152,9 @@ Primary implementation for Avalanche ecosystem:
 
 - **Protocols:** Teleporter (ICM) cross-chain messaging + ICTT token transfers
 - **Features:**
-  - Multi-chain parallel log streaming
+  - One sequential handler future per chain, joined with `try_join_all`
+    inside the bridge's single task, so a slow or throttled chain cannot
+    delay its siblings (ADR-008)
   - Blockchain ID resolution (native → EVM)
   - Transaction-grouped event processing
   - Incremental message state building

@@ -1095,9 +1095,13 @@ metric.
 **Fix:** Two config invariants, then a structural one.
 
 - **`max_rps` must agree with the receipt concurrency.** Avalanche's
-  `process_batch` hardcodes `buffer_unordered(25)`; a node left on
-  `default_max_rps() = 10` puts 15 of every 25 calls on the wait-for-a-token
-  path. Set `max_rps` explicitly for every node a bridge indexes.
+  the fan-out is `receipt_concurrency` (default 25, a setting on both adapters
+  since ADR-008; it was a literal `buffer_unordered(25)` on Avalanche). A node
+  left on `default_max_rps() = 10` puts 15 of every 25 calls on the
+  wait-for-a-token path. Note this costs latency, not throughput — throughput is
+  bounded by `max_rps` either way — so raising `max_rps` is the fix and lowering
+  `receipt_concurrency` only trims in-flight futures. Set `max_rps` explicitly
+  for every node a bridge indexes, fallbacks included.
 - **Size `batch_size` by blocking time, not by RPC efficiency.** While the
   batch was indivisible for the whole bridge, a wide batch traded one long
   stall for the other chains' timeouts. On `config/full-mainnet` with three
@@ -1121,6 +1125,46 @@ transaction — but the ceiling is real. See
 direction)` and look at the gap distribution, not the averages. Independent
 chains interleave smoothly; a shared blocked task shows near-identical gaps
 across every stream of one bridge and near-zero gaps *within* a burst.
+
+---
+
+## `config/*/ENVs.md` Is Hand-Maintained; `check-envs` Only Touches `README.md`
+
+**Symptom:** you edit `config/<set>/chains.json`, look for the command that
+regenerates the matching `ENVs.md`, run `just generate-envs`, and conclude from
+an unrelated dirty file that the tool rewrote your config.
+
+**What is actually true.** `interchain-indexer-server/src/bin/check-envs.rs`
+calls `run_env_collector_cli` six times with exactly one
+`markdown_path("README.md")` and `config_path("…/config/example.toml")`. It
+never reads or writes anything under `config/<set>/`. Its filters are all
+`INTERCHAIN_INDEXER__*` — the **service settings** family. The
+`INTERCHAIN_INDEXER_CHAINS*` / `INTERCHAIN_INDEXER_BRIDGES*` families that
+`ENVs.md` documents are invisible to it (that is the whole point of the single
+vs double underscore split — see the config gotcha below).
+
+So:
+
+- `just generate-envs` regenerates the settings tables in **`README.md`** only.
+  On a clean tree it writes nothing else; verified empirically.
+- `just check-envs` is the same binary with `--validate-only`. It reports
+  "All variables are documented correctly" per collector run — again about
+  `README.md`, not about `config/*/ENVs.md`.
+- **Every `config/*/ENVs.md` is maintained by hand.** After changing a
+  `chains.json` or `bridges.json`, update the matching `ENVs.md` yourself: both
+  the one-variable JSON form and the field-by-field block, since they must
+  agree with the file.
+- The per-variable **descriptions** in `README.md` are also hand-maintained.
+  The collector refreshes values and adds missing rows; it does not rewrite an
+  existing description, so a description can silently go stale after a
+  behaviour change. Two did on this branch.
+
+**Why this is worth an entry.** The naming invites the wrong inference:
+`generate-envs` sounds like it owns everything named `ENVs.md`. It does not,
+and acting on that inference caused a `git checkout` over a hand-edited
+`config/full-mainnet/chains.json` during this work. If a config file is dirty
+and you did not edit it, read the diff and ask — do not attribute it to
+tooling.
 
 ---
 
