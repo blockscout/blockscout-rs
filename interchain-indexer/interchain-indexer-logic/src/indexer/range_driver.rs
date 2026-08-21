@@ -365,9 +365,6 @@ pub struct RangeDriver<P: RangeProcessor> {
     processor: P,
     ledger: Arc<FailureLedger>,
     settings: FailureRetrySettings,
-    /// Where the next retry pass resumes its cyclic sweep of the due chunks.
-    /// See `RangeProcessor::retry_pending`.
-    retry_cursor: Option<(i64, u64)>,
 }
 
 impl<P: RangeProcessor> RangeDriver<P> {
@@ -376,16 +373,16 @@ impl<P: RangeProcessor> RangeDriver<P> {
             processor,
             ledger,
             settings,
-            retry_cursor: None,
         }
     }
 
-    /// Consumes the merged per-chain stream until it ends (`Ok(())`), or
-    /// returns `Err` on the escalation path only.
-    pub async fn run(
-        mut self,
-        mut stream: impl Stream<Item = (i64, LogBatch)> + Unpin + Send,
-    ) -> anyhow::Result<()> {
+    /// Drives one sequential handler future per chain, concurrently with the
+    /// bridge-wide retry pass, until either every chain's stream ends
+    /// (`Ok(())`) or the escalation path fires (`Err`).
+    pub async fn run<S>(self, streams: Vec<(i64, S)>) -> anyhow::Result<()>
+    where
+        S: Stream<Item = (i64, LogBatch)> + Unpin + Send,
+    {
         let bridge_id = self.processor.bridge_id();
         let pairs: Vec<(i32, i64)> = self
             .processor
@@ -394,43 +391,73 @@ impl<P: RangeProcessor> RangeDriver<P> {
             .map(|chain_id| (bridge_id, chain_id))
             .collect();
 
+        // ONE ledger, ONE initialize, over ALL pairs. `initialize` replaces
+        // rather than merges its cache, so a second caller would wipe the
+        // first's entries; there is never a second caller here.
         self.ledger.initialize(&pairs).await?;
 
-        let mut retry_tick = tokio::time::interval(self.settings.scan_interval);
-        // The default (Burst) would fire a run of catch-up ticks immediately
-        // after a long retry pass.
-        retry_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        // Hoisted out of the struct: this was the only `&mut self` borrow in
+        // the type, and removing it is what lets N handler futures share
+        // `&self` with no `Arc`, no `Clone` and no `'static`.
+        // Where the next retry pass resumes its cyclic sweep of the due
+        // chunks. See `RangeProcessor::retry_pending`.
+        let mut retry_cursor: Option<(i64, u64)> = None;
 
-        loop {
-            tokio::select! {
-                item = stream.next() => {
-                    match item {
-                        None => break,
-                        Some((chain_id, batch)) => {
-                            self.handle_batch(bridge_id, chain_id, batch).await?;
-                        }
-                    }
+        // One sequential handler per chain. Within a chain, batches are
+        // still processed strictly in arrival order — `handle_batch` is
+        // awaited to completion before the next item is pulled — which is
+        // what the cursor's gap-bridging depends on. Only ordering *across*
+        // chains is relaxed.
+        let this = &self;
+        let chains = futures::future::try_join_all(streams.into_iter().map(
+            move |(chain_id, mut stream)| async move {
+                while let Some((stream_chain_id, batch)) = stream.next().await {
+                    debug_assert_eq!(
+                        stream_chain_id, chain_id,
+                        "per-chain stream tagged with the wrong chain id"
+                    );
+                    this.handle_batch(bridge_id, chain_id, batch).await?;
                 }
-                _ = retry_tick.tick() => {
-                    // Only the replay work is gated by the kill switch;
-                    // recording still happens when `enabled` is `false`
-                    // (README-documented). The failed-blocks / oldest-open-hole
-                    // gauges are no longer refreshed here: they are
-                    // config-scoped and refreshed by
-                    // `spawn_indexing_progress_metrics_worker`
-                    // (`interchain-indexer-server/src/server.rs`), which runs
-                    // regardless of whether any driver loop is alive — so a
-                    // pair whose indexer never started, or whose driver has
-                    // since escalated to `Failed`, still gets both series
-                    // instead of no series or a frozen one.
-                    if self.settings.enabled {
-                        self.run_retry_tick(bridge_id, &pairs).await;
-                    }
+                tracing::warn!(bridge_id, chain_id, "per-chain log stream ended");
+                anyhow::Ok(())
+            },
+        ));
+
+        // A sibling future, not a `select!` branch: as a branch it ran to
+        // completion with nothing else polled, so a replay pass blocked
+        // every forward stream on the bridge for its whole duration.
+        let retry = async {
+            let mut retry_tick = tokio::time::interval(self.settings.scan_interval);
+            // The default (Burst) would fire a run of catch-up ticks
+            // immediately after a long retry pass.
+            retry_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                retry_tick.tick().await;
+                // Only the replay work is gated by the kill switch;
+                // recording still happens when `enabled` is `false`
+                // (README-documented). The failed-blocks / oldest-open-hole
+                // gauges are no longer refreshed here: they are
+                // config-scoped and refreshed by
+                // `spawn_indexing_progress_metrics_worker`
+                // (`interchain-indexer-server/src/server.rs`), which runs
+                // regardless of whether any driver loop is alive — so a
+                // pair whose indexer never started, or whose driver has
+                // since escalated to `Failed`, still gets both series
+                // instead of no series or a frozen one.
+                if self.settings.enabled {
+                    self.run_retry_tick(bridge_id, &pairs, &mut retry_cursor)
+                        .await;
                 }
             }
-        }
+        };
 
-        Ok(())
+        tokio::select! {
+            result = chains => result.map(|_| ()),
+            // `retry` is an unconditional `loop` and cannot complete; this
+            // arm exists only so that it is polled alongside the chain
+            // handlers.
+            () = retry => Ok(()),
+        }
     }
 
     async fn handle_batch(
@@ -489,7 +516,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
                             .await
                         {
                             metrics::FAILURE_RECORD_ESCALATIONS_TOTAL
-                                .with_label_values(&[&bridge_id.to_string()])
+                                .with_label_values(&[&bridge_id.to_string(), &chain_id.to_string()])
                                 .inc();
                             // With no cursor barrier, `record()` is the last
                             // point where data can be permanently lost.
@@ -557,7 +584,12 @@ impl<P: RangeProcessor> RangeDriver<P> {
         Err(last_err)
     }
 
-    async fn run_retry_tick(&mut self, bridge_id: i32, pairs: &[(i32, i64)]) {
+    async fn run_retry_tick(
+        &self,
+        bridge_id: i32,
+        pairs: &[(i32, i64)],
+        retry_cursor: &mut Option<(i64, u64)>,
+    ) {
         let open = match self.ledger.open(pairs).await {
             Ok(open) => open,
             Err(err) => {
@@ -585,7 +617,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
                 &self.ledger,
                 &due,
                 self.settings.max_chunks_per_pass,
-                &mut self.retry_cursor,
+                retry_cursor,
             )
             .await;
     }
@@ -844,6 +876,10 @@ mod tests {
         enum MockLogsAction {
             Logs(Vec<Log>),
             Error(&'static str),
+            /// Never resolves. Used to park a caller (the retry pass's
+            /// `fetch_logs`) inside the RPC call itself, the same place a
+            /// genuinely hanging endpoint would park it.
+            Block,
         }
 
         /// Minimal `eth_getLogs`-only mock transport: every call pops the next
@@ -869,6 +905,10 @@ mod tests {
             fn push_error(&self, msg: &'static str) {
                 self.actions.lock().push_back(MockLogsAction::Error(msg));
             }
+
+            fn push_block(&self) {
+                self.actions.lock().push_back(MockLogsAction::Block);
+            }
         }
 
         impl Service<RequestPacket> for MockLogsService {
@@ -882,12 +922,18 @@ mod tests {
 
             fn call(&mut self, req: RequestPacket) -> Self::Future {
                 let action = self.actions.lock().pop_front();
-                let result = match action {
-                    Some(MockLogsAction::Logs(logs)) => Ok(build_logs_response(&req, &logs)),
-                    Some(MockLogsAction::Error(msg)) => Err(TransportErrorKind::custom_str(msg)),
-                    None => Err(TransportErrorKind::custom_str("no mock action queued")),
-                };
-                Box::pin(future::ready(result))
+                match action {
+                    Some(MockLogsAction::Logs(logs)) => {
+                        Box::pin(future::ready(Ok(build_logs_response(&req, &logs))))
+                    }
+                    Some(MockLogsAction::Error(msg)) => {
+                        Box::pin(future::ready(Err(TransportErrorKind::custom_str(msg))))
+                    }
+                    Some(MockLogsAction::Block) => Box::pin(future::pending()),
+                    None => Box::pin(future::ready(Err(TransportErrorKind::custom_str(
+                        "no mock action queued",
+                    )))),
+                }
             }
         }
 
@@ -924,6 +970,21 @@ mod tests {
             /// `process()`, in call order. Only the fairness/rotation test
             /// reads this; every other test ignores it.
             attempted: Arc<Mutex<Vec<(i64, u64, u64)>>>,
+            /// Chains whose `process()` waits on `slow_gate` before
+            /// returning. Models a chain deliberately throttled to a low
+            /// `max_rps`: slow, but perfectly healthy and eventually
+            /// successful.
+            slow_chains: Arc<Mutex<HashSet<i64>>>,
+            /// Released by the test once it has asserted sibling progress.
+            slow_gate: Arc<tokio::sync::Notify>,
+            /// Chains whose `process()` never returns at all.
+            blocked_chains: Arc<Mutex<HashSet<i64>>>,
+            /// Incremented on entry to `process()`, before any waiting.
+            process_entries: Arc<AtomicUsize>,
+            /// Every completed `(chain_id, from_block, to_block)`, reported
+            /// as it happens so a test can assert progress *while* another
+            /// chain is still working rather than on final totals.
+            completed_tx: Option<tokio::sync::mpsc::UnboundedSender<(i64, u64, u64)>>,
         }
 
         impl TestRangeProcessor {
@@ -936,6 +997,11 @@ mod tests {
                     fail_exact: Arc::new(Mutex::new(HashSet::new())),
                     process_calls: Arc::new(AtomicUsize::new(0)),
                     attempted: Arc::new(Mutex::new(Vec::new())),
+                    slow_chains: Arc::new(Mutex::new(HashSet::new())),
+                    slow_gate: Arc::new(tokio::sync::Notify::new()),
+                    blocked_chains: Arc::new(Mutex::new(HashSet::new())),
+                    process_entries: Arc::new(AtomicUsize::new(0)),
+                    completed_tx: None,
                 }
             }
 
@@ -946,6 +1012,27 @@ mod tests {
 
             fn fail_range(&self, chain_id: i64, from: u64, to: u64) {
                 self.fail_exact.lock().insert((chain_id, from, to));
+            }
+
+            /// Marks `chain_id` as deliberately throttled: its `process()`
+            /// calls block on `slow_gate` until the test releases it.
+            fn slow_chain(self, chain_id: i64) -> Self {
+                self.slow_chains.lock().insert(chain_id);
+                self
+            }
+
+            /// Marks `chain_id` as permanently stuck inside `process()`.
+            fn block_chain(self, chain_id: i64) -> Self {
+                self.blocked_chains.lock().insert(chain_id);
+                self
+            }
+
+            fn with_completion_observer(
+                mut self,
+                tx: tokio::sync::mpsc::UnboundedSender<(i64, u64, u64)>,
+            ) -> Self {
+                self.completed_tx = Some(tx);
+                self
             }
         }
 
@@ -972,6 +1059,25 @@ mod tests {
             }
 
             async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError> {
+                self.process_entries.fetch_add(1, Ordering::SeqCst);
+                // Models `process_batch`'s per-transaction awaits (receipt +
+                // block RPC, each behind the node's rate limiter). Without a
+                // yield here the tests would run each handler to completion
+                // by accident and prove nothing about interleaving.
+                tokio::task::yield_now().await;
+
+                // Read membership into a bool and drop the guard before
+                // awaiting — never hold a `parking_lot::Mutex` guard across
+                // an `.await` point.
+                let is_blocked = self.blocked_chains.lock().contains(&chain_id);
+                if is_blocked {
+                    std::future::pending::<()>().await;
+                }
+                let is_slow = self.slow_chains.lock().contains(&chain_id);
+                if is_slow {
+                    self.slow_gate.notified().await;
+                }
+
                 self.process_calls.fetch_add(1, Ordering::SeqCst);
                 self.attempted
                     .lock()
@@ -980,6 +1086,11 @@ mod tests {
                     self.fail_exact
                         .lock()
                         .contains(&(chain_id, batch.from_block, batch.to_block));
+
+                if let Some(tx) = &self.completed_tx {
+                    let _ = tx.send((chain_id, batch.from_block, batch.to_block));
+                }
+
                 if should_fail {
                     Err(anyhow::anyhow!(
                         "synthetic failure for chain {chain_id} [{}, {}]",
@@ -1025,7 +1136,7 @@ mod tests {
 
             let stream = futures::stream::iter(vec![(1i64, empty_batch(1, 10))]);
             RangeDriver::new(processor, ledger, settings)
-                .run(stream)
+                .run(vec![(1i64, stream)])
                 .await
                 .unwrap();
 
@@ -1063,7 +1174,7 @@ mod tests {
                 futures::stream::iter(vec![(1i64, failing_batch), (1i64, recovering_batch)]);
 
             RangeDriver::new(processor, ledger, settings)
-                .run(stream)
+                .run(vec![(1i64, stream)])
                 .await
                 .unwrap();
 
@@ -1107,7 +1218,7 @@ mod tests {
             let stream = futures::stream::iter(vec![batch1, batch2]);
 
             let result = RangeDriver::new(processor, ledger, settings)
-                .run(stream)
+                .run(vec![(UNSEEDED_CHAIN_ID, stream)])
                 .await;
 
             assert!(result.is_err(), "an unrecordable failure must escalate");
@@ -1116,6 +1227,462 @@ mod tests {
                 1,
                 "the driver must not request the next batch after escalating"
             );
+        }
+
+        /// PRIMARY ACCEPTANCE TEST for per-chain range drivers.
+        ///
+        /// The delay is injected inside `RangeProcessor::process`, NOT inside
+        /// the stream, and that is load-bearing. A stream-level stall is the
+        /// already-working case: `SelectAll` (the pre-change merge strategy)
+        /// leaves a `Pending` stream alone and polls its siblings. Measured
+        /// 2026-08-21, black-holing one chain's RPC made the others speed up
+        /// (C-Chain catchup 33 -> 241.5 blocks/s), so a test that stalls the
+        /// stream passes against the pre-change code and proves nothing. The
+        /// real defect is wall-clock spent inside `process` — which is where
+        /// a chain throttled to a low `max_rps` spends its time, waiting at
+        /// `node.limiter.until_ready()` once per receipt and once per block.
+        /// Do not "simplify" this into a stream-level stall.
+        ///
+        /// The assertion is progress made *while* the slow chain is still
+        /// working, never a final total: a final-total assertion passes on
+        /// the pre-change sequential code too, once it eventually gets
+        /// there.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn a_slow_chain_does_not_slow_down_its_siblings() {
+            const BRIDGE_ID: i32 = 1;
+            const SLOW_CHAIN: i64 = 1;
+            const FAST_CHAIN: i64 = 2;
+            const FAST_BATCHES: usize = 10;
+
+            let db = init_db("range_driver_slow_chain_does_not_slow_siblings").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let processor = TestRangeProcessor::new(BRIDGE_ID, vec![SLOW_CHAIN, FAST_CHAIN], 1000)
+                .slow_chain(SLOW_CHAIN)
+                .with_completion_observer(tx);
+            let process_entries = processor.process_entries.clone();
+            let process_calls = processor.process_calls.clone();
+            let attempted = processor.attempted.clone();
+            let slow_gate = processor.slow_gate.clone();
+
+            let settings = FailureRetrySettings {
+                enabled: false,
+                ..Default::default()
+            };
+
+            // A single, long-but-finite batch: the slow chain's process()
+            // call blocks on the gate until the test releases it below.
+            let slow_stream = futures::stream::iter(vec![(SLOW_CHAIN, empty_batch(1, 10))]);
+            let fast_batches: Vec<(i64, LogBatch)> = (0..FAST_BATCHES)
+                .map(|i| {
+                    let from = (i as u64) * 10 + 1;
+                    (FAST_CHAIN, empty_batch(from, from + 9))
+                })
+                .collect();
+            let fast_stream = futures::stream::iter(fast_batches);
+
+            let mut driver = Box::pin(
+                RangeDriver::new(processor, ledger.clone(), settings)
+                    .run(vec![(SLOW_CHAIN, slow_stream), (FAST_CHAIN, fast_stream)]),
+            );
+
+            let outcome = tokio::time::timeout(Duration::from_secs(5), async {
+                let mut fast_completions = Vec::new();
+                tokio::select! {
+                    result = &mut driver => panic!("driver returned early: {result:?}"),
+                    () = async {
+                        while fast_completions.len() < FAST_BATCHES {
+                            let completed = rx.recv().await.expect("observer channel");
+                            assert_eq!(
+                                completed.0, FAST_CHAIN,
+                                "the slow chain must not have completed a batch yet"
+                            );
+                            fast_completions.push(completed);
+                        }
+                    } => {}
+                }
+                fast_completions
+            })
+            .await;
+
+            let fast_completions = outcome.expect(
+                "the fast chain made no progress while its sibling was still inside \
+                 process(): head-of-line blocking between the chains of one bridge is back",
+            );
+
+            assert_eq!(fast_completions.len(), FAST_BATCHES);
+            let mut previous_from_block = None;
+            for (chain_id, from_block, _) in &fast_completions {
+                assert_eq!(*chain_id, FAST_CHAIN);
+                if let Some(previous) = previous_from_block {
+                    assert!(
+                        *from_block > previous,
+                        "fast chain batches must complete in ascending order"
+                    );
+                }
+                previous_from_block = Some(*from_block);
+            }
+
+            // The slow chain must have entered `process()` exactly once
+            // (alongside every fast batch's own entry) and gotten past the
+            // gate zero times.
+            assert_eq!(
+                process_entries.load(Ordering::SeqCst),
+                FAST_BATCHES + 1,
+                "the slow chain must have entered process() exactly once while parked"
+            );
+            assert_eq!(
+                process_calls.load(Ordering::SeqCst),
+                FAST_BATCHES,
+                "the slow chain must not have gotten past the gate yet"
+            );
+
+            // A slow chain is healthy: releasing it must let it finish
+            // exactly like a serial run would, only later. `notify_one`
+            // stores a permit if nobody is waiting yet, so this is safe
+            // regardless of exactly when the slow chain's `process()`
+            // reaches its `.await` point.
+            slow_gate.notify_one();
+
+            let final_result = tokio::time::timeout(Duration::from_secs(5), driver)
+                .await
+                .expect("the driver must complete once the slow chain is released");
+            assert!(
+                final_result.is_ok(),
+                "a merely slow chain must not escalate the driver: {final_result:?}"
+            );
+
+            assert_eq!(
+                attempted
+                    .lock()
+                    .iter()
+                    .filter(|(chain_id, _, _)| *chain_id == SLOW_CHAIN)
+                    .count(),
+                1,
+                "the slow chain's batch must complete normally once released"
+            );
+            let open = ledger.open(&[(BRIDGE_ID, SLOW_CHAIN)]).await.unwrap();
+            assert!(
+                open.is_empty(),
+                "a merely slow chain must never be marked failed: {open:?}"
+            );
+        }
+
+        /// Secondary acceptance case: the degenerate extreme of the same
+        /// property, kept separate because it needs no gate release. `run`
+        /// never returns here — the blocked chain's handler is parked
+        /// forever — which is correct, hence driving it inside `select!`
+        /// against the observer rather than awaiting it directly.
+        ///
+        /// Same load-bearing requirement as the primary test: the delay is
+        /// injected inside `RangeProcessor::process`, never inside the
+        /// stream. See `a_slow_chain_does_not_slow_down_its_siblings` for why
+        /// a stream-level stall would prove nothing here.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn a_chain_blocked_inside_process_does_not_stop_its_siblings() {
+            const BRIDGE_ID: i32 = 1;
+            const BLOCKED_CHAIN: i64 = 1;
+            const FAST_CHAIN: i64 = 2;
+            const FAST_BATCHES: usize = 10;
+
+            let db = init_db("range_driver_blocked_chain_does_not_stop_siblings").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let processor =
+                TestRangeProcessor::new(BRIDGE_ID, vec![BLOCKED_CHAIN, FAST_CHAIN], 1000)
+                    .block_chain(BLOCKED_CHAIN)
+                    .with_completion_observer(tx);
+            let process_entries = processor.process_entries.clone();
+            let process_calls = processor.process_calls.clone();
+
+            let settings = FailureRetrySettings {
+                enabled: false,
+                ..Default::default()
+            };
+
+            let blocked_stream = futures::stream::iter(vec![(BLOCKED_CHAIN, empty_batch(1, 10))]);
+            let fast_batches: Vec<(i64, LogBatch)> = (0..FAST_BATCHES)
+                .map(|i| {
+                    let from = (i as u64) * 10 + 1;
+                    (FAST_CHAIN, empty_batch(from, from + 9))
+                })
+                .collect();
+            let fast_stream = futures::stream::iter(fast_batches);
+
+            let mut driver = Box::pin(RangeDriver::new(processor, ledger, settings).run(vec![
+                (BLOCKED_CHAIN, blocked_stream),
+                (FAST_CHAIN, fast_stream),
+            ]));
+
+            let outcome = tokio::time::timeout(Duration::from_secs(5), async {
+                let mut fast_completions = Vec::new();
+                tokio::select! {
+                    result = &mut driver => panic!("driver returned early: {result:?}"),
+                    () = async {
+                        while fast_completions.len() < FAST_BATCHES {
+                            let completed = rx.recv().await.expect("observer channel");
+                            assert_eq!(
+                                completed.0, FAST_CHAIN,
+                                "the blocked chain must never complete a batch"
+                            );
+                            fast_completions.push(completed);
+                        }
+                    } => {}
+                }
+                fast_completions
+            })
+            .await;
+
+            let fast_completions = outcome.expect(
+                "the fast chain made no progress while its sibling was permanently stuck \
+                 inside process(): head-of-line blocking between the chains of one bridge \
+                 is back",
+            );
+
+            assert_eq!(fast_completions.len(), FAST_BATCHES);
+            assert_eq!(
+                process_entries.load(Ordering::SeqCst),
+                FAST_BATCHES + 1,
+                "the blocked chain must have entered process() exactly once"
+            );
+            assert_eq!(
+                process_calls.load(Ordering::SeqCst),
+                FAST_BATCHES,
+                "the blocked chain must never get past its (never-returning) process() call"
+            );
+        }
+
+        /// Mandatory scope item 2: the retry pass runs as a sibling future,
+        /// not a `select!` branch awaited inline — so a replay pass parked
+        /// inside `fetch_logs` must not stop the forward streams. Against
+        /// the pre-change code the retry pass owns the `select!` arm and the
+        /// forward stream is never polled, so this test times out with a
+        /// clear failure message.
+        ///
+        /// The forward chain's stream deliberately carries more batches than
+        /// the observed threshold: unlike the two acceptance tests above,
+        /// nothing else keeps `try_join_all` from completing on its own once
+        /// the forward stream is exhausted (the retry pass is not one of its
+        /// members), so exhausting it exactly when the observer reaches its
+        /// target count would race the driver's own completion against the
+        /// observer inside the same `select!`. Leaving headroom avoids that.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn a_blocked_retry_pass_does_not_stop_the_forward_streams() {
+            const BRIDGE_ID: i32 = 1;
+            const RETRY_CHAIN: i64 = 1;
+            const FORWARD_CHAIN: i64 = 2;
+            const FORWARD_BATCHES: usize = 10;
+            const FORWARD_STREAM_LEN: usize = 30;
+
+            let db = init_db("range_driver_blocked_retry_pass_does_not_stop_forward").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+
+            interchain_db
+                .record_indexer_failures(
+                    BRIDGE_ID,
+                    RETRY_CHAIN,
+                    &[(BlockRange { from: 0, to: 99 }, "boom".to_string())],
+                )
+                .await
+                .unwrap();
+
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+
+            let retry_mock = MockLogsService::new();
+            retry_mock.push_block();
+
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let processor =
+                TestRangeProcessor::new(BRIDGE_ID, vec![RETRY_CHAIN, FORWARD_CHAIN], 100)
+                    .with_provider(RETRY_CHAIN, mock_provider(retry_mock))
+                    .with_completion_observer(tx);
+
+            let settings = FailureRetrySettings {
+                enabled: true,
+                scan_interval: Duration::from_millis(10),
+                // Without this the test is vacuous. `is_due` gates a replay on
+                // `last_attempt_at + backoff_base * 2^(attempts - 1)`, and the
+                // interval recorded above lands with `attempts = 1` and
+                // `last_attempt_at = now`. At the 30 s default the pass finds
+                // nothing due for the whole 5 s window, never reaches
+                // `fetch_logs`, and therefore never blocks — so the assertions
+                // below hold even when the retry pass DOES starve the forward
+                // streams. Make the interval due on the first tick instead.
+                backoff_base: Duration::from_millis(1),
+                ..Default::default()
+            };
+
+            let forward_batches: Vec<(i64, LogBatch)> = (0..FORWARD_STREAM_LEN)
+                .map(|i| {
+                    let from = (i as u64) * 10 + 1;
+                    (FORWARD_CHAIN, empty_batch(from, from + 9))
+                })
+                .collect();
+            let forward_stream = futures::stream::iter(forward_batches);
+
+            // `RETRY_CHAIN` intentionally has no forward stream of its own:
+            // this test is only about whether the retry pass (which does
+            // still cover `RETRY_CHAIN`, via `chain_ids()`/`pairs`) can stop
+            // `FORWARD_CHAIN`'s forward stream from progressing.
+            let mut driver = Box::pin(
+                RangeDriver::new(processor, ledger, settings)
+                    .run(vec![(FORWARD_CHAIN, forward_stream)]),
+            );
+
+            let outcome = tokio::time::timeout(Duration::from_secs(5), async {
+                let mut completions = Vec::new();
+                tokio::select! {
+                    result = &mut driver => panic!("driver returned early: {result:?}"),
+                    () = async {
+                        while completions.len() < FORWARD_BATCHES {
+                            let completed = rx.recv().await.expect("observer channel");
+                            assert_eq!(completed.0, FORWARD_CHAIN);
+                            completions.push(completed);
+                        }
+                    } => {}
+                }
+                completions
+            })
+            .await;
+
+            let completions = outcome.expect(
+                "the forward chain made no progress while the retry pass was blocked inside \
+                 fetch_logs: the retry pass starving the forward streams is back",
+            );
+            assert_eq!(completions.len(), FORWARD_BATCHES);
+        }
+
+        /// Invariant I7: an unrecordable failure on one chain must still
+        /// fail the whole bridge, even though the chains now index
+        /// independently. The healthy chain having processed at least one
+        /// batch is what proves the two chains actually ran concurrently
+        /// rather than sequentially before the escalation.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn an_unrecordable_failure_on_one_chain_still_fails_the_whole_bridge() {
+            const BRIDGE_ID: i32 = 1;
+            const UNSEEDED_CHAIN_ID: i64 = 999_999_998;
+            const HEALTHY_CHAIN: i64 = 2;
+
+            let db = init_db("range_driver_unrecordable_failure_fails_whole_bridge").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+
+            let processor =
+                TestRangeProcessor::new(BRIDGE_ID, vec![UNSEEDED_CHAIN_ID, HEALTHY_CHAIN], 1000);
+            processor.fail_range(UNSEEDED_CHAIN_ID, 1, 10);
+            let attempted = processor.attempted.clone();
+
+            let settings = FailureRetrySettings {
+                enabled: false,
+                record_retry_attempts: 2,
+                record_retry_initial_backoff: Duration::from_millis(1),
+                ..Default::default()
+            };
+
+            let failing_stream =
+                futures::stream::iter(vec![(UNSEEDED_CHAIN_ID, empty_batch(1, 10))]);
+            let healthy_batches: Vec<(i64, LogBatch)> = (0..5)
+                .map(|i| {
+                    let from = (i as u64) * 10 + 1;
+                    (HEALTHY_CHAIN, empty_batch(from, from + 9))
+                })
+                .collect();
+            let healthy_stream = futures::stream::iter(healthy_batches);
+
+            let result = RangeDriver::new(processor, ledger, settings)
+                .run(vec![
+                    (UNSEEDED_CHAIN_ID, failing_stream),
+                    (HEALTHY_CHAIN, healthy_stream),
+                ])
+                .await;
+
+            assert!(
+                result.is_err(),
+                "an unrecordable failure on one chain must escalate the whole bridge"
+            );
+            let healthy_processed = attempted
+                .lock()
+                .iter()
+                .filter(|(chain_id, _, _)| *chain_id == HEALTHY_CHAIN)
+                .count();
+            assert!(
+                healthy_processed >= 1,
+                "the healthy chain must have processed at least one batch, proving the \
+                 two chains ran concurrently rather than sequentially"
+            );
+        }
+
+        /// Invariant I2: within a chain, batches are still processed
+        /// strictly in arrival order — only ordering *across* chains is
+        /// relaxed by the per-chain driver split. Cross-chain interleaving
+        /// in `attempted` is expected and must not be asserted against.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn per_chain_batches_are_processed_in_arrival_order() {
+            const BRIDGE_ID: i32 = 1;
+            const CHAIN_A: i64 = 1;
+            const CHAIN_B: i64 = 2;
+
+            let db = init_db("range_driver_per_chain_batches_arrival_order").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+
+            let processor = TestRangeProcessor::new(BRIDGE_ID, vec![CHAIN_A, CHAIN_B], 1000);
+            let attempted = processor.attempted.clone();
+
+            let settings = FailureRetrySettings {
+                enabled: false,
+                ..Default::default()
+            };
+
+            let chain_a_batches: Vec<(i64, LogBatch)> = (0..8)
+                .map(|i| {
+                    let from = (i as u64) * 10 + 1;
+                    (CHAIN_A, empty_batch(from, from + 9))
+                })
+                .collect();
+            let chain_b_batches: Vec<(i64, LogBatch)> = (0..8)
+                .map(|i| {
+                    let from = (i as u64) * 20 + 1;
+                    (CHAIN_B, empty_batch(from, from + 19))
+                })
+                .collect();
+
+            let stream_a = futures::stream::iter(chain_a_batches);
+            let stream_b = futures::stream::iter(chain_b_batches);
+
+            RangeDriver::new(processor, ledger, settings)
+                .run(vec![(CHAIN_A, stream_a), (CHAIN_B, stream_b)])
+                .await
+                .unwrap();
+
+            let attempted = attempted.lock();
+            for chain_id in [CHAIN_A, CHAIN_B] {
+                let per_chain: Vec<u64> = attempted
+                    .iter()
+                    .filter(|(id, _, _)| *id == chain_id)
+                    .map(|(_, from, _)| *from)
+                    .collect();
+                let mut sorted = per_chain.clone();
+                sorted.sort_unstable();
+                assert_eq!(
+                    per_chain, sorted,
+                    "chain {chain_id}'s batches must be processed in ascending from_block order"
+                );
+            }
         }
 
         /// The forward path never yields empty ranges, so a retried chunk

@@ -52,13 +52,24 @@ test-with-db *args:
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
 
+# `AVALANCHE_INDEXER__BATCH_SIZE` is deliberately far below the 1000 default.
+# Each chain now runs its own sequential handler future (`RangeDriver::run`),
+# so a batch is no longer a bridge-wide blocking unit — while one chain's
+# `process_batch` drains its per-node RPS budget, the other chains' handlers
+# are polled independently and make progress at their own pace. The batch
+# size is instead tuned for per-chain latency: a smaller batch keeps one
+# chain's own per-batch RPC round trip comfortably under its `eth_getLogs`
+# request's `RPC_HTTP_TIMEOUT`, and completes often enough for that chain's
+# progress to stay visible. Comments live outside the body because `just`
+# echoes body lines on every run.
 run:
     INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
     INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
     INTERCHAIN_INDEXER__CHAINS_CONFIG=config/full-mainnet/chains.json \
     INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json \
     INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE=500 \
-    INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS=5000 \
+    INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS=500 \
+    INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE=200 \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS=8021 \
     cargo run --bin interchain-indexer-server

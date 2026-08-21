@@ -14,7 +14,6 @@ use alloy::{
 };
 use anyhow::{Context, Result, anyhow, ensure};
 use dashmap::DashMap;
-use futures::stream::SelectAll;
 use serde_json::Value;
 use tokio::task::JoinHandle;
 use tonic::async_trait;
@@ -157,12 +156,13 @@ impl AmbIndexer {
             "starting AMB indexer"
         );
 
-        let mut combined_stream = SelectAll::new();
+        let mut streams = Vec::with_capacity(ctx.chains.len());
         for chain in &ctx.chains {
-            let filter = ctx.abi_registry.filter_for_chain(chain.chain_id)?;
+            let chain_id = chain.chain_id;
+            let filter = ctx.abi_registry.filter_for_chain(chain_id)?;
             let stream = crate::indexer::evm::build_log_stream_for_chain(
                 chain.provider.clone(),
-                chain.chain_id,
+                chain_id,
                 ctx.bridge_id,
                 filter,
                 chain.start_block,
@@ -171,14 +171,14 @@ impl AmbIndexer {
                 ctx.settings.batch_size,
             )
             .await?;
-            combined_stream.push(stream);
+            streams.push((chain_id, stream));
         }
 
         let ledger = Arc::new(FailureLedger::new(ctx.db.clone()));
         let failure_retry_settings = ctx.settings.failure_retry.clone();
 
         RangeDriver::new(ctx, ledger, failure_retry_settings)
-            .run(combined_stream)
+            .run(streams)
             .await
     }
 
@@ -735,7 +735,7 @@ mod tests {
         };
 
         RangeDriver::new(ctx, ledger, settings)
-            .run(stream)
+            .run(vec![(CHAIN_ID, stream)])
             .await
             .expect("a recordable handler failure must not escalate the driver");
 

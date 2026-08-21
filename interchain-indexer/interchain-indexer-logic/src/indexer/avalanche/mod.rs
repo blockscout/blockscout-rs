@@ -31,7 +31,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::{Context, Error, Result, anyhow, ensure};
-use futures::{StreamExt, TryStreamExt, stream, stream::SelectAll};
+use futures::{StreamExt, TryStreamExt, stream};
 use itertools::Itertools;
 use std::sync::atomic::Ordering;
 
@@ -229,7 +229,8 @@ impl AvalancheIndexer {
     ///
     /// - Restores cursors from checkpoints (or starts from config).
     /// - Builds one log stream per chain (catchup + realtime).
-    /// - Merges streams and processes batches in order of arrival.
+    /// - Drives one sequential handler per chain concurrently, so a slow or
+    ///   throttled chain cannot delay its siblings.
     async fn run(self) -> Result<()> {
         let db = (*self.db).clone();
         let ledger = Arc::new(FailureLedger::new(self.db.clone()));
@@ -253,7 +254,7 @@ impl AvalancheIndexer {
             "starting Avalanche indexer"
         );
 
-        let mut combined_stream = SelectAll::new();
+        let mut streams = Vec::with_capacity(chains.len());
 
         for chain in &chains {
             let chain_id = chain.chain_id;
@@ -283,7 +284,7 @@ impl AvalancheIndexer {
             )
             .await?;
 
-            combined_stream.push(stream);
+            streams.push((chain_id, stream));
         }
 
         let processor = AvalancheRangeProcessor {
@@ -299,7 +300,7 @@ impl AvalancheIndexer {
         };
 
         RangeDriver::new(processor, ledger, settings.failure_retry.clone())
-            .run(combined_stream)
+            .run(streams)
             .await?;
 
         tracing::warn!(bridge_id, "Avalanche indexer stream completed unexpectedly");
