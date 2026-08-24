@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use alloy::{
     dyn_abi::{DynSolValue, EventExt},
-    primitives::{Address, B256, keccak256},
+    primitives::{Address, B256, U256, keccak256},
     rpc::types::{Block, Log},
 };
 use anyhow::{Context, Result, bail, ensure};
@@ -369,10 +369,7 @@ async fn handle_source_request(
     }
 
     if displaced_by_existing_destination
-        && ctx
-            .message_hash_lookup
-            .remove_if(&message_hash, |_, canonical_key| *canonical_key == key)
-            .is_some()
+        && remove_message_hash_lookup_if_canonical(ctx.message_hash_lookup, message_hash, key)
     {
         tracing::warn!(
             bridge_id = ctx.bridge_id,
@@ -548,6 +545,7 @@ async fn handle_validator_confirmation(
                 message_hash = %message_hash,
                 "queued AMB validator confirmation until source request is processed"
             );
+            report_pending_queue_size(ctx);
             Ok(())
         }
     }
@@ -607,12 +605,73 @@ async fn handle_collected_signatures(
                 message_hash = %message_hash,
                 "queued AMB collected-signatures event until source request is processed"
             );
+            report_pending_queue_size(ctx);
             Ok(())
         }
     }
 }
 
-/// Applies the queued events for `message_hash`, then removes the queue entry.
+/// Publishes the correlation queue's occupancy. Called from every site that
+/// inserts into or removes from `pending_message_hash_events`, because the map
+/// is unbounded and its size is the only warning that the source chain is
+/// lagging far enough for the queue to matter.
+fn report_pending_queue_size(ctx: &EventContext<'_>) {
+    crate::indexer::metrics::AMB_PENDING_CORRELATION_QUEUE
+        .with_label_values(&[&ctx.bridge_id.to_string()])
+        .set(ctx.pending_message_hash_events.len() as f64);
+}
+
+/// Identity of a queued collected-signatures event: enough to tell the one a
+/// drain snapshotted from a replacement queued during that drain's awaits.
+/// Compared field by field because `AnnotatedEvent` carries no `PartialEq` and
+/// deriving one would pull the derive through the whole event tree.
+type CollectedSignaturesIdentity = (u64, B256, i64, U256);
+
+fn collected_signatures_identity(
+    pending: &PendingCollectedSignatures,
+) -> CollectedSignaturesIdentity {
+    (
+        pending.chain_id,
+        pending.event.transaction_hash,
+        pending.event.block_number,
+        pending.event.event.count,
+    )
+}
+
+/// Removes exactly the events a drain applied, leaving anything queued during
+/// that drain's `.await`s in place. Returns `true` when the entry is empty
+/// afterwards and the caller should remove it from the map.
+///
+/// Validator confirmations are removed by signer address: the queue is a
+/// `HashMap` keyed by signer and `handle_validator_confirmation` *overwrites*
+/// on re-queue, so a same-signer re-queue is not a distinct event and nothing
+/// can be lost by removing it here. `signatures_collected` is a single field
+/// assigned with `= Some(..)`, so a *replacement* queued during the awaits IS a
+/// distinct event — hence the identity comparison rather than a bare
+/// `is_some()` check, which would still drop it.
+fn remove_drained_events(
+    entry: &mut PendingMessageHashEvents,
+    drained_confirmations: &[Address],
+    drained_signatures: Option<&CollectedSignaturesIdentity>,
+) -> bool {
+    for signer in drained_confirmations {
+        entry.validator_confirmations.remove(signer);
+    }
+
+    if let Some(drained) = drained_signatures
+        && entry
+            .signatures_collected
+            .as_ref()
+            .is_some_and(|current| collected_signatures_identity(current) == *drained)
+    {
+        entry.signatures_collected = None;
+    }
+
+    entry.validator_confirmations.is_empty() && entry.signatures_collected.is_none()
+}
+
+/// Applies the queued events for `message_hash`, then compare-and-removes
+/// exactly what was applied from the queue entry.
 ///
 /// The entry is deliberately **not** removed up front. Removing first and then
 /// running the fallible applies makes a mid-drain failure unrecoverable: the
@@ -628,6 +687,15 @@ async fn handle_collected_signatures(
 /// every replayed range already runs under, and both applies below are
 /// idempotent — one inserts into a map keyed by validator address, the other
 /// overwrites a single field.
+///
+/// The clone-then-remove **ordering** above is mandated by ADR-005 ("the
+/// ledger can only replay what the replay can still find") and must not be
+/// inverted. Only the removal's *conditionality* changes here: another chain
+/// can queue a new event for the same `message_hash` while these applies are
+/// awaiting (e.g. the AMB correlation maps are shared across chains and the
+/// retry pass now runs concurrently with the forward streams), and a bare
+/// unconditional removal would delete that new event along with what this
+/// drain actually applied — silently, with no ledger row and no log line.
 async fn drain_pending_message_hash_events(
     ctx: &EventContext<'_>,
     message_hash: B256,
@@ -645,6 +713,16 @@ async fn drain_pending_message_hash_events(
     };
     let confirmation_count = pending.validator_confirmations.len();
     let has_signatures_collected = pending.signatures_collected.is_some();
+
+    // Snapshot exactly what this drain is about to apply, so the removal below
+    // deletes only these and never what another chain queued for the same
+    // `message_hash` while the applies were awaiting.
+    let drained_confirmations: Vec<Address> =
+        pending.validator_confirmations.keys().copied().collect();
+    let drained_signatures = pending
+        .signatures_collected
+        .as_ref()
+        .map(collected_signatures_identity);
 
     for pending_confirmation in pending.validator_confirmations.into_values() {
         apply_validator_confirmation(
@@ -666,7 +744,31 @@ async fn drain_pending_message_hash_events(
         .await?;
     }
 
-    ctx.pending_message_hash_events.remove(&message_hash);
+    // Compare-and-remove. The clone-then-remove *ordering* above is mandated
+    // by ADR-005 and is unchanged; only this removal's conditionality changes.
+    let entry_is_now_empty = ctx
+        .pending_message_hash_events
+        .get_mut(&message_hash)
+        .map(|mut entry| {
+            remove_drained_events(
+                entry.value_mut(),
+                &drained_confirmations,
+                drained_signatures.as_ref(),
+            )
+        })
+        .unwrap_or(false);
+
+    if entry_is_now_empty {
+        // Separate statement: the `RefMut` above must be dropped before
+        // touching the same shard again, or this deadlocks. Re-checked under
+        // the shard lock so the decision cannot be made on a stale view.
+        ctx.pending_message_hash_events
+            .remove_if(&message_hash, |_, current| {
+                current.validator_confirmations.is_empty() && current.signatures_collected.is_none()
+            });
+    }
+
+    report_pending_queue_size(ctx);
 
     tracing::debug!(
         bridge_id = ctx.bridge_id,
@@ -688,6 +790,30 @@ fn is_canonical_message_hash_lookup(
     message_hash_lookup
         .get(&message_hash)
         .is_some_and(|canonical_key| *canonical_key == key)
+}
+
+/// Drops `message_hash` from the lookup only while it still points at `key`.
+///
+/// Consistency, not a live bug fix. The two call sites previously disagreed —
+/// one compared before removing, the other removed unconditionally — and only
+/// the comparison is safe to reason about: an unconditional removal would drop
+/// a mapping the source chain re-inserted during the preceding `.await`s, after
+/// which every later validator confirmation for that hash would queue forever
+/// with nothing left to drain it, silently.
+///
+/// That state is not reachable today: the `messageId` is derived from
+/// `keccak256(encoded_data)` (`amb/header.rs`), so the same `message_hash`
+/// always yields the same `Key`, and the predicate cannot observe a different
+/// one. This keeps both sites on the safe form so the reachability argument
+/// stops being load-bearing.
+fn remove_message_hash_lookup_if_canonical(
+    message_hash_lookup: &DashMap<B256, Key>,
+    message_hash: B256,
+    key: Key,
+) -> bool {
+    message_hash_lookup
+        .remove_if(&message_hash, |_, canonical_key| *canonical_key == key)
+        .is_some()
 }
 
 async fn apply_validator_confirmation(
@@ -852,7 +978,7 @@ async fn handle_destination_execution(
     );
 
     if let Some(message_hash) = displaced_source_hash
-        && ctx.message_hash_lookup.remove(&message_hash).is_some()
+        && remove_message_hash_lookup_if_canonical(ctx.message_hash_lookup, message_hash, key)
     {
         tracing::warn!(
             bridge_id = ctx.bridge_id,
@@ -932,14 +1058,17 @@ mod tests {
 
     use super::{
         AnnotatedEvent, CollectedSignaturesEvent, EventContext, Message,
-        PendingCollectedSignatures, PendingMessageHashEvents, drain_pending_message_hash_events,
-        find_tokens_bridged, is_canonical_message_hash_lookup,
+        PendingCollectedSignatures, PendingMessageHashEvents, PendingValidatorConfirmation,
+        collected_signatures_identity, drain_pending_message_hash_events, find_tokens_bridged,
+        is_canonical_message_hash_lookup, remove_drained_events,
+        remove_message_hash_lookup_if_canonical,
     };
     use crate::{
         MessageBufferSettings,
         indexer::amb::{
             abi::{AbiRegistry, ContractAbi, ContractKind, ContractVersion},
             settings::AmbIndexerSettings,
+            types::ValidatorConfirmation,
         },
         message_buffer::{Key, MessageBuffer},
     };
@@ -1078,6 +1207,163 @@ mod tests {
         );
     }
 
+    #[test]
+    fn remove_message_hash_lookup_if_canonical_removes_a_mapping_that_still_points_at_the_key() {
+        let lookup = DashMap::new();
+        let message_hash =
+            b256!("2222222222222222222222222222222222222222222222222222222222222222");
+        let key = Key::new(20, 1);
+        lookup.insert(message_hash, key);
+
+        let removed = remove_message_hash_lookup_if_canonical(&lookup, message_hash, key);
+
+        assert!(removed, "a mapping still pointing at key must be removed");
+        assert!(!lookup.contains_key(&message_hash));
+    }
+
+    #[test]
+    fn remove_message_hash_lookup_if_canonical_keeps_a_mapping_re_inserted_for_another_key() {
+        let lookup = DashMap::new();
+        let message_hash =
+            b256!("3333333333333333333333333333333333333333333333333333333333333333");
+        let stale_key = Key::new(30, 1);
+        let new_key = Key::new(31, 1);
+        // Simulates another chain re-inserting the mapping for a different
+        // key during the caller's preceding `.await`s.
+        lookup.insert(message_hash, new_key);
+
+        let removed = remove_message_hash_lookup_if_canonical(&lookup, message_hash, stale_key);
+
+        assert!(
+            !removed,
+            "a mapping re-inserted for another key must not be removed"
+        );
+        assert_eq!(*lookup.get(&message_hash).unwrap(), new_key);
+    }
+
+    fn confirmation_for(validator_address: Address) -> ValidatorConfirmation {
+        ValidatorConfirmation {
+            validator_address,
+            tx_hash: B256::with_last_byte(1),
+            block_number: 1,
+            block_timestamp: chrono::DateTime::from_timestamp(0, 0).unwrap().naive_utc(),
+        }
+    }
+
+    fn signatures_collected_with_tx_hash(tx_hash: B256) -> PendingCollectedSignatures {
+        PendingCollectedSignatures {
+            chain_id: 1,
+            event: AnnotatedEvent {
+                event: CollectedSignaturesEvent {
+                    authority_responsible_for_relay: Address::ZERO,
+                    message_hash: B256::ZERO,
+                    count: U256::from(1),
+                },
+                transaction_hash: tx_hash,
+                block_number: 1,
+                block_timestamp: chrono::DateTime::from_timestamp(0, 0).unwrap().naive_utc(),
+                source_chain_id: 1,
+                destination_chain_id: 2,
+            },
+        }
+    }
+
+    #[test]
+    fn remove_drained_events_keeps_a_confirmation_queued_during_the_drain() {
+        let signer_a = address!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let signer_b = address!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let mut entry = PendingMessageHashEvents {
+            validator_confirmations: HashMap::from([
+                (
+                    signer_a,
+                    PendingValidatorConfirmation {
+                        chain_id: 1,
+                        confirmation: confirmation_for(signer_a),
+                    },
+                ),
+                (
+                    signer_b,
+                    PendingValidatorConfirmation {
+                        chain_id: 1,
+                        confirmation: confirmation_for(signer_b),
+                    },
+                ),
+            ]),
+            signatures_collected: None,
+        };
+
+        // The drain snapshotted only signer A; signer B was queued during the
+        // drain's awaits and must survive the removal.
+        let is_empty = remove_drained_events(&mut entry, &[signer_a], None);
+
+        assert!(
+            !is_empty,
+            "an entry with a surviving confirmation must not report empty"
+        );
+        assert!(
+            !entry.validator_confirmations.contains_key(&signer_a),
+            "the drained confirmation must be removed"
+        );
+        assert!(
+            entry.validator_confirmations.contains_key(&signer_b),
+            "a confirmation queued during the drain's awaits must survive"
+        );
+    }
+
+    #[test]
+    fn remove_drained_events_keeps_a_replaced_signatures_collected() {
+        let drained = signatures_collected_with_tx_hash(B256::with_last_byte(1));
+        let drained_identity = collected_signatures_identity(&drained);
+        // A different event (different transaction_hash) replaced the
+        // drained one during the drain's awaits.
+        let replacement = signatures_collected_with_tx_hash(B256::with_last_byte(2));
+        let mut entry = PendingMessageHashEvents {
+            validator_confirmations: HashMap::new(),
+            signatures_collected: Some(replacement.clone()),
+        };
+
+        let is_empty = remove_drained_events(&mut entry, &[], Some(&drained_identity));
+
+        assert!(
+            !is_empty,
+            "an entry with a surviving replacement must not report empty"
+        );
+        assert_eq!(
+            entry
+                .signatures_collected
+                .as_ref()
+                .map(|current| current.event.transaction_hash),
+            Some(replacement.event.transaction_hash),
+            "a signatures_collected replaced during the drain's awaits must survive"
+        );
+    }
+
+    #[test]
+    fn remove_drained_events_reports_the_entry_empty_when_only_the_drained_events_were_queued() {
+        let signer = address!("cccccccccccccccccccccccccccccccccccccccc");
+        let drained = signatures_collected_with_tx_hash(B256::with_last_byte(1));
+        let drained_identity = collected_signatures_identity(&drained);
+        let mut entry = PendingMessageHashEvents {
+            validator_confirmations: HashMap::from([(
+                signer,
+                PendingValidatorConfirmation {
+                    chain_id: 1,
+                    confirmation: confirmation_for(signer),
+                },
+            )]),
+            signatures_collected: Some(drained.clone()),
+        };
+
+        let is_empty = remove_drained_events(&mut entry, &[signer], Some(&drained_identity));
+
+        assert!(
+            is_empty,
+            "the entry must report empty once every queued event has been drained"
+        );
+        assert!(entry.validator_confirmations.is_empty());
+        assert!(entry.signatures_collected.is_none());
+    }
+
     /// A queued `signatures_collected` whose block number does not fit `u64`
     /// makes `apply_collected_signatures` fail before it reaches the buffer —
     /// a deterministic mid-drain failure with no database involvement, which
@@ -1192,6 +1478,96 @@ mod tests {
         assert!(
             !pending.contains_key(&message_hash),
             "a successful drain must remove the queue entry"
+        );
+    }
+
+    /// H1 end-to-end wiring: another chain queuing an event for the same
+    /// `message_hash` while a drain is mid-flight must survive the drain's
+    /// removal — it was never applied and must not be deleted along with what
+    /// actually was.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn a_drain_keeps_events_queued_during_its_awaits() {
+        let db = crate::test_utils::init_db("amb_drain_keeps_events_queued_during_awaits").await;
+        let interchain_db = crate::database::InterchainDatabase::new(db.client());
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db,
+            MessageBufferSettings {
+                hot_ttl: std::time::Duration::from_secs(60),
+                maintenance_interval: std::time::Duration::from_secs(60),
+            },
+        );
+        let registry = AbiRegistry::default();
+        let lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending: Arc<DashMap<B256, PendingMessageHashEvents>> = Arc::new(DashMap::new());
+        let settings = AmbIndexerSettings::default();
+        let message_hash = B256::with_last_byte(44);
+        let signer = address!("dddddddddddddddddddddddddddddddddddddddd");
+        let other_signer = address!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+
+        pending.insert(
+            message_hash,
+            PendingMessageHashEvents {
+                validator_confirmations: HashMap::from([(
+                    signer,
+                    PendingValidatorConfirmation {
+                        chain_id: 1,
+                        confirmation: confirmation_for(signer),
+                    },
+                )]),
+                signatures_collected: None,
+            },
+        );
+
+        let ctx = EventContext {
+            bridge_id: 1,
+            chain_id: 1,
+            block_number: BLOCK_NUMBER,
+            abi_registry: &registry,
+            buffer: &buffer,
+            message_hash_lookup: &lookup,
+            pending_message_hash_events: &pending,
+            settings: &settings,
+        };
+
+        let key = Key::new(1, 1);
+        let other_confirmation = PendingValidatorConfirmation {
+            chain_id: 1,
+            confirmation: confirmation_for(other_signer),
+        };
+
+        // `tokio::join!` polls its futures in order on the current-thread
+        // runtime: the drain is polled first and parks on its first
+        // `.await` — the buffer's `restore` round trip, a real database
+        // call on this fresh key — then the injector below is polled and
+        // runs to completion synchronously. This is the "another chain
+        // queued an event during the drain's awaits" window this test
+        // exists to cover.
+        let (drain_result, ()) = tokio::join!(
+            drain_pending_message_hash_events(&ctx, message_hash, key),
+            async {
+                pending
+                    .entry(message_hash)
+                    .or_default()
+                    .validator_confirmations
+                    .insert(other_signer, other_confirmation);
+            },
+        );
+
+        assert!(
+            drain_result.is_ok(),
+            "the drain must succeed: {drain_result:?}"
+        );
+        let entry = pending
+            .get(&message_hash)
+            .expect("the entry must survive since the injected confirmation is still queued");
+        assert!(
+            entry.validator_confirmations.contains_key(&other_signer),
+            "a confirmation queued during the drain's awaits must not be deleted"
+        );
+        assert!(
+            !entry.validator_confirmations.contains_key(&signer),
+            "the confirmation the drain actually applied must be removed"
         );
     }
 }

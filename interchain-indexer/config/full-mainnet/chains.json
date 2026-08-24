@@ -11,14 +11,13 @@
         },
         "rpcs": [
             {
-                "gateway": {
-                    "url": "https://rpc.eth.gateway.fm"
-                },
                 "drpc": {
-                    "url": "https://eth.drpc.org"
+                    "url": "https://eth.drpc.org",
+                    "max_rps": 2
                 },
-                "1rpc": {
-                    "url": "https://1rpc.io/eth"
+                "mevblocker": {
+                    "url": "https://rpc.mevblocker.io",
+                    "max_rps": 2
                 }
             }
         ]
@@ -35,12 +34,14 @@
         },
         "rpcs": [
             {
-                "gateway": {
-                    "url": "https://rpc.gnosis.gateway.fm"
-                },
                 "gnosis_official": {
                     "url": "https://rpc.gnosischain.com",
-                    "max_rps": 2
+                    "max_rps": 5,
+                    "order": 100
+                },
+                "drpc": {
+                    "url": "https://gnosis.drpc.org",
+                    "max_rps": 5
                 }
             }
         ]

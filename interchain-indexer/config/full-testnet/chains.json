@@ -10,9 +10,6 @@
             {
                 "tenderly": {
                     "url": "https://sepolia.gateway.tenderly.co"
-                },
-                "drpc": {
-                    "url": "https://sepolia.drpc.org"
                 }
             }
         ]

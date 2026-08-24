@@ -1063,6 +1063,111 @@ strictly needed is free; splitting the scan under a shared key is not.
 
 ---
 
+## A Batch Is A Bridge-Wide Blocking Unit, So One Slow Chain Manufactures Timeouts On The Others
+
+**Symptom:** Every stream of one bridge advances in bursts a few hundred
+milliseconds wide, separated by 45–90 s of silence, and each burst is preceded
+by a cluster of `TimedOut` RPC warnings for *different* chains sharing the same
+millisecond. The endpoints named in those warnings are healthy — curl them and
+they answer instantly. Nothing appears in `indexer_failures`.
+
+**Root cause:** Three facts compose.
+
+1. `RangeDriver::run` awaits `handle_batch` inside its `tokio::select!`, so
+   while one chain's `process_batch` runs, `stream.next()` is not polled and
+   every other chain's in-flight `eth_getLogs` future sits parked.
+2. `RPC_HTTP_TIMEOUT` is 30 s (`provider_layers.rs`). A reqwest timeout is a
+   tokio timer: it elapses whether or not the future is polled, and the error
+   surfaces on the *next* poll — which is why the warnings share a millisecond
+   with the log line that follows them.
+3. A single `process_batch` can take far longer than 30 s. It issues two RPC
+   calls per transaction under `buffer_unordered(25)`, and the per-node
+   `max_rps` limiter throttles them: at `max_rps = 1`, a batch with N
+   transactions takes ~2N seconds, all of it inside `handle_batch`.
+
+Each fake timeout also feeds `mark_error`, so at `error_threshold = 3` the pool
+cools down a node that never actually failed, and the primary rotates. The
+timeouts never reach the ledger either: `fetch_logs` fails *inside* the stream,
+which retries the same range without yielding a batch, so the driver never
+learns and no `indexer_failures` row is written. The cost is invisible to every
+metric.
+
+**Fix:** Two config invariants, then a structural one.
+
+- **`max_rps` must agree with the receipt concurrency.** Avalanche's
+  the fan-out is `receipt_concurrency` (default 25, a setting on both adapters
+  since ADR-008; it was a literal `buffer_unordered(25)` on Avalanche). A node
+  left on `default_max_rps() = 10` puts 15 of every 25 calls on the
+  wait-for-a-token path. Note this costs latency, not throughput — throughput is
+  bounded by `max_rps` either way — so raising `max_rps` is the fix and lowering
+  `receipt_concurrency` only trims in-flight futures. Set `max_rps` explicitly
+  for every node a bridge indexes, fallbacks included.
+- **Size `batch_size` by blocking time, not by RPC efficiency.** While the
+  batch was indivisible for the whole bridge, a wide batch traded one long
+  stall for the other chains' timeouts. On `config/full-mainnet` with three
+  Avalanche chains, 1000 → 200 removed the timeouts outright and roughly
+  doubled catch-up throughput.
+
+**Status: fixed.** `RangeDriver::run` now drives one sequential handler future
+per chain, joined with `try_join_all`, with the retry pass as a sibling future
+— so a batch blocks only its own chain. A bridge whose chains have wildly
+different `max_rps` is no longer pathological: the slow chain parks on its own
+`until_ready()` and its siblings are polled throughout. `batch_size` is now
+tuned for a chain's own latency rather than against bridge-wide blocking.
+
+What remains true, and is the reason to keep this entry: a bridge is still ONE
+tokio task, so a long *CPU-bound* stretch with no `.await` still delays
+siblings. It is bounded by construction — `process_batch` awaits an RPC per
+transaction — but the ceiling is real. See
+`.memory-bank/research/indexing-concurrency-model.md`.
+
+**Diagnosing it:** group the `scanning … logs` lines by `(bridge, chain,
+direction)` and look at the gap distribution, not the averages. Independent
+chains interleave smoothly; a shared blocked task shows near-identical gaps
+across every stream of one bridge and near-zero gaps *within* a burst.
+
+---
+
+## `config/*/ENVs.md` Is Hand-Maintained; `check-envs` Only Touches `README.md`
+
+**Symptom:** you edit `config/<set>/chains.json`, look for the command that
+regenerates the matching `ENVs.md`, run `just generate-envs`, and conclude from
+an unrelated dirty file that the tool rewrote your config.
+
+**What is actually true.** `interchain-indexer-server/src/bin/check-envs.rs`
+calls `run_env_collector_cli` six times with exactly one
+`markdown_path("README.md")` and `config_path("…/config/example.toml")`. It
+never reads or writes anything under `config/<set>/`. Its filters are all
+`INTERCHAIN_INDEXER__*` — the **service settings** family. The
+`INTERCHAIN_INDEXER_CHAINS*` / `INTERCHAIN_INDEXER_BRIDGES*` families that
+`ENVs.md` documents are invisible to it (that is the whole point of the single
+vs double underscore split — see the config gotcha below).
+
+So:
+
+- `just generate-envs` regenerates the settings tables in **`README.md`** only.
+  On a clean tree it writes nothing else; verified empirically.
+- `just check-envs` is the same binary with `--validate-only`. It reports
+  "All variables are documented correctly" per collector run — again about
+  `README.md`, not about `config/*/ENVs.md`.
+- **Every `config/*/ENVs.md` is maintained by hand.** After changing a
+  `chains.json` or `bridges.json`, update the matching `ENVs.md` yourself: both
+  the one-variable JSON form and the field-by-field block, since they must
+  agree with the file.
+- The per-variable **descriptions** in `README.md` are also hand-maintained.
+  The collector refreshes values and adds missing rows; it does not rewrite an
+  existing description, so a description can silently go stale after a
+  behaviour change. Two did on this branch.
+
+**Why this is worth an entry.** The naming invites the wrong inference:
+`generate-envs` sounds like it owns everything named `ENVs.md`. It does not,
+and acting on that inference caused a `git checkout` over a hand-edited
+`config/full-mainnet/chains.json` during this work. If a config file is dirty
+and you did not edit it, read the diff and ask — do not attribute it to
+tooling.
+
+---
+
 ## A Replay Can Only Recover What The Replay Can Still Find
 
 **Symptom:** A recorded `indexer_failures` row disappears after a retry pass
@@ -1117,14 +1222,28 @@ Observed on Avalanche C-Chain: `max_chunks_per_pass = 16` against
 so the tick was already due when the pass returned and two passes ran
 back-to-back with zero forward progress in between.
 
-**Fix:** Keep `max_chunks_per_pass` low — it is the only bound that exists, which
-is why the default is `2`. A low value costs replay throughput and never
-coverage: the sweep's resume cursor continues the backlog on the next tick. The
-real fix is to bound the pass by elapsed time, or to move it off the driver task
-entirely — the latter introduces `process()` running concurrently with the
-forward path (concurrent transactions over the same messages, concurrent AMB
-correlation state) and is a design change of the same class as the alternatives
-rejected in ADR-005.
+**Fix: done — the pass is now a sibling future.** `run_retry_tick` is raced
+alongside the per-chain handlers inside the same task instead of occupying a
+`select!` branch, so a replay pass no longer stops forward consumption. This
+needed neither `Arc<P>` nor a `tokio::spawn`, which an earlier reading of this
+entry assumed.
+
+It does mean `process()` runs concurrently with the forward path, which this
+entry previously called a design change of the class ADR-005 rejected. That was
+right about the mechanism and wrong about the severity: cross-chain concurrency
+introduces the same class regardless, and the two genuinely lossy interleavings
+it exposes are both closed — the AMB correlation drain now compare-and-removes
+only what it applied, and `FailureLedger` carries a per-pair record epoch so a
+`record` landing inside a `resolve`'s round trip cannot be erased from the
+cache.
+
+`max_chunks_per_pass` still matters, and its default is still `2`: it now bounds
+replay *RPC load* per pass against the same rate-limited endpoints rather than a
+pause. It remains bridge-wide across every due interval on every chain.
+
+The timeout-burst symptom above is historical. Keep the diagnosis: it is still
+how to read a cluster of same-millisecond `TimedOut` warnings if any future
+change reintroduces a shared blocking section.
 
 ---
 

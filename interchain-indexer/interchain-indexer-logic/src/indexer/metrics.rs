@@ -50,11 +50,13 @@ lazy_static! {
 
     /// Number of times a `record` write could not be persisted after
     /// exhausting `record_retry_attempts` and the driver escalated (stopped
-    /// consuming the stream, indexer state becomes Failed).
+    /// consuming the stream, indexer state becomes Failed). Labelled by chain
+    /// because the chains of one bridge now index independently, so "which
+    /// chain escalated" is not answerable from `bridge_id` alone.
     pub static ref FAILURE_RECORD_ESCALATIONS_TOTAL: IntCounterVec = register_int_counter_vec!(
         "interchain_indexer_failure_record_escalations_total",
         "unrecordable failures that escalated to a fatal indexer error",
-        &["bridge_id"],
+        &["bridge_id", "chain_id"],
     )
     .unwrap();
 
@@ -79,6 +81,27 @@ lazy_static! {
         "interchain_indexer_catchup_blocks_remaining",
         "blocks remaining in the unscanned catchup interval",
         &["bridge_id", "chain_id"],
+    )
+    .unwrap();
+
+    /// Size of AMB's `pending_message_hash_events` correlation queue, per
+    /// bridge.
+    ///
+    /// This map holds destination-side events that arrived before their source
+    /// request, and it is drained only by `handle_source_request`. It has no
+    /// TTL, no cap and no offload, so its occupancy is proportional to how far
+    /// the *source* chain lags the destination chain — and per-chain
+    /// decoupling makes a large, permanent lag a supported configuration
+    /// rather than an incident. A monotonically rising series here is the
+    /// signal that the queue needs a retention policy; there is nothing today
+    /// that bounds it.
+    ///
+    /// Set from the AMB event handlers on every insert and drain, which is
+    /// where the only mutations happen — not from a request handler.
+    pub static ref AMB_PENDING_CORRELATION_QUEUE: GaugeVec = register_gauge_vec!(
+        "interchain_indexer_amb_pending_correlation_queue",
+        "queued AMB destination-side events awaiting their source request",
+        &["bridge_id"],
     )
     .unwrap();
 }

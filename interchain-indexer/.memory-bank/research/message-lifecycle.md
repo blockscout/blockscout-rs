@@ -372,7 +372,10 @@ choices, not specified by the trait.
 
 One `LogStream` per configured chain, filtered by the chain's Teleporter
 contract address and `ITeleporterMessengerEvents` signatures. All per-chain
-streams are merged via `SelectAll` for interleaved processing.
+streams are driven one sequential handler future per chain, joined with
+`try_join_all` inside the bridge's single task, so a slow chain cannot
+delay its siblings (ADR-008). Within a chain, batches stay in arrival
+order — the cursor's gap bridging depends on it.
 
 #### 2. Checkpoint initialization
 
@@ -389,7 +392,8 @@ each transaction, the indexer:
 2. Fetches the block (for `block_timestamp`)
 3. Dispatches each Teleporter log to a typed handler
 
-Receipt fetching is parallelized (`buffer_unordered(25)`).
+Receipt fetching is concurrent, bounded by the adapter's
+`receipt_concurrency` setting (default 25 for both AMB and Avalanche).
 
 #### 4. Blockchain ID resolution
 

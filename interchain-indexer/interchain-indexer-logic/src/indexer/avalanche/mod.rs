@@ -31,7 +31,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::{Context, Error, Result, anyhow, ensure};
-use futures::{StreamExt, TryStreamExt, stream, stream::SelectAll};
+use futures::{StreamExt, TryStreamExt, stream};
 use itertools::Itertools;
 use std::sync::atomic::Ordering;
 
@@ -229,7 +229,8 @@ impl AvalancheIndexer {
     ///
     /// - Restores cursors from checkpoints (or starts from config).
     /// - Builds one log stream per chain (catchup + realtime).
-    /// - Merges streams and processes batches in order of arrival.
+    /// - Drives one sequential handler per chain concurrently, so a slow or
+    ///   throttled chain cannot delay its siblings.
     async fn run(self) -> Result<()> {
         let db = (*self.db).clone();
         let ledger = Arc::new(FailureLedger::new(self.db.clone()));
@@ -253,7 +254,7 @@ impl AvalancheIndexer {
             "starting Avalanche indexer"
         );
 
-        let mut combined_stream = SelectAll::new();
+        let mut streams = Vec::with_capacity(chains.len());
 
         for chain in &chains {
             let chain_id = chain.chain_id;
@@ -283,7 +284,7 @@ impl AvalancheIndexer {
             )
             .await?;
 
-            combined_stream.push(stream);
+            streams.push((chain_id, stream));
         }
 
         let processor = AvalancheRangeProcessor {
@@ -296,10 +297,11 @@ impl AvalancheIndexer {
             blockchain_id_resolver,
             buffer,
             batch_size: settings.batch_size,
+            receipt_concurrency: settings.receipt_concurrency,
         };
 
         RangeDriver::new(processor, ledger, settings.failure_retry.clone())
-            .run(combined_stream)
+            .run(streams)
             .await?;
 
         tracing::warn!(bridge_id, "Avalanche indexer stream completed unexpectedly");
@@ -321,6 +323,7 @@ struct AvalancheRangeProcessor {
     blockchain_id_resolver: Arc<BlockchainIdResolver>,
     buffer: Arc<MessageBuffer<Message>>,
     batch_size: u64,
+    receipt_concurrency: u64,
 }
 
 impl AvalancheRangeProcessor {
@@ -415,6 +418,7 @@ impl RangeProcessor for AvalancheRangeProcessor {
 
         let ctx = BatchProcessContext {
             bridge_id: self.bridge_id,
+            receipt_concurrency: self.receipt_concurrency.max(1) as usize,
             chain_ids: &self.chain_ids,
             home_chain: self.home_chain,
             process_unknown_chains: self.process_unknown_chains,
@@ -608,6 +612,8 @@ struct BatchProcessContext<'a> {
     reconstruct_incoming_ictt_transfers: bool,
     blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
+    /// Concurrent receipt + block fetches inside one batch.
+    receipt_concurrency: usize,
 }
 
 /// Process a batch of logs for a single chain.
@@ -647,7 +653,7 @@ async fn process_batch(
             let logs = receipt.inner.logs().to_vec();
             Ok::<(B256, (Vec<Log>, Block)), anyhow::Error>((hash, (logs, block)))
         })
-        .buffer_unordered(25)
+        .buffer_unordered(ctx.receipt_concurrency.max(1))
         .try_collect()
         .await?;
 
@@ -1860,6 +1866,7 @@ mod tests {
                 },
             ),
             batch_size: 1000,
+            receipt_concurrency: 25,
         };
 
         let filter = processor
