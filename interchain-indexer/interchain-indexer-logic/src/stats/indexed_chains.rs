@@ -229,6 +229,34 @@ impl IndexedChains {
         Some(union)
     }
 
+    /// Sorted, deduplicated union of the concrete configured chains of
+    /// `bridge_ids`. Unknown / absent / present-but-empty bridges contribute
+    /// nothing, and `AllIndexed` yields an empty vec — this follows
+    /// [`Self::chain_ids_for`]'s concrete-membership convention, not the
+    /// permissive [`Self::may_observe`] default.
+    ///
+    /// Returns `Vec<i64>`, never `Option<Vec<i64>>`: an empty result here means
+    /// "no current configured zero-row candidates", which is the OPPOSITE of
+    /// the [`Self::configured_union`] convention where empty means "restrict
+    /// nothing". Keeping the types different is what stops the two from being
+    /// confused.
+    pub fn selected_configured_union(&self, bridge_ids: &[i32]) -> Vec<i64> {
+        let map = match self {
+            IndexedChains::AllIndexed => return Vec::new(),
+            IndexedChains::PerBridge(map) => map,
+        };
+
+        let mut union: HashSet<i64> = HashSet::new();
+        for bridge_id in bridge_ids {
+            if let Some(chains) = map.get(bridge_id) {
+                union.extend(chains.iter().copied());
+            }
+        }
+        let mut union: Vec<i64> = union.into_iter().collect();
+        union.sort_unstable();
+        union
+    }
+
     /// Chains configured by two or more DISTINCT bridge ids, as
     /// `(chain_id, sorted bridge ids)`, sorted by `chain_id`. Empty under
     /// `AllIndexed` (no per-bridge configuration to inspect, so a structural
@@ -690,6 +718,47 @@ mod tests {
     fn test_transfer_has_unindexed_dst_out_is_true() {
         let indexed = IndexedChains::from_pairs([(1, 1)]);
         assert!(indexed.transfer_has_unindexed(1, 1, 100));
+    }
+
+    // --- selected_configured_union ---
+
+    #[test]
+    fn test_selected_configured_union_all_indexed_is_empty() {
+        assert_eq!(
+            IndexedChains::AllIndexed.selected_configured_union(&[1, 2]),
+            Vec::<i64>::new()
+        );
+    }
+
+    #[test]
+    fn test_selected_configured_union_sorted_deduplicated_ignores_unknown() {
+        let indexed = IndexedChains::from_pairs([(1, 250), (1, 100), (2, 100), (2, 1)]);
+        // Bridge 99 is unknown and contributes nothing.
+        assert_eq!(
+            indexed.selected_configured_union(&[1, 2, 99]),
+            vec![1, 100, 250]
+        );
+    }
+
+    #[test]
+    fn test_selected_configured_union_absent_and_present_but_empty_contribute_nothing() {
+        let indexed = IndexedChains::from_bridges([(1, vec![]), (2, vec![100])]);
+        // Bridge 1 is present but empty; bridge 3 is absent entirely. Neither
+        // contributes a configured candidate.
+        assert_eq!(
+            indexed.selected_configured_union(&[1, 3]),
+            Vec::<i64>::new()
+        );
+        assert_eq!(indexed.selected_configured_union(&[1, 2, 3]), vec![100]);
+    }
+
+    #[test]
+    fn test_selected_configured_union_duplicate_selected_ids_are_idempotent() {
+        let indexed = IndexedChains::from_pairs([(1, 100), (1, 200)]);
+        assert_eq!(
+            indexed.selected_configured_union(&[1, 1, 1]),
+            vec![100, 200]
+        );
     }
 
     // --- configured_overlaps ---

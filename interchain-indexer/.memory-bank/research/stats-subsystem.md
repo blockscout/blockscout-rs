@@ -139,21 +139,18 @@ Operationally, this affects:
 - `StatsService` — now also holds an `IndexedChains`
 - `BridgedTokenListRow`
 - `StatsChainListRow`
-- `StatsChainsScope` — `Global` | `Bridges { bridge_ids }`, the explicit
-  `/stats/chains` read-scope (`stats_chains_query.rs`); replaces overloading
-  `Option<&[i32]>` so a bridge-filtered request can never be confused with an
-  unfiltered one. `bridge_ids` scopes attribution (the count) only — it never
-  narrows which chains appear; that stays driven by `chain_ids` / `q` /
-  `include_unindexed_chains` exactly as the unfiltered request (fixed
-  2026-08-25, see `gotchas.md`)
+- `StatsChainsScope` — `Global` | `Bridges { bridge_ids, configured_chain_ids }`,
+  the explicit `/stats/chains` read-scope (`stats_chains_query.rs`); replaces
+  overloading `Option<&[i32]>` so a bridge-filtered request can never be
+  confused with an unfiltered one
 - `StatsChainsRecomputeReport` / `StatsChainsOverlapSample` — returned by
   `recompute_stats_chains`; carries row counts and the actual cross-bridge
   overcount (`database.rs`)
 - `OverlapTransition` / `overlap_transition` — pure warning-policy decision for
   the recomputation-time overlap signal (`stats/overlap_warning.rs`)
 - `IndexedChains` — `AllIndexed` | `PerBridge(HashMap<bridge_id, HashSet<chain_id>>)`;
-  gained `configured_overlaps()` for the bridge filter's startup warning (see
-  "Read-Time Filterability Constraints" below)
+  gained `selected_configured_union(bridge_ids)` and `configured_overlaps()`
+  for the bridge filter (see "Read-Time Filterability Constraints" below)
 
 ### Stats tables
 
@@ -448,10 +445,9 @@ both a global-distinct arm (unchanged `stats_chains` semantics) and a
 per-bridge-distinct arm (`stats_chains_by_bridge`). Neither table has a
 projection eligibility rule — all statuses count, there is no
 transfer-to-message finality join — and neither is affected by
-`IndexedChains::may_observe`; `IndexedChains` only supplies the read-side
-global visibility set (`configured_union()`, unchanged by `bridge_ids`), never
-a write-side filter here or a chain-candidate restriction for the bridge
-filter. See "Read-Time Filterability Constraints"
+`IndexedChains::may_observe`; `IndexedChains` only supplies read-side
+candidate/visibility sets (`selected_configured_union`, `configured_union`),
+never a write-side filter here. See "Read-Time Filterability Constraints"
 below for the read path, and ADR-009 for why a second table exists instead of
 adding a bridge dimension to `stats_chains` directly.
 
@@ -633,11 +629,9 @@ Source (`StatsChainsScope`, `stats_chains_query.rs`; ADR-009):
   `chains LEFT JOIN stats_chains`, byte-for-byte the pre-ADR-009 query
 - non-empty `bridge_ids` -> `StatsChainsScope::Bridges`: `chains LEFT JOIN`
   an aggregate `SUM(...) GROUP BY chain_id FROM stats_chains_by_bridge WHERE
-  bridge_id IN (...)`, **no additional candidate predicate** — `bridge_ids`
-  scopes the count only, never which chains appear (fixed 2026-08-25, see
-  `gotchas.md`: an initial revision added `agg.chain_id IS NOT NULL OR c.id IN
-  (<selected bridges' own configured chains>)`, which silently dropped a chain
-  indexed only by a *different* bridge from the bridge-filtered listing)
+  bridge_id IN (...)`, with an added candidate predicate
+  `agg.chain_id IS NOT NULL OR c.id IN (<selected bridges' current configured
+  chains>)`
 
 Returned value:
 
@@ -675,12 +669,13 @@ per bridge because those rows are already distinct within it.
 
 Chain visibility for `include_unindexed_chains = false` still uses
 `IndexedChains::configured_union()` — the union across every configured
-bridge, unchanged, and never narrowed to the selected `bridge_ids`. This is
-the *only* chain-list restriction either scope applies: `bridge_ids` itself
-adds none. `/stats/chains` and `GetChains` therefore agree on the *entire*
-chain set (not just the default one) for any given `chain_ids` / `q` /
-`include_unindexed_chains` combination, regardless of `bridge_ids` — only the
-count column differs.
+bridge, unchanged, and never narrowed to the selected `bridge_ids`. A separate
+accessor, `IndexedChains::selected_configured_union(bridge_ids)`, supplies
+*additional* zero-row candidates for `Bridges` scope only (current configured
+chains of the selected bridges); an empty result there means "no candidates,"
+never "no restriction" — the opposite of `configured_union()`'s convention.
+`/stats/chains` and `GetChains` still agree on the *default* (unfiltered) chain
+set through the shared `configured_union()` accessor.
 
 Zero-chain visibility is service-wide and configurable:
 

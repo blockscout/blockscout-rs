@@ -1636,22 +1636,39 @@ else.
   count is exposed in the API response — `include_zero_chains = false` reads
   both, so a message-only chain/bridge cell must still survive that guard.
 
-**`bridge_ids` scopes the count, never the chain list (fixed 2026-08-25).** An
-initial revision made a chain's *appearance* in the `Bridges`-scope response
-conditional on selected-bridge activity or selected-bridge configuration —
-correct-looking in isolation, but it meant a chain visible with plain
-`include_unindexed_chains=true` (no `bridge_ids`) could silently vanish once
-`bridge_ids` was added, whenever the selected bridge(s) happened to have zero
-history there (for example, a chain indexed only by a *different* bridge).
-Caught by a live report: `bridge_ids=2&include_unindexed_chains=true` omitted
-chains the plain `include_unindexed_chains=true` request showed. The fix
-removed the extra candidate predicate entirely — `chains LEFT JOIN <bridge_ids
-aggregate>` now drives from `chains` exactly like the unfiltered path, so
-`chain_ids` / `q` / `include_unindexed_chains` / `include_zero_chains` alone
-decide which chains appear, in both scopes. `bridge_ids` only changes which
-number shows up for the chains that do. If you find yourself reaching for
-`IndexedChains` (or `bridge_contracts`, which is a stale diagnostic proxy
-regardless) to decide which chains are eligible to appear in a `bridge_ids`
-response, that is this bug again.
+**Do not** derive `stats_chains_by_bridge`'s candidate rows (for
+`include_zero_chains = false`) from `bridge_contracts` — like every other
+membership question in the stats layer, use the in-memory `IndexedChains`
+(`selected_configured_union`), which distinguishes a bridge that is absent
+from config (no current candidates, but retained history still queryable)
+from one present with an empty contract set, per ADR-004 Decision 5.
+
+**`bridge_ids` restricts the chain list too, on purpose.** A live report
+(2026-08-25) initially read as "a chain visible without `bridge_ids` vanished
+once `bridge_ids` was added" and got "fixed" by dropping the candidate
+predicate entirely, making every known chain a zero-row candidate for any
+`bridge_ids` value regardless of relevance. That is wrong: the confirmed,
+correct contract is that `bridge_ids` scopes **both** the count and which
+chains can appear — a chain neither touched by, nor currently configured for,
+any of the selected bridges must not appear at all, even under
+`include_unindexed_chains=true`. The candidate predicate (`agg.chain_id IS NOT
+NULL OR c.id IN (selected bridges' current configured chains)`) is therefore
+load-bearing, not incidental; the original live-report symptom traced back to
+`stats_chains_by_bridge` simply being empty (periodic worker hadn't run yet
+on a fresh database), not to this predicate. Do not remove it again on a
+similar report — verify the snapshot actually has rows for the
+bridge/chain pair in question first.
+
+**Placeholder numbering, fixed alongside the above.** The `chain_ids`
+predicate in `list_stats_chains` hardcoded `$1, $2, ...` instead of deriving
+from `values.len()`, silently mis-binding once `Bridges` scope's own bridge-id
+(and, when non-empty, configured-chain-id) placeholders preceded it in
+`values`. Masked in the one test that combined both filters, because its `q`
+filter happened to narrow to the same answer the collision produced by
+accident — see `stats_chains_bridges_scope_chain_ids_placeholders_stay_correct_after_bridge_scope`
+for a case chosen so the collision is observably wrong instead of
+coincidentally right. Per `.memory-bank/rules/database.md`'s placeholder
+rule: derive every predicate's `$N` from `values.len() + 1` at the point of
+use, never a literal count of that predicate's own values.
 
 ---
