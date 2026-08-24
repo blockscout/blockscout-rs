@@ -251,20 +251,14 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         let mut bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
         bridge_ids.sort_unstable();
         bridge_ids.dedup();
-        // Current configured chains of the selected bridges, for zero-row
-        // candidates. Only meaningful (and only computed) for a non-empty
-        // selection; `StatsChainsScope::Bridges` requires it non-empty.
-        let selected_configured_chain_ids = if bridge_ids.is_empty() {
-            Vec::new()
-        } else {
-            self.indexed_chains.selected_configured_union(&bridge_ids)
-        };
+        // `bridge_ids` scopes attribution (the count column) only; it never
+        // narrows which chains appear — that stays driven by `chain_ids` / `q`
+        // / `indexed` above, exactly as the unfiltered request.
         let scope = if bridge_ids.is_empty() {
             StatsChainsScope::Global
         } else {
             StatsChainsScope::Bridges {
                 bridge_ids: &bridge_ids,
-                configured_chain_ids: &selected_configured_chain_ids,
             }
         };
 

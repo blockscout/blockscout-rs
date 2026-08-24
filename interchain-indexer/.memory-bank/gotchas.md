@@ -1636,11 +1636,22 @@ else.
   count is exposed in the API response — `include_zero_chains = false` reads
   both, so a message-only chain/bridge cell must still survive that guard.
 
-**Do not** derive `stats_chains_by_bridge`'s candidate rows (for
-`include_zero_chains = false`) from `bridge_contracts` — like every other
-membership question in the stats layer, use the in-memory `IndexedChains`
-(`selected_configured_union`), which distinguishes a bridge that is absent
-from config (no current candidates, but retained history still queryable)
-from one present with an empty contract set, per ADR-004 Decision 5.
+**`bridge_ids` scopes the count, never the chain list (fixed 2026-08-25).** An
+initial revision made a chain's *appearance* in the `Bridges`-scope response
+conditional on selected-bridge activity or selected-bridge configuration —
+correct-looking in isolation, but it meant a chain visible with plain
+`include_unindexed_chains=true` (no `bridge_ids`) could silently vanish once
+`bridge_ids` was added, whenever the selected bridge(s) happened to have zero
+history there (for example, a chain indexed only by a *different* bridge).
+Caught by a live report: `bridge_ids=2&include_unindexed_chains=true` omitted
+chains the plain `include_unindexed_chains=true` request showed. The fix
+removed the extra candidate predicate entirely — `chains LEFT JOIN <bridge_ids
+aggregate>` now drives from `chains` exactly like the unfiltered path, so
+`chain_ids` / `q` / `include_unindexed_chains` / `include_zero_chains` alone
+decide which chains appear, in both scopes. `bridge_ids` only changes which
+number shows up for the chains that do. If you find yourself reaching for
+`IndexedChains` (or `bridge_contracts`, which is a stale diagnostic proxy
+regardless) to decide which chains are eligible to appear in a `bridge_ids`
+response, that is this bug again.
 
 ---

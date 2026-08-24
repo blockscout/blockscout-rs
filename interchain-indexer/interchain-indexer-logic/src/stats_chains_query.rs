@@ -123,62 +123,40 @@ fn build_pagination(
 /// by this task. `Bridges` sums selected bridges' `stats_chains_by_bridge`
 /// cells: exact for one bridge, an accepted additive overcount for several (see
 /// the module doc and `coding-task-2.md`).
+///
+/// `bridge_ids` scopes **attribution only** (the count column). It never
+/// scopes **which chains appear** — that list is driven by `chain_ids` / `q`
+/// / `include_unindexed_chains` exactly as the unfiltered request, so a chain
+/// visible without `bridge_ids` stays visible with it, just with its count
+/// reduced to what the selected bridges contributed (0 if none did). An
+/// earlier revision additionally required a chain to have selected-bridge
+/// activity or be in the selected bridges' own current config before it could
+/// appear at all — that silently dropped chains indexed only by a *different*
+/// bridge (or not configured anywhere, under `include_unindexed_chains =
+/// true`) from the bridge-filtered listing, which is not what "scope the
+/// count" means. Fixed 2026-08-25 after a live report of exactly this: chains
+/// visible with plain `include_unindexed_chains=true` disappearing once
+/// `bridge_ids` was added.
 pub enum StatsChainsScope<'a> {
     Global,
     Bridges {
         /// Non-empty, sorted, deduplicated.
         bridge_ids: &'a [i32],
-        /// Current configured chains of those bridges, from
-        /// `IndexedChains::selected_configured_union`. **Empty means "no
-        /// configured zero-row candidates"**, not "no restriction" — the
-        /// opposite of the global configured-union convention used by
-        /// `indexed_chain_ids` below. Keeping the two types/parameters
-        /// separate is what stops those meanings from being confused.
-        configured_chain_ids: &'a [i64],
     },
 }
 
-/// Appends the bridge-scoped `LEFT JOIN` aggregate and its candidate predicate
-/// (the first predicate of the `Bridges` inner `WHERE`, per `coding-task-2.md`
-/// item 5) and returns the `LEFT JOIN` clause SQL.
-///
-/// Placeholder numbers are always derived from `values.len() + 1` at the point
-/// each value is pushed — bridge ids first (they sit inside the `LEFT JOIN`
-/// subquery, textually before the `WHERE` clause), then the candidate chain
-/// ids — so a predicate appended after this call keeps `$N` numbering
+/// Builds the bridge-scoped `LEFT JOIN` aggregate clause. Placeholder numbers
+/// are always derived from `values.len() + 1` at the point each value is
+/// pushed, so a predicate appended after this call keeps `$N` numbering
 /// contiguous by construction. Pinned by
 /// `test_bridge_scope_join_contiguous_with_predicate_appended_after`.
-fn build_bridge_scope_join(
-    bridge_ids: &[i32],
-    configured_chain_ids: &[i64],
-    values: &mut Vec<Value>,
-    inner_conditions: &mut Vec<String>,
-) -> String {
+fn build_bridge_scope_join(bridge_ids: &[i32], values: &mut Vec<Value>) -> String {
     let bridge_start = values.len() + 1;
     let bridge_placeholders: Vec<String> = (0..bridge_ids.len())
         .map(|i| format!("${}", bridge_start + i))
         .collect();
     for id in bridge_ids {
         values.push(Value::Int(Some(*id)));
-    }
-
-    if configured_chain_ids.is_empty() {
-        // No current configured candidates: the only way onto the candidate
-        // list is selected-bridge activity. This is the correct answer for a
-        // removed/unknown/present-but-empty bridge, never "no restriction".
-        inner_conditions.push("agg.chain_id IS NOT NULL".to_string());
-    } else {
-        let cand_start = values.len() + 1;
-        let cand_placeholders: Vec<String> = (0..configured_chain_ids.len())
-            .map(|i| format!("${}", cand_start + i))
-            .collect();
-        for id in configured_chain_ids {
-            values.push(Value::BigInt(Some(*id)));
-        }
-        inner_conditions.push(format!(
-            "(agg.chain_id IS NOT NULL OR c.id IN ({}))",
-            cand_placeholders.join(", ")
-        ));
     }
 
     format!(
@@ -240,37 +218,33 @@ pub async fn list_stats_chains(
     let mut inner_conditions = Vec::new();
 
     // `Global` keeps the exact pre-existing join/expressions untouched.
-    // `Bridges` swaps in the bridge-scoped aggregate and pushes its candidate
-    // predicate first, since it sits before every other inner-`WHERE`
-    // predicate both textually (inside the `LEFT JOIN` subquery) and in
-    // `values` ordering (`coding-task-2.md` item 5).
+    // `Bridges` swaps in the bridge-scoped aggregate; its bridge-id
+    // placeholders sit inside the `LEFT JOIN` subquery, textually before every
+    // other inner-`WHERE` predicate, so they must be pushed into `values`
+    // first too (`coding-task-2.md` item 5 / `database.md`'s placeholder rule).
     let (join_clause, transfer_expr, message_expr) = match scope {
         StatsChainsScope::Global => (
             "LEFT JOIN stats_chains sc ON sc.chain_id = c.id".to_string(),
             "sc.unique_transfer_users_count",
             "sc.unique_message_users_count",
         ),
-        StatsChainsScope::Bridges {
-            bridge_ids,
-            configured_chain_ids,
-        } => {
+        StatsChainsScope::Bridges { bridge_ids } => {
             debug_assert!(
                 !bridge_ids.is_empty(),
                 "StatsChainsScope::Bridges requires a non-empty bridge_ids"
             );
-            let join = build_bridge_scope_join(
-                bridge_ids,
-                configured_chain_ids,
-                &mut values,
-                &mut inner_conditions,
-            );
+            let join = build_bridge_scope_join(bridge_ids, &mut values);
             (join, "agg.transfer_cnt", "agg.message_cnt")
         }
     };
 
     if !chain_ids.is_empty() {
+        // Placeholder numbers derive from `values.len()`, not a hardcoded `i +
+        // 1`: `Bridges` scope already pushed its own bridge-id values above,
+        // so this predicate is not always first once a scope precedes it.
+        let start = values.len() + 1;
         let placeholders: Vec<String> = (0..chain_ids.len())
-            .map(|i| format!("${}", i + 1))
+            .map(|i| format!("${}", start + i))
             .collect();
         for id in chain_ids {
             values.push(Value::BigInt(Some(*id)));
@@ -1201,37 +1175,20 @@ mod tests {
     #[test]
     fn test_bridge_scope_join_contiguous_with_predicate_appended_after() {
         let mut values: Vec<Value> = Vec::new();
-        let mut inner_conditions: Vec<String> = Vec::new();
 
-        let join = build_bridge_scope_join(&[7, 9], &[1, 2, 3], &mut values, &mut inner_conditions);
+        let join = build_bridge_scope_join(&[7, 9], &mut values);
         assert!(join.contains("IN ($1, $2)"), "join was: {join}");
-        assert!(
-            inner_conditions[0].contains("IN ($3, $4, $5)"),
-            "candidate predicate was: {}",
-            inner_conditions[0]
-        );
-        assert_eq!(values.len(), 5);
+        assert_eq!(values.len(), 2);
 
-        // A predicate appended after both helper-pushed groups must continue
-        // numbering from exactly where they left off.
+        // A predicate appended after the helper-pushed bridge-id group must
+        // continue numbering from exactly where it left off. This is the
+        // shape `list_stats_chains` relies on for its `chain_ids` / `q` /
+        // zero-guard predicates, which all sit textually after this join.
         let next_ph = values.len() + 1;
-        inner_conditions.push(format!("c.id = ${next_ph}"));
+        let predicate = format!("c.id = ${next_ph}");
         values.push(Value::BigInt(Some(42)));
-        assert_eq!(inner_conditions[1], "c.id = $6");
-        assert_eq!(values.len(), 6);
-    }
-
-    #[test]
-    fn test_bridge_scope_join_empty_configured_chain_ids_renders_activity_only() {
-        let mut values: Vec<Value> = Vec::new();
-        let mut inner_conditions: Vec<String> = Vec::new();
-        build_bridge_scope_join(&[1], &[], &mut values, &mut inner_conditions);
-        assert_eq!(
-            inner_conditions,
-            vec!["agg.chain_id IS NOT NULL".to_string()]
-        );
-        // Only the bridge-id placeholder was pushed; no candidate placeholders.
-        assert_eq!(values.len(), 1);
+        assert_eq!(predicate, "c.id = $3");
+        assert_eq!(values.len(), 3);
     }
 
     // --- StatsChainsScope::Bridges: DB-backed read-path coverage (coding-task-2 item 8) ---
@@ -1247,10 +1204,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
-            StatsChainsScope::Bridges {
-                bridge_ids: &[10],
-                configured_chain_ids: &[],
-            },
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
             &[],
             true,
             None,
@@ -1277,7 +1231,6 @@ mod tests {
             db.as_ref(),
             StatsChainsScope::Bridges {
                 bridge_ids: &[10, 20],
-                configured_chain_ids: &[],
             },
             &[],
             true,
@@ -1318,7 +1271,6 @@ mod tests {
             db.as_ref(),
             StatsChainsScope::Bridges {
                 bridge_ids: &[10, 20],
-                configured_chain_ids: &[],
             },
             &[],
             true,
@@ -1347,19 +1299,21 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn stats_chains_bridges_scope_configured_zero_row_only_when_allowed() {
+    async fn stats_chains_bridges_scope_zero_activity_chain_shown_only_when_allowed() {
+        // Chain 2 has no bridge-10 activity at all (no `stats_chains_by_bridge`
+        // row) and no special relationship to bridge 10 — it is simply one of
+        // the known chains. `bridge_ids` must never remove a chain from the
+        // listing, only zero its count, so this is governed purely by
+        // `include_zero_chains`, exactly like the `Global` scope's own
+        // zero-chains guard.
         let g = init_db("stats_chains_bridges_zero_row").await;
         let db = g.client();
         seed_chains(db.as_ref(), &[1, 2]).await;
         seed_bridges(db.as_ref(), &[10]).await;
-        // Chain 2 is configured for bridge 10 but has no recorded activity.
 
         let (hidden, _) = list_stats_chains(
             db.as_ref(),
-            StatsChainsScope::Bridges {
-                bridge_ids: &[10],
-                configured_chain_ids: &[2],
-            },
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
             &[],
             false,
             None,
@@ -1369,15 +1323,12 @@ mod tests {
         .unwrap();
         assert!(
             !hidden.iter().any(|r| r.chain_id == 2),
-            "include_zero_chains=false must omit the zero-activity configured chain"
+            "include_zero_chains=false must omit the zero-activity chain"
         );
 
         let (shown, _) = list_stats_chains(
             db.as_ref(),
-            StatsChainsScope::Bridges {
-                bridge_ids: &[10],
-                configured_chain_ids: &[2],
-            },
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
             &[],
             true,
             None,
@@ -1387,6 +1338,84 @@ mod tests {
         .unwrap();
         let row2 = shown.iter().find(|r| r.chain_id == 2).unwrap();
         assert_eq!(row2.unique_transfer_users_count, 0);
+    }
+
+    /// Regression for the live bug report (2026-08-25): a chain visible with
+    /// plain `include_unindexed_chains=true` (no `bridge_ids`) must stay
+    /// visible once `bridge_ids` is added, even though the selected bridge
+    /// never touched it and it is not configured for that bridge either —
+    /// `bridge_ids` scopes the count, never the chain list. An earlier
+    /// revision required selected-bridge activity or configuration before a
+    /// chain could appear at all, which silently dropped exactly this case.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_never_drops_a_chain_the_selected_bridge_never_touched() {
+        let g = init_db("stats_chains_bridges_unrelated_chain").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        seed_bridges(db.as_ref(), &[10, 20]).await;
+        // Bridge 20 (not selected) is the only one with activity on chain 2.
+        seed_stats_chains_by_bridge(db.as_ref(), 20, 2, 999, 0).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
+            &[],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+
+        let row2 = rows
+            .iter()
+            .find(|r| r.chain_id == 2)
+            .expect("chain 2 must still appear even though bridge 10 never touched it");
+        assert_eq!(
+            row2.unique_transfer_users_count, 0,
+            "bridge 20's count must never leak into bridge 10's scoped view"
+        );
+    }
+
+    /// Regression for the placeholder-collision bug this fix also caught:
+    /// `chain_ids`' predicate used to hardcode `$1, $2, ...` instead of
+    /// deriving from `values.len()`, which collided with the bridge-id
+    /// placeholders `Bridges` scope pushes first. Chosen so the collision
+    /// produces an observably wrong (not merely coincidentally correct)
+    /// result if it regresses: chain_ids requests {2, 3}; the collided
+    /// binding would silently drop chain 3.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_chain_ids_placeholders_stay_correct_after_bridge_ids() {
+        let g = init_db("stats_chains_bridges_chain_ids_after_bridge_ids").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2, 3, 4]).await;
+        seed_bridges(db.as_ref(), &[10]).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 2, 20, 0).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 3, 30, 0).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
+            &[2, 3],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+
+        let mut ids: Vec<i64> = rows.iter().map(|r| r.chain_id).collect();
+        ids.sort_unstable();
+        assert_eq!(ids, vec![2, 3], "both requested chain_ids must be present");
+        assert_eq!(
+            rows.iter()
+                .find(|r| r.chain_id == 3)
+                .unwrap()
+                .unique_transfer_users_count,
+            30
+        );
     }
 
     #[tokio::test]
@@ -1405,10 +1434,7 @@ mod tests {
 
         let (hidden, _) = list_stats_chains(
             db.as_ref(),
-            StatsChainsScope::Bridges {
-                bridge_ids: &[10],
-                configured_chain_ids: &[],
-            },
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
             &[],
             true,
             Some(&[1]),
@@ -1423,10 +1449,7 @@ mod tests {
 
         let (shown, _) = list_stats_chains(
             db.as_ref(),
-            StatsChainsScope::Bridges {
-                bridge_ids: &[10],
-                configured_chain_ids: &[],
-            },
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
             &[],
             true,
             None,
@@ -1448,16 +1471,14 @@ mod tests {
         let db = g.client();
         seed_chains(db.as_ref(), &[1]).await;
         seed_bridges(db.as_ref(), &[10]).await;
-        // Chain 999 is a configured candidate but has no `chains` row at all
-        // (for example, removed from the chain directory). Must not fail
+        // Chain 999 has no `chains` row at all (for example, removed from the
+        // chain directory). Driving the query from `chains` makes this
+        // unrepresentable rather than merely absent: it must not fail
         // deserialization (StatsChainListRow.name is non-nullable) and must
         // not appear.
         let (rows, _) = list_stats_chains(
             db.as_ref(),
-            StatsChainsScope::Bridges {
-                bridge_ids: &[10],
-                configured_chain_ids: &[999],
-            },
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
             &[],
             true,
             None,
@@ -1483,10 +1504,7 @@ mod tests {
         // {1}; q further narrows by name; all must compose through AND.
         let (rows, _) = list_stats_chains(
             db.as_ref(),
-            StatsChainsScope::Bridges {
-                bridge_ids: &[10],
-                configured_chain_ids: &[],
-            },
+            StatsChainsScope::Bridges { bridge_ids: &[10] },
             &[1, 2],
             true,
             None,
@@ -1522,10 +1540,7 @@ mod tests {
             async move {
                 list_stats_chains(
                     db.as_ref(),
-                    StatsChainsScope::Bridges {
-                        bridge_ids: &[10],
-                        configured_chain_ids: &[],
-                    },
+                    StatsChainsScope::Bridges { bridge_ids: &[10] },
                     &[],
                     true,
                     None,

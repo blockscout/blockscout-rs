@@ -61,11 +61,18 @@ Visibility and attribution are kept separate on the read side:
   is unindexed only when no configured bridge indexes it
   (`IndexedChains::configured_union()`), never "not indexed by the selected
   bridges";
-- `IndexedChains::selected_configured_union(bridge_ids)` (new) supplies
-  current configured zero-row candidates for the *selected* bridges only,
-  returning `Vec<i64>` (never `Option<Vec<i64>>`) so an empty result cannot be
-  read as "no restriction" — the opposite convention from
-  `configured_union()`;
+- `bridge_ids` scopes **attribution only** (the returned count). It never
+  narrows **which chains appear** — that list is driven by `chain_ids` / `q` /
+  `include_unindexed_chains` exactly as the unfiltered request, so a chain
+  visible without `bridge_ids` stays visible with it, just with its count
+  reduced to what the selected bridges contributed (0 if none did). A
+  same-day revision (2026-08-25) replaced an initial design that additionally
+  required selected-bridge activity or selected-bridge configuration before a
+  chain could appear at all — that silently dropped chains indexed only by a
+  *different* bridge (or entirely unconfigured chains, under
+  `include_unindexed_chains = true`) from the bridge-filtered listing, caught
+  by a live report of exactly that: chains visible with plain
+  `include_unindexed_chains=true` disappearing once `bridge_ids` was added;
 - historical activity for a bridge removed from runtime config, or one that
   observed an unconfigured chain, stays queryable through
   `stats_chains_by_bridge`, independent of current configuration.
@@ -223,5 +230,5 @@ the other rejected alternatives do (they fail on cost or latency instead).
 - `interchain-indexer-migration/src/m20260824_120000_add_stats_chains_by_bridge.rs`
 - `interchain-indexer-logic/src/database.rs` (`recompute_stats_chains`, `StatsChainsRecomputeReport`)
 - `interchain-indexer-logic/src/stats_chains_query.rs` (`StatsChainsScope`)
-- `interchain-indexer-logic/src/stats/indexed_chains.rs` (`selected_configured_union`, `configured_overlaps`)
+- `interchain-indexer-logic/src/stats/indexed_chains.rs` (`configured_overlaps`)
 - `interchain-indexer-logic/src/stats/overlap_warning.rs`
