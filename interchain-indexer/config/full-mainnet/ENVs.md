@@ -8,8 +8,8 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 
 | Chain | Name | RPC providers |
 | --- | --- | --- |
-| `1` | Ethereum | `gateway`, `drpc`, `1rpc` |
-| `100` | Gnosis | `gateway`, `gnosis_official` |
+| `1` | Ethereum | `drpc`, `mevblocker` |
+| `100` | Gnosis | `gnosis_official`, `drpc` |
 | `43114` | Avalanche C-Chain | `avalanche` |
 
 | Bridge | Name | `type` / `indexer_type` | Contracts |
@@ -80,7 +80,7 @@ INTERCHAIN_INDEXER_CHAINS__100__EXPLORER__CUSTOM_TOKEN_ROUTE='/token/{hash}'
 # rpc provider "gnosis_official"
 INTERCHAIN_INDEXER_CHAINS__100__RPCS__GNOSIS_OFFICIAL__URL=https://rpc.gnosischain.com
 INTERCHAIN_INDEXER_CHAINS__100__RPCS__GNOSIS_OFFICIAL__MAX_RPS=5
-INTERCHAIN_INDEXER_CHAINS__100__RPCS__GNOSIS_OFFICIAL__OREDER=100
+INTERCHAIN_INDEXER_CHAINS__100__RPCS__GNOSIS_OFFICIAL__ORDER=100
 # rpc provider "drpc"
 INTERCHAIN_INDEXER_CHAINS__100__RPCS__DRPC__URL=https://gnosis.drpc.org
 INTERCHAIN_INDEXER_CHAINS__100__RPCS__DRPC__MAX_RPS=5

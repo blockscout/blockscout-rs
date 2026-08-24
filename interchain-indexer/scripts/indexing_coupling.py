@@ -12,6 +12,11 @@ So: split each fast chain's inter-batch gaps into those that overlap a slow
 chain's batch and those that do not, and compare. Coupled => the overlapping
 gaps are systematically longer. Decoupled => the two distributions match.
 
+Overlap is judged by the slow chain's *scan starts*, the only per-batch mark the
+logs carry, so a fast gap sitting entirely inside one slow batch is counted as
+clear. That biases the comparison towards "decoupled" — read a decoupled verdict
+together with the slow chain's batch count.
+
 Usage: coupling.py <log> <slow_chain_id> [fast_chain_id ...]
 """
 import re
@@ -65,7 +70,7 @@ def main():
     print("-" * 110)
 
     for chain in sorted(fast_ids, key=int):
-        marks = events[chain]
+        marks = events.get(chain, [])
         if len(marks) < 3:
             print(f"{chain:<8} too few batches to compare")
             continue

@@ -4,7 +4,7 @@ Rust microservice indexing cross-chain messages and token transfers. Currently s
 
 ## Stack
 
-- Rust 2021
+- Rust, edition 2024 (except `interchain-indexer-migration`, still 2021)
 - Tokio
 - PostgreSQL + SeaORM
 - Actix-web + Tonic

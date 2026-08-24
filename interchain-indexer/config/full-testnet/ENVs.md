@@ -8,7 +8,7 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 
 | Chain | Name | RPC providers |
 | --- | --- | --- |
-| `11155111` | Sepolia | `tenderly`, `drpc` |
+| `11155111` | Sepolia | `tenderly` |
 | `10200` | Chiado | `gateway_archive`, `gnosis_official`, `ankr` |
 
 | Bridge | Name | `type` / `indexer_type` | Contracts |

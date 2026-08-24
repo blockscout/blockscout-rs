@@ -44,8 +44,8 @@ failures fed `mark_error`, cooling down nodes that never failed.
 The driving case is a **deliberately rate-limited chain as a steady state**,
 not an incident. Some chains have a single RPC with hard rate limits — NUMINE
 via Glacier is the concrete one — and the operator wants to set a low `max_rps`
-so that chain syncs slowly *on purpose*. Under the current shape that choice
-silently sets the pace for every other chain on the bridge: at `max_rps = 1`, a
+so that chain syncs slowly *on purpose*. Under the pre-change shape that choice
+silently set the pace for every other chain on the bridge: at `max_rps = 1`, a
 batch of N transactions holds the whole bridge for ~2N seconds, because each
 transaction issues a receipt and a block call and the entire `process_batch` is
 swallowed by one inline `await` in `handle_batch`.
@@ -57,11 +57,11 @@ Raising the limit is a workaround, not a fix: it takes away the operator's
 ability to run a chain slowly.
 
 Compounding this, the Avalanche bridge is expected to grow to many subnets.
-Each added chain lengthens the blocking period for every existing chain, so
-throughput per chain degrades as `O(1/N)`. For AMB the chain count is small but
-the requirement is the same: a stalled or throttled Gnosis must not stop
-Ethereum from being indexed, since messages are assembled incrementally and one
-side's events are still useful on their own.
+Under that baseline every added chain lengthened the blocking period for every
+existing chain, so throughput per chain degraded as `O(1/N)`. For AMB the chain
+count is small but the requirement is the same: a stalled or throttled Gnosis
+must not stop Ethereum from being indexed, since messages are assembled
+incrementally and one side's events are still useful on their own.
 
 A slow chain must therefore be treated as **healthy and normal**, never as a
 fault: no backpressure that accumulates, no stall detector, no liveness check
@@ -394,11 +394,12 @@ Real quota rejections, however, are visible and are the thing to tune against:
 
 Two lessons. First, 20 RPS is above Glacier's quota — and since decoupling makes
 a low limit free, a rate-limited chain should simply be configured low rather
-than pushed. Second, the Ethereum publics in `config/full-mainnet/chains.json`
-(`gateway`, `drpc`, `1rpc`) carry no `max_rps` at all, so they inherit
-`default_max_rps() = 10`; when the pool rotates the primary away from the
-unmetered Blockscout node they immediately exhaust their plan. Gnosis already
-guards against this (`gnosis_official` has `max_rps: 2`); Ethereum does not.
+than pushed. Second, at measurement time the Ethereum publics in
+`config/full-mainnet/chains.json` (`gateway`, `drpc`, `1rpc`) carried no
+`max_rps` at all, so they inherited `default_max_rps() = 10`; when the pool
+rotated the primary away from the unmetered Blockscout node they immediately
+exhausted their plan. That is what the current provider set fixes: every
+Ethereum and Gnosis node now carries an explicit `max_rps`.
 
 ### Recommended parameters
 
@@ -426,10 +427,11 @@ Shrinking `batch_size` shortens the blocking period; raising `max_rps` to match
 the receipt fan-out stops each batch from serialising its own RPC calls. Both
 help, and together they removed the manufactured timeouts outright.
 
-Neither removes head-of-line blocking. The gaps are still correlated across
-the chains of bridge 2 — a chain that genuinely stalls (endpoint outage, a very
-dense block range) still freezes its siblings for the duration. Config tuning
-bounded the damage; it did not decouple the chains.
+Neither removed head-of-line blocking. On the baseline the gaps stayed
+correlated across the chains of bridge 2 — a chain that genuinely stalled
+(endpoint outage, a very dense block range) froze its siblings for the duration.
+Config tuning bounded the damage; it did not decouple the chains. Per-chain
+handlers did — see [After per-chain concurrency](#after-per-chain-concurrency--2026-08-21).
 
 ## Edge Cases / Gotchas
 
