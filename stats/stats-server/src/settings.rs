@@ -274,13 +274,27 @@ pub fn handle_disable_internal_transactions(
 /// Finds the entry served under `id` in either config section. Chart ids are
 /// unique across counters and line charts *among enabled entries* only —
 /// `RuntimeSetup::build_charts_info` drops disabled entries before its
-/// collision check — so for a duplicate id whose other side is disabled the
-/// `lines` probe below wins.
+/// collision check — so a duplicate id with a disabled side reaches here and
+/// the `lines` probe below wins. That preference is not something an operator
+/// can predict from the config alone, so the ambiguous case is warned about
+/// (naming both sides and their `enabled` states) instead of being resolved
+/// silently.
 fn find_chart_settings_mut<'a>(
     charts: &'a mut config::charts::Config<AllChartSettings>,
     id: &str,
 ) -> Option<&'a mut AllChartSettings> {
     match (charts.lines.get_mut(id), charts.counters.get_mut(id)) {
+        (Some(line_settings), Some(counter_settings)) => {
+            warn!(
+                "Chart id '{id}' is served by an entry in both config sections: \
+                line charts (enabled: {}) and counters (enabled: {}). \
+                Chart ids must be unique across both sections; the line chart \
+                entry is selected here, which may not be the intended one. \
+                Rename or remove one of the two entries.",
+                line_settings.enabled, counter_settings.enabled,
+            );
+            Some(line_settings)
+        }
         (Some(settings), _) => Some(settings),
         (_, Some(settings)) => Some(settings),
         _ => None,
@@ -923,6 +937,24 @@ mod tests {
         let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
         assert!(txns_fee_24h.enabled);
         assert_eq!(txns_fee_24h.implementation, None);
+    }
+
+    // a duplicate id with one side disabled survives
+    // `RuntimeSetup::build_charts_info`, so this preference is observable in a
+    // running service; pin that the line chart entry is the one acted upon
+    #[test]
+    fn duplicate_id_across_sections_resolves_to_the_line_chart_entry() {
+        let disabled = config::types::AllChartSettings::default();
+        let id = "some_duplicated_id".to_owned();
+        let mut charts = config::charts::Config {
+            counters: [(id.clone(), disabled.clone())].into_iter().collect(),
+            lines: [(id.clone(), disabled.clone())].into_iter().collect(),
+        };
+
+        enable_charts(&[&id], &mut charts, "test");
+
+        assert!(charts.lines[&id].enabled);
+        assert!(!charts.counters[&id].enabled);
     }
 
     #[test]

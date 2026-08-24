@@ -47,6 +47,8 @@ If non-default config files are used, respective environment variables (e.g. `ST
 
 To disable unnecessary charts, open the `charts.json` file and set `enabled: false` for them. Other parameters can also be set/modified there.
 
+Chart ids must be unique across the `counters` and `line_charts` sections. Two enabled entries sharing an id fail at startup; if one of them is disabled the service still starts, but the `STATS__ENABLE_ALL_*` flags then act on the `line_charts` entry (a warning naming both entries and their `enabled` states is logged).
+
 ##### Serving a chart with another chart's implementation
 
 An entry may set an optional `implementation` field so the public id keeps its own metadata (title, description, units) while its data comes from a *different* registered chart. Example: the Filecoin deployment serves `txnsFee` with the `filecoinNewChainFees` implementation (see `STATS__ENABLE_ALL_FILECOIN`).
