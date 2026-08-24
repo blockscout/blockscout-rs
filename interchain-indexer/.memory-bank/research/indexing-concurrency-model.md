@@ -119,9 +119,8 @@ that could escalate it.
    every `.await`. `try_join_all` returns on the first `Err`, so an
    unrecordable-failure escalation still fails the whole bridge loudly.
 5. `process_batch` groups logs by transaction and fetches receipt + block per
-   transaction under `buffer_unordered` — 25 hardcoded for Avalanche,
-   `receipt_concurrency` (default 25) for AMB. Each call is throttled by the
-   node's `max_rps`.
+   transaction under `buffer_unordered(receipt_concurrency)` — default 25 in
+   both adapters. Each call is throttled by the node's `max_rps`.
 6. Successful batches call `ledger.resolve`; failures call `ledger.record`.
    Cursors are **not** derived here — `MessageBuffer` maintenance derives them
    independently from cold/hot block sets.
@@ -296,7 +295,7 @@ rate-limited.
 ### After configuration tuning — 2026-08-20, 662 s window
 
 `AVALANCHE_INDEXER__BATCH_SIZE = 200`, glacier `max_rps = 20`, C-Chain and
-Henesys `max_rps = 25` (matching the hardcoded `buffer_unordered(25)`).
+Henesys `max_rps = 25` (matching the 25-wide receipt fan-out).
 
 | Stream | blocks/s | mean gap | max gap |
 | --- | --- | --- | --- |
@@ -403,9 +402,9 @@ guards against this (`gnosis_official` has `max_rps: 2`); Ethereum does not.
 
 ### Recommended parameters
 
-- **`max_rps` ≥ the receipt fan-out (25) for any chain you want fast**, because
-  `process_batch` issues receipts under `buffer_unordered(25)`; below that the
-  chain throttles itself. Set it *deliberately low* for a chain you want slow —
+- **`max_rps` ≥ the receipt fan-out for any chain you want fast**, because
+  `process_batch` issues receipts under `buffer_unordered(receipt_concurrency)`,
+  default 25; below that the chain throttles itself. Set it *deliberately low* for a chain you want slow —
   that is now free for its siblings.
 - **Give every fallback node an explicit `max_rps`.** A fallback is only used
   when the primary rotates, i.e. exactly when the system is already degraded;
@@ -434,10 +433,13 @@ bounded the damage; it did not decouple the chains.
 
 ## Edge Cases / Gotchas
 
-- **`max_rps` must agree with receipt concurrency.** Avalanche hardcodes
-  `buffer_unordered(25)` while `default_max_rps()` is 10, so an unconfigured
-  node puts 15 of every 25 calls on the wait-for-a-token path. AMB exposes
-  `receipt_concurrency`; Avalanche does not.
+- **`max_rps` must agree with `receipt_concurrency`.** Both adapters default
+  the fan-out to 25 while `default_max_rps()` is 10, so an unconfigured node
+  parks 15 of every 25 calls against the limiter. That costs no throughput —
+  `max_rps` is the bound either way — but it is why peak in-flight requests
+  exceed what the endpoint is allowed to serve. Lower `receipt_concurrency`
+  rather than raising `max_rps` when the goal is fewer sockets, not more
+  blocks.
 - **`pull_interval_ms` applies to catchup too**, not just realtime polling — it
   is a flat sleep after every batch in both sub-streams.
 - **The retry pass is a sibling future**, not a `select!` branch, so a replay
@@ -482,5 +484,3 @@ Update this note when:
 - Should `pull_interval_ms` be split into separate catchup and realtime
   intervals? Catchup wants it as low as the endpoint tolerates; realtime wants
   it near the chain's block time.
-- Should Avalanche's receipt concurrency become a setting, mirroring AMB's
-  `receipt_concurrency`?

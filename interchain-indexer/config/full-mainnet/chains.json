@@ -36,7 +36,8 @@
             {
                 "gnosis_official": {
                     "url": "https://rpc.gnosischain.com",
-                    "max_rps": 5
+                    "max_rps": 5,
+                    "order": 100
                 },
                 "drpc": {
                     "url": "https://gnosis.drpc.org",
