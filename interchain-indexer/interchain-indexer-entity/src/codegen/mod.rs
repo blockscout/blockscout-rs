@@ -18,6 +18,7 @@ pub mod stats_asset_edges;
 pub mod stats_asset_tokens;
 pub mod stats_assets;
 pub mod stats_chains;
+pub mod stats_chains_by_bridge;
 pub mod stats_messages;
 pub mod stats_messages_days;
 pub mod tokens;

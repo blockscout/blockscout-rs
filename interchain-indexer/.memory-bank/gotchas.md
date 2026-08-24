@@ -557,7 +557,9 @@ in this code path.**
 **Operational consequence:** this fix changes `stats_chains` unique-user
 counts. `unique_message_users_count` counts distinct non-NULL
 `recipient_address` values grouped by `dst_chain_id`
-(`select_stats_chains_message_user_counts` in `database.rs`); with
+(`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL` in `database.rs`, formerly
+`select_stats_chains_message_user_counts` before ADR-009's bridge-qualified
+rewrite); with
 `recipient_address` NULL for every unindexed-source message, that chain's
 count was silently deflated (one production chain showed 23 against 13,865
 uncounted completed incoming messages). After this fix and a stats rebuild,
@@ -1574,5 +1576,71 @@ Consequences worth keeping straight:
 - No committed file under `config/` or `docker/` may declare an `api_key` at all:
   it would make the secret mandatory for every deployment reading that file.
   `test_no_repo_config_file_declares_an_api_key` enforces this.
+
+---
+
+## `stats_chains_by_bridge` Per-Bridge Uniques Are Not Additive (ADR-009)
+
+`GET /api/v1/stats/chains` accepts an optional `bridge_ids` CSV filter backed
+by a companion snapshot, `stats_chains_by_bridge (bridge_id, chain_id)`,
+rebuilt in the same transaction as the exact global `stats_chains` by the same
+periodic worker (`InterchainDatabase::recompute_stats_chains`).
+
+**The exactness boundary, precisely:**
+
+- no/blank `bridge_ids` → reads `stats_chains` directly, exact, unchanged from
+  before this feature existed. This path must **never** be reimplemented as a
+  sum over `stats_chains_by_bridge` rows — that would only be correct while no
+  two bridges ever see the same address on the same chain, which is not
+  guaranteed (a bridge with `process_unknown_chains = true` can observe a
+  chain outside its own configured set).
+- one `bridge_ids` value → exact. A single bridge's distinct-user count cannot
+  be inflated by another bridge, because the cell is keyed by that bridge
+  alone.
+- two or more `bridge_ids` values → **sums per-bridge distinct counts**, which
+  overcounts an address by exactly (number of selected bridges that saw it on
+  that chain) − 1, but **only** when that address appears on the **same
+  chain** through more than one of the *selected* bridges. The same address on
+  two *different* chains is not an error — it legitimately belongs once in
+  each chain's own row.
+
+**Why the same-chain/same-address condition is the whole story:** the
+recompute derives both snapshots from one bridge-qualified, `MATERIALIZED` CTE
+of `(bridge_id, chain_id, address)` triples per domain (message/transfer).
+`COUNT(DISTINCT address) GROUP BY chain_id` (global arm) already dedupes an
+address across bridges on the same chain — that is what keeps `stats_chains`
+exact. `COUNT(*) GROUP BY (bridge_id, chain_id)` (per-bridge arm) counts rows
+that are already distinct *within* one bridge, so summing several such cells
+double-counts exactly the addresses the global arm dedupes away and nothing
+else.
+
+**Reading the observability signals** (see `stats/metrics.rs`,
+`stats/overlap_warning.rs`, `server.rs`):
+
+- `IndexedChains::configured_overlaps()` (startup-only warning) is *structural
+  risk*: it fires when a chain is configured for two or more distinct bridge
+  ids, whether or not any of them has actually observed a duplicate address
+  there yet. It says nothing about whether an overcount is currently real.
+- `interchain_indexer_stats_chains_bridge_sum_overcount_users{kind}` /
+  `..._affected_chains{kind}` (gauges, updated every successful recomputation)
+  are the *actual* signal: `SUM` over chains of `SUM(per_bridge_count) -
+  global_distinct_count`, computed **across all bridges**, not just a
+  particular request's selection. A positive gauge means *some* multi-bridge
+  selection is currently approximate somewhere in the config/history, not that
+  every multi-bridge request is affected — it is an upper bound, not a
+  per-request figure. Read it alongside `overlap_transition`'s one-shot
+  warn-on-appearance log, not instead of it: neither signal substitutes for
+  the other.
+- Both counters (`unique_transfer_users_count` and `unique_message_users_count`)
+  are scoped in every stats-chains snapshot even though only the transfer
+  count is exposed in the API response — `include_zero_chains = false` reads
+  both, so a message-only chain/bridge cell must still survive that guard.
+
+**Do not** derive `stats_chains_by_bridge`'s candidate rows (for
+`include_zero_chains = false`) from `bridge_contracts` — like every other
+membership question in the stats layer, use the in-memory `IndexedChains`
+(`selected_configured_union`), which distinguishes a bridge that is absent
+from config (no current candidates, but retained history still queryable)
+from one present with an empty contract set, per ADR-004 Decision 5.
 
 ---

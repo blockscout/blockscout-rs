@@ -22,6 +22,7 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [006](./006-contract-versioning-by-block.md) | Contract Versioning Resolved By Block, At Decode Time | Accepted | 2026-08 |
 | [007](./007-scan-floor-reconciled-against-the-checkpoint.md) | The Scan Floor Is Reconciled Against The Checkpoint, Not `bridge_contracts` | Accepted (expires with bidirectional catch-up) | 2026-08 |
 | [008](./008-per-chain-concurrency-within-a-bridge.md) | Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task | Accepted | 2026-08 |
+| [009](./009-stats-chains-global-and-per-bridge-snapshots.md) | Stats Chains Global-Plus-Per-Bridge Snapshots | Accepted | 2026-08 |
 
 ## Creating a New ADR
 

@@ -5,16 +5,15 @@ use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, indexer_failures, pending_messages,
     sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
-    stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages, tokens,
+    stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_chains_by_bridge,
+    stats_messages, tokens,
 };
 use parking_lot::RwLock;
 use sea_orm::{
     ActiveValue, ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, RelationTrait, Statement, StatementBuilder, TransactionTrait, Value,
-    entity::prelude::*,
-    prelude::Expr,
-    sea_query::{Alias, Asterisk, Func, OnConflict, Query, SelectStatement, UnionType},
+    QuerySelect, RelationTrait, Statement, TransactionTrait, Value, entity::prelude::*,
+    prelude::Expr, sea_query::OnConflict,
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -128,81 +127,129 @@ pub struct InterchainDatabase {
     bridges_names: Arc<RwLock<HashMap<i32, String>>>, // Lazy loaded bridge names
 }
 
-/// Per-chain count of distinct `(chain_id, user_address)` from `crosschain_messages` (sender ∪ recipient).
-fn select_stats_chains_message_user_counts() -> SelectStatement {
-    let pairs = Query::select()
-        .expr_as(
-            Expr::col(crosschain_messages::Column::SrcChainId),
-            Alias::new("chain_id"),
-        )
-        .expr_as(
-            Expr::col(crosschain_messages::Column::SenderAddress),
-            Alias::new("addr"),
-        )
-        .from(crosschain_messages::Entity)
-        .and_where(Expr::col(crosschain_messages::Column::SenderAddress).is_not_null())
-        .union(
-            UnionType::Distinct,
-            Query::select()
-                .expr_as(
-                    Expr::col(crosschain_messages::Column::DstChainId),
-                    Alias::new("chain_id"),
-                )
-                .expr_as(
-                    Expr::col(crosschain_messages::Column::RecipientAddress),
-                    Alias::new("addr"),
-                )
-                .from(crosschain_messages::Entity)
-                .and_where(Expr::col(crosschain_messages::Column::DstChainId).is_not_null())
-                .and_where(Expr::col(crosschain_messages::Column::RecipientAddress).is_not_null())
-                .take(),
-        )
-        .take();
+/// Bridge-qualified per-chain distinct user counts from `crosschain_messages`
+/// (sender ∪ recipient). The `bridge_id IS NULL` rows are the global count,
+/// deduplicated `(chain_id, address)` across every bridge — exactly today's
+/// `stats_chains` semantics. The remaining rows are exact per-bridge distinct
+/// counts, `GROUP BY (bridge_id, chain_id)`.
+///
+/// `MATERIALIZED` computes `bridge_user_pairs` once and shares it between both
+/// arms, which is what buys the per-bridge report without a second full
+/// canonical scan. Kept as a raw SQL string rather than a `sea_query` builder:
+/// `sea_query` has no ergonomic way to express a `MATERIALIZED` CTE feeding two
+/// grouped arms combined with `UNION ALL`.
+///
+/// No status filter, no transfer-to-message join, NULL addresses excluded —
+/// same inclusion rules as before this task.
+const STATS_CHAINS_MESSAGE_USER_COUNTS_SQL: &str = r#"
+WITH bridge_user_pairs AS MATERIALIZED (
+  SELECT bridge_id, src_chain_id AS chain_id, sender_address AS addr
+  FROM crosschain_messages
+  WHERE sender_address IS NOT NULL
+  UNION
+  SELECT bridge_id, dst_chain_id AS chain_id, recipient_address AS addr
+  FROM crosschain_messages
+  WHERE dst_chain_id IS NOT NULL AND recipient_address IS NOT NULL
+)
+SELECT NULL::integer AS bridge_id, chain_id, COUNT(DISTINCT addr)::bigint AS user_count
+FROM bridge_user_pairs
+GROUP BY chain_id
+UNION ALL
+SELECT bridge_id, chain_id, COUNT(*)::bigint AS user_count
+FROM bridge_user_pairs
+GROUP BY bridge_id, chain_id
+"#;
 
-    Query::select()
-        .column(Alias::new("chain_id"))
-        .expr_as(Func::count(Expr::col(Asterisk)), Alias::new("user_count"))
-        .from_subquery(pairs, Alias::new("u"))
-        .group_by_col(Alias::new("chain_id"))
-        .take()
+/// Transfer-domain counterpart of [`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL`]: same
+/// shape, over `crosschain_transfers` token src/dst roles.
+const STATS_CHAINS_TRANSFER_USER_COUNTS_SQL: &str = r#"
+WITH bridge_user_pairs AS MATERIALIZED (
+  SELECT bridge_id, token_src_chain_id AS chain_id, sender_address AS addr
+  FROM crosschain_transfers
+  WHERE sender_address IS NOT NULL
+  UNION
+  SELECT bridge_id, token_dst_chain_id AS chain_id, recipient_address AS addr
+  FROM crosschain_transfers
+  WHERE recipient_address IS NOT NULL
+)
+SELECT NULL::integer AS bridge_id, chain_id, COUNT(DISTINCT addr)::bigint AS user_count
+FROM bridge_user_pairs
+GROUP BY chain_id
+UNION ALL
+SELECT bridge_id, chain_id, COUNT(*)::bigint AS user_count
+FROM bridge_user_pairs
+GROUP BY bridge_id, chain_id
+"#;
+
+/// One row of either bridge-qualified count query. `bridge_id: None` is the
+/// global (all-bridges-deduplicated) arm; `Some(_)` is one bridge's exact cell.
+#[derive(Debug, FromQueryResult)]
+struct BridgeChainUserCountRow {
+    bridge_id: Option<i32>,
+    chain_id: i64,
+    user_count: i64,
 }
 
-/// Per-chain count of distinct `(chain_id, user_address)` from `crosschain_transfers` (sender ∪ recipient).
-fn select_stats_chains_transfer_user_counts() -> SelectStatement {
-    let pairs = Query::select()
-        .expr_as(
-            Expr::col(crosschain_transfers::Column::TokenSrcChainId),
-            Alias::new("chain_id"),
-        )
-        .expr_as(
-            Expr::col(crosschain_transfers::Column::SenderAddress),
-            Alias::new("addr"),
-        )
-        .from(crosschain_transfers::Entity)
-        .and_where(Expr::col(crosschain_transfers::Column::SenderAddress).is_not_null())
-        .union(
-            UnionType::Distinct,
-            Query::select()
-                .expr_as(
-                    Expr::col(crosschain_transfers::Column::TokenDstChainId),
-                    Alias::new("chain_id"),
-                )
-                .expr_as(
-                    Expr::col(crosschain_transfers::Column::RecipientAddress),
-                    Alias::new("addr"),
-                )
-                .from(crosschain_transfers::Entity)
-                .and_where(Expr::col(crosschain_transfers::Column::RecipientAddress).is_not_null())
-                .take(),
-        )
-        .take();
+/// At most ten deterministic `(chain_id, transfer_delta, message_delta)`
+/// samples from [`StatsChainsRecomputeReport::samples`], for the startup/
+/// recomputation overlap warning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StatsChainsOverlapSample {
+    pub chain_id: i64,
+    pub transfer_delta: i64,
+    pub message_delta: i64,
+}
 
-    Query::select()
-        .column(Alias::new("chain_id"))
-        .expr_as(Func::count(Expr::col(Asterisk)), Alias::new("user_count"))
-        .from_subquery(pairs, Alias::new("u"))
-        .group_by_col(Alias::new("chain_id"))
-        .take()
+/// Outcome of one [`InterchainDatabase::recompute_stats_chains`] run.
+///
+/// `*_overcount_users` counts **extra address contributions**, not people: an
+/// address present on one chain in three bridges contributes 2, not 1. It is
+/// computed across *all* configured and historical bridges, so it is an upper
+/// bound for the overcount any particular multi-bridge request would actually
+/// see (`GetChainsStats` requests only ever select a subset).
+#[derive(Debug, Clone, Default)]
+pub struct StatsChainsRecomputeReport {
+    pub global_rows: usize,
+    pub bridge_rows: usize,
+    /// SUM over chains of `(SUM(per_bridge_count) - global_distinct_count)`.
+    pub transfer_overcount_users: i64,
+    pub message_overcount_users: i64,
+    pub transfer_affected_chains: usize,
+    pub message_affected_chains: usize,
+    /// Deterministic, sorted by `chain_id`, truncated to 10.
+    pub samples: Vec<StatsChainsOverlapSample>,
+}
+
+impl StatsChainsRecomputeReport {
+    /// Whether this run found any actual cross-bridge duplicate-user impact
+    /// (the recomputation-time signal, as opposed to `configured_overlaps()`'s
+    /// structural configuration signal).
+    pub fn has_overlap(&self) -> bool {
+        self.transfer_overcount_users > 0 || self.message_overcount_users > 0
+    }
+}
+
+/// Per-chain `SUM(per_bridge_count) - global_distinct_count`, for one domain
+/// (message or transfer). Every chain with a positive global count has at
+/// least one per-bridge contribution from the same source rows, so the delta
+/// is always non-negative; `BTreeMap` keeps the result sorted by `chain_id` for
+/// deterministic sample truncation.
+fn stats_chains_overcount_by_chain(
+    global_by_chain: &HashMap<i64, i64>,
+    per_bridge_by_chain: &HashMap<(i32, i64), i64>,
+) -> std::collections::BTreeMap<i64, i64> {
+    let mut sum_per_bridge: HashMap<i64, i64> = HashMap::new();
+    for (&(_, chain_id), &count) in per_bridge_by_chain {
+        *sum_per_bridge.entry(chain_id).or_insert(0) += count;
+    }
+
+    sum_per_bridge
+        .into_iter()
+        .map(|(chain_id, sum)| {
+            let global = global_by_chain.get(&chain_id).copied().unwrap_or(0);
+            (chain_id, sum - global)
+        })
+        .collect()
 }
 
 #[derive(Copy, Clone)]
@@ -1310,54 +1357,116 @@ impl InterchainDatabase {
         }
     }
 
-    /// Full refresh of `stats_chains` from `crosschain_messages` and `crosschain_transfers`.
+    /// Full refresh of **both** `stats_chains` (global) and `stats_chains_by_bridge`
+    /// (per-bridge) from `crosschain_messages` and `crosschain_transfers`, in one
+    /// transaction.
     ///
-    /// Counts distinct `(chain_id, address)` with **UNION** semantics between sender and recipient
-    /// roles (no status filter, no transfer–message join). Runs in a single transaction.
+    /// Counts distinct `(chain_id, address)` with **UNION** semantics between sender and
+    /// recipient roles (no status filter, no transfer–message join) — unchanged from
+    /// before this task, and still exactly what the global snapshot reflects. The
+    /// per-bridge snapshot additionally isolates each bridge's own distinct
+    /// `(chain_id, address)` set, which is what makes a single-bridge filtered read
+    /// exact; summing it across a multi-bridge selection can still overcount an
+    /// address present on the same chain through more than one selected bridge (see
+    /// [`StatsChainsRecomputeReport`]).
     ///
-    /// Implementation: `DELETE` all `stats_chains` rows in this transaction, then batch-insert
-    /// the recomputed snapshot (`ON CONFLICT` matches insert-only after the delete).
-    pub async fn recompute_stats_chains(&self) -> anyhow::Result<()> {
-        #[derive(Debug, FromQueryResult)]
-        struct ChainUserCountRow {
-            chain_id: i64,
-            user_count: i64,
-        }
-
+    /// Implementation: `DELETE` all rows of both tables in this transaction, then
+    /// batch-insert the recomputed snapshots (`ON CONFLICT` matches insert-only after
+    /// the delete), then commit once. Any error rolls back both deletes and all
+    /// inserts, so readers keep seeing the previous generation of both tables — the
+    /// report is only returned after a successful commit.
+    pub async fn recompute_stats_chains(&self) -> anyhow::Result<StatsChainsRecomputeReport> {
         let txn = self.db.begin().await?;
         let backend = txn.get_database_backend();
 
-        let message_rows = ChainUserCountRow::find_by_statement(StatementBuilder::build(
-            &select_stats_chains_message_user_counts(),
-            &backend,
+        let message_rows = BridgeChainUserCountRow::find_by_statement(Statement::from_string(
+            backend,
+            STATS_CHAINS_MESSAGE_USER_COUNTS_SQL,
         ))
         .all(&txn)
         .await?;
 
-        let transfer_rows = ChainUserCountRow::find_by_statement(StatementBuilder::build(
-            &select_stats_chains_transfer_user_counts(),
-            &backend,
+        let transfer_rows = BridgeChainUserCountRow::find_by_statement(Statement::from_string(
+            backend,
+            STATS_CHAINS_TRANSFER_USER_COUNTS_SQL,
         ))
         .all(&txn)
         .await?;
 
         let mut message_by_chain: HashMap<i64, i64> = HashMap::new();
+        let mut message_by_bridge_chain: HashMap<(i32, i64), i64> = HashMap::new();
         for r in message_rows {
-            message_by_chain.insert(r.chain_id, r.user_count);
+            match r.bridge_id {
+                None => {
+                    message_by_chain.insert(r.chain_id, r.user_count);
+                }
+                Some(bridge_id) => {
+                    message_by_bridge_chain.insert((bridge_id, r.chain_id), r.user_count);
+                }
+            }
         }
         let mut transfer_by_chain: HashMap<i64, i64> = HashMap::new();
+        let mut transfer_by_bridge_chain: HashMap<(i32, i64), i64> = HashMap::new();
         for r in transfer_rows {
-            transfer_by_chain.insert(r.chain_id, r.user_count);
+            match r.bridge_id {
+                None => {
+                    transfer_by_chain.insert(r.chain_id, r.user_count);
+                }
+                Some(bridge_id) => {
+                    transfer_by_bridge_chain.insert((bridge_id, r.chain_id), r.user_count);
+                }
+            }
         }
+
+        let transfer_deltas =
+            stats_chains_overcount_by_chain(&transfer_by_chain, &transfer_by_bridge_chain);
+        let message_deltas =
+            stats_chains_overcount_by_chain(&message_by_chain, &message_by_bridge_chain);
+
+        let transfer_overcount_users: i64 = transfer_deltas.values().sum();
+        let message_overcount_users: i64 = message_deltas.values().sum();
+        let transfer_affected_chains = transfer_deltas.values().filter(|&&d| d > 0).count();
+        let message_affected_chains = message_deltas.values().filter(|&&d| d > 0).count();
+
+        let mut affected_chain_ids: BTreeSet<i64> = BTreeSet::new();
+        affected_chain_ids.extend(
+            transfer_deltas
+                .iter()
+                .filter(|&(_, &d)| d > 0)
+                .map(|(&c, _)| c),
+        );
+        affected_chain_ids.extend(
+            message_deltas
+                .iter()
+                .filter(|&(_, &d)| d > 0)
+                .map(|(&c, _)| c),
+        );
+        let samples: Vec<StatsChainsOverlapSample> = affected_chain_ids
+            .into_iter()
+            .take(10)
+            .map(|chain_id| StatsChainsOverlapSample {
+                chain_id,
+                transfer_delta: transfer_deltas.get(&chain_id).copied().unwrap_or(0),
+                message_delta: message_deltas.get(&chain_id).copied().unwrap_or(0),
+            })
+            .collect();
 
         let mut chain_ids_set: BTreeSet<i64> = BTreeSet::new();
         chain_ids_set.extend(message_by_chain.keys().copied());
         chain_ids_set.extend(transfer_by_chain.keys().copied());
         let chain_ids: Vec<i64> = chain_ids_set.into_iter().collect();
 
-        stats_chains::Entity::delete_many().exec(&txn).await?;
+        let mut bridge_chain_keys: BTreeSet<(i32, i64)> = BTreeSet::new();
+        bridge_chain_keys.extend(message_by_bridge_chain.keys().copied());
+        bridge_chain_keys.extend(transfer_by_bridge_chain.keys().copied());
+        let bridge_chain_keys: Vec<(i32, i64)> = bridge_chain_keys.into_iter().collect();
 
-        let models: Vec<stats_chains::ActiveModel> = chain_ids
+        stats_chains::Entity::delete_many().exec(&txn).await?;
+        stats_chains_by_bridge::Entity::delete_many()
+            .exec(&txn)
+            .await?;
+
+        let global_models: Vec<stats_chains::ActiveModel> = chain_ids
             .iter()
             .map(|chain_id| stats_chains::ActiveModel {
                 chain_id: ActiveValue::Set(*chain_id),
@@ -1371,7 +1480,7 @@ impl InterchainDatabase {
             })
             .collect();
 
-        if !models.is_empty() {
+        if !global_models.is_empty() {
             let on_conflict = OnConflict::column(stats_chains::Column::ChainId)
                 .update_columns([
                     stats_chains::Column::UniqueTransferUsersCount,
@@ -1379,11 +1488,58 @@ impl InterchainDatabase {
                 ])
                 .value(stats_chains::Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned();
-            crate::bulk::batched_upsert(&txn, &models, on_conflict).await?;
+            crate::bulk::batched_upsert(&txn, &global_models, on_conflict).await?;
+        }
+
+        let bridge_models: Vec<stats_chains_by_bridge::ActiveModel> = bridge_chain_keys
+            .iter()
+            .map(
+                |&(bridge_id, chain_id)| stats_chains_by_bridge::ActiveModel {
+                    bridge_id: ActiveValue::Set(bridge_id),
+                    chain_id: ActiveValue::Set(chain_id),
+                    unique_transfer_users_count: ActiveValue::Set(
+                        *transfer_by_bridge_chain
+                            .get(&(bridge_id, chain_id))
+                            .unwrap_or(&0),
+                    ),
+                    unique_message_users_count: ActiveValue::Set(
+                        *message_by_bridge_chain
+                            .get(&(bridge_id, chain_id))
+                            .unwrap_or(&0),
+                    ),
+                    ..Default::default()
+                },
+            )
+            .collect();
+
+        if !bridge_models.is_empty() {
+            let on_conflict = OnConflict::columns([
+                stats_chains_by_bridge::Column::BridgeId,
+                stats_chains_by_bridge::Column::ChainId,
+            ])
+            .update_columns([
+                stats_chains_by_bridge::Column::UniqueTransferUsersCount,
+                stats_chains_by_bridge::Column::UniqueMessageUsersCount,
+            ])
+            .value(
+                stats_chains_by_bridge::Column::UpdatedAt,
+                Expr::current_timestamp(),
+            )
+            .to_owned();
+            crate::bulk::batched_upsert(&txn, &bridge_models, on_conflict).await?;
         }
 
         txn.commit().await?;
-        Ok(())
+
+        Ok(StatsChainsRecomputeReport {
+            global_rows: global_models.len(),
+            bridge_rows: bridge_models.len(),
+            transfer_overcount_users,
+            message_overcount_users,
+            transfer_affected_chains,
+            message_affected_chains,
+            samples,
+        })
     }
 
     /// Creates or increments the directional message count from src_chain_id to dst_chain_id.
@@ -3535,6 +3691,7 @@ impl InterchainDatabase {
 
     pub async fn list_stats_chains(
         &self,
+        scope: crate::stats_chains_query::StatsChainsScope<'_>,
         chain_ids: &[i64],
         include_zero_chains: bool,
         indexed_chain_ids: Option<&[i64]>,
@@ -3549,6 +3706,7 @@ impl InterchainDatabase {
     )> {
         crate::stats_chains_query::list_stats_chains(
             self.db.as_ref(),
+            scope,
             chain_ids,
             include_zero_chains,
             indexed_chain_ids,
@@ -3664,8 +3822,8 @@ mod tests {
         bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
         indexer_failures,
         sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferType},
-        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_messages,
-        stats_messages_days, tokens,
+        stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_chains_by_bridge,
+        stats_messages, stats_messages_days, tokens,
     };
     use sea_orm::{
         ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
@@ -3673,8 +3831,8 @@ mod tests {
     };
 
     use super::{
-        BlockRange, CrosschainMessageLookup, JoinedTransfer, push_indexed_pairs_predicate,
-        push_zero_chains_guard_predicate,
+        BlockRange, CrosschainMessageLookup, JoinedTransfer, StatsChainsOverlapSample,
+        push_indexed_pairs_predicate, push_zero_chains_guard_predicate,
     };
     use crate::{
         ChainBridgeFilter, IndexedChains, InterchainDatabase, MessagePathStatsRow,
@@ -6600,7 +6758,15 @@ mod tests {
             .await
             .unwrap();
 
-        interchain_db.recompute_stats_chains().await.unwrap();
+        let report = interchain_db.recompute_stats_chains().await.unwrap();
+        assert_eq!(
+            report.transfer_overcount_users, 0,
+            "single-bridge fixture: no cross-bridge duplicate possible"
+        );
+        assert_eq!(report.message_overcount_users, 0);
+        assert_eq!(report.transfer_affected_chains, 0);
+        assert_eq!(report.message_affected_chains, 0);
+        assert!(report.samples.is_empty());
 
         let r1 = stats_chains::Entity::find_by_id(c1)
             .one(conn.as_ref())
@@ -6676,6 +6842,267 @@ mod tests {
                 .unwrap()
                 .is_none(),
             "configured chain with no message/transfer users must not get a stats_chains row"
+        );
+
+        // Single-bridge fixture: every stats_chains_by_bridge cell for bridge 1
+        // must exactly match the corresponding global row (no other bridge to
+        // dedupe against), and the idle chain gets no per-bridge row either.
+        for (chain_id, global) in [(c1, &r1), (c2, &r2), (c3, &r3), (c4, &r4), (c5, &r5)] {
+            let by_bridge = stats_chains_by_bridge::Entity::find_by_id((1, chain_id))
+                .one(conn.as_ref())
+                .await
+                .unwrap()
+                .unwrap_or_else(|| {
+                    panic!("missing stats_chains_by_bridge row for chain {chain_id}")
+                });
+            assert_eq!(
+                by_bridge.unique_message_users_count, global.unique_message_users_count,
+                "chain {chain_id}: single-bridge cell must match the global row"
+            );
+            assert_eq!(
+                by_bridge.unique_transfer_users_count,
+                global.unique_transfer_users_count
+            );
+        }
+        assert!(
+            stats_chains_by_bridge::Entity::find_by_id((1, c_idle))
+                .one(conn.as_ref())
+                .await
+                .unwrap()
+                .is_none(),
+            "idle chain must not get a stats_chains_by_bridge row either"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn recompute_stats_chains_multi_bridge_overlap_and_removal() {
+        use interchain_indexer_entity::{bridge_contracts, bridges};
+
+        let _db = init_db("recompute_stats_chains_overlap").await;
+        let conn = _db.client();
+        let interchain_db = InterchainDatabase::new(conn.clone());
+
+        // c_shared: bridges 1, 2, 3 all see addr_shared as a message sender —
+        // a three-bridge duplicate. c_disjoint: only bridge 1, no overlap.
+        let c_shared = 91_001i64;
+        let c_disjoint = 91_002i64;
+
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(c_shared),
+                name: Set("re_sc_overlap_shared".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c_disjoint),
+                name: Set("re_sc_overlap_disjoint".to_string()),
+                ..Default::default()
+            },
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        bridges::Entity::insert_many([
+            bridges::ActiveModel {
+                id: Set(101),
+                name: Set("overlap_bridge_1".to_string()),
+                enabled: Set(true),
+                ..Default::default()
+            },
+            bridges::ActiveModel {
+                id: Set(102),
+                name: Set("overlap_bridge_2".to_string()),
+                enabled: Set(true),
+                ..Default::default()
+            },
+            bridges::ActiveModel {
+                id: Set(103),
+                name: Set("overlap_bridge_3".to_string()),
+                enabled: Set(true),
+                ..Default::default()
+            },
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        bridge_contracts::Entity::insert_many([
+            bridge_contracts::ActiveModel {
+                bridge_id: Set(101),
+                chain_id: Set(c_shared),
+                address: Set(vec![0x11; 20]),
+                ..Default::default()
+            },
+            bridge_contracts::ActiveModel {
+                bridge_id: Set(102),
+                chain_id: Set(c_shared),
+                address: Set(vec![0x22; 20]),
+                ..Default::default()
+            },
+            bridge_contracts::ActiveModel {
+                bridge_id: Set(103),
+                chain_id: Set(c_shared),
+                address: Set(vec![0x33; 20]),
+                ..Default::default()
+            },
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        let addr_shared = vec![0x5e; 20];
+        let addr_only_1 = vec![0xa0; 20];
+        let addr_removable = vec![0xf0; 20];
+
+        crosschain_messages::Entity::insert_many([
+            // Three bridges, same chain, same address as sender: a genuine
+            // three-way duplicate. Delta for c_shared must be 2 (3 - 1), not
+            // a boolean.
+            crosschain_messages::ActiveModel {
+                id: Set(91_101),
+                bridge_id: Set(101),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c_shared),
+                dst_chain_id: Set(None),
+                sender_address: Set(Some(addr_shared.clone())),
+                recipient_address: Set(None),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(91_102),
+                bridge_id: Set(102),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c_shared),
+                dst_chain_id: Set(None),
+                sender_address: Set(Some(addr_shared.clone())),
+                recipient_address: Set(None),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(91_103),
+                bridge_id: Set(103),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c_shared),
+                dst_chain_id: Set(None),
+                sender_address: Set(Some(addr_shared.clone())),
+                recipient_address: Set(None),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            // Disjoint chain, bridge 1 only, no overlap possible.
+            crosschain_messages::ActiveModel {
+                id: Set(91_104),
+                bridge_id: Set(101),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c_disjoint),
+                dst_chain_id: Set(None),
+                sender_address: Set(Some(addr_only_1.clone())),
+                recipient_address: Set(None),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            // Will be deleted before the second recomputation, to prove
+            // removed source rows drop from both snapshots.
+            crosschain_messages::ActiveModel {
+                id: Set(91_105),
+                bridge_id: Set(101),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(c_disjoint),
+                dst_chain_id: Set(None),
+                sender_address: Set(Some(addr_removable.clone())),
+                recipient_address: Set(None),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        let report = interchain_db.recompute_stats_chains().await.unwrap();
+
+        // c_shared: global distinct = 1 (addr_shared counted once across all
+        // bridges); per-bridge sum = 3 (once per bridge) => delta 2.
+        let global_shared = stats_chains::Entity::find_by_id(c_shared)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(global_shared.unique_message_users_count, 1);
+
+        for bridge_id in [101, 102, 103] {
+            let cell = stats_chains_by_bridge::Entity::find_by_id((bridge_id, c_shared))
+                .one(conn.as_ref())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(cell.unique_message_users_count, 1);
+        }
+
+        let global_disjoint = stats_chains::Entity::find_by_id(c_disjoint)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(global_disjoint.unique_message_users_count, 2);
+        let disjoint_cell = stats_chains_by_bridge::Entity::find_by_id((101, c_disjoint))
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(disjoint_cell.unique_message_users_count, 2);
+
+        assert_eq!(
+            report.message_overcount_users, 2,
+            "three bridges over one address on one chain: excess is 3 - 1 = 2, not a boolean"
+        );
+        assert_eq!(report.transfer_overcount_users, 0);
+        assert_eq!(report.message_affected_chains, 1);
+        assert_eq!(report.transfer_affected_chains, 0);
+        assert_eq!(
+            report.samples,
+            vec![StatsChainsOverlapSample {
+                chain_id: c_shared,
+                transfer_delta: 0,
+                message_delta: 2,
+            }],
+            "samples are deterministic, sorted by chain_id"
+        );
+
+        // Remove one source row and recompute again: its contribution must
+        // disappear from both snapshots, and no half-rebuilt generation is
+        // ever visible (single transaction, single commit).
+        crosschain_messages::Entity::delete_by_id((91_105i64, 101i32))
+            .exec(conn.as_ref())
+            .await
+            .unwrap();
+        let report2 = interchain_db.recompute_stats_chains().await.unwrap();
+        assert_eq!(
+            report2.message_overcount_users, 2,
+            "shared overlap persists"
+        );
+
+        let global_disjoint_after = stats_chains::Entity::find_by_id(c_disjoint)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            global_disjoint_after.unique_message_users_count, 1,
+            "removed address's contribution must drop from the global snapshot"
+        );
+        let disjoint_cell_after = stats_chains_by_bridge::Entity::find_by_id((101, c_disjoint))
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            disjoint_cell_after.unique_message_users_count, 1,
+            "removed address's contribution must drop from the per-bridge snapshot too"
         );
     }
 

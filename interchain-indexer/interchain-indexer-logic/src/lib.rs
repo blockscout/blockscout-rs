@@ -43,7 +43,7 @@ pub use provider_layers::*;
 pub use secret::{Secret, redact_urls, sanitize_transport_error};
 pub use settings::MessageBufferSettings;
 pub use stats::{
-    BridgedTokenListRow, IndexedChains, StatsChainListRow, StatsListQuery, StatsReadSettings,
-    StatsService,
+    BridgedTokenListRow, IndexedChains, OverlapTransition, StatsChainListRow, StatsChainsScope,
+    StatsListQuery, StatsReadSettings, StatsService, overlap_transition,
 };
 pub use token_info::{TokenInfoService, TokenInfoServiceSettings};

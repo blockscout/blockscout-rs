@@ -32,6 +32,8 @@ pub enum Relation {
     StatsAssetTokens,
     #[sea_orm(has_one = "super::stats_chains::Entity")]
     StatsChains,
+    #[sea_orm(has_many = "super::stats_chains_by_bridge::Entity")]
+    StatsChainsByBridge,
     #[sea_orm(has_many = "super::tokens::Entity")]
     Tokens,
 }
@@ -72,18 +74,15 @@ impl Related<super::stats_chains::Entity> for Entity {
     }
 }
 
-impl Related<super::tokens::Entity> for Entity {
+impl Related<super::stats_chains_by_bridge::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Tokens.def()
+        Relation::StatsChainsByBridge.def()
     }
 }
 
-impl Related<super::bridges::Entity> for Entity {
+impl Related<super::tokens::Entity> for Entity {
     fn to() -> RelationDef {
-        super::indexer_checkpoints::Relation::Bridges.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(super::indexer_checkpoints::Relation::Chains.def().rev())
+        Relation::Tokens.def()
     }
 }
 

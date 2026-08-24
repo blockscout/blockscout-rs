@@ -117,8 +117,79 @@ fn build_pagination(
     }
 }
 
+/// Which snapshot a `/stats/chains` read draws from.
+///
+/// `Global` is the exact, globally deduplicated `stats_chains` path — untouched
+/// by this task. `Bridges` sums selected bridges' `stats_chains_by_bridge`
+/// cells: exact for one bridge, an accepted additive overcount for several (see
+/// the module doc and `coding-task-2.md`).
+pub enum StatsChainsScope<'a> {
+    Global,
+    Bridges {
+        /// Non-empty, sorted, deduplicated.
+        bridge_ids: &'a [i32],
+        /// Current configured chains of those bridges, from
+        /// `IndexedChains::selected_configured_union`. **Empty means "no
+        /// configured zero-row candidates"**, not "no restriction" — the
+        /// opposite of the global configured-union convention used by
+        /// `indexed_chain_ids` below. Keeping the two types/parameters
+        /// separate is what stops those meanings from being confused.
+        configured_chain_ids: &'a [i64],
+    },
+}
+
+/// Appends the bridge-scoped `LEFT JOIN` aggregate and its candidate predicate
+/// (the first predicate of the `Bridges` inner `WHERE`, per `coding-task-2.md`
+/// item 5) and returns the `LEFT JOIN` clause SQL.
+///
+/// Placeholder numbers are always derived from `values.len() + 1` at the point
+/// each value is pushed — bridge ids first (they sit inside the `LEFT JOIN`
+/// subquery, textually before the `WHERE` clause), then the candidate chain
+/// ids — so a predicate appended after this call keeps `$N` numbering
+/// contiguous by construction. Pinned by
+/// `test_bridge_scope_join_contiguous_with_predicate_appended_after`.
+fn build_bridge_scope_join(
+    bridge_ids: &[i32],
+    configured_chain_ids: &[i64],
+    values: &mut Vec<Value>,
+    inner_conditions: &mut Vec<String>,
+) -> String {
+    let bridge_start = values.len() + 1;
+    let bridge_placeholders: Vec<String> = (0..bridge_ids.len())
+        .map(|i| format!("${}", bridge_start + i))
+        .collect();
+    for id in bridge_ids {
+        values.push(Value::Int(Some(*id)));
+    }
+
+    if configured_chain_ids.is_empty() {
+        // No current configured candidates: the only way onto the candidate
+        // list is selected-bridge activity. This is the correct answer for a
+        // removed/unknown/present-but-empty bridge, never "no restriction".
+        inner_conditions.push("agg.chain_id IS NOT NULL".to_string());
+    } else {
+        let cand_start = values.len() + 1;
+        let cand_placeholders: Vec<String> = (0..configured_chain_ids.len())
+            .map(|i| format!("${}", cand_start + i))
+            .collect();
+        for id in configured_chain_ids {
+            values.push(Value::BigInt(Some(*id)));
+        }
+        inner_conditions.push(format!(
+            "(agg.chain_id IS NOT NULL OR c.id IN ({}))",
+            cand_placeholders.join(", ")
+        ));
+    }
+
+    format!(
+        "LEFT JOIN (\n    SELECT chain_id,\n           SUM(unique_transfer_users_count) AS transfer_cnt,\n           SUM(unique_message_users_count) AS message_cnt\n    FROM stats_chains_by_bridge\n    WHERE bridge_id IN ({})\n    GROUP BY chain_id\n) agg ON agg.chain_id = c.id",
+        bridge_placeholders.join(", ")
+    )
+}
+
 pub async fn list_stats_chains(
     db: &impl ConnectionTrait,
+    scope: StatsChainsScope<'_>,
     chain_ids: &[i64],
     include_zero_chains: bool,
     indexed_chain_ids: Option<&[i64]>,
@@ -168,6 +239,35 @@ pub async fn list_stats_chains(
     let mut values: Vec<Value> = Vec::new();
     let mut inner_conditions = Vec::new();
 
+    // `Global` keeps the exact pre-existing join/expressions untouched.
+    // `Bridges` swaps in the bridge-scoped aggregate and pushes its candidate
+    // predicate first, since it sits before every other inner-`WHERE`
+    // predicate both textually (inside the `LEFT JOIN` subquery) and in
+    // `values` ordering (`coding-task-2.md` item 5).
+    let (join_clause, transfer_expr, message_expr) = match scope {
+        StatsChainsScope::Global => (
+            "LEFT JOIN stats_chains sc ON sc.chain_id = c.id".to_string(),
+            "sc.unique_transfer_users_count",
+            "sc.unique_message_users_count",
+        ),
+        StatsChainsScope::Bridges {
+            bridge_ids,
+            configured_chain_ids,
+        } => {
+            debug_assert!(
+                !bridge_ids.is_empty(),
+                "StatsChainsScope::Bridges requires a non-empty bridge_ids"
+            );
+            let join = build_bridge_scope_join(
+                bridge_ids,
+                configured_chain_ids,
+                &mut values,
+                &mut inner_conditions,
+            );
+            (join, "agg.transfer_cnt", "agg.message_cnt")
+        }
+    };
+
     if !chain_ids.is_empty() {
         let placeholders: Vec<String> = (0..chain_ids.len())
             .map(|i| format!("${}", i + 1))
@@ -187,10 +287,9 @@ pub async fn list_stats_chains(
     }
 
     if !include_zero_chains {
-        inner_conditions.push(
-            "(COALESCE(sc.unique_transfer_users_count, 0) > 0 OR COALESCE(sc.unique_message_users_count, 0) > 0)"
-                .to_string(),
-        );
+        inner_conditions.push(format!(
+            "(COALESCE({transfer_expr}, 0) > 0 OR COALESCE({message_expr}, 0) > 0)"
+        ));
     }
 
     // An empty union means no bridge is configured at all. Restrict nothing in
@@ -257,9 +356,9 @@ FROM (
            c.name,
            c.icon AS icon_url,
            c.explorer AS explorer_url,
-           COALESCE(sc.unique_transfer_users_count, 0)::bigint AS cnt
+           COALESCE({transfer_expr}, 0)::bigint AS cnt
     FROM chains c
-    LEFT JOIN stats_chains sc ON sc.chain_id = c.id
+    {join_clause}
     {inner_where}
 ) t
 WHERE TRUE
@@ -267,6 +366,8 @@ WHERE TRUE
 ORDER BY {order_clause}
 LIMIT ${limit_ph}
 "#,
+        transfer_expr = transfer_expr,
+        join_clause = join_clause,
         inner_where = inner_where,
         where_extra = where_extra,
         order_clause = order_clause,
@@ -299,7 +400,7 @@ LIMIT ${limit_ph}
 mod tests {
     use super::*;
     use interchain_indexer_entity::chains;
-    use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait};
+    use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseConnection, EntityTrait};
 
     use crate::{
         pagination::{PaginationDirection, StatsChainsSortField},
@@ -321,6 +422,56 @@ mod tests {
         chains::Entity::insert_many(models).exec(db).await.unwrap();
     }
 
+    async fn seed_bridges(db: &DatabaseConnection, ids: &[i32]) {
+        if ids.is_empty() {
+            return;
+        }
+        use interchain_indexer_entity::bridges;
+        let models: Vec<bridges::ActiveModel> = ids
+            .iter()
+            .map(|&id| bridges::ActiveModel {
+                id: Set(id),
+                name: Set(format!("bridge-{id}")),
+                enabled: Set(true),
+                ..Default::default()
+            })
+            .collect();
+        bridges::Entity::insert_many(models).exec(db).await.unwrap();
+    }
+
+    async fn seed_stats_chains_by_bridge(
+        db: &DatabaseConnection,
+        bridge_id: i32,
+        chain_id: i64,
+        transfer: i64,
+        message: i64,
+    ) {
+        use interchain_indexer_entity::stats_chains_by_bridge;
+        stats_chains_by_bridge::ActiveModel {
+            bridge_id: Set(bridge_id),
+            chain_id: Set(chain_id),
+            unique_transfer_users_count: Set(transfer),
+            unique_message_users_count: Set(message),
+            ..Default::default()
+        }
+        .insert(db)
+        .await
+        .unwrap();
+    }
+
+    fn default_query(
+        page_size: usize,
+    ) -> StatsListQuery<'static, StatsChainsSortField, StatsChainsPaginationLogic> {
+        StatsListQuery {
+            sort: StatsChainsSortField::default(),
+            order: StatsSortOrder::Desc,
+            page_size,
+            last_page: false,
+            input_pagination: None,
+            q: None,
+        }
+    }
+
     #[tokio::test]
     #[ignore = "needs database"]
     async fn stats_chains_left_join_missing_stats_is_zero() {
@@ -334,6 +485,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -368,6 +520,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             false,
             None,
@@ -403,6 +556,7 @@ mod tests {
 
         let (p1, pag1) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             false,
             None,
@@ -424,6 +578,7 @@ mod tests {
 
         let (p2, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             false,
             None,
@@ -457,6 +612,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -490,6 +646,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -522,6 +679,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -556,6 +714,7 @@ mod tests {
 
         let (p1, pag1) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -577,6 +736,7 @@ mod tests {
 
         let (p2, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -608,6 +768,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[3, 1],
             true,
             None,
@@ -649,6 +810,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -678,6 +840,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -706,6 +869,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -739,6 +903,7 @@ mod tests {
 
         let (p1, pag1) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -759,6 +924,7 @@ mod tests {
 
         let (p2, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -790,6 +956,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -822,6 +989,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             Some(&[1, 100]),
@@ -855,6 +1023,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             None,
@@ -887,6 +1056,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[],
             true,
             Some(&[]),
@@ -916,6 +1086,7 @@ mod tests {
 
         let (rows, _) = list_stats_chains(
             db.as_ref(),
+            StatsChainsScope::Global,
             &[1, 250],
             true,
             Some(&[1, 100]),
@@ -962,6 +1133,7 @@ mod tests {
             async move {
                 list_stats_chains(
                     db.as_ref(),
+                    StatsChainsScope::Global,
                     &[],
                     true,
                     union.as_ref().map(|u| u.as_slice()),
@@ -1021,6 +1193,385 @@ mod tests {
                 !page.iter().any(|r| r.chain_id == 999),
                 "chain 999 is outside the indexed union and must stay hidden: {page:?}"
             );
+        }
+    }
+
+    // --- build_bridge_scope_join: placeholder contiguity (coding-task-2 item 5) ---
+
+    #[test]
+    fn test_bridge_scope_join_contiguous_with_predicate_appended_after() {
+        let mut values: Vec<Value> = Vec::new();
+        let mut inner_conditions: Vec<String> = Vec::new();
+
+        let join = build_bridge_scope_join(&[7, 9], &[1, 2, 3], &mut values, &mut inner_conditions);
+        assert!(join.contains("IN ($1, $2)"), "join was: {join}");
+        assert!(
+            inner_conditions[0].contains("IN ($3, $4, $5)"),
+            "candidate predicate was: {}",
+            inner_conditions[0]
+        );
+        assert_eq!(values.len(), 5);
+
+        // A predicate appended after both helper-pushed groups must continue
+        // numbering from exactly where they left off.
+        let next_ph = values.len() + 1;
+        inner_conditions.push(format!("c.id = ${next_ph}"));
+        values.push(Value::BigInt(Some(42)));
+        assert_eq!(inner_conditions[1], "c.id = $6");
+        assert_eq!(values.len(), 6);
+    }
+
+    #[test]
+    fn test_bridge_scope_join_empty_configured_chain_ids_renders_activity_only() {
+        let mut values: Vec<Value> = Vec::new();
+        let mut inner_conditions: Vec<String> = Vec::new();
+        build_bridge_scope_join(&[1], &[], &mut values, &mut inner_conditions);
+        assert_eq!(
+            inner_conditions,
+            vec!["agg.chain_id IS NOT NULL".to_string()]
+        );
+        // Only the bridge-id placeholder was pushed; no candidate placeholders.
+        assert_eq!(values.len(), 1);
+    }
+
+    // --- StatsChainsScope::Bridges: DB-backed read-path coverage (coding-task-2 item 8) ---
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_single_bridge_is_exact() {
+        let g = init_db("stats_chains_bridges_single").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        seed_bridges(db.as_ref(), &[10]).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 1, 7, 0).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10],
+                configured_chain_ids: &[],
+            },
+            &[],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+
+        let r1 = rows.iter().find(|r| r.chain_id == 1).unwrap();
+        assert_eq!(r1.unique_transfer_users_count, 7);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_disjoint_bridges_sum_correctly() {
+        let g = init_db("stats_chains_bridges_disjoint").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1]).await;
+        seed_bridges(db.as_ref(), &[10, 20]).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 1, 5, 0).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 20, 1, 3, 0).await;
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10, 20],
+                configured_chain_ids: &[],
+            },
+            &[],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].unique_transfer_users_count, 8,
+            "disjoint bridges must sum exactly"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_overlapping_bridges_produce_additive_overcount() {
+        // The per-bridge snapshot cannot know the two cells overlap on the
+        // same real-world address; summing them is the documented,
+        // accepted approximation, not a bug this test tries to fix.
+        let g = init_db("stats_chains_bridges_overlap").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1]).await;
+        seed_bridges(db.as_ref(), &[10, 20]).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 1, 5, 0).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 20, 1, 5, 0).await;
+        // The exact global snapshot, had it been rebuilt with these two
+        // bridges overlapping on one address, would read 5 here — but the
+        // filtered sum below is 10, which is exactly the accepted overcount.
+        crate::InterchainDatabase::new(db.clone())
+            .upsert_stats_chains(1, 5, 0)
+            .await
+            .unwrap();
+
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10, 20],
+                configured_chain_ids: &[],
+            },
+            &[],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+        assert_eq!(rows[0].unique_transfer_users_count, 10);
+
+        let (global_rows, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Global,
+            &[],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            global_rows[0].unique_transfer_users_count, 5,
+            "the unfiltered path must never be implemented as a sum of bridge rows"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_configured_zero_row_only_when_allowed() {
+        let g = init_db("stats_chains_bridges_zero_row").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        seed_bridges(db.as_ref(), &[10]).await;
+        // Chain 2 is configured for bridge 10 but has no recorded activity.
+
+        let (hidden, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10],
+                configured_chain_ids: &[2],
+            },
+            &[],
+            false,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+        assert!(
+            !hidden.iter().any(|r| r.chain_id == 2),
+            "include_zero_chains=false must omit the zero-activity configured chain"
+        );
+
+        let (shown, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10],
+                configured_chain_ids: &[2],
+            },
+            &[],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+        let row2 = shown.iter().find(|r| r.chain_id == 2).unwrap();
+        assert_eq!(row2.unique_transfer_users_count, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_unindexed_chain_hidden_unless_opted_in() {
+        let g = init_db("stats_chains_bridges_unindexed").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 900]).await;
+        seed_bridges(db.as_ref(), &[10, 20]).await;
+        // Bridge 10 (selected) has activity on chain 900, which no configured
+        // bridge indexes (simulated by omitting 900 from `indexed_chain_ids`).
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 900, 4, 0).await;
+        // Bridge 20 (not selected) also has activity on chain 900 — it must
+        // never leak into the selected-bridge-only count once admitted.
+        seed_stats_chains_by_bridge(db.as_ref(), 20, 900, 100, 0).await;
+
+        let (hidden, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10],
+                configured_chain_ids: &[],
+            },
+            &[],
+            true,
+            Some(&[1]),
+            default_query(50),
+        )
+        .await
+        .unwrap();
+        assert!(
+            !hidden.iter().any(|r| r.chain_id == 900),
+            "globally unindexed chain must be hidden by default"
+        );
+
+        let (shown, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10],
+                configured_chain_ids: &[],
+            },
+            &[],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+        let row900 = shown.iter().find(|r| r.chain_id == 900).unwrap();
+        assert_eq!(
+            row900.unique_transfer_users_count, 4,
+            "admitted chain must still show only the selected bridge's count"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_configured_chain_absent_from_chains_yields_no_row() {
+        let g = init_db("stats_chains_bridges_absent_chain").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1]).await;
+        seed_bridges(db.as_ref(), &[10]).await;
+        // Chain 999 is a configured candidate but has no `chains` row at all
+        // (for example, removed from the chain directory). Must not fail
+        // deserialization (StatsChainListRow.name is non-nullable) and must
+        // not appear.
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10],
+                configured_chain_ids: &[999],
+            },
+            &[],
+            true,
+            None,
+            default_query(50),
+        )
+        .await
+        .unwrap();
+        assert!(!rows.iter().any(|r| r.chain_id == 999));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_composes_filters_with_and() {
+        let g = init_db("stats_chains_bridges_composes_and").await;
+        let db = g.client();
+        seed_chain_named(db.as_ref(), 1, "alpha-match").await;
+        seed_chain_named(db.as_ref(), 2, "beta-match").await;
+        seed_bridges(db.as_ref(), &[10]).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 1, 5, 0).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 2, 5, 0).await;
+
+        // bridge_ids selects bridge 10 on both chains; chain_ids narrows to
+        // {1}; q further narrows by name; all must compose through AND.
+        let (rows, _) = list_stats_chains(
+            db.as_ref(),
+            StatsChainsScope::Bridges {
+                bridge_ids: &[10],
+                configured_chain_ids: &[],
+            },
+            &[1, 2],
+            true,
+            None,
+            StatsListQuery {
+                q: Some("alpha"),
+                ..default_query(50)
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].chain_id, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn stats_chains_bridges_scope_pagination_round_trip_hides_unselected_bridge() {
+        let g = init_db("stats_chains_bridges_pagination_round_trip").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[100, 101, 102]).await;
+        seed_bridges(db.as_ref(), &[10, 99]).await;
+        // Selected bridge 10: two chains tied at 10, one chain at 99.
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 100, 10, 0).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 101, 10, 0).await;
+        seed_stats_chains_by_bridge(db.as_ref(), 10, 102, 99, 0).await;
+        // Unselected bridge 99 has a higher count on chain 100 that must
+        // never leak onto any page of the selected-bridge-only listing.
+        seed_stats_chains_by_bridge(db.as_ref(), 99, 100, 1_000_000, 0).await;
+
+        let query = |input_pagination| {
+            let db = db.clone();
+            async move {
+                list_stats_chains(
+                    db.as_ref(),
+                    StatsChainsScope::Bridges {
+                        bridge_ids: &[10],
+                        configured_chain_ids: &[],
+                    },
+                    &[],
+                    true,
+                    None,
+                    StatsListQuery {
+                        input_pagination,
+                        ..default_query(1)
+                    },
+                )
+                .await
+                .unwrap()
+            }
+        };
+
+        let (p1, pag1) = query(None).await;
+        assert_eq!(p1.len(), 1);
+        assert_eq!(p1[0].chain_id, 102);
+        assert_eq!(p1[0].unique_transfer_users_count, 99);
+        let next1 = pag1.next_marker.expect("page 1 has a next page");
+
+        let (p2, pag2) = query(Some(next1)).await;
+        assert_eq!(p2.len(), 1);
+        assert_eq!(p2[0].chain_id, 100);
+        let next2 = pag2.next_marker.expect("page 2 has a next page");
+
+        let (p3, pag3) = query(Some(next2)).await;
+        assert_eq!(p3.len(), 1);
+        assert_eq!(p3[0].chain_id, 101);
+        assert!(pag3.next_marker.is_none(), "page 3 must be the last page");
+        let prev3 = pag3.prev_marker.expect("page 3 has a prev page");
+
+        let (p2b, pag2b) = query(Some(prev3)).await;
+        assert_eq!(p2b.len(), 1);
+        assert_eq!(p2b[0].chain_id, 100);
+        let prev2 = pag2b.prev_marker.expect("page 2 has a prev page");
+
+        let (p1b, _) = query(Some(prev2)).await;
+        assert_eq!(p1b.len(), 1);
+        assert_eq!(p1b[0].chain_id, p1[0].chain_id);
+
+        for page in [&p1, &p2, &p3, &p2b, &p1b] {
+            for row in page {
+                assert_ne!(
+                    row.unique_transfer_users_count, 1_000_000,
+                    "unselected bridge 99's count must never leak into a selected-bridge-only page"
+                );
+            }
         }
     }
 }

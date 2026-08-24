@@ -8,7 +8,7 @@
 //! Decision 5 for the rationale behind the asymmetry between an absent bridge
 //! and a bridge present with an empty chain set.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use interchain_indexer_entity::{crosschain_messages, crosschain_transfers};
 use sea_orm::{
@@ -227,6 +227,66 @@ impl IndexedChains {
             .collect();
         union.sort_unstable();
         Some(union)
+    }
+
+    /// Sorted, deduplicated union of the concrete configured chains of
+    /// `bridge_ids`. Unknown / absent / present-but-empty bridges contribute
+    /// nothing, and `AllIndexed` yields an empty vec — this follows
+    /// [`Self::chain_ids_for`]'s concrete-membership convention, not the
+    /// permissive [`Self::may_observe`] default.
+    ///
+    /// Returns `Vec<i64>`, never `Option<Vec<i64>>`: an empty result here means
+    /// "no current configured zero-row candidates", which is the OPPOSITE of
+    /// the [`Self::configured_union`] convention where empty means "restrict
+    /// nothing". Keeping the types different is what stops the two from being
+    /// confused.
+    pub fn selected_configured_union(&self, bridge_ids: &[i32]) -> Vec<i64> {
+        let map = match self {
+            IndexedChains::AllIndexed => return Vec::new(),
+            IndexedChains::PerBridge(map) => map,
+        };
+
+        let mut union: HashSet<i64> = HashSet::new();
+        for bridge_id in bridge_ids {
+            if let Some(chains) = map.get(bridge_id) {
+                union.extend(chains.iter().copied());
+            }
+        }
+        let mut union: Vec<i64> = union.into_iter().collect();
+        union.sort_unstable();
+        union
+    }
+
+    /// Chains configured by two or more DISTINCT bridge ids, as
+    /// `(chain_id, sorted bridge ids)`, sorted by `chain_id`. Empty under
+    /// `AllIndexed` (no per-bridge configuration to inspect, so a structural
+    /// warning would be fabricated). Because each bridge's chains are a
+    /// `HashSet`, several contract versions of one bridge on one chain cannot
+    /// fabricate an overlap: the bridge id is only counted once regardless of
+    /// how many of its contracts sit on that chain.
+    pub fn configured_overlaps(&self) -> Vec<(i64, Vec<i32>)> {
+        let map = match self {
+            IndexedChains::AllIndexed => return Vec::new(),
+            IndexedChains::PerBridge(map) => map,
+        };
+
+        let mut bridges_by_chain: HashMap<i64, BTreeSet<i32>> = HashMap::new();
+        for (&bridge_id, chains) in map {
+            for &chain_id in chains {
+                bridges_by_chain
+                    .entry(chain_id)
+                    .or_default()
+                    .insert(bridge_id);
+            }
+        }
+
+        let mut overlaps: Vec<(i64, Vec<i32>)> = bridges_by_chain
+            .into_iter()
+            .filter(|(_, bridge_ids)| bridge_ids.len() >= 2)
+            .map(|(chain_id, bridge_ids)| (chain_id, bridge_ids.into_iter().collect()))
+            .collect();
+        overlaps.sort_by_key(|(chain_id, _)| *chain_id);
+        overlaps
     }
 
     /// `has_unindexed_chain` for a message. An unknown (NULL) destination always
@@ -658,6 +718,87 @@ mod tests {
     fn test_transfer_has_unindexed_dst_out_is_true() {
         let indexed = IndexedChains::from_pairs([(1, 1)]);
         assert!(indexed.transfer_has_unindexed(1, 1, 100));
+    }
+
+    // --- selected_configured_union ---
+
+    #[test]
+    fn test_selected_configured_union_all_indexed_is_empty() {
+        assert_eq!(
+            IndexedChains::AllIndexed.selected_configured_union(&[1, 2]),
+            Vec::<i64>::new()
+        );
+    }
+
+    #[test]
+    fn test_selected_configured_union_sorted_deduplicated_ignores_unknown() {
+        let indexed = IndexedChains::from_pairs([(1, 250), (1, 100), (2, 100), (2, 1)]);
+        // Bridge 99 is unknown and contributes nothing.
+        assert_eq!(
+            indexed.selected_configured_union(&[1, 2, 99]),
+            vec![1, 100, 250]
+        );
+    }
+
+    #[test]
+    fn test_selected_configured_union_absent_and_present_but_empty_contribute_nothing() {
+        let indexed = IndexedChains::from_bridges([(1, vec![]), (2, vec![100])]);
+        // Bridge 1 is present but empty; bridge 3 is absent entirely. Neither
+        // contributes a configured candidate.
+        assert_eq!(
+            indexed.selected_configured_union(&[1, 3]),
+            Vec::<i64>::new()
+        );
+        assert_eq!(indexed.selected_configured_union(&[1, 2, 3]), vec![100]);
+    }
+
+    #[test]
+    fn test_selected_configured_union_duplicate_selected_ids_are_idempotent() {
+        let indexed = IndexedChains::from_pairs([(1, 100), (1, 200)]);
+        assert_eq!(
+            indexed.selected_configured_union(&[1, 1, 1]),
+            vec![100, 200]
+        );
+    }
+
+    // --- configured_overlaps ---
+
+    #[test]
+    fn test_configured_overlaps_all_indexed_is_empty() {
+        assert_eq!(IndexedChains::AllIndexed.configured_overlaps(), Vec::new());
+    }
+
+    #[test]
+    fn test_configured_overlaps_one_bridge_multiple_contract_versions_no_overlap() {
+        // Bridge 1 has two contract versions on chain 100 — represented as one
+        // bridge with chain 100 already deduplicated into its `HashSet`, so
+        // this cannot fabricate an overlap.
+        let indexed = IndexedChains::from_pairs([(1, 100), (1, 100)]);
+        assert_eq!(indexed.configured_overlaps(), Vec::new());
+    }
+
+    #[test]
+    fn test_configured_overlaps_two_distinct_bridges_sharing_a_chain() {
+        let indexed = IndexedChains::from_pairs([(2, 100), (1, 100), (1, 200)]);
+        assert_eq!(indexed.configured_overlaps(), vec![(100, vec![1, 2])]);
+    }
+
+    #[test]
+    fn test_configured_overlaps_disabled_bridges_still_counted() {
+        // `IndexedChains` construction is independent of `enabled`; a caller
+        // that includes disabled bridges (as `server.rs` does) still sees them
+        // participate in an overlap.
+        let indexed = IndexedChains::from_pairs([(1, 100), (2, 100)]);
+        assert_eq!(indexed.configured_overlaps(), vec![(100, vec![1, 2])]);
+    }
+
+    #[test]
+    fn test_configured_overlaps_sorted_by_chain_id() {
+        let indexed = IndexedChains::from_pairs([(1, 300), (2, 300), (1, 100), (2, 100)]);
+        assert_eq!(
+            indexed.configured_overlaps(),
+            vec![(100, vec![1, 2]), (300, vec![1, 2])]
+        );
     }
 
     /// The asymmetry a future reader is most likely to "simplify" away: an absent
