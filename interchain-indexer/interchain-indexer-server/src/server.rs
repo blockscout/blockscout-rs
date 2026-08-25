@@ -25,12 +25,13 @@ use blockscout_service_launcher::{
 use chrono::NaiveDateTime;
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
 use interchain_indexer_logic::{
-    ChainInfoService, IndexedChains, InterchainDatabase, StatsReadSettings, StatsService,
-    TokenInfoService,
+    ChainInfoService, IndexedChains, InterchainDatabase, OverlapTransition, StatsReadSettings,
+    StatsService, TokenInfoService,
     indexer::metrics::{
         FAILED_BLOCKS, INDEXER_CATCHUP_BLOCKS_REMAINING, INDEXER_CATCHUP_PROGRESS,
         OLDEST_OPEN_HOLE_AGE_SECONDS,
     },
+    overlap_transition,
 };
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     interchain_statistics_service_actix::route_interchain_statistics_service,
@@ -45,11 +46,18 @@ const SERVICE_NAME: &str = "interchain_indexer";
 /// grow the ENV surface.
 const PROGRESS_METRICS_REFRESH: Duration = Duration::from_secs(60);
 
-/// Spawns a Tokio task that recomputes `stats_chains` on a fixed interval.
+/// Spawns a Tokio task that recomputes both `stats_chains` and
+/// `stats_chains_by_bridge` on a fixed interval.
 ///
 /// The **first** recomputation runs immediately after startup wiring (before the first sleep),
 /// so fresh stats are available without waiting a full period. Subsequent runs wait
 /// `period_secs` after each attempt (success or failure). If `period_secs` is `0`, does nothing.
+///
+/// Owns the overlap-warning transition state (`Option<bool>`, `None` before
+/// the first successful run) across iterations and drives it through
+/// [`overlap_transition`]. A failed recomputation leaves that state — and the
+/// previous tables/gauges — untouched; see `recompute_stats_chains`'s
+/// rollback-on-error guarantee.
 fn spawn_stats_chains_recalculation_worker(stats: Arc<StatsService>, period_secs: u64) {
     if period_secs == 0 {
         tracing::info!("stats_chains_recalculation_period_secs is 0: periodic refresh disabled");
@@ -57,10 +65,36 @@ fn spawn_stats_chains_recalculation_worker(stats: Arc<StatsService>, period_secs
     }
 
     tokio::spawn(async move {
+        let mut overlap_active: Option<bool> = None;
         loop {
             tracing::info!("stats_chains recomputation started");
             match stats.recompute_stats_chains().await {
-                Ok(()) => tracing::info!("stats_chains recomputation succeeded"),
+                Ok(report) => {
+                    let current = report.has_overlap();
+                    match overlap_transition(overlap_active, current) {
+                        OverlapTransition::Appeared => tracing::warn!(
+                            transfer_overcount_users = report.transfer_overcount_users,
+                            message_overcount_users = report.message_overcount_users,
+                            transfer_affected_chains = report.transfer_affected_chains,
+                            message_affected_chains = report.message_affected_chains,
+                            samples = ?report.samples,
+                            "stats_chains bridge-sum overlap appeared: a multi-bridge \
+                             GetChainsStats request can now overcount; this is the actual \
+                             data signal, not a substitute for the startup configured-overlap warning"
+                        ),
+                        OverlapTransition::Recovered => tracing::info!(
+                            "stats_chains bridge-sum overlap recovered: no cross-bridge \
+                             duplicate-user impact in the latest recomputation"
+                        ),
+                        OverlapTransition::Persisted | OverlapTransition::Quiet => {}
+                    }
+                    overlap_active = Some(current);
+                    tracing::info!(
+                        global_rows = report.global_rows,
+                        bridge_rows = report.bridge_rows,
+                        "stats_chains recomputation succeeded"
+                    );
+                }
                 Err(err) => tracing::error!(
                     err = ?err,
                     "stats_chains recomputation failed; keeping previous rows, retrying after interval"
@@ -319,6 +353,20 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         }
     }
     indexed_chains.record_metrics();
+    // Structural risk, not the actual data signal: a chain configured for two
+    // or more distinct bridges *can* let those bridges observe the same
+    // address on it. Whether that has actually happened is the separate,
+    // recomputation-time `stats_chains` bridge-sum overcount gauge/warning —
+    // neither is a substitute for the other.
+    for (chain_id, bridge_ids) in indexed_chains.configured_overlaps() {
+        tracing::warn!(
+            chain_id,
+            bridge_ids = ?bridge_ids,
+            "chain configured for more than one bridge; a multi-bridge GetChainsStats \
+             request selecting these bridges can overcount an address observed on this \
+             chain by more than one of them"
+        );
+    }
     // Misconfiguration guard, not a safety net: with bridges configured but
     // zero total pairs, every bridge in the map has an empty set, so every
     // chain is unindexed and every pending transfer becomes countable.

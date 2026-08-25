@@ -11,8 +11,8 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
-    IndexedChains, StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField,
-    StatsListQuery, StatsService, StatsSortOrder, utils::to_hex_prefixed,
+    IndexedChains, StatsChainListRow, StatsChainsPaginationLogic, StatsChainsScope,
+    StatsChainsSortField, StatsListQuery, StatsService, StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -240,14 +240,38 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
 
         // `None` = no restriction (opt-in, or an `AllIndexed` configuration).
         // Derived from the same `configured_union()` accessor `GetChains` uses,
-        // so the two directory views cannot drift apart.
+        // so the two directory views cannot drift apart. This gate stays
+        // global even under a bridge-filtered scope: `include_unindexed_chains`
+        // means "no configured bridge indexes this chain", never "not indexed
+        // by the selected bridges".
         let indexed = (!include_unindexed)
             .then(|| self.indexed_chains.configured_union())
             .flatten();
 
+        let mut bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
+        bridge_ids.sort_unstable();
+        bridge_ids.dedup();
+        // Current configured chains of the selected bridges, for zero-row
+        // candidates. Only meaningful (and only computed) for a non-empty
+        // selection; `StatsChainsScope::Bridges` requires it non-empty.
+        let selected_configured_chain_ids = if bridge_ids.is_empty() {
+            Vec::new()
+        } else {
+            self.indexed_chains.selected_configured_union(&bridge_ids)
+        };
+        let scope = if bridge_ids.is_empty() {
+            StatsChainsScope::Global
+        } else {
+            StatsChainsScope::Bridges {
+                bridge_ids: &bridge_ids,
+                configured_chain_ids: &selected_configured_chain_ids,
+            }
+        };
+
         let (rows, pagination) = self
             .stats
             .get_stats_chains(
+                scope,
                 chain_ids,
                 indexed.as_deref(),
                 StatsListQuery {

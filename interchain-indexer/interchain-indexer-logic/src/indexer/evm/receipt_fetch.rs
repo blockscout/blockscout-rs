@@ -27,18 +27,20 @@ where
         .map(|hash| async move {
             let receipt = provider
                 .get_transaction_receipt(hash)
-                .await?
-                .context("transaction receipt not found")?;
+                .await
+                .with_context(|| format!("failed to fetch transaction receipt for tx {hash}"))?
+                .with_context(|| format!("transaction receipt not found for tx {hash}"))?;
 
             let block_number = receipt
                 .block_number
-                .ok_or(anyhow::anyhow!("missing block number"))?
+                .ok_or_else(|| anyhow::anyhow!("missing block number in receipt for tx {hash}"))?
                 .into();
 
             let block = provider
                 .get_block_by_number(block_number)
-                .await?
-                .context("block not found")?;
+                .await
+                .with_context(|| format!("failed to fetch block {block_number} for tx {hash}"))?
+                .with_context(|| format!("block {block_number} not found for tx {hash}"))?;
 
             let logs = receipt.inner.logs().to_vec();
             let transaction_from = receipt.from;

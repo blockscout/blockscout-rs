@@ -557,7 +557,9 @@ in this code path.**
 **Operational consequence:** this fix changes `stats_chains` unique-user
 counts. `unique_message_users_count` counts distinct non-NULL
 `recipient_address` values grouped by `dst_chain_id`
-(`select_stats_chains_message_user_counts` in `database.rs`); with
+(`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL` in `database.rs`, formerly
+`select_stats_chains_message_user_counts` before ADR-009's bridge-qualified
+rewrite); with
 `recipient_address` NULL for every unindexed-source message, that chain's
 count was silently deflated (one production chain showed 23 against 13,865
 uncounted completed incoming messages). After this fix and a stats rebuild,
@@ -1574,5 +1576,164 @@ Consequences worth keeping straight:
 - No committed file under `config/` or `docker/` may declare an `api_key` at all:
   it would make the secret mandatory for every deployment reading that file.
   `test_no_repo_config_file_declares_an_api_key` enforces this.
+
+---
+
+## `stats_chains_by_bridge` Per-Bridge Uniques Are Not Additive (ADR-009)
+
+`GET /api/v1/stats/chains` accepts an optional `bridge_ids` CSV filter backed
+by a companion snapshot, `stats_chains_by_bridge (bridge_id, chain_id)`,
+rebuilt in the same transaction as the exact global `stats_chains` by the same
+periodic worker (`InterchainDatabase::recompute_stats_chains`).
+
+**The exactness boundary, precisely:**
+
+- no/blank `bridge_ids` → reads `stats_chains` directly, exact, unchanged from
+  before this feature existed. This path must **never** be reimplemented as a
+  sum over `stats_chains_by_bridge` rows — that would only be correct while no
+  two bridges ever see the same address on the same chain, which is not
+  guaranteed (a bridge with `process_unknown_chains = true` can observe a
+  chain outside its own configured set).
+- one `bridge_ids` value → exact. A single bridge's distinct-user count cannot
+  be inflated by another bridge, because the cell is keyed by that bridge
+  alone.
+- two or more `bridge_ids` values → **sums per-bridge distinct counts**, which
+  overcounts an address by exactly (number of selected bridges that saw it on
+  that chain) − 1, but **only** when that address appears on the **same
+  chain** through more than one of the *selected* bridges. The same address on
+  two *different* chains is not an error — it legitimately belongs once in
+  each chain's own row.
+
+**Why the same-chain/same-address condition is the whole story:** the
+recompute derives both snapshots from one bridge-qualified, `MATERIALIZED` CTE
+of `(bridge_id, chain_id, address)` triples per domain (message/transfer).
+`COUNT(DISTINCT address) GROUP BY chain_id` (global arm) already dedupes an
+address across bridges on the same chain — that is what keeps `stats_chains`
+exact. `COUNT(*) GROUP BY (bridge_id, chain_id)` (per-bridge arm) counts rows
+that are already distinct *within* one bridge, so summing several such cells
+double-counts exactly the addresses the global arm dedupes away and nothing
+else.
+
+**Reading the observability signals** (see `stats/metrics.rs`,
+`stats/overlap_warning.rs`, `server.rs`):
+
+- `IndexedChains::configured_overlaps()` (startup-only warning) is *structural
+  risk*: it fires when a chain is configured for two or more distinct bridge
+  ids, whether or not any of them has actually observed a duplicate address
+  there yet. It says nothing about whether an overcount is currently real.
+- `interchain_indexer_stats_chains_bridge_sum_overcount_users{kind}` /
+  `..._affected_chains{kind}` (gauges, updated every successful recomputation)
+  are the *actual* signal: `SUM` over chains of `SUM(per_bridge_count) -
+  global_distinct_count`, computed **across all bridges**, not just a
+  particular request's selection. A positive gauge means *some* multi-bridge
+  selection is currently approximate somewhere in the config/history, not that
+  every multi-bridge request is affected — it is an upper bound, not a
+  per-request figure. Read it alongside `overlap_transition`'s one-shot
+  warn-on-appearance log, not instead of it: neither signal substitutes for
+  the other.
+- Both counters (`unique_transfer_users_count` and `unique_message_users_count`)
+  are scoped in every stats-chains snapshot even though only the transfer
+  count is exposed in the API response — `include_zero_chains = false` reads
+  both, so a message-only chain/bridge cell must still survive that guard.
+
+**Do not** derive `stats_chains_by_bridge`'s candidate rows (for
+`include_zero_chains = false`) from `bridge_contracts` — like every other
+membership question in the stats layer, use the in-memory `IndexedChains`
+(`selected_configured_union`), which distinguishes a bridge that is absent
+from config (no current candidates, but retained history still queryable)
+from one present with an empty contract set, per ADR-004 Decision 5.
+
+**`bridge_ids` restricts the chain list too, on purpose.** A live report
+(2026-08-25) initially read as "a chain visible without `bridge_ids` vanished
+once `bridge_ids` was added" and got "fixed" by dropping the candidate
+predicate entirely, making every known chain a zero-row candidate for any
+`bridge_ids` value regardless of relevance. That is wrong: the confirmed,
+correct contract is that `bridge_ids` scopes **both** the count and which
+chains can appear — a chain neither touched by, nor currently configured for,
+any of the selected bridges must not appear at all, even under
+`include_unindexed_chains=true`. The candidate predicate (`agg.chain_id IS NOT
+NULL OR c.id IN (selected bridges' current configured chains)`) is therefore
+load-bearing, not incidental; the original live-report symptom traced back to
+`stats_chains_by_bridge` simply being empty (periodic worker hadn't run yet
+on a fresh database), not to this predicate. Do not remove it again on a
+similar report — verify the snapshot actually has rows for the
+bridge/chain pair in question first.
+
+**Placeholder numbering, fixed alongside the above.** The `chain_ids`
+predicate in `list_stats_chains` hardcoded `$1, $2, ...` instead of deriving
+from `values.len()`, silently mis-binding once `Bridges` scope's own bridge-id
+(and, when non-empty, configured-chain-id) placeholders preceded it in
+`values`. Masked in the one test that combined both filters, because its `q`
+filter happened to narrow to the same answer the collision produced by
+accident — see `stats_chains_bridges_scope_chain_ids_placeholders_stay_correct_after_bridge_scope`
+for a case chosen so the collision is observably wrong instead of
+coincidentally right. Per `.memory-bank/rules/database.md`'s placeholder
+rule: derive every predicate's `$N` from `values.len() + 1` at the point of
+use, never a literal count of that predicate's own values.
+
+---
+
+## Some RPC Gateways Cross-Contaminate `eth_call` Responses Per Address
+
+**Symptom:** A token's `tokens.decimals` (and sometimes `name`/`symbol`) in
+the DB does not match its real on-chain value — observed as `decimals=32` for
+an 18-decimals token (chain 8021/Numine, WAVAX at
+`0x012cb6651cb29c7d5dc96173756a773f7fb87cfb`), which then propagates into
+`stats_asset_edges.decimals` and corrupts displayed/scaled amounts by orders
+of magnitude in `/stats/*` responses.
+
+**Root cause:** `Erc20TokenInfoFetcher::fetch_token_info`
+(`interchain-indexer-logic/src/token_info/fetchers/erc20.rs`) calls
+`name()`, `symbol()`, and `decimals()` on the same contract address in quick
+succession. Some Avalanche subnet RPC gateways (confirmed on Glacier's
+`https://glacier-api.avax.network/v1/ext/bc/{chainId}/rpc` proxy, at least
+for chain 8021) occasionally return the *wrong* call's response for a given
+request to the same `to` address — e.g. `decimals()` gets back the raw bytes
+of a `name()`/`symbol()` response. Confirmed via direct reproduction against
+the live endpoint: this happens with `tokio::try_join!` (concurrent) calls,
+with plain sequential `.await` calls, with a fresh connection per call
+(`pool_max_idle_per_host(0)`), and with HTTP/1.1 forced — so it is **not**
+something fixable by changing call ordering, connection reuse, or HTTP
+version on our side. It is an external gateway defect outside our control.
+
+Decoding a `name()`/`symbol()` response (ABI-encoded dynamic `string`) as if
+it were a `decimals()` response (ABI-encoded static `uint8`) reads the
+leading word of that response, which per the ABI spec is *always* the offset
+`0x20` for a single dynamic return value — i.e. decimals decodes to exactly
+**32**, regardless of the actual string. Rejecting the *decoded value* `32`
+outright is not sound though: a genuine `decimals() == 32` token would then
+be permanently unpersistable, since every real fetch would also be rejected.
+The decoded value alone cannot tell the two cases apart — the raw response
+can.
+
+**Fix:** `fetch_token_info` now inspects the raw `eth_call` response before
+decoding, via the generated call builder's `.call_raw()` (`erc20.rs`,
+`is_valid_uint8_word`). A genuine `decimals()` return is ABI-encoded as
+exactly one right-padded 32-byte word, whatever its value; the
+`name()`/`symbol()` string encoding this contamination actually carries is
+always longer (offset word + length word + data). A response that isn't
+exactly 32 raw bytes is rejected as a failed fetch — including a real
+`decimals() == 32` token's genuine (also 32-byte) response, which passes and
+decodes normally. Rejection leaves `tokens.decimals` as `NULL`, which the
+existing `kickoff_token_fetch_for_stats_enrichment` eligibility check
+(decimals `IS NULL`) already retries on a later background cycle — by then
+the gateway is usually no longer misbehaving for that address. `name`/`symbol`
+contamination has no equivalent generic detection (no ground truth to check
+against) and is a known residual risk, but is cosmetic, not
+financially significant like `decimals`.
+
+Confirmed live against the real (still-misbehaving) gateway after the fix:
+20/20 attempts against the corrupted address correctly rejected the 96-byte
+contaminated response (offset + length + `"Wrapped AVAX"`/`"WAVAX"` data)
+and never once decoded it into a bogus value.
+
+**If you find more corrupted rows:** `SELECT decimals, count(*) FROM tokens
+GROUP BY decimals ORDER BY decimals;` — real-world ERC20 decimals are
+essentially always ≤ 18; an outlier value (32 or otherwise) on a chain with a
+fragile/low-`max_rps` RPC provider is a strong signal of this same class of
+bug. Fix the specific `tokens` row and any `stats_asset_edges` rows derived
+from it directly via SQL — `propagate_token_info_to_stats_tables` only fills
+edge `decimals` when `NULL`, so correcting `tokens` alone does not
+retroactively fix an already-populated (wrong) edge value.
 
 ---

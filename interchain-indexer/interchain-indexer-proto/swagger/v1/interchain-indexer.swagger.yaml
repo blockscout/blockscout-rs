@@ -1061,6 +1061,32 @@ paths:
           in: query
           required: false
           type: boolean
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids filter, for example `1,2`.
+            When absent or empty, counts come from the globally deduplicated snapshot
+            and are exact.
+            A single bridge id returns exact per-chain unique-user counts for that
+            bridge. Several bridge ids sum per-bridge distinct counts and can
+            overcount an address that appears on the SAME chain through more than one
+            selected bridge.
+            Malformed or out-of-int32-range ids return InvalidArgument. Unknown ids
+            are accepted and contribute nothing. Duplicate ids do not duplicate
+            counts. Disabled and removed bridges can still contribute retained
+            history.
+            The filter also scopes which chains can appear: a chain is a candidate
+            only when it is currently configured for at least one selected bridge or
+            has retained stats history for a selected bridge. Unrelated chains do not
+            become zero-count candidates, even with `include_unindexed_chains=true`.
+            `include_unindexed_chains` keeps its global meaning: a chain is unindexed
+            only when NO configured bridge indexes it; the flag controls visibility
+            among the selected bridge candidates described above.
+            Page tokens and raw cursors are valid only with the same `bridge_ids`,
+            `chain_ids`, `q`, `include_unindexed_chains`, `sort`, and `order` that
+            produced them.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainStatisticsService
   /api/v1/stats/common:

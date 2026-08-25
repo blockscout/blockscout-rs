@@ -55,6 +55,7 @@ specialized persistence module, or a higher-level service.
 
 - `interchain-indexer-migration/src/migrations_up/m20251030_000001_initial_up.sql`
 - `interchain-indexer-migration/src/migrations_up/m20260312_175120_add_stats_tables_up.sql`
+- `interchain-indexer-migration/src/migrations_up/m20260824_120000_add_stats_chains_by_bridge_up.sql`
 - `interchain-indexer-logic/src/database.rs`
 - `interchain-indexer-logic/src/bulk.rs`
 - `interchain-indexer-logic/src/message_buffer/persistence.rs`
@@ -134,13 +135,25 @@ config files.
 - `stats_assets`
 - `stats_asset_tokens`
 - `stats_asset_edges`
-- `stats_chains`
+- `stats_chains` — global, exact, `chain_id` PK
+- `stats_chains_by_bridge` — `(bridge_id, chain_id)` PK; per-bridge companion
+  to `stats_chains`, rebuilt in the same transaction by the same worker
+  (`m20260824_120000_add_stats_chains_by_bridge`, ADR-009); backs the
+  `bridge_ids` filter on `GET /api/v1/stats/chains`
 - `stats_messages`
 - `stats_messages_days`
 - stats marker columns on canonical tables:
   - `crosschain_messages.stats_processed`
   - `crosschain_transfers.stats_processed`
   - `crosschain_transfers.stats_asset_id`
+
+`stats_chains_by_bridge`'s migration also rebuilds the four canonical partial
+indexes that keep the `stats_chains`/`stats_chains_by_bridge` recomputation an
+index-only scan (`crosschain_messages_{src,dst}_user_by_chain_idx`,
+`crosschain_transfers_{src,dst}_user_by_chain_idx`, originally added by
+`m20260312_175120_add_stats_tables`), adding `bridge_id` as a **trailing** key
+column so the wider bridge-qualified projection stays covered. Leading columns
+and partial predicates are unchanged.
 
 These tables and marker columns support derived statistical views rather than
 primary indexing state.
