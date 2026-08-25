@@ -1672,3 +1672,54 @@ rule: derive every predicate's `$N` from `values.len() + 1` at the point of
 use, never a literal count of that predicate's own values.
 
 ---
+
+## Some RPC Gateways Cross-Contaminate `eth_call` Responses Per Address
+
+**Symptom:** A token's `tokens.decimals` (and sometimes `name`/`symbol`) in
+the DB does not match its real on-chain value — observed as `decimals=32` for
+an 18-decimals token (chain 8021/Numine, WAVAX at
+`0x012cb6651cb29c7d5dc96173756a773f7fb87cfb`), which then propagates into
+`stats_asset_edges.decimals` and corrupts displayed/scaled amounts by orders
+of magnitude in `/stats/*` responses.
+
+**Root cause:** `Erc20TokenInfoFetcher::fetch_token_info`
+(`interchain-indexer-logic/src/token_info/fetchers/erc20.rs`) calls
+`name()`, `symbol()`, and `decimals()` on the same contract address in quick
+succession. Some Avalanche subnet RPC gateways (confirmed on Glacier's
+`https://glacier-api.avax.network/v1/ext/bc/{chainId}/rpc` proxy, at least
+for chain 8021) occasionally return the *wrong* call's response for a given
+request to the same `to` address — e.g. `decimals()` gets back the raw bytes
+of a `name()`/`symbol()` response. Confirmed via direct reproduction against
+the live endpoint: this happens with `tokio::try_join!` (concurrent) calls,
+with plain sequential `.await` calls, with a fresh connection per call
+(`pool_max_idle_per_host(0)`), and with HTTP/1.1 forced — so it is **not**
+something fixable by changing call ordering, connection reuse, or HTTP
+version on our side. It is an external gateway defect outside our control.
+
+Decoding a `name()`/`symbol()` response (ABI-encoded dynamic `string`) as if
+it were a `decimals()` response (ABI-encoded static `uint8`) reads the
+leading word of that response, which per the ABI spec is *always* the offset
+`0x20` for a single dynamic return value — i.e. decimals decodes to exactly
+**32**, regardless of the actual string. This makes 32 a near-unmistakable
+signature of this specific contamination rather than a plausible real value.
+
+**Fix:** `fetch_token_info` now rejects `decimals() == 32` as a failed fetch
+(`is_abi_offset_artifact`) instead of persisting it. This leaves
+`tokens.decimals` as `NULL`, which the existing
+`kickoff_token_fetch_for_stats_enrichment` eligibility check (decimals `IS
+NULL`) already retries on a later background cycle — by then the gateway is
+usually no longer misbehaving for that address. `name`/`symbol`
+contamination has no equivalent generic detection (no ground truth to check
+against) and is a known residual risk, but is cosmetic, not
+financially significant like `decimals`.
+
+**If you find more corrupted rows:** `SELECT decimals, count(*) FROM tokens
+GROUP BY decimals ORDER BY decimals;` — real-world ERC20 decimals are
+essentially always ≤ 18; an outlier value (32 or otherwise) on a chain with a
+fragile/low-`max_rps` RPC provider is a strong signal of this same class of
+bug. Fix the specific `tokens` row and any `stats_asset_edges` rows derived
+from it directly via SQL — `propagate_token_info_to_stats_tables` only fills
+edge `decimals` when `NULL`, so correcting `tokens` alone does not
+retroactively fix an already-populated (wrong) edge value.
+
+---

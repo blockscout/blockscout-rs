@@ -203,6 +203,13 @@ If on-chain fetch fails:
 This keeps `tokens` anchored to successful on-chain metadata rather than to
 best-effort external icon responses.
 
+`Erc20TokenInfoFetcher` additionally rejects an on-chain fetch whose
+`decimals()` result is exactly `32` as a failed fetch, rather than a genuine
+value — see `.memory-bank/gotchas.md`'s "Some RPC Gateways Cross-Contaminate
+`eth_call` Responses Per Address" entry for why 32 specifically is a reliable
+signature of a gateway returning a `name()`/`symbol()` response in place of
+`decimals()`.
+
 ### 7. Stats workflows trigger enrichment only after projection commits
 
 There are two stats-related kickoff paths:
