@@ -425,6 +425,7 @@ impl ReadService {
             .await
     }
 
+    #[allow(clippy::result_large_err)]
     async fn query_line_chart(
         &self,
         name: String,
