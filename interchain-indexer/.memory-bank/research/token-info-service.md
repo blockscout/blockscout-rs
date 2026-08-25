@@ -203,12 +203,13 @@ If on-chain fetch fails:
 This keeps `tokens` anchored to successful on-chain metadata rather than to
 best-effort external icon responses.
 
-`Erc20TokenInfoFetcher` additionally rejects an on-chain fetch whose
-`decimals()` result is exactly `32` as a failed fetch, rather than a genuine
-value — see `.memory-bank/gotchas.md`'s "Some RPC Gateways Cross-Contaminate
-`eth_call` Responses Per Address" entry for why 32 specifically is a reliable
-signature of a gateway returning a `name()`/`symbol()` response in place of
-`decimals()`.
+`Erc20TokenInfoFetcher` additionally inspects the raw `decimals()` `eth_call`
+response (via `.call_raw()`) before decoding it, rejecting the fetch unless
+the response is exactly the single 32-byte word a `uint8` return must be
+ABI-encoded as — see `.memory-bank/gotchas.md`'s "Some RPC Gateways
+Cross-Contaminate `eth_call` Responses Per Address" entry for why this, and
+not a decoded-value check, is what's needed to tell a corrupted
+`name()`/`symbol()` response apart from a genuine `decimals() == 32` token.
 
 ### 7. Stats workflows trigger enrichment only after projection commits
 

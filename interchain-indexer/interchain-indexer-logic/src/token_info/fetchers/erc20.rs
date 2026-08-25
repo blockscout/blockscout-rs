@@ -29,7 +29,6 @@ impl TokenInfoFetcher for Erc20TokenInfoFetcher {
 
         let name = token_contract.name().call().await?;
         let symbol = token_contract.symbol().call().await?;
-        let decimals = token_contract.decimals().call().await?;
 
         // Some Avalanche subnet RPC gateways (confirmed on Glacier's
         // `ext/bc/{chainId}/rpc` proxy, e.g. for chain 8021/Numine) have been
@@ -37,23 +36,31 @@ impl TokenInfoFetcher for Erc20TokenInfoFetcher {
         // requested for the same `to` address in quick succession — this
         // happens with sequential calls, fresh connections, and HTTP/1.1
         // alike, so it is not something a client-side ordering/pooling change
-        // can prevent. When `decimals()`'s response is actually the payload
-        // of a `name()`/`symbol()` call, the ABI-encoded uint8 is decoded
-        // from that response's leading word, which for any single dynamic
-        // return value (per the ABI spec) is always the offset 0x20 = 32.
-        // That makes exactly 32 a near-unmistakable signature of this
-        // contamination rather than a genuine decimals value: treat it as a
-        // failed fetch instead of persisting corrupted decimals, and let the
-        // existing "decimals IS NULL" background retry
-        // (`kickoff_token_fetch_for_stats_enrichment`) pick it up again
-        // later, once the gateway is no longer misbehaving for this address.
+        // can prevent. Concretely: `decimals()`'s response can turn out to be
+        // the raw bytes of a `name()`/`symbol()` call instead.
+        //
+        // Inspect the raw response before decoding rather than trust the
+        // decoded `u8`: a genuine `decimals()` return is ABI-encoded as
+        // exactly one right-padded 32-byte word, no matter its value,
+        // while a dynamic `string` return (what `name()`/`symbol()` produce)
+        // is always longer — offset word + length word + data. That
+        // distinguishes a real `decimals() == 32` token (still exactly 32
+        // raw bytes, accepted below) from this contamination (a much longer
+        // response whose *first* word happens to decode as `32`, being the
+        // ABI offset of the dynamic value it actually carries) — checking
+        // the decoded value alone cannot tell those apart.
+        let decimals_call = token_contract.decimals();
+        let decimals_raw = decimals_call.call_raw().await?;
         anyhow::ensure!(
-            !is_abi_offset_artifact(decimals),
-            "decimals() returned 32 — the ABI offset word for a single \
-             dynamic-type return value, indicating the RPC gateway likely \
+            is_valid_uint8_word(&decimals_raw),
+            "decimals() returned a {}-byte response, not the single 32-byte \
+             word a uint8 return is ABI-encoded as — likely the RPC gateway \
              returned a name()/symbol() response instead of decimals(); \
-             rejecting as a failed fetch rather than persisting it"
+             rejecting as a failed fetch rather than persisting a misdecoded \
+             value",
+            decimals_raw.len()
         );
+        let decimals = decimals_call.decode_output(decimals_raw)?;
 
         Ok(OnchainTokenInfo {
             name,
@@ -63,13 +70,12 @@ impl TokenInfoFetcher for Erc20TokenInfoFetcher {
     }
 }
 
-/// True for the one value a `decimals()` response cannot plausibly carry
-/// unless it is actually a `name()`/`symbol()` response: per the ABI spec,
-/// a single dynamic-type return value is always encoded with a leading
-/// offset word of 0x20 (32), so decoding *that* as a `uint8` yields exactly
-/// 32 regardless of the string's actual contents.
-fn is_abi_offset_artifact(decimals: u8) -> bool {
-    decimals == 32
+/// A `uint8` return value is always ABI-encoded as exactly one right-padded
+/// 32-byte word, regardless of its value. Anything else — e.g. a dynamic
+/// `string` return's offset+length+data encoding — cannot be a genuine
+/// `decimals()` response.
+fn is_valid_uint8_word(raw: &[u8]) -> bool {
+    raw.len() == 32
 }
 
 #[cfg(test)]
@@ -77,11 +83,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_abi_offset_artifact_flags_only_32() {
-        assert!(is_abi_offset_artifact(32));
-        assert!(!is_abi_offset_artifact(18));
-        assert!(!is_abi_offset_artifact(6));
-        assert!(!is_abi_offset_artifact(0));
-        assert!(!is_abi_offset_artifact(255));
+    fn test_is_valid_uint8_word_accepts_exactly_32_bytes() {
+        assert!(is_valid_uint8_word(&[0u8; 32]));
+    }
+
+    #[test]
+    fn test_is_valid_uint8_word_rejects_dynamic_string_encoding() {
+        // offset word (0x20) + length word (0xc) + "Wrapped AVAX" padded to a
+        // word: the actual raw shape observed from the misbehaving gateway.
+        let mut raw = vec![0u8; 32];
+        raw[31] = 0x20;
+        raw.extend_from_slice(&[0u8; 32]);
+        raw.extend_from_slice(b"Wrapped AVAX");
+        raw.extend_from_slice(&[0u8; 20]);
+        assert!(!is_valid_uint8_word(&raw));
+    }
+
+    #[test]
+    fn test_is_valid_uint8_word_rejects_short_or_empty_response() {
+        assert!(!is_valid_uint8_word(&[]));
+        assert!(!is_valid_uint8_word(&[0u8; 31]));
     }
 }

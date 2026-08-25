@@ -1700,18 +1700,32 @@ Decoding a `name()`/`symbol()` response (ABI-encoded dynamic `string`) as if
 it were a `decimals()` response (ABI-encoded static `uint8`) reads the
 leading word of that response, which per the ABI spec is *always* the offset
 `0x20` for a single dynamic return value — i.e. decimals decodes to exactly
-**32**, regardless of the actual string. This makes 32 a near-unmistakable
-signature of this specific contamination rather than a plausible real value.
+**32**, regardless of the actual string. Rejecting the *decoded value* `32`
+outright is not sound though: a genuine `decimals() == 32` token would then
+be permanently unpersistable, since every real fetch would also be rejected.
+The decoded value alone cannot tell the two cases apart — the raw response
+can.
 
-**Fix:** `fetch_token_info` now rejects `decimals() == 32` as a failed fetch
-(`is_abi_offset_artifact`) instead of persisting it. This leaves
-`tokens.decimals` as `NULL`, which the existing
-`kickoff_token_fetch_for_stats_enrichment` eligibility check (decimals `IS
-NULL`) already retries on a later background cycle — by then the gateway is
-usually no longer misbehaving for that address. `name`/`symbol`
+**Fix:** `fetch_token_info` now inspects the raw `eth_call` response before
+decoding, via the generated call builder's `.call_raw()` (`erc20.rs`,
+`is_valid_uint8_word`). A genuine `decimals()` return is ABI-encoded as
+exactly one right-padded 32-byte word, whatever its value; the
+`name()`/`symbol()` string encoding this contamination actually carries is
+always longer (offset word + length word + data). A response that isn't
+exactly 32 raw bytes is rejected as a failed fetch — including a real
+`decimals() == 32` token's genuine (also 32-byte) response, which passes and
+decodes normally. Rejection leaves `tokens.decimals` as `NULL`, which the
+existing `kickoff_token_fetch_for_stats_enrichment` eligibility check
+(decimals `IS NULL`) already retries on a later background cycle — by then
+the gateway is usually no longer misbehaving for that address. `name`/`symbol`
 contamination has no equivalent generic detection (no ground truth to check
 against) and is a known residual risk, but is cosmetic, not
 financially significant like `decimals`.
+
+Confirmed live against the real (still-misbehaving) gateway after the fix:
+20/20 attempts against the corrupted address correctly rejected the 96-byte
+contaminated response (offset + length + `"Wrapped AVAX"`/`"WAVAX"` data)
+and never once decoded it into a bogus value.
 
 **If you find more corrupted rows:** `SELECT decimals, count(*) FROM tokens
 GROUP BY decimals ORDER BY decimals;` — real-world ERC20 decimals are

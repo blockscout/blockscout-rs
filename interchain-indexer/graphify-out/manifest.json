@@ -540,8 +540,8 @@
     "semantic_hash": "d86e25ce399378f34562f5fa71f2b7dc"
   },
   "interchain-indexer-logic/src/token_info/fetchers/erc20.rs": {
-    "mtime": 1787646576.772528,
-    "ast_hash": "4cf36a7e452951a7f06b20c38e704282",
+    "mtime": 1787654817.8745947,
+    "ast_hash": "ce3b6bdb509cff7424bb863f686f5d84",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/token_info/fetchers/erc20_token_home.rs": {
@@ -1065,8 +1065,8 @@
     "semantic_hash": "3444ad3ef07802eac7c1f459868679e1"
   },
   ".memory-bank/gotchas.md": {
-    "mtime": 1787646730.329144,
-    "ast_hash": "ba103764d36d6d9d578eb60878335649",
+    "mtime": 1787654984.9631672,
+    "ast_hash": "024c96dd15578d703aaa7b25614b2d73",
     "semantic_hash": ""
   },
   ".memory-bank/project-context.md": {
@@ -1125,8 +1125,8 @@
     "semantic_hash": ""
   },
   ".memory-bank/research/token-info-service.md": {
-    "mtime": 1787646757.834483,
-    "ast_hash": "908fd812ee8e737079b09a714466e30d",
+    "mtime": 1787655008.5394728,
+    "ast_hash": "9a06c8978bea4b01ce9ccd6541a60f82",
     "semantic_hash": ""
   },
   ".memory-bank/rules/async-patterns.md": {
@@ -1240,7 +1240,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1787649673.492339,
+    "mtime": 1787654916.584534,
     "ast_hash": "03b3742fc6f55c41e1aca96e88c89a87",
     "semantic_hash": ""
   },
