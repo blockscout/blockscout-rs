@@ -76,7 +76,7 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__DB_URL`                                                      |                          | Postgres URL to stats db                                                                                                                                                                                                                                                                     | ``                                              |
 | `STATS__MODE`                                                        |                          | Service mode: `blockscout`, `multichain_aggregator`, `zetachain`, or `interchain`. Modes are mutually exclusive. `blockscout` implies no zetachain CCTX and no multichain behavior.                                                                                                          | `blockscout`                                    |
 | `STATS__MULTICHAIN_FILTER`                                           |                          | An array of chain IDs used to filter input data in `multichain_aggregator` mode. Specified as a comma-separated list of identifiers without spaces (e.g. `10,130`)                                                                                                                           | `null`                                          |
-| `STATS__INTERCHAIN_PRIMARY_ID`                                       |                          | If the primary chain is set, send/receive counters and charts will be built around it (interchain mode only)                                                                                                                                                                                 | `null`                                          |
+| `STATS__INTERCHAIN_PRIMARY_ID`                                       |                          | DEPRECATED: use `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`. Still honoured and treated as exactly that value; setting both to different values is a startup error | `null`                                          |
 | `STATS__INDEXER_DB_URL`                                              |                          | Postgres URL to indexer db; renamed from `*_BLOCKSCOUT_DB_URL`                                                                                                                                                                                                                               | `null`                                          |
 | `STATS__BLOCKSCOUT_DB_URL`                                           |                          | Postgres URL to blockscout db. Renamed to `*_INDEXER_DB_URL` but left for backwards-compatibility                                                                                                                                                                                            | `null`                                          |
 | `STATS__SECOND_INDEXER_DB_URL`                                       |                          | Postgres URL to second indexer db; i.e. zetachain cctx indexer db. Required if `STATS__MODE=zetachain`                                                                                                                                                                                       | `null`                                          |
@@ -107,6 +107,12 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__ENABLE_ALL_EIP_7702`                                         |                          | Enable EIP-7702-specific charts. Variable for convenience only, the same charts can be enabled one-by-one.                                                                                                                                                                                   | `false`                                         |
 | `STATS__ENABLE_ALL_FILECOIN`                                         |                          | Enable the Filecoin-specific API surface: `filecoinChainFeesGrowth` is enabled under its own id, and the public `txnsFee` id is force-enabled and served with the `filecoinNewChainFees` implementation (chain-wide fees); `filecoinNewChainFees` is never exposed as a public chart id.     | `false`                                         |
 | `STATS__API_KEYS__<KEY_NAME>`                                        |                          | E.g. `very_secure_key_value`. Allows access to key-protected functinoality                                                                                                                                                                                                                   | `null`                                          |
+| `STATS__INTERCHAIN_FILTER__BRIDGE_IDS`                               |                          | Restriction on the interchain indexer's bridge ids, comma-separated | `null`                                          |
+| `STATS__INTERCHAIN_FILTER__COUNTERPARTY_CHAIN_IDS`                   |                          | Counterparties of the focal chain, comma-separated (e.g. `10,137`). **Without** `..__HOME_CHAIN_ID` this is a conjunction, not a focal OR: it keeps only routes with *both* endpoints inside the set (`src IN set AND dst IN set`) | `null`                                          |
+| `STATS__INTERCHAIN_FILTER__DST_CHAIN_IDS`                            |                          | Additional restriction on the destination chain, comma-separated. Applied as a separate AND term. A message with no known destination is excluded by it, because `dst IN (...)` is NULL for a NULL destination | `null`                                          |
+| `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`                            |                          | Focal chain for `interchain` mode. With `..__COUNTERPARTY_CHAIN_IDS` keeps `(src = home AND dst IN counterparties) OR (dst = home AND src IN counterparties)`; alone keeps `src = home OR dst = home` | `null`                                          |
+| `STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS`                 |                          | Mirrors the indexer read API flag of the same name, including its default. `false` keeps only rows the row's own bridge could have fully observed - in particular it excludes every message with no known destination. Set `true` to count everything the indexer stored | `false`                                         |
+| `STATS__INTERCHAIN_FILTER__SRC_CHAIN_IDS`                            |                          | Additional restriction on the source chain, comma-separated. Applied as a separate AND term, never folded into the focal OR | `null`                                          |
 
 [anchor]: <> (anchors.envs.end.service)
 
@@ -118,6 +124,73 @@ When `linked_stats` is configured, the intended topology is one primary stats se
 In order to prevent incorrect statistics from being collected, there is an option to automatically delay chart update. This is controlled by `STATS_CONDITIONAL_START_*` environmental variables. 
 
 The service will periodically check the enabled start conditions and start updating charts once they are satisfied.
+
+##### Interchain read filtering
+
+In `interchain` mode the service reads a *universal* interchain indexer: one database that can hold every chain and every bridge that indexer can reach. The `STATS__INTERCHAIN_FILTER__*` variables select the subset a given stats deployment counts.
+
+Two properties follow from that, and they drive everything else in this section:
+
+- **The filter is applied when charts are computed, not when they are served.** One stats deployment materialises exactly one subset into its own database. There is no per-request filtering; a second subset needs a second deployment.
+- **Stats configuration and an indexer API request must describe the same subset**, or the dashboard and the list view behind it will disagree with each other while both are internally correct — they were simply asked different questions.
+
+Each variable mirrors an indexer read-API query parameter of the same name, including its default. The predicate is not a re-implementation: stats depends on the indexer's `interchain-indexer-filters` crate and evaluates the same code, so no one has to keep two copies of the truth table in agreement.
+
+That guarantee is **per revision**, not permanent. `stats/Cargo.toml` pins those crates to one git rev, so stats keeps rendering the predicate as of that rev; if the deployed indexer runs a newer one with a changed filter — a new dimension, a different focal truth table, a changed NULL rule — the two disagree until the pin is bumped, and each looks internally correct while doing so. **Treat bumping that pin as a release step whenever the indexer's filter changes**, and keep the deployed indexer's revision in mind when comparing a stats number against an API response.
+
+| Stats env variable | Indexer API query parameter |
+| ------------------ | --------------------------- |
+| `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID` | `home_chain_id` |
+| `STATS__INTERCHAIN_FILTER__COUNTERPARTY_CHAIN_IDS` | `counterparty_chain_ids` |
+| `STATS__INTERCHAIN_FILTER__SRC_CHAIN_IDS` | `src_chain_ids` |
+| `STATS__INTERCHAIN_FILTER__DST_CHAIN_IDS` | `dst_chain_ids` |
+| `STATS__INTERCHAIN_FILTER__BRIDGE_IDS` | `bridge_ids` |
+| `STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS` | `include_unindexed_chains` |
+
+At startup the service logs the configured filter once, as a SQL `WHERE` clause (`configured interchain read filter: …`, or `<unfiltered>`), and it is worth reading after every configuration change. Read it as what you configured, not as what will be counted: the indexed-chain restriction is read from the indexer database on each update cycle and so cannot appear on that line, which means an otherwise unconfigured deployment logs `<unfiltered>` while still excluding rows. The line carries `include_unindexed_chains` as a field so the restriction's *presence* is visible; its resolved contents are logged per cycle at `DEBUG` (`resolved the interchain observability horizon for this cycle`).
+
+###### Things that surprise people
+
+- **`COUNTERPARTY_CHAIN_IDS` without `HOME_CHAIN_ID` is a conjunction, not a focal `OR`.** With a home chain it restricts the *other* endpoint: `(src = home AND dst IN set) OR (dst = home AND src IN set)`. Without one it means `src IN set AND dst IN set` — only routes with **both** endpoints inside the set survive. That is the indexer API's behaviour too, and the service warns about it at startup.
+- **`INCLUDE_UNINDEXED_CHAINS` defaults to `false`, and that default excludes rows.** It matches the indexer API's own default, so an unconfigured stats instance and an unparameterised API request answer the same question. What it excludes is every row its own bridge could not have observed from both sides — in particular **every message whose destination is still unknown** (`dst_chain_id IS NULL`), plus any row with an endpoint outside its bridge's indexed chain set. Set it to `true` to count everything the indexer stored.
+- **The "indexed chain set" comes from the indexer's database, not from stats configuration.** Stats re-derives it from the indexer's own `bridges` / `bridge_contracts` tables at the start of every update cycle in which the restriction is enabled. There is no stats variable for it, and there is deliberately none: it is the indexer's fact about itself, and stats must not be able to disagree. If that read fails, the update group is **skipped** and retried on its next schedule, rather than computed without the restriction.
+- **`STATS__INTERCHAIN_PRIMARY_ID` is deprecated.** It is still honoured and means exactly `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`. Setting both to the *same* value logs a deprecation warning; setting them to **different** values is a hard startup error, not a silent precedence rule.
+- **Changing the filter rebuilds the affected charts by itself.** A fingerprint of the configured filter is stored alongside every interchain point; on the next update a mismatch clears the stored series and recomputes it. Budget for one full backfill after a filter change; no manual intervention is needed, and none should be attempted.
+
+###### Parity, and its two known divergences
+
+For any `STATS__INTERCHAIN_FILTER__*` configuration there is an equivalent indexer API request that returns the same subset, and vice versa — except after something is **removed** from the indexer's bridges configuration. Both exceptions have the same single cause: the indexer derives its indexed chain set from its in-memory configuration, while stats derives it from the `bridges` and `bridge_contracts` tables, and the indexer's upserts into those tables never delete. A removal therefore shrinks the indexer's set and leaves stats' set as it was. Which way the numbers then diverge depends on *what* was removed, and the two directions are opposite:
+
+- **A bridge contract removed from a bridge that still exists ⇒ stats counts more than the API.** The API stops admitting that bridge's rows whose endpoint is the dropped chain; stats still has the `bridge_contracts` row, so it keeps admitting them.
+- **A whole bridge removed ⇒ stats counts less than the API.** The bridge is simply absent from the API's restriction, and the shared predicate deliberately admits an absent bridge's rows unconditionally — its already-indexed history must not be reinterpreted (only messages with an unknown destination stay excluded). Stats still has the bridge's `bridges` row, so it keeps testing its rows against the chain set recorded for it and drops any that fall outside.
+
+Neither is repaired by a forced recompute: it re-reads the same stale tables. Both are documented rather than fixed; closing them needs the indexer to publish its effective set, not a workaround on the stats side. Neither is reachable without an edit to the indexer's configuration — a steady-state deployment is at parity.
+
+###### Staleness the fingerprint does not cover
+
+The stored fingerprint covers the configured chain and bridge lists plus whether the indexed-chain restriction is enabled. It deliberately does **not** cover the resolved chain set itself, because that set grows on its own whenever the indexer gains a bridge or a bridge contract — hashing it would rebuild every interchain chart on every upstream bridge addition.
+
+The cost of that choice: when the indexer's set **widens** — a redeploy that adds a bridge or a bridge contract — points already computed under the narrower one stay narrower than freshly computed points, and nothing detects the difference. A one-off restart with `STATS__FORCE_UPDATE_ON_START=true` makes the history uniform again in that direction.
+
+It does **not** repair a *narrowing*, which is reachable mainly by starting stats before the indexer has populated `bridges` at all: a forced update recomputes and overwrites, but never deletes, so days that now yield no rows keep the values they had. Recovering from that means clearing the affected charts' stored data; only a filter-fingerprint change does that on its own.
+
+**Rolling back to a pre-filter build needs the same manual clear, and is the one case where it is easy to forget.** The old build stores a constant where the new one stores a fingerprint, so it does see a mismatch and does recompute from scratch — but it recomputes with the *old* predicate, and the recompute only overwrites. Any day whose sole row is admitted by the new predicate and rejected by the old one therefore keeps its new value, and the series ends up mixing the two definitions with nothing to indicate it. This is reachable, not theoretical: the transfer `*_sent` / `*_received` charts changed which columns they scope on, so a transfer whose token source chain is the home chain while its parent message's route is not is exactly such a row. **Clear the interchain charts' stored data as part of the rollback**, before the old build's first update cycle; do not rely on it to clean up after itself.
+
+###### Migrating an existing deployment
+
+```bash
+# was: STATS__INTERCHAIN_PRIMARY_ID=<P>
+STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID=<P>
+STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS=true   # keep the old, wider scope
+```
+
+That reproduces the old scope as closely as the new model can, but some numbers still move:
+
+- **The four unscoped charts become scoped.** `totalInterchainMessages`, `totalInterchainTransfers`, `newMessagesInterchain` and `newTransfersInterchain` previously counted everything the indexer held, ignoring `STATS__INTERCHAIN_PRIMARY_ID` entirely. They keep their ids and now count within the configured scope, so with a home chain set they narrow to routes touching it.
+- **The message `*_sent` / `*_received` charts do not move on account of the focal predicate.** With only a home chain configured, the filter's `src = P OR dst = P` is absorbed by the chart's own `src = P` (or `dst = P`) term, so the result is the same predicate as before. They move only if another filter dimension is also set, or if the indexed-chain restriction is left enabled.
+- **The transfer `*_sent` / `*_received` charts move regardless**, for two independent reasons. Their scope is now the transfer's own token source/destination chains rather than its parent message's route — the two answer genuinely different questions, not coarser and finer versions of one. And their join to the parent message is now on `(message_id, bridge_id)` rather than `message_id` alone, which corrects an over-count that occurred whenever two bridges reused the same numeric message id. The second reason applies with no filter configured at all. `totalInterchainTransferUsers` moves for the same two reasons; it no longer joins to messages at all.
+
+How large that movement is for a particular deployment is characterised by the test fixtures rather than measured against production. There is no deployment in the target (universal, multi-bridge) configuration to measure: today's deployments read indexers that already filter at write time, where the indexed-chain restriction is close to a no-op, so numbers taken from them would describe a dataset that does not resemble the one this feature exists for.
 
 <details><summary>Server settings</summary>
 <p>
