@@ -278,8 +278,7 @@ fn build_transfer(
     // a `TokenRemote` can only address its `TokenHome`, so hop 1's ICM
     // destination is `Home` while `SendTokensInput` names the final chain
     // `R2`. Deriving it from the ICM message keeps `token_dst_chain_id` /
-    // `token_dst_address` internally consistent by construction (see
-    // task.md `prevent-split-stats-assets`, coding-task-4b.md item 5b).
+    // `token_dst_address` internally consistent by construction.
     let dst_token_addr = send.event.message.destinationAddress;
 
     match transfer {
@@ -463,9 +462,9 @@ fn record_classification_outcome(key: &Key, classified: &Option<ClassifiedPayloa
     }
 }
 
-/// New completeness rule (see `coding-task-1.md` item 5c). `None` credit
-/// expectation means "unknown" — no payload source yet, or the payload was
-/// rejected — and stays conservative (incomplete), matching today's behavior.
+/// `None` credit expectation means "unknown" — no payload source yet, or the
+/// payload was rejected — and stays conservative (incomplete), matching
+/// today's behavior.
 fn ictt_completeness(
     transfer: &Option<TokenTransfer>,
     credit_expectation: Option<CreditExpectation>,
@@ -630,8 +629,7 @@ fn try_reconstruct_transfer(
 }
 
 /// Build the reconstructed transfer row for an incoming `SINGLE_HOP_SEND` /
-/// `SINGLE_HOP_CALL` message. See the field-mapping table in
-/// `coding-task-1.md` item 6. Column-shape uniformity with `build_transfer` is
+/// `SINGLE_HOP_CALL` message. Column-shape uniformity with `build_transfer` is
 /// deliberate: both `Set` exactly the same columns (per the "SeaORM
 /// `insert_many` Cannot Mix Set and NotSet for the Same Column" gotcha),
 /// `sender_address` included — it is always `Set`, `None` for

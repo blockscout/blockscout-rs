@@ -204,9 +204,7 @@ impl StatsService {
     /// Kicks off token metadata fetch for every consolidated entry in the
     /// batch, not only finalized ones — a transfer to an unindexed chain is
     /// never `is_final` but is now countable and asset-linked, so it must
-    /// still be eligible for enrichment (task.md Success Criteria: "assets
-    /// created from unindexed-counterpart transfers are eligible for token
-    /// metadata enrichment").
+    /// still be eligible for token metadata enrichment.
     pub fn kickoff_token_enrichment_for_flushed(&self, flushed: &[ConsolidatedMessage]) {
         let keys = token_keys_from_flushed_for_enrichment(flushed);
         self.kickoff_token_enrichment_for_keys(keys);

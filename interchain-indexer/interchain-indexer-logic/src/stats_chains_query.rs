@@ -121,8 +121,8 @@ fn build_pagination(
 ///
 /// `Global` is the exact, globally deduplicated `stats_chains` path — untouched
 /// by this task. `Bridges` sums selected bridges' `stats_chains_by_bridge`
-/// cells: exact for one bridge, an accepted additive overcount for several (see
-/// the module doc and `coding-task-2.md`).
+/// cells: exact for one bridge, an accepted additive overcount for several, as
+/// documented in the module-level contract and ADR-009.
 pub enum StatsChainsScope<'a> {
     Global,
     Bridges {
@@ -138,9 +138,9 @@ pub enum StatsChainsScope<'a> {
     },
 }
 
-/// Appends the bridge-scoped `LEFT JOIN` aggregate and its candidate predicate
-/// (the first predicate of the `Bridges` inner `WHERE`, per `coding-task-2.md`
-/// item 5) and returns the `LEFT JOIN` clause SQL.
+/// Appends the bridge-scoped `LEFT JOIN` aggregate and its candidate predicate,
+/// which must be the first predicate of the `Bridges` inner `WHERE`, and
+/// returns the `LEFT JOIN` clause SQL.
 ///
 /// Placeholder numbers are always derived from `values.len() + 1` at the point
 /// each value is pushed — bridge ids first (they sit inside the `LEFT JOIN`
@@ -243,7 +243,7 @@ pub async fn list_stats_chains(
     // `Bridges` swaps in the bridge-scoped aggregate and pushes its candidate
     // predicate first, since it sits before every other inner-`WHERE`
     // predicate both textually (inside the `LEFT JOIN` subquery) and in
-    // `values` ordering (`coding-task-2.md` item 5).
+    // `values` ordering.
     let (join_clause, transfer_expr, message_expr) = match scope {
         StatsChainsScope::Global => (
             "LEFT JOIN stats_chains sc ON sc.chain_id = c.id".to_string(),

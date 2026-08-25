@@ -161,8 +161,13 @@ message GetChainsStatsRequest {
   // are accepted and contribute nothing. Duplicate ids do not duplicate
   // counts. Disabled and removed bridges can still contribute retained
   // history.
+  // The filter also scopes which chains can appear: a chain is a candidate
+  // only when it is currently configured for at least one selected bridge or
+  // has retained stats history for a selected bridge. Unrelated chains do not
+  // become zero-count candidates, even with `include_unindexed_chains=true`.
   // `include_unindexed_chains` keeps its global meaning: a chain is unindexed
-  // only when NO configured bridge indexes it.
+  // only when NO configured bridge indexes it; the flag controls visibility
+  // among the selected bridge candidates described above.
   // Page tokens and raw cursors are valid only with the same `bridge_ids`,
   // `chain_ids`, `q`, `include_unindexed_chains`, `sort`, and `order` that
   // produced them.

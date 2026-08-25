@@ -2001,18 +2001,16 @@ impl InterchainDatabase {
                     0,
                 )
                 .await?;
-            // Deliberately `scanned == 0`, not `processed == 0` (coding-task-4a.md
-            // item 5b / AC6 asked for the latter). The candidate query and
+            // Deliberately `scanned == 0`, not `processed == 0`. The candidate query and
             // `project_messages_batch` both call `message_countable_condition`, so
-            // `processed == 0 ⟺ scanned == 0` by construction (AC5); if that ever
+            // `processed == 0 ⟺ scanned == 0` by construction; if that ever
             // drifts, breaking on `processed == 0` while `scanned > 0` would stop
             // the backfill early and silently strand a backlog unprojected, which
             // is worse than the alternative. Breaking on `scanned == 0` just walks
-            // the id space via `min_id` below and terminates regardless. AC6's
-            // "break on projected" wording predates this cursor: without it,
+            // the id space via `min_id` below and terminates regardless. Without
+            // this cursor,
             // candidates that are never projected would be rescanned forever,
-            // which is the infinite loop AC6 exists to prevent — the cursor closes
-            // that hole on its own, making the two fixes partly redundant.
+            // so the cursor also prevents an infinite loop.
             if r.messages_scanned == 0 {
                 break;
             }
@@ -12677,10 +12675,10 @@ mod tests {
 
         // --- Messages: 3 permanently-ineligible rows at the lowest ids
         // (never finalize; dst chain 100 is indexed for bridge 1, so per the
-        // truth table in coding-task-4a.md item 1 they must wait for
+        // bridge-specific countability rule requires them to wait for
         // completion forever, which in this fixture never happens) below
         // 104 countable rows. `message_countable_condition` is part of the
-        // candidate SELECT's WHERE clause (item 5a), so the 3 ineligible
+        // candidate SELECT's WHERE clause, so the 3 ineligible
         // rows are never returned by any round's query at all — they must
         // not be mistaken for "scanned" capacity. 104 countable rows need
         // two full batches of 50 plus a 4-row tail, forcing 3 non-empty

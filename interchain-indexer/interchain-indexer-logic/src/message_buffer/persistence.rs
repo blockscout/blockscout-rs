@@ -298,7 +298,7 @@ pub(super) async fn flush_to_final_storage(
 /// transfer to a chain unindexed for its bridge is never `is_final` (the
 /// destination-side events can never arrive) but is now countable and
 /// asset-linked, so its known-side token must still be eligible for
-/// enrichment (task.md Success Criteria).
+/// enrichment.
 pub(super) fn token_keys_from_flushed_for_enrichment(
     flushed: &[ConsolidatedMessage],
 ) -> Vec<(i64, Vec<u8>)> {

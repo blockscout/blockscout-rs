@@ -207,8 +207,8 @@ impl IndexedChains {
 
     /// Union of every bridge's chain set, deduplicated and sorted ascending.
     /// `None` means "no restriction" (`AllIndexed`); so does `Some(vec![])`, which
-    /// can only arise from a config with no bridges at all — see the renderer note
-    /// in item 8 and `coding-task-2b.md` item 2.
+    /// can only arise from a config with no bridges at all and therefore has no
+    /// configured-chain restriction to render.
     ///
     /// Only for the chain-*directory* views (`GetChains`, `/stats/chains`) and the
     /// per-asset token list, which are keyed by chain alone and carry no bridge

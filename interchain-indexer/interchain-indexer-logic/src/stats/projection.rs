@@ -1205,8 +1205,8 @@ impl EdgeAccum {
 
 /// Project eligible transfers into stats asset tables and mark them processed.
 ///
-/// Selection follows a rule that separates counting from identity maintenance
-/// (see the module docs and task.md): a row is returned when it is
+/// Selection follows the module-level rule that separates counting from
+/// identity maintenance: a row is returned when it is
 /// identity-ready per [`transfer_identity_ready_condition`] (every unknown
 /// token endpoint sits on a chain unindexed for this bridge, and at least one
 /// endpoint is known) **and** either it was already counted

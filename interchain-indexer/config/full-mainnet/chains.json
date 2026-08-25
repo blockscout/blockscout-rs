@@ -41,7 +41,7 @@
                 },
                 "drpc": {
                     "url": "https://gnosis.drpc.org",
-                    "max_rps": 5
+                    "max_rps": 2
                 }
             }
         ]

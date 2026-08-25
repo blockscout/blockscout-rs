@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 //! DB-backed HTTP contract tests for the `bridge_ids` filter on
-//! `GET /api/v1/stats/chains` (`coding-task-2.md`).
+//! `GET /api/v1/stats/chains`, whose snapshot semantics are recorded in
+//! ADR-009.
 //!
 //! `helpers::init_interchain_indexer_server` boots the server from
 //! `config/omnibridge/bridges.json`: bridge 1 has contracts on chains
@@ -10,7 +11,7 @@
 mod helpers;
 
 use blockscout_service_launcher::test_server;
-use interchain_indexer_entity::{stats_chains, stats_chains_by_bridge};
+use interchain_indexer_entity::{chains, stats_chains, stats_chains_by_bridge};
 use reqwest::StatusCode;
 use sea_orm::{ActiveValue::Set, EntityTrait};
 
@@ -128,6 +129,42 @@ async fn unknown_and_duplicate_bridge_ids_are_accepted_and_contribute_correctly(
     let (status, body) = helpers::get_raw(&base, "/api/v1/stats/chains?bridge_ids=1,1,42").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(count_for(&body, 1), Some(7));
+}
+
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn bridge_ids_scope_chain_candidates_even_when_unindexed_chains_are_included() {
+    let db = helpers::init_db("test", "stats_bridge_filter_candidate_scope").await;
+    let base = helpers::init_interchain_indexer_server(db.db_url(), |mut s| {
+        s.stats.chains_recalculation_period_secs = 0;
+        s
+    })
+    .await;
+    let conn = db.client();
+
+    chains::Entity::insert(chains::ActiveModel {
+        id: Set(250),
+        name: Set("unrelated".to_string()),
+        ..Default::default()
+    })
+    .exec(conn.as_ref())
+    .await
+    .unwrap();
+    seed_global(conn.as_ref(), 250, 99).await;
+    seed_by_bridge(conn.as_ref(), 1, 1, 7).await;
+
+    let filtered: serde_json::Value = test_server::send_get_request(
+        &base,
+        "/api/v1/stats/chains?bridge_ids=1&include_unindexed_chains=true",
+    )
+    .await;
+
+    assert_eq!(count_for(&filtered, 1), Some(7));
+    assert_eq!(
+        count_for(&filtered, 250),
+        None,
+        "include_unindexed_chains must not add chains unrelated to the selected bridges"
+    );
 }
 
 #[tokio::test]

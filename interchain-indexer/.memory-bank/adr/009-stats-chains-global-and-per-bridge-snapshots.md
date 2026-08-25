@@ -216,7 +216,6 @@ the other rejected alternatives do (they fail on cost or latency instead).
 
 ## References
 
-- `tmp/tasks/stats-chains-bridge-filter-2/{task.md,solutions.md,solution_1.md,solution_2.md,solution_3.md,solution_4.md,coding-task-2.md}`
 - `.memory-bank/research/stats-subsystem.md`
 - `.memory-bank/research/db-schema-and-layer.md`
 - `.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md` (Decision 5)
