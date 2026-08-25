@@ -61,7 +61,7 @@
   "59": "Rust Style Rules",
   "60": "amb/types.rs",
   "61": "BlockchainIdResolver",
-  "62": "Exploration Map",
+  "62": "Stats Projection",
   "63": "stats.rs",
   "64": "Indexing Gaps, Retries, and Checkpoint Safety",
   "65": "BatchError",
@@ -204,9 +204,9 @@
   "202": "interchain-indexer-proto/src/lib.rs",
   "203": "index.ts",
   "204": "stats_messages_days.rs",
-  "205": "Exposed REST Endpoints and Swagger URL",
+  "205": "InterchainStatisticsService",
   "206": ".get_checkpoint",
-  "207": "Project Context",
+  "207": "Configuration Loading and Validation",
   "208": "secret.rs",
   "209": "BlockscoutTokenInfoClientSettings",
   "210": "ENVs — `config/avalanche`",
@@ -230,5 +230,6 @@
   "228": "ActiveModel",
   "229": "MessageBuffer (Tiered Storage)",
   "230": "Testing Rules",
-  "231": "CrosschainIndexer Worker"
+  "231": "CrosschainIndexer Worker",
+  "232": "Exploration Map"
 }

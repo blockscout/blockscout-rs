@@ -9901,8 +9901,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_dashmap",
-      "community": 34,
-      "community_name": "AmbIndexer",
+      "community": 52,
+      "community_name": "amb/indexer.rs",
       "norm_label": "dashmap"
     },
     {
@@ -9945,8 +9945,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_joinhandle",
-      "community": 34,
-      "community_name": "AmbIndexer",
+      "community": 52,
+      "community_name": "amb/indexer.rs",
       "norm_label": "joinhandle"
     },
     {
@@ -10286,8 +10286,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "transactionreceipt",
-      "community": 77,
-      "community_name": "AmbDispatchMockService",
+      "community": 52,
+      "community_name": "amb/indexer.rs",
       "norm_label": "transactionreceipt"
     },
     {
@@ -10308,8 +10308,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_block",
-      "community": 77,
-      "community_name": "AmbDispatchMockService",
+      "community": 52,
+      "community_name": "amb/indexer.rs",
       "norm_label": "block"
     },
     {
@@ -18151,8 +18151,8 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_maintenance_bridgecounts_entry",
-      "community": 50,
-      "community_name": "BridgeCounts",
+      "community": 215,
+      "community_name": "BufferItem",
       "norm_label": ".entry()"
     },
     {
@@ -18195,8 +18195,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_maintenance_rs_t",
-      "community": 50,
-      "community_name": "BridgeCounts",
+      "community": 215,
+      "community_name": "BufferItem",
       "norm_label": "t"
     },
     {
@@ -18250,8 +18250,8 @@
       "source_location": "L151",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_maintenance_maintenanceplan_t",
-      "community": 50,
-      "community_name": "BridgeCounts",
+      "community": 215,
+      "community_name": "BufferItem",
       "norm_label": "maintenanceplan<t>"
     },
     {
@@ -18272,8 +18272,8 @@
       "source_location": "L156",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_maintenance_maintenanceplan_t_collect_stale",
-      "community": 50,
-      "community_name": "BridgeCounts",
+      "community": 215,
+      "community_name": "BufferItem",
       "norm_label": ".collect_stale()"
     },
     {
@@ -18283,8 +18283,8 @@
       "source_location": "L165",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_maintenance_maintenanceplan_t_collect_hot",
-      "community": 50,
-      "community_name": "BridgeCounts",
+      "community": 215,
+      "community_name": "BufferItem",
       "norm_label": ".collect_hot()"
     },
     {
@@ -18294,8 +18294,8 @@
       "source_location": "L171",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_maintenance_maintenanceplan_t_collect",
-      "community": 50,
-      "community_name": "BridgeCounts",
+      "community": 215,
+      "community_name": "BufferItem",
       "norm_label": ".collect()"
     },
     {
@@ -33546,26 +33546,26 @@
       "norm_label": "bridges"
     },
     {
-      "label": "Bridge `1` \u2014 AMB/Omnibridge",
+      "label": "Bridge `1001` \u2014 AMB/Omnibridge",
       "file_type": "document",
       "source_file": "config/full-testnet/ENVs.md",
       "source_location": "L69",
       "_origin": "ast",
-      "id": "config_full_testnet_envs_bridge_1_amb_omnibridge",
+      "id": "config_full_testnet_envs_bridge_1001_amb_omnibridge",
       "community": 211,
       "community_name": "ENVs \u2014 `config/full-testnet`",
-      "norm_label": "bridge `1` \u2014 amb/omnibridge"
+      "norm_label": "bridge `1001` \u2014 amb/omnibridge"
     },
     {
-      "label": "Contracts of bridge `1`",
+      "label": "Contracts of bridge `1001`",
       "file_type": "document",
       "source_file": "config/full-testnet/ENVs.md",
       "source_location": "L94",
       "_origin": "ast",
-      "id": "config_full_testnet_envs_contracts_of_bridge_1",
+      "id": "config_full_testnet_envs_contracts_of_bridge_1001",
       "community": 211,
       "community_name": "ENVs \u2014 `config/full-testnet`",
-      "norm_label": "contracts of bridge `1`"
+      "norm_label": "contracts of bridge `1001`"
     },
     {
       "label": "omnibridge/ENVs.md",
@@ -33574,8 +33574,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "config_omnibridge_envs",
-      "community": 213,
-      "community_name": "Mainnet set",
+      "community": 116,
+      "community_name": "Testnet set",
       "norm_label": "omnibridge/envs.md"
     },
     {
@@ -33585,8 +33585,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "config_omnibridge_envs_envs_config_omnibridge",
-      "community": 213,
-      "community_name": "Mainnet set",
+      "community": 116,
+      "community_name": "Testnet set",
       "norm_label": "envs \u2014 `config/omnibridge`"
     },
     {
@@ -33744,26 +33744,26 @@
       "norm_label": "bridges"
     },
     {
-      "label": "Bridge `1` \u2014 AMB/Omnibridge",
+      "label": "Bridge `1001` \u2014 AMB/Omnibridge",
       "file_type": "document",
       "source_file": "config/omnibridge/ENVs.md",
       "source_location": "L220",
       "_origin": "ast",
-      "id": "config_omnibridge_envs_bridge_1_amb_omnibridge_220",
+      "id": "config_omnibridge_envs_bridge_1001_amb_omnibridge",
       "community": 116,
       "community_name": "Testnet set",
-      "norm_label": "bridge `1` \u2014 amb/omnibridge"
+      "norm_label": "bridge `1001` \u2014 amb/omnibridge"
     },
     {
-      "label": "Contracts of bridge `1`",
+      "label": "Contracts of bridge `1001`",
       "file_type": "document",
       "source_file": "config/omnibridge/ENVs.md",
       "source_location": "L245",
       "_origin": "ast",
-      "id": "config_omnibridge_envs_contracts_of_bridge_1_245",
+      "id": "config_omnibridge_envs_contracts_of_bridge_1001",
       "community": 116,
       "community_name": "Testnet set",
-      "norm_label": "contracts of bridge `1`"
+      "norm_label": "contracts of bridge `1001`"
     },
     {
       "label": "Memory Bank: exploration-map.md",
@@ -33895,8 +33895,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 26,
-      "community_name": "Avalanche Bridge Filtering",
+      "community": 207,
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "home_chain_id flag",
       "_origin": "semantic",
       "id": "_memory_bank_research_avalanche_bridge_filtering_home_chain_id"
@@ -34851,8 +34851,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community": 56,
+      "community_name": "InterchainService",
       "norm_label": "exposed rest endpoints and swagger url",
       "_origin": "semantic",
       "id": "docker_readme_rest_endpoints"
@@ -35842,8 +35842,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "stats projection",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_projection_stats_projection"
@@ -35857,8 +35857,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "message_countable_condition",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_projection_message_countable_condition"
@@ -35872,8 +35872,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "finalized_message_stats_condition",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_projection_finalized_message_stats_condition"
@@ -35887,8 +35887,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 229,
+      "community_name": "MessageBuffer (Tiered Storage)",
       "norm_label": "stats_processed marker",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_projection_stats_processed_marker"
@@ -35902,8 +35902,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 229,
+      "community_name": "MessageBuffer (Tiered Storage)",
       "norm_label": "apply_stats_for_flushed_batch hook",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_projection_apply_stats_for_flushed_batch"
@@ -35917,8 +35917,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "two-phase startup backfill",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_projection_two_phase_startup_backfill"
@@ -35932,8 +35932,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "projection-invalidating migrations",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_projection_projection_invalidating_migrations"
@@ -36638,8 +36638,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 56,
-      "community_name": "InterchainService",
+      "community": 205,
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1pagination",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1pagination"
@@ -36744,7 +36744,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1getcommonstatisticsresponse",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1getcommonstatisticsresponse"
@@ -36758,8 +36758,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community": 56,
+      "community_name": "InterchainService",
       "norm_label": "v1getdailystatisticsresponse",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1getdailystatisticsresponse"
@@ -36774,7 +36774,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1getbridgedtokensresponse",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1getbridgedtokensresponse"
@@ -36789,7 +36789,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1statsbridgedtokenrow",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1statsbridgedtokenrow"
@@ -36803,8 +36803,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 56,
-      "community_name": "InterchainService",
+      "community": 205,
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1bridgedtokenslistpagination",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1bridgedtokenslistpagination"
@@ -36819,7 +36819,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1getchainsstatsresponse",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1getchainsstatsresponse"
@@ -36834,7 +36834,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1statschainrow",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1statschainrow"
@@ -36849,7 +36849,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1statschainslistpagination",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1statschainslistpagination"
@@ -36864,7 +36864,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1getmessagepathsresponse",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1getmessagepathsresponse"
@@ -36879,7 +36879,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "v1messagepathrow",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1messagepathrow"
@@ -36953,8 +36953,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community": 56,
+      "community_name": "InterchainService",
       "norm_label": "v1healthcheckresponse",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_swagger_v1_interchain_indexer_swagger_v1healthcheckresponse"
@@ -37208,8 +37208,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 26,
-      "community_name": "Avalanche Bridge Filtering",
+      "community": 207,
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "configuration loading and validation",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_config_loading_and_validation"
@@ -37224,7 +37224,7 @@
       "author": null,
       "contributor": null,
       "community": 207,
-      "community_name": "Project Context",
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "two-channel config system",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_two_channel_config"
@@ -37239,7 +37239,7 @@
       "author": null,
       "contributor": null,
       "community": 207,
-      "community_name": "Project Context",
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "env_merge.rs deep-merge override layer",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_env_merge_layer"
@@ -37254,7 +37254,7 @@
       "author": null,
       "contributor": null,
       "community": 207,
-      "community_name": "Project Context",
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "arrayrules id-key merge table",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_array_rules"
@@ -37268,8 +37268,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 26,
-      "community_name": "Avalanche Bridge Filtering",
+      "community": 207,
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "deny_unknown_fields pervasiveness",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_deny_unknown_fields"
@@ -37283,8 +37283,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 26,
-      "community_name": "Avalanche Bridge Filtering",
+      "community": 207,
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "db seeding via upserts",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_db_seeding_upserts"
@@ -37299,8 +37299,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 26,
-      "community_name": "Avalanche Bridge Filtering",
+      "community": 207,
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "late semantic validation",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_late_validation"
@@ -37314,8 +37314,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 26,
-      "community_name": "Avalanche Bridge Filtering",
+      "community": 207,
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "stats service env-patching pattern (cross-reference)",
       "_origin": "semantic",
       "id": "_memory_bank_research_config_loading_and_validation_stats_service_env_pattern"
@@ -38217,7 +38217,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "interchainstatisticsservice",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_interchain_statistics_service"
@@ -38246,8 +38246,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community": 56,
+      "community_name": "InterchainService",
       "norm_label": "health service",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_health"
@@ -38397,7 +38397,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "get /api/v1/stats/common",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_get_common_statistics"
@@ -38411,8 +38411,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community": 56,
+      "community_name": "InterchainService",
       "norm_label": "get /api/v1/stats/daily",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_get_daily_statistics"
@@ -38427,7 +38427,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "get /api/v1/stats/chain/{chain_id}/bridged-tokens",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_get_bridged_tokens"
@@ -38442,7 +38442,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "get /api/v1/stats/chains",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_get_chains_stats"
@@ -38457,7 +38457,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "get /api/v1/stats/chain/{chain_id}/messages-paths/sent",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_get_sent_message_paths"
@@ -38472,7 +38472,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "get /api/v1/stats/chain/{chain_id}/messages-paths/received",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_get_received_message_paths"
@@ -38486,8 +38486,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community": 56,
+      "community_name": "InterchainService",
       "norm_label": "get /health",
       "_origin": "semantic",
       "id": "interchain_indexer_proto_proto_v1_api_config_http_health_check"
@@ -38547,7 +38547,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "interchain stats subsystem",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_stats_subsystem"
@@ -38562,7 +38562,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "indexedchains / may_observe",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_indexed_chains"
@@ -38577,8 +38577,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "observability horizon eligibility rule",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_observability_horizon_rule"
@@ -38592,8 +38592,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
-      "community_name": "Exploration Map",
+      "community": 75,
+      "community_name": "Layer 1: Generic Pipeline",
       "norm_label": "asset identity as union-find with eager merge",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_asset_identity_union_find"
@@ -38608,8 +38608,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 229,
+      "community_name": "MessageBuffer (Tiered Storage)",
       "norm_label": "counting and identity are separate concerns",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_counting_vs_identity"
@@ -38638,8 +38638,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
-      "community_name": "Exploration Map",
+      "community": 75,
+      "community_name": "Layer 1: Generic Pipeline",
       "norm_label": "decimals conflict skip on the counting path",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_decimals_conflict_skip"
@@ -38654,7 +38654,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "stats_chains periodic snapshot",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_stats_chains_snapshot"
@@ -38669,7 +38669,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "stats endpoint matrix and refresh modes",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_endpoint_matrix"
@@ -38684,7 +38684,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "read-time filterability constraints",
       "_origin": "semantic",
       "id": "_memory_bank_research_stats_subsystem_read_time_filterability"
@@ -38939,8 +38939,8 @@
       "author": null,
       "contributor": null,
       "rationale": "Treating 'no destination TokensWithdrawn/CallSucceeded/CallFailed' as incomplete is wrong for two shapes that will never get one (incoming ICTT from an unconfigured chain, multi-hop first leg that routes onward). Both stayed Partial forever and never left pending_messages. Discriminating on the decoded TeleporterMessage payload kind (SINGLE_HOP_SEND/CALL still wait; REGISTER_REMOTE/MULTI_HOP_SEND/CALL complete on available evidence) is what lets completeness rest on the evidence that can actually exist.",
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 42,
+      "community_name": "Glossary",
       "norm_label": "gotcha: message finality is complex \u2014 icm payload kind decides ictt completeness",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_message_finality_is_complex"
@@ -38954,8 +38954,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 42,
+      "community_name": "Glossary",
       "norm_label": "ictt_completeness / classify_payload (consolidation.rs)",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_ictt_completeness_classify_payload"
@@ -38969,8 +38969,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 42,
+      "community_name": "Glossary",
       "norm_label": "ictt_payload.rs \u2014 teleportermessage payload decoder (decode_transferrer_message / decode_inner)",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_ictt_payload_rs"
@@ -39000,8 +39000,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 79,
-      "community_name": "Checkpoint",
+      "community": 229,
+      "community_name": "MessageBuffer (Tiered Storage)",
       "norm_label": "should_process_message \u2014 per-bridge chain filtering decision",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_should_process_message_filter"
@@ -39317,8 +39317,8 @@
       "author": null,
       "contributor": null,
       "rationale": "The resolver cache and its writes to chains / avalanche_icm_blockchain_ids are global while the filtering decision is per-bridge, so a permissive bridge's discovery lets a strict bridge skip a Data API call. Benign \u2014 the strict bridge still applies its own chain_ids set and rejects the message. No fix needed; just read the chains table as the union of all bridges' discovery activity.",
-      "community": 79,
-      "community_name": "Checkpoint",
+      "community": 229,
+      "community_name": "MessageBuffer (Tiered Storage)",
       "norm_label": "gotcha: cross-bridge resolver persistence leaks (blockchainidresolver global cache)",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_cross_bridge_resolver_persistence_leaks"
@@ -39535,8 +39535,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 79,
-      "community_name": "Checkpoint",
+      "community": 229,
+      "community_name": "MessageBuffer (Tiered Storage)",
       "norm_label": "blockchain_id_resolver.rs \u2014 blockchainidresolver mapping persistence",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_blockchain_id_resolver"
@@ -39677,8 +39677,8 @@
       "author": null,
       "contributor": null,
       "rationale": "alloy_sol_types::SolValue::abi_decode_validate only type-checks the tokens it reads and never verifies the input slice was fully consumed, so non-canonical offsets and trailing garbage both pass. The explicit canonicity round trip \u2014 re-encode and compare byte-for-byte \u2014 is the layer that actually rejects them. It matters here because a false-positive ICTT payload decode would fabricate a bogus crosschain_transfers row from an arbitrary ICM message.",
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 42,
+      "community_name": "Glossary",
       "norm_label": "gotcha: abi_decode_validate does not reject trailing bytes",
       "_origin": "semantic",
       "id": "_memory_bank_gotchas_abi_decode_validate_trailing_bytes"
@@ -40016,8 +40016,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 26,
-      "community_name": "Avalanche Bridge Filtering",
+      "community": 207,
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "home chain",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_home_chain"
@@ -40106,8 +40106,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 42,
+      "community_name": "Glossary",
       "norm_label": "finality",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_finality"
@@ -40136,8 +40136,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "projection",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_projection"
@@ -40151,8 +40151,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "observability horizon",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_observability_horizon"
@@ -40167,7 +40167,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "indexedchains (glossary)",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_indexed_chains"
@@ -40181,8 +40181,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 62,
+      "community_name": "Stats Projection",
       "norm_label": "countable / deferred (stats)",
       "_origin": "semantic",
       "id": "_memory_bank_glossary_countable_deferred"
@@ -40617,7 +40617,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "indexedchains (stats eligibility)",
       "_origin": "semantic",
       "id": "_memory_bank_architecture_indexed_chains"
@@ -40933,7 +40933,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "adr-004: stats observability horizon; asset identity as union-find",
       "_origin": "semantic",
       "id": "_memory_bank_adr_readme_adr_004"
@@ -41187,8 +41187,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 232,
+      "community_name": "Exploration Map",
       "norm_label": "project context",
       "_origin": "semantic",
       "id": "_memory_bank_project_context_project_context"
@@ -41202,8 +41202,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 232,
+      "community_name": "Exploration Map",
       "norm_label": "crate map",
       "_origin": "semantic",
       "id": "_memory_bank_project_context_crate_map"
@@ -41263,7 +41263,7 @@
       "author": null,
       "contributor": null,
       "community": 207,
-      "community_name": "Project Context",
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "configuration model",
       "_origin": "semantic",
       "id": "_memory_bank_project_context_configuration_model"
@@ -41277,8 +41277,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 42,
-      "community_name": "Glossary",
+      "community": 229,
+      "community_name": "MessageBuffer (Tiered Storage)",
       "norm_label": "statsservice",
       "_origin": "semantic",
       "id": "_memory_bank_project_context_stats_service"
@@ -41292,8 +41292,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 232,
+      "community_name": "Exploration Map",
       "norm_label": "local development flow",
       "_origin": "semantic",
       "id": "_memory_bank_project_context_local_development_flow"
@@ -41307,8 +41307,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 42,
+      "community_name": "Glossary",
       "norm_label": "current constraints",
       "_origin": "semantic",
       "id": "_memory_bank_project_context_current_constraints"
@@ -42210,7 +42210,7 @@
       "author": null,
       "contributor": null,
       "community": 205,
-      "community_name": "Exposed REST Endpoints and Swagger URL",
+      "community_name": "InterchainStatisticsService",
       "norm_label": "stats__include_zero_chains",
       "_origin": "semantic",
       "id": "readme_stats_include_zero_chains"
@@ -42554,7 +42554,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 232,
       "community_name": "Exploration Map",
       "norm_label": "exploration map",
       "_origin": "semantic",
@@ -42569,8 +42569,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 232,
+      "community_name": "Exploration Map",
       "norm_label": "whole-system entrypoints",
       "_origin": "semantic",
       "id": "_memory_bank_exploration_map_whole_system_entrypoints"
@@ -42584,7 +42584,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 232,
       "community_name": "Exploration Map",
       "norm_label": "common indexer architecture entrypoints",
       "_origin": "semantic",
@@ -42599,7 +42599,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 232,
       "community_name": "Exploration Map",
       "norm_label": "avalanche indexing entrypoints",
       "_origin": "semantic",
@@ -42614,8 +42614,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 207,
-      "community_name": "Project Context",
+      "community": 42,
+      "community_name": "Glossary",
       "norm_label": "incoming ictt reconstruction / icm payload decoding entrypoints",
       "_origin": "semantic",
       "id": "_memory_bank_exploration_map_ictt_reconstruction_entrypoints"
@@ -42660,7 +42660,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "stats entrypoints",
       "_origin": "semantic",
       "id": "_memory_bank_exploration_map_stats_entrypoints"
@@ -42674,7 +42674,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 232,
       "community_name": "Exploration Map",
       "norm_label": "api serving entrypoints",
       "_origin": "semantic",
@@ -42689,7 +42689,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 232,
       "community_name": "Exploration Map",
       "norm_label": "config loading entrypoints",
       "_origin": "semantic",
@@ -42704,7 +42704,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
+      "community": 232,
       "community_name": "Exploration Map",
       "norm_label": "database schema and migrations entrypoints",
       "_origin": "semantic",
@@ -42720,7 +42720,7 @@
       "author": null,
       "contributor": null,
       "community": 62,
-      "community_name": "Exploration Map",
+      "community_name": "Stats Projection",
       "norm_label": "runtime verification runbook",
       "_origin": "semantic",
       "id": "_memory_bank_exploration_map_runtime_verification_runbook"
@@ -42854,8 +42854,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 62,
-      "community_name": "Exploration Map",
+      "community": 75,
+      "community_name": "Layer 1: Generic Pipeline",
       "norm_label": "stats-driven enrichment fetch condition",
       "_origin": "semantic",
       "id": "_memory_bank_research_token_info_service_stats_enrichment_condition"
@@ -42899,8 +42899,8 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 26,
-      "community_name": "Avalanche Bridge Filtering",
+      "community": 207,
+      "community_name": "Configuration Loading and Validation",
       "norm_label": "upsert pattern (on_conflict)",
       "_origin": "semantic",
       "id": "_memory_bank_rules_database_upsert_pattern"
@@ -132855,7 +132855,7 @@
       "weight": 1.0,
       "_origin": "ast",
       "source": "config_full_testnet_envs_bridges",
-      "target": "config_full_testnet_envs_bridge_1_amb_omnibridge",
+      "target": "config_full_testnet_envs_bridge_1001_amb_omnibridge",
       "confidence_score": 1.0
     },
     {
@@ -132865,8 +132865,8 @@
       "source_location": "L94",
       "weight": 1.0,
       "_origin": "ast",
-      "source": "config_full_testnet_envs_bridge_1_amb_omnibridge",
-      "target": "config_full_testnet_envs_contracts_of_bridge_1",
+      "source": "config_full_testnet_envs_bridge_1001_amb_omnibridge",
+      "target": "config_full_testnet_envs_contracts_of_bridge_1001",
       "confidence_score": 1.0
     },
     {
@@ -133042,7 +133042,7 @@
       "weight": 1.0,
       "_origin": "ast",
       "source": "config_omnibridge_envs_bridges_218",
-      "target": "config_omnibridge_envs_bridge_1_amb_omnibridge_220",
+      "target": "config_omnibridge_envs_bridge_1001_amb_omnibridge",
       "confidence_score": 1.0
     },
     {
@@ -133052,8 +133052,8 @@
       "source_location": "L245",
       "weight": 1.0,
       "_origin": "ast",
-      "source": "config_omnibridge_envs_bridge_1_amb_omnibridge_220",
-      "target": "config_omnibridge_envs_contracts_of_bridge_1_245",
+      "source": "config_omnibridge_envs_bridge_1001_amb_omnibridge",
+      "target": "config_omnibridge_envs_contracts_of_bridge_1001",
       "confidence_score": 1.0
     },
     {
@@ -142946,5 +142946,5 @@
       "source_file": ".cursor/skills/implementation-plan/SKILL.md"
     }
   ],
-  "built_at_commit": "ab1feb4205b0d6d1d4f8cbca6a529e9fd6388a40"
+  "built_at_commit": "6e7e2bc8cb48e0ccd1573efe27585d57b3bc2577"
 }

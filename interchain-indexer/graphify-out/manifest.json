@@ -45,9 +45,9 @@
     "semantic_hash": "d751713988987e9331980363e24189ce"
   },
   "config/omnibridge/bridges-testnet.json": {
-    "mtime": 1786357396.0157905,
-    "ast_hash": "7ccac325f24be3bb8f6cce3313d28697",
-    "semantic_hash": "7ccac325f24be3bb8f6cce3313d28697"
+    "mtime": 1787653496.2561736,
+    "ast_hash": "a6212492e00a00fea47fde6a5d929395",
+    "semantic_hash": ""
   },
   "config/omnibridge/bridges.json": {
     "mtime": 1784105088.7058702,
@@ -350,9 +350,9 @@
     "semantic_hash": "e85346df2f61e9a2c5098228034c5006"
   },
   "interchain-indexer-logic/src/indexer/evm/receipt_fetch.rs": {
-    "mtime": 1784105088.713956,
-    "ast_hash": "05f843a1e54d965efcb890b3e62d91fa",
-    "semantic_hash": "05f843a1e54d965efcb890b3e62d91fa"
+    "mtime": 1787649627.9722474,
+    "ast_hash": "5494e7712af2ea0de7505562da941e59",
+    "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/evm/transaction_grouping.rs": {
     "mtime": 1784105088.7140741,
@@ -1125,9 +1125,9 @@
     "semantic_hash": ""
   },
   ".memory-bank/research/token-info-service.md": {
-    "mtime": 1786533967.2649493,
-    "ast_hash": "06697eb3fe68043376303de66becb2c4",
-    "semantic_hash": "06697eb3fe68043376303de66becb2c4"
+    "mtime": 1787646757.834483,
+    "ast_hash": "908fd812ee8e737079b09a714466e30d",
+    "semantic_hash": ""
   },
   ".memory-bank/rules/async-patterns.md": {
     "mtime": 1778145360.146112,
@@ -1240,7 +1240,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1787646658.7086065,
+    "mtime": 1787649673.492339,
     "ast_hash": "03b3742fc6f55c41e1aca96e88c89a87",
     "semantic_hash": ""
   },
@@ -1265,8 +1265,8 @@
     "semantic_hash": ""
   },
   "config/full-testnet/bridges.json": {
-    "mtime": 1787039102.968117,
-    "ast_hash": "0be90eb15c8032600feb66f94115b6ab",
+    "mtime": 1787653345.318098,
+    "ast_hash": "0045cb5dee8e29da39cef5a3313ae080",
     "semantic_hash": ""
   },
   "config/full-testnet/chains.json": {
@@ -1295,13 +1295,13 @@
     "semantic_hash": ""
   },
   "config/full-testnet/ENVs.md": {
-    "mtime": 1787574262.9868047,
-    "ast_hash": "072f0cd7f157f53ef5160d1b4ce653e0",
+    "mtime": 1787653667.1496308,
+    "ast_hash": "0bdc4b710b5d33385925b5e6589fb706",
     "semantic_hash": ""
   },
   "config/omnibridge/ENVs.md": {
-    "mtime": 1787039102.9687257,
-    "ast_hash": "b9e8f23a37db10927a42f0752fe07cbb",
+    "mtime": 1787653667.1504552,
+    "ast_hash": "8f7472ffec0cab456018ed6be922912c",
     "semantic_hash": ""
   },
   "interchain-indexer-filters/src/lib.rs": {
