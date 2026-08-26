@@ -218,7 +218,9 @@
   - the pure cursor arithmetic behind that endpoint — scanned share, blocks
     remaining, completion. Start here rather than in the service: every clamp
     has a reason, and the guard `lo = max(catchup_min_cursor, start_block)` is
-    load-bearing
+    load-bearing. `catchup_complete` lives here too, as the one predicate that
+    also takes the failure ledger's `failed_blocks` (passed in, so the module
+    stays DB-free)
 - `interchain-indexer-server/src/indexers.rs`
   - config-driven `(bridge, chain)` enumeration for that endpoint, and the
     startup reconciliation of a lowered `started_at_block`

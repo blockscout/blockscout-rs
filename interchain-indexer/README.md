@@ -150,6 +150,8 @@ Both directions are supported; neither deletes anything already indexed.
 
 **Raising it.** Catch-up stops higher, and the stored floor is raised at startup. Blocks already indexed below the new floor stay in the database and are still served by the message APIs — they simply stop counting toward `catchup_blocks_remaining` and `catchup_progress_percent`, so reported progress can jump.
 
+`catchup_complete` in `GET /api/v1/status/indexing` does **not** follow that jump on its own. It is `catchup_progress_percent == 100.0 && failed_blocks == 0`, and the failure ledger is not scoped by the floor: an unresolved hole recorded below the new floor keeps the pair reporting `catchup_complete: false` until the retry pass drains it.
+
 **Lowering it.** The newly opened range *is* scanned. Catch-up walks downward from `catchup_max_cursor` to the configured floor, and a previously completed catch-up left that cursor at `old_floor - 1`, so the scan resumes exactly at the boundary and continues to the new floor. Nothing above the old floor is re-fetched.
 
 The stored floor needs separate handling, because the cursor-maintenance writer can only ever raise it. A startup pass compares the configured floor against the stored `catchup_min_cursor` and lowers the stored value whenever configuration sits below it — so the two are back in agreement on the first restart after any floor change, however the change was expressed: editing `started_at_block` on an existing entry, or adding a new contract entry whose value is lower.

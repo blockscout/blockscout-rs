@@ -917,9 +917,8 @@ here because a false-positive ICTT payload decode would fabricate a bogus
 ## A Checkpoint Certifies Scanning, Not Correctness
 
 **Symptom:** `indexer_checkpoints` shows a chain fully caught up, and
-`GET /api/v1/status/indexing` reports `catchup_progress_percent: 100` with
-`catchup_scan_complete: true` — while messages from blocks inside that range are
-missing from the database.
+`GET /api/v1/status/indexing` reports `catchup_progress_percent: 100` — while
+messages from blocks inside that range are missing from the database.
 
 **Root cause:** A checkpoint records that `eth_getLogs` returned successfully for
 a range, plus gaps between known blocks inferred as "scanned but empty". It has
@@ -928,14 +927,18 @@ fetched and then failed downstream leaves no hot barrier, so a later successful
 item moves the frontier straight across it.
 
 **Fix:** Read the two records together. Completeness lives in `indexer_failures`
-(the failed-range ledger), not in the cursors. In the API payload,
-`failed_blocks != 0` is the only completeness signal — the percentage is the
-*scanned* share and reaches 100% with holes still open, by design. Operationally,
-alert on `interchain_indexer_oldest_open_hole_age_seconds`: the retry pass is the
-only recovery path, so a hole that stops draining is invisible otherwise.
+(the failed-range ledger), not in the cursors — the percentage is the *scanned*
+share and reaches 100% with holes still open, by design. The API payload reads
+both for you: `catchup_complete` is `catchup_progress_percent == 100.0 &&
+failed_blocks == 0`, so `catchup_progress_percent: 100` with
+`catchup_complete: false` is the shape this gotcha produces, and `failed_blocks`
+is the field that says how much. Operationally, alert on
+`interchain_indexer_oldest_open_hole_age_seconds`: the retry pass is the only
+recovery path, so a hole that stops draining is invisible otherwise.
 
-**The converse does not hold.** `failed_blocks == 0` means "nothing was
-recorded", not "nothing was lost". A failure only becomes a row if it reaches the
+**The converse does not hold**, and `catchup_complete: true` inherits the
+limitation whole. `failed_blocks == 0` means "nothing was recorded", not
+"nothing was lost". A failure only becomes a row if it reaches the
 driver as a `BatchError`, so an error a handler swallows is invisible — and worse,
 a replay covering that range reads as success and `resolve`s an existing hole.
 Malformed input is skipped as data quality on purpose (a log without

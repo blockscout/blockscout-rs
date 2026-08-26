@@ -11,8 +11,16 @@
 //! scanned and then failed downstream processing still counts as scanned,
 //! because that is exactly what the cursors record. So 100% with
 //! `failed_blocks > 0` (reported by the caller alongside this struct) is a
-//! normal, correct reading — `failed_blocks` is the only completeness
-//! signal in the payload.
+//! normal, correct reading — the cursors alone cannot tell you whether
+//! anything was lost.
+//!
+//! [`CatchupProgress::catchup_complete`] is the one field that answers
+//! completeness, and it needs both records: the percentage for "everything
+//! was scanned" and the failure ledger's `failed_blocks` for "nothing is
+//! known to be missing". `failed_blocks` remains the *only* input that can
+//! turn a finished scan back into an unfinished catch-up — and its converse
+//! still does not hold (see `.memory-bank/gotchas.md`, "A Checkpoint
+//! Certifies Scanning, Not Correctness").
 
 /// Stored checkpoint cursors for one `(bridge_id, chain_id)`, already clamped
 /// to `u64`.
@@ -130,6 +138,39 @@ impl CatchupProgress {
             progress_percent,
             blocks_remaining,
         }
+    }
+
+    /// The endpoint's `catchup_complete` field: everything in scope was
+    /// scanned **and** nothing is recorded as missing.
+    ///
+    /// ```text
+    /// catchup_complete = progress_percent == 100.0 && failed_blocks == 0
+    /// ```
+    ///
+    /// `failed_blocks` is not derivable from the cursors — it is the failure
+    /// ledger's aggregate — so the caller passes it in and this module stays
+    /// DB-free.
+    ///
+    /// **Why it is phrased over `progress_percent` and not [`Self::scan_complete`].**
+    /// Both inputs are fields the response already carries, so a client can
+    /// reproduce the flag exactly from the payload it holds; nothing hidden
+    /// feeds it. The two phrasings differ in exactly one case, and the
+    /// percentage gives the better answer there: `realtime_cursor <
+    /// start_block` (a floor configured above the chain head) makes `total =
+    /// 0`, so `scan_complete` is vacuously `true` while the reported
+    /// percentage is `0.0`. Answering `catchup_complete = false` keeps the
+    /// payload self-consistent and reads the misconfiguration as "not done",
+    /// which is what an operator needs.
+    ///
+    /// **The `== 100.0` is exact, not approximate.** `progress_percent` is
+    /// `100.0 * scanned / total` with `scanned` and `total` converted from
+    /// the same `u64`, so it is exactly `100.0` whenever `scanned == total`
+    /// as long as `100 * total` is exactly representable — true for every
+    /// `total` below `2^53 / 100 ≈ 9e13` blocks, which is every chain that
+    /// can exist. Below that bound the comparison is integer equality
+    /// wearing a float's clothes.
+    pub fn catchup_complete(&self, failed_blocks: u64) -> bool {
+        self.progress_percent == 100.0 && failed_blocks == 0
     }
 }
 
@@ -295,6 +336,72 @@ mod tests {
         assert_eq!(progress.catchup_min_cursor, 0);
         assert_eq!(progress.catchup_max_cursor, 0);
         assert_eq!(progress.realtime_cursor, 0);
+    }
+
+    #[test]
+    fn test_catchup_complete_requires_both_full_scan_and_no_failed_blocks() {
+        // S = 1000, M = 0 (un-healed) => lo = 1000, X = 999 => nothing left
+        // to scan, and R = 2000 makes the percentage exactly 100.
+        let progress = CatchupProgress::compute(1000, Some(cursors(0, 999, 2000)));
+        assert_eq!(progress.progress_percent, 100.0);
+
+        assert!(progress.catchup_complete(0));
+        assert!(
+            !progress.catchup_complete(1),
+            "a fully scanned range with an open hole is not a complete catch-up"
+        );
+    }
+
+    #[test]
+    fn test_catchup_complete_is_false_while_blocks_remain_even_with_no_failures() {
+        let progress = CatchupProgress::compute(1000, Some(cursors(0, 1500, 2000)));
+        assert!(progress.progress_percent < 100.0);
+        assert!(!progress.catchup_complete(0));
+    }
+
+    #[test]
+    fn test_catchup_complete_is_false_with_no_checkpoint_row() {
+        // Absence is *unknown*, not "done" — the same reasoning as
+        // `scan_complete`, and `progress_percent = 0.0` carries it for free.
+        let progress = CatchupProgress::compute(1000, None);
+        assert!(!progress.catchup_complete(0));
+    }
+
+    #[test]
+    fn test_catchup_complete_is_false_when_floor_sits_above_chain_head() {
+        // R < S: the one case where `scan_complete` and `catchup_complete`
+        // disagree. `total = 0` makes the scan vacuously complete while the
+        // reported percentage is 0.0; the payload must not claim "done" for a
+        // pair whose configured floor is above the chain head.
+        let progress = CatchupProgress::compute(1000, Some(cursors(0, 999, 200)));
+        assert!(progress.scan_complete);
+        assert_eq!(progress.progress_percent, 0.0);
+        assert!(!progress.catchup_complete(0));
+    }
+
+    /// Pins the claim `catchup_complete` rests on: a fully scanned range
+    /// yields *exactly* `100.0`, so the `== 100.0` comparison is integer
+    /// equality in disguise. Spans chain-head magnitudes from a fresh chain
+    /// to far past any real one.
+    #[rstest]
+    #[case(1, 2)]
+    #[case(1, 21_000_000)] // Ethereum-scale head
+    #[case(20_812_229, 23_000_000)] // the omnibridge amb_proxy floor
+    #[case(1, 1_000_000_000_000)] // 1e12 blocks: still exactly representable
+    fn test_compute_full_scan_yields_exactly_one_hundred_percent(
+        #[case] start_block: u64,
+        #[case] realtime_cursor: u64,
+    ) {
+        let progress = CatchupProgress::compute(
+            start_block,
+            Some(cursors(start_block, start_block - 1, realtime_cursor)),
+        );
+        assert_eq!(progress.blocks_remaining, 0);
+        assert_eq!(
+            progress.progress_percent, 100.0,
+            "a fully scanned range must land on exactly 100.0, not a value near it"
+        );
+        assert!(progress.catchup_complete(0));
     }
 
     #[rstest]

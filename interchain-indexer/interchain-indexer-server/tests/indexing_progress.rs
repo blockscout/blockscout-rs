@@ -113,7 +113,7 @@ async fn get_indexing_progress_pair_with_no_checkpoint_reports_zero_and_absent_u
 
     for item in items {
         assert_eq!(item["catchup_progress_percent"], serde_json::json!(0.0));
-        assert_eq!(item["catchup_scan_complete"], serde_json::json!(false));
+        assert_eq!(item["catchup_complete"], serde_json::json!(false));
         // `Value` indexing yields `Null` for a missing key too, so presence
         // must be asserted separately from the value — omission is exactly
         // what this test exists to catch.

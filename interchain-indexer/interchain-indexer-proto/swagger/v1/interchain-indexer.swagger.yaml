@@ -1445,8 +1445,12 @@ definitions:
       realtime_cursor:
         type: string
         format: uint64
-      catchup_scan_complete:
+      catchup_complete:
         type: boolean
+        description: |-
+          catchup_progress_percent == 100.0 AND failed_blocks == 0: everything in
+          scope was scanned and nothing is recorded as missing. Derivable from the
+          two fields below, on purpose.
       catchup_progress_percent:
         type: number
         format: double
