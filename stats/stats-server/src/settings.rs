@@ -13,9 +13,9 @@ use stats::{
     ChartProperties,
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
-        ArbitrumYesterdayOperationalTxns, NewZetachainCrossChainTxns24h,
+        ArbitrumYesterdayOperationalTxns, FilecoinChainFees24h, NewZetachainCrossChainTxns24h,
         OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
-        PendingZetachainCrossChainTxns, TotalZetachainCrossChainTxns,
+        PendingZetachainCrossChainTxns, TotalZetachainCrossChainTxns, TxnsFee24h,
     },
     indexing_status::BlockscoutIndexingStatus,
     lines::{
@@ -85,10 +85,12 @@ pub struct Settings {
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
     /// Enable the Filecoin-specific API surface: `filecoinChainFeesGrowth`
-    /// is enabled under its own id, and the public `txnsFee` id is
-    /// force-enabled and served with the `filecoinNewChainFees`
-    /// implementation (chain-wide fees); `filecoinNewChainFees` is never
-    /// exposed as a public chart id.
+    /// is enabled under its own id; the public `txnsFee` id is force-enabled
+    /// and served with the `filecoinNewChainFees` implementation (chain-wide
+    /// fees), and the public `txnsFee24h` id is force-enabled and served
+    /// with the `filecoinChainFees24h` implementation (24h burn + tips);
+    /// under this flag, `filecoinNewChainFees` and `filecoinChainFees24h`
+    /// are never exposed as public chart ids.
     pub enable_all_filecoin: bool,
     /// Filter by chain ids for multichain mode.
     /// TODO: recalculate statistics data when multichain_filter has been changed.
@@ -340,28 +342,74 @@ pub fn handle_disable_internal_transactions(
     }
 }
 
+/// Finds the entry served under `id` in either config section. Chart ids are
+/// unique across counters and line charts *among enabled entries* only —
+/// `RuntimeSetup::build_charts_info` drops disabled entries before its
+/// collision check — so a duplicate id with a disabled side reaches here and
+/// the `lines` probe below wins. That preference is not something an operator
+/// can predict from the config alone, so the ambiguous case is warned about
+/// (naming both sides and their `enabled` states) instead of being resolved
+/// silently.
+fn find_chart_settings_mut<'a>(
+    charts: &'a mut config::charts::Config<AllChartSettings>,
+    id: &str,
+) -> Option<&'a mut AllChartSettings> {
+    match (charts.lines.get_mut(id), charts.counters.get_mut(id)) {
+        (Some(line_settings), Some(counter_settings)) => {
+            warn!(
+                "Chart id '{id}' is served by an entry in both config sections: \
+                line charts (enabled: {}) and counters (enabled: {}). \
+                Chart ids must be unique across both sections; the line chart \
+                entry is selected here, which may not be the intended one. \
+                Rename or remove one of the two entries.",
+                line_settings.enabled, counter_settings.enabled,
+            );
+            Some(line_settings)
+        }
+        (Some(settings), _) => Some(settings),
+        (_, Some(settings)) => Some(settings),
+        _ => None,
+    }
+}
+
 fn enable_charts(
     to_enable: &[&str],
     charts: &mut config::charts::Config<AllChartSettings>,
     charts_name_for_logs: &str,
 ) {
     for enable_key in to_enable {
-        let settings = match (
-            charts.lines.get_mut(*enable_key),
-            charts.counters.get_mut(*enable_key),
-        ) {
-            (Some(settings), _) => settings,
-            (_, Some(settings)) => settings,
-            _ => {
-                warn!(
-                    "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
-                    chart not found in settings. \
-                    This should not be a problem for running the service.",
-                );
-                continue;
-            }
+        let Some(settings) = find_chart_settings_mut(charts, enable_key) else {
+            warn!(
+                "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
+                chart not found in settings. \
+                This should not be a problem for running the service.",
+            );
+            continue;
         };
         settings.enabled = true;
+    }
+}
+
+/// Sets `implementation` on the entry served under `public_id`, unless the
+/// operator already configured one — an explicit operator-provided mapping
+/// wins over a flag. Looks the entry up in both sections via
+/// [`find_chart_settings_mut`]; warns and continues when neither holds it.
+fn set_default_implementation(
+    charts: &mut config::charts::Config<AllChartSettings>,
+    public_id: &str,
+    implementation_id: String,
+    charts_name_for_logs: &str,
+) {
+    let Some(settings) = find_chart_settings_mut(charts, public_id) else {
+        warn!(
+            "Could not remap '{charts_name_for_logs}'-specific chart {public_id}: \
+            chart not found in settings. \
+            Nothing will be served under this public id; the service starts without it.",
+        );
+        return;
+    };
+    if settings.implementation.is_none() {
+        settings.implementation = Some(implementation_id);
     }
 }
 
@@ -425,30 +473,48 @@ pub fn handle_enable_all_eip_7702(
 /// `filecoinChainFeesGrowth` under its own id and force-enables the public
 /// `txnsFee` id, serving it with the `filecoinNewChainFees` implementation
 /// (chain-wide REV-style fees) unless an explicit `implementation` is already
-/// configured. `filecoinNewChainFees` is never exposed as a public chart id.
-/// The intermediate charts (`burnActorBalance`, `fevmFeeTips`) stay
-/// disabled — hidden from the API — and are updated transitively as
-/// dependencies of the public charts.
+/// configured. Likewise force-enables the public `txnsFee24h` id, serving it
+/// with the `filecoinChainFees24h` implementation (the 24h burn + tips
+/// counter) unless an explicit `implementation` is already configured.
+/// Under this flag, `filecoinNewChainFees` and `filecoinChainFees24h` are
+/// never exposed as public chart ids. Both have `layout.json` slots and may
+/// be explicitly enabled standalone only while this flag is off: the flag
+/// makes each of them a remap target, and a remap target that is also
+/// enabled under its own id is rejected at startup
+/// (`RuntimeSetup::validate_implementation_mappings`). The intermediate
+/// charts (`burnActorBalance`,
+/// `fevmFeeTips`) stay disabled — hidden from the API — and are updated
+/// transitively as dependencies of the public charts.
 pub fn handle_enable_all_filecoin(
     enable_all: bool,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
     if enable_all {
-        // force-enabling `txnsFee` keeps the single-env-var promise even for
-        // configs that disable the entry; `enable_charts` warns and continues
-        // if an entry is absent
+        // force-enabling `txnsFee`/`txnsFee24h` keeps the single-env-var
+        // promise even for configs that disable the entry; `enable_charts`
+        // warns and continues if an entry is absent
         enable_charts(
-            &[FilecoinChainFeesGrowth::key().name(), TxnsFee::key().name()],
+            &[
+                FilecoinChainFeesGrowth::key().name(),
+                TxnsFee::key().name(),
+                TxnsFee24h::key().name(),
+            ],
             charts,
             "filecoin",
         );
         // config keys are camelCase at this point (post config load)
-        if let Some(txns_fee) = charts.lines.get_mut(TxnsFee::key().name()) {
-            // an explicit operator-provided mapping wins over the flag
-            if txns_fee.implementation.is_none() {
-                txns_fee.implementation = Some(FilecoinNewChainFees::key().into_name());
-            }
-        }
+        set_default_implementation(
+            charts,
+            TxnsFee::key().name(),
+            FilecoinNewChainFees::key().into_name(),
+            "filecoin",
+        );
+        set_default_implementation(
+            charts,
+            TxnsFee24h::key().name(),
+            FilecoinChainFees24h::key().into_name(),
+            "filecoin",
+        );
     }
 }
 
@@ -856,7 +922,12 @@ mod tests {
             ..Default::default()
         };
         config::charts::Config {
-            counters: Default::default(),
+            counters: [
+                (FilecoinChainFees24h::key().into_name(), disabled.clone()),
+                (TxnsFee24h::key().into_name(), txns_fee_settings.clone()),
+            ]
+            .into_iter()
+            .collect(),
             lines: [
                 (FilecoinChainFeesGrowth::key().into_name(), disabled.clone()),
                 (FilecoinNewChainFees::key().into_name(), disabled),
@@ -865,6 +936,47 @@ mod tests {
             .into_iter()
             .collect(),
         }
+    }
+
+    /// The one property the four Filecoin flag tests cannot express: the
+    /// remap helper locates the public entry **regardless of which section
+    /// holds it**. This is the assertion that fails on the classic
+    /// copy-paste mistake the helper exists to prevent — a new remap block
+    /// hard-coding the wrong map (lines vs counters), which at HEAD before
+    /// the helper would silently set nothing.
+    #[test]
+    fn set_default_implementation_finds_entry_in_either_section() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings::default());
+
+        // a line-chart id and a counter id, through the same call
+        set_default_implementation(
+            &mut charts,
+            TxnsFee::key().name(),
+            "someImpl".into(),
+            "test",
+        );
+        set_default_implementation(
+            &mut charts,
+            TxnsFee24h::key().name(),
+            "someOtherImpl".into(),
+            "test",
+        );
+        assert_eq!(
+            charts.lines[TxnsFee::key().name()]
+                .implementation
+                .as_deref(),
+            Some("someImpl")
+        );
+        assert_eq!(
+            charts.counters[TxnsFee24h::key().name()]
+                .implementation
+                .as_deref(),
+            Some("someOtherImpl")
+        );
+
+        // an id present in neither section warns and continues — no panic,
+        // no change
+        set_default_implementation(&mut charts, "absentChart", "ignored".into(), "test");
     }
 
     #[test]
@@ -885,6 +997,15 @@ mod tests {
         );
         // the implementation must never become a public id
         assert!(!charts.lines[FilecoinNewChainFees::key().name()].enabled);
+
+        let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
+        assert!(txns_fee_24h.enabled);
+        assert_eq!(
+            txns_fee_24h.implementation,
+            Some(FilecoinChainFees24h::key().into_name())
+        );
+        // the implementation must never become a public id
+        assert!(!charts.counters[FilecoinChainFees24h::key().name()].enabled);
     }
 
     #[test]
@@ -901,6 +1022,13 @@ mod tests {
         assert_eq!(
             txns_fee.implementation,
             Some(FilecoinNewChainFees::key().into_name())
+        );
+
+        let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
+        assert!(txns_fee_24h.enabled);
+        assert_eq!(
+            txns_fee_24h.implementation,
+            Some(FilecoinChainFees24h::key().into_name())
         );
     }
 
@@ -921,6 +1049,14 @@ mod tests {
             txns_fee.implementation.as_deref(),
             Some("someOtherImplementation")
         );
+
+        let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
+        // enablement is still forced, the operator-provided mapping wins
+        assert!(txns_fee_24h.enabled);
+        assert_eq!(
+            txns_fee_24h.implementation.as_deref(),
+            Some("someOtherImplementation")
+        );
     }
 
     #[test]
@@ -937,6 +1073,29 @@ mod tests {
         let txns_fee = &charts.lines[TxnsFee::key().name()];
         assert!(txns_fee.enabled);
         assert_eq!(txns_fee.implementation, None);
+
+        assert!(!charts.counters[FilecoinChainFees24h::key().name()].enabled);
+        let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
+        assert!(txns_fee_24h.enabled);
+        assert_eq!(txns_fee_24h.implementation, None);
+    }
+
+    // a duplicate id with one side disabled survives
+    // `RuntimeSetup::build_charts_info`, so this preference is observable in a
+    // running service; pin that the line chart entry is the one acted upon
+    #[test]
+    fn duplicate_id_across_sections_resolves_to_the_line_chart_entry() {
+        let disabled = config::types::AllChartSettings::default();
+        let id = "some_duplicated_id".to_owned();
+        let mut charts = config::charts::Config {
+            counters: [(id.clone(), disabled.clone())].into_iter().collect(),
+            lines: [(id.clone(), disabled.clone())].into_iter().collect(),
+        };
+
+        enable_charts(&[&id], &mut charts, "test");
+
+        assert!(charts.lines[&id].enabled);
+        assert!(!charts.counters[&id].enabled);
     }
 
     #[test]

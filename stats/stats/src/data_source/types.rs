@@ -14,8 +14,11 @@ use tokio::sync::Mutex;
 use tracing::warn;
 
 use crate::{
-    ChartKey, charts::db_interaction::filters::interchain::InterchainFilter,
-    counters::TxnsStatsValue, mode::Mode, types::new_txns::NewTxnsCombinedPoint,
+    ChartKey,
+    charts::db_interaction::filters::interchain::InterchainFilter,
+    counters::{FilecoinChainFees24hValue, TxnsStatsValue},
+    mode::Mode,
+    types::new_txns::NewTxnsCombinedPoint,
 };
 
 #[derive(Clone)]
@@ -267,6 +270,7 @@ pub enum CacheValue {
     ValueOptionF64(Option<f64>),
     ValueOptionNaiveDateTime(Option<NaiveDateTime>),
     ValueTxnsStats(TxnsStatsValue),
+    ValueFilecoinChainFees24h(FilecoinChainFees24hValue),
     ValueNewTxnsCombined(NewTxnsCombinedPoint),
     VecTxnWindow(Vec<NewTxnsCombinedPoint>),
 }
@@ -299,6 +303,7 @@ macro_rules! impl_cacheable {
 }
 
 impl_cacheable!(TxnsStatsValue, ValueTxnsStats);
+impl_cacheable!(FilecoinChainFees24hValue, ValueFilecoinChainFees24h);
 impl_cacheable!(NewTxnsCombinedPoint, ValueNewTxnsCombined);
 impl_cacheable!(Vec<NewTxnsCombinedPoint>, VecTxnWindow);
 // for testing

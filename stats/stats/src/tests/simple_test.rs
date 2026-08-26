@@ -453,6 +453,30 @@ pub async fn simple_test_counter<C>(
         Mode::Blockscout,
         None,
         InterchainFilter::default(),
+        false,
+    )
+    .await;
+}
+
+/// Same as [`simple_test_counter`], but the indexer database is additionally
+/// filled with the Filecoin layer
+/// ([`fill_mock_blockscout_filecoin_data`]) on top of the shared fixture.
+pub async fn simple_test_counter_filecoin<C>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    simple_test_counter_inner::<C>(
+        test_name,
+        expected,
+        update_time,
+        IndexerMigrations::latest(),
+        Mode::Blockscout,
+        None,
+        InterchainFilter::default(),
+        true,
     )
     .await;
 }
@@ -474,6 +498,7 @@ pub async fn simple_test_counter_multichain<C>(
         Mode::MultichainAggregator,
         multichain_filter,
         InterchainFilter::default(),
+        false,
     )
     .await;
 }
@@ -500,6 +525,7 @@ pub async fn simple_test_counter_interchain<C>(
         Mode::Interchain,
         None,
         interchain_filter,
+        false,
     )
     .await;
 }
@@ -521,6 +547,7 @@ where
         Mode::Zetachain,
         None,
         InterchainFilter::default(),
+        false,
     )
     .await;
     (
@@ -554,11 +581,39 @@ pub async fn simple_test_counter_with_migration_variants<C>(
             Mode::Blockscout,
             None,
             InterchainFilter::default(),
+            false,
         )
         .await;
     }
 }
 
+/// Same as [`simple_test_counter_with_migration_variants`], but the indexer
+/// database is additionally filled with the Filecoin layer
+/// ([`fill_mock_blockscout_filecoin_data`]) on top of the shared fixture.
+pub async fn simple_test_counter_filecoin_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        simple_test_counter_inner::<C>(
+            &test_name,
+            expected,
+            update_time,
+            migrations,
+            Mode::Blockscout,
+            None,
+            InterchainFilter::default(),
+            true,
+        )
+        .await;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn simple_test_counter_inner<C>(
     test_name: &str,
     expected: &str,
@@ -567,13 +622,14 @@ async fn simple_test_counter_inner<C>(
     mode: Mode,
     multichain_filter: Option<Vec<u64>>,
     interchain_filter: InterchainFilter,
+    fill_filecoin: bool,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let (init_time, db, indexer, zetachain_cctx) =
-        prepare_simple_any_test::<C>(test_name, update_time, max_time, mode, false).await;
+        prepare_simple_any_test::<C>(test_name, update_time, max_time, mode, fill_filecoin).await;
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
