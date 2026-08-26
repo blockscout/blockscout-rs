@@ -17,6 +17,7 @@ config = "0.13"
 convert_case = "0.6.0"
 cron = "0.12"
 futures = "0.3"
+interchain-indexer-filters = { workspace = true }
 itertools = "0.13.0"
 liquid-json = "0.5.0"
 paste = "1.0"

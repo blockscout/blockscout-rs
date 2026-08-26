@@ -137,7 +137,8 @@ stats_messages (bridge_id, src_chain_id, dst_chain_id, messages_count)
 stats_messages_days (date, bridge_id, src_chain_id, dst_chain_id, messages_count)
 stats_assets / stats_asset_tokens (logical bridged-token asset ↔ chain-local tokens, union-find merged)
 stats_asset_edges (stats_asset_id, bridge_id, src_chain_id, dst_chain_id, cumulative_amount)
-stats_chains (chain_id, unique_transfer_users_count, unique_message_users_count — periodic snapshot)
+stats_chains (chain_id, unique_transfer_users_count, unique_message_users_count — periodic snapshot, global exact)
+stats_chains_by_bridge (bridge_id, chain_id, unique_transfer_users_count, unique_message_users_count — same worker, same transaction, per-bridge; backs GetChainsStats' bridge_ids filter, ADR-009)
 ```
 
 Stats tables are projections from `crosschain_messages`/`crosschain_transfers`,
@@ -152,7 +153,9 @@ Primary implementation for Avalanche ecosystem:
 
 - **Protocols:** Teleporter (ICM) cross-chain messaging + ICTT token transfers
 - **Features:**
-  - Multi-chain parallel log streaming
+  - One sequential handler future per chain, joined with `try_join_all`
+    inside the bridge's single task, so a slow or throttled chain cannot
+    delay its siblings (ADR-008)
   - Blockchain ID resolution (native → EVM)
   - Transaction-grouped event processing
   - Incremental message state building

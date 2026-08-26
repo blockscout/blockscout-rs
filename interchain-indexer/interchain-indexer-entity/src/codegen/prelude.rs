@@ -10,6 +10,7 @@ pub use super::{
     indexer_checkpoints::Entity as IndexerCheckpoints, indexer_failures::Entity as IndexerFailures,
     pending_messages::Entity as PendingMessages, stats_asset_edges::Entity as StatsAssetEdges,
     stats_asset_tokens::Entity as StatsAssetTokens, stats_assets::Entity as StatsAssets,
-    stats_chains::Entity as StatsChains, stats_messages::Entity as StatsMessages,
-    stats_messages_days::Entity as StatsMessagesDays, tokens::Entity as Tokens,
+    stats_chains::Entity as StatsChains, stats_chains_by_bridge::Entity as StatsChainsByBridge,
+    stats_messages::Entity as StatsMessages, stats_messages_days::Entity as StatsMessagesDays,
+    tokens::Entity as Tokens,
 };

@@ -151,8 +151,29 @@ impl StatsService {
         Ok(())
     }
 
-    pub async fn recompute_stats_chains(&self) -> anyhow::Result<()> {
-        self.db.recompute_stats_chains().await
+    /// Refreshes both `stats_chains` and `stats_chains_by_bridge` in one
+    /// transaction and publishes the bridge-sum overcount gauges from the
+    /// resulting report only after that commit succeeds — see
+    /// `stats/metrics.rs` and `.memory-bank/rules/testing.md`'s ban on
+    /// asserting process-wide metric deltas (the report/database state is
+    /// what tests should assert instead).
+    pub async fn recompute_stats_chains(
+        &self,
+    ) -> anyhow::Result<crate::database::StatsChainsRecomputeReport> {
+        let report = self.db.recompute_stats_chains().await?;
+        super::metrics::STATS_CHAINS_BRIDGE_SUM_OVERCOUNT_USERS
+            .with_label_values(&["transfer"])
+            .set(report.transfer_overcount_users as f64);
+        super::metrics::STATS_CHAINS_BRIDGE_SUM_OVERCOUNT_USERS
+            .with_label_values(&["message"])
+            .set(report.message_overcount_users as f64);
+        super::metrics::STATS_CHAINS_BRIDGE_SUM_AFFECTED_CHAINS
+            .with_label_values(&["transfer"])
+            .set(report.transfer_affected_chains as f64);
+        super::metrics::STATS_CHAINS_BRIDGE_SUM_AFFECTED_CHAINS
+            .with_label_values(&["message"])
+            .set(report.message_affected_chains as f64);
+        Ok(report)
     }
 
     pub async fn backfill_stats_until_idle(&self) -> anyhow::Result<()> {
@@ -183,9 +204,7 @@ impl StatsService {
     /// Kicks off token metadata fetch for every consolidated entry in the
     /// batch, not only finalized ones — a transfer to an unindexed chain is
     /// never `is_final` but is now countable and asset-linked, so it must
-    /// still be eligible for enrichment (task.md Success Criteria: "assets
-    /// created from unindexed-counterpart transfers are eligible for token
-    /// metadata enrichment").
+    /// still be eligible for token metadata enrichment.
     pub fn kickoff_token_enrichment_for_flushed(&self, flushed: &[ConsolidatedMessage]) {
         let keys = token_keys_from_flushed_for_enrichment(flushed);
         self.kickoff_token_enrichment_for_keys(keys);
@@ -245,12 +264,16 @@ impl StatsService {
         Ok((out, pagination))
     }
 
-    /// Known chains with `unique_transfer_users_count` from `stats_chains` (0 when missing).
+    /// Known chains with `unique_transfer_users_count`, from the exact global
+    /// `stats_chains` snapshot (`scope = Global`) or summed from the selected
+    /// bridges' `stats_chains_by_bridge` cells (`scope = Bridges`); 0 when
+    /// missing.
     ///
     /// `indexed_chain_ids` is a per-request parameter, not read off
     /// `self.indexed_chains()` — see [`Self::get_bridged_tokens_for_chain`].
     pub async fn get_stats_chains(
         &self,
+        scope: crate::stats_chains_query::StatsChainsScope<'_>,
         chain_ids: Vec<i64>,
         indexed_chain_ids: Option<&[i64]>,
         params: StatsListQuery<'_, StatsChainsSortField, StatsChainsPaginationLogic>,
@@ -260,6 +283,7 @@ impl StatsService {
     )> {
         self.db
             .list_stats_chains(
+                scope,
                 chain_ids.as_slice(),
                 self.read_settings.include_zero_chains,
                 indexed_chain_ids,

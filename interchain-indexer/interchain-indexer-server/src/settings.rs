@@ -94,7 +94,10 @@ pub struct StatsSettings {
     /// Env: `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START`.
     pub backfill_on_start: bool,
 
-    /// Interval between full `stats_chains` recomputations (distinct message/transfer users per chain).
+    /// Interval between full recomputations of the distinct message/transfer
+    /// user counters, both the global `stats_chains` snapshot and the
+    /// bridge-qualified `stats_chains_by_bridge` snapshot — one worker
+    /// rebuilds both, atomically, in the same transaction.
     /// Set to `0` to disable the background task. Unit: seconds.
     /// Env: `INTERCHAIN_INDEXER__STATS__CHAINS_RECALCULATION_PERIOD_SECS`.
     pub chains_recalculation_period_secs: u64,

@@ -6,7 +6,7 @@
   "types": "./index.d.ts",
   "scripts": {
     "build": "npm run compile:proto && npm run compile:ts",
-    "compile:proto": "mkdir -p ./dist && protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt=exportCommonSymbols=false --ts_proto_opt=snakeToCamel=false --ts_proto_opt=stringEnums=true --ts_proto_opt=onlyTypes=true --ts_proto_opt=emitImportedFiles=false --proto_path=../ --proto_path=../../proto/ --ts_proto_out=./dist ../tac-operation-lifecycle-proto/proto/v1/tac-operation-lifecycle.proto ../tac-operation-lifecycle-proto/proto/v1/statistic.proto",
+    "compile:proto": "mkdir -p ./dist && protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt=exportCommonSymbols=false --ts_proto_opt=snakeToCamel=false --ts_proto_opt=stringEnums=true --ts_proto_opt=onlyTypes=true --ts_proto_opt=emitImportedFiles=false --proto_path=../ --proto_path=../../proto/ --ts_proto_out=./dist ../tac-operation-lifecycle-proto/proto/v1/tac-operation-lifecycle.proto ../tac-operation-lifecycle-proto/proto/v1/statistic.proto ../tac-operation-lifecycle-proto/proto/v2/tac-operation-lifecycle.proto",
     "compile:ts": "tsc --declaration ./index.ts"
   },
   "repository": {

@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Offset, TimeZone};
 use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
-use sea_orm::{Set, Unchanged, prelude::*, sea_query};
+use sea_orm::{Set, TransactionTrait, Unchanged, prelude::*, sea_query};
 
 use crate::charts::ChartKey;
 
@@ -64,6 +64,39 @@ pub async fn clear_all_chart_data<C: ConnectionTrait>(db: &C, chart_id: i32) -> 
         .exec(db)
         .await?;
     Ok(())
+}
+
+/// Delete every stored point **and** forget `last_updated_at`, in one transaction.
+///
+/// Used only where the stored series is being discarded as unusable rather than
+/// recomputed in place — today that is exactly one caller, the interchain
+/// filter-fingerprint mismatch in
+/// [`crate::data_source::kinds::local_db`]. Plain [`clear_all_chart_data`] is
+/// what the in-place cases (`ClearAllAndPassVec`, the windowed batch step) keep
+/// using, and their behaviour is unchanged.
+///
+/// The two writes belong together because the recompute that follows can fail:
+/// `update_metadata` runs only after `update_values` succeeds, so a delete that
+/// left `last_updated_at` alone would leave the chart with zero rows and its
+/// pre-clear freshness — served as an empty series that nothing reports as
+/// stale, until the group's next cycle finishes a full rebuild. Clearing the
+/// timestamp puts the chart in the state a newly created one has: empty and
+/// visibly never updated.
+pub async fn clear_chart_data_and_updated_at(
+    db: &DatabaseConnection,
+    chart_id: i32,
+) -> Result<(), DbErr> {
+    let tx = db.begin().await?;
+    clear_all_chart_data(&tx, chart_id).await?;
+    charts::Entity::update(charts::ActiveModel {
+        id: Unchanged(chart_id),
+        last_updated_at: Set(None),
+        ..Default::default()
+    })
+    .filter(charts::Column::Id.eq(chart_id))
+    .exec(&tx)
+    .await?;
+    tx.commit().await
 }
 
 pub async fn set_last_updated_at<Tz>(

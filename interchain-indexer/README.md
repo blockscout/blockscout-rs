@@ -49,7 +49,51 @@ Defines the blockchains the indexer knows about. Each entry describes one chain:
 | `name`       | Human-readable chain name. |
 | `icon`       | Optional URL to chain icon. |
 | `explorer`   | Optional explorer base URL and routes: `url`, `custom_tx_route`, `custom_address_route`, `custom_token_route`. |
-| `rpcs`       | RPC config per chain. |
+| `rpcs`       | RPC providers for the chain — see below. |
+| `pool_config` | Optional pool-wide transport settings: `health_period` (ms), `max_block_lag`, `retry_count`, `retry_initial_delay_ms`, `retry_max_delay_ms`. |
+
+#### `rpcs`
+
+An array of objects, each mapping a provider name to its settings. The provider
+name is only a label (it shows up in logs as `<chain name>[<provider name>]`)
+and the env-override key.
+
+| Field | Default | Description |
+| ----- | ------- | ----------- |
+| `url` | — | HTTP endpoint. |
+| `enabled` | `true` | `false` drops the provider from the pool entirely. |
+| `order` | unset | Position in the failover pool, **ascending** — `0` is tried first and is the primary. Providers without an `order` rank after every provider that has one. Must be non-negative. |
+| `max_rps` | `10` | Client-side rate limit. |
+| `error_threshold` | `3` | Consecutive failures before the node is put in cooldown. |
+| `cooldown_threshold` | `1` | Cooldowns before the primary pointer rotates off this node. |
+| `cooldown_secs` | `60` | Cooldown duration. |
+| `multicall_batching_us` | `60` | Multicall batching wait. |
+| `api_key` | unset | Optional credential: `{"location": "header"\|"query"\|"path", "param_name": "...", "prefix": "...", "value_env": "..."}`. The object declares the credential's *shape* only — never a value; the secret comes from an environment variable (see "RPC provider API keys" below). `location: "header"` is preferred: a URL-embedded key (`query`/`path`) can be exposed by third-party debug logging this service does not control. `prefix` (e.g. `Bearer`) is supported for `header` only. |
+
+Ordering is fully determined by `order`, then by position in the `rpcs` array,
+then by provider name — **not** by key order inside one object, which does not
+survive config loading. Set `order` explicitly whenever the preference matters:
+
+```json
+"rpcs": [
+    {
+        "gateway": { "url": "https://rpc.eth.gateway.fm", "order": 0 },
+        "drpc":    { "url": "https://eth.drpc.org", "order": 1 }
+    }
+]
+```
+
+The primary is the *starting point* of node selection, not an exclusive one:
+requests walk the pool round-robin from the primary, skipping nodes in cooldown
+or over their `max_rps`, and repeated primary failures rotate the pointer
+onward (`Rotating primary RPC node after repeated failures`). Each chain logs
+its resolved pool once at startup, at INFO:
+
+```text
+Created layered provider for chain chain_id=1 chain_name=Ethereum
+  primary="Ethereum[gateway]"
+  nodes="Ethereum[gateway], Ethereum[drpc], Ethereum[1rpc]"
+```
 
 ### `bridges.json`
 
@@ -79,6 +123,43 @@ Defines which bridges (cross-chain mechanisms) to index. Each entry is one bridg
 
 **`started_at_block`** — indexer starts scanning from this block on associated chain; set it to reduce initial sync time or to start from a specific deployment block.
 
+#### Which contracts define a chain's scan floor
+
+A `(bridge, chain)` pair has **one** scan floor, however many contracts it declares.
+
+| Bridge type | Floor |
+| ----------- | ----- |
+| `amb` | lowest `started_at_block` among the chain's `kind: "amb_proxy"` entries |
+| everything else | lowest `started_at_block` among all the chain's entries |
+
+For AMB this means **editing `omnibridge_mediator`'s `started_at_block` changes nothing about scanning.** In the shipped Gnosis config the mediator sits ~7.4M blocks below the proxy on chain 1; that range is deliberately not scanned. A mediator configured *above* the proxy floor is also legal — messages in between are indexed without token transfers. Both cases are warned about once at startup.
+
+`0` is rejected at startup for every contract entry: a catch-up that completed at genesis is recorded as `floor - 1`, which is unrepresentable in `u64` when the floor is `0`.
+
+#### Multiple versions of the same contract
+
+An implementation upgrade is a **new entry**, not an edit: same `address`, higher `version`, and `started_at_block` set to the block the new implementation took effect. The old entry stays. `bridge_contracts` keys on `(bridge_id, chain_id, address, version)`, and events are decoded against whichever version was in force at the log's block.
+
+Since the floor is the *minimum* across versions, adding a later version never raises it and never orphans history the previous version covered.
+
+If `interchain_indexer_amb_logs_dropped_wrong_version_total` is non-zero, a version boundary disagrees with the chain: real events are being discarded. Nothing else reports this — the blocks were scanned, so no failure row exists.
+
+#### Changing `started_at_block` on a live deployment
+
+Both directions are supported; neither deletes anything already indexed.
+
+**Raising it.** Catch-up stops higher, and the stored floor is raised at startup. Blocks already indexed below the new floor stay in the database and are still served by the message APIs — they simply stop counting toward `catchup_blocks_remaining` and `catchup_progress_percent`, so reported progress can jump.
+
+`catchup_complete` in `GET /api/v1/status/indexing` does **not** follow that jump on its own. It is `catchup_progress_percent == 100.0 && failed_blocks == 0`, and the failure ledger is not scoped by the floor: an unresolved hole recorded below the new floor keeps the pair reporting `catchup_complete: false` until the retry pass drains it.
+
+**Lowering it.** The newly opened range *is* scanned. Catch-up walks downward from `catchup_max_cursor` to the configured floor, and a previously completed catch-up left that cursor at `old_floor - 1`, so the scan resumes exactly at the boundary and continues to the new floor. Nothing above the old floor is re-fetched.
+
+The stored floor needs separate handling, because the cursor-maintenance writer can only ever raise it. A startup pass compares the configured floor against the stored `catchup_min_cursor` and lowers the stored value whenever configuration sits below it — so the two are back in agreement on the first restart after any floor change, however the change was expressed: editing `started_at_block` on an existing entry, or adding a new contract entry whose value is lower.
+
+If that write fails, startup continues with a `warn` and the next restart re-applies it — the pass enforces the agreement every time rather than detecting a one-off transition. Until then **the scan is correct and only the reported progress under-states the remaining work**, because the scan takes its floor from config while the report reads the stored one.
+
+Restoring a floor you previously raised is not symmetric with never having raised it: the range between the two floors is rescanned, and already-indexed rows in it are re-derived rather than duplicated. Raising a floor to skip history and then lowering it back is therefore safe but not free — plan floor changes as deliberate rescans.
+
 ### Overriding `chains.json` / `bridges.json` via environment
 
 At startup, environment variables under two dedicated prefixes are deep-merged
@@ -95,7 +176,7 @@ separate from the main `INTERCHAIN_INDEXER__*` settings:
 
 **Path grammar** (segments are separated by `__` and are case-insensitive):
 
-```
+```text
 <PREFIX>                                  = whole-config array patch (value must be a JSON array)
 <PREFIX>__<ID>                            = one entry (value: JSON object fragment)
 <PREFIX>__<ID>__<FIELD>[__<FIELD>…]       = one field (value: scalar or JSON fragment)
@@ -177,6 +258,111 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d__8__STARTED_AT_BLOCK=19000000
 ```
 
+### RPC provider API keys
+
+An `rpcs` entry's `api_key` object (see `#### rpcs` above) declares only the
+*shape* of a provider credential — `location`, `param_name`, optional `prefix`,
+optional `value_env` — never the value. The secret always comes from the
+environment, so it cannot end up committed to a config file even by accident:
+
+- **Derived variable** (default): `INTERCHAIN_INDEXER_RPC_API_KEY__<CHAIN_ID>__<PROVIDER>`,
+  where `<PROVIDER>` is the provider's map key, uppercased, with every
+  character outside `[A-Z0-9_]` replaced by `_`.
+- **Explicit override**: set `value_env` to name a different variable instead.
+
+Exactly one variable is consulted per provider — the derived name, or
+`value_env` when set. There is no fallback chain: a typo in `value_env` fails
+startup rather than silently reading some other variable. A missing or empty
+(including whitespace-only) value also fails startup, naming the chain, the
+provider, and the exact variable that was checked.
+
+Note the single underscore before `RPC_API_KEY` — like the `CHAINS`/`BRIDGES`
+override prefixes above, this keeps the family outside the double-underscore
+`INTERCHAIN_INDEXER__*` settings namespace.
+
+#### Where each `location` puts the key
+
+| `location` | `param_name` means | Key ends up in | `prefix` |
+| ---------- | ------------------ | -------------- | -------- |
+| `header`   | the header name | a request header; the URL is left byte-identical | supported |
+| `query`    | the query parameter name | the request URL, as `?<param_name>=<key>` | rejected |
+| `path`     | the placeholder name | the request URL, replacing `:<param_name>` | rejected |
+
+In all three cases the credential applies to **every** request to that node,
+including the pool's background health probes.
+
+All examples below use chain `1`, so the derived variable is
+`INTERCHAIN_INDEXER_RPC_API_KEY__1__<PROVIDER>`. Hostnames are placeholders —
+check your provider's own documentation for which location it expects.
+
+**`header`** — the preferred location. `prefix` covers the
+`Authorization: Bearer <key>` convention; omit it and the header carries the bare
+key (e.g. `param_name: "x-api-key"`).
+
+```json
+"rpcs": [
+    { "drpc": { "url": "https://rpc.example.org/eth", "api_key": { "location": "header", "param_name": "Authorization", "prefix": "Bearer" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__DRPC=sk-live-abc123
+```
+
+Requests go to `https://rpc.example.org/eth` — unchanged — carrying:
+
+```text
+Authorization: Bearer sk-live-abc123
+```
+
+**`query`** — the key is appended to the URL as a query parameter. Appending is
+done through a URL parser, so an existing query string is extended with `&`
+rather than overwritten, and the value is percent-encoded.
+
+```json
+"rpcs": [
+    { "gateway": { "url": "https://rpc.example.org/eth", "api_key": { "location": "query", "param_name": "apikey" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__GATEWAY=sk-live-abc123
+```
+
+Requests go to:
+
+```text
+https://rpc.example.org/eth?apikey=sk-live-abc123
+```
+
+**`path`** — the key is substituted into a `:<param_name>` placeholder that you
+must put in `url` yourself. The placeholder name and `param_name` have to match;
+if `url` contains no such placeholder the service **fails at startup** rather
+than silently sending an unauthenticated request.
+
+```json
+"rpcs": [
+    { "provider": { "url": "https://rpc.example.org/v1/:api_key/eth", "api_key": { "location": "path", "param_name": "api_key" } } }
+]
+```
+
+```bash
+INTERCHAIN_INDEXER_RPC_API_KEY__1__PROVIDER=sk-live-abc123
+```
+
+Requests go to:
+
+```text
+https://rpc.example.org/v1/sk-live-abc123/eth
+```
+
+Both URL-embedded locations put the secret in the request URL, which is why
+`header` is preferred: a URL is rendered by code this service does not control
+(notably `alloy-transport-http`'s own debug span), so a `query`/`path` key can
+surface in logs if the log level is raised. Service-owned sinks — the failure
+ledger in Postgres, indexer state served by the status API, and this service's
+own RPC warnings — redact URLs before writing them.
+
 ## Envs
 
 ### Main Service Settings
@@ -201,7 +387,7 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 | `INTERCHAIN_INDEXER__BUFFER_SETTINGS__HOT_TTL`                          |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `10`          |
 | `INTERCHAIN_INDEXER__BUFFER_SETTINGS__MAINTENANCE_INTERVAL`             |                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `500`         |
 | `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START`                          |                          | Recalculate the statistics tables for messages and transfers (`stats_messages`, `stats_messages_days`, `stats_asset_edges`) on service startup, before indexers and the API start. Required as the catch-up mechanism after any projection-invalidating migration — not only the original `m20260312_175120_add_stats_tables` — for example the bridge-qualified `m20260720_120000_add_read_filters_and_bridge_stats` rebuild, which clears the additive aggregates and resets the canonical `stats_processed` markers. Such a deployment MUST run once with this flag enabled and MUST block until backfill reaches idle before serving (see the maintenance runbook below). This option should normally be disabled for steady-state operation to reduce service startup time.                                                                                                  | `false`       |
-| `INTERCHAIN_INDEXER__STATS__CHAINS_RECALCULATION_PERIOD_SECS`           |                          | Interval in seconds between full recomputations of per-chain distinct user counters in `stats_chains` (from `crosschain_messages` / `crosschain_transfers`, any status). Only chains with at least one counted user address keep a row; stale rows are deleted. Set to `0` to disable the background task.                                                                                                                                                                  | `3600`        |
+| `INTERCHAIN_INDEXER__STATS__CHAINS_RECALCULATION_PERIOD_SECS`           |                          | Interval in seconds between full recomputations of per-chain distinct user counters (from `crosschain_messages` / `crosschain_transfers`, any status). One worker rebuilds both `stats_chains` (globally deduplicated) and `stats_chains_by_bridge` (per-bridge, backing the `bridge_ids` filter on `/api/v1/stats/chains`) atomically, in the same transaction. Only chains/bridge-chain cells with at least one counted user address keep a row; stale rows are deleted from both tables. Set to `0` to disable the background task.                                                                                                                                                                  | `3600`        |
 | `INTERCHAIN_INDEXER__STATS__INCLUDE_ZERO_CHAINS`                        |                          | When `true`, stats endpoints (`/api/v1/stats/chains` and `/api/v1/stats/chain/{chain_id}/messages-paths/*`) include known chains from `chains` even when the aggregated stats row is missing or has a zero value. For message paths with `counterparty_chain_ids`, zero rows are still returned for the explicitly requested counterparties that exist in `chains`, and no other counterparties are added. Disable it to return only chains with positive aggregated stats. | `true`        |
 
 [anchor]: <> (anchors.envs.end.service)
@@ -210,12 +396,20 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 
 [anchor]: <> (anchors.envs.start.avalanche)
 
-| Variable                                                                   | Req&#x200B;uir&#x200B;ed | Description                                                            | Default value |
-| -------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------- | ------------- |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`                        |                          | Number of contract events to be pulled at once.                        | `1000`        |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`                  |                          | Duration between pulling contract events. Unit: `milliseconds`         | `10000`       |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__NETWORK` |                          | Avalanche Data API network. One of `mainnet`, `fuji`, `testnet`.       | `Mainnet`     |
-| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__API_KEY` |                          | API key for Avalanche Data API (`x-glacier-api-key` header). Optional. | `null`        |
+| Variable                                                                             | Req&#x200B;uir&#x200B;ed | Description                                                                                                                                                                                                                                                                                                                                                                                                           | Default value |
+| ------------------------------------------------------------------------------------ | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__BATCH_SIZE`                                  |                          | Number of blocks scanned per log request.                                                                                                                                                                                                                                                                                                                                                                             | `1000`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__PULL_INTERVAL_MS`                            |                          | Duration between pulling contract events. Unit: `milliseconds`                                                                                                                                                                                                                                                                                                                                                        | `500`         |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__NETWORK`           |                          | Avalanche Data API network. One of `mainnet`, `fuji`, `testnet`.                                                                                                                                                                                                                                                                                                                                                      | `Mainnet`     |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__DATA_API_CLIENT_SETTINGS__API_KEY`           |                          | API key for Avalanche Data API (`x-glacier-api-key` header). Optional.                                                                                                                                                                                                                                                                                                                                                | `null`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__BACKOFF_BASE`                 |                          | Base delay of the capped exponential backoff between replay attempts for a recorded failed block range. Unit: `seconds`                                                                                                                                                                                                                                                                                               | `30`          |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__BACKOFF_CAP`                  |                          | Ceiling of the capped exponential backoff between replay attempts. This is the knob that makes retrying a permanently unrecoverable interval forever affordable. Unit: `seconds`                                                                                                                                                                                                                                      | `3600`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__ENABLED`                      |                          | Kill switch for the failed-range replay pass. Recording failed ranges still happens when `false`; only replay of already-recorded ranges is paused.                                                                                                                                                                                                                                                                   | `true`        |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__MAX_CHUNKS_PER_PASS`          |                          | Maximum number of `batch_size`-sized chunks replayed per retry tick, across all due failed ranges on every chain of the bridge. The pass runs as a sibling future of the per-chain handlers, so it no longer holds up the catch-up and realtime scans; the budget now bounds replay RPC load per pass against the same rate-limited endpoints. Keeping it low only starves the backlog. | `8`           |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__RECORD_RETRY_ATTEMPTS`        |                          | Number of attempts to persist a failed range to `indexer_failures` before the indexer gives up and stops (enters a failed state).                                                                                                                                                                                                                                                                                     | `3`           |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__RECORD_RETRY_INITIAL_BACKOFF` |                          | Initial delay before retrying a failed `indexer_failures` write; doubles on each subsequent retry. Unit: `milliseconds`                                                                                                                                                                                                                                                                                               | `200`         |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__FAILURE_RETRY__SCAN_INTERVAL`                |                          | How often the retry pass scans recorded failed ranges for ones that are due for another replay attempt. Unit: `seconds`                                                                                                                                                                                                                                                                                               | `60`          |
+| `INTERCHAIN_INDEXER__AVALANCHE_INDEXER__RECEIPT_CONCURRENCY`                         |                          |                                                                                                                                                                                                                                                                                                                                                                                                                       Maximum concurrent receipt and block fetches per Avalanche batch. Does not set throughput — that is bounded by the node's `max_rps`; excess concurrency only parks futures against the limiter. | `25`          |
 
 [anchor]: <> (anchors.envs.end.avalanche)
 
@@ -223,12 +417,19 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 
 [anchor]: <> (anchors.envs.start.amb)
 
-| Variable                                                     | Req&#x200B;uir&#x200B;ed | Description                                                    | Default value |
-| ------------------------------------------------------------ | ------------------------ | -------------------------------------------------------------- | ------------- |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE`                |                          | Number of contract events to be pulled at once.                | `1000`        |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__PULL_INTERVAL_MS`          |                          | Duration between pulling contract events. Unit: `milliseconds` | `500`       |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__RECEIPT_CONCURRENCY`       |                          | Maximum concurrent receipt and block fetches per AMB batch.    | `25`          |
-| `INTERCHAIN_INDEXER__AMB_INDEXER__CLOCK_SKEW_TOLERANCE`      |                          | Tolerance for a destination execution preceding its source request before flagging an AMB `messageId` collision. Unit: `seconds` | `300`         |
+| Variable                                                                       | Req&#x200B;uir&#x200B;ed | Description                                                                                                                                                                                                                                                                                                                                                                                                           | Default value |
+| ------------------------------------------------------------------------------ | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE`                                  |                          | Number of blocks scanned per log request.                                                                                                                                                                                                                                                                                                                                                                             | `1000`        |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__PULL_INTERVAL_MS`                            |                          | Duration between pulling contract events. Unit: `milliseconds`                                                                                                                                                                                                                                                                                                                                                        | `500`         |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__RECEIPT_CONCURRENCY`                         |                          | Maximum concurrent receipt and block fetches per AMB batch.                                                                                                                                                                                                                                                                                                                                                           | `25`          |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__CLOCK_SKEW_TOLERANCE`                        |                          | Tolerance for a destination execution preceding its source request before flagging an AMB `messageId` collision. Unit: `seconds`                                                                                                                                                                                                                                                                                      | `300`         |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__BACKOFF_BASE`                 |                          | Base delay of the capped exponential backoff between replay attempts for a recorded failed block range. Unit: `seconds`                                                                                                                                                                                                                                                                                               | `30`          |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__BACKOFF_CAP`                  |                          | Ceiling of the capped exponential backoff between replay attempts. This is the knob that makes retrying a permanently unrecoverable interval forever affordable. Unit: `seconds`                                                                                                                                                                                                                                      | `3600`        |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__ENABLED`                      |                          | Kill switch for the failed-range replay pass. Recording failed ranges still happens when `false`; only replay of already-recorded ranges is paused.                                                                                                                                                                                                                                                                   | `true`        |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__MAX_CHUNKS_PER_PASS`          |                          | Maximum number of `batch_size`-sized chunks replayed per retry tick, across all due failed ranges on every chain of the bridge. The pass runs as a sibling future of the per-chain handlers, so it no longer holds up the catch-up and realtime scans; the budget now bounds replay RPC load per pass against the same rate-limited endpoints. Keeping it low only starves the backlog. | `8`           |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__RECORD_RETRY_ATTEMPTS`        |                          | Number of attempts to persist a failed range to `indexer_failures` before the indexer gives up and stops (enters a failed state).                                                                                                                                                                                                                                                                                     | `3`           |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__RECORD_RETRY_INITIAL_BACKOFF` |                          | Initial delay before retrying a failed `indexer_failures` write; doubles on each subsequent retry. Unit: `milliseconds`                                                                                                                                                                                                                                                                                               | `200`         |
+| `INTERCHAIN_INDEXER__AMB_INDEXER__FAILURE_RETRY__SCAN_INTERVAL`                |                          | How often the retry pass scans recorded failed ranges for ones that are due for another replay attempt. Unit: `seconds`                                                                                                                                                                                                                                                                                               | `60`          |
 
 [anchor]: <> (anchors.envs.end.amb)
 
@@ -355,7 +556,7 @@ delta against canonical eligibility, not against stale aggregates.
 ## Dev
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.
-+ Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
++ Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli) — used by `just run-dev` to run with `.env`
 + Execute `just` to see available dev commands
 
 ```bash
@@ -395,11 +596,16 @@ or run with ENVs from .env current
     just run-dev
     ```
 
+`.env` (see [`.env.example`](.env.example)) is read by `just run-dev` and by nothing
+else — no recipe loads it implicitly. That is why an RPC provider's `api_key` shape
+can live there safely: `set dotenv-load := true` would also hand it to `just test`,
+where a chains override for a chain outside the offline fixture fails the config load.
+
 ## Troubleshooting
 
 1. Invalid tonic version
 
-```
+```text
 `Router` and `Router` have similar names, but are actually distinct types
 ```
 

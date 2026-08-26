@@ -93,15 +93,27 @@ pub struct Settings {
     /// are never exposed as public chart ids.
     pub enable_all_filecoin: bool,
     /// Filter by chain ids for multichain mode.
-    /// TODO: recalculate statistics data when multichain_filter has been changed
-    ///       most likely it's need to implement in conjunction with 3D charts
+    /// TODO: recalculate statistics data when multichain_filter has been changed.
+    ///       Interchain solves the equivalent problem with a filter fingerprint
+    ///       stored alongside the chart data
+    ///       (`stats::charts::db_interaction::filters::interchain::filter_fingerprint`);
+    ///       copy that pattern here. Multichain has no such mechanism yet.
     #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
     pub multichain_filter: Option<Vec<u64>>,
-    /// Set the primary chain_id for Interchain mode
-    /// If the primary chain set, send/receive counters and charts will be built around it
-    /// TODO: recalculate statistics data when interchain_primary_id has been changed
-    ///       most likely it's need to implement in conjunction with 3D charts
+    /// DEPRECATED: use `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`.
+    ///
+    /// Still honoured, and treated as exactly that value. Setting both to
+    /// different values is a startup error.
     pub interchain_primary_id: Option<u64>,
+    /// Read filter applied to the interchain indexer DB in `Interchain` mode.
+    /// Mirrors the indexer's own read API parameters, so a stats deployment and
+    /// the equivalent API request return the same subset.
+    ///
+    /// Changing any of these values (or `interchain_primary_id`) is detected
+    /// automatically: the filter fingerprint stored in
+    /// `chart_data.min_blockscout_block` forces a clear-and-rebuild of every
+    /// interchain chart on the next update.
+    pub interchain_filter: InterchainFilterSettings,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -125,6 +137,64 @@ pub struct Settings {
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub tracing: TracingSettings,
+}
+
+/// The interchain read filter, as the operator configures it.
+///
+/// Every field mirrors an `interchain-indexer` read-API parameter of the same
+/// name, including its default, so that a stats deployment and the equivalent API
+/// request describe the same subset of rows. Only meaningful in
+/// [`Mode::Interchain`]; setting any field in another mode is a startup error.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct InterchainFilterSettings {
+    /// Focal chain. Equivalent to the indexer API's `home_chain_id`.
+    /// With a counterparty set, keeps
+    /// `(src = home AND dst IN cp) OR (dst = home AND src IN cp)`;
+    /// alone, keeps `src = home OR dst = home`.
+    pub home_chain_id: Option<u64>,
+    /// Counterparties of the focal chain, comma-separated (e.g. `10,137`).
+    /// Note: **without** `home_chain_id` this means "both endpoints inside the
+    /// set" (`src IN set AND dst IN set`), a conjunction — not a focal OR.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
+    pub counterparty_chain_ids: Option<Vec<u64>>,
+    /// Additional restriction on the source chain, comma-separated. Applied as a
+    /// separate AND term, never folded into the focal OR.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
+    pub src_chain_ids: Option<Vec<u64>>,
+    /// Additional restriction on the destination chain, comma-separated. Applied
+    /// as a separate AND term. A message with no known destination is excluded by
+    /// this term, because `dst IN (...)` is NULL for a NULL destination.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
+    pub dst_chain_ids: Option<Vec<u64>>,
+    /// Restriction on the indexer's bridge ids, comma-separated.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u32>>")]
+    pub bridge_ids: Option<Vec<u32>>,
+    /// Mirrors the indexer API flag of the same name, including its default.
+    /// `false` keeps only rows the row's own bridge could have fully observed —
+    /// in particular it excludes every message with no known destination. Set
+    /// `true` to count everything the indexer stored.
+    pub include_unindexed_chains: bool,
+}
+
+// Written out rather than derived — and yes, `derive(Default)` would produce the
+// identical impl. `include_unindexed_chains: false` is a *restrictive* default
+// copied from the indexer API, not an incidental "zero value", and the one place a
+// reader looks to confirm that is this impl. The generated env-docs table takes its
+// default column from here too.
+#[allow(clippy::derivable_impls)]
+impl Default for InterchainFilterSettings {
+    fn default() -> Self {
+        Self {
+            home_chain_id: None,
+            counterparty_chain_ids: None,
+            src_chain_ids: None,
+            dst_chain_ids: None,
+            bridge_ids: None,
+            include_unindexed_chains: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -217,6 +287,7 @@ impl Default for Settings {
             enable_all_filecoin: false,
             multichain_filter: Default::default(),
             interchain_primary_id: Default::default(),
+            interchain_filter: Default::default(),
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -640,6 +711,76 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    fn interchain_filter_envs_parse_to(
+        env_values: impl IntoIterator<Item = (&'static str, &'static str)>,
+        expected: InterchainFilterSettings,
+    ) -> anyhow::Result<()> {
+        check_envs_parsed_to(
+            "INTERCHAIN_FILTER",
+            env_values
+                .into_iter()
+                .map(|(k, v)| (format!("INTERCHAIN_FILTER__{k}"), v.to_owned()))
+                .collect(),
+            expected,
+        )
+    }
+
+    #[test]
+    fn interchain_filter_defaults_to_no_dimensions_and_the_horizon_enabled() {
+        interchain_filter_envs_parse_to([], InterchainFilterSettings::default()).unwrap();
+        assert!(!InterchainFilterSettings::default().include_unindexed_chains);
+    }
+
+    #[test]
+    fn interchain_filter_parses_csv_lists_and_scalars() {
+        interchain_filter_envs_parse_to(
+            [
+                ("HOME_CHAIN_ID", "1"),
+                ("COUNTERPARTY_CHAIN_IDS", "10,137"),
+                ("SRC_CHAIN_IDS", "1"),
+                ("DST_CHAIN_IDS", "137,10,137"),
+                ("BRIDGE_IDS", "7,3"),
+                ("INCLUDE_UNINDEXED_CHAINS", "true"),
+            ],
+            InterchainFilterSettings {
+                home_chain_id: Some(1),
+                counterparty_chain_ids: Some(vec![10, 137]),
+                src_chain_ids: Some(vec![1]),
+                // parsing is verbatim: de-duplication and sorting happen in
+                // `build_interchain_filter_config`, not here
+                dst_chain_ids: Some(vec![137, 10, 137]),
+                bridge_ids: Some(vec![7, 3]),
+                include_unindexed_chains: true,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn interchain_filter_rejects_out_of_range_ids() {
+        let too_big_for_u64 = format!("{}0", u64::MAX);
+        check_envs_parsed_to(
+            "INTERCHAIN_FILTER",
+            [(
+                "INTERCHAIN_FILTER__COUNTERPARTY_CHAIN_IDS".to_owned(),
+                too_big_for_u64,
+            )]
+            .into(),
+            InterchainFilterSettings::default(),
+        )
+        .unwrap_err();
+        check_envs_parsed_to(
+            "INTERCHAIN_FILTER",
+            [(
+                "INTERCHAIN_FILTER__BRIDGE_IDS".to_owned(),
+                format!("{}", u64::from(u32::MAX) + 1),
+            )]
+            .into(),
+            InterchainFilterSettings::default(),
+        )
+        .unwrap_err();
     }
 
     #[test]

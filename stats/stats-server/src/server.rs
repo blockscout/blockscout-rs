@@ -7,6 +7,7 @@ use crate::{
     blockscout_waiter::{self, IndexingStatusListener, init_blockscout_api_client},
     config::{self, read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
+    interchain_filter::validate_interchain_filter,
     linked_stats::LinkedStatsClient,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
@@ -73,6 +74,7 @@ pub async fn stats(
     let cctx_indexer = connect_to_second_indexer_db(&settings).await?;
 
     check_if_unsupported_charts_are_enabled(settings.mode, &charts, &indexer).await?;
+    let interchain_filter = validate_interchain_filter(&settings, &charts).await?;
     create_charts_if_needed(&db, &charts).await?;
 
     if settings.metrics.enabled {
@@ -96,7 +98,7 @@ pub async fn stats(
             status_listener,
             mode: settings.mode,
             multichain_filter: settings.multichain_filter,
-            interchain_primary_id: settings.interchain_primary_id,
+            interchain_filter,
         })
         .await?,
     );

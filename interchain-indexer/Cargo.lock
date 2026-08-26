@@ -4060,6 +4060,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "interchain-indexer-filters"
+version = "0.0.0"
+dependencies = [
+ "interchain-indexer-entity",
+ "sea-orm",
+]
+
+[[package]]
 name = "interchain-indexer-logic"
 version = "0.1.0"
 dependencies = [
@@ -4081,6 +4089,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "interchain-indexer-entity",
+ "interchain-indexer-filters",
  "interchain-indexer-migration",
  "interchain-indexer-proto",
  "itertools 0.14.0",
@@ -4170,6 +4179,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

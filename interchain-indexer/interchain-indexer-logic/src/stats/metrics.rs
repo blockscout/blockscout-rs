@@ -77,4 +77,28 @@ lazy_static! {
         "transfers skipped because a token's decimals changed for an existing edge (non-merge path)"
     )
     .unwrap();
+
+    /// Actual cross-bridge duplicate-user impact of the last successful
+    /// `stats_chains` recomputation: `SUM` over chains of
+    /// `SUM(per_bridge_count) - global_distinct_count`, i.e. the number of
+    /// extra address contributions a full bridge-sum would add. `kind` is the
+    /// only label — never chain id or bridge set. This is an upper bound
+    /// across *all* bridges, not the overcount any one multi-bridge request
+    /// would see; a `GetChainsStats` request only ever selects a subset.
+    pub static ref STATS_CHAINS_BRIDGE_SUM_OVERCOUNT_USERS: GaugeVec = register_gauge_vec!(
+        "interchain_indexer_stats_chains_bridge_sum_overcount_users",
+        "extra address contributions a full per-bridge stats_chains sum would add over the exact \
+         global count, by kind (transfer|message); an all-bridge upper bound, not per-request",
+        &["kind"],
+    )
+    .unwrap();
+
+    /// Number of chains with a positive overcount delta for `kind`, from the
+    /// same recomputation as [`STATS_CHAINS_BRIDGE_SUM_OVERCOUNT_USERS`].
+    pub static ref STATS_CHAINS_BRIDGE_SUM_AFFECTED_CHAINS: GaugeVec = register_gauge_vec!(
+        "interchain_indexer_stats_chains_bridge_sum_affected_chains",
+        "chains with a positive bridge-sum overcount delta, by kind (transfer|message)",
+        &["kind"],
+    )
+    .unwrap();
 }

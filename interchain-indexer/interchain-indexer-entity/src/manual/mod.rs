@@ -10,6 +10,10 @@ impl indexer_checkpoints::Model {
     pub fn validated_catchup_cursor(&self) -> u64 {
         self.catchup_max_cursor.max(0) as u64
     }
+
+    pub fn validated_catchup_min_cursor(&self) -> u64 {
+        self.catchup_min_cursor.max(0) as u64
+    }
 }
 
 impl bridge_contracts::Model {

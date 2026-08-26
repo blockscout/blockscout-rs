@@ -6,9 +6,16 @@ mod bulk;
 mod chain_info;
 mod database;
 mod error;
-pub mod filters;
+/// Moved to the `interchain-indexer-filters` leaf crate so that the `stats`
+/// service can share the exact same predicate. Re-exported here so existing
+/// `crate::filters::…` and `interchain_indexer_logic::ChainBridgeFilter`
+/// paths keep resolving.
+pub mod filters {
+    pub use interchain_indexer_filters::ChainBridgeFilter;
+}
 mod message_buffer;
 mod provider_layers;
+pub mod secret;
 pub mod settings;
 pub mod stats;
 mod stats_chains_query;
@@ -33,9 +40,10 @@ pub use error::ApiError;
 pub use filters::ChainBridgeFilter;
 pub use indexer::*;
 pub use provider_layers::*;
+pub use secret::{Secret, redact_urls, sanitize_transport_error};
 pub use settings::MessageBufferSettings;
 pub use stats::{
-    BridgedTokenListRow, IndexedChains, StatsChainListRow, StatsListQuery, StatsReadSettings,
-    StatsService,
+    BridgedTokenListRow, IndexedChains, OverlapTransition, StatsChainListRow, StatsChainsScope,
+    StatsListQuery, StatsReadSettings, StatsService, overlap_transition,
 };
 pub use token_info::{TokenInfoService, TokenInfoServiceSettings};

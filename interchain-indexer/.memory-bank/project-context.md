@@ -162,9 +162,10 @@ Common commands from `justfile`:
 - `just generate-entities`
   - regenerate SeaORM codegen into `interchain-indexer-entity/src/codegen`
 - `just run`
-  - start the service against Avalanche config with migrations enabled
+  - start the service against `config/full-mainnet` with migrations enabled
 - `just run-dev`
-  - same as `run`, but loads env vars from `.env`
+  - same as `run`, but with `.env` loaded (`dotenv` CLI). The only recipe that reads
+    `.env` — see the gotcha on why `set dotenv-load` is deliberately not set
 - `just check`
   - `cargo check` + strict clippy
 - `just format`

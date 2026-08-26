@@ -44,6 +44,26 @@ pub struct LogStream {
     enable_realtime: bool,
 }
 
+/// How a batch reached the consumer. Metrics/logging only — no behavioural
+/// branch depends on this today.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScanDirection {
+    Catchup,
+    Realtime,
+    Retry,
+}
+
+/// A batch of logs together with the block range that produced it, so a
+/// consumer can attribute a downstream processing failure to a specific
+/// range instead of only to the logs it happened to contain.
+#[derive(Clone, Debug)]
+pub struct LogBatch {
+    pub from_block: u64,
+    pub to_block: u64,
+    pub direction: ScanDirection,
+    pub logs: Vec<Log>,
+}
+
 impl<S: State> LogStreamBuilder<S> {
     /// Enable realtime mode, which will continuously poll for new logs starting
     /// from `realtime_cursor` until the stream is dropped.
@@ -64,7 +84,7 @@ impl<S: State> LogStreamBuilder<S> {
     }
 
     /// Finish the builder and immediately produce the merged log stream.
-    pub fn build(self) -> anyhow::Result<stream::BoxStream<'static, Vec<Log>>>
+    pub fn build(self) -> anyhow::Result<stream::BoxStream<'static, LogBatch>>
     where
         S::EnableCatchup: IsSet,
         S::EnableRealtime: IsSet,
@@ -74,7 +94,7 @@ impl<S: State> LogStreamBuilder<S> {
 }
 
 impl LogStream {
-    fn build_catchup_stream(&self) -> stream::BoxStream<'static, Vec<Log>> {
+    fn build_catchup_stream(&self) -> stream::BoxStream<'static, LogBatch> {
         let provider = self.provider.clone();
         let filter = self.filter.clone();
         let poll_interval = self.poll_interval;
@@ -114,7 +134,12 @@ impl LogStream {
                         );
                         if !logs.is_empty() {
                             observed_logs = true;
-                            yield logs;
+                            yield LogBatch {
+                                from_block,
+                                to_block,
+                                direction: ScanDirection::Catchup,
+                                logs,
+                            };
                         }
                         if from_block == genesis_block {
                             break;
@@ -156,15 +181,15 @@ impl LogStream {
 
             tracing::info!(bridge_id, chain_id, genesis_block, "catchup complete, reached genesis block");
         }
-        .map(|mut logs| {
-            logs.sort_by_key(|log| (log.block_number, log.log_index));
-            logs.reverse();
-            logs
+        .map(|mut batch| {
+            batch.logs.sort_by_key(|log| (log.block_number, log.log_index));
+            batch.logs.reverse();
+            batch
         })
         .boxed()
     }
 
-    fn build_realtime_stream(&self) -> stream::BoxStream<'static, Vec<Log>> {
+    fn build_realtime_stream(&self) -> stream::BoxStream<'static, LogBatch> {
         let provider = self.provider.clone();
         let filter = self.filter.clone();
         let poll_interval = self.poll_interval;
@@ -211,7 +236,12 @@ impl LogStream {
                                 batch_size,
                                 "fetched realtime logs"
                             );
-                            yield logs;
+                            yield LogBatch {
+                                from_block,
+                                to_block,
+                                direction: ScanDirection::Realtime,
+                                logs,
+                            };
                         }
                         from_block = to_block + 1;
                     }
@@ -243,14 +273,14 @@ impl LogStream {
                 tokio::time::sleep(poll_interval).await;
             }
         }
-        .map(|mut logs| {
-            logs.sort_by_key(|log| (log.block_number, log.log_index));
-            logs
+        .map(|mut batch| {
+            batch.logs.sort_by_key(|log| (log.block_number, log.log_index));
+            batch
         })
         .boxed()
     }
 
-    pub fn into_stream(self) -> Result<stream::BoxStream<'static, Vec<Log>>> {
+    pub fn into_stream(self) -> Result<stream::BoxStream<'static, LogBatch>> {
         if self.realtime_cursor < self.catchup_cursor {
             Err(anyhow::anyhow!(
                 "realtime_cursor ({}) must be >= catchup_cursor ({})",
@@ -280,7 +310,7 @@ impl LogStream {
 /// block #14 is bad, it should still be able to fetch all blocks that are okay,
 /// so [0;13] and [14; 100] should be fetched though and #14 should be marked as
 /// a bad block.
-async fn fetch_logs(
+pub(crate) async fn fetch_logs(
     provider: DynProvider<Ethereum>,
     filter: &Filter,
     from_block: u64,

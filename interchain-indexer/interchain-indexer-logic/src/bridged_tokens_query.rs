@@ -1737,8 +1737,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database"]
     async fn bridged_tokens_pruning_bridge_ids_disjunction_no_result_change() {
-        // `implementation-plan-2.md`'s pruning note: restricting `bridge_ids` to
-        // a subset must prune `configured_pairs`' `NOT IN` list identically, and
+        // Restricting `bridge_ids` to a subset must prune `configured_pairs`'
+        // `NOT IN` list identically, and
         // the *result set* must be identical whether or not that pruning
         // happens, because `bridge_id IN (bridge_ids)` already excludes the
         // unlisted bridge's rows regardless of what the permissive arm says
@@ -1797,11 +1797,11 @@ mod tests {
     #[ignore = "needs database"]
     async fn bridged_tokens_opt_in_returns_same_rows_until_projection_widens() {
         // `stats_asset_edges` rows are only ever written today for chain pairs
-        // the row's own bridge indexes (`stats/projection.rs`'s finality gate,
-        // `prevent-split-stats-assets/coding-task-4a` not yet landed). So an
+        // the row's own bridge indexes (`stats/projection.rs`'s finality gate).
+        // So an
         // indexed-pairs restriction over today's data is a no-op: this test
-        // must be tightened to "opt-in returns strictly more rows" once that
-        // task's projection changes land -- see `tmp/tasks/prevent-split-stats-assets/`.
+        // must be tightened to "opt-in returns strictly more rows" if the
+        // projection later starts persisting unindexed bridge/chain pairs.
         let g = init_db("bridged_tokens_opt_in_same_until_projection_widens").await;
         let db = g.client();
         seed_chains(db.as_ref(), &[1, 100]).await;

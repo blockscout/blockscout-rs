@@ -29,6 +29,9 @@ entity = { path = "./entity" }
 futures = "0.3"
 hex = { workspace = true }
 hex-literal = { version = "0.4.1", optional = true }
+interchain-indexer-entity = { workspace = true }
+interchain-indexer-filters = { workspace = true }
+interchain-indexer-migration = { workspace = true }
 itertools = "0.13.0"
 lazy_static = "1.4"
 migration = { path = "./migration" }
@@ -70,6 +73,9 @@ blockscout-service-launcher = { workspace = true, features = [
     "database-1",
     "test-database",
 ] }
+# same version stats-server uses for the production charts.json key mapping, so
+# the coverage guard converts config keys exactly as the server does
+convert_case = "0.6.0"
 hex-literal = "0.4.1"
 
 # test-utils

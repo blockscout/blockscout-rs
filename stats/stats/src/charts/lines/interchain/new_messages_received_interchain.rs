@@ -1,64 +1,77 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-//! New interchain messages received line chart (messages with dst_tx_hash set, per day).
-//! When interchain_primary_id is set, filters by dst_chain_id; otherwise counts all received.
+//! New interchain messages received per day, within the configured interchain
+//! slice.
+//!
+//! Counts messages admitted by the shared read filter whose destination event
+//! was indexed (`dst_tx_hash IS NOT NULL`). When
+//! `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID` is set, "received" additionally
+//! means `dst_chain_id = home`; with no home chain configured the chart degrades
+//! to "destination-side observed", which the server warns about at startup.
+//!
+//! The time axis is the message's **initiation** date, not the date its
+//! destination event was observed — a pre-existing property, unchanged here,
+//! and the reason a "received" point can predate the reception itself.
 
 use std::ops::Range;
 
+use interchain_indexer_entity::crosschain_messages;
+
 use crate::{
     chart_prelude::*,
-    charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-            },
-        },
-        types::UpdateContext,
+    charts::db_interaction::filters::interchain::{
+        InterchainFilter, InterchainFilterTarget, InterchainFiltered,
     },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
 };
-use chrono::{DateTime, NaiveDate, Utc};
-use sea_orm::{DbBackend, Statement};
 
 pub struct NewMessagesReceivedInterchainStatement;
+impl_db_choice!(NewMessagesReceivedInterchainStatement, UsePrimaryDB);
+
+impl NewMessagesReceivedInterchainStatement {
+    /// Split out from `get_statement_with_context` so tests can render it with an
+    /// explicit filter and no `UpdateContext` (hence no database connections).
+    fn build(filter: &InterchainFilter, range: Option<Range<DateTime<Utc>>>) -> Statement {
+        use crosschain_messages::Column as C;
+        const DATE: &str = "date";
+        let query = filter
+            .messages_query()
+            .select_only()
+            .expr_as(C::InitTimestamp.into_expr().cast_as(DATE), DATE)
+            .expr_as(
+                Func::count(Asterisk.into_column_ref()).cast_as("TEXT"),
+                "value",
+            )
+            .filter(C::DstTxHash.is_not_null())
+            .apply_if(filter.home_chain_id(), |query, home| {
+                query.filter(C::DstChainId.eq(home))
+            });
+        let query = match &range {
+            Some(range) => datetime_range_filter(query, C::InitTimestamp, range),
+            None => query,
+        };
+        query
+            .group_by(Expr::col(Alias::new(DATE)))
+            .build(DbBackend::Postgres)
+    }
+}
 
 impl StatementFromRange for NewMessagesReceivedInterchainStatement {
     fn get_statement_with_context(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTime<Utc>>>,
     ) -> Statement {
-        let (chain_condition, values) = match cx.interchain_primary_id {
-            Some(primary_id) => (
-                " AND dst_chain_id = $1".to_string(),
-                vec![sea_orm::Value::BigInt(Some(primary_id as i64))],
-            ),
-            None => (String::new(), vec![]),
-        };
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
-                SELECT
-                    init_timestamp::date AS date,
-                    COUNT(*)::TEXT AS value
-                FROM crosschain_messages
-                WHERE dst_tx_hash IS NOT NULL {chain_condition} {filter}
-                GROUP BY init_timestamp::date
-            "#,
-            values,
-            "init_timestamp::timestamp",
-            range,
-            chain_condition = chain_condition,
-        )
+        Self::build(&cx.interchain_filter, range)
     }
 }
 
-impl_db_choice!(NewMessagesReceivedInterchainStatement, UsePrimaryDB);
+impl InterchainFiltered for NewMessagesReceivedInterchainStatement {
+    const TARGET: InterchainFilterTarget = InterchainFilterTarget::Messages;
+    const CHART_NAME: &'static str = "newMessagesReceivedInterchain";
+
+    fn render(filter: &InterchainFilter) -> Statement {
+        Self::build(filter, None)
+    }
+}
 
 pub type NewMessagesReceivedInterchainRemote = RemoteDatabaseSource<
     PullAllWithAndSort<
@@ -119,7 +132,10 @@ pub type NewMessagesReceivedInterchainYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart_interchain;
+    use crate::tests::{
+        mock_interchain::test_interchain_home_chain_filter,
+        simple_test::simple_test_chart_interchain,
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -138,8 +154,11 @@ mod tests {
                 ("2023-01-21", "2"),
                 ("2023-02-01", "1"),
                 ("2023-02-05", "1"),
+                ("2023-02-06", "1"),
+                ("2023-02-08", "1"),
+                ("2023-02-09", "1"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
 
@@ -152,7 +171,7 @@ mod tests {
                 ("2023-01-21", "2"),
                 ("2023-02-05", "1"),
             ],
-            Some(1),
+            test_interchain_home_chain_filter(1),
         )
         .await;
     }
@@ -169,8 +188,9 @@ mod tests {
                 ("2023-01-09", "1"),
                 ("2023-01-16", "2"),
                 ("2023-01-30", "2"),
+                ("2023-02-06", "3"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
     }
@@ -183,9 +203,9 @@ mod tests {
             vec![
                 ("2022-12-01", "5"),
                 ("2023-01-01", "6"),
-                ("2023-02-01", "2"),
+                ("2023-02-01", "5"),
             ],
-            None,
+            InterchainFilter::default(),
         )
         .await;
     }
@@ -195,8 +215,8 @@ mod tests {
     async fn update_new_messages_received_interchain_yearly() {
         simple_test_chart_interchain::<NewMessagesReceivedInterchainYearly>(
             "update_new_messages_received_interchain_yearly",
-            vec![("2022-01-01", "5"), ("2023-01-01", "8")],
-            None,
+            vec![("2022-01-01", "5"), ("2023-01-01", "11")],
+            InterchainFilter::default(),
         )
         .await;
     }

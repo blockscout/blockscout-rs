@@ -1,6 +1,10 @@
-*.env
+*.env*
 database
 .claude/settings.local.json
 CLAUDE.local.md
 tmp
 __pycache__
+/graphify-out/cache/
+/graphify-out/memory/
+/graphify-out/20*/
+/graphify-out/.graphify_python

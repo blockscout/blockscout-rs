@@ -32,6 +32,25 @@
 - `interchain-indexer-logic/src/log_stream.rs`
   - reusable catchup/real-time log streaming primitive that indexers can build on
 
+## If You Need to Understand Indexing Concurrency, Throughput Or Why One Chain Is Slow
+
+- `.memory-bank/research/indexing-concurrency-model.md`
+  - start here: how concurrent the pipeline is at every level, the invariants
+    that constrain any change, measured throughput, and how to reproduce the
+    measurements
+- `.memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md`
+  - why it is cooperative and single-task, and why per-chain drivers and
+    `tokio::spawn` were both rejected
+- `interchain-indexer-logic/src/indexer/range_driver.rs`
+  - `RangeDriver::run`: one sequential handler future per chain joined with
+    `try_join_all`, raced against the retry future
+- `interchain-indexer-logic/src/provider_layers.rs`
+  - per-node `max_rps` limiter (`until_ready()` is the yield point a throttled
+    chain parks on), `RPC_HTTP_TIMEOUT`, `mark_error` cooldown
+- `scripts/indexing_throughput.py`, `scripts/indexing_coupling.py`
+  - the log analysers; the coupling one is the decisive check for "is a slow
+    chain dragging its siblings down"
+
 ## If You Need to Understand Avalanche Indexing
 
 - `interchain-indexer-logic/src/indexer/avalanche/mod.rs`
@@ -193,11 +212,24 @@
 - `interchain-indexer-server/src/services/stats.rs`
   - statistics endpoints
 - `interchain-indexer-server/src/services/status.rs`
-  - indexer status reporting
+  - indexer status reporting, and historical catch-up progress per
+    `(bridge, chain)` (`GET /api/v1/status/indexing`)
+- `interchain-indexer-logic/src/indexer/progress.rs`
+  - the pure cursor arithmetic behind that endpoint — scanned share, blocks
+    remaining, completion. Start here rather than in the service: every clamp
+    has a reason, and the guard `lo = max(catchup_min_cursor, start_block)` is
+    load-bearing. `catchup_complete` lives here too, as the one predicate that
+    also takes the failure ledger's `failed_blocks` (passed in, so the module
+    stays DB-free)
+- `interchain-indexer-server/src/indexers.rs`
+  - config-driven `(bridge, chain)` enumeration for that endpoint, and the
+    startup reconciliation of a lowered `started_at_block`
 - `interchain-indexer-proto/proto/v1/interchain_indexer.proto`
   - core API contract definitions
 - `interchain-indexer-proto/proto/v1/stats.proto`
   - stats API contract definitions
+- `interchain-indexer-proto/proto/v1/status.proto`
+  - status and indexing-progress API contract definitions
 - then continue to:
   - `interchain-indexer-logic/src/database.rs`
 
