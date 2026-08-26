@@ -606,7 +606,7 @@ pub async fn simple_test_counter_filecoin_with_migration_variants<C>(
             migrations,
             Mode::Blockscout,
             None,
-            None,
+            InterchainFilter::default(),
             true,
         )
         .await;

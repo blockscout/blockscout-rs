@@ -14,9 +14,11 @@ use tokio::sync::Mutex;
 use tracing::warn;
 
 use crate::{
-    ChartKey, charts::db_interaction::filters::interchain::InterchainFilter,
+    ChartKey,
+    charts::db_interaction::filters::interchain::InterchainFilter,
     counters::{FilecoinChainFees24hValue, TxnsStatsValue},
-    mode::Mode, types::new_txns::NewTxnsCombinedPoint,
+    mode::Mode,
+    types::new_txns::NewTxnsCombinedPoint,
 };
 
 #[derive(Clone)]
