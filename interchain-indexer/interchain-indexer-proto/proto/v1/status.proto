@@ -47,7 +47,10 @@ message ChainIndexingProgress {
   uint64 catchup_max_cursor       = 5;
   uint64 realtime_cursor          = 6;
 
-  bool   catchup_scan_complete    = 7;
+  // catchup_progress_percent == 100.0 AND failed_blocks == 0: everything in
+  // scope was scanned and nothing is recorded as missing. Derivable from the
+  // two fields below, on purpose.
+  bool   catchup_complete         = 7;
   double catchup_progress_percent = 8;  // scanned share, NOT a completeness measure
   uint64 catchup_blocks_remaining = 9;
 

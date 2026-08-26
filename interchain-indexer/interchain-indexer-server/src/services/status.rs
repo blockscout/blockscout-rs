@@ -134,7 +134,7 @@ pub(crate) async fn collect_indexing_progress(
                 catchup_min_cursor: progress.catchup_min_cursor,
                 catchup_max_cursor: progress.catchup_max_cursor,
                 realtime_cursor: progress.realtime_cursor,
-                catchup_scan_complete: progress.scan_complete,
+                catchup_complete: progress.catchup_complete(failed_blocks),
                 catchup_progress_percent: progress.progress_percent,
                 catchup_blocks_remaining: progress.blocks_remaining,
                 failed_blocks,
@@ -287,6 +287,71 @@ mod tests {
         assert_eq!(items[0].failed_blocks, 0);
     }
 
+    /// `catchup_complete` is the one field that reads *both* records, so it
+    /// is also the one field a broken join would silently get wrong: the
+    /// pure predicate is unit-tested in `progress.rs`, but only a DB test
+    /// proves the failure ledger's aggregate actually reaches it. Both pairs
+    /// here are fully scanned (`lo = 1000 > catchup_max_cursor = 999`,
+    /// `realtime_cursor = 2000`), so the cursors are identical and the open
+    /// hole is the only difference between them.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn collect_indexing_progress_catchup_complete_requires_a_clean_failure_ledger() {
+        let test_db = init_db("collect_progress_catchup_complete").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_bridges_and_chains(&db).await;
+
+        db.seed_catchup_floor(1, 1, 1000, 999, 2000).await.unwrap();
+        db.seed_catchup_floor(2, 100, 1000, 999, 2000)
+            .await
+            .unwrap();
+        db.record_indexer_failures(
+            1,
+            1,
+            &[(
+                BlockRange {
+                    from: 1_100,
+                    to: 1_199,
+                },
+                "boom".to_string(),
+            )],
+        )
+        .await
+        .unwrap();
+
+        let targets = [
+            IndexingTarget {
+                bridge_id: 1,
+                chain_id: 1,
+                start_block: 1000,
+            },
+            IndexingTarget {
+                bridge_id: 2,
+                chain_id: 100,
+                start_block: 1000,
+            },
+        ];
+
+        let items = collect_indexing_progress(&db, &targets, None, None)
+            .await
+            .unwrap();
+        assert_eq!(items.len(), 2);
+
+        assert_eq!(items[0].catchup_progress_percent, 100.0);
+        assert_eq!(items[0].failed_blocks, 100);
+        assert!(
+            !items[0].catchup_complete,
+            "100% scanned with an open hole is not a complete catch-up"
+        );
+
+        assert_eq!(items[1].catchup_progress_percent, 100.0);
+        assert_eq!(items[1].failed_blocks, 0);
+        assert!(
+            items[1].catchup_complete,
+            "100% scanned with an empty failure ledger is a complete catch-up"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "needs database"]
     async fn collect_indexing_progress_pair_with_no_checkpoint_row_reports_zero_and_absent_updated_at()
@@ -308,7 +373,7 @@ mod tests {
             .unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].catchup_progress_percent, 0.0);
-        assert!(!items[0].catchup_scan_complete);
+        assert!(!items[0].catchup_complete);
         assert_eq!(
             items[0].checkpoint_updated_at, None,
             "absent checkpoint_updated_at is the payload's 'no state at all' marker"

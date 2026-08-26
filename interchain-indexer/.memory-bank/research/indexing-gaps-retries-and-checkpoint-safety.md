@@ -50,7 +50,8 @@ now propagate their downstream failures; anything added later must do the same
 deliberately.
 
 **What the ledger still does not cover.** These are open by construction, not
-oversights, and `catchup_scan_complete == true && failed_blocks == 0` is
+oversights, and `catchup_complete == true` (the endpoint's
+`catchup_progress_percent == 100.0 && failed_blocks == 0`) is
 therefore not proof that every block was indexed:
 
 - **The current batch is not fenced.** Both adapters process a batch's

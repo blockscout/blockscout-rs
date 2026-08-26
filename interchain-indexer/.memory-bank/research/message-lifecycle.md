@@ -169,7 +169,10 @@ Consequences worth internalizing:
 - **Catchup completion is "the two catchup cursors met"**, i.e. the unscanned
   interval is empty (`catchup_max_cursor < catchup_min_cursor`). It is not "the
   frontier reached `started_at_block`" — that formulation only happens to work
-  while `catchup_min_cursor` sits at `started_at_block`.
+  while `catchup_min_cursor` sits at `started_at_block`. This is completion of
+  the *scan*, and it is not the same thing as the endpoint's
+  `catchup_complete`, which additionally requires an empty failure ledger
+  (`failed_blocks == 0`) — see `indexer/progress.rs`.
 - **The model allows catchup from both ends at once** — downward from realtime
   and upward from `started_at_block`. Nothing in the schema or the cursor
   algebra prevents it. Both current indexers walk **downward only**, so a reader
