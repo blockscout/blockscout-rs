@@ -19,8 +19,14 @@ impl BytecodeCandidate {
     /// Return Ok(()) if this candidate meets the requirements
     #[allow(clippy::result_large_err)]
     pub fn is_match(&self, remote_data: &Bytes) -> Result<MatchType, CompareError> {
-        let local =
-            LocalBytecode::new(&self.parts).expect("local bytecode should contain valid metadata");
+        let local = LocalBytecode::new(&self.parts).map_err(|err| {
+            tracing::warn!(
+                bytecode_id = self.bytecode.id,
+                error = ?err,
+                "failed to parse local bytecode parts; skipping the candidate"
+            );
+            CompareError::MetadataParse(err.to_string())
+        })?;
         let result = compare(remote_data, &local);
         if result.is_err() {
             tracing::debug!(error = ?result, "bytecode mismatch");
