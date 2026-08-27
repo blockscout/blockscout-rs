@@ -25,7 +25,10 @@ use stats::{
     resolve_only_indexed_by_bridge,
 };
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 /// Parameters for constructing [`UpdateService`].
 /// Used to avoid passing too many arguments to [`UpdateService::new`].
@@ -67,6 +70,18 @@ pub struct UpdateService {
     /// two `Mutex`es below), and `borrow()` is synchronous so the read path in
     /// `get_initial_update_status` gains no await point.
     interchain_history_catching_up: watch::Sender<Option<bool>>,
+    /// Per-group memory of whether the *last API-derived* interchain catch-up
+    /// verdict for that group was incomplete (`true`) or complete (`false`).
+    /// Absent entry ⇒ no verdict has been API-derived for that group yet.
+    ///
+    /// Used only to force one extra full rebuild on an observed `false → true`
+    /// transition — see `resolve_interchain_preflight`. Keyed by group name
+    /// rather than shared: unlike `interchain_history_catching_up` (one
+    /// service-wide "is anything still catching up" signal, correctly
+    /// last-writer-wins across groups), a transition belongs to the one group
+    /// whose slice actually completed and must not be consumable by another
+    /// group's cycle.
+    interchain_verdict_was_incomplete: Mutex<HashMap<String, bool>>,
     // currently only accessed in one place, but `Mutex`es
     // are needed due to `Arc<Self>` everywhere to provide
     // interior mutability
@@ -101,6 +116,56 @@ struct InterchainPreflight {
     slice_catchup_complete: bool,
 }
 
+/// Resolves this cycle's effective `slice_catchup_complete` for `group_name`,
+/// updating `state` (the per-group "was the last API-derived verdict
+/// incomplete" memory) in place, and forcing one extra full rebuild on an
+/// observed `false → true` transition of the verdict.
+///
+/// **Why this exists.** Trigger 1 (the verdict itself) forces a rebuild only
+/// while the verdict is `false`; trigger 2 (the stored-floor check) only sees
+/// floor *movement*. With per-chain decoupled catch-up, one chain can write
+/// its entire remaining history *above* another chain's already-lower floor —
+/// so the floor never moves — and only then mark itself complete. The verdict
+/// then flips straight from `false` to `true` with no cycle in between where a
+/// rebuild was forced, and those interior rows would never enter any line
+/// chart. This is exactly Option B′ from
+/// `.memory-bank/research/update-range-anchoring-and-backfill-detection.md`:
+/// *"any design that detects backfill purely by watching the floor is
+/// therefore ruled out"* — trigger 2 alone is that design.
+///
+/// This is memory *in addition to* the floor check, not a replacement for it:
+/// `decisions.md` Q7 rejected memory only as a *replacement*, because a
+/// process restart inside the flip window loses it. That residual gap still
+/// exists here — a restart between the `false` cycle and the `true` cycle
+/// still loses the interior fill — but the common case (the process stays up
+/// across the transition) is now covered.
+///
+/// **Only a verdict actually derived from the API may update `state` or
+/// consume a pending transition.** An unavailable or unconfigured API leaves
+/// `state` untouched and returns `verdict.complete` as-is: acting on
+/// `resolve_verdict`'s `complete = true` fallback here would silently consume
+/// the pending transition without ever having observed the real `true`.
+///
+/// A free function (rather than an `UpdateService` method body) so the
+/// transition — and the "non-API verdict never touches state" rule — are
+/// testable without constructing a full `UpdateService`.
+fn resolve_interchain_verdict_transition(
+    state: &mut HashMap<String, bool>,
+    group_name: &str,
+    verdict: &SliceCatchupVerdict,
+) -> bool {
+    if verdict.source != VerdictSource::IndexerApi {
+        return verdict.complete;
+    }
+    let was_incomplete = state.get(group_name).copied().unwrap_or(false);
+    state.insert(group_name.to_owned(), !verdict.complete);
+    if was_incomplete && verdict.complete {
+        false // the transition: force one more rebuild this cycle
+    } else {
+        verdict.complete
+    }
+}
+
 impl UpdateService {
     pub async fn new(config: UpdateServiceConfig) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
@@ -117,6 +182,7 @@ impl UpdateService {
             status_listener: config.status_listener,
             init_update_tracker,
             interchain_history_catching_up: watch::Sender::new(None),
+            interchain_verdict_was_incomplete: Mutex::new(HashMap::new()),
             on_demand_sender: Mutex::new(on_demand.0),
             on_demand_receiver: Mutex::new(on_demand.1),
         })
@@ -536,10 +602,21 @@ impl UpdateService {
                     "resolved the interchain catch-up verdict for this cycle"
                 );
             } else {
+                // Capped: `verdict.holding` is one entry per relevant pair still
+                // catching up, and with a large bridge/chain configuration this
+                // field is unbounded — it fires every cycle for a group that
+                // stays incomplete for a while, so an uncapped list here can
+                // dominate the log volume. `holding_total` keeps the true count
+                // visible even when the sample is truncated.
+                const MAX_LOGGED_HOLDING_PAIRS: usize = 20;
+                let holding_total = verdict.holding.len();
+                let holding_sample =
+                    &verdict.holding[..holding_total.min(MAX_LOGGED_HOLDING_PAIRS)];
                 tracing::warn!(
                     update_group = group_name,
                     pairs_considered = verdict.pairs_considered,
-                    holding =? verdict.holding,
+                    holding_total,
+                    holding =? holding_sample,
                     "interchain slice is still catching up; rebuilding every chart in this \
                      group from the filtered floor this cycle"
                 );
@@ -551,12 +628,53 @@ impl UpdateService {
                     "the configured interchain filter selects no pair the indexer reports; the \
                      catch-up verdict is vacuously complete"
                 );
+            } else if raw_payload_len == Some(0) {
+                // Distinguished from the branch above: this is a `200` whose
+                // `items` array itself is empty, not "rows returned but none
+                // relevant". `ChainIndexingProgress`'s fields are read with
+                // `#[serde(default)]`, so an envelope rename (e.g. `items` ->
+                // something else) silently deserializes to `vec![]` — `Ok(vec![])`
+                // is indistinguishable, at the type level, from "the indexer
+                // genuinely has nothing to report". Without this warn the
+                // verdict would resolve to vacuously complete with only a
+                // `debug!`, which is exactly the "silently a no-op" failure this
+                // check exists to prevent.
+                tracing::warn!(
+                    update_group = group_name,
+                    "the interchain indexer status response carried no rows at all; the \
+                     catch-up verdict is vacuously complete. If pairs are actually configured \
+                     upstream, this may mean the response envelope no longer matches what \
+                     stats expects (check for an `items` key rename)"
+                );
             }
         }
 
+        // Force one extra full rebuild on the observed `false → true` transition
+        // of the *API-derived* verdict for this group — see
+        // `resolve_interchain_verdict_transition`'s doc comment for the full
+        // justification (Option B′, the interior-fill gap it closes, and the
+        // residual restart-window gap it does not).
+        let slice_catchup_complete = {
+            let mut previous_incomplete = self.interchain_verdict_was_incomplete.lock().await;
+            let effective_complete = resolve_interchain_verdict_transition(
+                &mut previous_incomplete,
+                group_name,
+                &verdict,
+            );
+            if !effective_complete && verdict.complete {
+                tracing::info!(
+                    update_group = group_name,
+                    "interchain catch-up verdict transitioned from incomplete to complete; \
+                     forcing one more full rebuild this cycle to pick up any interior fill \
+                     that landed above the floor while the verdict was still incomplete"
+                );
+            }
+            effective_complete
+        };
+
         Some(InterchainPreflight {
             filter,
-            slice_catchup_complete: verdict.complete,
+            slice_catchup_complete,
         })
     }
 
@@ -810,5 +928,126 @@ mod tests {
 
         publish(&sender, &verdict(VerdictSource::ApiUnavailable, true));
         assert_eq!(*sender.borrow(), Some(true));
+    }
+
+    /// The `false → true` transition: a group that was incomplete on the last
+    /// API-derived cycle gets one forced rebuild the cycle it first reports
+    /// complete, and the state then settles so a *second* consecutive complete
+    /// cycle does not force again.
+    #[test]
+    fn interchain_verdict_transition_forces_one_rebuild_on_false_to_true() {
+        let mut state = HashMap::new();
+        let group = "test-group";
+
+        // first cycle ever: nothing pending, verdict incomplete — no forcing,
+        // remember incomplete
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, false)
+        ));
+        assert_eq!(state.get(group), Some(&true));
+
+        // still incomplete: no forcing needed, trigger 1 already covers it
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, false)
+        ));
+        assert_eq!(state.get(group), Some(&true));
+
+        // the transition: verdict reports complete after being incomplete —
+        // force one more rebuild despite `verdict.complete == true`
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, true)
+        ));
+        assert_eq!(state.get(group), Some(&false));
+
+        // steady state complete: no more forcing
+        assert!(resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, true)
+        ));
+        assert_eq!(state.get(group), Some(&false));
+    }
+
+    /// A verdict not derived from the API — unavailable or unconfigured — must
+    /// never update the stored state, or it would consume a pending transition
+    /// without ever having observed the real `true`.
+    #[test]
+    fn interchain_verdict_transition_ignores_non_api_verdicts() {
+        let mut state = HashMap::new();
+        let group = "test-group";
+
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, false)
+        ));
+        assert_eq!(state.get(group), Some(&true));
+
+        // an API outage between the incomplete cycle and the eventual complete
+        // one must not consume or otherwise touch the pending transition
+        assert!(resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::ApiUnavailable, true)
+        ));
+        assert_eq!(
+            state.get(group),
+            Some(&true),
+            "an unavailable-API verdict must not touch the stored state"
+        );
+        assert!(resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::NotConfigured, true)
+        ));
+        assert_eq!(
+            state.get(group),
+            Some(&true),
+            "a not-configured verdict must not touch the stored state either"
+        );
+
+        // the transition still fires once the API actually reports complete
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, true)
+        ));
+        assert_eq!(state.get(group), Some(&false));
+    }
+
+    /// Two groups' transitions are independent: one group's completion must
+    /// not consume another's pending transition.
+    #[test]
+    fn interchain_verdict_transition_is_per_group() {
+        let mut state = HashMap::new();
+
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            "group-a",
+            &verdict(VerdictSource::IndexerApi, false)
+        ));
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            "group-b",
+            &verdict(VerdictSource::IndexerApi, false)
+        ));
+
+        // group-a completes; group-b must still be pending afterwards
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            "group-a",
+            &verdict(VerdictSource::IndexerApi, true)
+        ));
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            "group-b",
+            &verdict(VerdictSource::IndexerApi, true)
+        ));
     }
 }

@@ -97,6 +97,15 @@ impl InterchainIndexerApiClient {
             match self.client.get(url.clone()).send().await {
                 Ok(response) => {
                     let status = response.status();
+                    // A 5xx is presumed transient (the indexer's own request
+                    // handling failing, not a malformed request on our side),
+                    // so it gets the same retry budget as a transport error.
+                    // A 4xx is not retried: retrying an unchanged request
+                    // against an unchanged endpoint would just repeat it.
+                    if status.is_server_error() && attempt < ATTEMPTS {
+                        tokio::time::sleep(RETRY_BACKOFF).await;
+                        continue;
+                    }
                     if !status.is_success() {
                         return Err(InterchainIndexerApiError::UnexpectedStatus(status));
                     }
@@ -472,6 +481,53 @@ mod tests {
         Mock::given(method("GET"))
             .and(path(format!("/{INDEXING_STATUS_PATH}")))
             .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+        let url = Url::parse(&server.uri()).unwrap();
+        let client = InterchainIndexerApiClient::try_new(Some(&url))
+            .unwrap()
+            .unwrap();
+        let err = client.indexing_progress().await.unwrap_err();
+        assert!(matches!(
+            err,
+            InterchainIndexerApiError::UnexpectedStatus(_)
+        ));
+    }
+
+    /// A 5xx gets the same `ATTEMPTS` retry budget as a transport error — only
+    /// the second (final) attempt's failure is returned. `.expect(2)` is
+    /// checked when `server` drops at the end of the test; if the request were
+    /// only made once (the pre-fix behaviour), this test panics on drop rather
+    /// than merely returning the same error the un-retried version would.
+    #[tokio::test]
+    async fn indexing_progress_retries_a_5xx_before_failing() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/{INDEXING_STATUS_PATH}")))
+            .respond_with(ResponseTemplate::new(503))
+            .expect(2)
+            .mount(&server)
+            .await;
+        let url = Url::parse(&server.uri()).unwrap();
+        let client = InterchainIndexerApiClient::try_new(Some(&url))
+            .unwrap()
+            .unwrap();
+        let err = client.indexing_progress().await.unwrap_err();
+        assert!(matches!(
+            err,
+            InterchainIndexerApiError::UnexpectedStatus(_)
+        ));
+    }
+
+    /// A 4xx is not retried: `.expect(1)` fails the test on drop if a second
+    /// request was made.
+    #[tokio::test]
+    async fn indexing_progress_does_not_retry_a_4xx() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/{INDEXING_STATUS_PATH}")))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(1)
             .mount(&server)
             .await;
         let url = Url::parse(&server.uri()).unwrap();

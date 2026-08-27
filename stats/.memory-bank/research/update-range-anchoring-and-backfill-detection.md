@@ -46,7 +46,11 @@ Intentionally out of scope:
   duplicate;
 - the indexer's internal catch-up algorithm (cursors, range driver, failure
   ledger) beyond what stats would need to read;
-- a chosen implementation. §"Design Options" is analysis, not a decision.
+- restating the decision inline: §"Design Options" below is the original,
+  pre-decision analysis of the options that were evaluated. The outcome of
+  that evaluation (Option A, resolved 2026-08-26) is recorded once, in the
+  Status banner above — the section itself is left as it was written, not
+  rewritten to read as a decision it wasn't at the time.
 
 ## Short Answer
 
@@ -470,7 +474,7 @@ missed one costs silently wrong data. Hash more, select less. A *choice* becomes
 unavoidable only for a boolean `is_fully_synced`, because a conjunction needs a
 set — and there the answer is Level 2's conservative reading.
 
-## Design Options (analysis, not a decision)
+## Design Options (original analysis — see the Status banner above for the resolution)
 
 ### Option A — force a full recompute while the indexer is not fully synced
 

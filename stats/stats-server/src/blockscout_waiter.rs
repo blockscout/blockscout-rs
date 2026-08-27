@@ -285,11 +285,14 @@ impl IndexingStatusAggregator {
         consecutive_errors: &mut u64,
     ) -> Result<(), anyhow::Error> {
         let Some(source) = self.interchain_api.as_ref() else {
-            // defensive only: work item 14's startup `bail!` makes "check
-            // enabled with no configured source" unreachable.
+            // defensive only: `run` only calls this method when
+            // `interchain_checks_live()` is true, which requires
+            // `self.interchain_api.is_some()` in every mode — not just the
+            // `Interchain`-mode startup `bail!`, which does not cover the
+            // other modes' "enabled without a URL" case.
             tracing::error!(
                 "interchain catch-up check is enabled but no InterchainCatchupSource was \
-                 configured; this is a bug, the startup validation should have refused to boot"
+                 configured; this is a bug in `run`'s liveness guard"
             );
             return Ok(());
         };
@@ -345,6 +348,30 @@ impl IndexingStatusAggregator {
         Ok(())
     }
 
+    /// Whether the interchain axis has both a reason to run (the flag) and a
+    /// way to run (the client).
+    ///
+    /// `wait_config.interchain_checks_enabled()` alone is not enough outside
+    /// `Interchain` mode: `validate_interchain_filter`'s startup `bail!` for
+    /// "enabled without a URL" only fires in `Mode::Interchain`; in every other
+    /// mode it merely warns ("is ignored") and still lets the service boot.
+    /// `STATS__CONDITIONAL_START__INTERCHAIN_CATCHUP_MIN_PROGRESS__THRESHOLD`
+    /// alone flips `enabled` (`ToggleableThreshold`'s own `#[serde(default)]`),
+    /// so a stray env var in another mode would otherwise make this axis
+    /// "live" with no source to ever satisfy it, polling nothing every
+    /// `check_period_secs` forever and never reaching `IndexingStatus::MAX`'s
+    /// poll-period back-off.
+    ///
+    /// Belt-and-braces with `server.rs`, which also only builds
+    /// `interchain_api` in `Mode::Interchain` regardless of whether
+    /// `STATS__INTERCHAIN_INDEXER_API_URL` is set — so `interchain_api` is
+    /// already `None` outside that mode by the time this runs. This method is
+    /// what makes that true regardless of how the caller assembled `self`,
+    /// rather than relying on the two staying in sync.
+    fn interchain_checks_live(&self) -> bool {
+        self.wait_config.interchain_checks_enabled() && self.interchain_api.is_some()
+    }
+
     pub async fn run(&self) -> Result<(), anyhow::Error> {
         // Consult every enabled axis, not just blockscout and user ops. A missed
         // axis here leaves it at its seeded value forever and blocks every group
@@ -359,7 +386,7 @@ impl IndexingStatusAggregator {
             && (self.wait_config.blockscout_checks_enabled()
                 || self.wait_config.user_ops_checks_enabled()))
             || self.wait_config.zetachain_checks_enabled()
-            || self.wait_config.interchain_checks_enabled();
+            || self.interchain_checks_live();
         if !any_check_live {
             tracing::info!("All indexing status checks are disabled, stopping status checks");
             return Ok(());
@@ -377,7 +404,7 @@ impl IndexingStatusAggregator {
             if self.wait_config.zetachain_checks_enabled() {
                 self.check_zetachain_status().await;
             }
-            if self.wait_config.interchain_checks_enabled() {
+            if self.interchain_checks_live() {
                 self.check_interchain_status(&mut interchain_consecutive_errors)
                     .await?;
             }
@@ -487,9 +514,15 @@ pub fn init(
     } else {
         ZetachainCctxIndexingStatus::IndexedHistoricalData
     };
-    // no `&& interchain_api.is_some()` clause is needed: work item 14's startup
-    // `bail!` makes "check enabled without a URL" unreachable.
-    let interchain_init_value = if wait_config.interchain_checks_enabled() {
+    // `&& interchain_api.is_some()` IS needed, unlike the blockscout/zetachain
+    // arms above might suggest: `validate_interchain_filter`'s startup `bail!`
+    // for "enabled without a URL" only fires in `Mode::Interchain` — outside
+    // it, the same misconfiguration merely warns and the service still boots.
+    // Treating "enabled with no client" as live would seed this axis
+    // `CatchingUp` with no way to ever move it to `CaughtUp`.
+    let interchain_checks_live =
+        wait_config.interchain_checks_enabled() && interchain_api.is_some();
+    let interchain_init_value = if interchain_checks_live {
         InterchainIndexingStatus::CatchingUp
     } else {
         InterchainIndexingStatus::CaughtUp
@@ -1109,7 +1142,11 @@ mod tests {
 
     #[test]
     fn init_seeds_the_interchain_axis_catching_up_when_the_check_is_enabled() {
-        let (_aggregator, listener) = init(None, interchain_only_wait_config(0.98), None, None);
+        // a real (if never-contacted) client: this test only exercises `init`'s
+        // synchronous seeding, never `run`, so the URL is never dialed
+        let source = interchain_catchup_source("http://127.0.0.1:1");
+        let (_aggregator, listener) =
+            init(None, interchain_only_wait_config(0.98), None, Some(source));
         assert!(
             !listener.receiver.borrow().is_requirement_satisfied(
                 &IndexingStatus::LEAST_RESTRICTIVE
@@ -1117,6 +1154,42 @@ mod tests {
             ),
             "the converse of the disabled case, at t=0"
         );
+    }
+
+    /// FIX 3's regression guard: `interchain_catchup_min_progress.enabled` alone
+    /// is not enough to make the axis live — `validate_interchain_filter`'s
+    /// startup `bail!` for "enabled without a URL" only fires in
+    /// `Mode::Interchain`; every other mode merely warns and boots anyway. A
+    /// deployment with `STATS__MODE` not `interchain`,
+    /// `STATS__CONDITIONAL_START__INTERCHAIN_CATCHUP_MIN_PROGRESS__THRESHOLD`
+    /// set (which alone flips `enabled`) and no interchain indexer URL must
+    /// seed the axis satisfied immediately, exactly like the disabled case —
+    /// not `CatchingUp` with no client that could ever move it.
+    #[test]
+    fn init_seeds_the_interchain_axis_satisfied_when_enabled_with_no_client() {
+        let (_aggregator, listener) = init(None, interchain_only_wait_config(0.98), None, None);
+        assert!(
+            listener.receiver.borrow().is_requirement_satisfied(
+                &IndexingStatus::LEAST_RESTRICTIVE
+                    .with_interchain(InterchainIndexingStatus::CaughtUp)
+            ),
+            "enabled with no client must seed exactly like disabled — there is no way to \
+             ever move this axis to CaughtUp otherwise"
+        );
+    }
+
+    /// The `run`-side half of the same regression guard: with every other
+    /// check disabled and the interchain check "enabled" but clientless, `run`
+    /// must recognise no axis is actually live and return promptly — not poll
+    /// a nonexistent client and log an `error!` every `check_period_secs`
+    /// forever.
+    #[tokio::test]
+    async fn run_stops_when_the_interchain_check_is_enabled_with_no_client() {
+        let (aggregator, _listener) = init(None, interchain_only_wait_config(0.98), None, None);
+        tokio::time::timeout(Duration::from_millis(500), aggregator.run())
+            .await
+            .expect("run must return promptly: no axis is actually live")
+            .expect("run must not error");
     }
 
     /// The regression guard for work item 19b: `init` is now always called,

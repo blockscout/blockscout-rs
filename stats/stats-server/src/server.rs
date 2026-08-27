@@ -89,17 +89,32 @@ pub async fn stats(
     // `UpdateService` need the client and the filter scope for the life of the
     // process, so each gets its own clone rather than the client being built
     // twice or the scope being re-derived from a moved value.
-    let interchain_indexer_api =
-        InterchainIndexerApiClient::try_new(settings.interchain_indexer_api_url.as_ref())
-            .context("interchain indexer API client")?
-            .map(Arc::new);
-    if settings.mode == Mode::Interchain && interchain_indexer_api.is_none() {
-        tracing::info!(
-            "STATS__INTERCHAIN_INDEXER_API_URL is not set: the interchain catch-up check is \
-             disabled. Charts still pick up history that extends backwards, but not gaps \
-             filled inside the already-computed range"
-        );
-    }
+    //
+    // Gated on `Mode::Interchain`, matching `STATS__INTERCHAIN_INDEXER_API_URL`'s
+    // own "ignored outside Interchain mode" documentation: both of its
+    // consumers (the per-cycle catch-up verdict in `update_service.rs`, and the
+    // interchain `IndexingStatus` axis in `blockscout_waiter.rs`) are
+    // themselves meaningless outside interchain mode, so building the client
+    // there would do nothing except let a stray env var in another mode look
+    // like it does something. This is belt-and-braces alongside
+    // `IndexingStatusAggregator::interchain_checks_live`'s own
+    // `interchain_api.is_some()` guard, not a replacement for it.
+    let interchain_indexer_api = if settings.mode == Mode::Interchain {
+        let client =
+            InterchainIndexerApiClient::try_new(settings.interchain_indexer_api_url.as_ref())
+                .context("interchain indexer API client")?
+                .map(Arc::new);
+        if client.is_none() {
+            tracing::info!(
+                "STATS__INTERCHAIN_INDEXER_API_URL is not set: the interchain catch-up check is \
+                 disabled. Charts still pick up history that extends backwards, but not gaps \
+                 filled inside the already-computed range"
+            );
+        }
+        client
+    } else {
+        None
+    };
     let interchain_catchup_source =
         interchain_indexer_api
             .clone()

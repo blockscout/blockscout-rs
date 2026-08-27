@@ -26,12 +26,12 @@ use parameters::{
         point::PassPoint,
     },
 };
-use sea_orm::{DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbBackend, DbErr, Statement};
 
 use crate::{
     ChartError, ChartKey, IndexingStatus, Mode,
     charts::{
-        ChartProperties, Named, chart_properties_portrait,
+        ChartProperties, Named, ResolutionKind, chart_properties_portrait,
         db_interaction::{
             read::{
                 get_chart_metadata, get_min_block_blockscout, get_min_date,
@@ -263,22 +263,78 @@ where
         // - `ChartType::Line` — counters store one point stamped at the
         //   *current* timespan, so their floor is always today and an ungated
         //   check would fire on every counter, every cycle, forever.
-        let backfill_rebuild = if !cx.force_full
+        let interchain_line_gate = !cx.force_full
             && cx.mode == Mode::Interchain
-            && ChartProps::chart_type() == ChartType::Line
-        {
+            && ChartProps::chart_type() == ChartType::Line;
+        let own_floor_regressed = if interchain_line_gate {
             interchain_history_floor_regressed::<ChartProps>(cx, chart_id).await?
         } else {
             None
         };
-        if let Some((stored_floor, indexer_floor)) = &backfill_rebuild {
-            tracing::info!(
-                chart =% ChartProps::key(),
-                stored_floor =? stored_floor,
-                indexer_floor =? indexer_floor,
-                "interchain history floor regressed; recomputing the series from the \
-                 indexer's current filtered floor (backfill pickup, no clear)"
-            );
+        // Propagation fix: both sides of `interchain_history_floor_regressed`'s
+        // comparison go through `ChartProps::Resolution::from_date`, and for a
+        // resolution chart a stored `date` already **is** the bucket's first day
+        // (`Week::into_date() == saturating_first_day()`, similarly for
+        // month/year). So once this chart's own comparison has fired once and
+        // normalised the stored floor to the bucket boundary, any further floor
+        // movement that stays inside that same bucket is invisible to it —
+        // forever, not just for one cycle. The **daily** chart's own comparison
+        // has no such blind spot (`Day::from_date` is the identity), so it is
+        // used as the family's reliable detector: when it fires, every lower
+        // resolution in the same family is forced to rebuild too, via a marker
+        // left in `cx.cache` under the chart *name* (shared across resolutions,
+        // unlike `ChartKey`).
+        //
+        // Reading a marker written by a *different* chart's `update_itself_inner`
+        // call within this same cycle is safe only because dependants are
+        // guaranteed to run after their dependencies: every lower-resolution
+        // interchain chart takes the daily local-db chart as its main dependency
+        // (`SumLowerResolution<MapParseTo<StripExt<…>>, …>`), and
+        // `enabled_members_with_deps`/`update_recursively` always update a
+        // chart's `MainDependencies` before the chart itself. So by the time a
+        // weekly/monthly/yearly chart's `update_itself_inner` runs in a given
+        // cycle, the daily chart in its family has already run in the same
+        // cycle and already written (or not written) the marker for this
+        // decision to read.
+        let daily_sibling_marker = interchain_backfill_marker_statement::<ChartProps>();
+        let daily_sibling_rebuilt = interchain_line_gate
+            && ChartProps::resolution() != ResolutionKind::Day
+            && cx
+                .cache
+                .get::<String>(&daily_sibling_marker)
+                .await
+                .is_some();
+        let backfill_rebuild = own_floor_regressed.is_some() || daily_sibling_rebuilt;
+        match &own_floor_regressed {
+            Some((stored_floor, indexer_floor)) => {
+                tracing::info!(
+                    chart =% ChartProps::key(),
+                    stored_floor =? stored_floor,
+                    indexer_floor =? indexer_floor,
+                    "interchain history floor regressed; recomputing the series from the \
+                     indexer's current filtered floor (backfill pickup, no clear)"
+                );
+            }
+            None if daily_sibling_rebuilt => {
+                tracing::info!(
+                    chart =% ChartProps::key(),
+                    "the daily chart in this interchain family rebuilt from a floor \
+                     regression this cycle; propagating the rebuild to this lower \
+                     resolution, whose own bucket-level floor comparison cannot see an \
+                     intra-bucket movement"
+                );
+            }
+            None => {}
+        }
+        // Only the daily chart writes the marker — it is the only reliable
+        // detector, and lower resolutions must not re-propagate a marker of
+        // their own (there is nothing below them to propagate to, and doing so
+        // would just be a no-op keyed the same way).
+        if interchain_line_gate
+            && ChartProps::resolution() == ResolutionKind::Day
+            && backfill_rebuild
+        {
+            cx.cache.insert(&daily_sibling_marker, "1".to_owned()).await;
         }
         // NOTE: only the `force_full` *argument* below is affected — `cx` itself
         // (shared by every chart in the group) is never mutated. `cx.force_full`
@@ -293,7 +349,7 @@ where
             min_indexer_block,
             recorded,
             cx.stats_db,
-            cx.force_full || backfill_rebuild.is_some(),
+            cx.force_full || backfill_rebuild,
             ChartProps::approximate_trailing_points(),
             ChartProps::missing_date_policy(),
         )
@@ -365,6 +421,24 @@ where
     } else {
         Ok(None)
     }
+}
+
+/// The `cx.cache` key used to propagate "the daily chart in this family fired
+/// trigger 2 this cycle" to its weekly/monthly/yearly siblings.
+///
+/// Keyed by `ChartProps::name()`, not `ChartProps::key()`: the name is exactly
+/// what every resolution of one chart family shares, and `UpdateCache` is keyed
+/// by an arbitrary `Statement`, so a synthetic one (never executed) is used
+/// purely as a namespaced string key. `db_backend` is irrelevant here — chosen
+/// once (`Postgres`) for a stable, unexecuted key.
+fn interchain_backfill_marker_statement<ChartProps>() -> Statement
+where
+    ChartProps: ChartProperties + ?Sized,
+{
+    Statement::from_string(
+        DbBackend::Postgres,
+        format!("interchain_backfill_marker::{}", ChartProps::name()),
+    )
 }
 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> DataSource
