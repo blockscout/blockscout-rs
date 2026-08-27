@@ -614,3 +614,48 @@ rendered `true` by hand-editing the default column; `generate-envs` would
 recompute the same value and `check-envs` would flag the hand-edit as drift on
 the next run. If this ever needs correcting, it belongs in
 `env-collector::default_of_var`, scoped and tested against `blocks_ratio` too.
+
+---
+
+## A Lower-Resolution Interchain Line Chart Cannot Detect Backfill By Itself
+
+**Symptom:** an interchain weekly/monthly/yearly series is short by up to one
+bucket's worth of history and disagrees with its own daily series, while every
+chart reports itself freshly updated. Nothing logs an error.
+
+**Root cause:** backfill detection compares the chart's stored floor against the
+indexer's current filtered floor, and for a resolution chart the stored `date`
+**is** the bucket's first day (`Week::into_date() == saturating_first_day()`, same
+for month/year). So the moment the comparison fires once, it normalises the stored
+floor to the bucket boundary, and every later floor movement that stays inside
+that bucket compares equal — permanently, not for one cycle. Only the **daily**
+chart's comparison is exact, because `Day::from_date` is the identity.
+
+**How it is actually made to work:** the daily chart is the family's detector.
+When its own comparison fires, `update_itself_inner` leaves a marker in
+`UpdateContext::cache` keyed by `ChartProps::name()` — the name, not the
+`ChartKey`, because the name is what every resolution of one family shares — and
+each lower resolution rebuilds when it sees that marker.
+
+**What this depends on, and can silently break:**
+
+1. **Dependency-update ordering.** A lower resolution reads a marker written by a
+   *different* chart's update in the same cycle. That is only sound because
+   `update_recursively` updates a chart's `MainDependencies` first, and every
+   lower-resolution interchain chart takes the daily local-db chart as its main
+   dependency (`SumLowerResolution<MapParseTo<StripExt<…>>, …>`). Change either
+   and the marker is read before it is written — with no compile error and no
+   test failure unless a test stages a backfill *within* one bucket.
+2. **The cache's lifetime.** `UpdateCache` is constructed fresh per group update,
+   so the marker cannot leak between cycles. It is also the reason the marker is
+   not a substitute for the stored-floor check across restarts.
+3. **A new lower-resolution chart with no daily sibling** would inherit the blind
+   spot and nothing would propagate to it.
+
+**When writing a test for this:** a backfill that crosses the bucket boundary
+passes against the broken code too, because the chart's own comparison fires. The
+test has to stage a movement that stays *inside* the bucket after an earlier fire
+already normalised the stored date — see
+`messages_growth_sent_interchain_picks_up_backwards_backfill_at_lower_resolutions`,
+whose stages are chosen so each resolution has one stage its own comparison cannot
+see.
