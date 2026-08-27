@@ -13,10 +13,14 @@ anyhow = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 bytes = { workspace = true }
 readonly = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
+solidity-metadata = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
+vyper-cbor-auxdata = { workspace = true }
 
 [dev-dependencies]
 hex = { workspace = true }

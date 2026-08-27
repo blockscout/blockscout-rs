@@ -24,6 +24,29 @@ impl Auxdata {
 
         Ok((result, context.used_size))
     }
+
+    pub fn integrity_hash(&self) -> &[u8; EXPECTED_INTEGRITY_HASH_SIZE] {
+        &self.integrity_hash
+    }
+
+    pub fn runtime_code_length(&self) -> u64 {
+        self.runtime_code_length
+    }
+
+    pub fn data_section_lengths(&self) -> &[u64] {
+        &self.data_section_lengths
+    }
+
+    /// The number of bytes the constructor appends to the runtime code when
+    /// initializing immutable values. On-chain runtime code of a contract with
+    /// immutables is that much longer than the compiled runtime code.
+    pub fn immutables_length(&self) -> u64 {
+        self.immutables_length
+    }
+
+    pub fn version(&self) -> &Version {
+        &self.version
+    }
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq, Hash)]
