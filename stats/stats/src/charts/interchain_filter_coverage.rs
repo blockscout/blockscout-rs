@@ -257,7 +257,12 @@ fn registry_covers_every_configured_interchain_chart() {
 /// loads the config, rather than re-implementing it: a hand-rolled version and
 /// the production one disagreeing (on digits, for instance) would make this guard
 /// check ids that no deployment ever produces.
-fn snake_to_camel(key: &str) -> String {
+///
+/// `pub(super)` rather than private: `interchain_indexing_status_coverage`'s
+/// layer 2 (`crate::charts::interchain_indexing_status_coverage`, a sibling
+/// module under `crate::charts`) needs the exact same conversion for the exact
+/// same reason, and re-deriving it there would risk the two disagreeing.
+pub(super) fn snake_to_camel(key: &str) -> String {
     use convert_case::{Case, Casing};
     key.from_case(Case::Snake).to_case(Case::Camel)
 }

@@ -27,6 +27,9 @@ impl ChartProperties for Properties {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::LEAST_RESTRICTIVE.with_interchain(InterchainIndexingStatus::CaughtUp)
+    }
 }
 
 define_and_impl_resolution_properties!(
@@ -62,16 +65,23 @@ pub type MessagesGrowthSentInterchainYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use chrono::TimeDelta;
+    use entity::chart_data;
     use pretty_assertions::assert_eq;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set};
 
     use super::*;
     use crate::{
-        charts::db_interaction::filters::interchain::InterchainFilter,
+        charts::db_interaction::{filters::interchain::InterchainFilter, read::find_chart},
         tests::{
-            mock_interchain::test_interchain_home_chain_filter,
+            mock_interchain::{
+                fill_mock_interchain_messages_in_range, fill_mock_interchain_reference_data,
+                test_interchain_home_chain_filter,
+            },
+            point_construction::d,
             simple_test::{
                 map_str_tuple_to_owned, prepare_interchain_chart_test,
-                simple_test_chart_interchain, update_and_query_interchain_chart,
+                prepare_interchain_chart_test_unfilled, simple_test_chart_interchain,
+                update_and_query_interchain_chart, update_and_query_interchain_chart_with_force,
             },
         },
     };
@@ -227,6 +237,133 @@ mod tests {
         )
         .await;
         assert_eq!(widened, wide_expected);
+    }
+
+    /// The test that would have caught the original bug. The cumulative family
+    /// is the right subject: a missing prefix offsets every later point, so any
+    /// mistake in trigger 2 shows up in the whole tail, not just the backfilled
+    /// dates.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn messages_growth_sent_interchain_picks_up_backwards_backfill() {
+        let cutoff = d("2023-01-01");
+
+        // The reference: a from-scratch, force_full run over the complete
+        // fixture, on an independent DB pair.
+        let (ref_time, ref_db, ref_indexer) = prepare_interchain_chart_test::<
+            MessagesGrowthSentInterchain,
+        >("messages_growth_sent_backfill_reference")
+        .await;
+        let reference =
+            update_and_query_interchain_chart_with_force::<MessagesGrowthSentInterchain>(
+                &ref_db,
+                &ref_indexer,
+                InterchainFilter::default(),
+                ref_time,
+                true,
+            )
+            .await;
+
+        // The main pair: only the tail of the fixture at first.
+        let (t1, db, indexer) = prepare_interchain_chart_test_unfilled::<
+            MessagesGrowthSentInterchain,
+        >("messages_growth_sent_backfill_main")
+        .await;
+        fill_mock_interchain_reference_data(&indexer).await;
+        fill_mock_interchain_messages_in_range(&indexer, cutoff..).await;
+        let tail_only = update_and_query_interchain_chart::<MessagesGrowthSentInterchain>(
+            &db,
+            &indexer,
+            InterchainFilter::default(),
+            t1,
+        )
+        .await;
+        // sanity: the tail-only run must actually differ from the full fixture,
+        // otherwise the test below would pass regardless of trigger 2
+        assert_ne!(tail_only, reference);
+
+        // The indexer backfills everything before the cutoff.
+        fill_mock_interchain_messages_in_range(&indexer, ..cutoff).await;
+        let t2 = t1 + TimeDelta::seconds(1);
+        let backfilled = update_and_query_interchain_chart::<MessagesGrowthSentInterchain>(
+            &db,
+            &indexer,
+            InterchainFilter::default(),
+            t2,
+        )
+        .await;
+
+        assert_eq!(backfilled, reference);
+    }
+
+    /// The "must not clear" requirement, asserted positively: a sentinel row on
+    /// a genuine hole date (one the recompute writes nothing for) must survive
+    /// a backfill-triggered rebuild. Had the trigger gone through
+    /// `clear_chart_data_and_updated_at` instead of a from-the-floor recompute,
+    /// the sentinel would be gone.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn interchain_backfill_rebuild_does_not_clear_stored_rows() {
+        let cutoff = d("2023-01-01");
+        // a documented hole in the fixture (see `mock_interchain`'s
+        // `routed("2023-01-04T10:00:00", 11, ...)` comment: "hole 3rd") that
+        // falls inside the eventual full range, so the phase-2 recompute passes
+        // over it but writes nothing for it
+        let hole_date = d("2023-01-03");
+
+        let (t1, db, indexer) = prepare_interchain_chart_test_unfilled::<
+            MessagesGrowthSentInterchain,
+        >("interchain_backfill_no_clear")
+        .await;
+        fill_mock_interchain_reference_data(&indexer).await;
+        fill_mock_interchain_messages_in_range(&indexer, cutoff..).await;
+        update_and_query_interchain_chart::<MessagesGrowthSentInterchain>(
+            &db,
+            &indexer,
+            InterchainFilter::default(),
+            t1,
+        )
+        .await;
+
+        let chart_id = find_chart(&db, &Properties::key())
+            .await
+            .unwrap()
+            .expect("chart must exist after the first update");
+        let sentinel = chart_data::ActiveModel {
+            chart_id: Set(chart_id),
+            date: Set(hole_date),
+            value: Set("999999".to_owned()),
+            min_blockscout_block: Set(Some(InterchainFilter::default().fingerprint)),
+            ..Default::default()
+        };
+        chart_data::Entity::insert(sentinel)
+            .exec(&*db)
+            .await
+            .unwrap();
+
+        // the indexer backfills everything before the cutoff, triggering trigger
+        // 2's from-the-floor recompute
+        fill_mock_interchain_messages_in_range(&indexer, ..cutoff).await;
+        let t2 = t1 + TimeDelta::seconds(1);
+        update_and_query_interchain_chart::<MessagesGrowthSentInterchain>(
+            &db,
+            &indexer,
+            InterchainFilter::default(),
+            t2,
+        )
+        .await;
+
+        let sentinel_row = chart_data::Entity::find()
+            .filter(chart_data::Column::ChartId.eq(chart_id))
+            .filter(chart_data::Column::Date.eq(hole_date))
+            .one(&*db)
+            .await
+            .unwrap();
+        assert_eq!(
+            sentinel_row.map(|row| row.value),
+            Some("999999".to_owned()),
+            "the sentinel on the hole date must survive a backfill-triggered rebuild"
+        );
     }
 
     #[tokio::test]

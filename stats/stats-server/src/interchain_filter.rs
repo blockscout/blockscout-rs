@@ -134,6 +134,22 @@ pub async fn validate_interchain_filter(
                 settings.mode
             );
         }
+        // Not a `bail!`: `first_set_field` answers "was it set?" for `Option`
+        // fields, and a `ToggleableThreshold`'s default is a *present* value, so
+        // the question is not answerable the same way. A stray env var in
+        // another mode must not take a deployment down.
+        if settings
+            .conditional_start
+            .interchain_catchup_min_progress
+            .enabled
+        {
+            tracing::warn!(
+                mode =? settings.mode,
+                "STATS__CONDITIONAL_START__INTERCHAIN_CATCHUP_MIN_PROGRESS is enabled, but \
+                 STATS__MODE is not `interchain`; the interchain catch-up start check is \
+                 ignored"
+            );
+        }
         // nothing else here is meaningful outside interchain mode, and
         // `interchain_primary_id` in another mode is pre-existing (ignored) behaviour
         return build_interchain_filter_config(settings);
@@ -157,6 +173,32 @@ pub async fn validate_interchain_filter(
              STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID={deprecated}. Please migrate."
         ),
         (None, _) => {}
+    }
+
+    // The check has a hard dependency on a source the mode does not otherwise
+    // need. `check_zetachain_status` shows what happens if you tolerate a
+    // missing source: it warns, returns, and leaves its axis at `CatchingUp`
+    // forever, blocking every dependent group (.memory-bank/gotchas.md:546-555).
+    // Refusing to boot is the only outcome an operator cannot mistake for
+    // "the check passed".
+    if settings
+        .conditional_start
+        .interchain_catchup_min_progress
+        .enabled
+        && settings.interchain_indexer_api_url.is_none()
+    {
+        bail!(
+            "STATS__CONDITIONAL_START__INTERCHAIN_CATCHUP_MIN_PROGRESS is enabled \
+             (threshold {}), but STATS__INTERCHAIN_INDEXER_API_URL is not set, so the \
+             interchain catch-up progress can never be read and no chart would ever \
+             start updating. Either set STATS__INTERCHAIN_INDEXER_API_URL, or set \
+             STATS__CONDITIONAL_START__INTERCHAIN_CATCHUP_MIN_PROGRESS__ENABLED=false. \
+             Note that setting only …__THRESHOLD also enables the check.",
+            settings
+                .conditional_start
+                .interchain_catchup_min_progress
+                .threshold
+        );
     }
 
     // hard error 3 lives inside the conversion
@@ -508,5 +550,56 @@ mod tests {
             permissive.with_horizon(None).fingerprint,
             "flipping include_unindexed_chains must change the fingerprint"
         );
+    }
+
+    fn settings_with_catchup_gate(
+        mode: Mode,
+        interchain_indexer_api_url: Option<url::Url>,
+    ) -> Settings {
+        Settings {
+            mode,
+            conditional_start: crate::settings::StartConditionSettings {
+                interchain_catchup_min_progress: crate::settings::ToggleableThreshold::enabled(
+                    0.98,
+                ),
+                ..Default::default()
+            },
+            interchain_indexer_api_url,
+            ..Settings::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn interchain_catchup_check_without_an_api_url_is_a_startup_error() {
+        let settings = settings_with_catchup_gate(Mode::Interchain, None);
+        let err = validate_interchain_filter(&settings, &empty_setup())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("STATS__INTERCHAIN_INDEXER_API_URL")
+                && err
+                    .contains("STATS__CONDITIONAL_START__INTERCHAIN_CATCHUP_MIN_PROGRESS__ENABLED"),
+            "the error must name both fixes: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn interchain_catchup_check_with_an_api_url_validates() {
+        let settings = settings_with_catchup_gate(
+            Mode::Interchain,
+            Some(url::Url::parse("http://localhost:8080").unwrap()),
+        );
+        validate_interchain_filter(&settings, &empty_setup())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn interchain_catchup_check_outside_interchain_mode_only_warns() {
+        let settings = settings_with_catchup_gate(Mode::Blockscout, None);
+        validate_interchain_filter(&settings, &empty_setup())
+            .await
+            .unwrap();
     }
 }

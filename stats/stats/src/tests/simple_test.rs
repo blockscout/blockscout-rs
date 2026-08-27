@@ -719,6 +719,24 @@ pub async fn prepare_interchain_chart_test<C: DataSource + ChartProperties>(
     (init_time, db, indexer)
 }
 
+/// Interchain scaffolding with an **empty** indexer DB: the caller fills it,
+/// possibly in stages, via `mock_interchain`'s range-scoped helpers. Use when a
+/// test needs to compute against a truncated fixture and then extend it.
+///
+/// Returns `(init_time, stats_db, indexer_db)`.
+pub async fn prepare_interchain_chart_test_unfilled<C: DataSource + ChartProperties>(
+    test_name: &str,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    let init_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let (init_time, db, indexer, zetachain_cctx) =
+        prepare_chart_test_inner::<C>(test_name, init_time, Mode::Interchain).await;
+    assert!(
+        zetachain_cctx.is_none(),
+        "zetachain cctx db was initialized needlessly"
+    );
+    (init_time, db, indexer)
+}
+
 /// Parameters for one interchain update of `C` under `interchain_filter`.
 ///
 /// `update_time` must strictly advance between updates on the same databases:
@@ -730,6 +748,7 @@ fn interchain_update_parameters<'a, C: DataSource>(
     indexer_db: &'a DatabaseConnection,
     interchain_filter: InterchainFilter,
     update_time: DateTime<Utc>,
+    force_full: bool,
 ) -> UpdateParameters<'a> {
     UpdateParameters {
         stats_db,
@@ -741,8 +760,7 @@ fn interchain_update_parameters<'a, C: DataSource>(
         second_indexer_db: None,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(update_time),
-        // the point of these helpers is what happens *without* a forced rebuild
-        force_full: false,
+        force_full,
     }
 }
 
@@ -758,11 +776,36 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
+    update_and_query_interchain_chart_with_force::<C>(
+        stats_db,
+        indexer_db,
+        interchain_filter,
+        update_time,
+        false,
+    )
+    .await
+}
+
+/// As [`update_and_query_interchain_chart`], with `force_full` under the
+/// caller's control — for comparing an incremental outcome against a
+/// from-scratch rebuild.
+pub async fn update_and_query_interchain_chart_with_force<C>(
+    stats_db: &DatabaseConnection,
+    indexer_db: &DatabaseConnection,
+    interchain_filter: InterchainFilter,
+    update_time: DateTime<Utc>,
+    force_full: bool,
+) -> Vec<(String, String)>
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
     let cx = UpdateContext::from_params_now_or_override(interchain_update_parameters::<C>(
         stats_db,
         indexer_db,
         interchain_filter,
         update_time,
+        force_full,
     ));
     C::update_recursively(&cx).await.unwrap();
     chart_output_to_expected(
@@ -788,6 +831,7 @@ where
         indexer_db,
         interchain_filter,
         update_time,
+        false,
     ));
     C::update_recursively(&cx).await.unwrap();
     get_counter::<C>(&cx).await.value

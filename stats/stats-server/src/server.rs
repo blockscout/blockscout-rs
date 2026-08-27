@@ -4,10 +4,13 @@ use std::{collections::HashMap, future::Future, path::PathBuf, sync::Arc, time::
 
 use crate::{
     auth::{ApiKey, AuthorizationProvider},
-    blockscout_waiter::{self, IndexingStatusListener, init_blockscout_api_client},
+    blockscout_waiter::{
+        self, IndexingStatusListener, InterchainCatchupSource, init_blockscout_api_client,
+    },
     config::{self, read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
     interchain_filter::validate_interchain_filter,
+    interchain_indexer_api::InterchainIndexerApiClient,
     linked_stats::LinkedStatsClient,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
@@ -81,13 +84,37 @@ pub async fn stats(
         metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
     }
 
+    // Built here, before `init_waiter` (L below) and before `interchain_filter`
+    // is moved into `UpdateServiceConfig`: both the aggregator and
+    // `UpdateService` need the client and the filter scope for the life of the
+    // process, so each gets its own clone rather than the client being built
+    // twice or the scope being re-derived from a moved value.
+    let interchain_indexer_api =
+        InterchainIndexerApiClient::try_new(settings.interchain_indexer_api_url.as_ref())
+            .context("interchain indexer API client")?
+            .map(Arc::new);
+    if settings.mode == Mode::Interchain && interchain_indexer_api.is_none() {
+        tracing::info!(
+            "STATS__INTERCHAIN_INDEXER_API_URL is not set: the interchain catch-up check is \
+             disabled. Charts still pick up history that extends backwards, but not gaps \
+             filled inside the already-computed range"
+        );
+    }
+    let interchain_catchup_source =
+        interchain_indexer_api
+            .clone()
+            .map(|client| InterchainCatchupSource {
+                client,
+                relevant_bridges: interchain_filter.bridge_ids().map(|ids| ids.to_vec()),
+                relevant_chains: interchain_filter.relevant_chain_ids(),
+            });
+
     let shutdown = shutdown.unwrap_or_default();
     let mut futures = JoinSet::new();
 
-    let (status_waiter_task, status_listener) = init_waiter(&settings, cctx_indexer.clone())?;
-    if let Some(status_waiter_task) = status_waiter_task {
-        spawn_and_track(&mut futures, &shutdown.task_tracker, status_waiter_task);
-    }
+    let (status_waiter_task, status_listener) =
+        init_waiter(&settings, cctx_indexer.clone(), interchain_catchup_source)?;
+    spawn_and_track(&mut futures, &shutdown.task_tracker, status_waiter_task);
 
     let update_service = Arc::new(
         UpdateService::new(UpdateServiceConfig {
@@ -95,10 +122,11 @@ pub async fn stats(
             indexer_db: indexer.clone(),
             second_indexer_db: cctx_indexer.clone(),
             charts: charts.clone(),
-            status_listener,
+            status_listener: Some(status_listener),
             mode: settings.mode,
             multichain_filter: settings.multichain_filter,
             interchain_filter,
+            interchain_indexer_api,
         })
         .await?,
     );
@@ -325,23 +353,25 @@ async fn create_charts_if_needed(
 fn init_waiter(
     settings: &Settings,
     cctx_db: Option<Arc<DatabaseConnection>>,
+    interchain_api: Option<InterchainCatchupSource>,
 ) -> anyhow::Result<(
-    Option<impl Future<Output = anyhow::Result<()>> + use<>>,
-    Option<IndexingStatusListener>,
+    impl Future<Output = anyhow::Result<()>> + use<>,
+    IndexingStatusListener,
 )> {
     let blockscout_api_config = init_blockscout_api_client(settings)?;
-    let (status_waiter, status_listener) = blockscout_api_config
-        .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone(), cctx_db))
-        .unzip();
-    let status_task = status_waiter.map(|w| {
-        async move {
-            w.run().await?;
-            // we don't want to finish on success because of the way
-            // the tasks are handled here
-            sleep_indefinitely().await;
-            anyhow::Result::<()>::Ok(())
-        }
-    });
+    let (status_waiter, status_listener) = blockscout_waiter::init(
+        blockscout_api_config,
+        settings.conditional_start.clone(),
+        cctx_db,
+        interchain_api,
+    );
+    let status_task = async move {
+        status_waiter.run().await?;
+        // we don't want to finish on success because of the way
+        // the tasks are handled here
+        sleep_indefinitely().await;
+        anyhow::Result::<()>::Ok(())
+    };
     Ok((status_task, status_listener))
 }
 

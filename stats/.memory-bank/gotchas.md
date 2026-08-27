@@ -446,3 +446,171 @@ DB?" was raised in the research note's §3.3 and **answered — all of them
 follow it** (§11, question 2; a coverage test asserts it). So the descriptions
 are plainly stale rather than debatable, and leaving them stale is a deliberate
 UI-stability call. Changing them is a product decision, not a cleanup.
+
+---
+
+## A Transfer's Token Chains Are Not Its Message's Route
+
+**Symptom:** you reason about interchain transfer charts using the parent
+message's `src_chain_id` / `dst_chain_id` — for a filter, a scoping decision, or
+a hand-written cross-check — and the numbers quietly disagree with what the
+service produces.
+
+**Root cause:** `crosschain_transfers` carries its **own**
+`token_src_chain_id` / `token_dst_chain_id`, and they need not equal the parent
+`crosschain_messages` row's `src_chain_id` / `dst_chain_id`. The indexer has
+separate columns because the asset's canonical chains can differ from the
+message's route (wrapped assets, reconstructed AMB transfers). The shared
+`ChainBridgeFilter` mirrors that split deliberately, for parity with the
+indexer's read API: `messages_condition` filters on the message's columns,
+`transfers_condition` on the transfer's own. The composite join in
+`InterchainFilter::transfers_joined_query` exists **only** to reach
+`crosschain_messages.init_timestamp` (transfers have no timestamp of their own)
+and the `src_tx_hash` / `dst_tx_hash` flags — never to move the predicate onto
+the message.
+
+The clearest consequence already in the code: `get_min_date_interchain` takes the
+`min` of two *separately* filtered floors rather than one, precisely because a
+transfer can satisfy `transfers_condition()` while its own message fails
+`messages_condition()`. Using the message floor alone would silently truncate the
+transfer charts' history.
+
+**Standing assumption — the one place this is knowingly glossed over.** The
+interchain catch-up scoping (see
+`.memory-bank/research/update-range-anchoring-and-backfill-detection.md`) narrows
+the relevant `(bridge_id, chain_id)` pairs by projecting the filter's chain
+dimensions onto the **message** route. That is exact for the 4 message chart
+families and an **assumption** for the 3 transfer families: it takes a transfer's
+token chains to lie inside its message's route-implied slice. Accepted
+deliberately, on the understanding that it may stop holding as new bridge types
+land.
+
+**How to check whether it still holds** (expect `0`):
+
+```sql
+SELECT count(*) FROM crosschain_transfers t
+JOIN crosschain_messages m
+  ON t.message_id = m.id AND t.bridge_id = m.bridge_id
+WHERE t.token_src_chain_id NOT IN (m.src_chain_id, m.dst_chain_id)
+   OR t.token_dst_chain_id NOT IN (m.src_chain_id, m.dst_chain_id);
+```
+
+**If it stops holding:** scope the 3 transfer families' relevant pairs at
+**bridge** level instead of chain level. Bridge narrowing needs no assumption — a
+row's `bridge_id` is always its creating pair's bridge — so it is exact at the
+cost of being coarser (a catching-up chain on an admitted bridge then holds the
+verdict even when its rows cannot enter the slice).
+
+---
+
+## Interchain *Line* Charts Inherit A Blockscout Indexing Requirement, But It Is Neutralised By Seeding
+
+**Symptom:** `/api/v1/update-status` fields are **not** interchangeable in
+`Mode::Interchain`, contrary to the natural assumption that "interchain has no
+indexing axis, so every subset covers every chart". `independent_status` and
+`zetachain_cctx_dependent_status` cover only the 7 counters; the 32 line charts
+land in the blocks-dependent subsets. The fields can therefore differ
+transiently.
+
+**Root cause:** The 7 interchain counters each override
+`ChartProperties::indexing_status_requirement()` to
+`IndexingStatus::LEAST_RESTRICTIVE`. **No** interchain line chart overrides it, so
+all 8 families × 4 resolutions inherit the default from
+`stats/src/charts/chart.rs:199` — `blockscout: BlockscoutIndexingStatus::BlocksIndexed`,
+whose comment reads "most of the charts need indexed blocks". Interchain charts
+read `crosschain_messages` / `crosschain_transfers` and have no relationship to
+Blockscout blocks at all, so the inherited requirement is meaningless here — it
+just is not harmful.
+
+**Why it is not harmful — the part that is easy to get backwards.** It would be
+tempting to conclude that wiring an `IndexingStatusAggregator` into interchain
+mode would make those 32 charts block forever on a Blockscout status that never
+arrives. **It would not.** `blockscout_waiter::init` seeds the axis by what is
+*enabled*, not by what has been observed:
+
+```rust
+match (blocks_ratio.enabled, internal_transactions_ratio.enabled) {
+    (true, _)      => BlockscoutIndexingStatus::NoneIndexed,
+    (false, true)  => BlockscoutIndexingStatus::BlocksIndexed,
+    (false, false) => BlockscoutIndexingStatus::InternalTransactionsIndexed,
+}
+```
+
+`apply_interchain_mode_settings` disables both, so the axis seeds at
+`InternalTransactionsIndexed`, which is `BlockscoutIndexingStatus::MAX`. And
+`is_requirement_satisfied` is `self >= requirement` over an ordered enum
+(`NoneIndexed < BlocksIndexed < InternalTransactionsIndexed`), so `BlocksIndexed`
+is satisfied on the first poll. `init`'s own comment states the intent: *"enable
+immediately if the checks are disabled."*
+
+**The real trap is the opposite one — an axis enabled with no source.**
+`check_zetachain_status` warns and returns when `zetachain_cctx_db` is `None`,
+leaving the axis at its `CatchingUp` seed forever, so every dependent group blocks
+indefinitely. `IndexingStatusAggregator::run` has a second instance of the same
+shape: it early-returns on
+`!blockscout_checks_enabled() && !user_ops_checks_enabled()` without consulting
+`zetachain_checks_enabled()`. Any *new* axis must therefore either fail at startup
+when enabled without its source — the way `init_blockscout_api_client`'s
+`(false, None)` arm `bail!`s — or disable itself with a warning. Never seed
+"not ready" and hope the source appears.
+
+**Fix:** If interchain line charts ever need to participate in a wait, give them
+an explicit `indexing_status_requirement()` override rather than relying on the
+default; the inherited value is accidental, not intentional. Do not relax the
+default in `chart.rs` — it is correct for the Blockscout-mode majority.
+
+**Resolved.** The interchain historical-backfill work
+(`.memory-bank/research/update-range-anchoring-and-backfill-detection.md`) added
+a 4th `IndexingStatus` axis (`interchain: InterchainIndexingStatus`) and gave all
+15 interchain chart families — the 7 counters and, now, all 8 line families —
+an explicit `indexing_status_requirement()` declaring it. The "no line chart
+overrides it" half of this entry's symptom no longer applies; the seeding
+mechanics above (seed-satisfied-when-disabled, fail-at-startup-when-enabled-
+without-a-source) are exactly what the new axis follows, and are why they are
+kept here rather than duplicated.
+
+---
+
+## `env-collector`'s Per-Field Default Column Can Disagree With The Real Default
+
+**Symptom:** `just generate-envs`/`just check-envs` render a settings field's
+"Default value" column as something that does not match what
+`Settings::default()` (or the containing struct's own hand-written `Default`)
+actually produces for that field — and a test asserting the real default (e.g.
+`StartConditionSettings::default()`) passes anyway, so the code is correct and
+only the generated table is wrong.
+
+**Root cause:** `env-collector`'s `default_of_var` (`libs/env-collector/src/lib.rs`)
+computes "what does field X default to" by serializing the whole settings
+struct to JSON, **removing only X's own leaf key**, and re-deserializing —
+relying on serde's `#[serde(default)]` to refill the missing leaf. That works
+when the refill source is the *outer* struct's own `Default` impl, but when the
+leaf's immediate parent type carries its **own** `#[serde(default)]` (e.g.
+`ToggleableThreshold`, whose `Default` is `Self::enabled(0.98)` — `enabled:
+true`), removing just the leaf triggers *that* type's container-level default
+for the leaf, not the outer struct's override of the whole sub-object. A
+`StartConditionSettings` field written out as
+`ToggleableThreshold::disabled().set_threshold(0.98)` (`enabled: false`) then
+gets its `…__ENABLED` row rendered as `true` — `ToggleableThreshold::default()`'s
+own `enabled`, not the actual field value.
+
+**This is not new to this task** — `STATS__CONDITIONAL_START__BLOCKS_RATIO__ENABLED`
+has always rendered `true` in `README.md`, and that happens to be correct only
+because `blocks_ratio`'s real default equals `ToggleableThreshold::default()`
+unmodified. The interchain catch-up gate
+(`STATS__CONDITIONAL_START__INTERCHAIN_CATCHUP_MIN_PROGRESS__ENABLED`, real
+default `false`) is the first `ToggleableThreshold` field whose override
+diverges from `ToggleableThreshold::default()`, which is what makes the quirk
+visible as a wrong answer for the first time.
+
+**What this does not affect:** `just check-envs` still passes, because it
+compares the checked-in table against a freshly recomputed one using the same
+(quirky) function — there is no independent ground truth being checked against.
+The quirk only misleads a human reading the generated default column.
+
+**Fix:** none applied — `libs/env-collector` is a shared library used by other
+services' doc generation, so this task did not modify it. Do not "fix" the
+rendered `true` by hand-editing the default column; `generate-envs` would
+recompute the same value and `check-envs` would flag the hand-edit as drift on
+the next run. If this ever needs correcting, it belongs in
+`env-collector::default_of_var`, scoped and tested against `blocks_ratio` too.

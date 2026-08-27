@@ -8,8 +8,8 @@ use std::{
 use stats::{
     ChartKey, IndexingStatus,
     indexing_status::{
-        BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
-        ZetachainCctxIndexingStatus,
+        BlockscoutIndexingStatus, IndexingStatusTrait, InterchainIndexingStatus,
+        UserOpsIndexingStatus, ZetachainCctxIndexingStatus,
     },
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
@@ -131,23 +131,35 @@ impl InitialUpdateTrackerInner {
                     .collect()
             };
 
+        // The interchain axis must not evict charts from these subsets. The
+        // subsets partition charts by *blockscout / user-ops / zetachain*
+        // dependency; an interchain chart's catch-up requirement is orthogonal
+        // to that, and a chart in no subset at all is reported as
+        // `CompletedInitialUpdate` (`get_status`'s first arm) — i.e. "done"
+        // while it has no data. Same reason `user_ops_indexed_status` below sets
+        // blockscout to `MAX`.
         let nothing_indexed_status = IndexingStatus::MIN
             .with_blockscout(BlockscoutIndexingStatus::NoneIndexed)
-            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations);
+            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations)
+            .with_interchain(InterchainIndexingStatus::MAX);
         let only_blocks_indexed_status = IndexingStatus::MIN
             .with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
-            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations);
+            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations)
+            .with_interchain(InterchainIndexingStatus::MAX);
         let internal_indexed_status = IndexingStatus::MIN
             .with_blockscout(BlockscoutIndexingStatus::InternalTransactionsIndexed)
-            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations);
+            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations)
+            .with_interchain(InterchainIndexingStatus::MAX);
         let user_ops_indexed_status = IndexingStatus::MIN
             // User ops charts sometimes also depend on blockscout.
             // We want to include all user ops dependant charts
             // therefore we set blockscout to be as indexed as possible
             .with_blockscout(BlockscoutIndexingStatus::MAX)
-            .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed);
+            .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed)
+            .with_interchain(InterchainIndexingStatus::MAX);
         let zetachain_indexed_status = IndexingStatus::MIN
-            .with_zetachain_cctx(ZetachainCctxIndexingStatus::IndexedHistoricalData);
+            .with_zetachain_cctx(ZetachainCctxIndexingStatus::IndexedHistoricalData)
+            .with_interchain(InterchainIndexingStatus::MAX);
 
         let independent = charts_satisfied_by_status(charts, &nothing_indexed_status);
         let blocks_dependent = charts_satisfied_by_status(charts, &only_blocks_indexed_status);
@@ -423,6 +435,114 @@ impl UpdateChartSubsetTracker {
             proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate => {
                 &self.completed_initial_update
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    async fn all_five_statuses(
+        tracker: &InitialUpdateTracker,
+    ) -> [proto_v1::ChartSubsetUpdateStatus; 5] {
+        [
+            tracker.get_independent_status().await,
+            tracker.get_blocks_dependent_status().await,
+            tracker.get_internal_transactions_dependent_status().await,
+            tracker.get_user_ops_dependent_status().await,
+            tracker.get_zetachain_cctx_dependent_status().await,
+        ]
+    }
+
+    /// This test *is* the work item's specification: on the unfixed code (the
+    /// five probe statuses built from `IndexingStatus::MIN` with no
+    /// `.with_interchain(MAX)` clause) the first assertion fails with
+    /// `CompletedInitialUpdate`, because every interchain chart falls out of all
+    /// five subsets and each reads as vacuously "done".
+    #[tokio::test]
+    async fn interchain_charts_stay_in_every_reported_subset() {
+        let requirement =
+            IndexingStatus::LEAST_RESTRICTIVE.with_interchain(InterchainIndexingStatus::CaughtUp);
+        let charts: BTreeMap<ChartKey, IndexingStatus> =
+            ["interchain_a", "interchain_b", "interchain_c"]
+                .into_iter()
+                .map(|name| (ChartKey::with_day(name.to_string()), requirement.clone()))
+                .collect();
+        let tracker = InitialUpdateTracker::new(&charts);
+
+        for status in all_five_statuses(&tracker).await {
+            assert_eq!(status, proto_v1::ChartSubsetUpdateStatus::Pending);
+        }
+
+        let keys: HashSet<ChartKey> = charts.keys().cloned().collect();
+        tracker.mark_waiting_for_starting_condition(&keys).await;
+
+        for status in all_five_statuses(&tracker).await {
+            assert_eq!(
+                status,
+                proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition
+            );
+        }
+    }
+
+    /// The regression guard for the five probe edits: a `blockscout:
+    /// BlocksIndexed` chart is in `blocks_dependent`, `internal_transactions_dependent`
+    /// and `user_ops_dependent` but **not** in `independent`, exactly as today.
+    #[tokio::test]
+    async fn blockscout_charts_keep_their_subset_membership() {
+        let key = ChartKey::with_day("blockscout_only_chart".to_string());
+        let charts: BTreeMap<ChartKey, IndexingStatus> = [(
+            key.clone(),
+            IndexingStatus::LEAST_RESTRICTIVE
+                .with_blockscout(BlockscoutIndexingStatus::BlocksIndexed),
+        )]
+        .into_iter()
+        .collect();
+        let tracker = InitialUpdateTracker::new(&charts);
+
+        assert_eq!(
+            tracker.get_independent_status().await,
+            proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate,
+            "a blockscout-dependent chart must not be a member of the independent subset"
+        );
+
+        let keys: HashSet<ChartKey> = [key].into_iter().collect();
+        tracker.mark_waiting_for_starting_condition(&keys).await;
+
+        assert_eq!(
+            tracker.get_blocks_dependent_status().await,
+            proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition
+        );
+        assert_eq!(
+            tracker.get_internal_transactions_dependent_status().await,
+            proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition
+        );
+        assert_eq!(
+            tracker.get_user_ops_dependent_status().await,
+            proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition
+        );
+        assert_eq!(
+            tracker.get_independent_status().await,
+            proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate,
+            "still not a member of the independent subset after marking"
+        );
+    }
+
+    /// Pins the surprising `get_status` arm the other two tests above depend on:
+    /// a subset with zero members reports `CompletedInitialUpdate`, not
+    /// `Pending`.
+    #[tokio::test]
+    async fn an_empty_subset_still_reports_completed() {
+        let charts: BTreeMap<ChartKey, IndexingStatus> = BTreeMap::new();
+        let tracker = InitialUpdateTracker::new(&charts);
+        for status in all_five_statuses(&tracker).await {
+            assert_eq!(
+                status,
+                proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate
+            );
         }
     }
 }

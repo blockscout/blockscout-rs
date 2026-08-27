@@ -7,16 +7,20 @@ use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use thiserror::Error;
-use tokio::sync::{Mutex, Semaphore, mpsc};
+use tokio::sync::{Mutex, Semaphore, mpsc, watch};
 
 use crate::{
     InitialUpdateTracker,
     blockscout_waiter::IndexingStatusListener,
+    interchain_indexer_api::{
+        InterchainIndexerApiClient, SliceCatchupVerdict, VerdictSource, catchup_state_to_publish,
+        resolve_verdict,
+    },
     runtime_setup::{RuntimeSetup, UpdateGroupEntry},
     settings::Mode,
 };
 use stats::{
-    ChartKey, InterchainFilterConfig,
+    ChartKey, InterchainFilter, InterchainFilterConfig,
     data_source::types::{IndexerMigrations, UpdateParameters},
     resolve_only_indexed_by_bridge,
 };
@@ -34,6 +38,12 @@ pub struct UpdateServiceConfig {
     pub mode: Mode,
     pub multichain_filter: Option<Vec<u64>>,
     pub interchain_filter: InterchainFilterConfig,
+    /// `None` when `STATS__INTERCHAIN_INDEXER_API_URL` is not set, or outside
+    /// `Interchain` mode: the per-cycle catch-up check is then disabled.
+    /// `Arc`, not a bare value: the same client also lives in
+    /// `blockscout_waiter::InterchainCatchupSource` for the aggregator, and both
+    /// need it for the life of the process.
+    pub interchain_indexer_api: Option<Arc<InterchainIndexerApiClient>>,
 }
 
 pub struct UpdateService {
@@ -43,9 +53,20 @@ pub struct UpdateService {
     mode: Mode,
     multichain_filter: Option<Vec<u64>>,
     interchain_filter: InterchainFilterConfig,
+    interchain_indexer_api: Option<Arc<InterchainIndexerApiClient>>,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
     init_update_tracker: InitialUpdateTracker,
+    /// Whether the configured interchain slice is still catching up, as last
+    /// resolved from the indexer API. `None` = unknown, which is the initial
+    /// value, the permanent value in every non-interchain mode, and the value
+    /// served when no API URL is configured.
+    ///
+    /// A `watch::Sender` rather than a `Mutex`: `send_replace` takes `&self`, so
+    /// under `Arc<Self>` this needs no interior-mutability wrapper (unlike the
+    /// two `Mutex`es below), and `borrow()` is synchronous so the read path in
+    /// `get_initial_update_status` gains no await point.
+    interchain_history_catching_up: watch::Sender<Option<bool>>,
     // currently only accessed in one place, but `Mutex`es
     // are needed due to `Arc<Self>` everywhere to provide
     // interior mutability
@@ -70,6 +91,16 @@ fn group_update_schedule<'a>(
     group.update_schedule.as_ref().unwrap_or(default_schedule)
 }
 
+/// Everything this cycle needs to resolve about the interchain indexer: the
+/// observability horizon merged into the filter, and the catch-up verdict for
+/// the configured slice.
+struct InterchainPreflight {
+    filter: InterchainFilter,
+    /// `false` ⇒ every chart in the group recomputes from the filtered floor
+    /// this cycle.
+    slice_catchup_complete: bool,
+}
+
 impl UpdateService {
     pub async fn new(config: UpdateServiceConfig) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
@@ -81,9 +112,11 @@ impl UpdateService {
             mode: config.mode,
             multichain_filter: config.multichain_filter,
             interchain_filter: config.interchain_filter,
+            interchain_indexer_api: config.interchain_indexer_api,
             charts: config.charts,
             status_listener: config.status_listener,
             init_update_tracker,
+            interchain_history_catching_up: watch::Sender::new(None),
             on_demand_sender: Mutex::new(on_demand.0),
             on_demand_receiver: Mutex::new(on_demand.1),
         })
@@ -404,6 +437,129 @@ impl UpdateService {
         }
     }
 
+    /// Publish the API-derived verdict for `/api/v1/update-status`.
+    ///
+    /// Only a verdict actually **derived from the API** is published. An
+    /// unreachable API or an unset URL leaves the last known value in place,
+    /// mirroring `IndexingStatusAggregator`, which changes nothing on an API
+    /// error. Clobbering to `None` on every transient blip would make the field
+    /// flap to absent exactly when an operator is watching it.
+    ///
+    /// Concurrency: every group computes the same predicate over the same
+    /// payload, because the verdict is a property of the configured slice and
+    /// not of a group. Last-writer-wins is therefore correct.
+    fn publish_interchain_catchup_state(&self, verdict: &SliceCatchupVerdict) {
+        if let Some(catching_up) = catchup_state_to_publish(verdict) {
+            self.interchain_history_catching_up
+                .send_replace(Some(catching_up));
+        }
+    }
+
+    /// `None` ⇒ **skip** this group's update this cycle. The only cause is an
+    /// unresolvable observability horizon, whose existing policy this preserves
+    /// verbatim. An API failure never skips.
+    async fn resolve_interchain_preflight(&self, group_name: &str) -> Option<InterchainPreflight> {
+        if self.mode != Mode::Interchain {
+            return Some(InterchainPreflight {
+                filter: self.interchain_filter.with_horizon(None),
+                slice_catchup_complete: true,
+            });
+        }
+
+        // Resolve the observability horizon for this update cycle. Once per group
+        // update, alongside the migrations probe — same shape, same failure handling.
+        //
+        // On error the group is SKIPPED rather than computed without the horizon:
+        // the operator asked for the restriction, and computing without it would
+        // write silently-too-large values under a fingerprint claiming they are
+        // filtered. The next scheduled run retries.
+        let filter = if !self.interchain_filter.include_unindexed_chains() {
+            let horizon = resolve_only_indexed_by_bridge(
+                &self.indexer_db,
+                self.interchain_filter.bridge_ids(),
+            )
+            .await
+            .inspect_err(|err| {
+                tracing::error!("error resolving the interchain observability horizon: {err:?}")
+            })
+            .ok()?;
+            // The startup log can only show the operator-configured half of the
+            // filter; the horizon is not known until this read. Logging it here is
+            // the only way an operator can confirm the scope actually applied.
+            tracing::debug!(
+                update_group = group_name,
+                horizon =? horizon,
+                "resolved the interchain observability horizon for this cycle"
+            );
+            self.interchain_filter.with_horizon(Some(horizon))
+        } else {
+            self.interchain_filter.with_horizon(None)
+        };
+
+        // The verdict probe is gated on `Mode::Interchain` alone — unlike the
+        // horizon probe above, it does not also require
+        // `!include_unindexed_chains()`, since the catch-up check is meaningful
+        // regardless of whether the observability horizon restriction is enabled.
+        let relevant_bridges = self.interchain_filter.bridge_ids().map(|ids| ids.to_vec());
+        let relevant_chains = self.interchain_filter.relevant_chain_ids();
+        let response = match self.interchain_indexer_api.as_ref() {
+            Some(client) => Some(client.indexing_progress().await),
+            None => None,
+        };
+        let raw_payload_len = response
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .map(|items| items.len());
+        if let Some(Err(err)) = &response {
+            tracing::warn!(
+                update_group = group_name,
+                error =? err,
+                "interchain indexing status unavailable; not forcing a rebuild on that account \
+                 (the stored-floor check still applies)"
+            );
+        }
+
+        let verdict = resolve_verdict(
+            response,
+            relevant_bridges.as_deref(),
+            relevant_chains.as_ref(),
+        );
+        self.publish_interchain_catchup_state(&verdict);
+
+        if verdict.source == VerdictSource::IndexerApi {
+            if verdict.complete {
+                tracing::debug!(
+                    update_group = group_name,
+                    slice_catchup_complete = true,
+                    pairs_considered = verdict.pairs_considered,
+                    source =? verdict.source,
+                    "resolved the interchain catch-up verdict for this cycle"
+                );
+            } else {
+                tracing::warn!(
+                    update_group = group_name,
+                    pairs_considered = verdict.pairs_considered,
+                    holding =? verdict.holding,
+                    "interchain slice is still catching up; rebuilding every chart in this \
+                     group from the filtered floor this cycle"
+                );
+            }
+            if verdict.pairs_considered == 0 && raw_payload_len.is_some_and(|n| n > 0) {
+                tracing::warn!(
+                    configured_bridge_ids =? relevant_bridges,
+                    relevant_chains =? relevant_chains,
+                    "the configured interchain filter selects no pair the indexer reports; the \
+                     catch-up verdict is vacuously complete"
+                );
+            }
+        }
+
+        Some(InterchainPreflight {
+            filter,
+            slice_catchup_complete: verdict.complete,
+        })
+    }
+
     async fn update(
         self: Arc<Self>,
         group_entry: UpdateGroupEntry,
@@ -429,44 +585,18 @@ impl UpdateService {
             return;
         };
 
-        // Resolve the observability horizon for this update cycle. Once per group
-        // update, alongside the migrations probe — same shape, same failure handling.
-        //
-        // On error the group is SKIPPED rather than computed without the horizon:
-        // the operator asked for the restriction, and computing without it would
-        // write silently-too-large values under a fingerprint claiming they are
-        // filtered. The next scheduled run retries.
-        let interchain_filter = if self.mode == Mode::Interchain
-            && !self.interchain_filter.include_unindexed_chains()
-        {
-            let Ok(horizon) = resolve_only_indexed_by_bridge(
-                &self.indexer_db,
-                self.interchain_filter.bridge_ids(),
-            )
+        let Some(preflight) = self
+            .resolve_interchain_preflight(&group_entry.group.name())
             .await
-            .inspect_err(|err| {
-                tracing::error!("error resolving the interchain observability horizon: {err:?}")
-            }) else {
-                return;
-            };
-            // The startup log can only show the operator-configured half of the
-            // filter; the horizon is not known until this read. Logging it here is
-            // the only way an operator can confirm the scope actually applied.
-            tracing::debug!(
-                update_group = group_entry.group.name(),
-                horizon =? horizon,
-                "resolved the interchain observability horizon for this cycle"
-            );
-            self.interchain_filter.with_horizon(Some(horizon))
-        } else {
-            self.interchain_filter.with_horizon(None)
+        else {
+            return;
         };
 
         let update_parameters = UpdateParameters {
             stats_db: &self.db,
             mode: self.mode,
             multichain_filter: self.multichain_filter.clone(),
-            interchain_filter,
+            interchain_filter: preflight.filter,
             indexer_db: &self.indexer_db,
             second_indexer_db: self.second_indexer_db.as_deref(),
             indexer_applied_migrations: active_migrations,
@@ -474,7 +604,7 @@ impl UpdateService {
                 .group
                 .enabled_members_with_deps(enabled_charts),
             update_time_override: None,
-            force_full,
+            force_full: force_full || !preflight.slice_catchup_complete,
         };
         let result = group_entry
             .group
@@ -531,6 +661,12 @@ impl UpdateService {
     }
 
     pub async fn get_initial_update_status(&self) -> proto_v1::UpdateStatus {
+        // bound before the literal on purpose: `watch::Ref` holds a read guard
+        // and must not be held across an `.await`, and a temporary inside a
+        // struct literal lives until the end of the statement — which here
+        // contains six `.await`s. Inlining `*self.…borrow()` below makes the
+        // future non-`Send`.
+        let interchain_history_catching_up = *self.interchain_history_catching_up.borrow();
         let tracker = &self.init_update_tracker;
         proto_v1::UpdateStatus {
             all_status: tracker.get_all_status().await.into(),
@@ -545,6 +681,7 @@ impl UpdateService {
                 .get_zetachain_cctx_dependent_status()
                 .await
                 .into(),
+            interchain_history_catching_up,
         }
     }
 
@@ -621,4 +758,57 @@ impl OnDemandReupdateAccepted {
 pub struct Rejection {
     pub name: String,
     pub reason: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+    use tokio::sync::watch;
+
+    use super::*;
+
+    fn verdict(source: VerdictSource, complete: bool) -> SliceCatchupVerdict {
+        SliceCatchupVerdict {
+            complete,
+            pairs_considered: 0,
+            holding: Vec::new(),
+            source,
+        }
+    }
+
+    /// Mirrors [`UpdateService::publish_interchain_catchup_state`]'s body over a
+    /// bare channel — the policy under test is
+    /// [`catchup_state_to_publish`], not the channel, so a full `UpdateService`
+    /// (which needs a `RuntimeSetup`, DB handles, etc.) is unnecessary
+    /// scaffolding for these two assertions.
+    fn publish(sender: &watch::Sender<Option<bool>>, verdict: &SliceCatchupVerdict) {
+        if let Some(catching_up) = catchup_state_to_publish(verdict) {
+            sender.send_replace(Some(catching_up));
+        }
+    }
+
+    #[test]
+    fn interchain_catching_up_is_absent_until_the_api_answers() {
+        let (sender, _receiver) = watch::channel(None);
+        assert_eq!(*sender.borrow(), None);
+
+        publish(&sender, &verdict(VerdictSource::ApiUnavailable, true));
+        assert_eq!(*sender.borrow(), None);
+
+        publish(&sender, &verdict(VerdictSource::NotConfigured, true));
+        assert_eq!(*sender.borrow(), None);
+
+        publish(&sender, &verdict(VerdictSource::IndexerApi, false));
+        assert_eq!(*sender.borrow(), Some(true));
+    }
+
+    #[test]
+    fn interchain_catching_up_keeps_the_last_known_value_on_an_api_error() {
+        let (sender, _receiver) = watch::channel(None);
+        publish(&sender, &verdict(VerdictSource::IndexerApi, false));
+        assert_eq!(*sender.borrow(), Some(true));
+
+        publish(&sender, &verdict(VerdictSource::ApiUnavailable, true));
+        assert_eq!(*sender.borrow(), Some(true));
+    }
 }

@@ -34,8 +34,9 @@ use crate::{
         ChartProperties, Named, chart_properties_portrait,
         db_interaction::{
             read::{
-                get_chart_metadata, get_min_block_blockscout, interchain::get_min_block_interchain,
-                last_accurate_point, multichain::get_min_block_multichain,
+                get_chart_metadata, get_min_block_blockscout, get_min_date,
+                interchain::get_min_block_interchain, last_accurate_point,
+                multichain::get_min_block_multichain, recorded_min_chart_date,
                 recorded_min_indexer_block,
             },
             write::{clear_chart_data_and_updated_at, set_last_updated_at},
@@ -46,8 +47,10 @@ use crate::{
     },
     metrics,
     range::UniversalRange,
+    types::Timespan,
     utils::day_start,
 };
+use entity::sea_orm_active_enums::ChartType;
 
 use super::auxiliary::PartialCumulative;
 
@@ -249,11 +252,48 @@ where
                 .await
                 .map_err(ChartError::StatsDB)?;
         }
+        // Trigger 2 ("stored-floor check"): a line chart whose earliest stored
+        // date sits above the indexer's current filtered floor picks up history
+        // the indexer has backfilled, without a clear. Each guard term is
+        // load-bearing:
+        // - `!cx.force_full` — a rebuild is already happening, so skip both reads
+        //   (this also means a trigger-1 cycle never pays for trigger 2);
+        // - `cx.mode == Mode::Interchain` — the other modes detect backfill
+        //   through the real `min_blockscout_block` and must not change;
+        // - `ChartType::Line` — counters store one point stamped at the
+        //   *current* timespan, so their floor is always today and an ungated
+        //   check would fire on every counter, every cycle, forever.
+        let backfill_rebuild = if !cx.force_full
+            && cx.mode == Mode::Interchain
+            && ChartProps::chart_type() == ChartType::Line
+        {
+            interchain_history_floor_regressed::<ChartProps>(cx, chart_id).await?
+        } else {
+            None
+        };
+        if let Some((stored_floor, indexer_floor)) = &backfill_rebuild {
+            tracing::info!(
+                chart =% ChartProps::key(),
+                stored_floor =? stored_floor,
+                indexer_floor =? indexer_floor,
+                "interchain history floor regressed; recomputing the series from the \
+                 indexer's current filtered floor (backfill pickup, no clear)"
+            );
+        }
+        // NOTE: only the `force_full` *argument* below is affected — `cx` itself
+        // (shared by every chart in the group) is never mutated. `cx.force_full`
+        // has a second job a few lines above (gating the
+        // `recorded_min_indexer_block` read), and conflating the two would change
+        // read behaviour in non-interchain modes. The local override reuses
+        // `Update::update_values`' existing "`last_accurate_point == None` ⇒
+        // recompute from `get_min_date`" contract, and gives per-chart
+        // granularity: within one group a base daily line may have regressed
+        // while its cumulative dependant has not.
         let last_accurate_point = last_accurate_point::<ChartProps, Query>(
             min_indexer_block,
             recorded,
             cx.stats_db,
-            cx.force_full,
+            cx.force_full || backfill_rebuild.is_some(),
             ChartProps::approximate_trailing_points(),
             ChartProps::missing_date_policy(),
         )
@@ -287,6 +327,44 @@ fn postgres_timestamps_eq(time_1: DateTime<Utc>, time_2: DateTime<Utc>) -> bool 
     // therefore, we need to drop any values smaller than microsecond
     // microsecond = 10^(-6) => compare up to 6 digits after comma
     time_1.trunc_subsecs(6).eq(&time_2.trunc_subsecs(6))
+}
+
+/// `Some((stored_floor, indexer_floor))` when this chart's stored history starts
+/// **later** than the indexer's current filtered floor — i.e. the indexer has
+/// backfilled below the chart's anchor, and the series must be recomputed from
+/// the true floor rather than only moving forward.
+///
+/// Both floors go through `ChartProps::Resolution::from_date`, which is exactly
+/// how `BatchUpdate` derives `update_range_start`, so the comparison is in the
+/// units the rebuild will use — for weekly/monthly/yearly charts as much as for
+/// daily ones. `get_min_date(cx)` is filter-scoped and memoised in
+/// `UpdateContext::cache`, so it costs one query pair per group update rather
+/// than one per chart.
+async fn interchain_history_floor_regressed<ChartProps>(
+    cx: &UpdateContext<'_>,
+    chart_id: i32,
+) -> Result<Option<(ChartProps::Resolution, ChartProps::Resolution)>, ChartError>
+where
+    ChartProps: ChartProperties + ?Sized,
+    ChartProps::Resolution: Ord + Clone + Debug,
+{
+    // a fresh chart, or one the fingerprint gate just cleared, has no floor to
+    // regress, and `BatchUpdate` already starts at `get_min_date` then
+    let Some(stored_floor) = recorded_min_chart_date(cx.stats_db, chart_id).await? else {
+        return Ok(None);
+    };
+    let stored_floor = ChartProps::Resolution::from_date(stored_floor);
+    let indexer_floor = ChartProps::Resolution::from_date(
+        get_min_date(cx)
+            .await
+            .map(|time| time.date())
+            .map_err(ChartError::IndexerDB)?,
+    );
+    if stored_floor > indexer_floor {
+        Ok(Some((stored_floor, indexer_floor)))
+    } else {
+        Ok(None)
+    }
 }
 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> DataSource
