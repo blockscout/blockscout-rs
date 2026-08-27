@@ -2205,7 +2205,6 @@ dependencies = [
  "serde",
  "serde_json",
  "smart-contract-verifier-proto",
- "solidity-metadata",
  "strum 0.27.1",
  "thiserror 1.0.65",
  "tokio",
@@ -3976,7 +3975,16 @@ version = "0.24.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29be4f60e41fde478b36998b88821946aafac540e53591e76db53921a0cc225b"
 dependencies = [
- "minicbor-derive",
+ "minicbor-derive 0.15.3",
+]
+
+[[package]]
+name = "minicbor"
+version = "0.26.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a309f581ade7597820083bc275075c4c6986e57e53f8d26f88507cfefc8c987"
+dependencies = [
+ "minicbor-derive 0.16.2",
 ]
 
 [[package]]
@@ -3984,6 +3992,17 @@ name = "minicbor-derive"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd2209fff77f705b00c737016a48e73733d7fbccb8b007194db148f03561fb70"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "minicbor-derive"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9882ef5c56df184b8ffc107fc6c61e33ee3a654b021961d790a78571bb9d67a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5078,7 +5097,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.13.0",
  "log",
  "multimap",
@@ -6689,7 +6708,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27866969b7fa575837afa26079574f78f1e8223ac2f933e5808060b204ba23d8"
 dependencies = [
- "minicbor",
+ "minicbor 0.24.4",
  "semver 1.0.23",
  "thiserror 1.0.65",
 ]
@@ -7971,7 +7990,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verification-common"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=f6e4483#f6e4483b20a78f9e0e6582c0686b14ccf4bbce13"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=5bd230d#5bd230debc03b4924343c95e6e4041aacb1c3f5b"
 dependencies = [
  "alloy-dyn-abi",
  "alloy-json-abi",
@@ -7979,10 +7998,14 @@ dependencies = [
  "blockscout-display-bytes",
  "bytes",
  "readonly",
+ "semver 1.0.23",
  "serde",
  "serde_json",
  "serde_with",
+ "solidity-metadata",
+ "thiserror 1.0.65",
  "tracing",
+ "vyper-cbor-auxdata",
 ]
 
 [[package]]
@@ -8046,6 +8069,16 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vyper-cbor-auxdata"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=5bd230d#5bd230debc03b4924343c95e6e4041aacb1c3f5b"
+dependencies = [
+ "minicbor 0.26.5",
+ "semver 1.0.23",
+ "thiserror 1.0.65",
+]
 
 [[package]]
 name = "wait-timeout"
@@ -8226,7 +8259,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

@@ -31,7 +31,6 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smart-contract-verifier-proto = { workspace = true, features = ["http-client"] }
-solidity-metadata = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio-stream = { workspace = true }
