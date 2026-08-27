@@ -329,10 +329,49 @@ impl IndexingStatusAggregator {
                         false
                     }
                 });
+                // Unlike the blockscout/user-ops arms, this one carries the
+                // numbers with it. A gated service reports
+                // `WAITING_FOR_STARTING_CONDITION` on every `/api/v1/update-status`
+                // field and writes no chart data, so "unchanged" alone leaves an
+                // operator with no way to tell a slow pair from a stuck one. The
+                // slowest pair is the actionable field: it names what to go and
+                // look at.
                 if modified {
-                    tracing::info!("Observed new indexing status: {:?}", status);
+                    tracing::info!(
+                        interchain_status =? status,
+                        min_progress_ratio =? progress.min_progress_ratio,
+                        threshold = self.wait_config.interchain_catchup_min_progress.threshold,
+                        slowest =? progress.slowest,
+                        pairs_considered = progress.pairs_considered,
+                        "Observed new interchain indexing status"
+                    );
+                } else if status == InterchainIndexingStatus::CatchingUp {
+                    // `info`, not `debug`, precisely while the gate is blocking.
+                    // The axis is *seeded* `CatchingUp` when the check is
+                    // enabled, so the first poll takes the "unchanged" branch —
+                    // at `debug` an operator on the default `RUST_LOG=info`
+                    // would watch the service sit in
+                    // `WAITING_FOR_STARTING_CONDITION` with nothing in the log
+                    // but "Rechecking indexing status in 5 secs".
+                    tracing::info!(
+                        interchain_status =? status,
+                        min_progress_ratio =? progress.min_progress_ratio,
+                        threshold = self.wait_config.interchain_catchup_min_progress.threshold,
+                        slowest =? progress.slowest,
+                        pairs_considered = progress.pairs_considered,
+                        "Interchain catch-up is still below the start threshold"
+                    );
                 } else {
-                    tracing::info!("Indexing status is unchanged");
+                    // Caught up and unchanged: nothing actionable, so keep the
+                    // steady-state poll quiet.
+                    tracing::debug!(
+                        interchain_status =? status,
+                        min_progress_ratio =? progress.min_progress_ratio,
+                        threshold = self.wait_config.interchain_catchup_min_progress.threshold,
+                        slowest =? progress.slowest,
+                        pairs_considered = progress.pairs_considered,
+                        "Interchain indexing status is unchanged"
+                    );
                 }
             }
             Err(e) => {
