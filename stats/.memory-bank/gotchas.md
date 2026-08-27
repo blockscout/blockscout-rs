@@ -569,6 +569,39 @@ mechanics above (seed-satisfied-when-disabled, fail-at-startup-when-enabled-
 without-a-source) are exactly what the new axis follows, and are why they are
 kept here rather than duplicated.
 
+**Known debt — the axis model does not fit `Interchain` mode (follow-up).** The
+five per-axis `update-status` fields describe *Blockscout's* database: blocks,
+internal transactions, user ops, plus zetachain's extra tables layered on the same
+DB. `Interchain` mode reads an entirely disjoint indexer DB with no blocks in it,
+so in that mode every one of those five fields is either vacuous or accidental:
+the 32 line charts sit in `blocks_dependent_status` purely because of the
+inherited default described above, and the 7 counters sit in `independent_status`
+while in fact depending on the interchain axis. That last one is not merely odd,
+it is **provably wrong** since the fourth axis landed — and it is knowingly
+retained, because the alternative (dropping `.with_interchain(MAX)` from the
+probes) evicts charts into *no* subset, which `get_status` reports as
+`CompletedInitialUpdate`, i.e. "done" with no data.
+
+Consequences to know now:
+
+- **In `Interchain` mode, read `all_status`.** It is unambiguous there:
+  `apply_interchain_mode_settings` force-disables `blocks_ratio`,
+  `internal_transactions_ratio` and `user_ops_past_indexing_finished` and nulls
+  `blockscout_api_url`, and the zetachain CCTX DB only connects in
+  `Mode::Zetachain` — so the interchain catch-up gate is the only start condition
+  that can hold, and `WAITING_FOR_STARTING_CONDITION` can only mean that gate.
+- **Do not "fix" this by adding a sixth per-axis field.** That was proposed and
+  rejected: it fits interchain into the Blockscout-shaped frame instead of
+  admitting the frame is the problem.
+
+A real fix means changing the semantics of five already-shipped fields —
+interchain charts would stop declaring `blockscout: BlocksIndexed`, and the
+`independent` probe would stop setting `interchain: MAX`, which in turn needs
+`get_status`'s "empty subset ⇒ completed" arm revisited (and note that
+`verify_tracking_all_charts` only `warn!`s, so nothing fails loudly if a chart
+ends up unclassified). That is its own change with its own review, not a rider on
+the backfill work.
+
 ---
 
 ## `env-collector`'s Per-Field Default Column Can Disagree With The Real Default

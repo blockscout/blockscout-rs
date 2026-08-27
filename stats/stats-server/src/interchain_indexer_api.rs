@@ -235,22 +235,6 @@ pub fn resolve_verdict(
     }
 }
 
-/// `Some(catching_up)` when the verdict is worth publishing, `None` when it must
-/// leave the last known value alone.
-///
-/// Only a verdict actually **derived from the API** is published. An
-/// unreachable API or an unset URL leaves the last known value in place,
-/// mirroring `IndexingStatusAggregator`, which changes nothing on an API
-/// error. Clobbering to `None` on every transient blip would make the field
-/// flap to absent exactly when an operator is watching it.
-pub fn catchup_state_to_publish(verdict: &SliceCatchupVerdict) -> Option<bool> {
-    if verdict.source == VerdictSource::IndexerApi {
-        Some(!verdict.complete)
-    } else {
-        None
-    }
-}
-
 /// `min(catchup_progress_percent)` over the pairs relevant to the configured
 /// slice, converted to a **ratio** so the setting reads exactly like
 /// `STATS__CONDITIONAL_START__BLOCKS_RATIO__THRESHOLD`.

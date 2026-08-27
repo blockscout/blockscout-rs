@@ -231,7 +231,14 @@ enum ChartSubsetUpdateStatus {
 // Each field represents status of charts with corresponding dependency
 // as well as all charts with weaker requirements
 message UpdateStatus {
-  // Status of all enabled charts
+  // Status of all enabled charts.
+  //
+  // In `Interchain` mode this is the field to read, and it is unambiguous
+  // there: that mode force-disables every other start check, so the
+  // interchain catch-up gate is the only condition that can hold it at
+  // `WAITING_FOR_STARTING_CONDITION`. The five fields below describe
+  // Blockscout's database, which `Interchain` mode never reads, so their
+  // values there are not meaningful.
   ChartSubsetUpdateStatus all_status = 1;
   // Status of all enabled charts that are independent from any indexing
   ChartSubsetUpdateStatus independent_status = 2;
@@ -243,13 +250,6 @@ message UpdateStatus {
   ChartSubsetUpdateStatus user_ops_dependent_status = 5;
   // Status of all enabled charts that depend on indexing zetachain cctx
   ChartSubsetUpdateStatus zetachain_cctx_dependent_status = 6;
-  // Interchain mode only. True while the configured slice's catch-up is
-  // incomplete: charts are served and updated, but their history is still
-  // filling in. Absent in other modes and whenever the state is unknown (no
-  // indexer API URL configured, or the API could not be reached) — absent is
-  // not the same as `false`, which would assert a completeness the service
-  // cannot vouch for.
-  optional bool interchain_history_catching_up = 7;
 }
 
 message BatchUpdateChartsRequest {

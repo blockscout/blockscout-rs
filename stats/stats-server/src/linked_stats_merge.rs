@@ -196,29 +196,6 @@ pub fn merge_update_statuses(
             primary.zetachain_cctx_dependent_status,
             secondary.zetachain_cctx_dependent_status,
         ),
-        interchain_history_catching_up: or_catching_up(
-            primary.interchain_history_catching_up,
-            secondary.interchain_history_catching_up,
-        ),
-    }
-}
-
-/// Three-valued OR across linked hops, with absent = unknown.
-///
-/// Any hop still catching up marks the whole chain as catching up. Otherwise a
-/// **known** value wins over an unknown one, primary first — the same
-/// "primary wins, secondary fills gaps" rule the `merge_main_page_*` functions
-/// in this file express as `primary.x.or(secondary.x)`.
-///
-/// Deliberately not strict Kleene OR (`false OR unknown = unknown`): every
-/// non-interchain hop, and every hop older than this field, reports absent, so
-/// Kleene would let one such hop permanently blank the field for the whole
-/// chain — useless in exactly the heterogeneous deployments `merge_*` exists
-/// for.
-fn or_catching_up(primary: Option<bool>, secondary: Option<bool>) -> Option<bool> {
-    match (primary, secondary) {
-        (Some(true), _) | (_, Some(true)) => Some(true),
-        _ => primary.or(secondary),
     }
 }
 
@@ -402,7 +379,6 @@ mod tests {
                     proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate.into(),
                 zetachain_cctx_dependent_status:
                     proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate.into(),
-                interchain_history_catching_up: None,
             },
             proto_v1::UpdateStatus {
                 all_status: proto_v1::ChartSubsetUpdateStatus::RunningInitialUpdate.into(),
@@ -415,7 +391,6 @@ mod tests {
                 user_ops_dependent_status: proto_v1::ChartSubsetUpdateStatus::Pending.into(),
                 zetachain_cctx_dependent_status:
                     proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate.into(),
-                interchain_history_catching_up: None,
             },
         );
 
@@ -435,48 +410,5 @@ mod tests {
             proto_v1::ChartSubsetUpdateStatus::try_from(merged.user_ops_dependent_status).unwrap(),
             proto_v1::ChartSubsetUpdateStatus::Pending
         );
-    }
-
-    #[test]
-    fn merge_update_statuses_ors_interchain_catching_up_across_hops() {
-        let cases: [(Option<bool>, Option<bool>, Option<bool>); 8] = [
-            (None, None, None),
-            (Some(false), None, Some(false)),
-            (None, Some(false), Some(false)),
-            (Some(false), Some(false), Some(false)),
-            (Some(true), Some(false), Some(true)),
-            (Some(false), Some(true), Some(true)),
-            (None, Some(true), Some(true)),
-            (Some(true), None, Some(true)),
-        ];
-        for (primary, secondary, expected) in cases {
-            let merged = merge_update_statuses(
-                proto_v1::UpdateStatus {
-                    interchain_history_catching_up: primary,
-                    ..pending_update_status()
-                },
-                proto_v1::UpdateStatus {
-                    interchain_history_catching_up: secondary,
-                    ..pending_update_status()
-                },
-            );
-            assert_eq!(
-                merged.interchain_history_catching_up, expected,
-                "primary={primary:?} secondary={secondary:?}"
-            );
-        }
-    }
-
-    fn pending_update_status() -> proto_v1::UpdateStatus {
-        proto_v1::UpdateStatus {
-            all_status: proto_v1::ChartSubsetUpdateStatus::Pending.into(),
-            independent_status: proto_v1::ChartSubsetUpdateStatus::Pending.into(),
-            blocks_dependent_status: proto_v1::ChartSubsetUpdateStatus::Pending.into(),
-            internal_transactions_dependent_status: proto_v1::ChartSubsetUpdateStatus::Pending
-                .into(),
-            user_ops_dependent_status: proto_v1::ChartSubsetUpdateStatus::Pending.into(),
-            zetachain_cctx_dependent_status: proto_v1::ChartSubsetUpdateStatus::Pending.into(),
-            interchain_history_catching_up: None,
-        }
     }
 }

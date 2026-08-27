@@ -7,14 +7,13 @@ use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use thiserror::Error;
-use tokio::sync::{Mutex, Semaphore, mpsc, watch};
+use tokio::sync::{Mutex, Semaphore, mpsc};
 
 use crate::{
     InitialUpdateTracker,
     blockscout_waiter::IndexingStatusListener,
     interchain_indexer_api::{
-        InterchainIndexerApiClient, SliceCatchupVerdict, VerdictSource, catchup_state_to_publish,
-        resolve_verdict,
+        InterchainIndexerApiClient, SliceCatchupVerdict, VerdictSource, resolve_verdict,
     },
     runtime_setup::{RuntimeSetup, UpdateGroupEntry},
     settings::Mode,
@@ -60,27 +59,14 @@ pub struct UpdateService {
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
     init_update_tracker: InitialUpdateTracker,
-    /// Whether the configured interchain slice is still catching up, as last
-    /// resolved from the indexer API. `None` = unknown, which is the initial
-    /// value, the permanent value in every non-interchain mode, and the value
-    /// served when no API URL is configured.
-    ///
-    /// A `watch::Sender` rather than a `Mutex`: `send_replace` takes `&self`, so
-    /// under `Arc<Self>` this needs no interior-mutability wrapper (unlike the
-    /// two `Mutex`es below), and `borrow()` is synchronous so the read path in
-    /// `get_initial_update_status` gains no await point.
-    interchain_history_catching_up: watch::Sender<Option<bool>>,
     /// Per-group memory of whether the *last API-derived* interchain catch-up
     /// verdict for that group was incomplete (`true`) or complete (`false`).
     /// Absent entry ⇒ no verdict has been API-derived for that group yet.
     ///
     /// Used only to force one extra full rebuild on an observed `false → true`
-    /// transition — see `resolve_interchain_preflight`. Keyed by group name
-    /// rather than shared: unlike `interchain_history_catching_up` (one
-    /// service-wide "is anything still catching up" signal, correctly
-    /// last-writer-wins across groups), a transition belongs to the one group
-    /// whose slice actually completed and must not be consumable by another
-    /// group's cycle.
+    /// transition — see `resolve_interchain_preflight`. Keyed by group name:
+    /// a transition belongs to the one group whose slice actually completed
+    /// and must not be consumable by another group's cycle.
     interchain_verdict_was_incomplete: Mutex<HashMap<String, bool>>,
     // currently only accessed in one place, but `Mutex`es
     // are needed due to `Arc<Self>` everywhere to provide
@@ -181,7 +167,6 @@ impl UpdateService {
             charts: config.charts,
             status_listener: config.status_listener,
             init_update_tracker,
-            interchain_history_catching_up: watch::Sender::new(None),
             interchain_verdict_was_incomplete: Mutex::new(HashMap::new()),
             on_demand_sender: Mutex::new(on_demand.0),
             on_demand_receiver: Mutex::new(on_demand.1),
@@ -503,24 +488,6 @@ impl UpdateService {
         }
     }
 
-    /// Publish the API-derived verdict for `/api/v1/update-status`.
-    ///
-    /// Only a verdict actually **derived from the API** is published. An
-    /// unreachable API or an unset URL leaves the last known value in place,
-    /// mirroring `IndexingStatusAggregator`, which changes nothing on an API
-    /// error. Clobbering to `None` on every transient blip would make the field
-    /// flap to absent exactly when an operator is watching it.
-    ///
-    /// Concurrency: every group computes the same predicate over the same
-    /// payload, because the verdict is a property of the configured slice and
-    /// not of a group. Last-writer-wins is therefore correct.
-    fn publish_interchain_catchup_state(&self, verdict: &SliceCatchupVerdict) {
-        if let Some(catching_up) = catchup_state_to_publish(verdict) {
-            self.interchain_history_catching_up
-                .send_replace(Some(catching_up));
-        }
-    }
-
     /// `None` ⇒ **skip** this group's update this cycle. The only cause is an
     /// unresolvable observability horizon, whose existing policy this preserves
     /// verbatim. An API failure never skips.
@@ -590,7 +557,6 @@ impl UpdateService {
             relevant_bridges.as_deref(),
             relevant_chains.as_ref(),
         );
-        self.publish_interchain_catchup_state(&verdict);
 
         if verdict.source == VerdictSource::IndexerApi {
             if verdict.complete {
@@ -779,12 +745,6 @@ impl UpdateService {
     }
 
     pub async fn get_initial_update_status(&self) -> proto_v1::UpdateStatus {
-        // bound before the literal on purpose: `watch::Ref` holds a read guard
-        // and must not be held across an `.await`, and a temporary inside a
-        // struct literal lives until the end of the statement — which here
-        // contains six `.await`s. Inlining `*self.…borrow()` below makes the
-        // future non-`Send`.
-        let interchain_history_catching_up = *self.interchain_history_catching_up.borrow();
         let tracker = &self.init_update_tracker;
         proto_v1::UpdateStatus {
             all_status: tracker.get_all_status().await.into(),
@@ -799,7 +759,6 @@ impl UpdateService {
                 .get_zetachain_cctx_dependent_status()
                 .await
                 .into(),
-            interchain_history_catching_up,
         }
     }
 
@@ -881,7 +840,6 @@ pub struct Rejection {
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
-    use tokio::sync::watch;
 
     use super::*;
 
@@ -892,42 +850,6 @@ mod tests {
             holding: Vec::new(),
             source,
         }
-    }
-
-    /// Mirrors [`UpdateService::publish_interchain_catchup_state`]'s body over a
-    /// bare channel — the policy under test is
-    /// [`catchup_state_to_publish`], not the channel, so a full `UpdateService`
-    /// (which needs a `RuntimeSetup`, DB handles, etc.) is unnecessary
-    /// scaffolding for these two assertions.
-    fn publish(sender: &watch::Sender<Option<bool>>, verdict: &SliceCatchupVerdict) {
-        if let Some(catching_up) = catchup_state_to_publish(verdict) {
-            sender.send_replace(Some(catching_up));
-        }
-    }
-
-    #[test]
-    fn interchain_catching_up_is_absent_until_the_api_answers() {
-        let (sender, _receiver) = watch::channel(None);
-        assert_eq!(*sender.borrow(), None);
-
-        publish(&sender, &verdict(VerdictSource::ApiUnavailable, true));
-        assert_eq!(*sender.borrow(), None);
-
-        publish(&sender, &verdict(VerdictSource::NotConfigured, true));
-        assert_eq!(*sender.borrow(), None);
-
-        publish(&sender, &verdict(VerdictSource::IndexerApi, false));
-        assert_eq!(*sender.borrow(), Some(true));
-    }
-
-    #[test]
-    fn interchain_catching_up_keeps_the_last_known_value_on_an_api_error() {
-        let (sender, _receiver) = watch::channel(None);
-        publish(&sender, &verdict(VerdictSource::IndexerApi, false));
-        assert_eq!(*sender.borrow(), Some(true));
-
-        publish(&sender, &verdict(VerdictSource::ApiUnavailable, true));
-        assert_eq!(*sender.borrow(), Some(true));
     }
 
     /// The `false → true` transition: a group that was incomplete on the last

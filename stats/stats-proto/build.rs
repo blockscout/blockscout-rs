@@ -25,15 +25,7 @@ fn compile(
         )
         .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(skip_serializing_if = \"std::ops::Not::not\")]")
         .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(default)]")
-        .field_attribute(".blockscout.stats.v1.GetLineChartRequest.resolution", "#[serde(default)]")
-        .field_attribute(
-            ".blockscout.stats.v1.UpdateStatus.interchain_history_catching_up",
-            "#[serde(skip_serializing_if = \"Option::is_none\")]",
-        )
-        .field_attribute(
-            ".blockscout.stats.v1.UpdateStatus.interchain_history_catching_up",
-            "#[serde(default)]",
-        );
+        .field_attribute(".blockscout.stats.v1.GetLineChartRequest.resolution", "#[serde(default)]");
 
     config.compile_protos(protos, includes)?;
     Ok(())

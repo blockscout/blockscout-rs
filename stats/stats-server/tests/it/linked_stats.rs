@@ -74,7 +74,6 @@ async fn linked_stats_merge_and_line_fallback_work() {
                     proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate.into(),
                 zetachain_cctx_dependent_status:
                     proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate.into(),
-                interchain_history_catching_up: None,
             }),
         )
         .mount(&linked_server)
