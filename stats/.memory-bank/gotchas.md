@@ -491,9 +491,20 @@ land.
 SELECT count(*) FROM crosschain_transfers t
 JOIN crosschain_messages m
   ON t.message_id = m.id AND t.bridge_id = m.bridge_id
-WHERE t.token_src_chain_id NOT IN (m.src_chain_id, m.dst_chain_id)
-   OR t.token_dst_chain_id NOT IN (m.src_chain_id, m.dst_chain_id);
+WHERE NOT (t.token_src_chain_id IS NOT DISTINCT FROM m.src_chain_id
+        OR t.token_src_chain_id IS NOT DISTINCT FROM m.dst_chain_id)
+   OR NOT (t.token_dst_chain_id IS NOT DISTINCT FROM m.src_chain_id
+        OR t.token_dst_chain_id IS NOT DISTINCT FROM m.dst_chain_id);
 ```
+
+**Why the awkward `IS NOT DISTINCT FROM` instead of `NOT IN`.**
+`crosschain_messages.dst_chain_id` is **nullable** — a message whose destination
+is not yet known has `NULL` there, which is exactly what
+`STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS` exists to include or drop.
+`x NOT IN (a, NULL)` evaluates to `UNKNOWN`, never `TRUE`, so the obvious
+`NOT IN` form silently drops every row with an unknown destination and can report
+`0` while real divergence exists. The rewritten form compares NULL-safely, so a
+row with an unknown destination counts as divergent rather than vanishing.
 
 **If it stops holding:** scope the 3 transfer families' relevant pairs at
 **bridge** level instead of chain level. Bridge narrowing needs no assumption — a

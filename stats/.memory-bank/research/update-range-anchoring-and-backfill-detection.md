@@ -247,10 +247,21 @@ query per group update at most.
 - The anchor is a function of *when stats first ran*, not of what the data is.
   Two stats deployments started a week apart against the same indexer can hold
   permanently different histories, with no field distinguishing them.
-- Because catch-up descends, `MIN(init_timestamp)` is monotonically
-  non-increasing during catch-up and constant afterwards. A forward-scanning
-  indexer would break this and would leave the *middle* of history permanently
-  empty while the minimum never moved — that hazard does not apply here.
+- Because catch-up descends, `MIN(init_timestamp)` **for a single
+  `(bridge_id, chain_id)` pair** is monotonically non-increasing during that
+  pair's catch-up and constant afterwards. A forward-scanning indexer would break
+  this and would leave the *middle* of history permanently empty while the
+  minimum never moved.
+- **[CORRECTION]** That per-pair reasoning does **not** lift to the aggregate
+  minimum across pairs, and the original text here implied it did. Since
+  `05bd53f1` decoupled per-chain indexing inside a bridge, one chain can be
+  writing rows *above* another chain's already-lower floor, so the aggregate
+  `MIN(init_timestamp)` stays put while history is still filling in. The
+  aggregate floor therefore detects **backward extension only** — a constant
+  minimum is not evidence that catch-up is complete, and the "that hazard does not
+  apply here" clause is wrong for the aggregate. This is the same gap the shipped
+  design closes with a trailing rebuild on the verdict's `false → true`
+  transition.
 
 ## Failure Modes / Observability
 
@@ -460,6 +471,17 @@ dangerous direction. The safe reading is a conjunction over **all**
 `(bridge, chain)` pairs of the bridges the filter admits; `bridge_ids = None`
 means all bridges. Stats already resolves exactly that pair set in
 `resolve_only_indexed_by_bridge` (with its documented `bridge_contracts` caveat).
+
+> **[SUPERSEDED — pre-decision analysis.]** The shipped design narrows by chain as
+> well as by bridge. The risk identified above is answered not by refusing to
+> narrow, but by making the chain set an explicit **upper bound**: the server
+> passes `interchain_filter.relevant_chain_ids()` into the catch-up source, and
+> that projection returns `None` (unbounded) wherever the filter cannot bound the
+> other endpoint — a focal chain with no counterparty list being the main case. So
+> narrowing never produces a false "synced"; where it cannot prove a bound it
+> keeps every pair. See `.memory-bank/gotchas.md` for the bridge-and-chain
+> projection and its one standing assumption for the transfer families. Read the
+> paragraph above as the analysis that led there, not as the rule in force.
 
 ### Level 3 — a fingerprint is a change-detector, not a completeness predicate
 
