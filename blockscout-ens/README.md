@@ -47,6 +47,16 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 
 [anchor]: <> (anchors.envs.end.envs_main)
 
+### Read replica
+
+`BENS__REPLICA_DATABASE__*` is optional. When it is configured, read queries are served by the
+replica while it is healthy (reachable and lagging no more than `MAX_LAG` seconds behind, checked
+every `HEALTH_CHECK_INTERVAL` seconds), and by the main database otherwise.
+
+A replica that is missing, unreachable or misconfigured at startup never blocks the start of the
+service: BENS logs a warning and serves all reads from the main database. Note that the replica
+stays disabled until the service is restarted, so restart BENS once the replica is back.
+
 ## Quickstart developer run
 
 1. Install [just](https://github.com/casey/just), [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
