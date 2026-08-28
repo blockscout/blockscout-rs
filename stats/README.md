@@ -316,7 +316,7 @@ How large that movement is for a particular deployment is characterised by the t
 just start-postgres
 ```
 
-+ Start blockscout instance with varialbe `DATABASE_URL=postgres://postgres:admin@host.docker.internal:5432/blockscout`
++ Start blockscout instance with variable `DATABASE_URL=postgres://postgres:admin@host.docker.internal:5432/blockscout`
 
 + Start stats server:
 
