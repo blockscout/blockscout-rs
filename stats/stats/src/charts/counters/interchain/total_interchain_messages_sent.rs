@@ -250,6 +250,7 @@ mod tests {
                 TotalInterchainMessagesSent::all_dependencies_chart_keys(),
             update_time_override: Some(init_time),
             force_full: false,
+            interchain_backfill_memory: None,
         };
         let cx = UpdateContext::from_params_now_or_override(params);
         let indexer_floor = get_min_date(&cx).await.unwrap().date();

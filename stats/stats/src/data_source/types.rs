@@ -6,7 +6,7 @@ use std::{
 };
 
 use blockscout_db::entity::migrations_status;
-use chrono::{NaiveDateTime, Utc};
+use chrono::{NaiveDate, NaiveDateTime, Utc};
 use sea_orm::{
     DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement, TryGetable,
 };
@@ -20,6 +20,79 @@ use crate::{
     mode::Mode,
     types::new_txns::NewTxnsCombinedPoint,
 };
+
+/// Process-local memory of interchain "trigger 2" (stored-floor regression)
+/// rebuilds that produced no movement of the chart's stored floor.
+///
+/// **Why this exists.** `interchain_history_floor_regressed`
+/// (`data_source::kinds::local_db`) compares a chart's own stored floor
+/// against the shared, filter-scoped indexer floor
+/// (`get_min_date`/`get_min_date_interchain`) — which is `min` of a
+/// message-filtered and a transfer-filtered floor, not anything scoped to the
+/// chart's own predicate (see `.memory-bank/gotchas.md` → "A Transfer's Token
+/// Chains Are Not Its Message's Route"). A chart whose own predicate matches no
+/// rows between the two floors therefore regresses forever: every rebuild it
+/// triggers inserts nothing in the gap, so its stored floor never moves, and
+/// the identical comparison fires again next cycle. This memory remembers the
+/// exact `(stored_floor, indexer_floor)` pair a rebuild already proved
+/// unproductive for a chart, so `local_db::update_itself_inner` can suppress a
+/// byte-for-byte repeat of it — see the call site there for exactly which of
+/// the two rebuild paths (a chart's own comparison vs. the propagated daily
+/// sibling marker) this applies to.
+///
+/// **Process-local, deliberately.** This is an in-memory `HashMap`, not a
+/// stats-DB column: it is lost on every process restart, so the worst case
+/// this reintroduces is one repeated unproductive rebuild per affected chart
+/// per process start — bounded and cheap. The alternative (a persisted column)
+/// would need a migration for a problem that only costs a handful of wasted
+/// full recomputes over a process's lifetime; not worth it.
+///
+/// `Clone` is cheap: the map lives behind an `Arc<Mutex<_>>`, so every clone
+/// shares the same underlying memory. One instance is owned by `UpdateService`
+/// and threaded into every group's `UpdateParameters` for the life of the
+/// process.
+#[derive(Clone, Default)]
+pub struct InterchainBackfillMemory {
+    /// `chart -> (stored_floor, indexer_floor)` of the last rebuild that this
+    /// chart triggered on its own floor-regression comparison and that did NOT
+    /// move the chart's stored floor.
+    unproductive: Arc<Mutex<HashMap<ChartKey, (NaiveDate, NaiveDate)>>>,
+}
+
+impl InterchainBackfillMemory {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// `true` if `pair` is already known, for `chart`, to produce no
+    /// stored-floor movement when rebuilt — i.e. triggering on it again would
+    /// only repeat a rebuild already proven to insert nothing new.
+    pub async fn is_known_unproductive(
+        &self,
+        chart: &ChartKey,
+        pair: (NaiveDate, NaiveDate),
+    ) -> bool {
+        self.unproductive.lock().await.get(chart) == Some(&pair)
+    }
+
+    /// Record `pair` as unproductive for `chart`: the rebuild it just
+    /// triggered did not move the chart's stored floor. Overwrites any
+    /// previously recorded pair for this chart, which is exactly what is
+    /// wanted when the pair itself has changed (e.g. the indexer floor moved
+    /// further, but the chart's own floor still didn't) — the new pair is what
+    /// must be proven unproductive again before being suppressed.
+    pub async fn record_unproductive(&self, chart: ChartKey, pair: (NaiveDate, NaiveDate)) {
+        self.unproductive.lock().await.insert(chart, pair);
+    }
+
+    /// Clear any remembered unproductive pair for `chart` — its stored floor
+    /// moved, so a previously recorded pair (if any) no longer describes a
+    /// standing situation and must not suppress a future, different
+    /// regression.
+    pub async fn clear(&self, chart: &ChartKey) {
+        self.unproductive.lock().await.remove(chart);
+    }
+}
 
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
@@ -44,6 +117,15 @@ pub struct UpdateParameters<'a> {
     pub update_time_override: Option<chrono::DateTime<Utc>>,
     /// Force full re-update
     pub force_full: bool,
+    /// Process-local memory suppressing a repeat interchain trigger-2 rebuild
+    /// already proven unproductive — see [`InterchainBackfillMemory`].
+    ///
+    /// `None` means "no memory available": `local_db::update_itself_inner`
+    /// then behaves exactly as it did before this memory existed (every floor
+    /// regression triggers, unconditionally). This is what `query_parameters`
+    /// and every non-interchain-specific test construction site pass, since
+    /// none of them exercise the suppression this memory enables.
+    pub interchain_backfill_memory: Option<InterchainBackfillMemory>,
 }
 
 impl<'a> UpdateParameters<'a> {
@@ -77,7 +159,20 @@ impl<'a> UpdateParameters<'a> {
             enabled_update_charts_recursive: HashSet::new(),
             // doesn't make sense during query
             force_full: false,
+            // only used when updating the DB
+            interchain_backfill_memory: None,
         }
+    }
+}
+
+impl<'a> UpdateParameters<'a> {
+    /// Attach [`InterchainBackfillMemory`] to these parameters. Without this,
+    /// `interchain_backfill_memory` stays `None` and
+    /// `local_db::update_itself_inner` never suppresses a repeat trigger-2
+    /// rebuild — see the field's doc comment.
+    pub fn with_interchain_backfill_memory(mut self, memory: InterchainBackfillMemory) -> Self {
+        self.interchain_backfill_memory = Some(memory);
+        self
     }
 }
 
@@ -101,6 +196,7 @@ impl<'a> UpdateParameters<'a> {
             update_time_override: time_override,
             enabled_update_charts_recursive: enabled_charts_recursive,
             force_full: false,
+            interchain_backfill_memory: None,
         }
     }
 
@@ -145,6 +241,9 @@ pub struct UpdateContext<'a> {
     /// Update time
     pub time: chrono::DateTime<Utc>,
     pub force_full: bool,
+    /// See [`InterchainBackfillMemory`] and the field of the same name on
+    /// [`UpdateParameters`], which this is copied from verbatim.
+    pub interchain_backfill_memory: Option<InterchainBackfillMemory>,
 }
 
 impl<'a> UpdateContext<'a> {
@@ -161,6 +260,7 @@ impl<'a> UpdateContext<'a> {
             enabled_update_charts_recursive: value.enabled_update_charts_recursive,
             time: value.update_time_override.unwrap_or_else(Utc::now),
             force_full: value.force_full,
+            interchain_backfill_memory: value.interchain_backfill_memory,
         }
     }
 }
@@ -466,5 +566,43 @@ mod tests {
         assert_eq!(cache.get::<String>(&stmt_b).await, None);
         assert_eq!(cache.get::<Option<f64>>(&stmt_a).await, None);
         assert_eq!(cache.get::<String>(&stmt_a).await, Some(val_2));
+    }
+
+    fn d(s: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
+    }
+
+    #[tokio::test]
+    async fn interchain_backfill_memory_tracks_unproductive_pairs_per_chart() {
+        let memory = InterchainBackfillMemory::new();
+        let chart_a = ChartKey::with_day("chart_a".to_owned());
+        let chart_b = ChartKey::with_day("chart_b".to_owned());
+        let pair = (d("2023-02-01"), d("2023-01-01"));
+        let other_pair = (d("2023-02-01"), d("2022-12-01"));
+
+        // nothing recorded yet for either chart
+        assert!(!memory.is_known_unproductive(&chart_a, pair).await);
+        assert!(!memory.is_known_unproductive(&chart_b, pair).await);
+
+        memory.record_unproductive(chart_a.clone(), pair).await;
+        assert!(memory.is_known_unproductive(&chart_a, pair).await);
+        // a different pair for the same chart is not the recorded one
+        assert!(!memory.is_known_unproductive(&chart_a, other_pair).await);
+        // a different chart is unaffected by chart_a's record
+        assert!(!memory.is_known_unproductive(&chart_b, pair).await);
+
+        // recording a new pair for the same chart overwrites the old one
+        memory
+            .record_unproductive(chart_a.clone(), other_pair)
+            .await;
+        assert!(memory.is_known_unproductive(&chart_a, other_pair).await);
+        assert!(!memory.is_known_unproductive(&chart_a, pair).await);
+
+        // clearing removes the record entirely, not just makes it stale
+        memory.clear(&chart_a).await;
+        assert!(!memory.is_known_unproductive(&chart_a, other_pair).await);
+
+        // clearing a chart with no record is a harmless no-op
+        memory.clear(&chart_b).await;
     }
 }

@@ -114,6 +114,7 @@ mod tests {
             enabled_update_charts_recursive: NewTxnsMultichainWindow::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
+            interchain_backfill_memory: None,
         };
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         NewTxnsMultichainWindow::update_recursively(&cx)

@@ -20,7 +20,7 @@ use crate::{
 };
 use stats::{
     ChartKey, InterchainFilter, InterchainFilterConfig,
-    data_source::types::{IndexerMigrations, UpdateParameters},
+    data_source::types::{IndexerMigrations, InterchainBackfillMemory, UpdateParameters},
     resolve_only_indexed_by_bridge,
 };
 
@@ -68,6 +68,18 @@ pub struct UpdateService {
     /// a transition belongs to the one group whose slice actually completed
     /// and must not be consumable by another group's cycle.
     interchain_verdict_was_incomplete: Mutex<HashMap<String, bool>>,
+    /// Process-local memory suppressing a repeat interchain trigger-2
+    /// (stored-floor regression) rebuild already proven unproductive for a
+    /// chart — see `InterchainBackfillMemory`'s doc comment for the full
+    /// rationale.
+    ///
+    /// Unlike `interchain_verdict_was_incomplete` above, this is **not**
+    /// keyed per group: it is keyed per chart internally
+    /// (`InterchainBackfillMemory`), and a chart belongs to exactly one
+    /// group, so one shared instance handed to every group's
+    /// `UpdateParameters` is both simpler and correct — there is no risk of
+    /// one group's cycle consuming or clobbering another's entries.
+    interchain_backfill_memory: InterchainBackfillMemory,
     // currently only accessed in one place, but `Mutex`es
     // are needed due to `Arc<Self>` everywhere to provide
     // interior mutability
@@ -168,6 +180,7 @@ impl UpdateService {
             status_listener: config.status_listener,
             init_update_tracker,
             interchain_verdict_was_incomplete: Mutex::new(HashMap::new()),
+            interchain_backfill_memory: InterchainBackfillMemory::new(),
             on_demand_sender: Mutex::new(on_demand.0),
             on_demand_receiver: Mutex::new(on_demand.1),
         })
@@ -689,6 +702,7 @@ impl UpdateService {
                 .enabled_members_with_deps(enabled_charts),
             update_time_override: None,
             force_full: force_full || !preflight.slice_catchup_complete,
+            interchain_backfill_memory: Some(self.interchain_backfill_memory.clone()),
         };
         let result = group_entry
             .group

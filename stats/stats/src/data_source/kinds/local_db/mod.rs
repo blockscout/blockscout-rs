@@ -266,11 +266,66 @@ where
         let interchain_line_gate = !cx.force_full
             && cx.mode == Mode::Interchain
             && ChartProps::chart_type() == ChartType::Line;
-        let own_floor_regressed = if interchain_line_gate {
+        let raw_floor_regressed = if interchain_line_gate {
             interchain_history_floor_regressed::<ChartProps>(cx, chart_id).await?
         } else {
             None
         };
+        // Suppress a *repeat* of an already-proven-unproductive trigger-2
+        // rebuild. A chart's own predicate can match no rows in the gap
+        // between its stored floor and the shared, filter-scoped indexer floor
+        // (see `InterchainBackfillMemory`'s doc comment for why this arises —
+        // in short, the shared floor is `min` of a message- and a
+        // transfer-filtered floor, neither of which is the chart's own
+        // predicate). A rebuild triggered by such a gap never moves the
+        // chart's stored floor, so without this check the identical
+        // comparison fires again next cycle, forever — a full rebuild every
+        // cycle for no benefit. Comparing the exact `(stored_floor,
+        // indexer_floor)` pair — not just "did it regress" — is what lets a
+        // *genuine* further regression (the indexer floor moving even lower)
+        // through unsuppressed: that is a different pair, unproven, and must
+        // trigger.
+        //
+        // This suppression applies ONLY to this chart's own comparison above
+        // (`raw_floor_regressed`) — never to `daily_sibling_rebuilt` below.
+        // That path exists precisely because a lower resolution's own
+        // comparison is blind to an intra-bucket floor movement (see the
+        // "Propagation fix" comment just below); it is driven by whether the
+        // *daily* chart's own comparison fired this cycle, which this memory
+        // has no say over. A lower resolution's own memory (if it even has an
+        // entry — resolution charts hit trigger 2 far less often, per that
+        // same "Propagation fix" blind spot) must never suppress a rebuild the
+        // daily sibling just proved warranted.
+        // Matched by value (not by reference) so nothing borrowed from
+        // `raw_floor_regressed`/`stored_floor`/`indexer_floor` is held across
+        // the `.await` below — `ChartProps::Resolution` isn't required to be
+        // `Sync`, only `Send`, and a held reference would need the former for
+        // the surrounding future to stay `Send`.
+        let own_floor_regressed =
+            match (raw_floor_regressed, cx.interchain_backfill_memory.as_ref()) {
+                (Some((stored_floor, indexer_floor)), Some(memory)) => {
+                    let pair = (stored_floor.into_date(), indexer_floor.into_date());
+                    if memory.is_known_unproductive(&ChartProps::key(), pair).await {
+                        tracing::debug!(
+                            chart =% ChartProps::key(),
+                            stored_floor =? pair.0,
+                            indexer_floor =? pair.1,
+                            "suppressing interchain floor-regression rebuild: this exact pair \
+                             already produced no stored-floor movement earlier in this process"
+                        );
+                        None
+                    } else {
+                        Some((
+                            ChartProps::Resolution::from_date(pair.0),
+                            ChartProps::Resolution::from_date(pair.1),
+                        ))
+                    }
+                }
+                // no memory configured (e.g. `query_parameters`/most test
+                // construction sites) ⇒ behave exactly as before this memory
+                // existed, or the raw comparison found no regression to begin with
+                (raw, _) => raw,
+            };
         // Propagation fix: both sides of `interchain_history_floor_regressed`'s
         // comparison go through `ChartProps::Resolution::from_date`, and for a
         // resolution chart a stored `date` already **is** the bucket's first day
@@ -365,6 +420,37 @@ where
         .await?;
         tracing::info!(chart =% ChartProps::key(), "updating chart metadata");
         Update::update_metadata(cx.stats_db, chart_id, cx.time).await?;
+        // Record whether this cycle's own trigger-2 rebuild (if any) actually
+        // moved the chart's stored floor, so a byte-for-byte repeat of an
+        // unproductive pair can be suppressed next cycle (see the suppression
+        // comment above and `InterchainBackfillMemory`). Keyed on
+        // `own_floor_regressed` (the post-suppression value) rather than
+        // `raw_floor_regressed`: a cycle that got suppressed did not actually
+        // rebuild from the floor this time, so it has nothing new to report
+        // either way, and must leave the existing record alone. Likewise this
+        // is never reached via `daily_sibling_rebuilt` alone — a chart that
+        // only rebuilt because its daily sibling did had no floor regression
+        // of its own to prove anything about, and must not overwrite (or
+        // clear) whatever this chart's own memory currently holds.
+        if let (Some((stored_floor, indexer_floor)), Some(memory)) =
+            (&own_floor_regressed, cx.interchain_backfill_memory.as_ref())
+        {
+            let pair = (
+                stored_floor.clone().into_date(),
+                indexer_floor.clone().into_date(),
+            );
+            let chart_key = ChartProps::key();
+            let new_stored_floor = recorded_min_chart_date(cx.stats_db, chart_id).await?;
+            if new_stored_floor == Some(pair.0) {
+                memory.record_unproductive(chart_key, pair).await;
+            } else {
+                // the floor moved (or, degenerately, the chart is now empty) —
+                // any previously recorded pair no longer describes this
+                // chart's situation and must not linger to suppress a future,
+                // different regression
+                memory.clear(&chart_key).await;
+            }
+        }
         Ok(())
     }
 
@@ -832,6 +918,333 @@ mod tests {
                 .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
+        }
+    }
+
+    /// Reproduces, and verifies the fix for, the loop documented on
+    /// [`super::super::super::types::InterchainBackfillMemory`]: a
+    /// message-family interchain line chart whose own predicate never matches
+    /// any row between the transfer-filtered floor and the message-filtered
+    /// floor triggers trigger 2 (`interchain_history_floor_regressed`) every
+    /// cycle, forever, because the rebuild it keeps causing can never move
+    /// its own stored floor.
+    ///
+    /// The divergence between the two floors is the same one documented in
+    /// `.memory-bank/gotchas.md` under "A Transfer's Token Chains Are Not Its
+    /// Message's Route": a transfer can satisfy `transfers_condition()` while
+    /// its own parent message fails `messages_condition()`. Filtering on
+    /// `dst_chain_ids` reproduces it directly, since the same list is applied
+    /// to `crosschain_messages.dst_chain_id` and to
+    /// `crosschain_transfers.token_dst_chain_id` independently.
+    mod interchain_backfill_floor_regression_suppression {
+        use chrono::{DateTime, Days, NaiveDate, Utc};
+        use interchain_indexer_filters::ChainBridgeFilter;
+        use pretty_assertions::assert_eq;
+        use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
+
+        use crate::{
+            ChartProperties, InterchainFilter, Mode,
+            charts::{
+                db_interaction::read::{find_chart, recorded_min_chart_date},
+                lines::interchain::new_messages_interchain::{self, NewMessagesInterchain},
+            },
+            data_source::{
+                DataSource, UpdateContext,
+                types::{IndexerMigrations, InterchainBackfillMemory, UpdateParameters},
+            },
+            tests::{
+                mock_interchain::test_interchain_filter,
+                simple_test::prepare_interchain_chart_test_unfilled,
+            },
+        };
+
+        use super::super::{
+            interchain_backfill_marker_statement, interchain_history_floor_regressed,
+        };
+
+        const BRIDGE_ID: i32 = 1;
+        const SRC_CHAIN: i64 = 10;
+        /// A message ending here fails the test's `dst_chain_ids` filter.
+        const OTHER_DST_CHAIN: i64 = 20;
+        /// The filter's configured `dst_chain_ids` target.
+        const TARGET_DST_CHAIN: i64 = 30;
+
+        async fn exec(interchain: &DatabaseConnection, sql: String) {
+            interchain
+                .execute(Statement::from_string(DbBackend::Postgres, sql))
+                .await
+                .unwrap();
+        }
+
+        async fn insert_reference_rows(interchain: &DatabaseConnection) {
+            for chain_id in [SRC_CHAIN, OTHER_DST_CHAIN, TARGET_DST_CHAIN] {
+                exec(
+                    interchain,
+                    format!(
+                        "INSERT INTO chains (id, name) VALUES ({chain_id}, 'chain_{chain_id}')"
+                    ),
+                )
+                .await;
+            }
+            exec(
+                interchain,
+                format!(
+                    "INSERT INTO bridges (id, name) VALUES ({BRIDGE_ID}, 'bridge_{BRIDGE_ID}')"
+                ),
+            )
+            .await;
+        }
+
+        /// A message whose own route matches the filter (`dst = TARGET_DST_CHAIN`):
+        /// the message-family chart actually stores a row for it.
+        async fn insert_matching_message(
+            interchain: &DatabaseConnection,
+            id: i64,
+            init_timestamp: &str,
+        ) {
+            insert_message_and_transfer(interchain, id, init_timestamp, TARGET_DST_CHAIN).await;
+        }
+
+        /// A message whose own route does NOT match the filter (`dst =
+        /// OTHER_DST_CHAIN`), paired with a transfer whose own token route DOES
+        /// (`token_dst_chain_id = TARGET_DST_CHAIN`) — the "transfer's token
+        /// chains are not its message's route" case. Passes
+        /// `transfers_condition()`, fails `messages_condition()`.
+        async fn insert_diverging_message(
+            interchain: &DatabaseConnection,
+            id: i64,
+            init_timestamp: &str,
+        ) {
+            insert_message_and_transfer(interchain, id, init_timestamp, OTHER_DST_CHAIN).await;
+        }
+
+        /// Inserts one message (route `SRC_CHAIN -> message_dst_chain`) and its
+        /// one transfer, whose token route is always `SRC_CHAIN ->
+        /// TARGET_DST_CHAIN` regardless of `message_dst_chain` — the token route
+        /// deliberately does not follow the message's own route, matching the
+        /// gotcha this test reproduces.
+        async fn insert_message_and_transfer(
+            interchain: &DatabaseConnection,
+            id: i64,
+            init_timestamp: &str,
+            message_dst_chain: i64,
+        ) {
+            exec(
+                interchain,
+                format!(
+                    "INSERT INTO crosschain_messages \
+                     (id, bridge_id, init_timestamp, src_chain_id, dst_chain_id) \
+                     VALUES ({id}, {BRIDGE_ID}, '{init_timestamp}', {SRC_CHAIN}, {message_dst_chain})"
+                ),
+            )
+            .await;
+            exec(
+                interchain,
+                format!(
+                    "INSERT INTO crosschain_transfers \
+                     (id, message_id, bridge_id, index, token_src_chain_id, token_dst_chain_id) \
+                     VALUES ({id}, {id}, {BRIDGE_ID}, 0, {SRC_CHAIN}, {TARGET_DST_CHAIN})"
+                ),
+            )
+            .await;
+        }
+
+        fn filter() -> InterchainFilter {
+            test_interchain_filter(ChainBridgeFilter {
+                dst_chain_ids: Some(vec![TARGET_DST_CHAIN]),
+                ..Default::default()
+            })
+        }
+
+        fn parameters<'a>(
+            stats_db: &'a DatabaseConnection,
+            indexer_db: &'a DatabaseConnection,
+            update_time: DateTime<Utc>,
+            memory: InterchainBackfillMemory,
+        ) -> UpdateParameters<'a> {
+            UpdateParameters {
+                stats_db,
+                mode: Mode::Interchain,
+                multichain_filter: None,
+                interchain_filter: filter(),
+                indexer_db,
+                indexer_applied_migrations: IndexerMigrations::latest(),
+                second_indexer_db: None,
+                enabled_update_charts_recursive: NewMessagesInterchain::all_dependencies_chart_keys(
+                ),
+                update_time_override: Some(update_time),
+                force_full: false,
+                interchain_backfill_memory: None,
+            }
+            .with_interchain_backfill_memory(memory)
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn suppresses_repeat_unproductive_trigger_but_not_a_genuine_further_regression() {
+            let _ = tracing_subscriber::fmt::try_init();
+            let (init_time, db, indexer) =
+                prepare_interchain_chart_test_unfilled::<NewMessagesInterchain>(
+                    "interchain_backfill_suppression_reproduces_loop",
+                )
+                .await;
+            insert_reference_rows(&indexer).await;
+            // only the matching message exists so far — the chart's initial
+            // build sees a floor that agrees with the (not yet backfilled)
+            // indexer floor, so trigger 2 has nothing to fire on yet
+            insert_matching_message(&indexer, 1, "2023-01-10 10:00:00").await;
+
+            let chart_id = find_chart(&db, &new_messages_interchain::Properties::key())
+                .await
+                .unwrap()
+                .expect("chart row must exist after init_recursively");
+            let floor_10th = NaiveDate::from_ymd_opt(2023, 1, 10).unwrap();
+            let floor_1st = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
+            let floor_dec_1st = NaiveDate::from_ymd_opt(2022, 12, 1).unwrap();
+
+            let memory = InterchainBackfillMemory::new();
+
+            // cycle 0: initial build.
+            let cx0 = UpdateContext::from_params_now_or_override(parameters(
+                &db,
+                &indexer,
+                init_time,
+                memory.clone(),
+            ));
+            NewMessagesInterchain::update_recursively(&cx0)
+                .await
+                .unwrap();
+            assert_eq!(
+                recorded_min_chart_date(&db, chart_id).await.unwrap(),
+                Some(floor_10th),
+                "the fresh chart's floor is the only message that passes the filter"
+            );
+
+            // the indexer backfills an earlier message whose OWN route fails the
+            // filter, but whose transfer's token route matches it — this pulls
+            // the shared indexer floor below the chart's stored floor without
+            // ever giving the chart new data to store there
+            insert_diverging_message(&indexer, 2, "2023-01-01 10:00:00").await;
+
+            let update_time_1 = init_time.checked_add_days(Days::new(1)).unwrap();
+            let cx1 = UpdateContext::from_params_now_or_override(parameters(
+                &db,
+                &indexer,
+                update_time_1,
+                memory.clone(),
+            ));
+            let raw_1 = interchain_history_floor_regressed::<new_messages_interchain::Properties>(
+                &cx1, chart_id,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                raw_1,
+                Some((floor_10th, floor_1st)),
+                "the stored floor sits above the shared, filter-scoped indexer floor"
+            );
+
+            NewMessagesInterchain::update_recursively(&cx1)
+                .await
+                .unwrap();
+            // the marker is the daily chart's own reliable "did trigger 2 fire
+            // this cycle" signal (only the daily chart writes it, and only when
+            // its own `backfill_rebuild` is true) — see the comments in
+            // `update_itself_inner`
+            assert_eq!(
+                cx1.cache
+                    .get::<String>(&interchain_backfill_marker_statement::<
+                        new_messages_interchain::Properties,
+                    >())
+                    .await,
+                Some("1".to_owned()),
+                "the first cycle under the new (lower) indexer floor must trigger a rebuild"
+            );
+            assert_eq!(
+                recorded_min_chart_date(&db, chart_id).await.unwrap(),
+                Some(floor_10th),
+                "the rebuild is unproductive: the diverging message still fails the filter, so \
+                 nothing gets inserted below the chart's existing floor"
+            );
+            assert!(
+                memory
+                    .is_known_unproductive(
+                        &new_messages_interchain::Properties::key(),
+                        (floor_10th, floor_1st)
+                    )
+                    .await,
+                "the fix must remember this exact pair as unproductive after the rebuild"
+            );
+
+            // cycle 2: same filter, same floors — the loop's second iteration.
+            // Without suppression this triggers (and rebuilds) identically to
+            // cycle 1, forever.
+            let update_time_2 = update_time_1.checked_add_days(Days::new(1)).unwrap();
+            let cx2 = UpdateContext::from_params_now_or_override(parameters(
+                &db,
+                &indexer,
+                update_time_2,
+                memory.clone(),
+            ));
+            let raw_2 = interchain_history_floor_regressed::<new_messages_interchain::Properties>(
+                &cx2, chart_id,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                raw_2, raw_1,
+                "the underlying condition is unchanged — this is a genuine repeat, not a \
+                 regression that resolved itself on its own"
+            );
+
+            NewMessagesInterchain::update_recursively(&cx2)
+                .await
+                .unwrap();
+            assert_eq!(
+                cx2.cache
+                    .get::<String>(&interchain_backfill_marker_statement::<
+                        new_messages_interchain::Properties,
+                    >())
+                    .await,
+                None,
+                "the second cycle under the identical, already-proven-unproductive pair must \
+                 NOT trigger another rebuild — this is what fails against the pre-fix code"
+            );
+
+            // a genuine further regression — the indexer floor moving even
+            // lower — must still trigger, because it is a different pair the
+            // memory has never proven unproductive
+            insert_diverging_message(&indexer, 3, "2022-12-01 10:00:00").await;
+            let update_time_3 = update_time_2.checked_add_days(Days::new(1)).unwrap();
+            let cx3 = UpdateContext::from_params_now_or_override(parameters(
+                &db,
+                &indexer,
+                update_time_3,
+                memory.clone(),
+            ));
+            let raw_3 = interchain_history_floor_regressed::<new_messages_interchain::Properties>(
+                &cx3, chart_id,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                raw_3,
+                Some((floor_10th, floor_dec_1st)),
+                "the indexer floor moved further down"
+            );
+            NewMessagesInterchain::update_recursively(&cx3)
+                .await
+                .unwrap();
+            assert_eq!(
+                cx3.cache
+                    .get::<String>(&interchain_backfill_marker_statement::<
+                        new_messages_interchain::Properties,
+                    >())
+                    .await,
+                Some("1".to_owned()),
+                "a genuinely new (lower) indexer floor must trigger again even though the \
+                 previous pair was suppressed"
+            );
         }
     }
 }
