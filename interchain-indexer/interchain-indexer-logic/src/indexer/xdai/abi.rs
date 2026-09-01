@@ -149,13 +149,34 @@ impl AbiRegistry {
             .with_context(|| format!("xDai bridge config missing {side:?} chain"))
     }
 
-    // `counterpart_chain_id` / `side_for_chain` / `event_for_log` are not
-    // needed until phase B2 (the Gno→Eth direction correlates
-    // `SignedForUserRequest`/`CollectedSignatures` by the emitting chain's
-    // side, and scans receipt logs for a matching event the way AMB's
-    // `find_tokens_bridged` does). Add them there rather than now: xDai's
-    // "direction is derived, never looked up" design means B1's Eth→Gno
-    // handlers need neither.
+    /// The Foreign proxy's own address — the `foreignBridgeAddr` component of
+    /// `messageHash = keccak256(recipient ‖ value ‖ nonce ‖ foreignBridgeAddr [‖ token])`.
+    /// Every configured Foreign version shares one address (a proxy is
+    /// upgraded behind the same address, like every other xDai/AMB
+    /// contract); this fails loudly if the config somehow disagrees rather
+    /// than silently picking one.
+    pub(crate) fn foreign_proxy_address(&self) -> Result<Address> {
+        let foreign_chain_id = self.chain_id_for_side(XDaiSide::Foreign)?;
+        let mut addresses = self
+            .inner
+            .contracts
+            .keys()
+            .filter(|(chain_id, _)| *chain_id == foreign_chain_id)
+            .map(|(_, address)| *address);
+        let first = addresses
+            .next()
+            .context("no xDai Foreign contract configured")?;
+        ensure!(
+            addresses.all(|address| address == first),
+            "xDai Foreign side has more than one configured proxy address"
+        );
+        Ok(first)
+    }
+
+    // `counterpart_chain_id`, `side_for_chain` and `event_for_log` are not
+    // needed: xDai's "direction is derived, never looked up" design means no
+    // handler in any phase needs to resolve a chain's side or look up a
+    // second event in the same receipt at runtime.
 
     pub(crate) fn resolve_log(
         &self,
@@ -497,5 +518,30 @@ mod tests {
             registry.resolve_log(100, address, &v7_topic, 43_027_713),
             LogResolution::Matched(_, ContractKind { version: 7, .. })
         ));
+    }
+
+    #[test]
+    fn foreign_proxy_address_returns_the_configured_address() {
+        let address = Address::repeat_byte(0xEE);
+        let chains = vec![chain_config(
+            1,
+            vec![
+                XDaiContractConfig {
+                    address,
+                    version: 9,
+                    started_at_block: FOREIGN_EPOCH_FLOOR_BLOCK,
+                    abi: Some(foreign_event_abi()),
+                },
+                XDaiContractConfig {
+                    address,
+                    version: 10,
+                    started_at_block: 23_748_179,
+                    abi: Some(foreign_event_abi()),
+                },
+            ],
+        )];
+        let registry = AbiRegistry::from_chains(&chains).expect("registry builds");
+
+        assert_eq!(registry.foreign_proxy_address().unwrap(), address);
     }
 }

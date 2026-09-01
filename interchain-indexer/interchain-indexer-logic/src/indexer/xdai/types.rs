@@ -82,10 +82,54 @@ pub(crate) struct UserRequestForAffirmationEvent {
     pub(crate) nonce: U256,
 }
 
+/// Payload shared by both destination-completion events
+/// (`AffirmationCompleted` and `RelayedMessage`): each carries only
+/// `(recipient, value)` beyond the nonce, which is already known from the
+/// source event and not re-stored here.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct AffirmationCompletedEvent {
+pub(crate) struct CompletionEvent {
     pub(crate) recipient: Address,
     pub(crate) value: U256,
+}
+
+/// Which destination event produced a [`CompletionEvent`]. Mirrors
+/// `amb::types::DestinationExecution`: the variant records provenance: an
+/// `Affirmation` completes an Eth→Gno message, a `Relayed` completes a
+/// Gno→Eth one. Nothing enforces that pairing at this type's level — the
+/// direction check in `consolidation.rs::status_and_finality` is what
+/// actually keeps a `CollectedSignatures` that resolved onto the wrong key
+/// from producing `ReadyToClaim`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) enum Completion {
+    Affirmation(AnnotatedEvent<CompletionEvent>),
+    Relayed(AnnotatedEvent<CompletionEvent>),
+}
+
+impl Completion {
+    pub(crate) fn event(&self) -> &AnnotatedEvent<CompletionEvent> {
+        match self {
+            Self::Affirmation(event) | Self::Relayed(event) => event,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct UserRequestForSignatureEvent {
+    pub(crate) recipient: Address,
+    pub(crate) value: U256,
+    pub(crate) nonce: U256,
+    /// Destination-side asset, explicit only from Home v7. `None` below v7
+    /// means DAI — the legacy 104-byte message layout hardcodes it.
+    pub(crate) token: Option<Address>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct CollectedSignaturesEvent {
+    pub(crate) authority_responsible_for_relay: Address,
+    pub(crate) message_hash: B256,
+    /// `requiredSignatures()`, **not** the number actually collected — do
+    /// not treat it as a tally.
+    pub(crate) count: U256,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -99,13 +143,45 @@ pub(crate) struct ValidatorConfirmation {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub(crate) struct Message {
     pub(crate) direction: Option<Direction>,
+    // Eth→Gno
     pub(crate) source_request: Option<AnnotatedEvent<UserRequestForAffirmationEvent>>,
+    // Gno→Eth
+    pub(crate) signature_request: Option<AnnotatedEvent<UserRequestForSignatureEvent>>,
+    pub(crate) signatures_collected: Option<AnnotatedEvent<CollectedSignaturesEvent>>,
+    // Shared by both directions: a validator confirmation always self-keys
+    // to a message of exactly one direction, so there is no collision risk
+    // in one map for both `SignedForAffirmation` and `SignedForUserRequest`.
     pub(crate) validator_confirmations: HashMap<Address, ValidatorConfirmation>,
-    pub(crate) destination_execution: Option<AnnotatedEvent<AffirmationCompletedEvent>>,
-    /// `receipt.from` of the transaction that emitted `source_request`. Never
+    pub(crate) destination_execution: Option<Completion>,
+    /// `receipt.from` of the transaction that emitted the source event
+    /// (`UserRequestForAffirmation` or `UserRequestForSignature`). Never
     /// taken from any event field — see the AMB "header sender is not the
     /// source transaction initiator" gotcha, which applies here identically.
     pub(crate) sender_address: Option<Address>,
+}
+
+/// `messageHash = keccak256(recipient ‖ value ‖ nonce ‖ foreignBridgeAddr [‖ token])`
+/// — `BasicHomeBridge.submitSignature`'s message-blob layout (`Message.sol`),
+/// 104 bytes without `token` (Home v6) or 124 with it (Home v7+). Computable
+/// at `UserRequestForSignature` time: every component is in the event or in
+/// config, so the lookup can be populated proactively rather than waiting for
+/// `submitSignature`'s own blob.
+pub(crate) fn compute_message_hash(
+    recipient: Address,
+    value: U256,
+    nonce: U256,
+    foreign_bridge: Address,
+    token: Option<Address>,
+) -> B256 {
+    let mut preimage = Vec::with_capacity(124);
+    preimage.extend_from_slice(recipient.as_slice());
+    preimage.extend_from_slice(&value.to_be_bytes::<32>());
+    preimage.extend_from_slice(&nonce.to_be_bytes::<32>());
+    preimage.extend_from_slice(foreign_bridge.as_slice());
+    if let Some(token) = token {
+        preimage.extend_from_slice(token.as_slice());
+    }
+    keccak256(&preimage)
 }
 
 #[cfg(test)]
@@ -134,5 +210,66 @@ mod tests {
     fn native_id_blob_rejects_a_nonce_that_does_not_fit_in_28_bytes() {
         let oversized_nonce = U256::from(1u8) << 225;
         assert!(native_id_blob(1, oversized_nonce).is_err());
+    }
+
+    /// Pins the preimage's field order and length against `Message.sol`'s
+    /// layout directly (no verified on-chain `messageHash` value exists to
+    /// compare against — see the research note's open questions), so this
+    /// test exists to catch a field-order or length regression, not to
+    /// independently confirm the algorithm.
+    #[test]
+    fn compute_message_hash_uses_the_104_byte_legacy_layout_without_token() {
+        let recipient = Address::repeat_byte(0x11);
+        let value = U256::from(1_000u64);
+        let nonce = U256::from(0x140a_u64);
+        let foreign_bridge = Address::repeat_byte(0x22);
+
+        let mut expected_preimage = Vec::with_capacity(104);
+        expected_preimage.extend_from_slice(recipient.as_slice());
+        expected_preimage.extend_from_slice(&value.to_be_bytes::<32>());
+        expected_preimage.extend_from_slice(&nonce.to_be_bytes::<32>());
+        expected_preimage.extend_from_slice(foreign_bridge.as_slice());
+        assert_eq!(expected_preimage.len(), 104);
+
+        assert_eq!(
+            compute_message_hash(recipient, value, nonce, foreign_bridge, None),
+            keccak256(&expected_preimage)
+        );
+    }
+
+    #[test]
+    fn compute_message_hash_uses_the_124_byte_layout_with_token() {
+        let recipient = Address::repeat_byte(0x11);
+        let value = U256::from(1_000u64);
+        let nonce = U256::from(0x140a_u64);
+        let foreign_bridge = Address::repeat_byte(0x22);
+        let token = Address::repeat_byte(0x33);
+
+        let mut expected_preimage = Vec::with_capacity(124);
+        expected_preimage.extend_from_slice(recipient.as_slice());
+        expected_preimage.extend_from_slice(&value.to_be_bytes::<32>());
+        expected_preimage.extend_from_slice(&nonce.to_be_bytes::<32>());
+        expected_preimage.extend_from_slice(foreign_bridge.as_slice());
+        expected_preimage.extend_from_slice(token.as_slice());
+        assert_eq!(expected_preimage.len(), 124);
+
+        assert_eq!(
+            compute_message_hash(recipient, value, nonce, foreign_bridge, Some(token)),
+            keccak256(&expected_preimage)
+        );
+    }
+
+    #[test]
+    fn compute_message_hash_differs_between_the_104_and_124_byte_layouts() {
+        let recipient = Address::repeat_byte(0x11);
+        let value = U256::from(1_000u64);
+        let nonce = U256::from(0x140a_u64);
+        let foreign_bridge = Address::repeat_byte(0x22);
+        let token = Address::repeat_byte(0x33);
+
+        assert_ne!(
+            compute_message_hash(recipient, value, nonce, foreign_bridge, None),
+            compute_message_hash(recipient, value, nonce, foreign_bridge, Some(token)),
+        );
     }
 }

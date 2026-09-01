@@ -8,11 +8,12 @@ use std::{
 
 use alloy::{
     network::Ethereum,
-    primitives::Address,
+    primitives::{Address, B256},
     providers::DynProvider,
     rpc::types::{Filter, Log},
 };
 use anyhow::{Context, Result, anyhow, ensure};
+use dashmap::DashMap;
 use serde_json::Value;
 use tokio::task::JoinHandle;
 use tonic::async_trait;
@@ -25,13 +26,13 @@ use crate::{
         range_driver::{BatchError, RangeDriver, RangeProcessor},
     },
     log_stream::LogBatch,
-    message_buffer::MessageBuffer,
+    message_buffer::{Key, MessageBuffer},
     secret::redact_urls,
 };
 
 use super::{
     abi::AbiRegistry,
-    events::{self, EventContext},
+    events::{self, EventContext, PendingMessageHashEvents},
     settings::XDaiIndexerSettings,
     types::Message,
     version::{XDaiSide, grammar_for},
@@ -66,6 +67,11 @@ pub struct XDaiIndexer {
     bridge_id: i32,
     chains: Vec<XDaiChainConfig>,
     abi_registry: Arc<AbiRegistry>,
+    /// Gno→Eth only: the Foreign proxy's own address, needed to compute
+    /// `messageHash`. Resolved once at construction rather than per event.
+    foreign_bridge_address: Address,
+    message_hash_lookup: Arc<DashMap<B256, Key>>,
+    pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>>,
     settings: XDaiIndexerSettings,
     buffer: Arc<MessageBuffer<Message>>,
     buffer_handle: Arc<parking_lot::RwLock<Option<JoinHandle<()>>>>,
@@ -81,6 +87,9 @@ struct RunContext {
     bridge_id: i32,
     chains: Vec<XDaiChainConfig>,
     abi_registry: Arc<AbiRegistry>,
+    foreign_bridge_address: Address,
+    message_hash_lookup: Arc<DashMap<B256, Key>>,
+    pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>>,
     settings: XDaiIndexerSettings,
     buffer: Arc<MessageBuffer<Message>>,
 }
@@ -104,6 +113,7 @@ impl XDaiIndexer {
             .context("invalid xDai indexer failure_retry settings")?;
 
         let abi_registry = Arc::new(AbiRegistry::from_chains(&chains)?);
+        let foreign_bridge_address = abi_registry.foreign_proxy_address()?;
         let db = stats.interchain_db_arc();
         let buffer = MessageBuffer::new_with_stats(stats, buffer_settings.clone());
 
@@ -112,6 +122,9 @@ impl XDaiIndexer {
             bridge_id,
             chains,
             abi_registry,
+            foreign_bridge_address,
+            message_hash_lookup: Arc::new(DashMap::new()),
+            pending_message_hash_events: Arc::new(DashMap::new()),
             settings: settings.clone(),
             buffer,
             buffer_handle: Arc::new(parking_lot::RwLock::new(None)),
@@ -129,6 +142,9 @@ impl XDaiIndexer {
             bridge_id: self.bridge_id,
             chains: self.chains.clone(),
             abi_registry: self.abi_registry.clone(),
+            foreign_bridge_address: self.foreign_bridge_address,
+            message_hash_lookup: self.message_hash_lookup.clone(),
+            pending_message_hash_events: self.pending_message_hash_events.clone(),
             settings: self.settings.clone(),
             buffer: self.buffer.clone(),
         }
@@ -215,6 +231,9 @@ impl XDaiIndexer {
                 block_number: receipt.block.header.number,
                 abi_registry: &ctx.abi_registry,
                 buffer: &ctx.buffer,
+                foreign_bridge_address: ctx.foreign_bridge_address,
+                message_hash_lookup: &ctx.message_hash_lookup,
+                pending_message_hash_events: &ctx.pending_message_hash_events,
             };
             if let Err(err) = events::dispatch_transaction(
                 &event_ctx,
@@ -497,7 +516,7 @@ mod tests {
     use super::*;
     use crate::{
         MessageBufferSettings,
-        indexer::xdai::types::{Message, key_from_native_id, native_id_blob},
+        indexer::xdai::types::{Message, compute_message_hash, key_from_native_id, native_id_blob},
         message_buffer::MessageBuffer,
         test_utils::init_db,
     };
@@ -658,6 +677,59 @@ mod tests {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn user_request_for_signature_log(
+        event: &Event,
+        emitter: Address,
+        recipient: Address,
+        value: U256,
+        nonce: U256,
+        token: Option<Address>,
+        tx_hash: B256,
+        block_number: u64,
+    ) -> Log {
+        let mut data = Vec::with_capacity(128);
+        data.extend_from_slice(word_address(recipient).as_slice());
+        data.extend_from_slice(&word_u256(value));
+        data.extend_from_slice(&word_u256(nonce));
+        if let Some(token) = token {
+            data.extend_from_slice(word_address(token).as_slice());
+        }
+        make_log(
+            emitter,
+            vec![event.selector()],
+            data,
+            tx_hash,
+            block_number,
+            0,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn collected_signatures_log(
+        event: &Event,
+        emitter: Address,
+        authority: Address,
+        message_hash: B256,
+        count: U256,
+        tx_hash: B256,
+        block_number: u64,
+        log_index: u64,
+    ) -> Log {
+        let mut data = Vec::with_capacity(96);
+        data.extend_from_slice(word_address(authority).as_slice());
+        data.extend_from_slice(message_hash.as_slice());
+        data.extend_from_slice(&word_u256(count));
+        make_log(
+            emitter,
+            vec![event.selector()],
+            data,
+            tx_hash,
+            block_number,
+            log_index,
+        )
+    }
+
     fn block_with_timestamp(ts: u64) -> alloy::rpc::types::Block {
         let mut block: alloy::rpc::types::Block = Default::default();
         block.header.timestamp = ts;
@@ -705,6 +777,9 @@ mod tests {
         let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
         let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
         let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
         let foreign_event = event_of(&foreign_abi(), "UserRequestForAffirmation");
         let signed_event = event_of(&home_abi(), "SignedForAffirmation");
         let completed_event = event_of(&home_abi(), "AffirmationCompleted");
@@ -807,6 +882,9 @@ mod tests {
             block_number: SRC_BLOCK,
             abi_registry: &registry,
             buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
         };
         events::dispatch_transaction(&src_ctx, &[source_log], &eth_block, sender)
             .await
@@ -818,6 +896,9 @@ mod tests {
             block_number: CONF1_BLOCK,
             abi_registry: &registry,
             buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
         };
         events::dispatch_transaction(&conf1_ctx, &[conf1_log], &gno_block_1, validator1)
             .await
@@ -829,6 +910,9 @@ mod tests {
             block_number: CONF2_BLOCK,
             abi_registry: &registry,
             buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
         };
         events::dispatch_transaction(&conf2_ctx, &[conf2_log], &gno_block_2, validator2)
             .await
@@ -840,6 +924,9 @@ mod tests {
             block_number: CONF3_BLOCK,
             abi_registry: &registry,
             buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
         };
         events::dispatch_transaction(&conf3_ctx, &[conf3_log], &gno_block_3, validator3)
             .await
@@ -851,6 +938,9 @@ mod tests {
             block_number: CONF4_COMPLETE_BLOCK,
             abi_registry: &registry,
             buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
         };
         events::dispatch_transaction(
             &conf4_ctx,
@@ -906,6 +996,9 @@ mod tests {
         let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
         let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
         let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
         let foreign_event = event_of(&foreign_abi(), "UserRequestForAffirmation");
 
         let buffer = MessageBuffer::<Message>::new(
@@ -948,6 +1041,9 @@ mod tests {
             block_number: BLOCK,
             abi_registry: &registry,
             buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
         };
         events::dispatch_transaction(&ctx, &[log_a, log_b], &block, sender)
             .await
@@ -972,5 +1068,264 @@ mod tests {
 
         assert_eq!(row_a.status, MessageStatus::Initiated);
         assert_eq!(row_b.status, MessageStatus::Initiated);
+    }
+
+    /// Replays the verified Gno→Eth trace's real, fully-recorded facts: the
+    /// nonce (`0x140a`), the transferred value, the DAI token, and both
+    /// block numbers. Addresses and transaction hashes are synthetic
+    /// placeholders (see the module doc) since the research note's Gno→Eth
+    /// trace only records those truncated.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn gno_to_eth_trace_replay_produces_one_completed_message() {
+        let db = init_db("xdai_gno_to_eth_trace_replay").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
+        let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
+        let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
+        let signature_event = event_of(&home_abi(), "UserRequestForSignature");
+        let relayed_event = event_of(&foreign_abi(), "RelayedMessage");
+
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db.clone(),
+            MessageBufferSettings {
+                hot_ttl: Duration::from_secs(60),
+                maintenance_interval: Duration::from_secs(60),
+            },
+        );
+
+        // Real, fully-recorded facts from the research note's worked trace.
+        let nonce = U256::from(0x140a_u64);
+        let value = U256::from_str_radix("39239013587778384001516", 10).unwrap();
+        let dai = address!("6B175474E89094C44Da98b954EedeAC495271d0F");
+        const SIGNATURE_BLOCK: u64 = 47_945_328;
+        const RELAYED_BLOCK: u64 = 25_848_470;
+
+        // Synthetic: the note only records these truncated.
+        let recipient = Address::repeat_byte(0xA1);
+        let sender = Address::repeat_byte(0x66);
+        let tx_signature = B256::repeat_byte(0x06);
+        let tx_relayed = B256::repeat_byte(0x07);
+
+        let signature_log = user_request_for_signature_log(
+            &signature_event,
+            home_addr,
+            recipient,
+            value,
+            nonce,
+            Some(dai),
+            tx_signature,
+            SIGNATURE_BLOCK,
+        );
+        let relayed_log = affirmation_completed_log(
+            &relayed_event,
+            foreign_addr,
+            recipient,
+            value,
+            nonce,
+            tx_relayed,
+            RELAYED_BLOCK,
+            0,
+        );
+
+        let gno_block = block_with_timestamp(1_700_100_000);
+        let eth_block = block_with_timestamp(1_700_200_000);
+
+        let signature_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: GNO,
+            block_number: SIGNATURE_BLOCK,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+        };
+        events::dispatch_transaction(&signature_ctx, &[signature_log], &gno_block, sender)
+            .await
+            .expect("signature dispatch succeeds");
+
+        let relayed_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: ETH,
+            block_number: RELAYED_BLOCK,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+        };
+        events::dispatch_transaction(&relayed_ctx, &[relayed_log], &eth_block, Address::ZERO)
+            .await
+            .expect("relayed dispatch succeeds");
+
+        buffer.run().await.expect("maintenance flush succeeds");
+
+        let native_id = native_id_blob(100, nonce).unwrap();
+        let key = key_from_native_id(&native_id, BRIDGE_ID).unwrap();
+
+        let message = crosschain_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("message row must exist");
+
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(message.native_id, Some(native_id.to_vec()));
+        assert_eq!(message.src_chain_id, GNO);
+        assert_eq!(message.dst_chain_id, Some(ETH));
+        assert_eq!(message.dst_tx_hash, Some(tx_relayed.as_slice().to_vec()));
+        assert_eq!(message.sender_address, Some(sender.as_slice().to_vec()));
+    }
+
+    /// `SignedForUserRequest`/`CollectedSignatures` are same-chain (Gnosis)
+    /// but catch-up and realtime scan concurrently, so a `CollectedSignatures`
+    /// can arrive before its `UserRequestForSignature` source. This must
+    /// queue, then drain once the source lands, reaching the exact same
+    /// `ReadyToClaim` / unset-`dst_tx_hash` state as the in-order case
+    /// (`consolidate_gno_to_eth_with_signatures_collected_is_ready_to_claim_with_no_dst_tx_hash`
+    /// pins the same outcome at the unit level).
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn collected_signatures_before_its_source_is_queued_then_drained_to_ready_to_claim() {
+        let db = init_db("xdai_collected_signatures_queued_then_drained").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
+        let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
+        let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
+        let signature_event = event_of(&home_abi(), "UserRequestForSignature");
+        let collected_event = event_of(&home_abi(), "CollectedSignatures");
+
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db.clone(),
+            MessageBufferSettings {
+                hot_ttl: Duration::from_secs(60),
+                maintenance_interval: Duration::from_secs(60),
+            },
+        );
+
+        let nonce = U256::from(0x2400_u64);
+        let value = U256::from(5_000u64);
+        let recipient = Address::repeat_byte(0xB2);
+        let sender = Address::repeat_byte(0x66);
+        let authority = Address::repeat_byte(0xC4);
+        // No verified on-chain `CollectedSignatures` instance exists for
+        // xDai in the research note (its Gno→Eth trace has only
+        // `UserRequestForSignature` and `RelayedMessage`) -- this log is
+        // deliberately synthetic, per the task's explicit fallback for that
+        // gap. The `messageHash` is computed the same way the indexer does,
+        // so the queue/drain mechanics under test are exercised faithfully
+        // even though the log itself was never observed on chain.
+        let expected_message_hash =
+            compute_message_hash(recipient, value, nonce, foreign_addr, Some(dai_address()));
+
+        const SIGNATURE_BLOCK: u64 = 47_800_000;
+        const COLLECTED_BLOCK: u64 = 47_800_010;
+        let tx_signature = B256::repeat_byte(0x08);
+        let tx_collected = B256::repeat_byte(0x09);
+
+        let collected_log = collected_signatures_log(
+            &collected_event,
+            home_addr,
+            authority,
+            expected_message_hash,
+            U256::from(4u64),
+            tx_collected,
+            COLLECTED_BLOCK,
+            0,
+        );
+        let signature_log = user_request_for_signature_log(
+            &signature_event,
+            home_addr,
+            recipient,
+            value,
+            nonce,
+            Some(dai_address()),
+            tx_signature,
+            SIGNATURE_BLOCK,
+        );
+
+        let gno_block_collected = block_with_timestamp(1_700_300_000);
+        let gno_block_signature = block_with_timestamp(1_700_300_100);
+
+        // Out-of-order on purpose: CollectedSignatures dispatched first.
+        let collected_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: GNO,
+            block_number: COLLECTED_BLOCK,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+        };
+        events::dispatch_transaction(
+            &collected_ctx,
+            &[collected_log],
+            &gno_block_collected,
+            sender,
+        )
+        .await
+        .expect("collected-signatures dispatch succeeds");
+        assert_eq!(
+            pending_message_hash_events.len(),
+            1,
+            "the queue must hold the event until its source arrives"
+        );
+
+        let signature_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: GNO,
+            block_number: SIGNATURE_BLOCK,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+        };
+        events::dispatch_transaction(
+            &signature_ctx,
+            &[signature_log],
+            &gno_block_signature,
+            sender,
+        )
+        .await
+        .expect("signature dispatch succeeds");
+
+        assert!(
+            pending_message_hash_events.is_empty(),
+            "the queue must be drained once the source arrives"
+        );
+
+        buffer.run().await.expect("maintenance flush succeeds");
+
+        let native_id = native_id_blob(100, nonce).unwrap();
+        let key = key_from_native_id(&native_id, BRIDGE_ID).unwrap();
+
+        let message = crosschain_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("message row must exist");
+
+        assert_eq!(message.status, MessageStatus::ReadyToClaim);
+        assert_eq!(
+            message.dst_tx_hash, None,
+            "CollectedSignatures is a source-chain event, not a destination transaction"
+        );
+    }
+
+    fn dai_address() -> Address {
+        address!("6B175474E89094C44Da98b954EedeAC495271d0F")
     }
 }
