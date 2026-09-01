@@ -14,6 +14,8 @@ use alloy::{
 };
 use anyhow::{Context, Result, anyhow, ensure};
 use dashmap::DashMap;
+use interchain_indexer_entity::tokens;
+use sea_orm::ActiveValue;
 use serde_json::Value;
 use tokio::task::JoinHandle;
 use tonic::async_trait;
@@ -34,9 +36,16 @@ use super::{
     abi::AbiRegistry,
     events::{self, EventContext, PendingMessageHashEvents},
     settings::XDaiIndexerSettings,
-    types::Message,
+    types::{Message, NATIVE_SENTINEL},
     version::{XDaiSide, grammar_for},
 };
+
+/// Gnosis, the chain the native sentinel's `tokens` row is seeded on. Not
+/// derived from `Direction` here: this seed runs once at startup, before any
+/// message has established a direction, and the value is fixed by the
+/// protocol (xDai's Home chain), not by which message happens to be seen
+/// first.
+const GNOSIS_CHAIN_ID: i64 = 100;
 
 /// One configured deployment of the xDai proxy on one chain, valid from
 /// `started_at_block` until the next version of the same address begins.
@@ -147,6 +156,40 @@ impl XDaiIndexer {
             pending_message_hash_events: self.pending_message_hash_events.clone(),
             settings: self.settings.clone(),
             buffer: self.buffer.clone(),
+        }
+    }
+
+    /// Seeds the `(100, 0x00…00)` sentinel `tokens` row this indexer's own
+    /// transfers depend on for stats eligibility. Lives here, not in
+    /// `server::run`, which must not know indexer specifics -- mirrors how
+    /// `AmbIndexer::new` gets its DB handle from `stats.interchain_db_arc()`.
+    ///
+    /// Idempotent (`upsert_token_info`) and never fatal: a write failure is a
+    /// `warn`, not a startup abort, the same rationale as
+    /// `evm/log_stream_builder.rs::seed_catchup_floor` -- metadata enrichment
+    /// must not be able to stop ingestion. See the gotcha in
+    /// `.memory-bank/gotchas.md` for what a missing row actually costs
+    /// (a permanent `Background token info fetch failed` warn stream, and a
+    /// possible NULL `stats_asset_edges.decimals`), which is why this is not
+    /// cosmetic despite being non-blocking.
+    async fn seed_native_sentinel_token(&self) {
+        let seed = tokens::ActiveModel {
+            chain_id: ActiveValue::Set(GNOSIS_CHAIN_ID),
+            address: ActiveValue::Set(NATIVE_SENTINEL.as_slice().to_vec()),
+            symbol: ActiveValue::Set(Some("xDAI".to_string())),
+            name: ActiveValue::Set(Some("xDai".to_string())),
+            decimals: ActiveValue::Set(Some(18)),
+            ..Default::default()
+        };
+
+        if let Err(err) = self.db.upsert_token_info(seed).await {
+            tracing::warn!(
+                err = ?err,
+                bridge_id = self.bridge_id,
+                chain_id = GNOSIS_CHAIN_ID,
+                "failed to seed the native xDAI sentinel tokens row; stats enrichment will \
+                 keep re-attempting a doomed fetch against it until this succeeds"
+            );
         }
     }
 
@@ -401,6 +444,8 @@ impl CrosschainIndexer for XDaiIndexer {
 
         *self.state.write() = CrosschainIndexerState::Running;
 
+        self.seed_native_sentinel_token().await;
+
         let buffer_handle = match self.buffer.clone().start().await {
             Ok(handle) => handle,
             Err(err) => {
@@ -508,14 +553,14 @@ mod tests {
         rpc::types::Log,
     };
     use interchain_indexer_entity::{
-        amb_messages_confirmations, bridges, chains, crosschain_messages,
+        amb_messages_confirmations, bridges, chains, crosschain_messages, crosschain_transfers,
         sea_orm_active_enums::MessageStatus,
     };
-    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
 
     use super::*;
     use crate::{
-        MessageBufferSettings,
+        IndexedChains, MessageBufferSettings,
         indexer::xdai::types::{Message, compute_message_hash, key_from_native_id, native_id_blob},
         message_buffer::MessageBuffer,
         test_utils::init_db,
@@ -1327,5 +1372,211 @@ mod tests {
 
     fn dai_address() -> Address {
         address!("6B175474E89094C44Da98b954EedeAC495271d0F")
+    }
+
+    /// Proves the native sentinel actually clears
+    /// `transfer_identity_ready_condition` instead of deferring as
+    /// `identity_incomplete`: a completed Gno→Eth transfer reaches
+    /// `stats_processed = 1`, its two endpoints (Gnosis sentinel + Ethereum
+    /// ERC-20) merge into one shared `stats_assets` row, and the resulting
+    /// edge's `decimals` comes from the seeded sentinel row rather than
+    /// ending up NULL.
+    ///
+    /// Gno→Eth specifically, not Eth→Gno: `amount_side` is sticky to
+    /// whichever side is *source*-indexed
+    /// (`stats/projection.rs`, "source_chain_indexed || src_dec.is_some()"),
+    /// and for this direction the source chain is Gnosis -- so `decimals`
+    /// is read from the sentinel's own seeded row, which is exactly the
+    /// path this test exists to exercise. (For Eth→Gno the source side is
+    /// the ERC-20, and decimals would instead depend on that token's row
+    /// being enriched -- a real DAI/USDS contract eventually resolves that
+    /// via `TokenInfoService`'s on-chain fetch, which is out of scope for
+    /// this unit-level test.)
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn completed_transfer_reaches_one_shared_stats_asset_with_sentinel_decimals() {
+        let db = init_db("xdai_stats_projection_sentinel").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        // Mirrors `XDaiIndexer::seed_native_sentinel_token`.
+        interchain_db
+            .upsert_token_info(interchain_indexer_entity::tokens::ActiveModel {
+                chain_id: Set(GNO),
+                address: Set(NATIVE_SENTINEL.as_slice().to_vec()),
+                symbol: Set(Some("xDAI".to_string())),
+                name: Set(Some("xDai".to_string())),
+                decimals: Set(Some(18)),
+                ..Default::default()
+            })
+            .await
+            .expect("sentinel token seed succeeds");
+
+        let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
+        let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
+        let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
+        let signature_event = event_of(&home_abi(), "UserRequestForSignature");
+        let relayed_event = event_of(&foreign_abi(), "RelayedMessage");
+
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db.clone(),
+            MessageBufferSettings {
+                hot_ttl: Duration::from_secs(60),
+                maintenance_interval: Duration::from_secs(60),
+            },
+        );
+
+        let nonce = U256::from(0x3002_u64);
+        let value = U256::from(9_000u64);
+        let recipient = Address::repeat_byte(0xD2);
+        let sender = Address::repeat_byte(0x77);
+        let tx_signature = B256::repeat_byte(0x0C);
+        let tx_relayed = B256::repeat_byte(0x0D);
+        const SIGNATURE_BLOCK: u64 = 39_600_000;
+        const RELAYED_BLOCK: u64 = 22_300_000;
+
+        let signature_log = user_request_for_signature_log(
+            &signature_event,
+            home_addr,
+            recipient,
+            value,
+            nonce,
+            Some(dai_address()),
+            tx_signature,
+            SIGNATURE_BLOCK,
+        );
+        let relayed_log = affirmation_completed_log(
+            &relayed_event,
+            foreign_addr,
+            recipient,
+            value,
+            nonce,
+            tx_relayed,
+            RELAYED_BLOCK,
+            0,
+        );
+
+        let signature_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: GNO,
+            block_number: SIGNATURE_BLOCK,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+        };
+        events::dispatch_transaction(
+            &signature_ctx,
+            &[signature_log],
+            &block_with_timestamp(1_700_500_000),
+            sender,
+        )
+        .await
+        .expect("signature dispatch succeeds");
+
+        let relayed_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: ETH,
+            block_number: RELAYED_BLOCK,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+        };
+        events::dispatch_transaction(
+            &relayed_ctx,
+            &[relayed_log],
+            &block_with_timestamp(1_700_500_100),
+            sender,
+        )
+        .await
+        .expect("relayed dispatch succeeds");
+
+        buffer.run().await.expect("maintenance flush succeeds");
+
+        let native_id = native_id_blob(100, nonce).unwrap();
+        let key = key_from_native_id(&native_id, BRIDGE_ID).unwrap();
+
+        let transfer = crosschain_transfers::Entity::find()
+            .filter(crosschain_transfers::Column::MessageId.eq(key.message_id))
+            .filter(crosschain_transfers::Column::BridgeId.eq(BRIDGE_ID))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("transfer row must exist");
+        assert_eq!(
+            transfer.token_src_address,
+            Some(NATIVE_SENTINEL.as_slice().to_vec())
+        );
+
+        let conn = interchain_db.db.as_ref();
+        conn.transaction::<_, (), sea_orm::DbErr>(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(key.message_id, BRIDGE_ID)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[transfer.id],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                Ok(())
+            })
+        })
+        .await
+        .expect("projection succeeds");
+
+        let projected = crosschain_transfers::Entity::find_by_id(transfer.id)
+            .one(conn)
+            .await
+            .unwrap()
+            .expect("transfer row must still exist");
+        assert_eq!(projected.stats_processed, 1);
+        let asset_id = projected
+            .stats_asset_id
+            .expect("identity must resolve, not defer");
+
+        let asset_tokens: Vec<(i64, Vec<u8>)> =
+            interchain_indexer_entity::stats_asset_tokens::Entity::find()
+                .filter(
+                    interchain_indexer_entity::stats_asset_tokens::Column::StatsAssetId
+                        .eq(asset_id),
+                )
+                .all(conn)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|row| (row.chain_id, row.token_address))
+                .collect();
+        assert!(
+            asset_tokens.contains(&(GNO, NATIVE_SENTINEL.as_slice().to_vec())),
+            "the sentinel endpoint must be linked into the shared asset: {asset_tokens:?}"
+        );
+        assert!(
+            asset_tokens.contains(&(ETH, dai_address().as_slice().to_vec())),
+            "the Ethereum ERC-20 endpoint must be linked into the same asset: {asset_tokens:?}"
+        );
+
+        let edge = interchain_indexer_entity::stats_asset_edges::Entity::find_by_id((
+            asset_id, GNO, ETH, BRIDGE_ID,
+        ))
+        .one(conn)
+        .await
+        .unwrap()
+        .expect("edge row must exist");
+        assert_eq!(
+            edge.decimals,
+            Some(18),
+            "decimals must come from the seeded sentinel row, not end up NULL"
+        );
     }
 }

@@ -1,13 +1,20 @@
-use anyhow::Result;
+use std::str::FromStr;
+
+use alloy::primitives::{Address, U256};
+use anyhow::{Context, Result};
 use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
-    amb_messages_confirmations, crosschain_messages, sea_orm_active_enums::MessageStatus,
+    amb_messages_confirmations, crosschain_messages, crosschain_transfers,
+    sea_orm_active_enums::{MessageStatus, TransferType},
 };
-use sea_orm::ActiveValue;
+use sea_orm::{ActiveValue, prelude::BigDecimal};
 
 use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
 
-use super::types::{Direction, Message, native_id_blob};
+use super::{
+    types::{Direction, Message, NATIVE_SENTINEL, native_id_blob},
+    version::DAI,
+};
 
 impl Consolidate for Message {
     fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>> {
@@ -43,6 +50,7 @@ impl Consolidate for Message {
         let native_id = native_id_blob(direction.initiator_chain_id(), nonce)?;
         let (status, last_update_timestamp, dst_tx_hash, is_final) =
             status_and_finality(direction, self);
+        let transfer = build_transfer(key, direction, self)?;
 
         let message_model = crosschain_messages::ActiveModel {
             id: ActiveValue::Set(key.message_id),
@@ -86,8 +94,7 @@ impl Consolidate for Message {
             is_final,
             replace_existing: false,
             message: message_model,
-            // B3 adds the erc20_to_native / native_to_erc20 transfer row.
-            transfers: Vec::new(),
+            transfers: vec![transfer],
             amb_confirmations,
             // The nonce is contract-issued, so a duplicate key can only be an
             // indexing bug; there is no protocol-level collision to record.
@@ -140,6 +147,75 @@ fn status_and_finality(
     }
 }
 
+/// Exactly one transfer row per message (`index = 0`): there is no payload
+/// field and `isMessageValid` constrains the message blob to {104, 124}
+/// bytes, so a bridge message never carries more than one movement.
+///
+/// `src_amount`/`dst_amount` both come from the *source* event's `value` --
+/// not mirrored from an unknown side (the AMB "never mirror" trap): the
+/// bridge validates `(recipient, value, nonce)` identically on both ends and
+/// charges no fee today (verified: source and destination `value` match
+/// byte-for-byte in the worked traces), so this is recording one already-agreed
+/// quantity twice, not guessing an unobserved one.
+fn build_transfer(
+    key: &Key,
+    direction: Direction,
+    message: &Message,
+) -> Result<crosschain_transfers::ActiveModel> {
+    let (recipient, value, token_src_address, token_dst_address, transfer_type) =
+        match (&message.source_request, &message.signature_request) {
+            (Some(source), _) => (
+                source.event.recipient,
+                source.event.value,
+                source.event.source_asset,
+                NATIVE_SENTINEL,
+                TransferType::Erc20ToNative,
+            ),
+            (None, Some(signature_request)) => (
+                signature_request.event.recipient,
+                signature_request.event.value,
+                NATIVE_SENTINEL,
+                // Explicit only from Home v7; the legacy 104-byte layout
+                // (Home v6) hardcodes DAI (`parseMessage`).
+                signature_request.event.token.unwrap_or(DAI),
+                TransferType::NativeToErc20,
+            ),
+            (None, None) => unreachable!("consolidate() returns early without a source event"),
+        };
+
+    let amount = amount_to_decimal(value)?;
+
+    Ok(crosschain_transfers::ActiveModel {
+        message_id: ActiveValue::Set(key.message_id),
+        bridge_id: ActiveValue::Set(key.bridge_id as i32),
+        index: ActiveValue::Set(0),
+        r#type: ActiveValue::Set(Some(transfer_type)),
+        token_src_chain_id: ActiveValue::Set(direction.initiator_chain_id()),
+        token_dst_chain_id: ActiveValue::Set(direction.destination_chain_id()),
+        src_amount: ActiveValue::Set(Some(amount.clone())),
+        dst_amount: ActiveValue::Set(Some(amount)),
+        token_src_address: ActiveValue::Set(Some(address_bytes(token_src_address))),
+        token_dst_address: ActiveValue::Set(Some(address_bytes(token_dst_address))),
+        sender_address: ActiveValue::Set(message.sender_address.map(address_bytes)),
+        recipient_address: ActiveValue::Set(Some(address_bytes(recipient))),
+        token_ids: ActiveValue::Set(None),
+        stats_processed: ActiveValue::Set(0),
+        stats_asset_id: ActiveValue::Set(None),
+        created_at: ActiveValue::NotSet,
+        updated_at: ActiveValue::NotSet,
+        id: ActiveValue::NotSet,
+    })
+}
+
+fn address_bytes(address: Address) -> Vec<u8> {
+    address.as_slice().to_vec()
+}
+
+fn amount_to_decimal(amount: U256) -> Result<BigDecimal> {
+    BigDecimal::from_str(&amount.to_string())
+        .with_context(|| format!("failed to parse xDai transfer amount {amount}"))
+}
+
 #[cfg(test)]
 mod tests {
     use alloy::primitives::{Address, B256, U256};
@@ -183,6 +259,7 @@ mod tests {
                     recipient,
                     value: U256::from(1_000u64),
                     nonce: U256::from(nonce),
+                    source_asset: addr(0xDA),
                 },
                 transaction_hash: hash(0x11),
                 block_number: 10,
@@ -298,7 +375,25 @@ mod tests {
         );
         assert_eq!(consolidated.amb_confirmations.len(), 1);
         assert!(consolidated.amb_anomalies.is_empty());
-        assert!(consolidated.transfers.is_empty());
+
+        assert_eq!(
+            consolidated.transfers.len(),
+            1,
+            "exactly one row, index = 0"
+        );
+        let t = &consolidated.transfers[0];
+        assert_eq!(set_value!(t.index), 0);
+        assert_eq!(set_value!(t.r#type), Some(TransferType::Erc20ToNative));
+        assert_eq!(
+            set_value!(t.token_src_address),
+            Some(addr(0xDA).as_slice().to_vec())
+        );
+        assert_eq!(
+            set_value!(t.token_dst_address),
+            Some(NATIVE_SENTINEL.as_slice().to_vec())
+        );
+        assert_eq!(set_value!(t.src_amount), Some(BigDecimal::from(1_000)));
+        assert_eq!(set_value!(t.dst_amount), Some(BigDecimal::from(1_000)));
     }
 
     #[test]
@@ -374,6 +469,42 @@ mod tests {
         assert_eq!(
             set_value!(consolidated.message.dst_tx_hash),
             Some(hash(0xAA).as_slice().to_vec())
+        );
+
+        let t = &consolidated.transfers[0];
+        assert_eq!(set_value!(t.r#type), Some(TransferType::NativeToErc20));
+        assert_eq!(
+            set_value!(t.token_src_address),
+            Some(NATIVE_SENTINEL.as_slice().to_vec())
+        );
+        // `signature_request`'s fixture leaves `token: None` (Home v6), so
+        // this pins the legacy layout's hardcoded-DAI fallback.
+        assert_eq!(
+            set_value!(t.token_dst_address),
+            Some(DAI.as_slice().to_vec())
+        );
+    }
+
+    /// Home v7's explicit `token` field must be used verbatim, never
+    /// defaulted to DAI.
+    #[test]
+    fn consolidate_gno_to_eth_uses_the_explicit_home_v7_token_when_present() {
+        let mut message = signature_request(0x140a, addr(3), ts(3_000));
+        message.signature_request.as_mut().unwrap().event.token = Some(addr(0x55));
+        let key =
+            key_from_native_id(&native_id_blob(100, U256::from(0x140a_u64)).unwrap(), 3).unwrap();
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+
+        let t = &consolidated.transfers[0];
+        assert_eq!(set_value!(t.r#type), Some(TransferType::NativeToErc20));
+        assert_eq!(
+            set_value!(t.token_src_address),
+            Some(NATIVE_SENTINEL.as_slice().to_vec())
+        );
+        assert_eq!(
+            set_value!(t.token_dst_address),
+            Some(addr(0x55).as_slice().to_vec())
         );
     }
 

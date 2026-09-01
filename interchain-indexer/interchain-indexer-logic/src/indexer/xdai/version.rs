@@ -68,7 +68,12 @@ pub(crate) const FOREIGN_EPOCH_FLOOR_BLOCK: u64 = 22_273_407;
 /// Gnosis equivalent of [`FOREIGN_EPOCH_FLOOR_BLOCK`].
 pub(crate) const HOME_EPOCH_FLOOR_BLOCK: u64 = 39_569_937;
 
-const DAI: Address = address!("6B175474E89094C44Da98b954EedeAC495271d0F");
+/// The legacy 104-byte Gno→Eth message layout has no `token` field and
+/// hardcodes DAI (`parseMessage`); Home v6 predates the `token` param on
+/// `UserRequestForSignature` for the same reason. Exposed for
+/// `consolidation.rs`'s transfer construction, which needs the same
+/// fallback.
+pub(crate) const DAI: Address = address!("6B175474E89094C44Da98b954EedeAC495271d0F");
 const USDS: Address = address!("dC035D45d973E3EC169d2276DDab16f1e407384F");
 
 pub(crate) static FOREIGN_EVENTS: &[&str] = &["UserRequestForAffirmation", "RelayedMessage"];

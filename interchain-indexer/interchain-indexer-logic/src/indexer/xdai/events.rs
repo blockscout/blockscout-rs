@@ -17,6 +17,7 @@ use super::{
         UserRequestForAffirmationEvent, UserRequestForSignatureEvent, ValidatorConfirmation,
         compute_message_hash, key_from_native_id, native_id_blob,
     },
+    version::{XDaiSide, grammar_for},
 };
 
 pub(super) struct EventContext<'a> {
@@ -75,7 +76,7 @@ pub(super) async fn dispatch_transaction(
         let Some(topic) = log.topic0() else {
             continue;
         };
-        let (event, _kind) =
+        let (event, kind) =
             match ctx
                 .abi_registry
                 .resolve_log(ctx.chain_id, log.address(), topic, ctx.block_number)
@@ -112,6 +113,7 @@ pub(super) async fn dispatch_transaction(
                 handle_user_request_for_affirmation(
                     ctx,
                     event,
+                    kind.version,
                     log,
                     block_timestamp,
                     transaction_from,
@@ -171,6 +173,7 @@ pub(super) async fn dispatch_transaction(
 async fn handle_user_request_for_affirmation(
     ctx: &EventContext<'_>,
     event: &alloy::json_abi::Event,
+    version: i16,
     log: &Log,
     block_timestamp: chrono::NaiveDateTime,
     transaction_from: Address,
@@ -179,6 +182,14 @@ async fn handle_user_request_for_affirmation(
     let recipient = expect_address(decoded.body.first(), "recipient")?;
     let value = expect_uint(decoded.body.get(1), "value")?;
     let nonce = expect_nonce(decoded.body.get(2), "nonce")?;
+
+    // Never from a log (no token field exists) and never from a `latest`
+    // RPC call (would relabel history): the version-block-keyed grammar
+    // table is the only source that stays correct across the DAI->USDS
+    // flip at Foreign v10.
+    let source_asset = grammar_for(XDaiSide::Foreign, version)?
+        .source_asset
+        .context("xDai Foreign grammar has no source_asset")?;
 
     let native_id = native_id_blob(Direction::EthToGno.initiator_chain_id(), nonce)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
@@ -189,6 +200,7 @@ async fn handle_user_request_for_affirmation(
             recipient,
             value,
             nonce,
+            source_asset,
         },
         transaction_hash: log.transaction_hash.context("missing tx hash")?,
         block_number: block_number as i64,

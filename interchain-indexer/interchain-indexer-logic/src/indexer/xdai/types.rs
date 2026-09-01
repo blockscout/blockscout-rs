@@ -7,6 +7,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::message_buffer::Key;
 
+/// Sentinel written for the Gnosis leg of a transfer, which is always native
+/// xDAI and therefore has no token contract to record. A named constant, not
+/// a literal at each call site: if another bridge later writes a native leg
+/// on chain 100, both must use this exact value or they form two disjoint
+/// `stats_assets` rows for the same coin. See the gotcha in
+/// `.memory-bank/gotchas.md` for the full rationale, including why the
+/// matching `tokens` row must be seeded.
+pub(crate) const NATIVE_SENTINEL: Address = Address::ZERO;
+
 /// The nonce is a **per-contract** monotonic counter, so Eth→Gno and
 /// Gno→Eth have independent, overlapping ranges. `initiator_chain_id` is
 /// what makes identity globally unique — never key on the bare nonce.
@@ -80,6 +89,11 @@ pub(crate) struct UserRequestForAffirmationEvent {
     pub(crate) recipient: Address,
     pub(crate) value: U256,
     pub(crate) nonce: U256,
+    /// The Ethereum-side asset resolved from the grammar table at the log's
+    /// own block/version (DAI below Foreign v10, USDS from it) — never from
+    /// a log, since `UserRequestForAffirmation` carries no token field, and
+    /// never from a `latest`-block RPC call, which would relabel history.
+    pub(crate) source_asset: Address,
 }
 
 /// Payload shared by both destination-completion events
