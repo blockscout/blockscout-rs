@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use alloy::{
     json_abi::{Event, JsonAbi},
-    primitives::{Address, B256},
+    primitives::{Address, B256, keccak256},
     rpc::types::Filter,
 };
 use anyhow::{Context, Result, bail, ensure};
@@ -76,6 +76,22 @@ impl AbiRegistry {
                 let grammar = amb_grammar_for(proxy.version)?;
                 let side =
                     amb_side_for_abi(chain.chain_id, proxy.address, proxy.abi.as_ref(), grammar)?;
+
+                // xDai's proxy events share the exact same name partition, so
+                // the name-set inference above cannot tell the two protocols
+                // apart on its own — only the canonical topic0 can. This is
+                // what stops an xDai ABI from being accepted as AMB (or vice
+                // versa) under a plausible-looking config.
+                let canonical_topics = match side {
+                    AmbSide::Foreign => grammar.foreign_canonical_topics,
+                    AmbSide::Home => grammar.home_canonical_topics,
+                };
+                assert_canonical_topics(
+                    chain.chain_id,
+                    proxy.address,
+                    proxy.abi.as_ref(),
+                    canonical_topics,
+                )?;
 
                 match chain_side {
                     None => chain_side = Some(side),
@@ -235,6 +251,46 @@ fn amb_side_for_abi(
     }
 }
 
+/// Asserts that every subscribed event's `topic0`, as computed from the
+/// *configured* ABI, equals the canonical AMB signature's hash. Mirrors
+/// `xdai::abi::assert_canonical_topics`: the event-name partition is
+/// identical between the two protocols, so name-set inference alone cannot
+/// separate them — only the canonical topic0 can.
+fn assert_canonical_topics(
+    chain_id: i64,
+    address: Address,
+    abi_value: Option<&Value>,
+    canonical_topics: &[(&str, &str)],
+) -> Result<()> {
+    let abi_value = abi_value.with_context(|| {
+        format!("missing ABI for AMB contract row chain_id={chain_id} address={address}")
+    })?;
+    let abi: JsonAbi = serde_json::from_value(abi_value.clone()).with_context(|| {
+        format!("invalid ABI for AMB contract row chain_id={chain_id} address={address}")
+    })?;
+
+    for (event_name, canonical_signature) in canonical_topics {
+        let event = abi
+            .events
+            .get(*event_name)
+            .and_then(|events| events.first())
+            .with_context(|| {
+                format!("ABI for chain_id={chain_id} address={address} missing event {event_name}")
+            })?;
+        let expected = keccak256(canonical_signature.as_bytes());
+        let found = event.selector();
+        ensure!(
+            found == expected,
+            "AMB ABI for chain_id={chain_id} address={address} event {event_name} has topic0 \
+             {found} but the canonical AMB signature `{canonical_signature}` hashes to \
+             {expected} -- this looks like an xDai ABI configured under an AMB bridge (or an \
+             AMB ABI configured under an xDai bridge)",
+        );
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use alloy::primitives::Address;
@@ -281,11 +337,11 @@ mod tests {
         use alloy::providers::{Provider, ProviderBuilder};
 
         let home_abi = serde_json::json!([
-            {"type":"event","name":"UserRequestForSignature","inputs":[],"anonymous":false},
-            {"type":"event","name":"AffirmationCompleted","inputs":[],"anonymous":false},
-            {"type":"event","name":"SignedForAffirmation","inputs":[],"anonymous":false},
-            {"type":"event","name":"SignedForUserRequest","inputs":[],"anonymous":false},
-            {"type":"event","name":"CollectedSignatures","inputs":[],"anonymous":false}
+            {"type":"event","name":"UserRequestForSignature","inputs":[{"indexed":true,"name":"messageId","type":"bytes32"},{"indexed":false,"name":"encodedData","type":"bytes"}],"anonymous":false},
+            {"type":"event","name":"AffirmationCompleted","inputs":[{"indexed":true,"name":"sender","type":"address"},{"indexed":true,"name":"executor","type":"address"},{"indexed":true,"name":"messageId","type":"bytes32"},{"indexed":false,"name":"status","type":"bool"}],"anonymous":false},
+            {"type":"event","name":"SignedForAffirmation","inputs":[{"indexed":true,"name":"signer","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"}],"anonymous":false},
+            {"type":"event","name":"SignedForUserRequest","inputs":[{"indexed":true,"name":"signer","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"}],"anonymous":false},
+            {"type":"event","name":"CollectedSignatures","inputs":[{"indexed":false,"name":"authorityResponsibleForRelay","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"},{"indexed":false,"name":"NumberOfCollectedSignatures","type":"uint256"}],"anonymous":false}
         ]);
         let mediator_abi = serde_json::json!([
             {"type":"event","name":"TokensBridgingInitiated","inputs":[],"anonymous":false},
@@ -353,6 +409,46 @@ mod tests {
                 .inner
                 .contracts
                 .contains_key(&(100, mediator_address))
+        );
+    }
+
+    /// The reverse of `xdai::abi::from_chains_rejects_an_amb_abi_offered_as_xdai`:
+    /// xDai's proxy events share the exact same name partition as AMB's, so
+    /// this exercises the direction that name-set inference alone cannot
+    /// catch — only `assert_canonical_topics` does.
+    #[test]
+    fn from_chains_rejects_an_xdai_abi_offered_as_amb() {
+        use super::AbiRegistry;
+        use crate::indexer::amb::indexer::{AmbChainConfig, AmbContractConfig};
+        use alloy::providers::{Provider, ProviderBuilder};
+
+        // Real xDai Foreign/Home event ABIs (see xdai::abi's own fixtures):
+        // same event names as AMB, different real signatures/selectors.
+        let xdai_foreign_abi = serde_json::json!([
+            {"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"UserRequestForAffirmation","type":"event"},
+            {"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"transactionHash","type":"bytes32"}],"name":"RelayedMessage","type":"event"}
+        ]);
+
+        let provider = ProviderBuilder::new()
+            .connect_http("http://127.0.0.1:1".parse().unwrap())
+            .erased();
+        let chains = vec![AmbChainConfig {
+            chain_id: 1,
+            provider,
+            start_block: 100,
+            amb_proxies: vec![AmbContractConfig {
+                address: Address::from([1; 20]),
+                version: 6,
+                started_at_block: 100,
+                abi: Some(xdai_foreign_abi),
+            }],
+            mediators: vec![],
+        }];
+
+        let err = AbiRegistry::from_chains(&chains).expect_err("xDai ABI must be rejected as AMB");
+        assert!(
+            err.to_string().contains("topic0"),
+            "unexpected error: {err}"
         );
     }
 }
