@@ -1,0 +1,5 @@
+-- No-op. PostgreSQL cannot drop a value from an enum type (ALTER TYPE ...
+-- DROP VALUE does not exist), so 'xdai', 'erc20_to_native' and
+-- 'native_to_erc20' cannot be removed here. The table comment is likewise
+-- left in place -- it is documentation, not schema, and removing it would
+-- only make the reuse harder to discover on a rolled-back database.

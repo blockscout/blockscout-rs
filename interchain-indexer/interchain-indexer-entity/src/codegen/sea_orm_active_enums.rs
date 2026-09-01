@@ -11,6 +11,8 @@ pub enum BridgeType {
     AvalancheNative,
     #[sea_orm(string_value = "amb")]
     Amb,
+    #[sea_orm(string_value = "xdai")]
+    Xdai,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "edge_amount_side")]
@@ -43,4 +45,8 @@ pub enum TransferType {
     Native,
     #[sea_orm(string_value = "erc1155")]
     Erc1155,
+    #[sea_orm(string_value = "erc20_to_native")]
+    Erc20ToNative,
+    #[sea_orm(string_value = "native_to_erc20")]
+    NativeToErc20,
 }
