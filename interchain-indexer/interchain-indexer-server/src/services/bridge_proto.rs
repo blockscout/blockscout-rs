@@ -24,7 +24,13 @@ pub fn bridge_model_to_proto(
 ) -> Result<Bridge, Status> {
     let id =
         u32::try_from(model.id).map_err(|_| map_db_error(anyhow!("bridge id out of range")))?;
-    let indexed_chain_ids = indexed_chains.chain_ids_for(model.id);
+    // `chain_ids_for` sorts numerically; stringify only at the wire boundary so
+    // the emitted order stays numeric rather than lexicographic.
+    let indexed_chain_ids = indexed_chains
+        .chain_ids_for(model.id)
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
     Ok(Bridge {
         id,
         name: model.name,
@@ -62,14 +68,14 @@ mod tests {
         // permissive `may_observe` default.
         let indexed = IndexedChains::from_pairs([(2, 100)]);
         let bridge = bridge_model_to_proto(model(1), &indexed).unwrap();
-        assert_eq!(bridge.indexed_chain_ids, Vec::<i64>::new());
+        assert_eq!(bridge.indexed_chain_ids, Vec::<String>::new());
     }
 
     #[test]
     fn test_bridge_model_to_proto_multi_chain_is_sorted() {
         let indexed = IndexedChains::from_pairs([(1, 300), (1, 100), (1, 200)]);
         let bridge = bridge_model_to_proto(model(1), &indexed).unwrap();
-        assert_eq!(bridge.indexed_chain_ids, vec![100, 200, 300]);
+        assert_eq!(bridge.indexed_chain_ids, vec!["100", "200", "300"]);
     }
 
     #[test]
@@ -98,7 +104,7 @@ mod tests {
             [400, 500, 100, 300, 200],
             [200, 400, 100, 500, 300],
         ];
-        let expected = vec![100_i64, 200, 300, 400, 500];
+        let expected = vec!["100", "200", "300", "400", "500"];
 
         for chains in orderings {
             let indexed = IndexedChains::from_bridges([(1, chains.to_vec())]);

@@ -55,15 +55,15 @@ async fn get_bridges_reports_configured_chains_sorted_and_empty_for_removed_brid
         .iter()
         .find(|b| b["id"] == serde_json::json!(1))
         .expect("bridge 1 (from config) must be present");
-    let bridge_1_chains: Vec<i64> = bridge_1["indexed_chain_ids"]
+    let bridge_1_chains: Vec<&str> = bridge_1["indexed_chain_ids"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v.as_i64().unwrap())
+        .map(|v| v.as_str().unwrap())
         .collect();
     assert_eq!(
         bridge_1_chains,
-        vec![1, 100],
+        vec!["1", "100"],
         "bridge 1 must report its configured contract chains, sorted ascending; got {bridge_1_chains:?}"
     );
 

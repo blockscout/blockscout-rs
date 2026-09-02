@@ -1368,13 +1368,13 @@ definitions:
         type: array
         items:
           type: string
-          format: int64
         description: |-
           Chain ids this bridge actually indexes today, sorted ascending. Derived
           from the in-memory bridges config (`IndexedChains`), not from historical
           `bridge_contracts` rows, so a bridge removed from config but still
           present in the `bridges` table (upserts never delete) reports an empty
           list here rather than stale contract history.
+          The ids are decimal strings, matching `ChainInfo.id`.
   v1BridgeInfo:
     type: object
     properties:
@@ -1426,7 +1426,6 @@ definitions:
         format: int32
       chain_id:
         type: string
-        format: int64
       start_block:
         type: string
         format: uint64

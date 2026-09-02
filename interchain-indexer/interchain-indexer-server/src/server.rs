@@ -134,7 +134,8 @@ fn spawn_indexing_progress_metrics_worker(
                 Ok(items) => {
                     for item in items {
                         let bridge_label = item.bridge_id.to_string();
-                        let chain_label = item.chain_id.to_string();
+                        // Already a decimal string on the proto struct.
+                        let chain_label = item.chain_id;
                         INDEXER_CATCHUP_PROGRESS
                             .with_label_values(&[&bridge_label, &chain_label])
                             .set(item.catchup_progress_percent);
