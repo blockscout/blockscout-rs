@@ -28,7 +28,10 @@ use tonic::{Request, Response, Status};
 use super::{
     bridge_proto::bridge_model_to_proto,
     chain_info_proto::chain_model_to_proto,
-    utils::{build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, map_db_error},
+    utils::{
+        build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, map_db_error,
+        parse_bridge_ids_csv, parse_chain_ids_csv,
+    },
 };
 
 macro_rules! messages_pagination_params {
@@ -733,12 +736,44 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetChainsRequest>,
     ) -> Result<Response<GetChainsResponse>, Status> {
         let inner = request.into_inner();
+        let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
+        let mut bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
+        bridge_ids.sort_unstable();
+        bridge_ids.dedup();
+
+        // Chains the selected bridges index today. Only meaningful (and only
+        // computed) for a non-empty selection: `selected_configured_union`
+        // returns a bare `Vec` where empty means "no candidates", the OPPOSITE
+        // of `configured_union()`'s "restrict nothing". Gate on the parsed
+        // request value, never on the union's emptiness, or `?bridge_ids=999`
+        // would return the whole directory.
+        let selected_configured_chain_ids = if bridge_ids.is_empty() {
+            None
+        } else {
+            Some(self.indexed_chains.selected_configured_union(&bridge_ids))
+        };
+
         let models = self
             .chain_info_service
             .get_all_chains_info()
             .await
             .map_err(map_db_error)?;
 
+        let models: Vec<_> = models
+            .into_iter()
+            .filter(|m| chain_ids.is_empty() || chain_ids.contains(&m.id))
+            .filter(|m| {
+                selected_configured_chain_ids
+                    .as_ref()
+                    .is_none_or(|selected| selected.contains(&m.id))
+            })
+            .collect();
+
+        // The unindexed gate stays last and global: it means "no configured
+        // bridge indexes this chain", never "not indexed by the selected
+        // bridges". Under a non-empty `bridge_ids` it is currently a no-op
+        // (`selected_configured_union ⊆ configured_union`), but that
+        // containment is a property of the current derivation, not a guarantee.
         let models = if inner.include_unindexed_chains.unwrap_or(false) {
             models
         } else {
