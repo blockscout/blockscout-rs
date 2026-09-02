@@ -104,4 +104,25 @@ lazy_static! {
         &["bridge_id"],
     )
     .unwrap();
+
+    /// Protocol-agnostic successor to
+    /// `interchain_indexer_amb_logs_dropped_wrong_version_total`
+    /// (`amb/metrics.rs`): logs dropped because the contract version in force
+    /// at the log's block does not declare its `topic0`, while another
+    /// configured version of the same address does. Emitted by each
+    /// protocol's own dispatcher (never by `evm::abi_registry` itself), so the
+    /// `protocol` label always names the caller rather than something the
+    /// shared registry would have to infer.
+    ///
+    /// Zero is the expected value; see the AMB metric's doc for why a nonzero
+    /// value means a `started_at_block` boundary disagrees with the chain.
+    /// The AMB-specific metric keeps emitting in parallel for one release —
+    /// operators may already alert on it — and is slated for removal once
+    /// this one is established.
+    pub static ref LOGS_DROPPED_WRONG_VERSION_TOTAL: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_logs_dropped_wrong_version_total",
+        "logs dropped because the version active at their block does not declare their topic0",
+        &["protocol", "bridge_id", "chain_id"],
+    )
+    .unwrap();
 }

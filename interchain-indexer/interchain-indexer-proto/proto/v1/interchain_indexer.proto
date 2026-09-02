@@ -267,6 +267,17 @@ enum MessageStatus {
   MESSAGE_STATUS_READY_TO_CLAIM = 3;
 }
 
+// Per-side classification of a TokenInfo. UNSPECIFIED is the proto3 default,
+// so a transfer whose type column was never set (e.g. Avalanche today)
+// reports it rather than being silently labelled ERC_20.
+enum TokenType {
+  TOKEN_TYPE_UNSPECIFIED = 0;
+  TOKEN_TYPE_ERC_20 = 1;
+  TOKEN_TYPE_NATIVE = 2;
+  TOKEN_TYPE_ERC_721 = 3;
+  TOKEN_TYPE_ERC_1155 = 4;
+}
+
 message InterchainMessage {
   BridgeInfo bridge = 1;
   string message_id = 2;
@@ -430,11 +441,15 @@ message GetTransfersByAddressRequest {
 
 message TokenInfo {
   reserved 1; // chain_id moved to InterchainTransfer
-  string address_hash = 2;
+  // Absent iff `type == TOKEN_TYPE_NATIVE`: a native side has no token
+  // contract, so it must not carry the zero-address sentinel some indexers
+  // (xDai) write internally for it.
+  optional string address_hash = 2;
   optional string name = 3;
   optional string symbol = 4;
   optional string decimals = 5;
   optional string icon_url = 6;
+  TokenType type = 7;
 }
 
 message InterchainTransfer {

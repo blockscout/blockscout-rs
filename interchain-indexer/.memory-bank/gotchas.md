@@ -1740,3 +1740,114 @@ edge `decimals` when `NULL`, so correcting `tokens` alone does not
 retroactively fix an already-populated (wrong) edge value.
 
 ---
+
+## The xDai Native-Leg Sentinel Must Be Seeded As A `tokens` Row
+
+**Symptom:** Every stats projection batch touching an xDai transfer logs
+`Background token info fetch failed` at `warn`, forever; or an xDai
+transfer's `stats_asset_edges` row has `decimals = NULL` even though the
+transfer itself resolved to a shared `stats_assets` row correctly.
+
+**Root cause:** The Gnosis leg of every xDai transfer is native xDAI, which
+has no token contract and therefore no address to record. Leaving that side
+`NULL` is not an option: `stats/indexed_chains.rs::transfer_identity_ready_condition`
+only accepts a `NULL` token endpoint when its chain is *unindexed* for the
+bridge — Gnosis is very much indexed here, so every xDai transfer would
+defer forever with `stats_processed = 0`, invisible in bridged-token stats.
+
+The fix is the same zero-address sentinel pattern the down-migration of
+`m20260508_082944_add_amb_indexer` already uses as a neutral placeholder:
+`interchain-indexer-logic/src/indexer/xdai/types.rs::NATIVE_SENTINEL`
+(`0x0000000000000000000000000000000000000000` on chain `100`), written to
+`crosschain_transfers.token_dst_address` (Eth→Gno) or `token_src_address`
+(Gno→Eth), with `TransferType::Erc20ToNative` / `NativeToErc20` — never
+`Native`, which means native on *both* sides. This makes the Gnosis leg a
+real, non-NULL endpoint, so `ensure_asset_for_transfer`'s union-find links
+`(100, 0x00…00)` and the Ethereum-side ERC-20 into one `stats_assets` row
+with no stats-layer change.
+
+That alone is not sufficient, though — a real `tokens` row for
+`(100, 0x00…00)` must also exist, seeded by `XDaiIndexer::start()` (mirrors
+`AmbIndexer::new`'s `stats.interchain_db_arc()` pattern; deliberately not in
+`server::run`, which must not know indexer specifics). Two concrete failures
+follow if it is missing, both traced in `xdai-bridge-indexer`'s task
+artifacts:
+
+- `TokenInfoService::kickoff_token_fetch_for_stats_enrichment`
+  (`token_info/service.rs`) decides whether to fetch purely from
+  `db.get_token_info(chain_id, address)` — `Ok(None)` ⇒ fetch. It does
+  **not** consult `error_cache` (that only short-circuits the request-time
+  `get_token_info` path); with no row, every stats projection batch that
+  touches an xDai transfer re-spawns a doomed `eth_call` against a
+  non-contract address, forever.
+- `stats_asset_edges.decimals` is read per side from the `tokens` table
+  (`stats/projection.rs`), and which side supplies it depends on the sticky
+  `amount_side` (`EdgeAmountSide::Source` whenever the message's *source*
+  chain was indexed — see "Stats Edge Amount Side Must Follow Indexed
+  Source Presence" above). For a Gno→Eth transfer the source chain is
+  Gnosis, so `decimals` is read from the sentinel's own row; without it,
+  the edge's `decimals` ends up `NULL` even though asset identity resolved
+  correctly.
+
+**Fix:** Seed exactly one row —
+`chain_id = 100, address = 0x00…00, symbol = "xDAI", name = "xDai",
+decimals = 18` — via the existing idempotent `upsert_token_info`. A seed
+failure is a `warn`, not a startup abort (same rationale as
+`evm/log_stream_builder.rs::seed_catchup_floor`: metadata enrichment must
+never be able to stop ingestion), and is self-healing on the next restart.
+
+**The sentinel constant is shared, not xDai-private.** If another bridge
+later writes a native leg on chain `100`, it must reuse
+`xdai::types::NATIVE_SENTINEL` rather than its own zero-address literal, or
+the two bridges' native xDAI legs form two disjoint `stats_assets` rows for
+the same coin instead of merging.
+
+---
+
+## xDai Messages Straddling The Epoch Floor Are Deliberately Not Indexed
+
+**Symptom:** An xDai buffer entry accumulates a destination event
+(`AffirmationCompleted` or `RelayedMessage`) but never consolidates, so the
+message never appears in `crosschain_messages`. It settles into
+`pending_messages` and stays there.
+
+**Root cause:** `xdai/consolidation.rs::consolidate` returns `Ok(None)` unless
+`source_request` or `signature_request` is set — a destination event alone is
+not enough to build a row. Both destination handlers reach the buffer through
+`alter`, which *creates* the entry, so a destination-only entry is reachable
+and then simply waits forever for a source that will never arrive.
+
+This is reachable only in one window: a message whose source event sits **below
+the configured epoch floor** (Ethereum `22273407` / Gnosis `39569937`) while
+its destination event sits above it. Both floors are the 2025-04-15 upgrade
+blocks, so the candidate population is exactly "messages in flight across that
+upgrade".
+
+**This is intentional, not a bug to fix.** Two reasons:
+
+1. **It should be empty in practice.** The bridge is taken down for maintenance
+   to upgrade its contracts, so there should be no message in flight across the
+   upgrade boundary at all.
+2. **A destination-only row could not be built correctly anyway.** For
+   Ethereum→Gnosis the source asset comes from the version-keyed grammar table
+   *at the source block* (`UserRequestForAffirmation` carries no token field).
+   With no source event there is no source block, so `token_src_address` would
+   have to be `NULL` — and a NULL token address on an indexed chain is never
+   stats-eligible (`stats/indexed_chains.rs::transfer_identity_ready_condition`),
+   which is the exact problem the native sentinel exists to avoid. The row
+   would be permanently deferred from stats, i.e. no better than not existing.
+
+AMB *does* synthesize such rows (`amb/consolidation.rs::build_destination_only`),
+and that asymmetry is deliberate: AMB's destination event carries the full
+header (sender, executor, both chain ids), so a complete row is derivable from
+it. xDai's carries only `(recipient, value, nonce)`.
+
+**If this ever needs to change** — e.g. an upgrade ships without a maintenance
+pause — the honest fix is to lower `started_at_block` for the affected side and
+implement the pre-2025-04-15 grammar, not to synthesize partial rows. Below
+that floor the `bytes32` in these events is a *transaction hash*, not a nonce,
+under an unchanged `topic0`, so the identity derivation differs too; see
+`.memory-bank/research/xdai-bridge-protocol-and-indexing-fit.md` §"Resulting
+decode epochs".
+
+---

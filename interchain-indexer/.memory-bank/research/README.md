@@ -132,6 +132,18 @@ Small topics may keep some sections brief.
   semantics for Avalanche and AMB indexing, the missing post-`getLogs`
   acknowledgement boundary, durable-gap scenarios, and the actual guarantees
   of `indexer_checkpoints` and `indexer_failures`
+- `xdai-bridge-protocol-and-indexing-fit.md` — the xDai bridge (DAI/USDS ↔
+  native xDAI) as an indexing target: why it is a standalone ERC20-to-Native
+  TokenBridge rather than an AMB application, the shared-event-name /
+  different-signature collision with AMB, nonce-based identity (per-direction
+  counters, the `chain_id ‖ nonce` `native_id` encoding the official explorer
+  uses, and the silent 2025-04-15 switch from source tx hash under an unchanged
+  `topic0`), the DAI→USDS reserve flip that changes the source asset without
+  touching any event, the `BridgeRouter`/`XDaiBridgePeripheral` entry points
+  shared with Omnibridge, the one-message-one-transfer structural guarantee, why
+  `AmountLimitExceeded` and `outOfLimitAmount()` must not be read as stuck
+  funds, the full implementation upgrade history of both proxies, and what would
+  have to be new versus reused. Pre-implementation: no xDai indexer exists yet
 - Follow-up: migrate Avalanche's inline cleanup guard / EVM log orchestration
   onto `interchain-indexer-logic/src/indexer/cleanup_guard.rs` and
   `interchain-indexer-logic/src/indexer/evm/`.

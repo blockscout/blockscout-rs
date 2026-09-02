@@ -24,6 +24,8 @@ pub enum IndexerType {
     #[serde(rename = "amb")]
     #[allow(clippy::upper_case_acronyms)]
     AMB,
+    #[serde(rename = "xdai")]
+    XDai,
     #[default]
     Unknown,
 }

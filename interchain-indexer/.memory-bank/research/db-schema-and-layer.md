@@ -122,6 +122,24 @@ This table stores temporary cold-tier state for partially observed messages.
 These tables hold shared indexer/runtime state rather than user-facing canonical
 message data.
 
+#### Protocol-Specific Support Tables (Shared Across Protocols Despite The Name)
+
+- `amb_messages_confirmations` — per-validator signature confirmations, one row
+  per `(message_id, bridge_id, validator_address)`. Every column
+  (`message_id`, `bridge_id`, `validator_address`, `tx_hash`, `block_number`,
+  `block_timestamp`) is protocol-agnostic; the `amb_` prefix is historical, not
+  a scoping constraint. `bridge_id` is what disambiguates rows across bridges
+  sharing the table. The xDai indexer (`interchain-indexer-logic/src/indexer/xdai/`)
+  reuses this table as-is for its own validator confirmations — no new table,
+  no migration beyond a `COMMENT ON TABLE` recording the reuse
+  (`m20260830_120000_add_xdai_indexer`). A rename was considered and rejected:
+  it would need a migration, an entity regeneration, and churn across every
+  consumer for zero behavioural gain.
+- `amb_message_anomalies` — AMB-specific `messageId` collision captures.
+  **Not** reused by xDai: the xDai nonce is contract-issued, so a duplicate key
+  can only be an indexing bug, not a protocol-level collision to record. xDai's
+  `ConsolidatedMessage.amb_anomalies` stays empty for every message.
+
 #### Metadata / Cache Tables
 
 - `tokens`
