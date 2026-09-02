@@ -1653,7 +1653,7 @@ definitions:
         description: |-
           True when this record's source or destination chain is not indexed by its
           own bridge (an unknown destination also counts). Such a record can never be
-          observed from both sides. Always present.
+          observed from both sides.
   v1InterchainTransfer:
     type: object
     properties:
@@ -1692,7 +1692,7 @@ definitions:
         description: |-
           True when this record's source or destination chain is not indexed by its
           own bridge (an unknown destination also counts). Such a record can never be
-          observed from both sides. Always present.
+          observed from both sides.
   v1MessagePathRow:
     type: object
     properties:

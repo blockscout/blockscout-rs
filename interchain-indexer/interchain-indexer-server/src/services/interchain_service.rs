@@ -224,7 +224,7 @@ impl InterchainServiceImpl {
             payload,
             extra: BTreeMap::new(),
             transfers,
-            has_unindexed_chain: Some(has_unindexed_chain),
+            has_unindexed_chain,
         }
     }
 
@@ -287,7 +287,7 @@ impl InterchainServiceImpl {
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash.clone()),
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: message.last_update_timestamp.map(db_datetime_to_string),
-            has_unindexed_chain: Some(has_unindexed_chain),
+            has_unindexed_chain,
         }
     }
 
@@ -327,7 +327,7 @@ impl InterchainServiceImpl {
             destination_transaction_hash: hex_string_opt(transfer.dst_tx_hash.clone()),
             recipient: self.get_address_info_opt(transfer.recipient_address.clone()),
             receive_timestamp: transfer.last_update_timestamp.map(db_datetime_to_string),
-            has_unindexed_chain: Some(has_unindexed_chain),
+            has_unindexed_chain,
         }
     }
 
