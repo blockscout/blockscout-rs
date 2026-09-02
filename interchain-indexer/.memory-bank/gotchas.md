@@ -1740,3 +1740,40 @@ edge `decimals` when `NULL`, so correcting `tokens` alone does not
 retroactively fix an already-populated (wrong) edge value.
 
 ---
+
+## Retyping A Numeric Proto Field To `string` Silently Turns Any Sort On It Lexicographic
+
+**Symptom:** After `ChainIndexingProgress.chain_id` was retyped from `int64`
+to `string`, `GET /api/v1/status/indexing` would have emitted chain ids
+`{1, 2, 100}` in the order `1, 100, 2`. Nothing fails to compile: the sort key
+is still valid, just a `String` now, and `String: Ord` is lexicographic.
+
+**Root cause:** `collect_indexing_progress`
+(`interchain-indexer-server/src/services/status.rs`) built the proto items
+first and sorted them afterwards with
+`items.sort_by_key(|item| (item.bridge_id, item.chain_id))`. The proto struct
+is the *wire* representation; once its `chain_id` is a decimal string, that
+line orders by string, not by number.
+
+**Why no test caught it:** the shared test fixture
+(`config/omnibridge/bridges.json`) declares only chains `{1, 100}`, whose
+lexicographic and numeric orders coincide. A two-element fixture cannot
+distinguish the two orderings at all — you need at least three ids where the
+widths differ, e.g. `{1, 2, 100}`.
+
+**Rule:** settle ordering on the domain type before converting to the wire
+type, per `.memory-bank/rules/rust-style.md`'s "Domain Types over Storage
+Types". `status.rs` now sorts the `IndexingTarget` slice on the numeric `i64`
+and stringifies only when the proto struct is built;
+`bridge_proto.rs`'s `indexed_chain_ids` likewise maps `to_string()` *after*
+`IndexedChains::chain_ids_for`'s numeric sort.
+
+**When you next stringify a numeric proto field, grep for every `sort`,
+`sort_by_key`, `BTreeMap`, `BTreeSet`, `min`, `max` and `binary_search` that
+touches it** — all of them change meaning silently, and only the ones with a
+three-plus-element, mixed-width fixture will fail a test.
+`test_collect_indexing_progress_orders_chain_ids_numerically` (`status.rs`)
+is the guard for this specific field; it was confirmed to fail against the
+lexicographic sort before landing.
+
+---
