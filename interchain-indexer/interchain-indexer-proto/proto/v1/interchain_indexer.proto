@@ -215,7 +215,7 @@ message BridgeInfo {
   optional string ui_url = 2;
   optional string docs_url = 3;
   // Bridge id usable in bridge_ids filters.
-  optional uint32 id = 4;
+  uint32 id = 4;
 }
 
 message ChainInfo {

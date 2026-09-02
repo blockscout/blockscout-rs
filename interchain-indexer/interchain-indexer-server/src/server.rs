@@ -495,7 +495,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridges,
         api_settings.clone(),
         indexed_chains.clone(),
-    ));
+    )?);
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(
         stats.clone(),
         api_settings,
