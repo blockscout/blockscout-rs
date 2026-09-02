@@ -35,6 +35,7 @@ use crate::{
 use super::{
     abi::AbiRegistry,
     events::{self, EventContext, PendingMessageHashEvents},
+    metrics,
     settings::XDaiIndexerSettings,
     types::{Message, NATIVE_SENTINEL},
     version::{XDaiSide, grammar_for},
@@ -173,24 +174,7 @@ impl XDaiIndexer {
     /// possible NULL `stats_asset_edges.decimals`), which is why this is not
     /// cosmetic despite being non-blocking.
     async fn seed_native_sentinel_token(&self) {
-        let seed = tokens::ActiveModel {
-            chain_id: ActiveValue::Set(GNOSIS_CHAIN_ID),
-            address: ActiveValue::Set(NATIVE_SENTINEL.as_slice().to_vec()),
-            symbol: ActiveValue::Set(Some("xDAI".to_string())),
-            name: ActiveValue::Set(Some("xDai".to_string())),
-            decimals: ActiveValue::Set(Some(18)),
-            ..Default::default()
-        };
-
-        if let Err(err) = self.db.upsert_token_info(seed).await {
-            tracing::warn!(
-                err = ?err,
-                bridge_id = self.bridge_id,
-                chain_id = GNOSIS_CHAIN_ID,
-                "failed to seed the native xDAI sentinel tokens row; stats enrichment will \
-                 keep re-attempting a doomed fetch against it until this succeeds"
-            );
-        }
+        seed_native_sentinel_token_into(&self.db, self.bridge_id).await;
     }
 
     async fn run(ctx: RunContext) -> Result<()> {
@@ -200,7 +184,7 @@ impl XDaiIndexer {
             "starting xDai indexer"
         );
 
-        check_source_asset_matches_latest(&ctx.chains, &ctx.abi_registry).await;
+        check_source_asset_matches_latest(ctx.bridge_id, &ctx.chains, &ctx.abi_registry).await;
 
         let mut streams = Vec::with_capacity(ctx.chains.len());
         for chain in &ctx.chains {
@@ -329,16 +313,63 @@ alloy::sol! {
     }
 }
 
+/// The body of [`XDaiIndexer::seed_native_sentinel_token`], as a free
+/// function over the database handle.
+///
+/// Split out purely for testability: the method needs a fully constructed
+/// `XDaiIndexer` (and therefore a `StatsService`), while the behaviour worth
+/// pinning — that the row lands with `decimals = 18` and that a second call
+/// is a no-op — needs nothing but a database. Without this split, "startup
+/// actually creates the row" is only ever verified by inference from the
+/// stats test, which inserts the row itself.
+async fn seed_native_sentinel_token_into(db: &InterchainDatabase, bridge_id: i32) {
+    let seed = tokens::ActiveModel {
+        chain_id: ActiveValue::Set(GNOSIS_CHAIN_ID),
+        address: ActiveValue::Set(NATIVE_SENTINEL.as_slice().to_vec()),
+        symbol: ActiveValue::Set(Some("xDAI".to_string())),
+        name: ActiveValue::Set(Some("xDai".to_string())),
+        decimals: ActiveValue::Set(Some(18)),
+        ..Default::default()
+    };
+
+    if let Err(err) = db.upsert_token_info(seed).await {
+        tracing::warn!(
+            err = ?err,
+            bridge_id,
+            chain_id = GNOSIS_CHAIN_ID,
+            "failed to seed the native xDAI sentinel tokens row; stats enrichment will \
+             keep re-attempting a doomed fetch against it until this succeeds"
+        );
+    }
+}
+
 /// One-off startup sanity check, not a per-block probe: reads the Foreign
 /// proxy's `erc20token()` at `latest` and compares it against the *newest*
-/// configured version's `source_asset`. A mismatch means the bridge was
-/// upgraded without a matching `bridges.json` update -- loud, but not fatal,
-/// since a fresh vNext deployment should not stop the service.
+/// configured version's `source_asset`.
+///
+/// A mismatch means the bridge was upgraded without a matching
+/// `bridges.json` update, so every Ethereum→Gnosis deposit indexed from that
+/// point carries the wrong `token_src_address`. Reported at `error` and via
+/// [`metrics::XDAI_SOURCE_ASSET_MISMATCH`], **not** at `warn`: the asset
+/// comes from a static table rather than from a log, so nothing downstream
+/// can notice the divergence and this is the entire detection path.
+///
+/// Deliberately **not** fatal, and the two artifacts disagreed on this until
+/// it was resolved in favour of non-fatal (see `implementation-plan-2.md`
+/// "Source-asset validation"): `spawn_configured_indexers` propagates a
+/// construction error, so failing here would take the AMB and Avalanche
+/// indexers down too — a service-wide outage traded for a labelling error
+/// confined to one direction of one bridge, in a condition only reachable
+/// after a coordinated proxy upgrade that is itself an operational event.
 ///
 /// Only the newest window is checked: historical windows are immutable and
 /// were verified by bisection, and reading `erc20token()` at `latest` says
 /// nothing about what it returned at a historical block.
-async fn check_source_asset_matches_latest(chains: &[XDaiChainConfig], abi_registry: &AbiRegistry) {
+async fn check_source_asset_matches_latest(
+    bridge_id: i32,
+    chains: &[XDaiChainConfig],
+    abi_registry: &AbiRegistry,
+) {
     let Ok(foreign_chain_id) = abi_registry.chain_id_for_side(XDaiSide::Foreign) else {
         return;
     };
@@ -365,21 +396,39 @@ async fn check_source_asset_matches_latest(chains: &[XDaiChainConfig], abi_regis
 
     let contract = IXDaiForeignBridge::new(newest.address, chain.provider.clone());
     match contract.erc20token().call().await {
-        Ok(found) if found == expected => {}
-        Ok(found) => tracing::warn!(
-            chain_id = chain.chain_id,
-            address = %newest.address,
-            expected = %expected,
-            found = %found,
-            "xDai Foreign proxy erc20token() does not match the configured newest source_asset; \
-             a bridge upgrade may have shipped without a matching bridges.json update"
-        ),
+        Ok(found) if found == expected => {
+            metrics::XDAI_SOURCE_ASSET_MISMATCH
+                .with_label_values(&[&bridge_id.to_string()])
+                .set(0);
+        }
+        Ok(found) => {
+            metrics::XDAI_SOURCE_ASSET_MISMATCH
+                .with_label_values(&[&bridge_id.to_string()])
+                .set(1);
+            tracing::error!(
+                bridge_id,
+                chain_id = chain.chain_id,
+                address = %newest.address,
+                version = newest.version,
+                expected = %expected,
+                found = %found,
+                "xDai Foreign proxy erc20token() does not match the configured newest \
+                 source_asset: the bridge was upgraded without a matching bridges.json update, \
+                 so every Ethereum->Gnosis deposit indexed from now on will carry the wrong \
+                 token_src_address. Indexing continues deliberately (a hard failure here would \
+                 stop every other bridge too) -- add the new version window to bridges.json and \
+                 reindex the affected range"
+            );
+        }
+        // Left unset rather than zeroed: a transient RPC failure is not
+        // evidence that the config agrees with the chain.
         Err(err) => tracing::warn!(
             err = ?err,
+            bridge_id,
             chain_id = chain.chain_id,
             address = %newest.address,
             "failed to sanity-check xDai Foreign proxy erc20token() against the configured \
-             source_asset"
+             source_asset; the newest source_asset window is unverified this run"
         ),
     }
 }
@@ -1367,6 +1416,60 @@ mod tests {
         assert_eq!(
             message.dst_tx_hash, None,
             "CollectedSignatures is a source-chain event, not a destination transaction"
+        );
+    }
+
+    /// The startup seed itself, not its consequences. The stats test below
+    /// inserts the sentinel row by hand and then proves what having it buys;
+    /// this proves the indexer's own startup path actually creates it, with
+    /// `decimals = 18` — the value `stats_asset_edges` reads — and that a
+    /// restart is a no-op rather than a conflict.
+    ///
+    /// Why this matters beyond tidiness: with no row,
+    /// `TokenInfoService::kickoff_token_fetch_for_stats_enrichment` decides
+    /// to fetch from `db.get_token_info` alone and never consults its
+    /// `error_cache`, so every stats projection batch touching an xDai
+    /// transfer re-spawns a doomed `eth_call` against a non-contract address.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn seed_native_sentinel_token_creates_the_row_and_is_idempotent() {
+        let db = init_db("xdai_seed_native_sentinel_token").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        seed_native_sentinel_token_into(&interchain_db, BRIDGE_ID).await;
+
+        let row = interchain_db
+            .get_token_info(GNOSIS_CHAIN_ID as u64, NATIVE_SENTINEL.as_slice().to_vec())
+            .await
+            .expect("token lookup succeeds")
+            .expect("the sentinel row must exist after the seed");
+
+        assert_eq!(row.decimals, Some(18), "stats_asset_edges reads this");
+        assert_eq!(row.symbol.as_deref(), Some("xDAI"));
+        assert_eq!(row.name.as_deref(), Some("xDai"));
+
+        // A restart must not conflict, and must not degrade the row.
+        seed_native_sentinel_token_into(&interchain_db, BRIDGE_ID).await;
+
+        let again = interchain_db
+            .get_token_info(GNOSIS_CHAIN_ID as u64, NATIVE_SENTINEL.as_slice().to_vec())
+            .await
+            .expect("token lookup succeeds")
+            .expect("the sentinel row must survive a second seed");
+        assert_eq!(again.decimals, Some(18));
+        assert_eq!(again.symbol.as_deref(), Some("xDAI"));
+
+        // `kickoff_token_fetch_for_stats_enrichment` treats a row with
+        // decimals plus a non-empty name/symbol as "no fetch needed"; assert
+        // that predicate directly rather than trying to observe an absent
+        // log line.
+        let needs_fetch = again.decimals.is_none()
+            || (again.name.as_ref().is_none_or(|s| s.is_empty())
+                && again.symbol.as_ref().is_none_or(|s| s.is_empty()));
+        assert!(
+            !needs_fetch,
+            "the seeded row must make the stats-enrichment fetch decision a no-op"
         );
     }
 

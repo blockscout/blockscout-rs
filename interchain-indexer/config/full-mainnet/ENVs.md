@@ -1,6 +1,6 @@
 # ENVs — `config/full-mainnet`
 
-AMB/Omnibridge between Ethereum and Gnosis, plus Avalanche ICM/ICTT on C-Chain. The set the `just run` recipe uses.
+AMB/Omnibridge and the xDai bridge between Ethereum and Gnosis, plus Avalanche ICM/ICTT on C-Chain. The set the `just run` recipe uses.
 
 Grammar, merge semantics, field reference and traps: [`config/ENVs.md`](../ENVs.md). Here — only this set's variables, with their actual values, in two interchangeable forms per entity: one JSON variable, or one variable per field.
 
@@ -16,6 +16,7 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 | --- | --- | --- | --- |
 | `1` | AMB/Omnibridge | `amb` / `amb` | 4 |
 | `2` | Avalanche ICTT | `avalanche_native` / `icm_ictt` | 1 |
+| `3` | xDai Bridge | `xdai` / `xdai` | 4 |
 
 The Avalanche side ships with C-Chain only, deliberately: bridge `2` has
 `process_unknown_chains: true`, so subnets are indexed through their C-Chain
@@ -220,6 +221,74 @@ INTERCHAIN_INDEXER_BRIDGES__2__HOME_CHAIN_ID=null
 # chain 43114, version 1
 INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__43114__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=42526120
 ```
+
+### Bridge `3` — xDai Bridge
+
+Both of this bridge's chains (`1` and `100`) are already configured in this
+set for bridge `1`, so adding or changing the xDai bridge here needs no chain
+block — only the variables below.
+
+`contracts` is replaced wholesale by the single-variable form, so a per-field
+override is the safer pinpoint change once the bridge already exists — use
+the field-by-field contract blocks below rather than re-supplying the whole
+bridge as JSON.
+
+```bash
+INTERCHAIN_INDEXER_BRIDGES__3__NAME='xDai Bridge'
+INTERCHAIN_INDEXER_BRIDGES__3__TYPE=xdai
+INTERCHAIN_INDEXER_BRIDGES__3__INDEXER_TYPE=xdai
+INTERCHAIN_INDEXER_BRIDGES__3__ENABLED=true
+INTERCHAIN_INDEXER_BRIDGES__3__API_URL=null
+INTERCHAIN_INDEXER_BRIDGES__3__UI_URL='https://bridge.gnosischain.com/bridge-explorer/transaction/{{message_id}}'
+INTERCHAIN_INDEXER_BRIDGES__3__DOCS_URL='https://docs.gnosischain.com/bridges/About%20Token%20Bridges/xdai-bridge'
+```
+
+#### Contracts of bridge `3`
+
+`kind` is deliberately absent for every xDai contract — unlike AMB, xDai has
+one contract kind per chain, so the side (Foreign/Home) is inferred from the
+ABI's event set, not from a config field.
+
+```bash
+# chain 1 (Ethereum, Foreign), version 9 -- epoch floor
+INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__1__0x4aa42145Aa6Ebf72e164C9bBC74fbD3788045016__9__STARTED_AT_BLOCK=22273407
+```
+
+```bash
+# chain 1 (Ethereum, Foreign), version 10 -- ABI unchanged; erc20token() flips DAI -> USDS
+INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__1__0x4aa42145Aa6Ebf72e164C9bBC74fbD3788045016__10__STARTED_AT_BLOCK=23748179
+```
+
+```bash
+# chain 100 (Gnosis, Home), version 6 -- epoch floor
+INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__100__0x7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6__6__STARTED_AT_BLOCK=39569937
+```
+
+```bash
+# chain 100 (Gnosis, Home), version 7 -- UserRequestForSignature gains `token`
+INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__100__0x7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6__7__STARTED_AT_BLOCK=43027713
+```
+
+<details>
+<summary>ABIs — 4 variables, inline JSON (trimmed to the subscribed events)</summary>
+
+```bash
+# chain 1, version 9 and version 10 (byte-identical ABI)
+INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__1__0x4aa42145Aa6Ebf72e164C9bBC74fbD3788045016__9__ABI='[{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"UserRequestForAffirmation","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"transactionHash","type":"bytes32"}],"name":"RelayedMessage","type":"event"}]'
+INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__1__0x4aa42145Aa6Ebf72e164C9bBC74fbD3788045016__10__ABI='[{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"UserRequestForAffirmation","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"transactionHash","type":"bytes32"}],"name":"RelayedMessage","type":"event"}]'
+```
+
+```bash
+# chain 100, version 6 (no `token` on UserRequestForSignature)
+INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__100__0x7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6__6__ABI='[{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"UserRequestForSignature","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"AffirmationCompleted","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"signer","type":"address"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"SignedForAffirmation","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"signer","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"}],"name":"SignedForUserRequest","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"authorityResponsibleForRelay","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"},{"indexed":false,"name":"NumberOfCollectedSignatures","type":"uint256"}],"name":"CollectedSignatures","type":"event"}]'
+```
+
+```bash
+# chain 100, version 7 (UserRequestForSignature gains `token`)
+INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__100__0x7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6__7__ABI='[{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"},{"indexed":false,"name":"token","type":"address"}],"name":"UserRequestForSignature","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"AffirmationCompleted","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"signer","type":"address"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"SignedForAffirmation","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"signer","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"}],"name":"SignedForUserRequest","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"authorityResponsibleForRelay","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"},{"indexed":false,"name":"NumberOfCollectedSignatures","type":"uint256"}],"name":"CollectedSignatures","type":"event"}]'
+```
+
+</details>
 
 ## Optional subnets, added per deployment
 

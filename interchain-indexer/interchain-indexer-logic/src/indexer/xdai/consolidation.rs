@@ -151,12 +151,11 @@ fn status_and_finality(
 /// field and `isMessageValid` constrains the message blob to {104, 124}
 /// bytes, so a bridge message never carries more than one movement.
 ///
-/// `src_amount`/`dst_amount` both come from the *source* event's `value` --
-/// not mirrored from an unknown side (the AMB "never mirror" trap): the
-/// bridge validates `(recipient, value, nonce)` identically on both ends and
-/// charges no fee today (verified: source and destination `value` match
-/// byte-for-byte in the worked traces), so this is recording one already-agreed
-/// quantity twice, not guessing an unobserved one.
+/// `src_amount` comes from the source event's `value`; `dst_amount` comes
+/// from the destination event's own `value` once that event is observed, and
+/// falls back to the source value only while the message is still in flight.
+/// Neither side is ever mirrored over an *observed* value — see the inline
+/// note in the body for why that distinction matters here.
 fn build_transfer(
     key: &Key,
     direction: Direction,
@@ -183,7 +182,27 @@ fn build_transfer(
             (None, None) => unreachable!("consolidate() returns early without a source event"),
         };
 
-    let amount = amount_to_decimal(value)?;
+    // `dst_amount` comes from the destination event's own `value` whenever
+    // that event has been observed, and falls back to the source value only
+    // for a message still in flight.
+    //
+    // Both destination events carry the credited/paid-out amount
+    // (`AffirmationCompleted(recipient, value, nonce)`,
+    // `RelayedMessage(recipient, value, nonce)`), so this side is genuinely
+    // observable -- mirroring the source value over it would be the ADR-003
+    // "never mirror" trap applied to a side that is *not* unknown. Today the
+    // two are byte-identical (no fee manager is configured, verified in
+    // `.memory-bank/research/xdai-bridge-protocol-and-indexing-fit.md`), so
+    // this changes no output; it is what keeps `dst_amount` correct if a fee
+    // is ever activated, which the research note lists as a change trigger.
+    // Reading the mirrored value instead would make that divergence
+    // undetectable, since `FeeDistributedFrom*` is deliberately not
+    // subscribed.
+    let src_amount = amount_to_decimal(value)?;
+    let dst_amount = match &message.destination_execution {
+        Some(completion) => amount_to_decimal(completion.event().event.value)?,
+        None => src_amount.clone(),
+    };
 
     Ok(crosschain_transfers::ActiveModel {
         message_id: ActiveValue::Set(key.message_id),
@@ -192,8 +211,8 @@ fn build_transfer(
         r#type: ActiveValue::Set(Some(transfer_type)),
         token_src_chain_id: ActiveValue::Set(direction.initiator_chain_id()),
         token_dst_chain_id: ActiveValue::Set(direction.destination_chain_id()),
-        src_amount: ActiveValue::Set(Some(amount.clone())),
-        dst_amount: ActiveValue::Set(Some(amount)),
+        src_amount: ActiveValue::Set(Some(src_amount)),
+        dst_amount: ActiveValue::Set(Some(dst_amount)),
         token_src_address: ActiveValue::Set(Some(address_bytes(token_src_address))),
         token_dst_address: ActiveValue::Set(Some(address_bytes(token_dst_address))),
         sender_address: ActiveValue::Set(message.sender_address.map(address_bytes)),
@@ -392,6 +411,57 @@ mod tests {
             set_value!(t.token_dst_address),
             Some(NATIVE_SENTINEL.as_slice().to_vec())
         );
+        assert_eq!(set_value!(t.src_amount), Some(BigDecimal::from(1_000)));
+        assert_eq!(set_value!(t.dst_amount), Some(BigDecimal::from(1_000)));
+    }
+
+    /// `dst_amount` must come from the destination event's own `value`, not
+    /// be mirrored from the source. The two are byte-identical today because
+    /// no fee manager is configured, so only a deliberately divergent pair
+    /// distinguishes the two implementations — and if `dst_amount` is ever
+    /// mirrored again, a fee becoming active would silently overstate what
+    /// the recipient received, with `FeeDistributedFrom*` unsubscribed and
+    /// therefore no other detector.
+    #[test]
+    fn consolidate_takes_dst_amount_from_the_destination_event_not_the_source() {
+        let mut message = source_request(0x1ae0, addr(2), ts(1_000));
+        // Source 1000, destination 995: the shape a 0.5 % fee would produce.
+        message.destination_execution = Some(Completion::Affirmation(AnnotatedEvent {
+            event: CompletionEvent {
+                recipient: addr(2),
+                value: U256::from(995u64),
+            },
+            transaction_hash: hash(0x22),
+            block_number: 20,
+            block_timestamp: ts(2_000),
+        }));
+        let key =
+            key_from_native_id(&native_id_blob(1, U256::from(0x1ae0_u64)).unwrap(), 3).unwrap();
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+        let t = &consolidated.transfers[0];
+
+        assert_eq!(set_value!(t.src_amount), Some(BigDecimal::from(1_000)));
+        assert_eq!(
+            set_value!(t.dst_amount),
+            Some(BigDecimal::from(995)),
+            "dst_amount must be the destination event's value, not the source's"
+        );
+    }
+
+    /// The in-flight case: with no destination event yet, `dst_amount` falls
+    /// back to the source value rather than being left NULL — the bridge has
+    /// already committed to `(recipient, value, nonce)`, so the expected
+    /// payout is known even before it executes.
+    #[test]
+    fn consolidate_falls_back_to_the_source_amount_while_the_message_is_in_flight() {
+        let message = source_request(0x1ae1, addr(2), ts(1_000));
+        let key =
+            key_from_native_id(&native_id_blob(1, U256::from(0x1ae1_u64)).unwrap(), 3).unwrap();
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+        let t = &consolidated.transfers[0];
+
         assert_eq!(set_value!(t.src_amount), Some(BigDecimal::from(1_000)));
         assert_eq!(set_value!(t.dst_amount), Some(BigDecimal::from(1_000)));
     }

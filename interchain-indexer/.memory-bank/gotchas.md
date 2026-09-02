@@ -1803,3 +1803,51 @@ the two bridges' native xDAI legs form two disjoint `stats_assets` rows for
 the same coin instead of merging.
 
 ---
+
+## xDai Messages Straddling The Epoch Floor Are Deliberately Not Indexed
+
+**Symptom:** An xDai buffer entry accumulates a destination event
+(`AffirmationCompleted` or `RelayedMessage`) but never consolidates, so the
+message never appears in `crosschain_messages`. It settles into
+`pending_messages` and stays there.
+
+**Root cause:** `xdai/consolidation.rs::consolidate` returns `Ok(None)` unless
+`source_request` or `signature_request` is set — a destination event alone is
+not enough to build a row. Both destination handlers reach the buffer through
+`alter`, which *creates* the entry, so a destination-only entry is reachable
+and then simply waits forever for a source that will never arrive.
+
+This is reachable only in one window: a message whose source event sits **below
+the configured epoch floor** (Ethereum `22273407` / Gnosis `39569937`) while
+its destination event sits above it. Both floors are the 2025-04-15 upgrade
+blocks, so the candidate population is exactly "messages in flight across that
+upgrade".
+
+**This is intentional, not a bug to fix.** Two reasons:
+
+1. **It should be empty in practice.** The bridge is taken down for maintenance
+   to upgrade its contracts, so there should be no message in flight across the
+   upgrade boundary at all.
+2. **A destination-only row could not be built correctly anyway.** For
+   Ethereum→Gnosis the source asset comes from the version-keyed grammar table
+   *at the source block* (`UserRequestForAffirmation` carries no token field).
+   With no source event there is no source block, so `token_src_address` would
+   have to be `NULL` — and a NULL token address on an indexed chain is never
+   stats-eligible (`stats/indexed_chains.rs::transfer_identity_ready_condition`),
+   which is the exact problem the native sentinel exists to avoid. The row
+   would be permanently deferred from stats, i.e. no better than not existing.
+
+AMB *does* synthesize such rows (`amb/consolidation.rs::build_destination_only`),
+and that asymmetry is deliberate: AMB's destination event carries the full
+header (sender, executor, both chain ids), so a complete row is derivable from
+it. xDai's carries only `(recipient, value, nonce)`.
+
+**If this ever needs to change** — e.g. an upgrade ships without a maintenance
+pause — the honest fix is to lower `started_at_block` for the affected side and
+implement the pre-2025-04-15 grammar, not to synthesize partial rows. Below
+that floor the `bytes32` in these events is a *transaction hash*, not a nonce,
+under an unchanged `topic0`, so the identity derivation differs too; see
+`.memory-bank/research/xdai-bridge-protocol-and-indexing-fit.md` §"Resulting
+decode epochs".
+
+---
