@@ -242,6 +242,11 @@ message GetChainsRequest {
   // selected bridges index today -- the union of their
   // `Bridge.indexed_chain_ids`, derived from the in-memory bridges config,
   // never from historical `bridge_contracts` rows.
+  // The returned rows are that union INTERSECTED with the chain directory this
+  // endpoint serves, which is upserted from `chains.json`. The two coincide in
+  // practice, but a chain that a selected bridge indexes and that has no entry
+  // in the chain directory is listed by GET /api/v1/interchain/bridges and is
+  // not returned here, because there is no chain row to return.
   // When absent or empty, no bridge restriction is applied. A non-empty
   // selection naming only unknown, removed, or contract-less bridges returns an
   // EMPTY list, not the full directory. Malformed or out-of-int32-range values
@@ -252,8 +257,8 @@ message GetChainsRequest {
   // which additionally admits a chain with retained per-bridge stats history
   // for a selected bridge. For a bridge removed from configuration,
   // /stats/chains can still list its historical chains while this endpoint
-  // lists none. That is by design: this endpoint mirrors
-  // `Bridge.indexed_chain_ids`.
+  // lists none. That is by design: this endpoint applies the same
+  // currently-configured membership that `Bridge.indexed_chain_ids` reports.
   optional string bridge_ids = 3;
 }
 

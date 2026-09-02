@@ -119,7 +119,11 @@ async fn bridge_ids_agrees_with_the_bridges_endpoint_indexed_chain_ids() {
     assert_eq!(
         chain_ids_of(&filtered),
         expected,
-        "?bridge_ids=1 must return exactly bridge 1's indexed_chain_ids"
+        "?bridge_ids=1 must return exactly bridge 1's indexed_chain_ids. \
+         The two agree because every chain bridge 1 indexes also has a row in \
+         the chain directory; the endpoint intersects the configured union with \
+         that directory, so a bridge chain missing from `chains.json` would be \
+         listed by /bridges and absent here"
     );
 
     let duplicated: serde_json::Value =
