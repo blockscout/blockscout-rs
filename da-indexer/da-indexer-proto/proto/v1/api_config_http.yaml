@@ -12,7 +12,10 @@ http:
 
     - selector: blockscout.daIndexer.v1.EigenDaService.GetBlob
       get: /api/v1/eigenda/blob
-    
+
+    - selector: blockscout.daIndexer.v1.EigenDaV2Service.GetBlob
+      get: /api/v1/eigenda/v2/blobs/{commitment}
+
     #################### Health ####################
 
     - selector: blockscout.daIndexer.v1.Health.Check
