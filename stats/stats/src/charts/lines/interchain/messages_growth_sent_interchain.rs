@@ -304,7 +304,7 @@ mod tests {
     /// The lower-resolution analogue of
     /// `messages_growth_sent_interchain_picks_up_backwards_backfill`, and the
     /// test that catches trigger 2's blind spot: both sides of
-    /// `interchain_history_floor_regressed`'s comparison go through
+    /// `interchain_history_gap_has_data`'s comparison go through
     /// `ChartProps::Resolution::from_date`, and a resolution's stored `date` is
     /// already its bucket's first day, so once a resolution chart's own
     /// comparison has fired once, a *further* floor movement that stays inside
@@ -495,7 +495,7 @@ mod tests {
     /// exists: with per-chain decoupled catch-up, one chain can write its
     /// entire remaining history *above* another chain's already-lower floor —
     /// so `get_min_date` (the floor) never moves — and only then mark itself
-    /// complete. `interchain_history_floor_regressed` (trigger 2) is blind to
+    /// complete. `interchain_history_gap_has_data` (trigger 2) is blind to
     /// this by construction: it compares only the floor, never the interior.
     ///
     /// This test isolates that floor-blindness at the chart level: an interior

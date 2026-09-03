@@ -119,7 +119,6 @@ mod tests {
                 PendingZetachainCrossChainTxns::all_dependencies_chart_keys(),
             update_time_override: Some(dt("2022-11-11T11:30:00").and_utc()),
             force_full: false,
-            interchain_backfill_memory: None,
         };
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         // Query immediately - should return cached value (1)

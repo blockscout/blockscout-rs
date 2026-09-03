@@ -254,7 +254,6 @@ where
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(init_time),
         force_full: true,
-        interchain_backfill_memory: None,
     };
     let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
@@ -310,7 +309,6 @@ pub async fn dirty_force_update_and_check<C>(
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
-        interchain_backfill_memory: None,
     };
     let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
@@ -414,7 +412,6 @@ async fn ranged_test_chart_inner<C>(
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(init_time),
         force_full: true,
-        interchain_backfill_memory: None,
     };
     let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
@@ -645,7 +642,6 @@ where
         second_indexer_db: zetachain_cctx.as_deref(),
         update_time_override: Some(init_time),
         force_full: true,
-        interchain_backfill_memory: None,
     };
     let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
@@ -693,7 +689,6 @@ where
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(init_time),
         force_full: false,
-        interchain_backfill_memory: None,
     };
     let cx: UpdateContext<'_> = UpdateContext::from_params_now_or_override(parameters.clone());
     let data = get_counter::<C>(&cx).await;
@@ -766,9 +761,6 @@ fn interchain_update_parameters<'a, C: DataSource>(
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(update_time),
         force_full,
-        // callers that need suppression exercised chain
-        // `.with_interchain_backfill_memory(...)` onto the result
-        interchain_backfill_memory: None,
     }
 }
 

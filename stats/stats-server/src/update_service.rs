@@ -20,7 +20,7 @@ use crate::{
 };
 use stats::{
     ChartKey, InterchainFilter, InterchainFilterConfig,
-    data_source::types::{IndexerMigrations, InterchainBackfillMemory, UpdateParameters},
+    data_source::types::{IndexerMigrations, UpdateParameters},
     resolve_only_indexed_by_bridge,
 };
 
@@ -67,19 +67,16 @@ pub struct UpdateService {
     /// transition — see `resolve_interchain_preflight`. Keyed by group name:
     /// a transition belongs to the one group whose slice actually completed
     /// and must not be consumable by another group's cycle.
-    interchain_verdict_was_incomplete: Mutex<HashMap<String, bool>>,
-    /// Process-local memory suppressing a repeat interchain trigger-2
-    /// (stored-floor regression) rebuild already proven unproductive for a
-    /// chart — see `InterchainBackfillMemory`'s doc comment for the full
-    /// rationale.
     ///
-    /// Unlike `interchain_verdict_was_incomplete` above, this is **not**
-    /// keyed per group: it is keyed per chart internally
-    /// (`InterchainBackfillMemory`), and a chart belongs to exactly one
-    /// group, so one shared instance handed to every group's
-    /// `UpdateParameters` is both simpler and correct — there is no risk of
-    /// one group's cycle consuming or clobbering another's entries.
-    interchain_backfill_memory: InterchainBackfillMemory,
+    /// Recording that the last verdict was incomplete (`true`) happens eagerly,
+    /// inside `resolve_interchain_verdict_transition`, as part of resolving this
+    /// cycle's preflight — it is not a consumption, and losing it would only
+    /// cost one extra rebuild later. Recording that the pending transition is
+    /// resolved (`false`) is a separate, later step —
+    /// `consume_interchain_verdict_transition`, called from `update()` only
+    /// after `update_charts_sync` returns `Ok` for a FULL-group update. See
+    /// both functions' doc comments for why the split matters.
+    interchain_verdict_was_incomplete: Mutex<HashMap<String, bool>>,
     // currently only accessed in one place, but `Mutex`es
     // are needed due to `Arc<Self>` everywhere to provide
     // interior mutability
@@ -112,12 +109,18 @@ struct InterchainPreflight {
     /// `false` ⇒ every chart in the group recomputes from the filtered floor
     /// this cycle.
     slice_catchup_complete: bool,
+    /// Whether this cycle's verdict is eligible to have its pending
+    /// `false → true` transition consumed — i.e. it was actually derived from
+    /// the API and reports complete. `update()` still requires the update to
+    /// have succeeded, and to have covered the full group, before actually
+    /// consuming it — see `should_consume_interchain_verdict_transition`.
+    verdict_consumable: bool,
 }
 
-/// Resolves this cycle's effective `slice_catchup_complete` for `group_name`,
-/// updating `state` (the per-group "was the last API-derived verdict
-/// incomplete" memory) in place, and forcing one extra full rebuild on an
-/// observed `false → true` transition of the verdict.
+/// Resolves this cycle's effective `slice_catchup_complete` for `group_name`
+/// from `state` (the per-group "was the last API-derived verdict incomplete"
+/// memory) and the freshly observed `verdict`, forcing one extra full rebuild
+/// on an observed `false → true` transition of the verdict.
 ///
 /// **Why this exists.** Trigger 1 (the verdict itself) forces a rebuild only
 /// while the verdict is `false`; trigger 2 (the stored-floor check) only sees
@@ -138,11 +141,26 @@ struct InterchainPreflight {
 /// still loses the interior fill — but the common case (the process stays up
 /// across the transition) is now covered.
 ///
-/// **Only a verdict actually derived from the API may update `state` or
-/// consume a pending transition.** An unavailable or unconfigured API leaves
-/// `state` untouched and returns `verdict.complete` as-is: acting on
-/// `resolve_verdict`'s `complete = true` fallback here would silently consume
-/// the pending transition without ever having observed the real `true`.
+/// **This function does NOT consume a pending transition.** It only ever
+/// writes `state[group_name] = true` (recording an incomplete verdict), never
+/// `false`. That is deliberately safe to do unconditionally, here, before the
+/// update has even run: it is not a consumption (it never discards a pending
+/// transition, only ever (re-)asserts one), so losing it to a crash before
+/// the update completes would merely cost one extra rebuild later, not a
+/// missed one. Actually consuming the transition — recording that it no
+/// longer needs to force a rebuild — is a separate, later step:
+/// `consume_interchain_verdict_transition`, which `update()` calls only after
+/// `update_charts_sync` returns `Ok` for a FULL-group update. Splitting the
+/// two is what fixes FINDING 1: previously this function wrote `false`
+/// unconditionally (before the update even ran), so a failed
+/// `update_charts_sync` or a partial (on-demand) update would silently
+/// discard the pending trailing rebuild.
+///
+/// **Only a verdict actually derived from the API may update `state`.** An
+/// unavailable or unconfigured API leaves `state` untouched and returns
+/// `verdict.complete` as-is: acting on `resolve_verdict`'s `complete = true`
+/// fallback here would silently consume the pending transition without ever
+/// having observed the real `true`.
 ///
 /// A free function (rather than an `UpdateService` method body) so the
 /// transition — and the "non-API verdict never touches state" rule — are
@@ -156,12 +174,51 @@ fn resolve_interchain_verdict_transition(
         return verdict.complete;
     }
     let was_incomplete = state.get(group_name).copied().unwrap_or(false);
-    state.insert(group_name.to_owned(), !verdict.complete);
+    if !verdict.complete {
+        state.insert(group_name.to_owned(), true);
+    }
     if was_incomplete && verdict.complete {
         false // the transition: force one more rebuild this cycle
     } else {
         verdict.complete
     }
+}
+
+/// Decides whether `update()` should consume this cycle's pending interchain
+/// verdict transition, given `verdict_consumable` (from `InterchainPreflight`,
+/// i.e. whether this cycle's verdict was API-derived and complete),
+/// `update_succeeded` (whether `update_charts_sync` returned `Ok`), and
+/// `is_full_group_update` (whether `enabled_charts_overwrite` was `None`).
+///
+/// **Consuming requires all three.** A failed update never actually rebuilt
+/// anything from the (possibly forced-complete) floor, so consuming would
+/// discard the pending transition for a rebuild that never happened
+/// (FINDING 1, case 1). A partial (on-demand) update only re-updates some of
+/// the group's charts, so consuming would discard the pending transition for
+/// every chart that was *not* re-updated this cycle (FINDING 1, case 2) — an
+/// on-demand cycle can only ever consume its own eventual full-group
+/// counterpart.
+///
+/// A free function for the same testability reason as
+/// `resolve_interchain_verdict_transition`.
+fn should_consume_interchain_verdict_transition(
+    update_succeeded: bool,
+    is_full_group_update: bool,
+    verdict_consumable: bool,
+) -> bool {
+    update_succeeded && is_full_group_update && verdict_consumable
+}
+
+/// Consumes a pending `false → true` interchain verdict transition for
+/// `group_name`: records that the last API-derived verdict is complete, so a
+/// future cycle's `resolve_interchain_verdict_transition` no longer forces a
+/// rebuild on this group's account.
+///
+/// Call ONLY when `should_consume_interchain_verdict_transition` says so —
+/// see its doc comment for why a failed or partial update must not reach
+/// this.
+fn consume_interchain_verdict_transition(state: &mut HashMap<String, bool>, group_name: &str) {
+    state.insert(group_name.to_owned(), false);
 }
 
 impl UpdateService {
@@ -180,7 +237,6 @@ impl UpdateService {
             status_listener: config.status_listener,
             init_update_tracker,
             interchain_verdict_was_incomplete: Mutex::new(HashMap::new()),
-            interchain_backfill_memory: InterchainBackfillMemory::new(),
             on_demand_sender: Mutex::new(on_demand.0),
             on_demand_receiver: Mutex::new(on_demand.1),
         })
@@ -509,6 +565,7 @@ impl UpdateService {
             return Some(InterchainPreflight {
                 filter: self.interchain_filter.with_horizon(None),
                 slice_catchup_complete: true,
+                verdict_consumable: false,
             });
         }
 
@@ -654,6 +711,7 @@ impl UpdateService {
         Some(InterchainPreflight {
             filter,
             slice_catchup_complete,
+            verdict_consumable: verdict.source == VerdictSource::IndexerApi && verdict.complete,
         })
     }
 
@@ -689,6 +747,7 @@ impl UpdateService {
             return;
         };
 
+        let verdict_consumable = preflight.verdict_consumable;
         let update_parameters = UpdateParameters {
             stats_db: &self.db,
             mode: self.mode,
@@ -702,13 +761,12 @@ impl UpdateService {
                 .enabled_members_with_deps(enabled_charts),
             update_time_override: None,
             force_full: force_full || !preflight.slice_catchup_complete,
-            interchain_backfill_memory: Some(self.interchain_backfill_memory.clone()),
         };
         let result = group_entry
             .group
             .update_charts_sync(update_parameters, enabled_charts)
             .await;
-        if let Err(err) = result {
+        if let Err(err) = &result {
             tracing::error!(
                 update_group = group_entry.group.name(),
                 "error during updating group: {}",
@@ -718,6 +776,23 @@ impl UpdateService {
             tracing::info!(
                 update_group = group_entry.group.name(),
                 "successfully updated group"
+            );
+        }
+        // See FINDING 1 / `should_consume_interchain_verdict_transition`'s doc
+        // comment: only a successful FULL-group update may consume the
+        // pending verdict transition. Neither a failed update nor a partial
+        // (on-demand) one actually rebuilt the rest of the group from the
+        // (possibly forced-complete) floor, so either would otherwise
+        // silently discard a trailing rebuild that still needs to happen.
+        if should_consume_interchain_verdict_transition(
+            result.is_ok(),
+            enabled_charts_overwrite.is_none(),
+            verdict_consumable,
+        ) {
+            let mut previous_incomplete = self.interchain_verdict_was_incomplete.lock().await;
+            consume_interchain_verdict_transition(
+                &mut previous_incomplete,
+                &group_entry.group.name(),
             );
         }
     }
@@ -893,12 +968,20 @@ mod tests {
         assert_eq!(state.get(group), Some(&true));
 
         // the transition: verdict reports complete after being incomplete —
-        // force one more rebuild despite `verdict.complete == true`
+        // force one more rebuild despite `verdict.complete == true`.
+        // Resolving alone must NOT settle the state — only an explicit
+        // consumption (standing in for `update()`'s post-success call) does.
         assert!(!resolve_interchain_verdict_transition(
             &mut state,
             group,
             &verdict(VerdictSource::IndexerApi, true)
         ));
+        assert_eq!(
+            state.get(group),
+            Some(&true),
+            "resolving the transition must not, by itself, consume it"
+        );
+        consume_interchain_verdict_transition(&mut state, group);
         assert_eq!(state.get(group), Some(&false));
 
         // steady state complete: no more forcing
@@ -954,7 +1037,11 @@ mod tests {
             group,
             &verdict(VerdictSource::IndexerApi, true)
         ));
-        assert_eq!(state.get(group), Some(&false));
+        assert_eq!(
+            state.get(group),
+            Some(&true),
+            "resolving the transition must not, by itself, consume it"
+        );
     }
 
     /// Two groups' transitions are independent: one group's completion must
@@ -985,5 +1072,113 @@ mod tests {
             "group-b",
             &verdict(VerdictSource::IndexerApi, true)
         ));
+    }
+
+    /// `should_consume_interchain_verdict_transition` requires all three
+    /// conditions to hold — see FINDING 1 in the task this fixes.
+    #[test]
+    fn should_consume_interchain_verdict_transition_requires_all_conditions() {
+        assert!(should_consume_interchain_verdict_transition(
+            true, true, true
+        ));
+        assert!(!should_consume_interchain_verdict_transition(
+            false, true, true
+        ));
+        assert!(!should_consume_interchain_verdict_transition(
+            true, false, true
+        ));
+        assert!(!should_consume_interchain_verdict_transition(
+            true, true, false
+        ));
+    }
+
+    /// FINDING 1, case 1: `update_charts_sync` failing must not consume the
+    /// pending transition — the next cycle must still see it pending and
+    /// force a rebuild on its account. Before the fix,
+    /// `resolve_interchain_verdict_transition` wrote the "consumed" state
+    /// unconditionally as part of *resolving* the verdict, which ran before
+    /// `update_charts_sync` — so a failure right after would have already
+    /// discarded the pending transition with nothing to revert it.
+    #[test]
+    fn interchain_verdict_transition_not_consumed_on_update_failure() {
+        let mut state = HashMap::new();
+        let group = "test-group";
+
+        // cycle 1: incomplete — remember it
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, false)
+        ));
+
+        // cycle 2: verdict now complete — the transition forces one more
+        // rebuild this cycle, but suppose the group update FAILS
+        let effective = resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, true),
+        );
+        assert!(
+            !effective,
+            "the transition must still force a rebuild this cycle"
+        );
+        assert!(
+            !should_consume_interchain_verdict_transition(false, true, true),
+            "a failed update must not consume the transition"
+        );
+        // `update()` does not call `consume_interchain_verdict_transition` here
+
+        // cycle 3: verdict complete again — cycle 2 never consumed the
+        // transition, so this cycle must still see it pending and force a
+        // rebuild again
+        let effective_3 = resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, true),
+        );
+        assert!(
+            !effective_3,
+            "a failed update must not have consumed the pending transition"
+        );
+    }
+
+    /// FINDING 1, case 2: a partial (on-demand) update must not consume the
+    /// pending transition either — only a full-group update may, since a
+    /// partial update never actually rebuilt the rest of the group's charts
+    /// from the (possibly forced-complete) floor.
+    #[test]
+    fn interchain_verdict_transition_not_consumed_by_partial_update() {
+        let mut state = HashMap::new();
+        let group = "test-group";
+
+        assert!(!resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, false)
+        ));
+
+        let effective = resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, true),
+        );
+        assert!(!effective);
+        // the update succeeds, but it is a PARTIAL (on-demand) update, i.e.
+        // `enabled_charts_overwrite.is_some()` ⇒ `is_full_group_update = false`
+        assert!(
+            !should_consume_interchain_verdict_transition(true, false, true),
+            "a partial update must not consume the transition"
+        );
+        // `update()` does not call `consume_interchain_verdict_transition` here
+
+        let effective_3 = resolve_interchain_verdict_transition(
+            &mut state,
+            group,
+            &verdict(VerdictSource::IndexerApi, true),
+        );
+        assert!(
+            !effective_3,
+            "a partial update must not have consumed the pending transition either"
+        );
     }
 }
