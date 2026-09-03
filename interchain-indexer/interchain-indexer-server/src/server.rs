@@ -3,7 +3,7 @@
 use crate::{
     create_provider_pools_from_chains,
     indexers::{IndexingTarget, enumerate_indexing_targets, reconcile_catchup_floors},
-    load_bridges_from_file, load_chains_from_file,
+    load_bridges_from_file, load_chains_from_file, logging,
     proto::{
         health_actix::route_health, health_server::HealthServer,
         interchain_service_actix::route_interchain_service,
@@ -19,9 +19,7 @@ use crate::{
     spawn_configured_indexers,
 };
 use blockscout_endpoint_swagger::route_swagger;
-use blockscout_service_launcher::{
-    database, launcher, launcher::LaunchSettings, tracing as bs_tracing,
-};
+use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings};
 use chrono::NaiveDateTime;
 use interchain_indexer_entity::{bridge_contracts, bridges, chains};
 use interchain_indexer_logic::{
@@ -303,7 +301,7 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    bs_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    logging::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
 

@@ -1777,3 +1777,39 @@ is the guard for this specific field; it was confirmed to fail against the
 lexicographic sort before landing.
 
 ---
+
+## Third-Party Log Noise Is Suppressed In Code, Not Only Via `RUST_LOG`
+
+`alloy_transport_http` wraps every JSON-RPC call in
+`#[instrument(name = "request", ...)]`, and `#[instrument]` defaults to the
+**INFO** level. `blockscout-service-launcher`'s `TracingFormat::Default` fmt
+layer is built with `FmtSpan::NEW | FmtSpan::CLOSE`, so each RPC call prints
+two INFO lines (`request{method_names=eth_getTransactionReceipt}: ... new` /
+`... close time.busy=...`). At the indexer's request rate that buries every
+other log line — including our own INFO logs — which is why deployments used
+to carry `RUST_LOG=info,alloy_transport_http=warn`.
+
+The launcher hardcodes `EnvFilter::builder().with_default_directive(INFO)
+.from_env_lossy()`, so there is no way to inject extra *default* directives
+through it. The programmatic hook it does expose is
+`tracing::init_logs_with_filter`, which takes a `FilterFn<&Metadata>` layered
+on top of that `EnvFilter`. `interchain-indexer-server/src/logging.rs` uses it:
+`init_logs` there is a drop-in replacement for the launcher's `init_logs` and
+drops anything from `NOISY_TARGETS` above `NOISY_TARGET_MAX_LEVEL` (WARN).
+
+Two properties worth knowing before touching it:
+
+- The filter is **AND**-ed with the `EnvFilter`, so it can only ever silence,
+  never re-enable. To keep the debugging escape hatch, `suppressed_targets`
+  drops any target that is *named* in `RUST_LOG` (coarse substring check), so
+  `RUST_LOG=info,alloy_transport_http=debug` still works.
+- A `FilterFn` on the fmt layer filters span lifecycle events too (that is what
+  makes it work here at all), and it filters them by the **span's** metadata —
+  suppressing the `request` span's `new`/`close` lines does **not** suppress a
+  WARN/ERROR logged inside that span, since those events carry their own
+  metadata. Real RPC failures still surface.
+
+Adding a new noisy dependency? Append its target to `NOISY_TARGETS` rather than
+extending a deployment's `RUST_LOG`.
+
+---
