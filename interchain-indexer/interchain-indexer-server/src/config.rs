@@ -559,6 +559,7 @@ fn load_bridges_impl<P: AsRef<Path>>(
         )
     })?;
     validate_started_at_blocks(&bridges)?;
+    validate_bridge_ids(&bridges)?;
 
     Ok(bridges)
 }
@@ -581,6 +582,22 @@ fn validate_started_at_blocks(bridges: &[BridgeConfig]) -> Result<()> {
                 contract.chain_id,
             );
         }
+    }
+    Ok(())
+}
+
+/// Rejects a negative `bridge_id`: the public API exposes bridge ids as
+/// `uint32` (`BridgeInfo.id`, `Bridge.id`, `Pagination.bridge_id`), so a
+/// negative id has no representation there. Config typos fail hard in this
+/// repo; this is the same convention applied to a semantically invalid value.
+fn validate_bridge_ids(bridges: &[BridgeConfig]) -> Result<()> {
+    for bridge in bridges {
+        ensure!(
+            bridge.bridge_id >= 0,
+            "bridge {} has a negative bridge_id, which cannot be represented \
+             in the public API (bridge ids are uint32); use a non-negative id",
+            bridge.bridge_id,
+        );
     }
     Ok(())
 }
@@ -2049,6 +2066,44 @@ mod tests {
     }
 
     #[test]
+    fn test_load_bridges_impl_rejects_negative_bridge_id() {
+        // A negative bridge id has no representation in the public API, where
+        // bridge ids are `uint32`. The env-override key is itself the bridge
+        // id, so the invalid value can only come from the file.
+        const NEGATIVE_BRIDGE_ID_FILE: &str = r#"
+        [
+            {
+                "bridge_id": -1,
+                "name": "AMB",
+                "type": "amb",
+                "indexer_type": "amb",
+                "enabled": true,
+                "api_url": null,
+                "ui_url": null,
+                "docs_url": null,
+                "contracts": [
+                    {
+                        "chain_id": 100,
+                        "address": "0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d",
+                        "version": 6,
+                        "started_at_block": 10
+                    }
+                ]
+            }
+        ]
+        "#;
+
+        let file = write_temp_json(NEGATIVE_BRIDGE_ID_FILE);
+        let err = load_bridges_impl(file.path(), fixture_vars(&[])).unwrap_err();
+
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("negative bridge_id"),
+            "unexpected: {message}"
+        );
+    }
+
+    #[test]
     fn test_load_bridges_impl_new_bridge_fragment_parses_typed() {
         let file = write_temp_json(BRIDGES_FILE);
         let bridges = load_bridges_impl(
@@ -2162,10 +2217,14 @@ mod tests {
             } else if name.starts_with("bridges") {
                 let bridges: Vec<BridgeConfig> = serde_json::from_str(&content)
                     .unwrap_or_else(|e| panic!("failed to parse {path:?} as bridges config: {e}"));
-                // Structural parsing is not enough: `started_at_block = 0` is
-                // syntactically valid and semantically rejected at load time,
-                // so a committed config carrying it must fail here too.
+                // Structural parsing is not enough: `started_at_block = 0`
+                // and a negative `bridge_id` are both syntactically valid and
+                // semantically rejected at load time, so a committed config
+                // carrying either must fail here too. Keep this in step with
+                // `load_bridges_impl`'s validation.
                 validate_started_at_blocks(&bridges)
+                    .unwrap_or_else(|e| panic!("invalid bridges config {path:?}: {e}"));
+                validate_bridge_ids(&bridges)
                     .unwrap_or_else(|e| panic!("invalid bridges config {path:?}: {e}"));
             } else {
                 panic!("unexpected config file {path:?}: neither chains* nor bridges*");

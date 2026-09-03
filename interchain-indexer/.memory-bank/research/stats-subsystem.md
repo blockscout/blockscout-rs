@@ -927,7 +927,7 @@ filter):
 | message-paths (sent/received) | yes | yes | **yes** (`push_indexed_pairs_predicate`) | bridge filter + collapse over `stats_messages` / `stats_messages_days` |
 | bridged-tokens | yes | yes | **yes** | bridge filter inside the `stats_asset_edges` aggregate, collapsed per asset |
 | `/stats/chains` | subject-row `chain_ids` | **yes** (`bridge_ids`, ADR-009) | implicit — union of every configured bridge's set (`configured_union()`), unchanged by `bridge_ids` | no/blank `bridge_ids` -> exact global snapshot; one bridge -> exact; several -> additive overcount on same-chain overlap |
-| `GetChains` | subject-row `chain_ids` only | no | implicit — union of every configured bridge's set (`configured_union()`) | chain directory only, no user counts |
+| `GetChains` | subject-row `chain_ids` | **yes** (`bridge_ids`) | implicit — union of every configured bridge's set (`configured_union()`), unchanged by `bridge_ids` | chain directory only, no user counts. `bridge_ids` is derived purely from the in-memory bridges config (`IndexedChains::selected_configured_union`), mirroring `Bridge.indexed_chain_ids`, so for a bridge removed from configuration this endpoint lists no chains while `/stats/chains` can still list its retained per-bridge history |
 | `GetBridges` | n/a | n/a | n/a | reports each bridge's own `indexed_chain_ids`, not a filter |
 
 - **The three additive aggregates carry `bridge_id`.** `stats_messages

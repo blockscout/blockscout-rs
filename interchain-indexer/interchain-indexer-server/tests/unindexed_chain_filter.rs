@@ -22,6 +22,11 @@ use sea_orm::{ActiveValue::Set, EntityTrait};
 const HIDDEN_MESSAGE_ID: i64 = 8888;
 const HIDDEN_MESSAGE_HEX: &str = "0x22b8";
 
+/// Public numeric message ID for the seeded fully-indexed message.
+/// `7777 == 0x1e61`.
+const INDEXED_MESSAGE_ID: i64 = 7777;
+const INDEXED_MESSAGE_HEX: &str = "0x1e61";
+
 /// A chain outside `config/omnibridge/chains.json` (`{1, 100}`) and outside
 /// bridge 1's contract set, so it is not in `IndexedChains::configured_union()`.
 const UNINDEXED_CHAIN_ID: i64 = 999;
@@ -46,11 +51,37 @@ async fn get_message_details_returns_hidden_row_with_flag() {
     .await
     .unwrap();
 
+    // Both chains are in bridge 1's configured set, so this row is fully
+    // indexed and must report the flag explicitly as `false`.
+    crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+        id: Set(INDEXED_MESSAGE_ID),
+        bridge_id: Set(1),
+        status: Set(MessageStatus::Initiated),
+        init_timestamp: Set(Utc::now().naive_utc()),
+        src_chain_id: Set(1),
+        dst_chain_id: Set(Some(100)),
+        ..Default::default()
+    })
+    .exec(conn.as_ref())
+    .await
+    .unwrap();
+
     // `GetMessageDetails` bypasses the default-hide filter entirely and still
     // sets the flag.
     let route = format!("/api/v1/interchain/messages/{HIDDEN_MESSAGE_HEX}");
     let details: serde_json::Value = test_server::send_get_request(&base, &route).await;
     assert_eq!(details["has_unindexed_chain"], serde_json::json!(true));
+
+    // The negative case must be an explicit `false`, not an omitted key: the
+    // field is non-optional in the proto and carries no `skip_serializing_if`.
+    let indexed_route = format!("/api/v1/interchain/messages/{INDEXED_MESSAGE_HEX}");
+    let indexed_details: serde_json::Value =
+        test_server::send_get_request(&base, &indexed_route).await;
+    assert_eq!(
+        indexed_details["has_unindexed_chain"],
+        serde_json::json!(false),
+        "a fully-indexed message must carry has_unindexed_chain=false, not omit it; got {indexed_details}"
+    );
 
     // The same row is excluded from the default list view.
     let list: serde_json::Value =
