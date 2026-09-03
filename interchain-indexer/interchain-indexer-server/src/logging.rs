@@ -55,7 +55,12 @@ pub fn init_logs(
 /// An explicit directive wins over the built-in default, so
 /// `RUST_LOG=info,alloy_transport_http=debug` still works when someone is
 /// debugging RPC traffic. The substring check is deliberately coarse: it only
-/// decides whether to step out of `RUST_LOG`'s way.
+/// decides whether to step out of `RUST_LOG`'s way. A substring hit can only
+/// ever return logs to the pre-change noise level; it can never hide a target
+/// someone asked to see. Matching whole directive targets instead would fail
+/// in the harmful direction — it would silently drop an explicit
+/// `RUST_LOG=alloy_transport_http::reqwest_transport=trace`, which the coarse
+/// check honours.
 fn suppressed_targets(rust_log: &str) -> Vec<&'static str> {
     NOISY_TARGETS
         .iter()
