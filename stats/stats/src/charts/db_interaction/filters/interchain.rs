@@ -13,6 +13,8 @@
 //! the three sanctioned query entry points, and the fingerprint that detects a
 //! configuration change against already-stored chart data.
 
+use std::collections::BTreeSet;
+
 use interchain_indexer_entity::{crosschain_messages, crosschain_transfers};
 use interchain_indexer_filters::ChainBridgeFilter;
 use sea_orm::{
@@ -123,6 +125,65 @@ pub trait InterchainFiltered {
     fn render(filter: &InterchainFilter) -> Statement;
 }
 
+/// The chain ids a row admitted by `configured` can possibly name — an **upper
+/// bound**, not an exact set. `None` = unbounded (every chain).
+///
+/// Used to scope the catch-up verdict: an indexing pair `(b, c)` can only create
+/// or update a row whose `bridge_id = b` and one of whose endpoints is `c`, so a
+/// pair whose chain falls outside this bound cannot influence the configured
+/// slice and must not delay a recompute.
+///
+/// Projects onto the **message** route. Exact for the 4 message chart families;
+/// an accepted assumption for the 3 transfer families, which filter on the
+/// transfer's own `token_src_chain_id` / `token_dst_chain_id` — see
+/// `.memory-bank/gotchas.md` → "A Transfer's Token Chains Are Not Its Message's
+/// Route".
+///
+/// Deliberately ignores `only_indexed_by_bridge`: the horizon is DB-derived and
+/// per-cycle, and the failure direction here prefers a **wide** bound (an
+/// over-narrow scope produces a false "synced" and silently wrong data; an
+/// over-wide one only produces extra work).
+pub fn relevant_chain_ids(configured: &ChainBridgeFilter) -> Option<BTreeSet<i64>> {
+    let mut bound: Option<BTreeSet<i64>> = None;
+
+    let mut intersect = |ids: BTreeSet<i64>| {
+        bound = Some(match bound.take() {
+            Some(existing) => existing.intersection(&ids).cloned().collect(),
+            None => ids,
+        });
+    };
+
+    match (
+        configured.home_chain_id,
+        configured.counterparty_chain_ids.as_deref(),
+    ) {
+        (Some(home), Some(counterparties)) => {
+            let mut ids: BTreeSet<i64> = counterparties.iter().cloned().collect();
+            ids.insert(home);
+            intersect(ids);
+        }
+        (Some(_), None) => {
+            // focal alone: `src = home OR dst = home` leaves the other side open
+        }
+        (None, Some(counterparties)) => {
+            intersect(counterparties.iter().cloned().collect());
+        }
+        (None, None) => {}
+    }
+
+    // exactly one side bounded leaves the other side open
+    if let (Some(src), Some(dst)) = (
+        configured.src_chain_ids.as_deref(),
+        configured.dst_chain_ids.as_deref(),
+    ) {
+        let mut ids: BTreeSet<i64> = src.iter().cloned().collect();
+        ids.extend(dst.iter().cloned());
+        intersect(ids);
+    }
+
+    bound
+}
+
 /// The operator-configured half of the filter, resolved from settings once at
 /// startup. The observability horizon is added per update cycle by
 /// [`Self::with_horizon`].
@@ -168,6 +229,11 @@ impl InterchainFilterConfig {
 
     pub fn bridge_ids(&self) -> Option<&[i32]> {
         self.configured.bridge_ids.as_deref()
+    }
+
+    /// See [`relevant_chain_ids`]. The **operator-configured** half only.
+    pub fn relevant_chain_ids(&self) -> Option<BTreeSet<i64>> {
+        relevant_chain_ids(&self.configured)
     }
 
     /// Merge the horizon resolved for this update cycle. The fingerprint is
@@ -344,6 +410,74 @@ mod tests {
             bridge_ids,
             only_indexed_by_bridge: None,
         }
+    }
+
+    fn chains(ids: &[i64]) -> BTreeSet<i64> {
+        ids.iter().cloned().collect()
+    }
+
+    #[test]
+    fn relevant_chains_unbounded_without_configured_dimensions() {
+        assert_eq!(relevant_chain_ids(&ChainBridgeFilter::default()), None);
+    }
+
+    #[test]
+    fn relevant_chains_focal_with_counterparties_is_home_plus_counterparties() {
+        let filter = configured(Some(1), Some(vec![2, 3]), None, None, None);
+        assert_eq!(relevant_chain_ids(&filter), Some(chains(&[1, 2, 3])));
+    }
+
+    #[test]
+    fn relevant_chains_focal_alone_is_unbounded() {
+        let filter = configured(Some(1), None, None, None, None);
+        assert_eq!(relevant_chain_ids(&filter), None);
+    }
+
+    #[test]
+    fn relevant_chains_counterparties_alone_is_the_within_set() {
+        let filter = configured(None, Some(vec![2, 3]), None, None, None);
+        assert_eq!(relevant_chain_ids(&filter), Some(chains(&[2, 3])));
+    }
+
+    #[test]
+    fn relevant_chains_directional_requires_both_sides_to_bound() {
+        // src alone: dst is open, so unbounded
+        let src_only = configured(None, None, Some(vec![1]), None, None);
+        assert_eq!(relevant_chain_ids(&src_only), None);
+
+        // dst alone: src is open, so unbounded
+        let dst_only = configured(None, None, None, Some(vec![1]), None);
+        assert_eq!(relevant_chain_ids(&dst_only), None);
+
+        // both sides: union of the two
+        let both = configured(None, None, Some(vec![1]), Some(vec![2, 3]), None);
+        assert_eq!(relevant_chain_ids(&both), Some(chains(&[1, 2, 3])));
+    }
+
+    #[test]
+    fn relevant_chains_composes_bounds_by_intersection() {
+        // focal (home + counterparties) ∩ directional (src ∪ dst)
+        let filter = configured(
+            Some(1),
+            Some(vec![2, 3]),
+            Some(vec![1, 2]),
+            Some(vec![3, 4]),
+            None,
+        );
+        // focal bound: {1, 2, 3}; directional bound: {1, 2, 3, 4}
+        // intersection: {1, 2, 3}
+        assert_eq!(relevant_chain_ids(&filter), Some(chains(&[1, 2, 3])));
+    }
+
+    #[test]
+    fn relevant_chains_ignores_the_observability_horizon() {
+        let filter = ChainBridgeFilter {
+            only_indexed_by_bridge: Some(vec![(7, vec![99])]),
+            ..configured(Some(1), None, None, None, None)
+        };
+        // still unbounded: home alone leaves the other side open, and the
+        // horizon must not narrow it
+        assert_eq!(relevant_chain_ids(&filter), None);
     }
 
     #[test]

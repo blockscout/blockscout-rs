@@ -75,7 +75,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::LEAST_RESTRICTIVE
+        IndexingStatus::LEAST_RESTRICTIVE.with_interchain(InterchainIndexingStatus::CaughtUp)
     }
 }
 
@@ -88,15 +88,23 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::tests::{
-        mock_interchain::{
-            mock_interchain_horizon, test_interchain_filter, test_interchain_filter_with_horizon,
-            test_interchain_home_chain_filter,
+    use crate::{
+        charts::db_interaction::read::{find_chart, get_min_date, recorded_min_chart_date},
+        data_source::{
+            source::DataSource,
+            types::{IndexerMigrations, UpdateContext, UpdateParameters},
         },
-        normalize_sql,
-        simple_test::{
-            prepare_interchain_chart_test, simple_test_counter_interchain,
-            update_and_query_interchain_counter,
+        tests::{
+            mock_interchain::{
+                mock_interchain_horizon, test_interchain_filter,
+                test_interchain_filter_with_horizon, test_interchain_home_chain_filter,
+            },
+            normalize_sql,
+            point_construction::d,
+            simple_test::{
+                prepare_interchain_chart_test, simple_test_counter_interchain,
+                update_and_query_interchain_counter,
+            },
         },
     };
 
@@ -194,5 +202,68 @@ mod tests {
             ),
         )
         .await;
+    }
+
+    /// The `ChartType::Line` gate, demonstrated rather than merely asserted
+    /// correct: a counter's own stored floor (its single point, always stamped
+    /// at the *current* date) regresses relative to the indexer's floor exactly
+    /// like a line chart's would. Without the gate, this comparison would fire
+    /// on this counter — and every other interchain counter — every cycle,
+    /// forever. A test that only checked "the counter's value is right anyway"
+    /// would pass with or without the gate; this one would not.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn counter_floor_would_regress_forever_without_the_line_gate() {
+        let (init_time, db, indexer) =
+            prepare_interchain_chart_test::<TotalInterchainMessagesSent>(
+                "counter_floor_would_regress_forever",
+            )
+            .await;
+        update_and_query_interchain_counter::<TotalInterchainMessagesSent>(
+            &db,
+            &indexer,
+            InterchainFilter::default(),
+            init_time,
+        )
+        .await;
+
+        let chart_id = find_chart(&db, &Properties::key())
+            .await
+            .unwrap()
+            .expect("chart must exist after the update");
+        let stored_floor = recorded_min_chart_date(&db, chart_id).await.unwrap();
+        assert_eq!(
+            stored_floor,
+            Some(init_time.date_naive()),
+            "a counter's stored floor is always the date it was last computed at"
+        );
+
+        let params = UpdateParameters {
+            stats_db: &db,
+            mode: crate::Mode::Interchain,
+            multichain_filter: None,
+            interchain_filter: InterchainFilter::default(),
+            indexer_db: &indexer,
+            second_indexer_db: None,
+            indexer_applied_migrations: IndexerMigrations::latest(),
+            enabled_update_charts_recursive:
+                TotalInterchainMessagesSent::all_dependencies_chart_keys(),
+            update_time_override: Some(init_time),
+            force_full: false,
+        };
+        let cx = UpdateContext::from_params_now_or_override(params);
+        let indexer_floor = get_min_date(&cx).await.unwrap().date();
+        assert_eq!(
+            indexer_floor,
+            d("2022-12-20"),
+            "the indexer's true filtered floor is the earliest fixture date"
+        );
+
+        assert!(
+            stored_floor.unwrap() > indexer_floor,
+            "the counter's floor regresses relative to the indexer's floor exactly like a \
+             line chart's would — this is the condition the ChartType::Line gate exists to \
+             ignore for counters"
+        );
     }
 }

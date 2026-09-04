@@ -103,5 +103,17 @@ Small topics may keep some sections brief.
   machinery, and the parity gap against the interchain-indexer's read-time API
   filtering (`ChainBridgeFilter`).
 
+- `update-range-anchoring-and-backfill-detection.md` — **Chart Update-Range
+  Anchoring, Backfill Detection, and Indexer-Sync Gating.** Why a chart's history
+  floor is frozen by its first successful update, how
+  `chart_data.min_blockscout_block` acts as a backfill detector in
+  `Blockscout`/`MultichainAggregator` mode but not in `Interchain` mode (where it
+  is the filter fingerprint), which chart kinds self-heal and which do not, how
+  the `conditional_start`/`IndexingStatus` wait is built and why it is
+  structurally absent in interchain mode, what the interchain-indexer's
+  `GetIndexingProgress` handle can and cannot tell stats, how a sync signal would
+  be scoped across many bridges and shared chains, and five design options
+  including splitting the fingerprint word to carry a "catch-up in progress" bit.
+
 Add an entry here for every new note. Use the `research-scope` workflow
 (`.memory-bank/workflows/research-scope.md`) to scope one before writing it.

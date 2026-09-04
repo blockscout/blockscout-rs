@@ -114,6 +114,15 @@ pub struct Settings {
     /// `chart_data.min_blockscout_block` forces a clear-and-rebuild of every
     /// interchain chart on the next update.
     pub interchain_filter: InterchainFilterSettings,
+    /// Base URL of the interchain indexer's HTTP API, used in `Interchain` mode
+    /// to read `GET /api/v1/status/indexing`. When a `(bridge, chain)` pair
+    /// relevant to the configured interchain filter is still catching up, every
+    /// interchain chart is recomputed from the indexer's current earliest data
+    /// instead of only moving forward, so history the indexer backfills is
+    /// picked up. Optional: with no URL the check is disabled and charts still
+    /// pick up history that extends backwards, but not interior gaps. Ignored
+    /// outside `Interchain` mode.
+    pub interchain_indexer_api_url: Option<url::Url>,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -288,6 +297,7 @@ impl Default for Settings {
             multichain_filter: Default::default(),
             interchain_primary_id: Default::default(),
             interchain_filter: Default::default(),
+            interchain_indexer_api_url: None,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -599,6 +609,39 @@ pub struct StartConditionSettings {
     pub internal_transactions_ratio: ToggleableThreshold,
     pub user_ops_past_indexing_finished: ToggleableCheck,
     pub zetachain_indexed_until_today: ToggleableOptionalCheck,
+    /// Interchain mode only, and **off by default**.
+    ///
+    /// When enabled, the service waits before its first chart update until every
+    /// `(bridge, chain)` pair relevant to `interchain_filter` reports at least
+    /// this much catch-up progress, as a **ratio** in `0.0..=1.0` (`0.95` = 95%),
+    /// matching `blocks_ratio` and `internal_transactions_ratio` above. Progress
+    /// is aggregated as the **minimum** over the relevant pairs, so the slowest
+    /// pair decides.
+    ///
+    /// The indexer's `catchup_progress_percent` is the share of the configured
+    /// block range that has been **scanned**, *not* the share of data that is
+    /// present: a range scanned but failed downstream still counts as scanned.
+    /// Read `0.95` as "95% of blocks scanned", never as "95% of the data is
+    /// there".
+    ///
+    /// While the service waits, `/api/v1/update-status` reports
+    /// `WAITING_FOR_STARTING_CONDITION` and no chart has any data. A pair with no
+    /// checkpoint row yet, or whose realtime cursor is still below its configured
+    /// start block, reports 0% — so a single stuck pair holds the whole service
+    /// at "no data" indefinitely. That is why this is opt-in; leaving it disabled
+    /// is the supported configuration, and the per-cycle catch-up check
+    /// (`interchain_indexer_api_url`) then keeps chart history tracking the
+    /// indexer without ever withholding data.
+    ///
+    /// This threshold gates the **start**; the per-cycle catch-up verdict governs
+    /// **rebuilds after** the start. The two are independent, and they resolve an
+    /// unreachable API in opposite directions on purpose — see
+    /// `check_interchain_status`.
+    ///
+    /// **Requires `interchain_indexer_api_url`.** Enabling this without a URL is
+    /// a startup error, not a warning: an ungated start that looks gated is worse
+    /// than a refusal to boot.
+    pub interchain_catchup_min_progress: ToggleableThreshold,
     pub check_period_secs: u32,
 }
 
@@ -610,6 +653,16 @@ impl Default for StartConditionSettings {
             internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck::default(),
             zetachain_indexed_until_today: ToggleableOptionalCheck::default(),
+            // written out on purpose. `ToggleableThreshold::default()` is
+            // `Self::enabled(0.98)` (see below) — *enabled* and 0.98 — so
+            // deriving this default would turn the check on for every existing
+            // interchain deployment, none of which has the indexer API URL
+            // set, so they would all hit the enabled-without-source `bail!` on
+            // upgrade. The value matches `blocks_ratio`'s 0.98 deliberately:
+            // there is no reason to carry two different-but-close defaults, and
+            // it means `__ENABLED=true` alone yields a sensible threshold rather
+            // than the useless 0.0 a bare `disabled()` would give.
+            interchain_catchup_min_progress: ToggleableThreshold::disabled().set_threshold(0.98),
             check_period_secs: 5,
         }
     }
@@ -624,6 +677,19 @@ impl StartConditionSettings {
     }
     pub fn zetachain_checks_enabled(&self) -> bool {
         self.zetachain_indexed_until_today.enabled.unwrap_or(false)
+    }
+    /// Whether the interchain catch-up start check participates in the wait.
+    ///
+    /// `validate_interchain_filter` `bail!`s when this is enabled without
+    /// `interchain_indexer_api_url`, so by the time the aggregator runs,
+    /// `interchain_checks_enabled() == true` implies a configured source. That is
+    /// why this takes no argument even though `decisions.md` Q11 words the
+    /// requirement as "must also require the API URL to be configured":
+    /// `StartConditionSettings` cannot see the URL, and normalising the
+    /// invariant at startup is cleaner than giving one of four sibling helpers a
+    /// different signature.
+    pub fn interchain_checks_enabled(&self) -> bool {
+        self.interchain_catchup_min_progress.enabled
     }
 }
 
@@ -711,6 +777,81 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    /// Under Q11 the default *value* is aligned with `blocks_ratio` at `0.98`,
+    /// so the threshold alone no longer distinguishes the correct default from
+    /// the bug this test exists to catch (turning the check on by default). The
+    /// **pair** must be asserted.
+    #[test]
+    fn interchain_catchup_gate_is_disabled_by_default() {
+        assert_eq!(
+            StartConditionSettings::default().interchain_catchup_min_progress,
+            ToggleableThreshold::disabled().set_threshold(0.98)
+        );
+    }
+
+    #[test]
+    fn interchain_catchup_gate_stays_disabled_with_no_envs() {
+        check_envs_parsed_to(
+            "START_SETTINGS",
+            std::collections::HashMap::new(),
+            StartConditionSettings::default(),
+        )
+        .unwrap();
+    }
+
+    /// Pins the toggleable-threshold "partial env sets `enabled`" behaviour
+    /// (parity with `STATS__CONDITIONAL_START__BLOCKS_RATIO__*`, not a bug):
+    /// setting only `…__ENABLED=true` yields the written-out `0.98` threshold,
+    /// and setting only `…__THRESHOLD` alone flips `enabled` to `true`.
+    #[test]
+    fn interchain_catchup_gate_partial_env_inherits_the_toggleable_default() {
+        check_envs_parsed_to(
+            "START_SETTINGS",
+            [(
+                "START_SETTINGS__INTERCHAIN_CATCHUP_MIN_PROGRESS__ENABLED".to_owned(),
+                "true".to_owned(),
+            )]
+            .into(),
+            StartConditionSettings {
+                interchain_catchup_min_progress: ToggleableThreshold::enabled(0.98),
+                ..StartConditionSettings::default()
+            },
+        )
+        .unwrap();
+
+        check_envs_parsed_to(
+            "START_SETTINGS",
+            [(
+                "START_SETTINGS__INTERCHAIN_CATCHUP_MIN_PROGRESS__THRESHOLD".to_owned(),
+                "0.95".to_owned(),
+            )]
+            .into(),
+            StartConditionSettings {
+                interchain_catchup_min_progress: ToggleableThreshold::enabled(0.95),
+                ..StartConditionSettings::default()
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn interchain_checks_enabled_follows_the_threshold_toggle() {
+        assert!(
+            !StartConditionSettings {
+                interchain_catchup_min_progress: ToggleableThreshold::disabled(),
+                ..StartConditionSettings::default()
+            }
+            .interchain_checks_enabled()
+        );
+        assert!(
+            StartConditionSettings {
+                interchain_catchup_min_progress: ToggleableThreshold::enabled(0.9),
+                ..StartConditionSettings::default()
+            }
+            .interchain_checks_enabled()
+        );
     }
 
     fn interchain_filter_envs_parse_to(

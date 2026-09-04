@@ -446,3 +446,324 @@ DB?" was raised in the research note's §3.3 and **answered — all of them
 follow it** (§11, question 2; a coverage test asserts it). So the descriptions
 are plainly stale rather than debatable, and leaving them stale is a deliberate
 UI-stability call. Changing them is a product decision, not a cleanup.
+
+---
+
+## A Transfer's Token Chains Are Not Its Message's Route
+
+**Symptom:** you reason about interchain transfer charts using the parent
+message's `src_chain_id` / `dst_chain_id` — for a filter, a scoping decision, or
+a hand-written cross-check — and the numbers quietly disagree with what the
+service produces.
+
+**Root cause:** `crosschain_transfers` carries its **own**
+`token_src_chain_id` / `token_dst_chain_id`, and they need not equal the parent
+`crosschain_messages` row's `src_chain_id` / `dst_chain_id`. The indexer has
+separate columns because the asset's canonical chains can differ from the
+message's route (wrapped assets, reconstructed AMB transfers). The shared
+`ChainBridgeFilter` mirrors that split deliberately, for parity with the
+indexer's read API: `messages_condition` filters on the message's columns,
+`transfers_condition` on the transfer's own. The composite join in
+`InterchainFilter::transfers_joined_query` exists **only** to reach
+`crosschain_messages.init_timestamp` (transfers have no timestamp of their own)
+and the `src_tx_hash` / `dst_tx_hash` flags — never to move the predicate onto
+the message.
+
+The clearest consequence already in the code: `get_min_date_interchain` takes the
+`min` of two *separately* filtered floors rather than one, precisely because a
+transfer can satisfy `transfers_condition()` while its own message fails
+`messages_condition()`. Using the message floor alone would silently truncate the
+transfer charts' history.
+
+**Standing assumption — the one place this is knowingly glossed over.** The
+interchain catch-up scoping (see
+`.memory-bank/research/update-range-anchoring-and-backfill-detection.md`) narrows
+the relevant `(bridge_id, chain_id)` pairs by projecting the filter's chain
+dimensions onto the **message** route. That is exact for the 4 message chart
+families and an **assumption** for the 3 transfer families: it takes a transfer's
+token chains to lie inside its message's route-implied slice. Accepted
+deliberately, on the understanding that it may stop holding as new bridge types
+land.
+
+**How to check whether it still holds** (expect `0`):
+
+```sql
+SELECT count(*) FROM crosschain_transfers t
+JOIN crosschain_messages m
+  ON t.message_id = m.id AND t.bridge_id = m.bridge_id
+WHERE NOT (t.token_src_chain_id IS NOT DISTINCT FROM m.src_chain_id
+        OR t.token_src_chain_id IS NOT DISTINCT FROM m.dst_chain_id)
+   OR NOT (t.token_dst_chain_id IS NOT DISTINCT FROM m.src_chain_id
+        OR t.token_dst_chain_id IS NOT DISTINCT FROM m.dst_chain_id);
+```
+
+**Why the awkward `IS NOT DISTINCT FROM` instead of `NOT IN`.**
+`crosschain_messages.dst_chain_id` is **nullable** — a message whose destination
+is not yet known has `NULL` there, which is exactly what
+`STATS__INTERCHAIN_FILTER__INCLUDE_UNINDEXED_CHAINS` exists to include or drop.
+`x NOT IN (a, NULL)` evaluates to `UNKNOWN`, never `TRUE`, so the obvious
+`NOT IN` form silently drops every row with an unknown destination and can report
+`0` while real divergence exists. The rewritten form compares NULL-safely, so a
+row with an unknown destination counts as divergent rather than vanishing.
+
+**If it stops holding:** scope the 3 transfer families' relevant pairs at
+**bridge** level instead of chain level. Bridge narrowing needs no assumption — a
+row's `bridge_id` is always its creating pair's bridge — so it is exact at the
+cost of being coarser (a catching-up chain on an admitted bridge then holds the
+verdict even when its rows cannot enter the slice).
+
+---
+
+## Interchain *Line* Charts Inherit A Blockscout Indexing Requirement, But It Is Neutralised By Seeding
+
+**Symptom:** `/api/v1/update-status` fields are **not** interchangeable in
+`Mode::Interchain`, contrary to the natural assumption that "interchain has no
+indexing axis, so every subset covers every chart". `independent_status` and
+`zetachain_cctx_dependent_status` cover only the 7 counters; the 32 line charts
+land in the blocks-dependent subsets. The fields can therefore differ
+transiently.
+
+**Root cause:** The 7 interchain counters each override
+`ChartProperties::indexing_status_requirement()` to
+`IndexingStatus::LEAST_RESTRICTIVE`. **No** interchain line chart overrides it, so
+all 8 families × 4 resolutions inherit the default from
+`stats/src/charts/chart.rs:199` — `blockscout: BlockscoutIndexingStatus::BlocksIndexed`,
+whose comment reads "most of the charts need indexed blocks". Interchain charts
+read `crosschain_messages` / `crosschain_transfers` and have no relationship to
+Blockscout blocks at all, so the inherited requirement is meaningless here — it
+just is not harmful.
+
+**Why it is not harmful — the part that is easy to get backwards.** It would be
+tempting to conclude that wiring an `IndexingStatusAggregator` into interchain
+mode would make those 32 charts block forever on a Blockscout status that never
+arrives. **It would not.** `blockscout_waiter::init` seeds the axis by what is
+*enabled*, not by what has been observed:
+
+```rust
+match (blocks_ratio.enabled, internal_transactions_ratio.enabled) {
+    (true, _)      => BlockscoutIndexingStatus::NoneIndexed,
+    (false, true)  => BlockscoutIndexingStatus::BlocksIndexed,
+    (false, false) => BlockscoutIndexingStatus::InternalTransactionsIndexed,
+}
+```
+
+`apply_interchain_mode_settings` disables both, so the axis seeds at
+`InternalTransactionsIndexed`, which is `BlockscoutIndexingStatus::MAX`. And
+`is_requirement_satisfied` is `self >= requirement` over an ordered enum
+(`NoneIndexed < BlocksIndexed < InternalTransactionsIndexed`), so `BlocksIndexed`
+is satisfied on the first poll. `init`'s own comment states the intent: *"enable
+immediately if the checks are disabled."*
+
+**The real trap is the opposite one — an axis enabled with no source.**
+`check_zetachain_status` warns and returns when `zetachain_cctx_db` is `None`,
+leaving the axis at its `CatchingUp` seed forever, so every dependent group blocks
+indefinitely. `IndexingStatusAggregator::run` has a second instance of the same
+shape: it early-returns on
+`!blockscout_checks_enabled() && !user_ops_checks_enabled()` without consulting
+`zetachain_checks_enabled()`. Any *new* axis must therefore either fail at startup
+when enabled without its source — the way `init_blockscout_api_client`'s
+`(false, None)` arm `bail!`s — or disable itself with a warning. Never seed
+"not ready" and hope the source appears.
+
+**Fix:** If interchain line charts ever need to participate in a wait, give them
+an explicit `indexing_status_requirement()` override rather than relying on the
+default; the inherited value is accidental, not intentional. Do not relax the
+default in `chart.rs` — it is correct for the Blockscout-mode majority.
+
+**Resolved.** The interchain historical-backfill work
+(`.memory-bank/research/update-range-anchoring-and-backfill-detection.md`) added
+a 4th `IndexingStatus` axis (`interchain: InterchainIndexingStatus`) and gave all
+15 interchain chart families — the 7 counters and, now, all 8 line families —
+an explicit `indexing_status_requirement()` declaring it. The "no line chart
+overrides it" half of this entry's symptom no longer applies; the seeding
+mechanics above (seed-satisfied-when-disabled, fail-at-startup-when-enabled-
+without-a-source) are exactly what the new axis follows, and are why they are
+kept here rather than duplicated.
+
+**Known debt — the axis model does not fit `Interchain` mode (follow-up).** The
+five per-axis `update-status` fields describe *Blockscout's* database: blocks,
+internal transactions, user ops, plus zetachain's extra tables layered on the same
+DB. `Interchain` mode reads an entirely disjoint indexer DB with no blocks in it,
+so in that mode every one of those five fields is either vacuous or accidental:
+the 32 line charts sit in `blocks_dependent_status` purely because of the
+inherited default described above, and the 7 counters sit in `independent_status`
+while in fact depending on the interchain axis. That last one is not merely odd,
+it is **provably wrong** since the fourth axis landed — and it is knowingly
+retained, because the alternative (dropping `.with_interchain(MAX)` from the
+probes) evicts charts into *no* subset, which `get_status` reports as
+`CompletedInitialUpdate`, i.e. "done" with no data.
+
+Consequences to know now:
+
+- **In `Interchain` mode, read `all_status`.** It is unambiguous there:
+  `apply_interchain_mode_settings` force-disables `blocks_ratio`,
+  `internal_transactions_ratio` and `user_ops_past_indexing_finished` and nulls
+  `blockscout_api_url`, and the zetachain CCTX DB only connects in
+  `Mode::Zetachain` — so the interchain catch-up gate is the only start condition
+  that can hold, and `WAITING_FOR_STARTING_CONDITION` can only mean that gate.
+- **Do not "fix" this by adding a sixth per-axis field.** That was proposed and
+  rejected: it fits interchain into the Blockscout-shaped frame instead of
+  admitting the frame is the problem.
+
+A real fix means changing the semantics of five already-shipped fields —
+interchain charts would stop declaring `blockscout: BlocksIndexed`, and the
+`independent` probe would stop setting `interchain: MAX`, which in turn needs
+`get_status`'s "empty subset ⇒ completed" arm revisited (and note that
+`verify_tracking_all_charts` only `warn!`s, so nothing fails loudly if a chart
+ends up unclassified). That is its own change with its own review, not a rider on
+the backfill work.
+
+---
+
+## `env-collector`'s Per-Field Default Column Can Disagree With The Real Default
+
+**Symptom:** `just generate-envs`/`just check-envs` render a settings field's
+"Default value" column as something that does not match what
+`Settings::default()` (or the containing struct's own hand-written `Default`)
+actually produces for that field — and a test asserting the real default (e.g.
+`StartConditionSettings::default()`) passes anyway, so the code is correct and
+only the generated table is wrong.
+
+**Root cause:** `env-collector`'s `default_of_var` (`libs/env-collector/src/lib.rs`)
+computes "what does field X default to" by serializing the whole settings
+struct to JSON, **removing only X's own leaf key**, and re-deserializing —
+relying on serde's `#[serde(default)]` to refill the missing leaf. That works
+when the refill source is the *outer* struct's own `Default` impl, but when the
+leaf's immediate parent type carries its **own** `#[serde(default)]` (e.g.
+`ToggleableThreshold`, whose `Default` is `Self::enabled(0.98)` — `enabled:
+true`), removing just the leaf triggers *that* type's container-level default
+for the leaf, not the outer struct's override of the whole sub-object. A
+`StartConditionSettings` field written out as
+`ToggleableThreshold::disabled().set_threshold(0.98)` (`enabled: false`) then
+gets its `…__ENABLED` row rendered as `true` — `ToggleableThreshold::default()`'s
+own `enabled`, not the actual field value.
+
+**This is not new to this task** — `STATS__CONDITIONAL_START__BLOCKS_RATIO__ENABLED`
+has always rendered `true` in `README.md`, and that happens to be correct only
+because `blocks_ratio`'s real default equals `ToggleableThreshold::default()`
+unmodified. The interchain catch-up gate
+(`STATS__CONDITIONAL_START__INTERCHAIN_CATCHUP_MIN_PROGRESS__ENABLED`, real
+default `false`) is the first `ToggleableThreshold` field whose override
+diverges from `ToggleableThreshold::default()`, which is what makes the quirk
+visible as a wrong answer for the first time.
+
+**What this does not affect:** `just check-envs` still passes, because it
+compares the checked-in table against a freshly recomputed one using the same
+(quirky) function — there is no independent ground truth being checked against.
+The quirk only misleads a human reading the generated default column.
+
+**Fix:** none applied — `libs/env-collector` is a shared library used by other
+services' doc generation, so this task did not modify it. Do not "fix" the
+rendered `true` by hand-editing the default column; `generate-envs` would
+recompute the same value and `check-envs` would flag the hand-edit as drift on
+the next run. If this ever needs correcting, it belongs in
+`env-collector::default_of_var`, scoped and tested against `blocks_ratio` too.
+
+---
+
+## A Lower-Resolution Interchain Line Chart Cannot Detect Backfill By Itself
+
+**Symptom:** an interchain weekly/monthly/yearly series is short by up to one
+bucket's worth of history and disagrees with its own daily series, while every
+chart reports itself freshly updated. Nothing logs an error.
+
+**Root cause:** backfill detection compares the chart's stored floor against the
+indexer's current filtered floor, and for a resolution chart the stored `date`
+**is** the bucket's first day (`Week::into_date() == saturating_first_day()`, same
+for month/year). So the moment the comparison fires once, it normalises the stored
+floor to the bucket boundary, and every later floor movement that stays inside
+that bucket compares equal — permanently, not for one cycle. Only the **daily**
+chart's comparison is exact, because `Day::from_date` is the identity.
+
+**How it is actually made to work:** the daily chart is the family's detector.
+When its own comparison fires, `update_itself_inner` leaves a marker in
+`UpdateContext::cache` keyed by `ChartProps::name()` — the name, not the
+`ChartKey`, because the name is what every resolution of one family shares — and
+each lower resolution rebuilds when it sees that marker.
+
+**What this depends on, and can silently break:**
+
+1. **Dependency-update ordering.** A lower resolution reads a marker written by a
+   *different* chart's update in the same cycle. That is only sound because
+   `update_recursively` updates a chart's `MainDependencies` first, and every
+   lower-resolution interchain chart takes the daily local-db chart as its main
+   dependency (`SumLowerResolution<MapParseTo<StripExt<…>>, …>`). Change either
+   and the marker is read before it is written — with no compile error and no
+   test failure unless a test stages a backfill *within* one bucket.
+2. **The cache's lifetime.** `UpdateCache` is constructed fresh per group update,
+   so the marker cannot leak between cycles. It is also the reason the marker is
+   not a substitute for the stored-floor check across restarts.
+3. **A new lower-resolution chart with no daily sibling** would inherit the blind
+   spot and nothing would propagate to it.
+
+**When writing a test for this:** a backfill that crosses the bucket boundary
+passes against the broken code too, because the chart's own comparison fires. The
+test has to stage a movement that stays *inside* the bucket after an earlier fire
+already normalised the stored date — see
+`messages_growth_sent_interchain_picks_up_backwards_backfill_at_lower_resolutions`,
+whose stages are chosen so each resolution has one stage its own comparison cannot
+see.
+
+---
+
+## Interchain Chart History Drifts After Catch-Up Completes
+
+**Symptom:** an interchain chart's historical days disagree with the indexer — in **both**
+directions — while every chart reports itself freshly updated and no floor has moved.
+Measured on a live stand: 12 of 714 days differed before a `force_full` cycle repaired
+them; afterwards, 0 of 714 differed and the sums matched exactly (71 699 = 71 699).
+
+**Root cause — two independent mechanisms, both fed by the same upstream fact.** The
+interchain indexer **mutates rows long after their day has passed** (a message initiated in
+March can be completed in September; see the indexer's
+`.memory-bank/gotchas.md` → *"Message History Is Not Append-Only"*). So a past day's
+correct value keeps changing.
+
+1. **Interior fills nothing detects.** Trigger 2 fires only when a chart's stored floor
+   sits *above* the indexer's filtered floor. A row landing at a date **below** the chart's
+   floor changes that day's value but moves no floor, so nothing rebuilds. Observed:
+   `newMessagesInterchain` held `0` for 2024-08-01 while the indexer had 1 row — its floor
+   was already at 2024-06-15. The *directional* chart picked the same row up, because its
+   own floor did move. This is the residual gap recorded in the task's decision Q7.
+2. **Upsert asymmetry.** `insert_data_many` is an upsert with no delete, so when the
+   indexer *lowers* a day's count (re-indexing, deduplication) the previously stored higher
+   value survives. Observed as **negative** deltas: 2025-04-10 read 143 in stats against
+   139 in the indexer.
+
+**What repairs it:** `force_full`, which recomputes the whole series. That runs while the
+per-cycle catch-up verdict is incomplete — so during catch-up the drift is continuously
+repaired. With a **complete** verdict and a static floor, nothing repairs it, and the error
+accumulates.
+
+**Practical consequences:**
+
+- Do not treat an interchain chart's historical values as settled once catch-up completes.
+- Reconciling stats against the indexer is only meaningful right after a `force_full`
+  cycle; otherwise expect a fraction of a percent of days to disagree.
+- A periodic full recompute would close this. It was out of scope for the backfill work,
+  which targets catch-up, not the steady state.
+
+---
+
+## Interchain Directional Charts Count "Observed", Not "Routed" — Naive SQL Will Not Match
+
+**Symptom:** you verify `totalInterchainMessagesSent` against
+`count(*) WHERE src_chain_id = <home>` and stats reports roughly half your number, so it
+looks like rows are being dropped.
+
+**Root cause:** a directional chart means "source-side **observed**" / "destination-side
+**observed**", not "routed through". The predicate carries the matching tx-hash presence
+check. Measured on the live stand with `HOME_CHAIN_ID=100`:
+
+| predicate | count |
+|---|---|
+| `src_chain_id = 100` (naive) | 32 875 |
+| `src_chain_id = 100 AND src_tx_hash IS NOT NULL` | 15 957 |
+| stats `newMessagesSentInterchain` | **15 957** |
+
+The received side matches the same way through `dst_tx_hash`. Note this interacts with the
+retroactive mutation above: a message becomes "destination-side observed" only when its
+`dst_tx_hash` arrives, which can be months after the day it is counted on.
+
+`sent + received` also does not equal the undirected total, for the same reason — each
+side drops the rows it cannot observe.

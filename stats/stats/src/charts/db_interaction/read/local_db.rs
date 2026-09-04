@@ -448,6 +448,38 @@ pub async fn recorded_min_indexer_block(
     Ok(row.map(|row| row.min_blockscout_block))
 }
 
+#[derive(Debug, FromQueryResult)]
+struct MinChartDate {
+    date: NaiveDate,
+}
+
+/// The earliest `date` this chart has a stored row for — its history floor.
+///
+/// `None` when the chart has no stored rows. Sibling to
+/// [`recorded_min_indexer_block`], which reads the *newest* row of the same
+/// `UNIQUE (chart_id, date)` index (`migration/src/m20220101_000001_init.rs`);
+/// the two cannot be merged because they read different rows.
+///
+/// Used by the interchain backfill check in
+/// [`crate::data_source::kinds::local_db`]: a stored floor above the indexer's
+/// current filtered floor means the indexer has backfilled below this chart's
+/// anchor.
+pub async fn recorded_min_chart_date(
+    db: &DatabaseConnection,
+    chart_id: i32,
+) -> Result<Option<NaiveDate>, ChartError> {
+    let row: Option<MinChartDate> = chart_data::Entity::find()
+        .select_only()
+        .column(chart_data::Column::Date)
+        .filter(chart_data::Column::ChartId.eq(chart_id))
+        .order_by_asc(chart_data::Column::Date)
+        .into_model()
+        .one(db)
+        .await
+        .map_err(ChartError::StatsDB)?;
+    Ok(row.map(|row| row.date))
+}
+
 /// Get last 'finalized' row (for which no recomputations needed).
 ///
 /// In case of inconsistencies or set `force_full`, returns `None`.
