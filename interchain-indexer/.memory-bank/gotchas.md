@@ -1740,3 +1740,65 @@ edge `decimals` when `NULL`, so correcting `tokens` alone does not
 retroactively fix an already-populated (wrong) edge value.
 
 ---
+
+---
+
+## Published Message Aggregates Count Terminal States Only — Downstream Totals Will Not Match
+
+**Symptom:** someone compares `stats_messages_days` / `stats_messages` against a naive
+`count(*)` over `crosschain_messages`, or against the stats service's
+`newMessagesInterchain` chart, and the numbers disagree by tens of percent. The instinct
+is that one side is losing rows.
+
+**Root cause:** our aggregates count messages that have reached a **terminal** state, i.e.
+`completed` plus `failed`. In-flight messages (`initiated`, `ready_to_claim`) are not
+counted. The stats service counts **every** message regardless of status, because its
+chart is "messages initiated per day", not "messages delivered per day".
+
+Measured on a live mainnet AMB/Omnibridge dataset filtered to `src=100 OR dst=100`
+(2026-09-04), and the arithmetic closes exactly in both directions:
+
+| | count |
+|---|---|
+| `stats_messages_days` (ours) | 50 262 |
+| raw `completed` | 50 238 |
+| raw `failed` | 24 |
+| raw `initiated` | 21 158 |
+| raw `ready_to_claim` | 270 |
+| stats service, all statuses | 71 690 |
+
+`50 238 + 24 = 50 262`, and the four statuses sum to `71 690`. So the gap is exactly the
+21 428 in-flight messages — neither side is dropping anything.
+
+**Why it matters:** the two numbers are both correct and answer different questions. If a
+UI ever shows ours next to the stats service's, they will differ by the in-flight backlog
+and look like a bug. Say which question is being answered before comparing.
+
+Related: `stats_chains_by_bridge` per-bridge uniques are not additive either (ADR-009).
+
+---
+
+## Message History Is Not Append-Only — We Mutate Rows Long After Their Day Has Passed
+
+**Symptom:** a downstream consumer caches per-day counts and they slowly go stale, or a
+re-derived aggregate disagrees with a snapshot taken earlier, with no rows added for those
+days.
+
+**Root cause:** a bridge message is initiated on one chain and claimed on another, and the
+delay is unbounded. When the claim lands we update the **existing** row — `status` moves
+toward a terminal state, `dst_tx_hash` is filled — and that row's `init_timestamp` still
+points at the original day. So the aggregate for a day weeks or months in the past changes
+without any insert.
+
+Measured on the live stand: a message initiated **2025-03-24** was updated **2026-09-04**
+to `completed` with `dst_tx_hash` set, and 2909 rows were touched within one hour.
+Re-scanning a range rewrites rows too, so `updated_at > init_timestamp` is the norm rather
+than the exception here.
+
+**Why it matters:** any consumer that assumes "days in the past are settled" is wrong for
+this indexer, and the error accumulates silently. It is also why observability-sensitive
+predicates change retroactively: a message only satisfies "destination-side observed" once
+its `dst_tx_hash` arrives, which can be months after the day it belongs to.
+
+The stats service hit exactly this — see its
+`.memory-bank/gotchas.md` → *"Interchain Chart History Drifts After Catch-Up Completes"*.

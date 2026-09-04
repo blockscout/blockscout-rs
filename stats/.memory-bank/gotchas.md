@@ -703,3 +703,67 @@ already normalised the stored date — see
 `messages_growth_sent_interchain_picks_up_backwards_backfill_at_lower_resolutions`,
 whose stages are chosen so each resolution has one stage its own comparison cannot
 see.
+
+---
+
+## Interchain Chart History Drifts After Catch-Up Completes
+
+**Symptom:** an interchain chart's historical days disagree with the indexer — in **both**
+directions — while every chart reports itself freshly updated and no floor has moved.
+Measured on a live stand: 12 of 714 days differed before a `force_full` cycle repaired
+them; afterwards, 0 of 714 differed and the sums matched exactly (71 699 = 71 699).
+
+**Root cause — two independent mechanisms, both fed by the same upstream fact.** The
+interchain indexer **mutates rows long after their day has passed** (a message initiated in
+March can be completed in September; see the indexer's
+`.memory-bank/gotchas.md` → *"Message History Is Not Append-Only"*). So a past day's
+correct value keeps changing.
+
+1. **Interior fills nothing detects.** Trigger 2 fires only when a chart's stored floor
+   sits *above* the indexer's filtered floor. A row landing at a date **below** the chart's
+   floor changes that day's value but moves no floor, so nothing rebuilds. Observed:
+   `newMessagesInterchain` held `0` for 2024-08-01 while the indexer had 1 row — its floor
+   was already at 2024-06-15. The *directional* chart picked the same row up, because its
+   own floor did move. This is the residual gap recorded in the task's decision Q7.
+2. **Upsert asymmetry.** `insert_data_many` is an upsert with no delete, so when the
+   indexer *lowers* a day's count (re-indexing, deduplication) the previously stored higher
+   value survives. Observed as **negative** deltas: 2025-04-10 read 143 in stats against
+   139 in the indexer.
+
+**What repairs it:** `force_full`, which recomputes the whole series. That runs while the
+per-cycle catch-up verdict is incomplete — so during catch-up the drift is continuously
+repaired. With a **complete** verdict and a static floor, nothing repairs it, and the error
+accumulates.
+
+**Practical consequences:**
+
+- Do not treat an interchain chart's historical values as settled once catch-up completes.
+- Reconciling stats against the indexer is only meaningful right after a `force_full`
+  cycle; otherwise expect a fraction of a percent of days to disagree.
+- A periodic full recompute would close this. It was out of scope for the backfill work,
+  which targets catch-up, not the steady state.
+
+---
+
+## Interchain Directional Charts Count "Observed", Not "Routed" — Naive SQL Will Not Match
+
+**Symptom:** you verify `totalInterchainMessagesSent` against
+`count(*) WHERE src_chain_id = <home>` and stats reports roughly half your number, so it
+looks like rows are being dropped.
+
+**Root cause:** a directional chart means "source-side **observed**" / "destination-side
+**observed**", not "routed through". The predicate carries the matching tx-hash presence
+check. Measured on the live stand with `HOME_CHAIN_ID=100`:
+
+| predicate | count |
+|---|---|
+| `src_chain_id = 100` (naive) | 32 875 |
+| `src_chain_id = 100 AND src_tx_hash IS NOT NULL` | 15 957 |
+| stats `newMessagesSentInterchain` | **15 957** |
+
+The received side matches the same way through `dst_tx_hash`. Note this interacts with the
+retroactive mutation above: a message becomes "destination-side observed" only when its
+`dst_tx_hash` arrives, which can be months after the day it is counted on.
+
+`sent + received` also does not equal the undirected total, for the same reason — each
+side drops the rows it cannot observe.
