@@ -8,8 +8,8 @@ use bytes::Bytes;
 use entity::{parts, sea_orm_active_enums::PartType};
 use ethabi::{Constructor, Token};
 use mismatch::Mismatch;
-use solidity_metadata::MetadataHash;
 use thiserror::Error;
+use verification_common::code_metadata::CodeMetadata;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BytecodePart {
@@ -18,7 +18,10 @@ pub enum BytecodePart {
     },
     Metadata {
         raw: Bytes,
-        metadata: MetadataHash,
+        /// `None` when the blob matches neither of the shapes compilers are known to
+        /// emit. Such a part is still usable for byte comparison, we just cannot read
+        /// a compiler version out of it.
+        metadata: Option<CodeMetadata>,
         metadata_length_raw: Bytes,
     },
 }
@@ -32,8 +35,15 @@ impl TryFrom<&parts::Model> for BytecodePart {
                 raw: Bytes::copy_from_slice(&part.data),
             },
             PartType::Metadata => {
-                let (metadata, length) = MetadataHash::from_cbor(&part.data)?;
-                let metadata_length_raw = &part.data[length..];
+                // Both solidity and vyper store a metadata part as `<cbor blob><2 length bytes>`,
+                // so the trailing two bytes are recoverable even when the blob itself is not
+                // solidity metadata and cannot be decoded here.
+                let (metadata, metadata_length_raw) = match CodeMetadata::from_cbor(&part.data) {
+                    Ok((metadata, length)) if length + 2 <= part.data.len() => {
+                        (Some(metadata), &part.data[length..])
+                    }
+                    _ => (None, &part.data[part.data.len().saturating_sub(2)..]),
+                };
                 Self::Metadata {
                     raw: Bytes::copy_from_slice(&part.data),
                     metadata,
@@ -204,10 +214,10 @@ fn compare_bytecode_parts(
                 ..
             } => {
                 let (remote_metadata, remote_metadata_length) =
-                    MetadataHash::from_cbor(&remote_raw[i..])
+                    CodeMetadata::from_cbor(&remote_raw[i..])
                         .map_err(|err| CompareError::MetadataParse(err.to_string()))?;
                 let start_index = i + remote_metadata_length;
-                if remote_raw.len() <= start_index {
+                if remote_raw.len() < start_index + 2 {
                     return Err(CompareError::MetadataParse(
                         "metadata doesn't have encoded length".into(),
                     ));
@@ -218,17 +228,29 @@ fn compare_bytecode_parts(
                     ));
                 }
 
+                // Metadata parts are compared by length and compiler version rather than
+                // byte by byte, so blobs emitted by different compilers must not be
+                // considered interchangeable just because they happen to be the same size.
+                if let Some(metadata) = metadata {
+                    if !metadata.is_same_language(&remote_metadata) {
+                        return Err(CompareError::MetadataParse(
+                            "metadata was produced by a different compiler".into(),
+                        ));
+                    }
+                }
+
                 // We may say the compiler versions does not correspond to each other only in case if both compiler versions are present.
                 // Otherwise, we cannot say for sure if compiler version is invalid.
-                if let (Some(metadata_solc), Some(remote_metadata_solc)) =
-                    (&metadata.solc, &remote_metadata.solc)
+                let metadata_version = metadata
+                    .as_ref()
+                    .and_then(|metadata| metadata.compiler_version());
+                if let (Some(metadata_version), Some(remote_metadata_version)) =
+                    (metadata_version, remote_metadata.compiler_version())
                 {
-                    if metadata_solc != remote_metadata_solc {
-                        let expected_solc = metadata_solc.clone();
-                        let remote_solc = remote_metadata_solc.clone();
+                    if metadata_version != remote_metadata_version {
                         return Err(CompareError::CompilerVersionMismatch(Mismatch::new(
-                            expected_solc,
-                            remote_solc,
+                            metadata_version.clone(),
+                            remote_metadata_version.clone(),
                         )));
                     }
                 }
@@ -265,6 +287,12 @@ mod tests {
 
     const DEFAULT_MAIN: &str = "6080604052348015600f57600080fd5b506004361060285760003560e01c8063f43fa80514602d575b600080fd5b60336047565b604051603e91906062565b60405180910390f35b600065100000000001905090565b605c81607b565b82525050565b6000602082019050607560008301846055565b92915050565b600081905091905056fe";
     const DEFAULT_META: &str = "a2646970667358221220ad5a5e9ea0429c6665dc23af78b0acca8d56235be9dc3573672141811ea4a0da64736f6c63430008070033";
+
+    /// Auxdata of a vyper 0.4.3 creation code. Unlike solidity metadata (a cbor map),
+    /// vyper >=0.4 emits a cbor array of 5 - [integrity hash, runtime code length,
+    /// data section lengths, immutables length, {"vyper": [0, 4, 3]}] - which the
+    /// solidity metadata parser cannot decode.
+    const VYPER_META: &str = "8558202636c527aac5420370bf53e1d11abbd62b06edbec0bd9eb95f67622a7ecb8cd7195a4a90184b18231831182318460e0e182a18381838183118311831181c151823190180a1657679706572830004030054";
 
     #[test]
     fn db_convert() {
@@ -305,9 +333,11 @@ mod tests {
                 metadata_length_raw,
             } => {
                 assert_eq!(raw.to_vec(), meta.data,);
+                let metadata = metadata.expect("solidity metadata should be parsed");
+                assert!(matches!(metadata, CodeMetadata::Solidity(_)));
                 assert_eq!(
-                    metadata.solc,
-                    Some(Version::from_str("0.8.7").expect("valid semver"))
+                    metadata.compiler_version(),
+                    Some(&Version::from_str("0.8.7").expect("valid semver"))
                 );
                 let length = 0x33;
                 assert_eq!(metadata_length_raw.to_vec(), vec![0x0, length]);
@@ -422,5 +452,119 @@ mod tests {
             );
             test_compare(&remote, bytecodes, false);
         }
+    }
+
+    #[test]
+    fn db_convert_vyper_auxdata() {
+        let meta = parts::Model {
+            id: 0,
+            part_type: PartType::Metadata,
+            data: hex::decode(VYPER_META).unwrap(),
+            data_text: VYPER_META.to_string(),
+            created_at: Default::default(),
+            updated_at: Default::default(),
+        };
+
+        let part = BytecodePart::try_from(&meta).expect("vyper auxdata should not fail conversion");
+        match part {
+            BytecodePart::Main { .. } => panic!("invalid type for bytecode part"),
+            BytecodePart::Metadata {
+                raw,
+                metadata,
+                metadata_length_raw,
+            } => {
+                assert_eq!(raw.to_vec(), meta.data);
+                let metadata = metadata.expect("vyper auxdata should be parsed");
+                assert!(matches!(metadata, CodeMetadata::Vyper(_)));
+                assert_eq!(
+                    metadata.compiler_version(),
+                    Some(&Version::from_str("0.4.3").expect("valid semver"))
+                );
+                // Vyper counts the 2 length bytes themselves as part of the auxdata.
+                assert_eq!(metadata_length_raw.to_vec(), vec![0x0, 0x54]);
+                assert_eq!(raw.len(), 0x54);
+            }
+        };
+    }
+
+    #[test]
+    fn db_convert_invalid_metadata_does_not_fail() {
+        let data = "0000000000000004";
+        let meta = parts::Model {
+            id: 0,
+            part_type: PartType::Metadata,
+            data: hex::decode(data).unwrap(),
+            data_text: data.to_string(),
+            created_at: Default::default(),
+            updated_at: Default::default(),
+        };
+
+        let part = BytecodePart::try_from(&meta).expect("undecodable metadata should not fail");
+        match part {
+            BytecodePart::Main { .. } => panic!("invalid type for bytecode part"),
+            BytecodePart::Metadata { metadata, .. } => assert_eq!(metadata, None),
+        };
+    }
+
+    #[test]
+    fn local_bytecode_with_vyper_auxdata_is_built() {
+        let parts = get_parts(&[DEFAULT_MAIN, VYPER_META]);
+        LocalBytecode::new(&parts).expect("vyper auxdata should not fail local bytecode building");
+    }
+
+    #[test]
+    fn compare_same_vyper_auxdata() {
+        let bytecodes = vec![DEFAULT_MAIN, VYPER_META];
+        test_compare(&bytecodes.join(""), bytecodes, true);
+    }
+
+    /// A contract deployed from a vyper blueprint gets `<blueprint initcode><constructor args>`
+    /// as its creation input, so the stored creation code is a strict prefix of the remote one.
+    #[test]
+    fn compare_vyper_creation_code_with_constructor_args() {
+        let bytecodes = vec![DEFAULT_MAIN, VYPER_META];
+        let constructor_args = "0".repeat(64);
+        let remote = format!("{}{constructor_args}", bytecodes.join(""));
+        test_compare(&remote, bytecodes, true);
+    }
+
+    /// Two verifications of otherwise identical vyper code differ in the auxdata's
+    /// integrity hash, which covers the sources. The comparison must then fall through to
+    /// the part by part check - it cannot take the `starts_with` shortcut - and still
+    /// match, which requires decoding the *remote* auxdata too.
+    #[test]
+    fn compare_vyper_creation_code_with_different_integrity_hash() {
+        let stored = "855820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1900118000a1657679706572830004030035";
+        let on_chain = "855820bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1900118000a1657679706572830004030035";
+        let constructor_args = "0".repeat(64);
+
+        let parts = get_parts(&[DEFAULT_MAIN, stored]);
+        let local = LocalBytecode::new(&parts).expect("local bytecode should be built");
+        let remote =
+            DisplayBytes::from_str(&format!("0x{DEFAULT_MAIN}{on_chain}{constructor_args}"))
+                .unwrap()
+                .0;
+
+        assert_eq!(
+            MatchType::Partial,
+            compare(&remote, &local).expect("should match partially"),
+        );
+    }
+
+    #[test]
+    fn compare_vyper_creation_code_with_different_compiler_version() {
+        let stored = "855820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1900118000a1657679706572830004030035";
+        let another_version = "855820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1900118000a1657679706572830004010035";
+
+        let parts = get_parts(&[DEFAULT_MAIN, stored]);
+        let local = LocalBytecode::new(&parts).expect("local bytecode should be built");
+        let remote = DisplayBytes::from_str(&format!("0x{DEFAULT_MAIN}{another_version}"))
+            .unwrap()
+            .0;
+
+        assert!(matches!(
+            compare(&remote, &local),
+            Err(CompareError::CompilerVersionMismatch(_))
+        ));
     }
 }

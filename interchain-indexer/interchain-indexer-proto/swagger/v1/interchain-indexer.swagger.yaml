@@ -53,6 +53,42 @@ paths:
           in: query
           required: false
           type: boolean
+        - name: chain_ids
+          description: |-
+            Optional comma-separated chain ids filter, for example `123,456`.
+            When absent or empty, all known chains are returned. Selects the returned
+            rows by chain id. Unknown ids match nothing; duplicates are idempotent.
+            Malformed or out-of-int64-range values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids filter, for example `1,2`
+            (see GET /api/v1/interchain/bridges). Restricts the response to chains the
+            selected bridges index today -- the union of their
+            `Bridge.indexed_chain_ids`, derived from the in-memory bridges config,
+            never from historical `bridge_contracts` rows.
+            The returned rows are that union INTERSECTED with the chain directory this
+            endpoint serves, which is upserted from `chains.json`. The two coincide in
+            practice, but a chain that a selected bridge indexes and that has no entry
+            in the chain directory is listed by GET /api/v1/interchain/bridges and is
+            not returned here, because there is no chain row to return.
+            When absent or empty, no bridge restriction is applied. A non-empty
+            selection naming only unknown, removed, or contract-less bridges returns an
+            EMPTY list, not the full directory. Malformed or out-of-int32-range values
+            return InvalidArgument; duplicates are idempotent. Composes with
+            `chain_ids` and `include_unindexed_chains` through AND.
+
+            NOTE: this deliberately differs from GET /api/v1/stats/chains?bridge_ids=,
+            which additionally admits a chain with retained per-bridge stats history
+            for a selected bridge. For a bridge removed from configuration,
+            /stats/chains can still list its historical chains while this endpoint
+            lists none. That is by design: this endpoint applies the same
+            currently-configured membership that `Bridge.indexed_chain_ids` reports.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainService
   /api/v1/interchain/messages:
@@ -1368,13 +1404,13 @@ definitions:
         type: array
         items:
           type: string
-          format: int64
         description: |-
           Chain ids this bridge actually indexes today, sorted ascending. Derived
           from the in-memory bridges config (`IndexedChains`), not from historical
           `bridge_contracts` rows, so a bridge removed from config but still
           present in the `bridges` table (upserts never delete) reports an empty
           list here rather than stale contract history.
+          The ids are decimal strings, matching `ChainInfo.id`.
   v1BridgeInfo:
     type: object
     properties:
@@ -1426,7 +1462,6 @@ definitions:
         format: int32
       chain_id:
         type: string
-        format: int64
       start_block:
         type: string
         format: uint64
@@ -1653,7 +1688,7 @@ definitions:
         description: |-
           True when this record's source or destination chain is not indexed by its
           own bridge (an unknown destination also counts). Such a record can never be
-          observed from both sides. Always present.
+          observed from both sides.
   v1InterchainTransfer:
     type: object
     properties:
@@ -1692,7 +1727,7 @@ definitions:
         description: |-
           True when this record's source or destination chain is not indexed by its
           own bridge (an unknown destination also counts). Such a record can never be
-          observed from both sides. Always present.
+          observed from both sides.
   v1MessagePathRow:
     type: object
     properties:

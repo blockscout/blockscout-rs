@@ -258,6 +258,11 @@ pub async fn find_resolved_addresses(
     protocols: NonEmpty<&Protocol>,
     input: &LookupAddressInput,
 ) -> Result<Vec<Domain>, DbErr> {
+    // Without at least one of these the address predicate renders as a bare
+    // FALSE, which drops $1 from the SQL and breaks the bind below.
+    if !input.resolved_to && !input.owned_by {
+        return Ok(Vec::new());
+    }
     let queries = protocols.into_iter().map(|protocol| {
         gen_sql_select_domains_by_address(
             protocol,
@@ -291,6 +296,10 @@ pub async fn count_domains_by_address(
     resolved_to: bool,
     owned_by: bool,
 ) -> Result<i64, DbErr> {
+    // See `find_resolved_addresses`.
+    if !resolved_to && !owned_by {
+        return Ok(0);
+    }
     let queries = protocols.into_iter().map(|protocol| {
         gen_sql_select_domains_by_address(
             protocol,
@@ -333,8 +342,15 @@ fn gen_sql_select_domains_by_address(
         q = q.with_not_expired();
     };
 
-    // Trick: in resolved_to and owned_by are not provided, binding still exists and `cond` will be false
-    let mut main_cond = Condition::any().add(Expr::cust("$1 <> $1"));
+    // No `$1 <> $1` sentinel here: it is opaque to the planner, so in a generic
+    // plan Postgres estimates the whole disjunction at ~99.5% selectivity, gives
+    // up on the resolved_address/owner/wrapped_owner indexes and walks the
+    // created_at index instead. Callers guarantee at least one flag is set.
+    debug_assert!(
+        resolved_to || owned_by,
+        "caller must reject the empty filter before building the query"
+    );
+    let mut main_cond = Condition::any();
     if resolved_to {
         main_cond = main_cond.add(Expr::cust("resolved_address = $1"));
     }
@@ -345,4 +361,59 @@ fn gen_sql_select_domains_by_address(
     q = q.cond_where(main_cond);
 
     q.to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn address_filter_sql(resolved_to: bool, owned_by: bool) -> String {
+        let protocol = Protocol {
+            subgraph_schema: "sgd1".to_string(),
+            ..Default::default()
+        };
+        gen_sql_select_domains_by_address(&protocol, None, true, resolved_to, owned_by)
+            .to_string(PostgresQueryBuilder)
+    }
+
+    #[test]
+    fn address_filter_stays_indexable() {
+        // A `$1 <> $1` disjunct is opaque to the planner: in a generic plan it
+        // pushes the estimate for the whole OR to ~99.5% of the table, the
+        // attribute indexes stop being used and the query degrades into a full
+        // walk of the created_at index.
+        for (resolved_to, owned_by) in [(true, true), (true, false), (false, true)] {
+            let sql = address_filter_sql(resolved_to, owned_by);
+            assert!(!sql.contains("$1 <> $1"), "{sql}");
+            // callers bind exactly one parameter, so $1 must survive every variant
+            assert!(sql.contains("$1"), "{sql}");
+        }
+    }
+
+    #[test]
+    fn address_filter_respects_flags() {
+        let both = address_filter_sql(true, true);
+        assert!(both.contains("(resolved_address = $1)"), "{both}");
+        assert!(both.contains("(owner = $1)"), "{both}");
+        assert!(both.contains("(wrapped_owner = $1)"), "{both}");
+
+        let resolved_only = address_filter_sql(true, false);
+        assert!(
+            resolved_only.contains("(resolved_address = $1)"),
+            "{resolved_only}"
+        );
+        assert!(!resolved_only.contains("(owner = $1)"), "{resolved_only}");
+        assert!(
+            !resolved_only.contains("(wrapped_owner = $1)"),
+            "{resolved_only}"
+        );
+
+        let owned_only = address_filter_sql(false, true);
+        assert!(
+            !owned_only.contains("(resolved_address = $1)"),
+            "{owned_only}"
+        );
+        assert!(owned_only.contains("(owner = $1)"), "{owned_only}");
+        assert!(owned_only.contains("(wrapped_owner = $1)"), "{owned_only}");
+    }
 }
