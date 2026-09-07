@@ -166,6 +166,7 @@ dataSources:
       language: wasm/assemblyscript
       file: ./src/reverseRecords.ts
       entities:
+        - PrimaryNameClaim
         - PrimaryNameRecord
       abis:
         - name: DefaultReverseRegistrar

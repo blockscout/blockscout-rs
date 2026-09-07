@@ -469,6 +469,16 @@ type PrimaryNameRecord @entity {
   domain_name: String
 }
 
+"Latest primary names claimed for an address, verified lazily against the forward record"
+type PrimaryNameClaim @entity {
+  "Unique identifier (address)"
+  id: ID!
+  "Name set on the classic <addr>.addr.reverse node (takes precedence)"
+  name: String
+  "Name set on the ENSIP-19 default reverse registrar"
+  defaultName: String
+}
+
 type ReverseClaim @entity {
   "The namehash of <addr>.addr.reverse"
   id: ID!

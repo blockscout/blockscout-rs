@@ -28,6 +28,8 @@ import {
   Transfer,
 } from "./types/schema";
 
+import { onResolvedAddressChanged } from "./reverseRecords";
+
 const BIG_INT_ZERO = BigInt.fromI32(0);
 
 function createDomain(node: string, timestamp: BigInt): Domain {
@@ -189,6 +191,7 @@ export function handleNewResolver(event: NewResolverEvent): void {
 
   let node = event.params.node.toHexString();
   let domain = getDomain(node)!;
+  let previousResolvedAddress = domain.resolvedAddress;
   domain.resolver = id;
 
   if (id) {
@@ -207,6 +210,7 @@ export function handleNewResolver(event: NewResolverEvent): void {
     domain.resolvedAddress = null;
   }
   saveDomain(domain);
+  onResolvedAddressChanged(previousResolvedAddress, domain.resolvedAddress);
 
   let domainEvent = new NewResolver(createEventID(event));
   domainEvent.blockNumber = event.block.number.toI32();

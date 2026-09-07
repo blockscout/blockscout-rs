@@ -28,7 +28,10 @@ import {
   VersionChanged,
 } from "./types/schema";
 
-import { setPrimaryNameRecord } from "./reverseRecords";
+import {
+  onResolvedAddressChanged,
+  setPrimaryNameRecord,
+} from "./reverseRecords";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
   let account = new Account(event.params.a.toHexString());
@@ -44,8 +47,10 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
 
   let domain = Domain.load(event.params.node.toHexString());
   if (domain && domain.resolver == resolver.id) {
+    let previous = domain.resolvedAddress;
     domain.resolvedAddress = event.params.a.toHexString();
     domain.save();
+    onResolvedAddressChanged(previous, domain.resolvedAddress);
   }
 
   let resolverEvent = new AddrChanged(createEventID(event));
