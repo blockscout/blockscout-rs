@@ -156,8 +156,25 @@ mod tests {
         .await;
     }
 
+    /// Unfiltered baseline for [`new_messages_interchain_24h_horizon`]: the
+    /// window holds exactly message 24, so the horizon case's `1` means "the
+    /// message survived the horizon", not "the window happened to be empty".
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn new_messages_interchain_24h_horizon_baseline() {
+        simple_test_counter_interchain::<NewMessagesInterchain24h>(
+            "new_messages_interchain_24h_horizon_baseline",
+            "1",
+            Some(dt("2023-02-09T11:00:00")),
+            InterchainFilter::default(),
+        )
+        .await;
+    }
+
     /// The horizon reaches the new counter: message 24's route `1→2` is inside
-    /// bridge 1's observed chain set, so it survives.
+    /// bridge 1's observed chain set, so it survives — same count as
+    /// [`new_messages_interchain_24h_horizon_baseline`], while the same window's
+    /// transfer is dropped (see `new_transfers_interchain_24h_horizon`).
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn new_messages_interchain_24h_horizon() {

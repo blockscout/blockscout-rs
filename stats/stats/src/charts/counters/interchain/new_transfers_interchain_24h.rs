@@ -164,6 +164,22 @@ mod tests {
         .await;
     }
 
+    /// Unfiltered baseline for [`new_transfers_interchain_24h_horizon`]. Without
+    /// it that test's `0` is ambiguous — a broken statement returns `0` just as
+    /// readily as a correctly applied horizon. This pins the same window at `1`,
+    /// so the drop to `0` is attributable to the horizon.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn new_transfers_interchain_24h_horizon_baseline() {
+        simple_test_counter_interchain::<NewTransfersInterchain24h>(
+            "new_transfers_interchain_24h_horizon_baseline",
+            "1",
+            Some(dt("2023-02-09T11:00:00")),
+            InterchainFilter::default(),
+        )
+        .await;
+    }
+
     /// Proves the observability horizon reaches the new counters: message 24's
     /// route `1→2` is inside bridge 1's observed chain set so the message
     /// survives, while its transfer's token chains `3→4` are not, so the
