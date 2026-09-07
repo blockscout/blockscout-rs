@@ -972,6 +972,67 @@ becomes real, the ledger needs a database-level non-overlap constraint
 
 ---
 
+## Failure Rows Are Coverage Sets, Not Stable Retry Tasks
+
+`record_indexer_failures` merges overlapping **and adjacent** ranges with
+`attempts = max(existing attempts) + 1`. Recording two failed halves therefore
+reconstitutes the parent; it does not preserve a retry split. During replay,
+recording a narrow `BatchError.attributed` inside an existing wide row also
+leaves the wide coverage intact. Only a successful `resolve` subtracts blocks.
+
+`resolve_indexer_failures` resets every affected remainder to `attempts = 1`
+while retaining the parent's timestamps. Thus `attempts` is neither a lifetime
+retry count nor the number of times each block was attempted. A retry policy
+derived only from `batch_size` and this counter can repeatedly revisit coarse
+widths after successful partial recovery. Any adaptive-width change must
+account for the **current remainder's width** and the reset semantics together.
+
+The existing `range_driver.rs::retry_queue` materializes every virtual chunk
+before applying `max_chunks_per_pass`. If adaptive replay reduces chunks to one
+block, preserving that implementation makes memory proportional to the number
+of failed blocks, even with a tiny execution budget. Bound planning as well as
+execution when introducing finer chunks.
+
+These are current contracts and design constraints, not an implemented adaptive
+retry feature. Sources: `interchain-indexer-logic/src/database.rs`
+(`record_indexer_failures`, `resolve_indexer_failures`),
+`interchain-indexer-logic/src/indexer/range_driver.rs`, and ADR-005.
+
+---
+
+## A Retry Cursor Over Only Due Rows Can Revisit The Same Prefix Forever
+
+`RangeDriver::run_retry_tick` filters open rows through `policy::is_due` before
+`retry_pending` constructs its queue. The single `(chain_id, block)` resume
+cursor therefore moves across a changing subset of the open intervals.
+`resume_index` wraps to the head when that cursor is beyond the current subset.
+
+A deterministic model of these source paths exposes a starvation case: two
+permanently failing, multi-chunk intervals have capped backoff schedules offset
+by half the cap. Each interval becomes due alone. Replaying the first interval's
+prefix advances the cursor into it; replaying the second interval's prefix
+moves it past the first interval. When the first becomes due again, the cursor
+wraps to its head. Both prefixes repeat forever while both tails stay untouched.
+This can happen within one chain too, so a cursor per chain alone is insufficient.
+
+The existing queue-sweep unit test uses a fixed queue and does not exercise due
+filtering or timestamps; its `ceil(len / budget)` guarantee does not establish
+fairness for alternating due sets. Finer retry chunks amplify this existing
+limitation. Any retry scheduling change must test staggered backoff and preserve
+each interval's progress while other intervals are due. This is a model-backed
+code finding, not a production incident measurement or an implemented fix.
+
+Related: continuous adjacent forward failures can keep updating one merged
+row's `updated_at` more often than its backoff expires, so that row never becomes
+due at all. A stable finite-backlog convergence claim excludes that case.
+
+Sources: `interchain-indexer-logic/src/indexer/range_driver.rs`
+(`run_retry_tick`, `retry_queue`, `resume_index`, `retry_pending`),
+`interchain-indexer-logic/src/indexer/failure_ledger/policy.rs`, and
+`interchain-indexer-logic/src/database.rs::record_indexer_failures`.
+
+---
+
 ## The AMB Scan Floor Is The `amb_proxy` Contract's `started_at_block`
 
 **Symptom:** Lowering `omnibridge_mediator`'s `started_at_block` in
@@ -1873,3 +1934,60 @@ its `dst_tx_hash` arrives, which can be months after the day it belongs to.
 
 The stats service hit exactly this — see its
 `.memory-bank/gotchas.md` → *"Interchain Chart History Drifts After Catch-Up Completes"*.
+
+---
+
+## A `null` RPC Result Is Never A Failover Signal, So A Half-Archive Node Is Invisible
+
+**Symptom:** `indexer_failures` fills with `transaction receipt not found for tx 0x…` for a
+chain whose configured primary node serves every one of those receipts fine when queried by
+hand. Forward indexing looks healthy; only the replay of historical ranges fails, forever,
+with `attempts` climbing into the hundreds.
+
+**Root cause, in three parts.**
+
+1. **A provider can be archive for logs and not for receipts.** `gnosis.drpc.org` returned
+   the *complete* `eth_getLogs` set for a 2024 Gnosis range — 344 logs, byte-identical to
+   two archive nodes — while returning `null` from `eth_getTransactionReceipt` for those
+   very same transaction hashes. Receipt history there is roughly the last 20k–100k blocks.
+   So the pipeline always gets far enough to fail at the receipt stage, and never at the
+   log stage. Do not infer "this node has the history" from a working `eth_getLogs`.
+
+2. **`null` is a successful response, so the pool never punishes it.** `failover_error`
+   (`provider_layers.rs`) only inspects JSON-RPC *error* payloads. An empty result reaches
+   `dispatch` as `Ok`, hits `mark_ok`, and clears the node's error counter — no cooldown, no
+   primary rotation. `fetch_receipts_for_transactions` then turns the `None` into a terminal
+   error for the whole chunk, with no retry against a different provider. A node that lies
+   by omission is treated as the healthiest node in the pool.
+
+3. **The replay pass saturates the pool by construction, so "catch-up is done" buys
+   nothing.** `pick_node` is a non-blocking round-robin: as soon as the primary's `max_rps`
+   cells are spent, the next request goes to the next node, and when every limiter is dry
+   `execute` falls through to `pick_node(true)`, which picks *uniformly at random* among
+   available nodes. A single 500-block AMB chunk on Gnosis holds 47–365 transactions, and
+   each one costs two calls (`eth_getTransactionReceipt` + an un-deduplicated
+   `eth_getBlockByNumber`) — 94–730 calls per chunk, issued 25 at a time against a pool
+   budget of 50 + 5 + 2 rps. The pool is saturated for the entire chunk even when the chain
+   is fully caught up, so a ~3.5% share of calls lands on the bad node. Over 153
+   transactions that is a 99.6% chance the chunk dies; over 365, 99.9998%. The same
+   interval then fails on every retry, indefinitely.
+
+Forward indexing survives the same code path only because 500 blocks take ~42 minutes to
+produce at head: the identical work spread over that window never exhausts the primary's
+budget, and recent receipts exist on the bad node anyway.
+
+**Diagnosis:** query the *same* hash against every provider in the chain's pool
+individually. A per-node split — some `OK`, some `null` — is this bug. Checking only the
+node you believe is primary proves nothing, because the pool spreads load across all of
+them regardless of `order`.
+
+**Related:** `primary_index` is a one-way ratchet. The only write outside construction is
+in `mark_error`; `health_tick` clears `disabled_until` and `consecutive_errors` but never
+re-homes the pointer to the highest-`order` node that recovered. With
+`cooldown_threshold: 1`, three consecutive errors permanently demote the preferred primary,
+and a node whose failure mode is `null` can never be demoted in turn — so the pointer can
+come to rest on the worst node in the pool and stay there.
+
+See also: *"RPC Pool Order Comes From `order`, Never From JSON Key Order"* and *"Some RPC
+Gateways Cross-Contaminate `eth_call` Responses Per Address"* — the same theme, a provider
+that answers confidently and wrongly.
