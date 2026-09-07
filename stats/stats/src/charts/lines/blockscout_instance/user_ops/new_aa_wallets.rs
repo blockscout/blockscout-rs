@@ -24,17 +24,22 @@ impl StatementFromRange for NewAccountAbstractionWalletsStatement {
 
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
+            // `GROUP BY`+`MIN` rather than `DISTINCT ON` on purpose: they mean
+            // the same thing here, but only `GROUP BY` can run as a *partial*
+            // (per-worker) aggregate. `DISTINCT ON` has to funnel every user
+            // operation through the leader for its `Unique` step. Measured on
+            // a production indexer (~3M user ops): 336K rows through
+            // `Gather Merge` instead of 11.8M, 4.37M vs 6.14M total cost.
             r#"
                 SELECT "first_user_op"."date" AS "date",
                     COUNT(*)::TEXT AS "value"
                 FROM
-                    (SELECT DISTINCT ON ("sender") CAST("blocks"."timestamp" AS date) AS "date"
+                    (SELECT CAST(MIN("blocks"."timestamp") AS date) AS "date"
                     FROM "user_operations"
                     INNER JOIN "blocks" ON "user_operations"."block_hash" = "blocks"."hash"
                     WHERE "blocks"."consensus" = TRUE
                         AND "blocks"."timestamp" != to_timestamp(0) {filter}
-                    ORDER BY "user_operations"."sender" ASC,
-                            "blocks"."timestamp" ASC
+                    GROUP BY "user_operations"."sender"
                 ) AS "first_user_op"
                 GROUP BY "first_user_op"."date"
             "#,
@@ -138,7 +143,36 @@ pub type NewAccountAbstractionWalletsYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::{normalize_sql, point_construction::dt, simple_test::simple_test_chart};
+
+    /// The per-sender aggregation must stay a `GROUP BY` (see the note in
+    /// `get_statement`); `DISTINCT ON` blocks partial aggregation and pushes
+    /// every user operation through the leader process.
+    #[test]
+    fn statement_is_correct() {
+        let actual = NewAccountAbstractionWalletsStatement::get_statement(
+            Some(dt("2025-01-01T00:00:00").and_utc()..dt("2025-01-02T00:00:00").and_utc()),
+            &IndexerMigrations::latest(),
+            &HashSet::new(),
+        );
+
+        let expected = r#"
+            SELECT "first_user_op"."date" AS "date",
+                COUNT(*)::TEXT AS "value"
+            FROM
+                (SELECT CAST(MIN("blocks"."timestamp") AS date) AS "date"
+                FROM "user_operations"
+                INNER JOIN "blocks" ON "user_operations"."block_hash" = "blocks"."hash"
+                WHERE "blocks"."consensus" = TRUE
+                    AND "blocks"."timestamp" != to_timestamp(0)
+                    AND "blocks"."timestamp" < '2025-01-02 00:00:00.000000 +00:00'
+                    AND "blocks"."timestamp" >= '1970-01-01 00:00:00.000000 +00:00'
+                GROUP BY "user_operations"."sender"
+            ) AS "first_user_op"
+            GROUP BY "first_user_op"."date"
+        "#;
+        assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()))
+    }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
