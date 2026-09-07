@@ -114,8 +114,8 @@ pub enum InterchainFilterTarget {
 pub trait InterchainFiltered {
     /// Which of the two predicates this statement is required to apply.
     const TARGET: InterchainFilterTarget;
-    /// How many times the predicate appears in the rendered SQL. `1` for twelve
-    /// of the thirteen; `2` for `totalInterchainTransferUsers`, whose UNION has
+    /// How many times the predicate appears in the rendered SQL. `1` for fourteen
+    /// of the fifteen; `2` for `totalInterchainTransferUsers`, whose UNION has
     /// two arms over the same table.
     const EXPECTED_APPLICATIONS: usize = 1;
     /// The public chart id this statement serves.
