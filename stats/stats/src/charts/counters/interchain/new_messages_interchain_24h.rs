@@ -190,6 +190,24 @@ mod tests {
         .await;
     }
 
+    /// Unfiltered companion of [`new_messages_interchain_24h_bridge_2`]: every
+    /// message in this window belongs to bridge 2 (`id = 1` at 10:00, `id = 100`
+    /// at 11:00), so the bridge dimension drops nothing here and both cases read
+    /// `2`. Pins that, and keeps this side symmetric with
+    /// `new_transfers_interchain_24h_id_collision_window`, where the same window
+    /// is what catches a `message_id`-only join.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn new_messages_interchain_24h_id_collision_window() {
+        simple_test_counter_interchain::<NewMessagesInterchain24h>(
+            "new_messages_interchain_24h_id_collision_window",
+            "2",
+            Some(dt("2023-02-06T12:00:00")),
+            InterchainFilter::default(),
+        )
+        .await;
+    }
+
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn new_messages_interchain_24h_bridge_2() {

@@ -199,6 +199,30 @@ mod tests {
         .await;
     }
 
+    /// The anchor that fails on a `message_id`-only join, and the reason it must
+    /// stay **unfiltered**. The window holds both bridge-2 messages (`id = 1` at
+    /// 10:00 with two transfers, `id = 100` at 11:00 with one) — and bridge 2's
+    /// `id = 1` collides with bridge 1's message 1 (2022-12-20), whose own two
+    /// transfers sit outside the window but are eligible while nothing filters
+    /// them out. The composite `(message_id, bridge_id)` join keeps the two
+    /// messages apart and yields `3`; joining on `message_id` alone fans bridge
+    /// 1's transfers onto bridge 2's in-window message and yields `5`.
+    ///
+    /// [`new_transfers_interchain_24h_bridge_2`] cannot do this job: restricting
+    /// to bridge 2 removes bridge 1's transfers from the scan, so a broken join
+    /// still reads `3` there.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn new_transfers_interchain_24h_id_collision_window() {
+        simple_test_counter_interchain::<NewTransfersInterchain24h>(
+            "new_transfers_interchain_24h_id_collision_window",
+            "3",
+            Some(dt("2023-02-06T12:00:00")),
+            InterchainFilter::default(),
+        )
+        .await;
+    }
+
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn new_transfers_interchain_24h_bridge_2() {
