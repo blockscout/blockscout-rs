@@ -32,7 +32,8 @@ use crate::{
     counters::{
         TotalZetachainCrossChainTxns,
         interchain::{
-            TotalInterchainMessages, TotalInterchainMessagesReceived, TotalInterchainMessagesSent,
+            NewMessagesInterchain24h, NewTransfersInterchain24h, TotalInterchainMessages,
+            TotalInterchainMessagesReceived, TotalInterchainMessagesSent,
             TotalInterchainTransferUsers, TotalInterchainTransfers,
             TotalInterchainTransfersReceived, TotalInterchainTransfersSent,
         },
@@ -68,7 +69,7 @@ macro_rules! coverage_entries {
     };
 }
 
-/// All 15 interchain chart families. The failure message names the one-line fix
+/// All 17 interchain chart families. The failure message names the one-line fix
 /// (add `.with_interchain(InterchainIndexingStatus::CaughtUp)` /
 /// `fn indexing_status_requirement()`) rather than leaving the reader to
 /// rediscover it.
@@ -89,6 +90,8 @@ fn registry() -> Vec<CoverageEntry> {
         NewTransfersReceivedInterchain,
         MessagesGrowthSentInterchain,
         MessagesGrowthReceivedInterchain,
+        NewMessagesInterchain24h,
+        NewTransfersInterchain24h,
     ]
 }
 
@@ -113,7 +116,7 @@ fn every_interchain_chart_declares_the_interchain_axis() {
 ///
 /// A new interchain chart must appear in `config/interchain/charts.json` to be
 /// enabled at all, so adding one without registering it here fails this test.
-/// None of the 15 families remaps `implementation` today (verified against
+/// None of the 17 families remaps `implementation` today (verified against
 /// `config/interchain/charts.json`), so the config key equals the served id for
 /// all of them; still resolve through `implementation` the same way
 /// `interchain_filter_coverage`'s layer 2 does, so this stays correct if that

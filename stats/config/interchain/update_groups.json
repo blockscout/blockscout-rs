@@ -12,6 +12,7 @@
     "new_messages_received_interchain_group": "0 0 */2 * * * *",
     "new_transfers_interchain_group": "0 0 */2 * * * *",
     "new_transfers_sent_interchain_group": "0 0 */2 * * * *",
-    "new_transfers_received_interchain_group": "0 0 */2 * * * *"
+    "new_transfers_received_interchain_group": "0 0 */2 * * * *",
+    "interchain_24h_group": "0 20 * * * * *"
   }
 }

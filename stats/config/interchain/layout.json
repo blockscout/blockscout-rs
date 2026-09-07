@@ -3,9 +3,11 @@
     "total_interchain_messages",
     "total_interchain_messages_sent",
     "total_interchain_messages_received",
+    "new_messages_interchain_24h",
     "total_interchain_transfers",
     "total_interchain_transfers_sent",
     "total_interchain_transfers_received",
+    "new_transfers_interchain_24h",
     "total_interchain_transfer_users"
   ],
   "line_chart_categories": [

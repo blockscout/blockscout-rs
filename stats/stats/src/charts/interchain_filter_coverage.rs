@@ -4,7 +4,7 @@
 //!
 //! This module exists so that "every interchain chart applies the shared
 //! predicate" is a property a test checks rather than a claim a reviewer
-//! re-verifies by reading thirteen files. Before the filter was introduced, four
+//! re-verifies by reading fifteen files. Before the filter was introduced, four
 //! of the fifteen interchain chart families silently ignored filtering
 //! altogether — precisely because coverage was procedural.
 //!
@@ -45,6 +45,7 @@ use crate::{
         InterchainFilter, InterchainFilterConfig, InterchainFilterTarget, InterchainFiltered,
     },
     counters::interchain::{
+        NewMessagesInterchain24hStatement, NewTransfersInterchain24hStatement,
         TotalInterchainMessagesReceivedStatement, TotalInterchainMessagesSentStatement,
         TotalInterchainMessagesStatement, TotalInterchainTransferUsersStatement,
         TotalInterchainTransfersReceivedStatement, TotalInterchainTransfersSentStatement,
@@ -97,6 +98,8 @@ fn registry() -> Vec<CoverageEntry> {
         NewTransfersInterchainStatement,
         NewTransfersSentInterchainStatement,
         NewTransfersReceivedInterchainStatement,
+        NewMessagesInterchain24hStatement,
+        NewTransfersInterchain24hStatement,
     ]
 }
 
