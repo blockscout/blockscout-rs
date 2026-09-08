@@ -762,7 +762,7 @@ mod tests {
     /// Regression for the false-clear: a *repeated* handler failure during a
     /// retry pass must re-record the block, never resolve it. If
     /// `dispatch_transaction` goes back to swallowing handler errors, this
-    /// batch looks successful to `retry_pending`, which calls
+    /// batch looks successful to `RangeDriver::retry_chunk`, which calls
     /// `ledger.resolve` and deletes the still-real hole — this test fails in
     /// exactly that scenario.
     #[tokio::test]

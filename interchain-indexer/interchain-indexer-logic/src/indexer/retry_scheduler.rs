@@ -369,6 +369,8 @@ fn earliest_due(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use chrono::{Duration as ChronoDuration, NaiveDate};
 
     use super::*;
@@ -380,19 +382,72 @@ mod tests {
             .unwrap()
     }
     fn row(from: u64, to: u64, attempts: u32) -> (i64, FailedInterval) {
+        row_on(1, from, to, attempts, time())
+    }
+    fn row_on(
+        chain_id: i64,
+        from: u64,
+        to: u64,
+        attempts: u32,
+        last_attempt_at: NaiveDateTime,
+    ) -> (i64, FailedInterval) {
         (
-            1,
+            chain_id,
             FailedInterval {
                 range: BlockRange { from, to },
                 attempts,
                 reason: None,
-                first_failed_at: time(),
-                last_attempt_at: time(),
+                first_failed_at: last_attempt_at,
+                last_attempt_at,
             },
         )
     }
     fn scheduler(width: u64) -> RetryScheduler {
         RetryScheduler::new(width, 3, Duration::from_secs(1), Duration::from_secs(64))
+    }
+
+    fn fail_sweep(scheduler: &mut RetryScheduler, decision_time: NaiveDateTime) -> SweepCompletion {
+        loop {
+            let chunk = scheduler.next_chunk(decision_time).unwrap();
+            if let Some(completion) =
+                scheduler.report_outcome(chunk, RetryChunkOutcome::NotResolved, decision_time)
+            {
+                return completion;
+            }
+        }
+    }
+
+    #[test]
+    fn bootstrap_uses_row_attempts_for_due_and_initial_state() {
+        let mut scheduler = scheduler(8);
+        let decision_time = time() + ChronoDuration::seconds(1);
+
+        let stats = scheduler.begin_tick(&[row(10, 12, 1)], decision_time);
+
+        assert_eq!(stats.open_sessions, 1);
+        assert_eq!(stats.ready_sessions, 1);
+        let session = &scheduler.sessions[0];
+        assert_eq!(session.coverage, BlockRange { from: 10, to: 12 });
+        assert_eq!(session.width, 3);
+        assert_eq!(session.failed_sweeps, 1);
+        assert!(!session.narrowing_started);
+        assert_eq!(session.next_due_at, Some(decision_time));
+    }
+
+    #[test]
+    fn large_bootstrap_attempt_count_starts_narrowing_without_retroactive_halving() {
+        let mut scheduler = scheduler(8);
+        let now = time() + ChronoDuration::seconds(64);
+
+        scheduler.begin_tick(&[row(0, 31, u32::MAX)], now);
+
+        let session = &scheduler.sessions[0];
+        assert_eq!(session.width, 8);
+        assert_eq!(session.failed_sweeps, u32::MAX);
+        assert!(session.narrowing_started);
+        let completion = fail_sweep(&mut scheduler, now);
+        assert_eq!(completion.failed_sweeps, u32::MAX);
+        assert_eq!(completion.new_width, 4);
     }
 
     #[test]
@@ -415,6 +470,40 @@ mod tests {
     }
 
     #[test]
+    fn a_multi_chunk_sweep_halves_only_once_and_rounds_odd_width_up() {
+        let mut scheduler = scheduler(5);
+        let now = time() + ChronoDuration::seconds(2);
+        scheduler.begin_tick(&[row(0, 11, 2)], now);
+
+        let first = scheduler.next_chunk(now).unwrap();
+        assert_eq!(first.range, BlockRange { from: 0, to: 4 });
+        assert!(
+            scheduler
+                .report_outcome(first, RetryChunkOutcome::NotResolved, now)
+                .is_none()
+        );
+        assert_eq!(scheduler.sessions[0].width, 5);
+
+        let completion = fail_sweep(&mut scheduler, now);
+        assert_eq!(completion.old_width, 5);
+        assert_eq!(completion.new_width, 3);
+    }
+
+    #[test]
+    fn singleton_width_never_gives_up() {
+        let mut scheduler = scheduler(1);
+        let row = row(7, 7, 3);
+
+        for pass in 1..=6 {
+            let now = time() + ChronoDuration::seconds(pass * 100);
+            scheduler.begin_tick(std::slice::from_ref(&row), now);
+            let completion = fail_sweep(&mut scheduler, now);
+            assert_eq!(completion.new_width, 1);
+            assert!(completion.narrowing_started);
+        }
+    }
+
+    #[test]
     fn active_sweep_crosses_ticks_and_round_robins() {
         let mut scheduler = scheduler(2);
         let now = time() + ChronoDuration::seconds(4);
@@ -424,6 +513,277 @@ mod tests {
         scheduler.report_outcome(first, RetryChunkOutcome::NotResolved, now);
         let second = scheduler.next_chunk(now).unwrap();
         assert_eq!(second.range, BlockRange { from: 10, to: 11 });
+    }
+
+    #[test]
+    fn active_sweep_ignores_backoff_and_cannot_restart_after_completion_in_same_tick() {
+        let mut scheduler = scheduler(2);
+        let now = time() + ChronoDuration::seconds(4);
+        let rows = [row(0, 3, 1)];
+        scheduler.begin_tick(&rows, now);
+        let first = scheduler.next_chunk(now).unwrap();
+        scheduler.report_outcome(first, RetryChunkOutcome::NotResolved, now);
+
+        scheduler.begin_tick(&rows, time());
+        let second = scheduler.next_chunk(time()).unwrap();
+        assert_eq!(second.range, BlockRange { from: 2, to: 3 });
+        assert!(
+            scheduler
+                .report_outcome(second, RetryChunkOutcome::NotResolved, time())
+                .is_some()
+        );
+        assert!(scheduler.next_chunk(time()).is_none());
+    }
+
+    #[test]
+    fn round_robin_shares_budgets_across_intervals_and_chains() {
+        for budget in [1usize, 2, 8] {
+            let mut scheduler = scheduler(2);
+            let now = time() + ChronoDuration::seconds(4);
+            let rows = [
+                row_on(2, 20, 23, 1, time()),
+                row_on(1, 0, 3, 1, time()),
+                row_on(1, 10, 13, 1, time()),
+            ];
+            scheduler.begin_tick(&rows, now);
+
+            let mut chunks = Vec::new();
+            for _ in 0..budget {
+                let Some(chunk) = scheduler.next_chunk(now) else {
+                    break;
+                };
+                chunks.push((chunk.chain_id, chunk.range));
+                scheduler.report_outcome(chunk, RetryChunkOutcome::NotResolved, now);
+            }
+
+            let expected = [
+                (1, BlockRange { from: 0, to: 1 }),
+                (1, BlockRange { from: 10, to: 11 }),
+                (2, BlockRange { from: 20, to: 21 }),
+                (1, BlockRange { from: 2, to: 3 }),
+                (1, BlockRange { from: 12, to: 13 }),
+                (2, BlockRange { from: 22, to: 23 }),
+            ];
+            assert_eq!(chunks, expected[..budget.min(expected.len())]);
+        }
+    }
+
+    #[test]
+    fn staggered_due_sessions_become_ready_without_starving_later_ids() {
+        let mut scheduler = scheduler(1);
+        let first_due = time() + ChronoDuration::seconds(1);
+        let second_due = time() + ChronoDuration::seconds(11);
+        let rows = [
+            row_on(1, 0, 0, 1, time()),
+            row_on(2, 0, 0, 1, time() + ChronoDuration::seconds(10)),
+        ];
+
+        let stats = scheduler.begin_tick(&rows, first_due);
+        assert_eq!(stats.ready_sessions, 1);
+        let first = scheduler.next_chunk(first_due).unwrap();
+        assert_eq!(first.chain_id, 1);
+        scheduler.report_outcome(first, RetryChunkOutcome::NotResolved, first_due);
+        assert!(scheduler.next_chunk(first_due).is_none());
+
+        scheduler.begin_tick(&rows, second_due);
+        let next = scheduler.next_chunk(second_due).unwrap();
+        assert_eq!(next.chain_id, 2);
+    }
+
+    #[test]
+    fn changed_db_attempts_and_timestamp_do_not_reschedule_an_existing_session() {
+        let mut scheduler = scheduler(8);
+        scheduler.begin_tick(&[row(0, 7, 1)], time());
+        let original_due = scheduler.sessions[0].next_due_at;
+
+        scheduler.begin_tick(
+            &[row_on(1, 0, 7, 99, time() + ChronoDuration::hours(1))],
+            time(),
+        );
+
+        assert_eq!(scheduler.sessions[0].next_due_at, original_due);
+        assert_eq!(scheduler.sessions[0].failed_sweeps, 1);
+    }
+
+    #[test]
+    fn adjacent_growth_does_not_extend_an_active_sweep() {
+        let mut scheduler = scheduler(2);
+        let now = time() + ChronoDuration::seconds(1);
+        scheduler.begin_tick(&[row(0, 3, 1)], now);
+        let first = scheduler.next_chunk(now).unwrap();
+        scheduler.report_outcome(first, RetryChunkOutcome::NotResolved, now);
+
+        scheduler.begin_tick(&[row(0, 9, 2)], now);
+        let second = scheduler.next_chunk(now).unwrap();
+        assert_eq!(second.range, BlockRange { from: 2, to: 3 });
+        assert!(
+            scheduler
+                .report_outcome(second, RetryChunkOutcome::NotResolved, now)
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn split_remainders_inherit_state_with_unique_ids() {
+        let mut scheduler = scheduler(4);
+        let now = time() + ChronoDuration::seconds(2);
+        scheduler.begin_tick(&[row(0, 9, 2)], now);
+        let first = scheduler.next_chunk(now).unwrap();
+        scheduler.report_outcome(first, RetryChunkOutcome::NotResolved, now);
+
+        scheduler.begin_tick(&[row(0, 1, 1), row(4, 5, 1), row(7, 9, 1)], now);
+
+        assert_eq!(scheduler.sessions.len(), 3);
+        let ids: HashSet<_> = scheduler
+            .sessions
+            .iter()
+            .map(|session| session.id)
+            .collect();
+        assert_eq!(ids.len(), 3);
+        assert!(scheduler.sessions.iter().all(|session| session.width <= 4));
+        assert!(
+            scheduler
+                .sessions
+                .iter()
+                .any(|session| session.coverage == BlockRange { from: 4, to: 5 })
+        );
+        assert!(
+            scheduler
+                .sessions
+                .iter()
+                .any(|session| session.coverage == BlockRange { from: 7, to: 9 })
+        );
+    }
+
+    #[test]
+    fn prefix_suffix_and_interior_splits_preserve_scheduler_hints() {
+        let now = time() + ChronoDuration::seconds(8);
+        let cases = [
+            vec![row(2, 9, 1)],
+            vec![row(0, 7, 1)],
+            vec![row(0, 3, 1), row(6, 9, 1)],
+        ];
+
+        for rows in cases {
+            let mut scheduler = scheduler(8);
+            scheduler.begin_tick(&[row(0, 9, 3)], now);
+            let parent_id = scheduler.sessions[0].id;
+            scheduler.sessions[0].width = 3;
+            scheduler.sessions[0].failed_sweeps = 6;
+            scheduler.sessions[0].next_due_at = Some(now + ChronoDuration::seconds(20));
+
+            scheduler.begin_tick(&rows, now);
+
+            assert_eq!(scheduler.sessions.len(), rows.len());
+            assert_eq!(scheduler.sessions[0].id, parent_id);
+            let ids: HashSet<_> = scheduler
+                .sessions
+                .iter()
+                .map(|session| session.id)
+                .collect();
+            assert_eq!(ids.len(), rows.len());
+            assert!(scheduler.sessions.iter().all(|session| {
+                session.width == 3
+                    && session.failed_sweeps == 6
+                    && session.narrowing_started
+                    && session.next_due_at == Some(now + ChronoDuration::seconds(20))
+            }));
+        }
+    }
+
+    #[test]
+    fn merge_uses_active_primary_and_combines_parent_hints() {
+        let mut scheduler = scheduler(8);
+        let now = time() + ChronoDuration::seconds(8);
+        scheduler.begin_tick(&[row(0, 3, 1), row(6, 9, 1)], now);
+        scheduler.sessions[0].width = 4;
+        scheduler.sessions[0].failed_sweeps = 2;
+        scheduler.sessions[0].next_due_at = Some(now + ChronoDuration::seconds(20));
+        scheduler.sessions[1].width = 2;
+        scheduler.sessions[1].failed_sweeps = 7;
+        scheduler.sessions[1].narrowing_started = true;
+        scheduler.sessions[1].next_due_at = Some(now + ChronoDuration::seconds(10));
+        scheduler.sessions[1].active = Some(ActiveSweep {
+            next_block: 8,
+            fixed_end: 9,
+            resolved_any: false,
+        });
+        let active_id = scheduler.sessions[1].id;
+
+        scheduler.begin_tick(&[row(0, 9, 8)], now);
+
+        let merged = &scheduler.sessions[0];
+        assert_eq!(merged.id, active_id);
+        assert_eq!(merged.width, 2);
+        assert_eq!(merged.failed_sweeps, 7);
+        assert!(merged.narrowing_started);
+        assert_eq!(merged.next_due_at, Some(now + ChronoDuration::seconds(10)));
+        let active = merged.active.unwrap();
+        assert_eq!(active.next_block, 8);
+        assert_eq!(active.fixed_end, 9);
+    }
+
+    #[test]
+    fn removed_tail_counts_as_progress_and_reappearing_coverage_is_fresh() {
+        let mut scheduler = scheduler(4);
+        let now = time() + ChronoDuration::seconds(2);
+        scheduler.begin_tick(&[row(0, 9, 2)], now);
+        let first = scheduler.next_chunk(now).unwrap();
+        let old_id = first.session_id;
+        scheduler.report_outcome(first, RetryChunkOutcome::NotResolved, now);
+
+        scheduler.begin_tick(&[row(0, 3, 1)], now);
+        assert_eq!(scheduler.sessions[0].failed_sweeps, 0);
+        assert!(scheduler.sessions[0].active.is_none());
+        assert!(scheduler.next_chunk(now).is_none());
+
+        scheduler.begin_tick(&[], now);
+        scheduler.begin_tick(&[row(0, 3, 1)], now);
+        assert_ne!(scheduler.sessions[0].id, old_id);
+        assert_eq!(scheduler.sessions[0].width, 4);
+        assert_eq!(scheduler.sessions[0].failed_sweeps, 1);
+    }
+
+    #[test]
+    fn numeric_and_chrono_boundaries_are_safe_and_due_fail_open() {
+        let mut scheduler = RetryScheduler::new(
+            u64::MAX,
+            3,
+            Duration::from_secs(u64::MAX),
+            Duration::from_secs(u64::MAX),
+        );
+        let max_time = NaiveDateTime::MAX;
+        scheduler.begin_tick(
+            &[
+                row_on(1, 0, 0, u32::MAX, max_time),
+                row_on(2, i64::MAX as u64, i64::MAX as u64, u32::MAX, max_time),
+            ],
+            NaiveDateTime::MIN,
+        );
+
+        assert!(
+            scheduler
+                .sessions
+                .iter()
+                .all(|session| session.next_due_at.is_none())
+        );
+        let first = scheduler.next_chunk(NaiveDateTime::MIN).unwrap();
+        assert_eq!(first.range.width(), 1);
+        scheduler.report_outcome(first, RetryChunkOutcome::NotResolved, NaiveDateTime::MAX);
+        let second = scheduler.next_chunk(NaiveDateTime::MIN).unwrap();
+        assert_eq!(second.range.width(), 1);
+    }
+
+    #[test]
+    fn not_resolved_outcome_never_counts_as_progress() {
+        let mut scheduler = scheduler(8);
+        let now = time() + ChronoDuration::seconds(2);
+        scheduler.begin_tick(&[row(0, 7, 2)], now);
+        let completion = fail_sweep(&mut scheduler, now);
+
+        assert!(!completion.resolved_any);
+        assert_eq!(completion.failed_sweeps, 3);
+        assert_eq!(completion.new_width, 4);
     }
 
     #[test]
@@ -438,6 +798,10 @@ mod tests {
         assert_eq!(completion.new_width, 3);
         assert_eq!(completion.failed_sweeps, 0);
         assert!(completion.narrowing_started);
+        assert_eq!(
+            completion.next_due_at,
+            Some(now + ChronoDuration::seconds(1))
+        );
     }
 
     #[test]
@@ -450,5 +814,83 @@ mod tests {
             scheduler.next_chunk(now).unwrap().range,
             BlockRange { from: 0, to: 0 }
         );
+    }
+
+    #[test]
+    fn exhaustive_small_poison_sets_converge_and_reach_singletons() {
+        const BLOCKS: u64 = 5;
+        const TICKS: usize = 40;
+
+        for mask in 0u32..(1 << BLOCKS) {
+            let poison: HashSet<u64> = (0..BLOCKS)
+                .filter(|block| mask & (1 << *block) != 0)
+                .collect();
+            let mut open: HashSet<u64> = (0..BLOCKS).collect();
+            let mut poison_singletons = HashSet::new();
+            let mut scheduler = scheduler(BLOCKS);
+
+            for tick in 0..TICKS {
+                let now = time() + ChronoDuration::seconds(1000 + tick as i64 * 100);
+                let rows: Vec<_> = contiguous_ranges(&open)
+                    .into_iter()
+                    .map(|range| row(range.from, range.to, 1))
+                    .collect();
+                scheduler.begin_tick(&rows, now);
+
+                for _ in 0..8 {
+                    let Some(chunk) = scheduler.next_chunk(now) else {
+                        break;
+                    };
+                    let contains_poison =
+                        (chunk.range.from..=chunk.range.to).any(|block| poison.contains(&block));
+                    let outcome = if contains_poison {
+                        if chunk.range.width() == 1 {
+                            poison_singletons.insert(chunk.range.from);
+                        }
+                        RetryChunkOutcome::NotResolved
+                    } else {
+                        for block in chunk.range.from..=chunk.range.to {
+                            open.remove(&block);
+                        }
+                        RetryChunkOutcome::Resolved
+                    };
+                    scheduler.report_outcome(chunk, outcome, now);
+                }
+
+                if open == poison && poison_singletons == poison {
+                    break;
+                }
+            }
+
+            assert_eq!(
+                open, poison,
+                "ledger oracle mismatch for poison mask {mask:#07b}"
+            );
+            assert_eq!(
+                poison_singletons, poison,
+                "not every poison block reached a singleton request for mask {mask:#07b}"
+            );
+        }
+    }
+
+    fn contiguous_ranges(blocks: &HashSet<u64>) -> Vec<BlockRange> {
+        let mut blocks: Vec<_> = blocks.iter().copied().collect();
+        blocks.sort_unstable();
+        let mut ranges = Vec::new();
+        let Some(mut from) = blocks.first().copied() else {
+            return ranges;
+        };
+        let mut to = from;
+        for block in blocks.into_iter().skip(1) {
+            if block == to + 1 {
+                to = block;
+            } else {
+                ranges.push(BlockRange { from, to });
+                from = block;
+                to = block;
+            }
+        }
+        ranges.push(BlockRange { from, to });
+        ranges
     }
 }

@@ -19,30 +19,28 @@ pub struct FailureRetrySettings {
     /// `false` — only the retry tick that re-scans open holes is paused.
     #[serde(default = "default_enabled")]
     pub enabled: bool,
-    /// How often the retry tick fires to scan for due intervals.
+    /// How often the retry tick reads the full open-ledger snapshot.
     #[serde(default = "default_scan_interval")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub scan_interval: Duration,
-    /// Base delay of the capped exponential backoff (`policy::is_due`).
+    /// Base delay used for initial due calculation and between complete retry
+    /// sweeps. An active sweep continues across ticks without this delay.
     #[serde(default = "default_backoff_base")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub backoff_base: Duration,
-    /// Ceiling of the capped exponential backoff. This is what makes
-    /// "retry forever" affordable for a permanently unrecoverable interval.
+    /// Ceiling of the capped exponential backoff between wholly unsuccessful
+    /// sweeps. This makes singleton retry forever affordable.
     #[serde(default = "default_backoff_cap")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub backoff_cap: Duration,
-    /// Maximum number of `batch_size`-sized chunks replayed per retry tick,
-    /// across all due intervals. The pass now runs as a sibling future of
-    /// the per-chain handlers, so it no longer pauses the forward streams;
-    /// the budget still bounds replay RPC load per pass against the same
-    /// rate-limited endpoints, it is still bridge-wide across every due
-    /// interval on every chain, and the default is still low for that
-    /// reason.
+    /// Maximum number of adaptively sized chunks emitted per retry tick,
+    /// across all ready intervals and chains. Each chunk is at most
+    /// `batch_size` blocks; the bridge-wide budget bounds replay RPC load.
     #[serde(default = "default_max_chunks_per_pass")]
     pub max_chunks_per_pass: usize,
-    /// Number of attempts (the initial record counts as one) after which a
-    /// wholly unsuccessful replay sweep halves its request width.
+    /// Initial ledger record plus wholly unsuccessful replay sweeps required
+    /// before request width starts halving. Width changes only after a
+    /// complete sweep, never between its chunks.
     #[serde(default = "default_split_after_attempts")]
     pub split_after_attempts: u32,
     /// Number of attempts `FailureLedger::record` makes before the driver

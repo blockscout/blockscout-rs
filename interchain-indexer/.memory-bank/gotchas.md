@@ -992,8 +992,10 @@ budget, so singleton replay retains memory proportional to open ledger rows,
 not failed blocks. The coverage-set limitation remains: only `resolve` removes
 blocks and `attempts` is still approximate after union/difference.
 
-These are current contracts and design constraints, not an implemented adaptive
-retry feature. Sources: `interchain-indexer-logic/src/database.rs`
+The adaptive retry scheduler accounts for these contracts with sticky in-memory
+width, progress confirmed only by successful `resolve`, and reconciliation by
+coverage overlap rather than DB row identity. Sources:
+`interchain-indexer-logic/src/database.rs`
 (`record_indexer_failures`, `resolve_indexer_failures`),
 `interchain-indexer-logic/src/indexer/range_driver.rs`, and ADR-005.
 
@@ -1012,7 +1014,8 @@ row's `updated_at` more often than its backoff expires, so that row never become
 due at all. A stable finite-backlog convergence claim excludes that case.
 
 Sources: `interchain-indexer-logic/src/indexer/range_driver.rs`
-(`run_retry_tick`, `retry_queue`, `resume_index`, `retry_pending`),
+(`run_retry_tick`, `run_retry_tick_at`, `retry_chunk`),
+`interchain-indexer-logic/src/indexer/retry_scheduler.rs`,
 `interchain-indexer-logic/src/indexer/failure_ledger/policy.rs`, and
 `interchain-indexer-logic/src/database.rs::record_indexer_failures`.
 
@@ -1288,7 +1291,7 @@ only what it applied, and `FailureLedger` carries a per-pair record epoch so a
 `record` landing inside a `resolve`'s round trip cannot be erased from the
 cache.
 
-`max_chunks_per_pass` still matters, and its default is still `2`: it now bounds
+`max_chunks_per_pass` still matters, and its default is `8`: it now bounds
 replay *RPC load* per pass against the same rate-limited endpoints rather than a
 pause. It remains bridge-wide across every due interval on every chain.
 
