@@ -1020,8 +1020,8 @@
     "semantic_hash": "75ad48784abb624aa5cb3905f9bafa51"
   },
   ".memory-bank/adr/005-failed-range-ledger-and-checkpoint-independence.md": {
-    "mtime": 1788855855.0518064,
-    "ast_hash": "3f98cc4abf3965059190ce29e2dd0889",
+    "mtime": 1788873616.0500228,
+    "ast_hash": "9b22dc3b214dc15242e7205e01da8fcf",
     "semantic_hash": ""
   },
   ".memory-bank/adr/006-contract-versioning-by-block.md": {
@@ -1065,8 +1065,8 @@
     "semantic_hash": "3444ad3ef07802eac7c1f459868679e1"
   },
   ".memory-bank/gotchas.md": {
-    "mtime": 1788871319.159388,
-    "ast_hash": "850034173c8b9d1b6541a2f0c009aeb5",
+    "mtime": 1788873607.0976815,
+    "ast_hash": "ddc86a405baaf4a38c851a8b59cca83c",
     "semantic_hash": ""
   },
   ".memory-bank/project-context.md": {
@@ -1375,7 +1375,7 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/retry_scheduler.rs": {
-    "mtime": 1788871784.6817167,
+    "mtime": 1788872841.0517354,
     "ast_hash": "9777763cb675fb827e823b6d5dca5cb5",
     "semantic_hash": ""
   }

@@ -82,10 +82,17 @@ Consequential details, each of which is load-bearing:
   acknowledgement boundary rejected as Alternative 1, so it is carried as a known
   limitation rather than claimed as safe.
 - **Proven progress resets the backoff.** A `resolve` split gives remainders
-  `attempts = 1` and the parent's `updated_at`. Inheriting the parent's attempt
-  count instead makes an hour-long incident take ~22 hours to drain, since each
-  pass replays only `max_chunks_per_pass` chunks before the remainder waits out
-  the full cap again.
+  `attempts = 1` and the parent's `updated_at`. Since replay became an adaptive
+  sweep this counter no longer paces replay in a running process — a scheduler
+  session's own no-progress count does, and reconciliation ignores live
+  `attempts`/`updated_at`. It still decides where a session *starts*: the first
+  tick after a restart seeds a row's due time from
+  `last_attempt_at + capped_backoff(attempts)` and turns narrowing on at
+  `attempts >= split_after_attempts`. Inheriting the parent's attempt count
+  would therefore park a remainder at the full `backoff_cap`, and start it
+  already narrowed, right after part of its interval was proven healthy —
+  turning an hour-long incident into a many-hour drain instead of resuming at
+  the base delay and the indexer's own `batch_size`.
 - **Replay is an adaptive per-interval sweep.** `RangeDriver` owns a compact
   in-memory session for each open row. It freezes the end of an active sweep,
   yields at most one lazy chunk at a time, and round-robins local session ids

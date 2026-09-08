@@ -1009,9 +1009,19 @@ retains an active frontier per interval; ready sessions are selected round-robin
 by stable local id. A missing target still consumes its position, so it cannot
 pin a chain ahead of ready work elsewhere.
 
-Related: continuous adjacent forward failures can keep updating one merged
-row's `updated_at` more often than its backoff expires, so that row never becomes
-due at all. A stable finite-backlog convergence claim excludes that case.
+Related, and also fixed: continuous adjacent forward failures used to keep
+updating one merged row's `updated_at` more often than its backoff expired, so
+that row never became due at all. A row's `attempts`/`updated_at` are now read
+exactly once, when the scheduler first bootstraps a session for it;
+reconciliation afterwards inherits that session's own `next_due_at` and ignores
+live DB values, so new records cannot postpone an already scheduled sweep
+(`retry_scheduler.rs::reconcile`, pinned by
+`changed_db_attempts_and_timestamp_do_not_reschedule_an_existing_session`).
+
+What a stable finite-backlog convergence claim still excludes is the opposite
+case: failures arriving faster than `max_chunks_per_pass` can replay them. A
+frozen sweep end guarantees each *started* sweep finishes, not that replay keeps
+up with an unbounded incoming stream.
 
 Sources: `interchain-indexer-logic/src/indexer/range_driver.rs`
 (`run_retry_tick`, `run_retry_tick_at`, `retry_chunk`),
