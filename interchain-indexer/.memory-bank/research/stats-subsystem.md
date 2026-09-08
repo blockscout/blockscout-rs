@@ -68,6 +68,45 @@ For the deeper runtime semantics of incremental directional message projection,
 processed markers, and startup catch-up for `stats_messages*`, see
 `stats-projection.md`.
 
+### User Counter Refresh And Canonical Mutation Boundaries
+
+The existing `STATS_CHAINS_*_USER_COUNTS_SQL` queries read sender and recipient
+occurrences over the complete message/transfer history. A materialized CTE shares
+the deduplicated intermediate data between global and bridge aggregates; it is
+not an incremental refresh. `recompute_stats_chains` reads both domains and
+replaces the two small snapshots in one transaction. There is no canonical
+`FOR UPDATE`/`TRUNCATE` in that recount. Atomic publication does not imply that
+separate source SELECTs under READ COMMITTED used an identical source snapshot.
+
+`spawn_stats_chains_recalculation_worker` waits its configured period after a
+recount attempt. One worker therefore does not overlap its own attempts, but
+this is not database-wide ownership across server processes. Existing canonical
+covering indexes for these counts contain local chain, address and bridge; they
+do not include the opposite chain needed for pair-specific user counts.
+
+Any future incremental replacement must account for the actual mutation contract:
+
+- `flush_to_final_storage` upserts messages and transfers with non-regressing
+  merge rules; incoming ActiveModels alone do not identify the final address set.
+- `delete_replaced_messages` removes old messages; the transfer FK cascades.
+  `test_collision_replacement_deletes_stale_source_message_and_transfer` asserts
+  that a previous sender is cleared in both domains. Exact current-data users
+  therefore cannot be maintained as an append-only set of encountered addresses.
+- The production writers found outside canonical persistence update
+  `stats_processed`, `stats_asset_id` and timestamps, which do not change the
+  current user-count definition. A new writer of chain/address columns changes
+  this boundary and requires a fresh audit.
+- `commit_maintenance` puts persistence, additive projection, pending cleanup
+  and checkpoint updates in a single transaction. `run_in_batches` only limits
+  bind parameters. Introducing bounded maintenance transactions must also retain
+  cursor bounds and dirty/version state for every deferred hot entry.
+
+These are current-code constraints, not a claim that an incremental user-counter
+projection already exists. Sources: `database.rs` user-count constants and recount,
+`message_buffer/persistence.rs`, `message_buffer/maintenance.rs`, `bulk.rs`,
+`interchain-indexer-entity/src/codegen/crosschain_transfers.rs`, and
+`interchain-indexer-server/src/server.rs` worker.
+
 ## Why This Matters
 
 This subsystem is easy to misunderstand because `/stats/*` endpoints do not all
@@ -295,7 +334,7 @@ The same `may_observe` predicate drives an opt-in read filter:
   configured chain set, from `IndexedChains::chain_ids_for(bridge_id)`, never
   from `bridge_contracts`
 
-`ChainBridgeFilter` (`filters.rs`) renders `only_indexed_by_bridge` for the
+`ChainBridgeFilter` (`interchain-indexer-filters/src/lib.rs`) renders `only_indexed_by_bridge` for the
 canonical list endpoints (`GetMessages*`, `GetTransfers*`); the raw-SQL stats
 endpoints (bridged-tokens, message-paths) render the equivalent restriction
 via `push_indexed_pairs_predicate` in `database.rs`. Both consume
@@ -305,8 +344,10 @@ renderers.
 `/stats/chains` and `GetChains` are the two exceptions: both are chain
 *directories*, not bridge-qualified rows, so they use
 `IndexedChains::configured_union()` — the union of every bridge's indexed set
-— rather than a per-bridge restriction. The same accessor backs both, so the
-two directory views cannot drift apart.
+— rather than a per-bridge restriction. The same accessor backs this visibility
+gate, but does **not** make their candidate sets identical: `GetChains` with
+`bridge_ids` uses current configuration only, while `/stats/chains` also admits
+retained per-bridge snapshot history. See the consistency audit below.
 
 ## Asset Identity: Union-Find With Eager Merge (ADR-004)
 
@@ -978,6 +1019,87 @@ message-paths / bridged-tokens was delivered in a later iteration. The
 observability-horizon eligibility rule and the `include_unindexed_chains` /
 `has_unindexed_chain` / `indexed_chain_ids` surface were delivered together on
 one branch (see ADR-004).
+
+## Observability And Connectivity Consistency Audit (2026-09-08)
+
+Verified against commit `cd413c58`. These are findings about existing behavior,
+not a new architectural decision.
+
+Three different questions must stay distinct:
+
+- `IndexedChains::may_observe(bridge, chain)` describes effective configured
+  observability, including its permissive absent-bridge rule.
+- Whether a pair of chains has interacted requires canonical message **or**
+  transfer evidence. Message routes and token-transfer routes can differ.
+- Whether that evidence contributes to a metric depends on that metric's
+  eligibility, address availability, and refresh model.
+
+`stats_messages UNION stats_asset_edges` is not a complete interaction catalog.
+The former omits an initiated message between indexed endpoints until it meets
+`message_countable_condition`; the latter also depends on token identity and
+can skip mapping/decimals conflicts. A pair with no countable aggregate may
+already exist in canonical API results. Per-chain user snapshots are not a
+substitute either: their source queries exclude NULL addresses and discard the
+counterparty dimension. Pair-scoped distinct users cannot be recovered by
+filtering their resulting chain rows.
+
+The converse rollup is also invalid: distinct-user counts of several chain
+pairs cannot be summed to recover a chain's users, even within one bridge,
+because the same local address can interact with several counterparties.
+The current `STATS_CHAINS_*_USER_COUNTS_SQL` queries also admit known source
+users of messages with NULL destinations and users of same-chain records;
+deriving their input solely from distinct, known-endpoint chain pairs would
+lose those contributions. Any future consolidation of snapshot storage must
+preserve separate global, per-bridge, and per-pair distinct calculations.
+
+The following differences are currently real:
+
+- `GetChains` restricts selected bridges to current configured chain sets;
+  `GetChainsStats` also admits historical per-bridge snapshot candidates.
+  This is explicitly documented in `GetChainsRequest` in
+  `interchain-indexer-proto/proto/v1/interchain_indexer.proto`, and tested in
+  `interchain-indexer-server/tests/chains_endpoint_filters.rs`.
+- Both directory endpoints use a global configured union for unindexed
+  visibility, unlike bridge-qualified message/transfer filters. A chain
+  indexed by bridge B2 does not make a relationship through B1 observable.
+- `stats_chains` / `stats_chains_by_bridge` user counts are computed without
+  the observability predicate; the API's unindexed filter hides chain rows,
+  not the contributions of hidden relationships to a visible chain's count.
+  See `STATS_CHAINS_*_USER_COUNTS_SQL` and `recompute_stats_chains` in
+  `interchain-indexer-logic/src/database.rs`.
+- Message-path zero candidates use `push_zero_chains_guard_predicate`, which
+  is a no-op for an empty/absent union. A pruned unknown or empty bridge scope,
+  or opting into unindexed chains, can therefore admit unrelated **zero**
+  rows even though positive counts stay bridge-filtered. A nonempty union
+  also does not prove that home and a zero candidate share a bridge.
+- `bridged_tokens_query.rs::fetch_bridged_token_items_for_assets` restricts
+  token metadata by global union, not by eligible edges of the selected
+  asset/bridge scope. A chain-only connection catalog cannot supply missing
+  asset attribution.
+
+The standalone stats service shares `interchain-indexer-filters`, but its
+`stats/src/charts/db_interaction/read/interchain.rs::resolve_only_indexed_by_bridge`
+reads `bridges LEFT JOIN bridge_contracts` from the indexer database. These
+tables retain removed bridges/contracts, so the same predicate receives
+different inputs after configuration removal. `enabled` cannot distinguish
+removed from disabled. This is also documented in that service's
+`.memory-bank/gotchas.md`. Closing the difference requires publishing effective
+configuration, not deriving observability from historical interactions.
+
+Lifecycle details relevant to any future connection projection:
+
+- `message_buffer/persistence.rs::flush_to_final_storage` is the existing
+  transactional canonical write boundary, including partial writes; its
+  upserts may preserve fields absent from the incoming ActiveModel.
+- `delete_replaced_messages` can replace a canonical record, so append-only
+  connection facts would need an explicit historical-evidence versus repair
+  contract rather than an assumption that canonical routes never change.
+- The distinct-user worker has a 3600-second default delay between full
+  recomputations; period 0 disables it. Its initial recompute is asynchronous.
+  A schema migration alone does not establish complete historical coverage.
+- The startup guard permits **no bridges**, but rejects a nonempty bridge
+  configuration with zero total contract-chain pairs (`server.rs`). Older
+  comments claiming all empty configurations are rejected are too broad.
 
 ## Change Triggers
 

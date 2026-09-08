@@ -430,6 +430,58 @@ detector) and B (refusal legitimacy check).
 
 ---
 
+## Observability Filters Do Not Imply A Complete Chain-Interaction Catalog
+
+`stats_messages` and `stats_asset_edges` contain eligible projected activity,
+not every canonical interaction. An initiated message between indexed chains
+can already be listed by the API while its pair is absent from both aggregates.
+Transfer identity/decimals conflicts can omit edge contributions as well.
+Per-chain user snapshots also lose the counterparty dimension and exclude
+NULL-address occurrences; they cannot recover pair-specific distinct users.
+
+The two chain directories additionally differ: `GetChains?bridge_ids=...`
+uses current configured membership, whereas `/stats/chains` also admits
+historical per-bridge snapshot rows. Their shared global-union visibility
+gate does not filter users contributed by hidden relationships on an otherwise
+visible chain. Do not infer endpoint parity from their shared accessor.
+
+The standalone stats service shares the Rust predicate but derives its inputs
+from retained `bridges`/`bridge_contracts`, unlike the indexer's effective
+in-memory config. Removed contracts/bridges can therefore produce different
+results. A connection graph cannot replace effective configuration publication.
+
+See `research/stats-subsystem.md` → "Observability And Connectivity Consistency
+Audit", `interchain-indexer-filters/src/lib.rs`,
+`interchain-indexer-logic/src/stats/indexed_chains.rs`, and
+`interchain-indexer-logic/src/database.rs` (`STATS_CHAINS_*_USER_COUNTS_SQL`).
+
+---
+
+## User-Count Deltas Must Follow Canonical Replacement, Not Just New IDs
+
+Canonical identity columns are mutable: the persistence upserts merge independently
+observed sides, and `replace_existing` deletes the old message with cascading
+transfers before inserting its replacement. The replacement test demonstrates
+that a previously stored sender can disappear from both domains. An incoming
+ActiveModel is also not the final persisted row because the merge preserves some
+existing values. A cursor over newly inserted IDs or the additive `stats_processed`
+marker cannot represent all these changes for exact unique-user maintenance.
+
+`run_in_batches` bounds SQL bind parameters, not transaction duration. The current
+maintenance planner collects all entries and commits canonical writes, projections,
+pending cleanup and checkpoints in one transaction. Splitting statements does not
+release their locks early; splitting maintenance itself must preserve the hot
+entries' checkpoint bounds and post-commit eviction/version rules.
+
+Sources: `interchain-indexer-logic/src/message_buffer/persistence.rs`
+(`crosschain_messages_on_conflict`, `crosschain_transfers_on_conflict`,
+`delete_replaced_messages`, replacement test),
+`interchain-indexer-logic/src/message_buffer/maintenance.rs`
+(`plan_maintenance`, `commit_maintenance`), and
+`interchain-indexer-logic/src/bulk.rs` (`run_in_batches`).
+
+---
+
 ## Stats Eligibility Is About Observability, Not Protocol Terminality
 
 **Symptom:** A bridged token appears as two one-token `stats_assets` (one per
