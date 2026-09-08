@@ -53,8 +53,10 @@ pub trait RangeProcessor: Send + Sync {
     fn chain_ids(&self) -> Vec<i64>;
     fn provider(&self, chain_id: i64) -> Option<DynProvider<Ethereum>>;
     fn log_filter(&self, chain_id: i64) -> anyhow::Result<Filter>;
-    /// The indexer's own configured block-range width, reused verbatim for
-    /// replay. No retry-specific width exists.
+    /// The indexer's own configured block-range width. There is no
+    /// retry-specific width setting: this is where replay *starts*, and the
+    /// retry scheduler treats it as an upper bound, halving a session's request
+    /// width below it after wholly unsuccessful sweeps and never above it.
     fn batch_size(&self) -> u64;
 
     async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError>;
@@ -1242,8 +1244,9 @@ mod tests {
             let settings = FailureRetrySettings {
                 enabled: true,
                 scan_interval: Duration::from_millis(10),
-                // Without this the test is vacuous. `is_due` gates a replay on
-                // `last_attempt_at + backoff_base * 2^(attempts - 1)`, and the
+                // Without this the test is vacuous. The scheduler bootstraps a
+                // session's first due time at `last_attempt_at + backoff_base
+                // * 2^(attempts - 1)` (`policy::next_attempt_at`), and the
                 // interval recorded above lands with `attempts = 1` and
                 // `last_attempt_at = now`. At the 30 s default the pass finds
                 // nothing due for the whole 5 s window, never reaches

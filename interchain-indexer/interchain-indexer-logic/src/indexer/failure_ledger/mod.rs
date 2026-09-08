@@ -5,7 +5,8 @@ pub mod policy;
 pub mod settings;
 
 pub use interval::*;
-pub use policy::*;
+// No `pub use policy::*`: the module's only remaining item, `next_attempt_at`,
+// is `pub(crate)` and is imported by path from the retry scheduler.
 pub use settings::*;
 
 use std::{collections::HashMap, sync::Arc};
