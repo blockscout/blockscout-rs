@@ -256,10 +256,20 @@ impl RetryScheduler {
                     .map(|parent| parent.next_due_at)
                     .reduce(earliest_due)
                     .expect("parents is non-empty");
+                // Progress is OR-ed over every active parent, while the cursor
+                // and frozen end come from the primary alone. A merged sweep
+                // that resolved coverage under a non-primary parent must not be
+                // scored as wholly unsuccessful: that would cost one narrowing
+                // level and the exponential rather than the base delay.
+                let resolved_any = parents
+                    .iter()
+                    .filter_map(|parent| parent.active)
+                    .any(|active| active.resolved_any);
                 let mut active = primary.active;
                 if let Some(active_sweep) = &mut active {
                     active_sweep.next_block = active_sweep.next_block.max(row.range.from);
                     active_sweep.fixed_end = active_sweep.fixed_end.min(row.range.to);
+                    active_sweep.resolved_any |= resolved_any;
                 }
                 RetrySession {
                     id: primary.id,
@@ -721,6 +731,66 @@ mod tests {
         let active = merged.active.unwrap();
         assert_eq!(active.next_block, 8);
         assert_eq!(active.fixed_end, 9);
+        assert!(
+            !active.resolved_any,
+            "no parent resolved anything, so the merged sweep must not claim progress"
+        );
+    }
+
+    /// The primary parent supplies the cursor, but progress is OR-ed over
+    /// every active parent: a merged sweep that already resolved coverage
+    /// under a non-primary parent must not be charged as wholly unsuccessful.
+    #[test]
+    fn merge_ors_progress_from_a_non_primary_active_parent() {
+        let mut scheduler = scheduler(8);
+        let now = time() + ChronoDuration::seconds(8);
+        let completion = now + ChronoDuration::seconds(5);
+        scheduler.begin_tick(&[row(0, 3, 1), row(6, 9, 1)], now);
+        // Both parents are mid-sweep. The lower local id — and therefore the
+        // primary — is the one without progress.
+        scheduler.sessions[0].width = 4;
+        scheduler.sessions[0].failed_sweeps = 2;
+        scheduler.sessions[0].active = Some(ActiveSweep {
+            next_block: 3,
+            fixed_end: 3,
+            resolved_any: false,
+        });
+        scheduler.sessions[1].width = 4;
+        scheduler.sessions[1].failed_sweeps = 2;
+        scheduler.sessions[1].active = Some(ActiveSweep {
+            next_block: 8,
+            fixed_end: 9,
+            resolved_any: true,
+        });
+        let primary_id = scheduler.sessions[0].id;
+
+        scheduler.begin_tick(&[row(0, 9, 8)], now);
+
+        let merged = &scheduler.sessions[0];
+        assert_eq!(merged.id, primary_id);
+        let active = merged.active.unwrap();
+        assert_eq!(
+            (active.next_block, active.fixed_end),
+            (3, 3),
+            "cursor and frozen end still come from the primary alone"
+        );
+        assert!(active.resolved_any);
+
+        let chunk = scheduler.next_chunk(now).unwrap();
+        assert_eq!(chunk.range, BlockRange { from: 3, to: 3 });
+        let sweep = scheduler
+            .report_outcome(chunk, RetryChunkOutcome::NotResolved, completion)
+            .expect("the frozen end is reached, so the sweep completes");
+
+        assert!(sweep.resolved_any);
+        assert_eq!(sweep.failed_sweeps, 0);
+        assert_eq!((sweep.old_width, sweep.new_width), (4, 4));
+        assert!(!sweep.narrowing_started);
+        assert_eq!(
+            sweep.next_due_at,
+            Some(completion + ChronoDuration::seconds(1)),
+            "progress schedules the base delay from the actual completion time"
+        );
     }
 
     #[test]
