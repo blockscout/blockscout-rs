@@ -86,19 +86,15 @@ Consequential details, each of which is load-bearing:
   count instead makes an hour-long incident take ~22 hours to drain, since each
   pass replays only `max_chunks_per_pass` chunks before the remainder waits out
   the full cap again.
-- **Replay uses the indexer's own `batch_size`.** Shared code never talks to an
-  RPC; it hands the processor a range and the processor chunks it.
-- **The retry pass sweeps, it does not restart.** Every due interval on every
-  chain is flattened into one queue ordered by `(chain_id, from)` and walked
-  cyclically from an in-memory cursor. `max_chunks_per_pass` is a budget shared
-  across all of them, so a pass that always began at the head would let a wide
-  interval — or merely the chain that sorts first — consume it forever, and
-  since this is the only recovery path, the chunks behind it are holes that stay
-  open while their rows keep advertising themselves as retryable. The cursor
-  advances by exactly the positions consumed, so the sweep completes in
-  `ceil(len / max_chunks_per_pass)` passes no matter how a failure is
-  attributed. It is `(chain_id, block)` rather than an index because `resolve`
-  splits and `record` merges invalidate indices while block space stays stable.
+- **Replay is an adaptive per-interval sweep.** `RangeDriver` owns a compact
+  in-memory session for each open row. It freezes the end of an active sweep,
+  yields at most one lazy chunk at a time, and round-robins local session ids
+  across chains under the single bridge-wide `max_chunks_per_pass` budget.
+  A wholly unsuccessful sweep halves width (rounded up, never below one) after
+  `split_after_attempts`; successful chunks are still removed only by
+  `resolve`. Backoff is between complete sweeps, not between their chunks.
+  Session width/cursor/due are disposable hints reconciled from durable coverage
+  every tick, so a restart can repeat work but cannot lose ledger coverage.
 - **A drain must not clear its queue before its writes succeed.** AMB's
   correlation drain applies a clone and removes the queue entry only on success.
   Removing first and applying after means a mid-drain failure loses the

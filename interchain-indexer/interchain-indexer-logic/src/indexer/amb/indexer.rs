@@ -484,7 +484,8 @@ mod tests {
         MessageBufferSettings,
         indexer::{
             amb::abi::{ContractAbi, ContractKind, ContractVersion},
-            failure_ledger::{BlockRange, FailedInterval, FailureLedger, FailureRetrySettings},
+            failure_ledger::{BlockRange, FailureLedger, FailureRetrySettings},
+            retry_scheduler::RetryScheduler,
         },
         log_stream::ScanDirection,
         test_utils::{init_db, mock_db::fill_mock_interchain_database},
@@ -813,16 +814,24 @@ mod tests {
         let chain = chain_config(CHAIN_ID, contract_address, mock_provider(service));
         let ctx = run_context(arc_db.clone(), owned_db, BRIDGE_ID, vec![chain], registry);
 
-        let due: Vec<(i64, FailedInterval)> = ledger
-            .open(&[(BRIDGE_ID, CHAIN_ID)])
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|(_, chain_id, interval)| (chain_id, interval))
-            .collect();
-        assert_eq!(due.len(), 1, "the seeded hole must be due for retry");
-
-        <RunContext as RangeProcessor>::retry_pending(&ctx, &ledger, &due, 16, &mut None).await;
+        let settings = FailureRetrySettings {
+            max_chunks_per_pass: 16,
+            ..Default::default()
+        };
+        let mut scheduler = RetryScheduler::new(
+            ctx.batch_size(),
+            settings.split_after_attempts,
+            settings.backoff_base,
+            settings.backoff_cap,
+        );
+        RangeDriver::new(ctx, ledger.clone(), settings)
+            .run_retry_tick_at(
+                BRIDGE_ID,
+                &[(BRIDGE_ID, CHAIN_ID)],
+                &mut scheduler,
+                chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
+            )
+            .await;
 
         let open = ledger.open(&[(BRIDGE_ID, CHAIN_ID)]).await.unwrap();
         assert_eq!(

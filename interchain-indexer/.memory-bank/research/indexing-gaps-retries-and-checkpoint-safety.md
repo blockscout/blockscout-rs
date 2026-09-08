@@ -76,26 +76,13 @@ therefore not proof that every block was indexed:
 - Crash mid-batch, planned-stop drain, reorgs and AMB's in-memory correlation
   maps remain as they were — see the accepted non-goals below.
 
-**Replay granularity, verified 2026-09-07.** The default
-`RangeProcessor::retry_pending` in `indexer/range_driver.rs` splits each open
-row into requests of at most the processor's fixed `batch_size`; it does not
-adapt that size to `attempts`. Ledger rows can be much wider than a batch because
-adjacent failures merge. Recording a smaller failed range inside an existing
-row does not narrow it; only resolving successfully processed blocks does.
-`resolve_indexer_failures` resets remainder attempts to 1, so a future adaptive
-policy must account for that reset. The queue currently materializes all chunks
-before limiting execution; single-block replay would require bounded planning
-to avoid memory proportional to the number of failed blocks. See the gotcha
-"Failure Rows Are Coverage Sets, Not Stable Retry Tasks" and ADR-005.
-
-**Retry fairness qualification, verified by source tracing and a deterministic
-model on 2026-09-07.** The cyclic cursor does not by itself guarantee coverage
-when intervals alternate in and out of the due set. Two permanently failing
-multi-chunk intervals on staggered capped-backoff schedules can repeatedly
-reset each other's position to the prefix, leaving their tails unattempted.
-The fixed-queue sweep test does not cover this dynamic due filtering. See the
-gotcha "A Retry Cursor Over Only Due Rows Can Revisit The Same Prefix Forever";
-no scheduler fix has been implemented as part of this investigation.
+**Adaptive replay, implemented 2026-09-08.** `retry_scheduler.rs` keeps one
+reconciled in-memory session per open ledger row, freezes active sweep ends and
+emits lazy chunks under the shared bridge budget. Per-session round-robin keeps
+tails reachable when due sets change. A fully unsuccessful sweep eventually
+halves request width to singleton blocks; only successful `resolve` removes
+coverage. Width/cursor/due remain disposable hints, while existing durability
+and adapter limitations below remain unchanged.
 
 What did **not** change, and is still the correct model: a checkpoint certifies
 *scanning*, not correctness. Cursor derivation is untouched, holes live in a

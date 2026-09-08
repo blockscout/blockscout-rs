@@ -18,7 +18,24 @@ pub fn is_due(
     base: Duration,
     cap: Duration,
 ) -> bool {
-    let backoff_secs = capped_backoff_secs(interval.attempts, base.as_secs(), cap.as_secs());
+    next_attempt_at(interval.last_attempt_at, interval.attempts, base, cap)
+        .is_none_or(|next_attempt_at| now >= next_attempt_at)
+}
+
+/// Computes the next replay time using the capped exponential policy.
+///
+/// `None` deliberately means immediately due. It preserves the failure-open
+/// behaviour for offsets chrono cannot represent, rather than panicking or
+/// parking a durable failure forever. An attempts value of zero uses the base
+/// delay, which is required after a partially successful sweep resets the
+/// scheduler-local counter.
+pub(crate) fn next_attempt_at(
+    last_attempt_at: NaiveDateTime,
+    attempts: u32,
+    base: Duration,
+    cap: Duration,
+) -> Option<NaiveDateTime> {
+    let backoff_secs = capped_backoff_secs(attempts, base.as_secs(), cap.as_secs());
 
     // `chrono::Duration::seconds` panics above `i64::MAX / 1_000` seconds
     // (~9.2e15), which a misconfigured `backoff_cap` (a raw config value,
@@ -29,18 +46,11 @@ pub fn is_due(
     // which is effectively "unreasonably far in the future" for any
     // realistic `cap`; treat it as due rather than panicking or silently
     // never retrying.
-    let Some(backoff) = chrono::Duration::try_seconds(backoff_secs.min(i64::MAX as u64) as i64)
-    else {
-        return true;
-    };
+    let backoff = chrono::Duration::try_seconds(backoff_secs.min(i64::MAX as u64) as i64)?;
 
-    match interval.last_attempt_at.checked_add_signed(backoff) {
-        Some(next_attempt_at) => now >= next_attempt_at,
-        // An offset so large it cannot be represented is effectively
-        // "unreasonably far in the future" for any realistic `cap`; treat it
-        // as due rather than silently never retrying.
-        None => true,
-    }
+    // An offset so large it cannot be represented is treated as immediately
+    // due by the scheduler rather than silently never retried.
+    last_attempt_at.checked_add_signed(backoff)
 }
 
 /// `min(base * 2^(attempts - 1), cap)` in whole seconds, with saturating

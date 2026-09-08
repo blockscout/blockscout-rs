@@ -22,9 +22,10 @@ fetch_interval = 1
 # [avalanche_indexer.failure_retry]
 # enabled = true
 # scan_interval = 60                  # seconds
-# backoff_base = 30                   # seconds
+# backoff_base = 30                   # seconds; applied after a complete replay sweep
 # backoff_cap = 3600                  # seconds
-# max_chunks_per_pass = 2
+# max_chunks_per_pass = 8             # bridge-wide chunks per tick
+# split_after_attempts = 3            # initial record plus wholly failed sweeps before narrowing
 # record_retry_attempts = 3
 # record_retry_initial_backoff = 200  # milliseconds
 
@@ -38,9 +39,10 @@ fetch_interval = 1
 # [amb_indexer.failure_retry]
 # enabled = true
 # scan_interval = 60                  # seconds
-# backoff_base = 30                   # seconds
+# backoff_base = 30                   # seconds; applied after a complete replay sweep
 # backoff_cap = 3600                  # seconds
-# max_chunks_per_pass = 2
+# max_chunks_per_pass = 8             # bridge-wide chunks per tick
+# split_after_attempts = 3            # initial record plus wholly failed sweeps before narrowing
 # record_retry_attempts = 3
 # record_retry_initial_backoff = 200  # milliseconds
 

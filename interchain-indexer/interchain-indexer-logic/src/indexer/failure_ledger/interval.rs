@@ -13,13 +13,8 @@ pub struct BlockRange {
 impl BlockRange {
     /// Number of blocks covered by this range, inclusive on both ends.
     ///
-    /// `pub(crate)` and `cfg(test)`, not `pub`: production computes widths in
-    /// SQL (`indexer_failure_totals`); the only Rust callers are this
-    /// module's own tests and the disjointness-union assertion in
-    /// `database.rs`'s test module, both within this crate and both
-    /// test-only — without `cfg(test)` a normal (non-test) build has zero
-    /// callers and `-D warnings` correctly flags it as dead code.
-    #[cfg(test)]
+    /// Uses saturating inclusive arithmetic so the PostgreSQL BIGINT upper
+    /// boundary is safe in retry scheduling as well as in tests.
     pub(crate) fn width(&self) -> u64 {
         self.to.saturating_sub(self.from).saturating_add(1)
     }

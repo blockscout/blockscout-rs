@@ -987,11 +987,10 @@ derived only from `batch_size` and this counter can repeatedly revisit coarse
 widths after successful partial recovery. Any adaptive-width change must
 account for the **current remainder's width** and the reset semantics together.
 
-The existing `range_driver.rs::retry_queue` materializes every virtual chunk
-before applying `max_chunks_per_pass`. If adaptive replay reduces chunks to one
-block, preserving that implementation makes memory proportional to the number
-of failed blocks, even with a tiny execution budget. Bound planning as well as
-execution when introducing finer chunks.
+`retry_scheduler.rs` now emits one virtual chunk at a time under the shared
+budget, so singleton replay retains memory proportional to open ledger rows,
+not failed blocks. The coverage-set limitation remains: only `resolve` removes
+blocks and `attempts` is still approximate after union/difference.
 
 These are current contracts and design constraints, not an implemented adaptive
 retry feature. Sources: `interchain-indexer-logic/src/database.rs`
@@ -1002,25 +1001,11 @@ retry feature. Sources: `interchain-indexer-logic/src/database.rs`
 
 ## A Retry Cursor Over Only Due Rows Can Revisit The Same Prefix Forever
 
-`RangeDriver::run_retry_tick` filters open rows through `policy::is_due` before
-`retry_pending` constructs its queue. The single `(chain_id, block)` resume
-cursor therefore moves across a changing subset of the open intervals.
-`resume_index` wraps to the head when that cursor is beyond the current subset.
-
-A deterministic model of these source paths exposes a starvation case: two
-permanently failing, multi-chunk intervals have capped backoff schedules offset
-by half the cap. Each interval becomes due alone. Replaying the first interval's
-prefix advances the cursor into it; replaying the second interval's prefix
-moves it past the first interval. When the first becomes due again, the cursor
-wraps to its head. Both prefixes repeat forever while both tails stay untouched.
-This can happen within one chain too, so a cursor per chain alone is insufficient.
-
-The existing queue-sweep unit test uses a fixed queue and does not exercise due
-filtering or timestamps; its `ceil(len / budget)` guarantee does not establish
-fairness for alternating due sets. Finer retry chunks amplify this existing
-limitation. Any retry scheduling change must test staggered backoff and preserve
-each interval's progress while other intervals are due. This is a model-backed
-code finding, not a production incident measurement or an implemented fix.
+The old cursor over a pre-filtered due queue could starve interval tails. The
+adaptive scheduler instead reconciles the full open snapshot each tick and
+retains an active frontier per interval; ready sessions are selected round-robin
+by stable local id. A missing target still consumes its position, so it cannot
+pin a chain ahead of ready work elsewhere.
 
 Related: continuous adjacent forward failures can keep updating one merged
 row's `updated_at` more often than its backoff expires, so that row never becomes
