@@ -1127,6 +1127,16 @@ paths:
         - InterchainStatisticsService
   /api/v1/stats/common:
     get:
+      summary: |-
+        DEPRECATED: total_messages and total_transfers are always 0. Use the stats
+        service in interchain mode instead.
+      description: |-
+        Every call used to run an unbounded COUNT(*) over crosschain_messages plus
+        a joined COUNT(*) over crosschain_transfers, uncached — the heaviest query
+        this service served, growing with the canonical tables. The stats service
+        now precomputes the same numbers. The endpoint is kept, answering zeros
+        without querying, only so existing clients do not break, and will be
+        removed in a future API iteration.
       operationId: InterchainStatisticsService_GetCommonStatistics
       responses:
         "200":
@@ -1192,6 +1202,14 @@ paths:
         - InterchainStatisticsService
   /api/v1/stats/daily:
     get:
+      summary: |-
+        DEPRECATED: daily_messages and daily_transfers are always 0. Use the stats
+        service in interchain mode instead.
+      description: |-
+        Same reasoning as GetCommonStatistics: two uncached COUNT(*) queries per
+        call, now precomputed by the stats service. The endpoint is kept, answering
+        zeros without querying, only so existing clients do not break, and will be
+        removed in a future API iteration.
       operationId: InterchainStatisticsService_GetDailyStatistics
       responses:
         "200":
@@ -1574,9 +1592,14 @@ definitions:
       total_messages:
         type: string
         format: uint64
+        description: Always 0 since deprecation. Use the stats service in interchain mode.
       total_transfers:
         type: string
         format: uint64
+        description: Always 0 since deprecation. Use the stats service in interchain mode.
+    description: |-
+      DEPRECATED, and removed together with
+      InterchainStatisticsService.GetCommonStatistics in a future API iteration.
   v1GetDailyStatisticsResponse:
     type: object
     properties:
@@ -1585,9 +1608,14 @@ definitions:
       daily_messages:
         type: string
         format: uint64
+        description: Always 0 since deprecation. Use the stats service in interchain mode.
       daily_transfers:
         type: string
         format: uint64
+        description: Always 0 since deprecation. Use the stats service in interchain mode.
+    description: |-
+      DEPRECATED, and removed together with
+      InterchainStatisticsService.GetDailyStatistics in a future API iteration.
   v1GetIndexingProgressResponse:
     type: object
     properties:

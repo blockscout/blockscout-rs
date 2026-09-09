@@ -3492,6 +3492,17 @@ impl InterchainDatabase {
     }
 
     /// Statistics
+    ///
+    /// DEPRECATED, and no longer reachable from the API: the only callers were
+    /// `/api/v1/stats/common` and `/api/v1/stats/daily`, which now answer zeros
+    /// without querying, because these unbounded uncached `COUNT(*)`s were the
+    /// heaviest work this service did and the stats service in interchain mode
+    /// precomputes the same numbers. Kept only so the deprecated endpoints can
+    /// be removed in one step; the parity tests below still exercise them.
+    ///
+    /// TODO(next API iteration): delete `get_total_counters`,
+    /// `get_daily_counters`, `InterchainTotalCounters`,
+    /// `InterchainDailyCounters` and their tests together with the endpoints.
     pub async fn get_total_counters(
         &self,
         timestamp: NaiveDateTime,
@@ -3528,6 +3539,8 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
+    /// DEPRECATED alongside [`Self::get_total_counters`] — see its doc comment
+    /// for why and for the removal plan.
     pub async fn get_daily_counters(
         &self,
         timestamp: NaiveDateTime,
