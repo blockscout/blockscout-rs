@@ -1002,15 +1002,21 @@ Update this note when:
 - `IndexedChains::may_observe` semantics, or its callers, change
 - asset union-find merge or decimals-conflict handling changes
 - startup backfill or periodic recompute behavior changes
-- `/stats/common` or `/stats/daily` are replaced by projected or externalized
-  implementations
+- `/stats/common` or `/stats/daily` are finally removed (they are already
+  deprecated and answer zeros; see the status note above)
 - the product boundary between embedded interchain stats and the standalone
   stats service changes
 
 ## Open Questions
 
-- Should `/stats/common` and `/stats/daily` remain request-time canonical-table
-  queries, or be replaced by projected / externalized implementations?
+- **Resolved by the 2026-09-09 deprecation:** `/stats/common` and `/stats/daily`
+  are neither. They stopped being request-time canonical-table queries and were
+  not reprojected here either — the counts are hard-zeroed in the handlers, no
+  query is issued, and the stats service in interchain mode owns the real
+  numbers. What remains is a removal, not a design question: delete both
+  endpoints, their RPCs and messages, and
+  `InterchainDatabase::get_total_counters` / `get_daily_counters` in the next
+  API iteration.
 - Should `unique_message_users_count` be exposed through the public API?
 - If projection logic changes materially, what is the canonical full
   reprojection playbook beyond the current `stats_processed = 0` catch-up path?

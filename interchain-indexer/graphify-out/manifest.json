@@ -655,7 +655,7 @@
     "semantic_hash": ""
   },
   "interchain-indexer-proto/build.rs": {
-    "mtime": 1788941075.781152,
+    "mtime": 1788950645.1159763,
     "ast_hash": "bf7bd64708f8d53544cecc50e2ec007a",
     "semantic_hash": "bf7bd64708f8d53544cecc50e2ec007a"
   },
@@ -1120,8 +1120,8 @@
     "semantic_hash": "91e57f080bb39de64f44f9489fa2f1f6"
   },
   ".memory-bank/research/stats-subsystem.md": {
-    "mtime": 1788941066.292715,
-    "ast_hash": "decd09639c16b60fd7023144e59155e9",
+    "mtime": 1788950673.2473712,
+    "ast_hash": "59b890f1c1fa005f7db17470979f084a",
     "semantic_hash": ""
   },
   ".memory-bank/research/token-info-service.md": {
@@ -1240,7 +1240,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1788941175.1901631,
+    "mtime": 1788950764.432377,
     "ast_hash": "bc1776858d8ac70273a09697ecb38734",
     "semantic_hash": ""
   },
