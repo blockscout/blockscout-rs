@@ -230,8 +230,8 @@
     "semantic_hash": "4cd1833a866aaacecf4d5ac3b4491fcf"
   },
   "interchain-indexer-logic/src/database.rs": {
-    "mtime": 1788875922.2392335,
-    "ast_hash": "10846c74e995720eeb3b9ff556481ae5",
+    "mtime": 1788941066.2897549,
+    "ast_hash": "c8809ffcfcbee4d5193ff35f93e6d377",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/error.rs": {
@@ -655,7 +655,7 @@
     "semantic_hash": ""
   },
   "interchain-indexer-proto/build.rs": {
-    "mtime": 1788765041.0621195,
+    "mtime": 1788950645.1159763,
     "ast_hash": "bf7bd64708f8d53544cecc50e2ec007a",
     "semantic_hash": "bf7bd64708f8d53544cecc50e2ec007a"
   },
@@ -730,8 +730,8 @@
     "semantic_hash": "daf7685be63d096dc01234c11360cf8b"
   },
   "interchain-indexer-server/src/services/stats.rs": {
-    "mtime": 1788765041.0708296,
-    "ast_hash": "e0f5033140a121df65f2094de2b448fb",
+    "mtime": 1788941066.2865522,
+    "ast_hash": "bd54633f62784e9d75b7c54c3f2c55f6",
     "semantic_hash": ""
   },
   "interchain-indexer-server/src/services/status.rs": {
@@ -1120,8 +1120,8 @@
     "semantic_hash": "91e57f080bb39de64f44f9489fa2f1f6"
   },
   ".memory-bank/research/stats-subsystem.md": {
-    "mtime": 1788765190.5223613,
-    "ast_hash": "3b29bf3b5f580a7c8e1c196f231665c5",
+    "mtime": 1788950673.2473712,
+    "ast_hash": "59b890f1c1fa005f7db17470979f084a",
     "semantic_hash": ""
   },
   ".memory-bank/research/token-info-service.md": {
@@ -1220,9 +1220,9 @@
     "semantic_hash": ""
   },
   "docker/README.md": {
-    "mtime": 1788765040.9984498,
-    "ast_hash": "e15d199d0b2031dfeddd4e7fadbd34e5",
-    "semantic_hash": "e15d199d0b2031dfeddd4e7fadbd34e5"
+    "mtime": 1788941066.2804294,
+    "ast_hash": "2c6be518f056a43ad5718e0b0fdf7c8d",
+    "semantic_hash": ""
   },
   "docker/docker-compose-ubi.yml": {
     "mtime": 1778145360.1572707,
@@ -1240,8 +1240,8 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1788871871.4572842,
-    "ast_hash": "feecccc418784adabb3c4ebc5ddf2260",
+    "mtime": 1788950764.432377,
+    "ast_hash": "bc1776858d8ac70273a09697ecb38734",
     "semantic_hash": ""
   },
   ".codex/hooks.json": {
@@ -1377,6 +1377,11 @@
   "interchain-indexer-logic/src/indexer/retry_scheduler.rs": {
     "mtime": 1788874713.068583,
     "ast_hash": "6aefa825161bc340db7e851474eaf085",
+    "semantic_hash": ""
+  },
+  "interchain-indexer-server/tests/deprecated_stats_counters.rs": {
+    "mtime": 1788941066.2831895,
+    "ast_hash": "b18f58dc6b45c164a002d0429baae4b9",
     "semantic_hash": ""
   }
 }

@@ -63,8 +63,28 @@ message GetMessagePathsResponse {
 }
 
 service InterchainStatisticsService {
-  rpc GetCommonStatistics(GetCommonStatisticsRequest) returns (GetCommonStatisticsResponse) {}
-  rpc GetDailyStatistics(GetDailyStatisticsRequest) returns (GetDailyStatisticsResponse) {}
+  // DEPRECATED: total_messages and total_transfers are always 0. Use the stats
+  // service in interchain mode instead.
+  //
+  // Every call used to run an unbounded COUNT(*) over crosschain_messages plus
+  // a joined COUNT(*) over crosschain_transfers, uncached — the heaviest query
+  // this service served, growing with the canonical tables. The stats service
+  // now precomputes the same numbers. The endpoint is kept, answering zeros
+  // without querying, only so existing clients do not break, and will be
+  // removed in a future API iteration.
+  rpc GetCommonStatistics(GetCommonStatisticsRequest) returns (GetCommonStatisticsResponse) {
+    option deprecated = true;
+  }
+  // DEPRECATED: daily_messages and daily_transfers are always 0. Use the stats
+  // service in interchain mode instead.
+  //
+  // Same reasoning as GetCommonStatistics: two uncached COUNT(*) queries per
+  // call, now precomputed by the stats service. The endpoint is kept, answering
+  // zeros without querying, only so existing clients do not break, and will be
+  // removed in a future API iteration.
+  rpc GetDailyStatistics(GetDailyStatisticsRequest) returns (GetDailyStatisticsResponse) {
+    option deprecated = true;
+  }
   rpc GetBridgedTokens(GetBridgedTokensRequest) returns (GetBridgedTokensResponse) {}
   rpc GetChainsStats(GetChainsStatsRequest) returns (GetChainsStatsResponse) {}
   rpc GetSentMessagePaths(GetMessagePathsRequest) returns (GetMessagePathsResponse) {}
@@ -265,14 +285,22 @@ message GetDailyStatisticsRequest {
   optional bool include_unindexed_chains = 7;
 }
 
+// DEPRECATED, and removed together with
+// InterchainStatisticsService.GetCommonStatistics in a future API iteration.
 message GetCommonStatisticsResponse {
   string timestamp = 1;
+  // Always 0 since deprecation. Use the stats service in interchain mode.
   uint64 total_messages = 2;
+  // Always 0 since deprecation. Use the stats service in interchain mode.
   uint64 total_transfers = 3;
 }
 
+// DEPRECATED, and removed together with
+// InterchainStatisticsService.GetDailyStatistics in a future API iteration.
 message GetDailyStatisticsResponse {
   string date = 1;
+  // Always 0 since deprecation. Use the stats service in interchain mode.
   uint64 daily_messages = 2;
+  // Always 0 since deprecation. Use the stats service in interchain mode.
   uint64 daily_transfers = 3;
 }
