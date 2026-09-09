@@ -12,10 +12,10 @@ use crate::{
         failure_ledger::{
             FailureLedger,
             interval::{BlockRange, FailedInterval},
-            policy,
             settings::FailureRetrySettings,
         },
         metrics,
+        retry_scheduler::{RetryChunkOutcome, RetryScheduler, ScheduledRetryChunk},
     },
     log_stream::{LogBatch, ScanDirection, fetch_logs},
     secret::redact_urls,
@@ -45,286 +45,21 @@ impl From<anyhow::Error> for BatchError {
     }
 }
 
-/// `#[async_trait]` rather than native AFIT: the provided `retry_pending`
-/// default awaits other trait methods and the whole driver loop runs inside
-/// a `tokio::spawn`ed task, so `Send` futures are required — which RPITIT
-/// cannot express for a provided body. (`.memory-bank/rules/async-patterns.md`
-/// requires this justification.)
+/// `#[async_trait]` rather than native AFIT because the `process` future is
+/// awaited inside spawned indexer tasks and therefore must be `Send`.
 #[async_trait]
 pub trait RangeProcessor: Send + Sync {
     fn bridge_id(&self) -> i32;
     fn chain_ids(&self) -> Vec<i64>;
     fn provider(&self, chain_id: i64) -> Option<DynProvider<Ethereum>>;
     fn log_filter(&self, chain_id: i64) -> anyhow::Result<Filter>;
-    /// The indexer's own configured block-range width, reused verbatim for
-    /// replay. No retry-specific width exists.
+    /// The indexer's own configured block-range width. There is no
+    /// retry-specific width setting: this is where replay *starts*, and the
+    /// retry scheduler treats it as an upper bound, halving a session's request
+    /// width below it after wholly unsuccessful sweeps and never above it.
     fn batch_size(&self) -> u64;
 
     async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError>;
-
-    /// Provided default: re-fetch each due chunk via `log_filter`/`provider`,
-    /// call `process`, then report the outcome through the ledger. EVM-shaped
-    /// indexers need no override.
-    ///
-    /// Chunking is mandatory, not an optimisation: a recorded interval can be
-    /// far wider than `batch_size` because `record` merges adjacent ranges on
-    /// purpose. Each chunk is resolved or re-recorded on its own, so partial
-    /// progress survives a failure partway through a wide interval. Bounded
-    /// by `max_chunks` across every due interval combined, so a large hole
-    /// set cannot starve the realtime scan sharing this task.
-    ///
-    /// **Resumed, not started at the head.** `max_chunks` is a budget shared
-    /// across every due interval on every chain, so restarting each pass at
-    /// the head would let a wide interval — or merely a chain that sorts
-    /// first — consume the whole budget forever, and everything behind it
-    /// would never be attempted at all. Since the retry pass is the *only*
-    /// recovery path, a chunk that is never re-fetched is a hole that stays
-    /// open while its row keeps advertising itself as retryable.
-    ///
-    /// So every due interval on every chain is flattened into one ordered
-    /// chunk sequence and walked **cyclically from where the previous pass
-    /// stopped**. The cursor advances by exactly the number of queue positions
-    /// consumed, so consecutive passes cover consecutive segments and the
-    /// sweep is complete after `ceil(len / max_chunks)` passes — regardless of
-    /// how many ranges a failure is attributed to, how intervals split under
-    /// `resolve`, or how uneven the per-chain hole counts are.
-    ///
-    /// The cursor is `(chain_id, block)` rather than an index because indices
-    /// are invalidated by every split and merge, while block space is stable:
-    /// after a pass the position names a real boundary, and the next pass
-    /// resumes at the first chunk at or after it even if the surrounding rows
-    /// changed shape. It is in-memory and per-driver — losing it on restart
-    /// costs at most one pass starting at the head, which is where the old
-    /// behaviour started every time.
-    async fn retry_pending(
-        &self,
-        ledger: &FailureLedger,
-        due: &[(i64, FailedInterval)],
-        max_chunks: usize,
-        resume_from: &mut Option<(i64, u64)>,
-    ) {
-        let bridge_id = self.bridge_id();
-        let batch_size = self.batch_size().max(1);
-
-        let queue = retry_queue(due, batch_size);
-
-        if queue.is_empty() {
-            return;
-        }
-
-        // Emitted once per pass, and only when there is work — a tick with
-        // nothing due stays silent instead of printing every `scan_interval`.
-        //
-        // The forward streams need no equivalent: each is one continuous
-        // monotone walk, so a per-chunk line is readable on its own — the
-        // previous line's `to_block` predicts the next line's `from_block`.
-        // The retry pass is instead a bounded *cyclic* sweep resumed from
-        // `resume_from`, so consecutive per-chunk lines jump between chains
-        // and between unrelated intervals; without this header naming the
-        // window they belong to, they cannot be interpreted.
-        //
-        // `chunks` counts the chunks of the *due* intervals only — an interval
-        // still in backoff never reaches the queue — so it is the work planned
-        // for this tick, not the size of the open hole set.
-        tracing::info!(bridge_id, due_intervals = due.len(), chunks = queue.len(), max_chunks, resume_from =? resume_from, "starting RETRY    pass");
-
-        // Provider and filter resolve once per chain per pass, not once per
-        // chunk: `log_filter` allocates the address set, and a chain that
-        // cannot be resolved must log once rather than once per chunk.
-        let mut targets: HashMap<i64, Option<(DynProvider<Ethereum>, Filter)>> = HashMap::new();
-        for (chain_id, _) in &queue {
-            if targets.contains_key(chain_id) {
-                continue;
-            }
-            let chain_id = *chain_id;
-            let resolved = match (self.provider(chain_id), self.log_filter(chain_id)) {
-                (None, _) => {
-                    tracing::error!(
-                        bridge_id,
-                        chain_id,
-                        "no provider configured for chain during retry pass"
-                    );
-                    None
-                }
-                (Some(_), Err(err)) => {
-                    tracing::error!(err = %redact_urls(&format!("{err:#}")), bridge_id, chain_id, "failed to build log filter during retry pass");
-                    None
-                }
-                (Some(provider), Ok(filter)) => Some((provider, filter)),
-            };
-            targets.insert(chain_id, resolved);
-        }
-
-        let start = resume_index(&queue, *resume_from);
-
-        for offset in 0..queue.len().min(max_chunks) {
-            let (chain_id, chunk) = queue[(start + offset) % queue.len()];
-
-            // Consumed whether or not the chunk could be attempted: an
-            // unresolvable chain must not pin the cursor and starve the rest.
-            *resume_from = Some((chain_id, chunk.to.saturating_add(1)));
-
-            let Some(Some((provider, filter))) = targets.get(&chain_id) else {
-                continue;
-            };
-
-            tracing::info!(bridge_id, chain_id, from_block = chunk.from, to_block = chunk.to, size =? (chunk.to - chunk.from + 1), "scanning RETRY    logs");
-
-            match fetch_logs(provider.clone(), filter, chunk.from, chunk.to).await {
-                Ok(mut logs) => {
-                    // Parity with the forward path's ascending sort.
-                    logs.sort_by_key(|log| (log.block_number, log.log_index));
-                    let batch = LogBatch {
-                        from_block: chunk.from,
-                        to_block: chunk.to,
-                        direction: ScanDirection::Retry,
-                        logs,
-                    };
-
-                    match self.process(chain_id, &batch).await {
-                        Ok(()) => {
-                            tracing::debug!(
-                                bridge_id,
-                                chain_id,
-                                chunk_from = chunk.from,
-                                chunk_to = chunk.to,
-                                count = batch.logs.len(),
-                                "retried chunk processed"
-                            );
-                            // A retried chunk that returns zero logs must
-                            // still be resolved: the forward path never
-                            // yields empty ranges, so this case exists
-                            // only here.
-                            if let Err(err) = ledger.resolve(bridge_id, chain_id, &[chunk]).await {
-                                tracing::error!(
-                                    err = %redact_urls(&format!("{err:#}")),
-                                    bridge_id,
-                                    chain_id,
-                                    chunk_from = chunk.from,
-                                    chunk_to = chunk.to,
-                                    direction = ?batch.direction,
-                                    "failed to resolve a successfully retried chunk"
-                                );
-                            }
-                        }
-                        Err(batch_err) => {
-                            let redacted_error = redact_urls(&format!("{:#}", batch_err.error));
-                            tracing::warn!(
-                                err = %redacted_error,
-                                bridge_id,
-                                chain_id,
-                                chunk_from = chunk.from,
-                                chunk_to = chunk.to,
-                                "retried chunk still failing"
-                            );
-                            let ranges = attributed_ranges(&batch_err, chunk);
-                            let reason = truncate_reason(&redacted_error);
-                            let ranges_with_reason = with_reason(ranges, reason);
-                            if let Err(err) = ledger
-                                .record(bridge_id, chain_id, &ranges_with_reason)
-                                .await
-                            {
-                                tracing::error!(
-                                    err = %redact_urls(&format!("{err:#}")),
-                                    bridge_id,
-                                    chain_id,
-                                    chunk_from = chunk.from,
-                                    chunk_to = chunk.to,
-                                    direction = ?batch.direction,
-                                    "failed to re-record a still-failing retried chunk"
-                                );
-                            }
-                        }
-                    }
-                }
-                Err(err) => {
-                    let redacted_error = redact_urls(&format!("{err:#}"));
-                    tracing::warn!(
-                        err = %redacted_error,
-                        bridge_id,
-                        chain_id,
-                        chunk_from = chunk.from,
-                        chunk_to = chunk.to,
-                        "failed to re-fetch a retried chunk"
-                    );
-                    // An eth_getLogs failure records the chunk as
-                    // still-failed and moves on — this is not an
-                    // escalation, the range was never re-scanned.
-                    let reason = truncate_reason(&redacted_error);
-                    if let Err(record_err) =
-                        ledger.record(bridge_id, chain_id, &[(chunk, reason)]).await
-                    {
-                        tracing::error!(
-                            err = %redact_urls(&format!("{record_err:#}")),
-                            bridge_id,
-                            chain_id,
-                            chunk_from = chunk.from,
-                            chunk_to = chunk.to,
-                            "failed to re-record a retry-fetch failure"
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Splits `range` into consecutive, non-overlapping chunks of at most
-/// `batch_size` blocks each (the last chunk may be narrower). `batch_size` is
-/// clamped to at least `1`, so this always terminates and never divides by
-/// zero.
-fn chunk_range(range: BlockRange, batch_size: u64) -> Vec<BlockRange> {
-    let batch_size = batch_size.max(1);
-    let mut chunks = Vec::new();
-    let mut from = range.from;
-
-    loop {
-        let to = from
-            .saturating_add(batch_size.saturating_sub(1))
-            .min(range.to);
-        chunks.push(BlockRange { from, to });
-        if to >= range.to {
-            break;
-        }
-        from = to.saturating_add(1);
-    }
-
-    chunks
-}
-
-/// Flattens every due interval into one chunk queue ordered by
-/// `(chain_id, from)` — the same order the resume cursor is expressed in.
-/// `open()` guarantees no ordering of its own, so sorting here is what makes
-/// the cursor meaningful rather than an arbitrary offset.
-fn retry_queue(due: &[(i64, FailedInterval)], batch_size: u64) -> Vec<(i64, BlockRange)> {
-    let mut queue: Vec<(i64, BlockRange)> = due
-        .iter()
-        .flat_map(|(chain_id, interval)| {
-            chunk_range(interval.range, batch_size)
-                .into_iter()
-                .map(move |chunk| (*chain_id, chunk))
-        })
-        .collect();
-    queue.sort_by_key(|(chain_id, chunk)| (*chain_id, chunk.from));
-    queue
-}
-
-/// The queue position the next pass resumes at: the first chunk at or after
-/// `resume_from`, or the head when the cursor is unset or has fallen past the
-/// end (every position behind it was resolved, so the sweep wraps).
-///
-/// Compares against `chunk.to`, not `chunk.from`, so a cursor landing inside a
-/// chunk re-attempts that chunk rather than skipping it. Re-attempting is
-/// harmless — `resolve` is a set difference — while skipping is exactly the
-/// starvation this cursor exists to prevent.
-fn resume_index(queue: &[(i64, BlockRange)], resume_from: Option<(i64, u64)>) -> usize {
-    resume_from
-        .and_then(|cursor| {
-            queue
-                .iter()
-                .position(|(chain_id, chunk)| (*chain_id, chunk.to) >= cursor)
-        })
-        .unwrap_or(0)
 }
 
 /// `err.attributed`, or the whole yielded/retried range when empty.
@@ -396,12 +131,12 @@ impl<P: RangeProcessor> RangeDriver<P> {
         // first's entries; there is never a second caller here.
         self.ledger.initialize(&pairs).await?;
 
-        // Hoisted out of the struct: this was the only `&mut self` borrow in
-        // the type, and removing it is what lets N handler futures share
-        // `&self` with no `Arc`, no `Clone` and no `'static`.
-        // Where the next retry pass resumes its cyclic sweep of the due
-        // chunks. See `RangeProcessor::retry_pending`.
-        let mut retry_cursor: Option<(i64, u64)> = None;
+        let mut retry_scheduler = RetryScheduler::new(
+            self.processor.batch_size(),
+            self.settings.split_after_attempts,
+            self.settings.backoff_base,
+            self.settings.backoff_cap,
+        );
 
         // One sequential handler per chain. Within a chain, batches are
         // still processed strictly in arrival order — `handle_batch` is
@@ -445,7 +180,7 @@ impl<P: RangeProcessor> RangeDriver<P> {
                 // since escalated to `Failed`, still gets both series
                 // instead of no series or a frozen one.
                 if self.settings.enabled {
-                    self.run_retry_tick(bridge_id, &pairs, &mut retry_cursor)
+                    self.run_retry_tick(bridge_id, &pairs, &mut retry_scheduler)
                         .await;
                 }
             }
@@ -588,7 +323,21 @@ impl<P: RangeProcessor> RangeDriver<P> {
         &self,
         bridge_id: i32,
         pairs: &[(i32, i64)],
-        retry_cursor: &mut Option<(i64, u64)>,
+        scheduler: &mut RetryScheduler,
+    ) {
+        self.run_retry_tick_at(bridge_id, pairs, scheduler, chrono::Utc::now().naive_utc())
+            .await;
+    }
+
+    /// Crate-private deterministic seam for retry regression tests. The
+    /// scheduler has no async dependencies; all provider, processor and ledger
+    /// I/O stays here and no mutable scheduler borrow crosses an await.
+    pub(crate) async fn run_retry_tick_at(
+        &self,
+        bridge_id: i32,
+        pairs: &[(i32, i64)],
+        scheduler: &mut RetryScheduler,
+        decision_time: chrono::NaiveDateTime,
     ) {
         let open = match self.ledger.open(pairs).await {
             Ok(open) => open,
@@ -597,29 +346,131 @@ impl<P: RangeProcessor> RangeDriver<P> {
                 return;
             }
         };
-
-        let now = chrono::Utc::now().naive_utc();
-        let due: Vec<(i64, FailedInterval)> = open
+        let rows: Vec<(i64, FailedInterval)> = open
             .into_iter()
-            .filter(|(_, _, interval)| {
-                policy::is_due(
-                    interval,
-                    now,
-                    self.settings.backoff_base,
-                    self.settings.backoff_cap,
-                )
-            })
             .map(|(_, chain_id, interval)| (chain_id, interval))
             .collect();
+        let stats = scheduler.begin_tick(&rows, decision_time);
+        if stats.ready_sessions > 0 {
+            tracing::info!(
+                bridge_id,
+                open_sessions = rows.len(),
+                tracked_sessions = stats.open_sessions,
+                ready_sessions = stats.ready_sessions,
+                max_chunks = self.settings.max_chunks_per_pass,
+                "starting RETRY tick"
+            );
+        }
 
-        self.processor
-            .retry_pending(
-                &self.ledger,
-                &due,
-                self.settings.max_chunks_per_pass,
-                retry_cursor,
-            )
-            .await;
+        let mut targets: HashMap<i64, Option<(DynProvider<Ethereum>, Filter)>> = HashMap::new();
+        for _ in 0..self.settings.max_chunks_per_pass {
+            let Some(chunk) = scheduler.next_chunk(decision_time) else {
+                break;
+            };
+            let outcome = self.retry_chunk(bridge_id, chunk, &mut targets).await;
+            if let Some(completion) =
+                scheduler.report_outcome(chunk, outcome, chrono::Utc::now().naive_utc())
+            {
+                tracing::info!(bridge_id, session_id = completion.session_id, chain_id = completion.chain_id, old_width = completion.old_width, new_width = completion.new_width, progress = completion.resolved_any, failed_sweeps = completion.failed_sweeps, narrowing = completion.narrowing_started, next_due_at = ?completion.next_due_at, "completed RETRY sweep");
+            }
+        }
+    }
+
+    async fn retry_chunk(
+        &self,
+        bridge_id: i32,
+        chunk: ScheduledRetryChunk,
+        targets: &mut HashMap<i64, Option<(DynProvider<Ethereum>, Filter)>>,
+    ) -> RetryChunkOutcome {
+        let target = targets.entry(chunk.chain_id).or_insert_with(|| match (
+            self.processor.provider(chunk.chain_id),
+            self.processor.log_filter(chunk.chain_id),
+        ) {
+            (None, _) => {
+                tracing::error!(bridge_id, chain_id = chunk.chain_id, "no provider configured for chain during retry tick");
+                None
+            }
+            (Some(_), Err(err)) => {
+                tracing::error!(err = %redact_urls(&format!("{err:#}")), bridge_id, chain_id = chunk.chain_id, "failed to build log filter during retry tick");
+                None
+            }
+            (Some(provider), Ok(filter)) => Some((provider, filter)),
+        });
+        let Some((provider, filter)) = target.as_ref() else {
+            return RetryChunkOutcome::NotResolved;
+        };
+        tracing::info!(
+            bridge_id,
+            chain_id = chunk.chain_id,
+            from_block = chunk.range.from,
+            to_block = chunk.range.to,
+            size = chunk.range.width(),
+            "scanning RETRY logs"
+        );
+        match fetch_logs(provider.clone(), filter, chunk.range.from, chunk.range.to).await {
+            Ok(mut logs) => {
+                logs.sort_by_key(|log| (log.block_number, log.log_index));
+                let batch = LogBatch {
+                    from_block: chunk.range.from,
+                    to_block: chunk.range.to,
+                    direction: ScanDirection::Retry,
+                    logs,
+                };
+                match self.processor.process(chunk.chain_id, &batch).await {
+                    Ok(()) => match self
+                        .ledger
+                        .resolve(bridge_id, chunk.chain_id, &[chunk.range])
+                        .await
+                    {
+                        Ok(()) => RetryChunkOutcome::Resolved,
+                        Err(err) => {
+                            tracing::error!(err = %redact_urls(&format!("{err:#}")), bridge_id, chain_id = chunk.chain_id, from_block = chunk.range.from, to_block = chunk.range.to, "failed to resolve a successfully retried chunk");
+                            RetryChunkOutcome::NotResolved
+                        }
+                    },
+                    Err(batch_err) => {
+                        let redacted_error = redact_urls(&format!("{:#}", batch_err.error));
+                        tracing::warn!(
+                            err = %redacted_error,
+                            bridge_id,
+                            chain_id = chunk.chain_id,
+                            from_block = chunk.range.from,
+                            to_block = chunk.range.to,
+                            direction = ?batch.direction,
+                            "retried chunk still failing"
+                        );
+                        let ranges_with_reason = with_reason(
+                            attributed_ranges(&batch_err, chunk.range),
+                            truncate_reason(&redacted_error),
+                        );
+                        if let Err(err) = self
+                            .ledger
+                            .record(bridge_id, chunk.chain_id, &ranges_with_reason)
+                            .await
+                        {
+                            tracing::error!(err = %redact_urls(&format!("{err:#}")), bridge_id, chain_id = chunk.chain_id, from_block = chunk.range.from, to_block = chunk.range.to, "failed to re-record a still-failing retried chunk");
+                        }
+                        RetryChunkOutcome::NotResolved
+                    }
+                }
+            }
+            Err(err) => {
+                let redacted_error = redact_urls(&format!("{err:#}"));
+                tracing::warn!(err = %redacted_error, bridge_id, chain_id = chunk.chain_id, from_block = chunk.range.from, to_block = chunk.range.to, "failed to re-fetch a retried chunk");
+                if let Err(record_err) = self
+                    .ledger
+                    .record(
+                        bridge_id,
+                        chunk.chain_id,
+                        &[(chunk.range, truncate_reason(&redacted_error))],
+                    )
+                    .await
+                {
+                    tracing::error!(err = %redact_urls(&format!("{record_err:#}")), bridge_id, chain_id = chunk.chain_id, from_block = chunk.range.from, to_block = chunk.range.to, "failed to re-record a retry-fetch failure");
+                }
+                RetryChunkOutcome::NotResolved
+            }
+        }
     }
 }
 
@@ -692,151 +543,6 @@ mod tests {
 
         assert_eq!(paired.len(), 2);
         assert!(paired.iter().all(|(_, reason)| reason == "boom"));
-    }
-
-    #[test]
-    fn chunk_range_splits_into_batch_size_pieces_with_a_narrower_last_chunk() {
-        let chunks = chunk_range(BlockRange { from: 0, to: 2500 }, 1000);
-
-        assert_eq!(
-            chunks,
-            vec![
-                BlockRange { from: 0, to: 999 },
-                BlockRange {
-                    from: 1000,
-                    to: 1999
-                },
-                BlockRange {
-                    from: 2000,
-                    to: 2500
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn chunk_range_narrower_than_batch_size_yields_one_chunk() {
-        let chunks = chunk_range(BlockRange { from: 10, to: 20 }, 1000);
-
-        assert_eq!(chunks, vec![BlockRange { from: 10, to: 20 }]);
-    }
-
-    #[test]
-    fn chunk_range_clamps_a_zero_batch_size_to_one() {
-        let chunks = chunk_range(BlockRange { from: 0, to: 2 }, 0);
-
-        assert_eq!(
-            chunks,
-            vec![
-                BlockRange { from: 0, to: 0 },
-                BlockRange { from: 1, to: 1 },
-                BlockRange { from: 2, to: 2 },
-            ]
-        );
-    }
-
-    fn interval(from: u64, to: u64, attempts: u32) -> FailedInterval {
-        let at = chrono::DateTime::from_timestamp(0, 0).unwrap().naive_utc();
-        FailedInterval {
-            range: BlockRange { from, to },
-            attempts,
-            reason: None,
-            first_failed_at: at,
-            last_attempt_at: at,
-        }
-    }
-
-    #[test]
-    fn retry_queue_orders_every_chain_s_chunks_by_chain_then_block() {
-        // Deliberately unordered input: `open()` promises no ordering, and the
-        // resume cursor is only meaningful against a known order.
-        let due = vec![
-            (2, interval(50, 69, 1)),
-            (1, interval(100, 119, 1)),
-            (1, interval(0, 19, 1)),
-        ];
-
-        let queue = retry_queue(&due, 10);
-
-        assert_eq!(
-            queue,
-            vec![
-                (1, BlockRange { from: 0, to: 9 }),
-                (1, BlockRange { from: 10, to: 19 }),
-                (1, BlockRange { from: 100, to: 109 }),
-                (1, BlockRange { from: 110, to: 119 }),
-                (2, BlockRange { from: 50, to: 59 }),
-                (2, BlockRange { from: 60, to: 69 }),
-            ]
-        );
-    }
-
-    #[test]
-    fn resume_index_starts_at_the_head_when_unset_or_past_the_end() {
-        let queue = retry_queue(&[(1, interval(0, 29, 1))], 10);
-
-        assert_eq!(resume_index(&queue, None), 0);
-        // Past the last chunk on the last chain: wrap.
-        assert_eq!(resume_index(&queue, Some((1, 30))), 0);
-        // A chain that sorts after everything in the queue: wrap.
-        assert_eq!(resume_index(&queue, Some((7, 0))), 0);
-    }
-
-    #[test]
-    fn resume_index_re_attempts_the_chunk_a_cursor_lands_inside() {
-        let queue = retry_queue(&[(1, interval(0, 29, 1))], 10);
-
-        // Cursor inside chunk 1 ([10, 19]) resolves to chunk 1, not chunk 2:
-        // skipping it would be the starvation this cursor prevents.
-        assert_eq!(resume_index(&queue, Some((1, 15))), 1);
-        // Exactly on a boundary: the chunk starting there.
-        assert_eq!(resume_index(&queue, Some((1, 20))), 2);
-    }
-
-    /// The property the cursor exists for: with a budget smaller than the
-    /// queue, consecutive passes must cover every position — including when a
-    /// pass consumes several queue slots per interval, which is what broke the
-    /// previous `attempts`-driven rotation (AMB attributes a failure per
-    /// block, advancing `attempts` faster than the window is wide).
-    #[test]
-    fn successive_passes_sweep_every_queue_position_within_ceil_len_over_budget() {
-        let due = vec![(1, interval(0, 99, 1)), (2, interval(0, 49, 1))];
-        let queue = retry_queue(&due, 10);
-        assert_eq!(queue.len(), 15);
-
-        let budget = 4usize;
-        let mut cursor: Option<(i64, u64)> = None;
-        let mut visited = std::collections::HashSet::new();
-
-        // ceil(15 / 4) == 4 passes.
-        for _ in 0..4 {
-            let start = resume_index(&queue, cursor);
-            for offset in 0..queue.len().min(budget) {
-                let (chain_id, chunk) = queue[(start + offset) % queue.len()];
-                visited.insert((chain_id, chunk.from));
-                cursor = Some((chain_id, chunk.to.saturating_add(1)));
-            }
-        }
-
-        assert_eq!(
-            visited.len(),
-            queue.len(),
-            "every queue position must be attempted within ceil(len / budget) passes"
-        );
-    }
-
-    /// A budget at or above the queue length attempts everything in one pass
-    /// and must not double-attempt by wrapping.
-    #[test]
-    fn a_budget_covering_the_whole_queue_attempts_each_position_once() {
-        let queue = retry_queue(&[(1, interval(0, 29, 1))], 10);
-        let start = resume_index(&queue, None);
-
-        let attempted: Vec<_> = (0..queue.len().min(100))
-            .map(|offset| queue[(start + offset) % queue.len()])
-            .collect();
-
-        assert_eq!(attempted, queue);
     }
 
     // --- DB-backed driver tests ---
@@ -957,13 +663,14 @@ mod tests {
         /// A minimal `RangeProcessor` adopting only the driver: no
         /// protocol-specific decoding, just a configurable pass/fail decision
         /// per exact `(chain_id, from_block, to_block)`. Everything else
-        /// (recording, replay, escalation) comes from the trait's provided
-        /// `retry_pending` default and `RangeDriver`.
+        /// (recording, replay, escalation) comes from `RangeDriver`.
         struct TestRangeProcessor {
             bridge_id: i32,
             chain_ids: Vec<i64>,
             batch_size: u64,
             providers: HashMap<i64, DynProvider<Ethereum>>,
+            provider_calls: Arc<Mutex<HashMap<i64, usize>>>,
+            filter_calls: Arc<Mutex<HashMap<i64, usize>>>,
             fail_exact: Arc<Mutex<HashSet<(i64, u64, u64)>>>,
             process_calls: Arc<AtomicUsize>,
             /// Every `(chain_id, from_block, to_block)` ever passed to
@@ -994,6 +701,8 @@ mod tests {
                     chain_ids,
                     batch_size,
                     providers: HashMap::new(),
+                    provider_calls: Arc::new(Mutex::new(HashMap::new())),
+                    filter_calls: Arc::new(Mutex::new(HashMap::new())),
                     fail_exact: Arc::new(Mutex::new(HashSet::new())),
                     process_calls: Arc::new(AtomicUsize::new(0)),
                     attempted: Arc::new(Mutex::new(Vec::new())),
@@ -1047,10 +756,12 @@ mod tests {
             }
 
             fn provider(&self, chain_id: i64) -> Option<DynProvider<Ethereum>> {
+                *self.provider_calls.lock().entry(chain_id).or_default() += 1;
                 self.providers.get(&chain_id).cloned()
             }
 
-            fn log_filter(&self, _chain_id: i64) -> anyhow::Result<Filter> {
+            fn log_filter(&self, chain_id: i64) -> anyhow::Result<Filter> {
+                *self.filter_calls.lock().entry(chain_id).or_default() += 1;
                 Ok(Filter::default())
             }
 
@@ -1111,6 +822,29 @@ mod tests {
                 direction: ScanDirection::Realtime,
                 logs: vec![],
             }
+        }
+
+        fn retry_settings(max_chunks_per_pass: usize) -> FailureRetrySettings {
+            FailureRetrySettings {
+                max_chunks_per_pass,
+                ..Default::default()
+            }
+        }
+
+        fn retry_scheduler(batch_size: u64, settings: &FailureRetrySettings) -> RetryScheduler {
+            RetryScheduler::new(
+                batch_size,
+                settings.split_after_attempts,
+                settings.backoff_base,
+                settings.backoff_cap,
+            )
+        }
+
+        fn retry_decision_time() -> chrono::NaiveDateTime {
+            chrono::NaiveDate::from_ymd_opt(2100, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
         }
 
         /// The healthy path performs zero ledger database statements: this is
@@ -1510,8 +1244,9 @@ mod tests {
             let settings = FailureRetrySettings {
                 enabled: true,
                 scan_interval: Duration::from_millis(10),
-                // Without this the test is vacuous. `is_due` gates a replay on
-                // `last_attempt_at + backoff_base * 2^(attempts - 1)`, and the
+                // Without this the test is vacuous. The scheduler bootstraps a
+                // session's first due time at `last_attempt_at + backoff_base
+                // * 2^(attempts - 1)` (`policy::next_attempt_at`), and the
                 // interval recorded above lands with `attempts = 1` and
                 // `last_attempt_at = now`. At the 30 s default the pass finds
                 // nothing due for the whole 5 s window, never reaches
@@ -1705,27 +1440,19 @@ mod tests {
                 .unwrap();
 
             let ledger = Arc::new(FailureLedger::new(interchain_db));
-            // Normally done by `RangeDriver::run` before the loop starts;
-            // calling `retry_pending` directly here (bypassing `run`) must
-            // warm the cache itself, or `resolve` below would silently
-            // short-circuit on a cache that (wrongly) says no holes exist.
             ledger.initialize(&[(1, 1)]).await.unwrap();
-            let due: Vec<(i64, FailedInterval)> = ledger
-                .open(&[(1, 1)])
-                .await
-                .unwrap()
-                .into_iter()
-                .map(|(_, chain_id, interval)| (chain_id, interval))
-                .collect();
-            assert_eq!(due.len(), 1);
 
             let mock_service = MockLogsService::new();
             mock_service.push_logs(vec![]);
 
             let processor = TestRangeProcessor::new(1, vec![1], 100)
                 .with_provider(1, mock_provider(mock_service));
-
-            processor.retry_pending(&ledger, &due, 16, &mut None).await;
+            let settings = retry_settings(16);
+            let mut scheduler = retry_scheduler(100, &settings);
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
+            driver
+                .run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time())
+                .await;
 
             let open = ledger.open(&[(1, 1)]).await.unwrap();
             assert!(
@@ -1756,13 +1483,6 @@ mod tests {
 
             let ledger = Arc::new(FailureLedger::new(interchain_db));
             ledger.initialize(&[(1, 1)]).await.unwrap();
-            let due: Vec<(i64, FailedInterval)> = ledger
-                .open(&[(1, 1)])
-                .await
-                .unwrap()
-                .into_iter()
-                .map(|(_, chain_id, interval)| (chain_id, interval))
-                .collect();
 
             let mock_service = MockLogsService::new();
             // Three 1000-block chunks; all fetch successfully.
@@ -1774,8 +1494,12 @@ mod tests {
                 .with_provider(1, mock_provider(mock_service));
             // The middle chunk fails at the `process()` level.
             processor.fail_range(1, 1000, 1999);
-
-            processor.retry_pending(&ledger, &due, 16, &mut None).await;
+            let settings = retry_settings(16);
+            let mut scheduler = retry_scheduler(1000, &settings);
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
+            driver
+                .run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time())
+                .await;
 
             let open = ledger.open(&[(1, 1)]).await.unwrap();
             assert_eq!(open.len(), 1);
@@ -1814,13 +1538,6 @@ mod tests {
 
             let ledger = Arc::new(FailureLedger::new(interchain_db));
             ledger.initialize(&[(1, 1)]).await.unwrap();
-            let due: Vec<(i64, FailedInterval)> = ledger
-                .open(&[(1, 1)])
-                .await
-                .unwrap()
-                .into_iter()
-                .map(|(_, chain_id, interval)| (chain_id, interval))
-                .collect();
 
             let mock_service = MockLogsService::new();
             mock_service.push_logs(vec![]);
@@ -1829,8 +1546,12 @@ mod tests {
             let processor = TestRangeProcessor::new(1, vec![1], 1000)
                 .with_provider(1, mock_provider(mock_service));
             let process_calls = processor.process_calls.clone();
-
-            processor.retry_pending(&ledger, &due, 2, &mut None).await;
+            let settings = retry_settings(2);
+            let mut scheduler = retry_scheduler(1000, &settings);
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
+            driver
+                .run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time())
+                .await;
 
             assert_eq!(
                 process_calls.load(Ordering::SeqCst),
@@ -1871,9 +1592,8 @@ mod tests {
         /// per pass — strictly narrower than the failing prefix, so a driver
         /// that does not carry a resume cursor loops on `[0,199]` forever.
         ///
-        /// This is the end-to-end half of the guarantee; the sweep's
-        /// completeness itself is pinned by the pure `resume_index` tests
-        /// above, which do not need a database.
+        /// This is the end-to-end half of the guarantee; deterministic
+        /// scheduler tests pin the sweep's completeness without a database.
         #[tokio::test]
         #[ignore = "needs database to run"]
         async fn retry_pass_fairness_reaches_chunks_beyond_a_permanently_failing_prefix() {
@@ -1906,36 +1626,19 @@ mod tests {
             for from in [0u64, 100, 200, 300] {
                 processor.fail_range(1, from, from + 99);
             }
+            let attempted = processor.attempted.clone();
+            let settings = retry_settings(MAX_CHUNKS_PER_PASS);
+            let mut scheduler = retry_scheduler(100, &settings);
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
 
             let mut reached_beyond_prefix = false;
-            // The driver keeps this across passes; a test that reset it per
-            // pass would re-run the same head window forever and assert
-            // nothing.
-            let mut retry_cursor: Option<(i64, u64)> = None;
 
             for _pass in 0..MAX_PASSES {
-                let due: Vec<(i64, FailedInterval)> = ledger
-                    .open(&[(1, 1)])
-                    .await
-                    .unwrap()
-                    .into_iter()
-                    .map(|(_, chain_id, interval)| (chain_id, interval))
-                    .collect();
-                assert!(
-                    !due.is_empty(),
-                    "the permanently failing prefix must always leave an open interval"
-                );
-
-                processor
-                    .retry_pending(&ledger, &due, MAX_CHUNKS_PER_PASS, &mut retry_cursor)
+                driver
+                    .run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time())
                     .await;
 
-                if processor
-                    .attempted
-                    .lock()
-                    .iter()
-                    .any(|&(_, from, _)| from >= 400)
-                {
+                if attempted.lock().iter().any(|&(_, from, _)| from >= 400) {
                     reached_beyond_prefix = true;
                     break;
                 }
@@ -1946,7 +1649,7 @@ mod tests {
                 "chunks beyond the permanently-failing prefix (blocks [0, 399]) must \
                  eventually be attempted once that prefix is wider than \
                  max_chunks_per_pass; attempted so far: {:?}",
-                processor.attempted.lock()
+                attempted.lock()
             );
         }
 
@@ -1971,21 +1674,18 @@ mod tests {
 
             let ledger = Arc::new(FailureLedger::new(interchain_db));
             ledger.initialize(&[(1, 1)]).await.unwrap();
-            let due: Vec<(i64, FailedInterval)> = ledger
-                .open(&[(1, 1)])
-                .await
-                .unwrap()
-                .into_iter()
-                .map(|(_, chain_id, interval)| (chain_id, interval))
-                .collect();
 
             let mock_service = MockLogsService::new();
             mock_service.push_error("rpc unavailable");
 
             let processor = TestRangeProcessor::new(1, vec![1], 100)
                 .with_provider(1, mock_provider(mock_service));
-
-            processor.retry_pending(&ledger, &due, 16, &mut None).await;
+            let settings = retry_settings(16);
+            let mut scheduler = retry_scheduler(100, &settings);
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
+            driver
+                .run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time())
+                .await;
 
             let open = ledger.open(&[(1, 1)]).await.unwrap();
             assert_eq!(
@@ -1998,6 +1698,207 @@ mod tests {
                 open[0].2.attempts, 2,
                 "re-recording after a fetch failure still counts as another attempt"
             );
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn retry_ticks_fetch_the_exact_adaptive_range_sequence() {
+            let db = init_db("range_driver_retry_exact_adaptive_sequence").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            interchain_db
+                .record_indexer_failures(
+                    1,
+                    1,
+                    &[(BlockRange { from: 0, to: 7 }, "boom".to_string())],
+                )
+                .await
+                .unwrap();
+
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+            ledger.initialize(&[(1, 1)]).await.unwrap();
+            let mock_service = MockLogsService::new();
+            for _ in 0..4 {
+                mock_service.push_logs(vec![]);
+            }
+            let processor = TestRangeProcessor::new(1, vec![1], 8)
+                .with_provider(1, mock_provider(mock_service));
+            for (from, to) in [(0, 7), (0, 3), (4, 7)] {
+                processor.fail_range(1, from, to);
+            }
+            let attempted = processor.attempted.clone();
+            let settings = retry_settings(8);
+            let mut scheduler = retry_scheduler(8, &settings);
+            let driver = RangeDriver::new(processor, ledger, settings);
+
+            for _ in 0..3 {
+                driver
+                    .run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time())
+                    .await;
+            }
+
+            assert_eq!(
+                *attempted.lock(),
+                vec![(1, 0, 7), (1, 0, 7), (1, 0, 3), (1, 4, 7)]
+            );
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn missing_target_consumes_budget_without_starving_another_chain() {
+            let db = init_db("range_driver_retry_missing_target_fairness").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            for chain_id in [1, 100] {
+                interchain_db
+                    .record_indexer_failures(
+                        1,
+                        chain_id,
+                        &[(BlockRange { from: 0, to: 0 }, "boom".to_string())],
+                    )
+                    .await
+                    .unwrap();
+            }
+
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+            let pairs = [(1, 1), (1, 100)];
+            ledger.initialize(&pairs).await.unwrap();
+            let mock_service = MockLogsService::new();
+            mock_service.push_logs(vec![]);
+            let processor = TestRangeProcessor::new(1, vec![1, 100], 1)
+                .with_provider(100, mock_provider(mock_service));
+            let attempted = processor.attempted.clone();
+            let settings = retry_settings(2);
+            let mut scheduler = retry_scheduler(1, &settings);
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
+
+            driver
+                .run_retry_tick_at(1, &pairs, &mut scheduler, retry_decision_time())
+                .await;
+
+            assert_eq!(*attempted.lock(), vec![(100, 0, 0)]);
+            let open = ledger.open(&pairs).await.unwrap();
+            assert_eq!(open.len(), 1);
+            assert_eq!(
+                (open[0].1, open[0].2.range),
+                (1, BlockRange { from: 0, to: 0 })
+            );
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn retry_tick_resolves_provider_and_filter_once_per_chain() {
+            let db = init_db("range_driver_retry_target_cache_per_chain").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            interchain_db
+                .record_indexer_failures(
+                    1,
+                    1,
+                    &[(BlockRange { from: 0, to: 2 }, "boom".to_string())],
+                )
+                .await
+                .unwrap();
+
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+            ledger.initialize(&[(1, 1)]).await.unwrap();
+            let mock_service = MockLogsService::new();
+            for _ in 0..3 {
+                mock_service.push_logs(vec![]);
+            }
+            let processor = TestRangeProcessor::new(1, vec![1], 1)
+                .with_provider(1, mock_provider(mock_service));
+            let provider_calls = processor.provider_calls.clone();
+            let filter_calls = processor.filter_calls.clone();
+            let settings = retry_settings(3);
+            let mut scheduler = retry_scheduler(1, &settings);
+            let driver = RangeDriver::new(processor, ledger, settings);
+
+            driver
+                .run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time())
+                .await;
+
+            assert_eq!(provider_calls.lock().get(&1), Some(&1));
+            assert_eq!(filter_calls.lock().get(&1), Some(&1));
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn cancellation_during_retry_fetch_keeps_ledger_coverage() {
+            let db = init_db("range_driver_retry_cancellation_keeps_coverage").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            interchain_db
+                .record_indexer_failures(
+                    1,
+                    1,
+                    &[(BlockRange { from: 100, to: 199 }, "boom".to_string())],
+                )
+                .await
+                .unwrap();
+
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+            ledger.initialize(&[(1, 1)]).await.unwrap();
+            let mock_service = MockLogsService::new();
+            mock_service.push_block();
+            let processor = TestRangeProcessor::new(1, vec![1], 100)
+                .with_provider(1, mock_provider(mock_service));
+            let settings = retry_settings(1);
+            let mut scheduler = retry_scheduler(100, &settings);
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
+
+            let result = tokio::time::timeout(
+                Duration::from_millis(20),
+                driver.run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time()),
+            )
+            .await;
+            assert!(
+                result.is_err(),
+                "mock fetch must remain pending until cancelled"
+            );
+
+            let open = ledger.open(&[(1, 1)]).await.unwrap();
+            assert_eq!(open.len(), 1);
+            assert_eq!(open[0].2.range, BlockRange { from: 100, to: 199 });
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn disabled_retry_keeps_existing_ledger_rows_unchanged() {
+            let db = init_db("range_driver_disabled_retry_keeps_coverage").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            interchain_db
+                .record_indexer_failures(
+                    1,
+                    1,
+                    &[(BlockRange { from: 5, to: 9 }, "boom".to_string())],
+                )
+                .await
+                .unwrap();
+
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+            let processor = TestRangeProcessor::new(1, vec![1], 5);
+            let settings = FailureRetrySettings {
+                enabled: false,
+                scan_interval: Duration::from_millis(1),
+                ..Default::default()
+            };
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
+            let pending = futures::stream::pending::<(i64, LogBatch)>();
+
+            let result =
+                tokio::time::timeout(Duration::from_millis(20), driver.run(vec![(1, pending)]))
+                    .await;
+            assert!(
+                result.is_err(),
+                "driver must still be waiting on the stream"
+            );
+
+            let open = ledger.open(&[(1, 1)]).await.unwrap();
+            assert_eq!(open.len(), 1);
+            assert_eq!(open[0].2.range, BlockRange { from: 5, to: 9 });
+            assert_eq!(open[0].2.attempts, 1);
         }
 
         /// A minimal `Consolidate` implementation used only to exercise the

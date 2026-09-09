@@ -4,21 +4,26 @@ use std::time::Duration;
 
 use chrono::NaiveDateTime;
 
-use super::interval::FailedInterval;
-
 /// Capped exponential backoff:
 ///   `next_attempt_at = last_attempt_at + min(base * 2^(attempts - 1), cap)`
-/// Returns `true` when `interval` is due for another replay attempt.
 ///
-/// `now` is a parameter (not read from the system clock) so the decision is
-/// deterministic and testable.
-pub fn is_due(
-    interval: &FailedInterval,
-    now: NaiveDateTime,
+/// The instant is returned rather than a due/not-due boolean because the retry
+/// scheduler stores it: a session's due time is decided once, when it is
+/// bootstrapped or when a sweep completes, and is deliberately not recomputed
+/// from the ledger row on every tick.
+///
+/// `None` deliberately means immediately due. It preserves the failure-open
+/// behaviour for offsets chrono cannot represent, rather than panicking or
+/// parking a durable failure forever. An attempts value of zero uses the base
+/// delay, which is required after a partially successful sweep resets the
+/// scheduler-local counter.
+pub(crate) fn next_attempt_at(
+    last_attempt_at: NaiveDateTime,
+    attempts: u32,
     base: Duration,
     cap: Duration,
-) -> bool {
-    let backoff_secs = capped_backoff_secs(interval.attempts, base.as_secs(), cap.as_secs());
+) -> Option<NaiveDateTime> {
+    let backoff_secs = capped_backoff_secs(attempts, base.as_secs(), cap.as_secs());
 
     // `chrono::Duration::seconds` panics above `i64::MAX / 1_000` seconds
     // (~9.2e15), which a misconfigured `backoff_cap` (a raw config value,
@@ -29,18 +34,11 @@ pub fn is_due(
     // which is effectively "unreasonably far in the future" for any
     // realistic `cap`; treat it as due rather than panicking or silently
     // never retrying.
-    let Some(backoff) = chrono::Duration::try_seconds(backoff_secs.min(i64::MAX as u64) as i64)
-    else {
-        return true;
-    };
+    let backoff = chrono::Duration::try_seconds(backoff_secs.min(i64::MAX as u64) as i64)?;
 
-    match interval.last_attempt_at.checked_add_signed(backoff) {
-        Some(next_attempt_at) => now >= next_attempt_at,
-        // An offset so large it cannot be represented is effectively
-        // "unreasonably far in the future" for any realistic `cap`; treat it
-        // as due rather than silently never retrying.
-        None => true,
-    }
+    // An offset so large it cannot be represented is treated as immediately
+    // due by the scheduler rather than silently never retried.
+    last_attempt_at.checked_add_signed(backoff)
 }
 
 /// `min(base * 2^(attempts - 1), cap)` in whole seconds, with saturating
@@ -66,16 +64,6 @@ mod tests {
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap()
-    }
-
-    fn interval_with(attempts: u32, last_attempt_at: NaiveDateTime) -> FailedInterval {
-        FailedInterval {
-            range: super::super::interval::BlockRange { from: 1, to: 1 },
-            attempts,
-            reason: None,
-            first_failed_at: last_attempt_at,
-            last_attempt_at,
-        }
     }
 
     #[test]
@@ -115,55 +103,59 @@ mod tests {
     }
 
     #[test]
-    fn is_due_is_false_before_the_backoff_elapses() {
+    fn next_attempt_at_offsets_the_last_attempt_by_the_capped_backoff() {
         let last_attempt_at = base_ts();
-        let interval = interval_with(3, last_attempt_at); // backoff = 30*2^2 = 120s
-        let now = last_attempt_at + chrono::Duration::seconds(60);
+        let base = Duration::from_secs(30);
+        let cap = Duration::from_secs(3600);
 
-        assert!(!is_due(
-            &interval,
-            now,
+        // attempts = 3 => 30 * 2^2 = 120s.
+        let due =
+            next_attempt_at(last_attempt_at, 3, base, cap).expect("a 120s offset is representable");
+
+        assert_eq!(due, last_attempt_at + chrono::Duration::seconds(120));
+        assert!(last_attempt_at + chrono::Duration::seconds(60) < due);
+        assert!(last_attempt_at + chrono::Duration::seconds(121) > due);
+    }
+
+    /// Zero is a real input, not a guarded one: the scheduler passes it after a
+    /// sweep made progress, and it must mean the base delay rather than "now".
+    #[test]
+    fn next_attempt_at_uses_the_base_delay_for_zero_attempts() {
+        let last_attempt_at = base_ts();
+
+        let due = next_attempt_at(
+            last_attempt_at,
+            0,
             Duration::from_secs(30),
-            Duration::from_secs(3600)
-        ));
+            Duration::from_secs(3600),
+        )
+        .expect("a 30s offset is representable");
+
+        assert_eq!(due, last_attempt_at + chrono::Duration::seconds(30));
     }
 
     #[test]
-    fn is_due_is_true_once_the_backoff_elapses() {
+    fn next_attempt_at_still_lands_at_the_cap_for_a_huge_attempt_count() {
         let last_attempt_at = base_ts();
-        let interval = interval_with(3, last_attempt_at); // backoff = 120s
-        let now = last_attempt_at + chrono::Duration::seconds(121);
 
-        assert!(is_due(
-            &interval,
-            now,
+        let due = next_attempt_at(
+            last_attempt_at,
+            u32::MAX,
             Duration::from_secs(30),
-            Duration::from_secs(3600)
-        ));
-    }
+            Duration::from_secs(3600),
+        )
+        .expect("the cap is representable");
 
-    #[test]
-    fn is_due_still_fires_after_a_very_large_attempts_count_once_the_cap_elapses() {
-        let last_attempt_at = base_ts();
-        let interval = interval_with(u32::MAX, last_attempt_at);
-        let now = last_attempt_at + chrono::Duration::seconds(3601);
-
-        assert!(is_due(
-            &interval,
-            now,
-            Duration::from_secs(30),
-            Duration::from_secs(3600)
-        ));
+        assert_eq!(due, last_attempt_at + chrono::Duration::seconds(3600));
     }
 
     /// `chrono::Duration::seconds` panics above `i64::MAX / 1_000`
     /// (~9.2e15) seconds; `backoff_cap` comes straight from config, so a
     /// misconfigured value that large (or `attempts` large enough that
-    /// `capped_backoff_secs` saturates at it) must not panic — `is_due`
-    /// must still return a plain `bool`.
+    /// `capped_backoff_secs` saturates at it) must not panic — it must return
+    /// `None`, which every caller reads as immediately due.
     #[test]
-    fn is_due_does_not_panic_on_a_backoff_beyond_chrono_duration_bounds() {
-        let last_attempt_at = base_ts();
+    fn next_attempt_at_is_none_on_a_backoff_beyond_chrono_duration_bounds() {
         let base = Duration::from_secs(30);
         let huge_cap = Duration::from_secs(u64::MAX);
 
@@ -181,11 +173,22 @@ mod tests {
             "inputs no longer reach the branch this test exists to cover"
         );
 
-        let interval = interval_with(attempts, last_attempt_at);
-        let now = last_attempt_at + chrono::Duration::seconds(1);
+        // Never a panic, and never a hole that is silently retried never again.
+        assert_eq!(next_attempt_at(base_ts(), attempts, base, huge_cap), None);
+    }
 
-        // An offset that cannot be represented is treated as due — never a
-        // panic, and never a hole that is silently retried never again.
-        assert!(is_due(&interval, now, base, huge_cap));
+    /// The other `None` branch: a representable offset added to a timestamp
+    /// that cannot absorb it.
+    #[test]
+    fn next_attempt_at_is_none_when_the_timestamp_cannot_absorb_the_offset() {
+        assert_eq!(
+            next_attempt_at(
+                NaiveDateTime::MAX,
+                3,
+                Duration::from_secs(30),
+                Duration::from_secs(3600)
+            ),
+            None
+        );
     }
 }

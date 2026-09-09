@@ -3025,8 +3025,9 @@ impl InterchainDatabase {
     /// remainder inherit that count and get `updated_at = now()`, pinning
     /// the remainder at the capped backoff and draining a one-hour hole over
     /// many hours instead of clearing on the next tick. `attempts = 1`, not
-    /// `0` — `policy::is_due` computes `base * 2^(attempts - 1)`, so `0`
-    /// must never be reachable.
+    /// `0` — `attempts` doubles as the exponent in
+    /// `policy::next_attempt_at` (`base * 2^(attempts - 1)`) and as the count
+    /// `record` increments, so a remainder must start at a real attempt.
     pub async fn resolve_indexer_failures(
         &self,
         bridge_id: i32,
@@ -3104,9 +3105,9 @@ impl InterchainDatabase {
                                     chain_id: ActiveValue::Set(chain_id),
                                     from_block: ActiveValue::Set(piece_from),
                                     to_block: ActiveValue::Set(piece_to),
-                                    // Not `0`: `policy::is_due` computes
-                                    // `base * 2^(attempts - 1)`, so `0` must
-                                    // never be reachable.
+                                    // Not `0`: `policy::next_attempt_at`
+                                    // computes `base * 2^(attempts - 1)` and
+                                    // `record` increments this same count.
                                     attempts: ActiveValue::Set(1),
                                     reason: ActiveValue::Set(candidate.reason.clone()),
                                     created_at: ActiveValue::Set(Some(

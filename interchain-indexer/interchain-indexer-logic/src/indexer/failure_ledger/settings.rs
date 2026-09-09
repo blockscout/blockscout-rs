@@ -19,28 +19,30 @@ pub struct FailureRetrySettings {
     /// `false` — only the retry tick that re-scans open holes is paused.
     #[serde(default = "default_enabled")]
     pub enabled: bool,
-    /// How often the retry tick fires to scan for due intervals.
+    /// How often the retry tick reads the full open-ledger snapshot.
     #[serde(default = "default_scan_interval")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub scan_interval: Duration,
-    /// Base delay of the capped exponential backoff (`policy::is_due`).
+    /// Base delay used for initial due calculation and between complete retry
+    /// sweeps. An active sweep continues across ticks without this delay.
     #[serde(default = "default_backoff_base")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub backoff_base: Duration,
-    /// Ceiling of the capped exponential backoff. This is what makes
-    /// "retry forever" affordable for a permanently unrecoverable interval.
+    /// Ceiling of the capped exponential backoff between wholly unsuccessful
+    /// sweeps. This makes singleton retry forever affordable.
     #[serde(default = "default_backoff_cap")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub backoff_cap: Duration,
-    /// Maximum number of `batch_size`-sized chunks replayed per retry tick,
-    /// across all due intervals. The pass now runs as a sibling future of
-    /// the per-chain handlers, so it no longer pauses the forward streams;
-    /// the budget still bounds replay RPC load per pass against the same
-    /// rate-limited endpoints, it is still bridge-wide across every due
-    /// interval on every chain, and the default is still low for that
-    /// reason.
+    /// Maximum number of adaptively sized chunks emitted per retry tick,
+    /// across all ready intervals and chains. Each chunk is at most
+    /// `batch_size` blocks; the bridge-wide budget bounds replay RPC load.
     #[serde(default = "default_max_chunks_per_pass")]
     pub max_chunks_per_pass: usize,
+    /// Initial ledger record plus wholly unsuccessful replay sweeps required
+    /// before request width starts halving. Width changes only after a
+    /// complete sweep, never between its chunks.
+    #[serde(default = "default_split_after_attempts")]
+    pub split_after_attempts: u32,
     /// Number of attempts `FailureLedger::record` makes before the driver
     /// escalates (stops consuming the stream, indexer state becomes
     /// `Failed`).
@@ -86,6 +88,11 @@ impl FailureRetrySettings {
              nothing every tick while `enabled` stays true"
         );
         ensure!(
+            self.split_after_attempts > 0,
+            "failure_retry.split_after_attempts must be greater than zero: the initial record \
+             counts as the first attempt, so a zero threshold has no useful meaning"
+        );
+        ensure!(
             self.record_retry_attempts >= 1,
             "failure_retry.record_retry_attempts must be at least 1: one attempt is always \
              made before the retry loop starts, so 0 only makes the escalation message \
@@ -103,6 +110,7 @@ impl Default for FailureRetrySettings {
             backoff_base: default_backoff_base(),
             backoff_cap: default_backoff_cap(),
             max_chunks_per_pass: default_max_chunks_per_pass(),
+            split_after_attempts: default_split_after_attempts(),
             record_retry_attempts: default_record_retry_attempts(),
             record_retry_initial_backoff: default_record_retry_initial_backoff(),
         }
@@ -138,6 +146,10 @@ fn default_backoff_cap() -> Duration {
 /// hand, and remember it is shared across every due interval on every chain.
 fn default_max_chunks_per_pass() -> usize {
     8
+}
+
+fn default_split_after_attempts() -> u32 {
+    3
 }
 
 fn default_record_retry_attempts() -> u32 {
@@ -197,10 +209,24 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_rejects_zero_split_after_attempts() {
+        let settings = FailureRetrySettings {
+            split_after_attempts: 0,
+            ..Default::default()
+        };
+
+        let err = settings
+            .validate()
+            .expect_err("a zero split_after_attempts must be rejected");
+        assert!(format!("{err:#}").contains("split_after_attempts"));
+    }
+
+    #[test]
     fn test_validate_accepts_boundary_value_of_one() {
         let settings = FailureRetrySettings {
             scan_interval: Duration::from_secs(1),
             max_chunks_per_pass: 1,
+            split_after_attempts: 1,
             record_retry_attempts: 1,
             ..Default::default()
         };
