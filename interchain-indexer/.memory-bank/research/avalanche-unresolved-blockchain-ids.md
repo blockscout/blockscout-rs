@@ -98,7 +98,7 @@ coarse ledger coverage before adaptive replay isolated the actual poison set.
    it remains open indefinitely. `catchup_complete` requires both 100% scan
    progress and zero failed blocks.
 
-## Accepted Handling (Implementation Pending)
+## Accepted Handling (Implemented)
 
 - For an otherwise accepted outbound send, treat an expected network-scoped
   not-found or valid response without evmChainId as an unresolved destination
@@ -143,9 +143,15 @@ coarse ledger coverage before adaptive replay isolated the actual poison set.
 
 ## Failure Modes / Observability
 
-The persisted reason currently hides the HTTP status because the resolver
-flattens the error chain. Operators therefore cannot distinguish a permanent
-404 from a timeout or server failure using `indexer_failures.reason` alone.
+`indexer_failures.reason` now carries the full error chain
+(`anyhow!("{err:#}")` in `blockchain_id_resolver.rs`, rather than
+`err.to_string()`, which discarded it) and `DataApiError` is typed, so a
+permanent 404 (`Avalanche Data API returned status 404 Not Found: ...`) is
+distinguishable from a timeout or 5xx directly in the ledger. A confirmed
+missing destination (`message == "Blockchain not found"`) no longer reaches
+`indexer_failures` at all on the outbound path — it is classified as
+`Resolution::Unresolved` and persisted as data (ADR-010); only unrecognized
+Data API errors remain in the ledger.
 
 Deleting the singleton rows manually would report false completion and skip
 the intended handling of those messages. Deploy permanent-error classification

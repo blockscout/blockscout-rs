@@ -396,6 +396,40 @@ and explicitly defer partial message identities before projection.
 
 ---
 
+## Avalanche Data API Has Two Indistinguishable 404 Shapes
+
+**Symptom:** A blockchain ID that genuinely does not exist and a blockchain
+ID request hitting a mistyped or moved Data API path both return HTTP 404
+with `Content-Type: application/json` and an identical top-level
+`"error":"Not Found"` field. Classifying by status code, or by checking the
+body for a substring like `contains("not found")`, cannot tell them apart —
+`"Cannot GET /v1/networks/mainnet/blockchains/222/yH8D7Th..."` also contains
+`"error":"Not Found"` in the same envelope shape as the real not-found body.
+
+**Root cause:** The Data API's 404 error envelope is generic
+(`{"message": ..., "error": "Not Found", "statusCode": 404}`) regardless of
+*why* the route 404'd. Only the `message` field's exact text distinguishes
+"this blockchain ID is valid but unknown to the network" (`message:
+"Blockchain not found"`) from every other 404 cause. Fixtures captured
+against the live API (2026-09-10, four request shapes: unknown blockchain,
+changed handler path, unknown network, invalid ID) are preserved as tests in
+`interchain-indexer-logic/src/avalanche_data_api.rs`.
+
+**Fix:** `classify_error_response` in `avalanche_data_api.rs` treats a 404 as
+a confirmed missing destination (`DataApiError::BlockchainNotFound`) **only**
+when the body decodes into the error envelope, `message` is a string, and it
+equals `"Blockchain not found"` after `trim()` and case-insensitive
+comparison. Every other shape — a different `message`, an unparseable body,
+HTML from a proxy, or any non-404 status — stays `DataApiError::Status` and
+remains a retryable processing error, never a resolved-as-data outcome. Do
+not weaken this comparison to a substring match; do not classify by status
+code or `Content-Type` alone. See
+[ADR-010](adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md)
+for how this feeds `BlockchainIdResolver`'s destination-path
+`Resolution::Unresolved` outcome.
+
+---
+
 ## Cross-Bridge Resolver Persistence Leaks
 
 **Symptom:** Bridge B (with `process_unknown_chains: false`) resolves a previously unknown blockchain ID on the first lookup without hitting the Avalanche Data API.

@@ -7715,6 +7715,69 @@ mod tests {
         );
     }
 
+    /// avalanche-unresolved-destinations: an unresolved-destination row
+    /// (`dst_chain_id = NULL`, otherwise a completed message) must not be
+    /// projected. This locks in existing behavior — the `is_not_null()`
+    /// filter in `project_messages_batch` already excludes it — rather than
+    /// introducing anything new; `stats/**` is unchanged by that task.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_unresolved_destination_is_not_projected() {
+        let _db = init_db("stats_projection_unresolved_destination_is_not_projected").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: Set(92070),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Completed),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(None),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92070i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+                .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        let message = crosschain_messages::Entity::find_by_id((92070i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            message.stats_processed, 0,
+            "an unresolved-destination row must not be marked processed"
+        );
+        assert_eq!(
+            stats_messages::Entity::find().count(db).await.unwrap(),
+            0,
+            "no directional stats_messages row may be created for it"
+        );
+        assert_eq!(
+            stats_messages_days::Entity::find().count(db).await.unwrap(),
+            0,
+            "no directional stats_messages_days row may be created for it"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn stats_messages_days_chain_delete_cascades() {

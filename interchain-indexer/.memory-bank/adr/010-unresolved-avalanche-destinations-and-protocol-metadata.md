@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-10
 
-**Status:** Accepted; implementation pending
+**Status:** Accepted
 
 ## Context
 
@@ -40,6 +40,19 @@ expected resource-not-found or a valid response without an EVM chain ID:
 
 Transport failures, rate limiting, server errors and unrecognised/malformed
 responses are not automatically equivalent to a missing destination.
+
+The signal that a destination is genuinely missing is the response **body**,
+not the HTTP status: a 404 for a valid-but-unknown blockchain ID and a 404
+for a mistyped API path are otherwise indistinguishable (same status, same
+`Content-Type`, same top-level `"error":"Not Found"`) — only the `message`
+text differs. Only an exact, trimmed, case-insensitive match on
+`"Blockchain not found"` is treated as a confirmed missing destination;
+everything else, including a `"Cannot GET ..."` 404, stays a processing
+error. See the fixtures captured against the live Data API (2026-09-10) in
+`interchain-indexer-logic/src/avalanche_data_api.rs`'s
+`classify_error_response` and its tests, and the
+[gotcha](../gotchas.md#avalanche-data-api-has-two-indistinguishable-404-shapes)
+for the two-404-shapes trap this classification exists to avoid.
 
 ### 2. Preserve current unresolved-source behavior
 
