@@ -80,8 +80,6 @@ fn classify_data_api_result(
 #[derive(Clone)]
 pub struct BlockchainIdResolver {
     data_api: AvalancheDataApiClient,
-    // Wired into the send handler's destination path in a later stage.
-    #[allow(dead_code)]
     network: AvalancheDataApiNetwork,
     /// Resolved mappings. Shared by both paths, no TTL — as before this
     /// task. `try_get_with` gives single-flight deduplication for
@@ -93,8 +91,6 @@ pub struct BlockchainIdResolver {
     /// shared cache would let the source path's retry return a stale
     /// negative result for the whole TTL even after the Data API recovers,
     /// which changes retry *behavior*, not just its outcome.
-    // Wired into the send handler's destination path in a later stage.
-    #[allow(dead_code)]
     unresolved: Cache<CacheKey, UnresolvedReason>,
     db: InterchainDatabase,
 }
@@ -116,8 +112,6 @@ impl BlockchainIdResolver {
 
     /// The Avalanche Data API network this resolver looks blockchain IDs up
     /// against, taken from the same settings it was built from.
-    // Wired into the send handler's destination path in a later stage.
-    #[allow(dead_code)]
     pub(crate) fn network(&self) -> AvalancheDataApiNetwork {
         self.network
     }
@@ -271,8 +265,6 @@ impl BlockchainIdResolver {
     /// TTL. That delay is harmless here: the message is already saved as
     /// data, no block is held in the failure ledger, and a later event on
     /// the same key (or a replay) re-consolidates it.
-    // Wired into the send handler's destination path in a later stage.
-    #[allow(dead_code)]
     pub(crate) async fn resolve_destination(
         &self,
         blockchain_id: &[u8],

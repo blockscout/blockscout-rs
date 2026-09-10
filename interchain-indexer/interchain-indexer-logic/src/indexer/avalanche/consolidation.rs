@@ -12,7 +12,10 @@ use itertools::Itertools;
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 use std::str::FromStr;
 
-use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
+use crate::{
+    message_buffer::{Consolidate, ConsolidatedMessage, Key},
+    protocol_metadata::ProtocolMetadata,
+};
 
 use super::{
     abi::{ITokenTransferrer, TeleporterMessage},
@@ -138,24 +141,34 @@ impl Consolidate for Message {
             None => MessageStatus::Initiated,
         };
 
-        // Collect destination chain IDs from all available events and verify consistency.
-        let destination_chain_id = [
-            self.send.as_ref().map(|s| s.destination_chain_id),
-            self.receive.as_ref().map(|r| r.destination_chain_id),
-            self.execution.as_ref().map(|e| match e {
+        // Collect destination chain IDs from all available events and verify
+        // consistency. Unlike source, "no event carries a numeric
+        // destination yet" is a legal state (an unresolved outbound send),
+        // not a reason to wait: `Err(None)` (empty iterator) and
+        // `Err(Some(mismatch))` (real disagreement) are different outcomes
+        // and must not be conflated.
+        let destination_ids: Vec<i64> = [
+            self.send.as_ref().and_then(|s| s.destination_chain_id),
+            self.receive.as_ref().and_then(|r| r.destination_chain_id),
+            self.execution.as_ref().and_then(|e| match e {
                 MessageExecutionOutcome::Succeeded(executed) => executed.destination_chain_id,
                 MessageExecutionOutcome::Failed(failed) => failed.destination_chain_id,
             }),
         ]
         .into_iter()
         .flatten()
-        .all_equal_value()
-        .map_err(|mismatch| {
-            anyhow::anyhow!(
-                "destination chain id mismatch across events: {mismatch:?} \
-                 (send/receive/execution must agree)"
-            )
-        })?;
+        .collect();
+
+        let destination_chain_id: Option<i64> =
+            match destination_ids.iter().copied().all_equal_value() {
+                Ok(id) => Some(id),
+                // Empty iterator: no event carries a numeric destination yet.
+                Err(None) => None,
+                Err(Some(mismatch)) => bail!(
+                    "destination chain id mismatch across events: {mismatch:?} \
+                     (send/receive/execution must agree)"
+                ),
+            };
 
         // Get destination-side info from receive/execution events, else fall back to send.
         let (destination_transaction_hash, last_update_timestamp) =
@@ -200,12 +213,17 @@ impl Consolidate for Message {
         // Failed messages are NOT final - they can be retried via retryMessageExecution()
         let is_final = is_execution_succeeded && is_ictt_complete;
 
-        // Build transfers from ICTT events if present.
+        // Build transfers from ICTT events if present. Gated on the
+        // consolidated destination, not `send.destination_chain_id`: the
+        // destination may become known only via receive/execution after an
+        // unresolved send, and `send` (with its ICTT facts) is exactly the
+        // buffered state that must not be dropped when that happens.
         // If transfer building fails (e.g., BigDecimal parsing), propagate the error.
         let transfers = if let Some(send) = self.send.as_ref()
             && let Some(transfer) = self.transfer.as_ref()
+            && let Some(destination_chain_id) = destination_chain_id
         {
-            vec![build_transfer(transfer, key, send)?]
+            vec![build_transfer(transfer, key, send, destination_chain_id)?]
         } else if is_source_unknown_fallback {
             // Gate B — reconstruct an incoming ICTT transfer from the ICM
             // payload. Only reachable here because `send` is guaranteed `None`
@@ -224,12 +242,25 @@ impl Consolidate for Message {
             Vec::new()
         };
 
+        // As soon as any event has contributed a numeric destination, there
+        // is nothing left to report and any previously-buffered
+        // `unresolved_destination` snapshot is stale — the merge rule at
+        // upsert time (`message_buffer/persistence.rs`) relies on this
+        // container being absent to clear it.
+        let protocol_metadata = match (destination_chain_id, &self.unresolved_destination) {
+            (None, Some(unresolved)) => ProtocolMetadata {
+                unresolved_destination: Some(unresolved.clone()),
+            }
+            .to_json_value(),
+            _ => None,
+        };
+
         let message = crosschain_messages::ActiveModel {
             id: ActiveValue::Set(key.message_id),
             bridge_id: ActiveValue::Set(key.bridge_id as i32),
             status: ActiveValue::Set(status),
             src_chain_id: ActiveValue::Set(source_data.source_chain_id.try_into()?),
-            dst_chain_id: ActiveValue::Set(destination_chain_id.into()),
+            dst_chain_id: ActiveValue::Set(destination_chain_id),
             native_id: ActiveValue::Set(Some(source_data.message_id.as_slice().to_vec())),
             init_timestamp: ActiveValue::Set(source_data.init_timestamp),
             last_update_timestamp: ActiveValue::Set(last_update_timestamp),
@@ -247,7 +278,7 @@ impl Consolidate for Message {
             ),
             payload: ActiveValue::Set(source_data.payload.map(|p| p.to_vec())),
             stats_processed: ActiveValue::Set(0),
-            protocol_metadata: ActiveValue::Set(None),
+            protocol_metadata: ActiveValue::Set(protocol_metadata),
             created_at: ActiveValue::NotSet,
             updated_at: ActiveValue::NotSet,
         };
@@ -267,9 +298,13 @@ fn build_transfer(
     transfer: &TokenTransfer,
     key: &Key,
     send: &AnnotatedEvent<super::abi::ITeleporterMessenger::SendCrossChainMessage>,
+    // The consolidated message's final destination, not necessarily
+    // `send.destination_chain_id`: it may only be known via a later
+    // receive/execution event when `send` itself carried an unresolved one.
+    destination_chain_id: i64,
 ) -> Result<crosschain_transfers::ActiveModel> {
     let token_src_chain_id = ActiveValue::Set(send.source_chain_id);
-    let token_dst_chain_id = ActiveValue::Set(send.destination_chain_id);
+    let token_dst_chain_id = ActiveValue::Set(destination_chain_id);
 
     // token_dst_address: the transferrer this hop actually delivers to.
     // `TeleporterMessage.destinationAddress` is the `ITeleporterReceiver` the
@@ -379,7 +414,9 @@ fn build_transfer(
 struct PayloadSource<'a> {
     header: &'a TeleporterMessage,
     source_chain_id: i64,
-    destination_chain_id: i64,
+    /// `None` only when `send` is the source and its destination is
+    /// unresolved. receive/execution always know it (the local chain).
+    destination_chain_id: Option<i64>,
 }
 
 fn payload_source(msg: &Message) -> Option<PayloadSource<'_>> {
@@ -414,7 +451,7 @@ fn payload_source(msg: &Message) -> Option<PayloadSource<'_>> {
 struct ClassifiedPayload<'a> {
     header: &'a TeleporterMessage,
     source_chain_id: i64,
-    destination_chain_id: i64,
+    destination_chain_id: Option<i64>,
     decoded: Result<IcttPayload, PayloadRejection>,
 }
 
@@ -591,6 +628,22 @@ fn try_reconstruct_transfer(
                 return Ok(None);
             };
 
+            // This path is only reached from consolidate()'s source-unknown
+            // fallback, driven by receive/execution events — both always
+            // carry a known destination (the local chain) — so this is
+            // unreachable in practice. The guard stays explicit rather than
+            // assumed; not a distinct metric outcome, since it never fires.
+            let Some(destination_chain_id) = classified.destination_chain_id else {
+                tracing::trace!(
+                    message_id = key.message_id,
+                    bridge_id = key.bridge_id,
+                    source_chain_id,
+                    dst_tx_hash = ?dst_tx_hash_hex,
+                    "incoming ICTT transfer not reconstructed: destination chain id unknown"
+                );
+                return Ok(None);
+            };
+
             let variant_matches = matches!(
                 (payload, transfer),
                 (IcttPayload::SingleHopSend(_), TokenTransfer::Sent(_, _))
@@ -606,7 +659,7 @@ fn try_reconstruct_transfer(
                 transfer,
                 key,
                 classified.source_chain_id,
-                classified.destination_chain_id,
+                destination_chain_id,
             )?;
 
             let outcome = if variant_matches {
@@ -704,10 +757,17 @@ mod tests {
     };
 
     use super::*;
-    use crate::indexer::avalanche::abi::{
-        ITeleporterMessenger, ITokenTransferrer, MultiHopCallMessage, MultiHopSendMessage,
-        RegisterRemoteMessage, SendTokensInput, SingleHopCallMessage, SingleHopSendMessage,
-        TeleporterFeeInfo, TeleporterMessage, TransferrerMessage,
+    use crate::{
+        avalanche_data_api::AvalancheDataApiNetwork,
+        indexer::avalanche::abi::{
+            ITeleporterMessenger, ITokenTransferrer, MultiHopCallMessage, MultiHopSendMessage,
+            RegisterRemoteMessage, SendTokensInput, SingleHopCallMessage, SingleHopSendMessage,
+            TeleporterFeeInfo, TeleporterMessage, TransferrerMessage,
+        },
+        protocol_metadata::{
+            AvalancheIcmDestination, UnresolvedDestination, UnresolvedDestinationProtocol,
+            UnresolvedReason,
+        },
     };
 
     fn addr(byte: u8) -> Address {
@@ -748,7 +808,7 @@ mod tests {
             block_number: 100,
             block_timestamp: chrono::Utc::now().naive_utc(),
             source_chain_id: 1,
-            destination_chain_id: 100,
+            destination_chain_id: Some(100),
         }
     }
 
@@ -807,7 +867,7 @@ mod tests {
             1_000,
         );
 
-        let model = build_transfer(&transfer, &key(), &send).unwrap();
+        let model = build_transfer(&transfer, &key(), &send, 100).unwrap();
 
         assert_eq!(
             dst_token_address(&model),
@@ -834,7 +894,7 @@ mod tests {
             1_000,
         );
 
-        let model = build_transfer(&transfer, &key(), &send).unwrap();
+        let model = build_transfer(&transfer, &key(), &send, 100).unwrap();
 
         assert_eq!(
             dst_token_address(&model),
@@ -896,7 +956,7 @@ mod tests {
             block_number: 200,
             block_timestamp: chrono::Utc::now().naive_utc(),
             source_chain_id,
-            destination_chain_id,
+            destination_chain_id: Some(destination_chain_id),
         }
     }
 
@@ -913,7 +973,7 @@ mod tests {
             block_number: 200,
             block_timestamp: chrono::Utc::now().naive_utc(),
             source_chain_id,
-            destination_chain_id,
+            destination_chain_id: Some(destination_chain_id),
         })
     }
 
@@ -946,7 +1006,7 @@ mod tests {
             block_number: 200,
             block_timestamp: chrono::Utc::now().naive_utc(),
             source_chain_id,
-            destination_chain_id,
+            destination_chain_id: Some(destination_chain_id),
         }))
     }
 
@@ -1312,7 +1372,8 @@ mod tests {
             send: Some(send.clone()),
             execution: Some(execution_succeeded(
                 send.source_chain_id,
-                send.destination_chain_id,
+                send.destination_chain_id
+                    .expect("destination is known in this test fixture"),
             )),
             transfer: Some(transfer),
             source_chain_is_unknown: false,
@@ -1361,7 +1422,8 @@ mod tests {
             send: Some(send.clone()),
             execution: Some(execution_succeeded(
                 send.source_chain_id,
-                send.destination_chain_id,
+                send.destination_chain_id
+                    .expect("destination is known in this test fixture"),
             )),
             transfer: Some(transfer),
             source_chain_is_unknown: false,
@@ -1544,6 +1606,254 @@ mod tests {
             consolidated.transfers.is_empty(),
             "misdecoding an arbitrary payload into a bogus transfer is a \
              correctness failure, not a cosmetic one"
+        );
+    }
+
+    // --- Unresolved destination (avalanche-unresolved-destinations) ---
+
+    fn unresolved_destination_fixture() -> UnresolvedDestination {
+        UnresolvedDestination {
+            reason: UnresolvedReason::UnknownIdentifier,
+            protocol: UnresolvedDestinationProtocol::AvalancheIcm(AvalancheIcmDestination {
+                blockchain_id: "0x02".to_string(),
+                blockchain_id_cb58: "cb58-placeholder".to_string(),
+                network: AvalancheDataApiNetwork::Mainnet,
+            }),
+        }
+    }
+
+    /// Both ICTT sides populated: source from `tokens_sent_transfer`,
+    /// destination a matching `TokensWithdrawn` — the shape a fully
+    /// completed single-hop send has by the time execution succeeds.
+    fn tokens_sent_and_withdrawn_transfer(
+        destination_token_transferrer_address: Address,
+        sender: Address,
+        recipient: Address,
+        src_token_contract: Address,
+        amount: u64,
+    ) -> TokenTransfer {
+        let TokenTransfer::Sent(src, _) = tokens_sent_transfer(
+            destination_token_transferrer_address,
+            sender,
+            recipient,
+            src_token_contract,
+            amount,
+        ) else {
+            unreachable!("tokens_sent_transfer always returns TokenTransfer::Sent")
+        };
+        TokenTransfer::Sent(
+            src,
+            Some(ITokenTransferrer::TokensWithdrawn {
+                recipient,
+                amount: U256::from(amount),
+            }),
+        )
+    }
+
+    #[test]
+    fn test_consolidate_unresolved_send_produces_null_destination_and_metadata() {
+        let icm_destination = addr(0xaa);
+        let mut send = send_event(icm_destination);
+        send.destination_chain_id = None;
+        let unresolved = unresolved_destination_fixture();
+
+        let message = Message {
+            send: Some(send),
+            unresolved_destination: Some(unresolved.clone()),
+            ..Default::default()
+        };
+
+        let consolidated = message
+            .consolidate(&key())
+            .unwrap()
+            .expect("must consolidate an unresolved send");
+
+        let m = &consolidated.message;
+        assert_eq!(set_value(&m.dst_chain_id), None);
+        assert_eq!(set_value(&m.status), MessageStatus::Initiated);
+        assert!(
+            consolidated.transfers.is_empty(),
+            "no numeric destination yet: no transfer can be built"
+        );
+        assert!(!consolidated.is_final);
+
+        let metadata_json =
+            set_value(&m.protocol_metadata).expect("unresolved destination must produce metadata");
+        let decoded =
+            ProtocolMetadata::from_json_value(Some(metadata_json)).expect("metadata must decode");
+        assert_eq!(decoded.unresolved_destination, Some(unresolved));
+    }
+
+    #[test]
+    fn test_consolidate_unresolved_send_plus_receive_with_known_destination_resolves() {
+        let icm_destination = addr(0xaa);
+        let mut send = send_event(icm_destination);
+        send.destination_chain_id = None;
+        let known_destination = 8021;
+
+        let message = Message {
+            send: Some(send.clone()),
+            receive: Some(receive_event(
+                Bytes::new(),
+                addr(0x11),
+                icm_destination,
+                send.source_chain_id,
+                known_destination,
+            )),
+            unresolved_destination: Some(unresolved_destination_fixture()),
+            ..Default::default()
+        };
+
+        let consolidated = message
+            .consolidate(&key())
+            .unwrap()
+            .expect("must consolidate once receive resolves the destination");
+
+        assert_eq!(
+            set_value(&consolidated.message.dst_chain_id),
+            Some(known_destination)
+        );
+        assert_eq!(
+            set_value(&consolidated.message.protocol_metadata),
+            None,
+            "destination is now known: metadata must be cleared, not carried over stale"
+        );
+    }
+
+    /// Regression for the "unresolved send loses its transfer" hole: if
+    /// `build_transfer` were gated on `send.destination_chain_id` instead of
+    /// the consolidated destination, a message whose destination only became
+    /// known via a later receive/execution event would keep its `send`-driven
+    /// ICTT facts stuck in the buffer forever — destination known, metadata
+    /// cleared, but no transfer ever built, and the row would go final and
+    /// leave the buffer without one.
+    #[test]
+    fn test_consolidate_late_destination_resolution_still_builds_transfer() {
+        let icm_destination = addr(0xaa);
+        let mut send = send_event(icm_destination);
+        send.destination_chain_id = None;
+        let unresolved = unresolved_destination_fixture();
+        let sent_only_transfer =
+            tokens_sent_transfer(icm_destination, addr(0x11), addr(0x22), addr(0x33), 1_000);
+
+        // Phase 1: send observed with ICTT facts, destination unresolved.
+        let unresolved_message = Message {
+            send: Some(send.clone()),
+            transfer: Some(sent_only_transfer),
+            unresolved_destination: Some(unresolved.clone()),
+            ..Default::default()
+        };
+        let consolidated = unresolved_message
+            .consolidate(&key())
+            .unwrap()
+            .expect("must consolidate an unresolved send with ICTT facts");
+        assert_eq!(set_value(&consolidated.message.dst_chain_id), None);
+        assert!(
+            consolidated.transfers.is_empty(),
+            "destination unknown: no transfer yet, even though send carries ICTT facts"
+        );
+
+        // Phase 2: same buffered `send` (still `destination_chain_id: None`),
+        // but receive/execution now supply the final destination.
+        let known_destination = 8021;
+        let completed_transfer = tokens_sent_and_withdrawn_transfer(
+            icm_destination,
+            addr(0x11),
+            addr(0x22),
+            addr(0x33),
+            1_000,
+        );
+        let resolved_message = Message {
+            send: Some(send.clone()),
+            receive: Some(receive_event(
+                Bytes::new(),
+                addr(0x11),
+                icm_destination,
+                send.source_chain_id,
+                known_destination,
+            )),
+            execution: Some(execution_succeeded(send.source_chain_id, known_destination)),
+            transfer: Some(completed_transfer),
+            unresolved_destination: Some(unresolved),
+            ..Default::default()
+        };
+
+        let consolidated = resolved_message
+            .consolidate(&key())
+            .unwrap()
+            .expect("must consolidate the resolved message");
+
+        assert_eq!(
+            set_value(&consolidated.message.dst_chain_id),
+            Some(known_destination)
+        );
+        assert_eq!(set_value(&consolidated.message.protocol_metadata), None);
+        assert_eq!(
+            consolidated.transfers.len(),
+            1,
+            "transfer must be built from send's ICTT facts using the final resolved \
+             destination, not lost because send.destination_chain_id is still None"
+        );
+        assert_eq!(
+            set_value(&consolidated.transfers[0].token_dst_chain_id),
+            known_destination,
+            "token_dst_chain_id must be the message's final destination"
+        );
+        assert!(
+            consolidated.is_final,
+            "execution succeeded and ICTT facts are complete on both sides"
+        );
+    }
+
+    #[test]
+    fn test_consolidate_known_destination_mismatch_across_events_is_still_an_error() {
+        let icm_destination = addr(0xaa);
+        let send = send_event(icm_destination); // destination_chain_id: Some(100)
+
+        let message = Message {
+            send: Some(send.clone()),
+            receive: Some(receive_event(
+                Bytes::new(),
+                addr(0x11),
+                icm_destination,
+                send.source_chain_id,
+                999,
+            )),
+            ..Default::default()
+        };
+
+        assert!(
+            message.consolidate(&key()).is_err(),
+            "send (100) and receive (999) disagreeing on a *known* destination must \
+             still be a hard error, unchanged by unresolved-destination handling"
+        );
+    }
+
+    /// A `pending_messages` row written before this task has a bare numeric
+    /// `destination_chain_id` (matches `Option<i64>`'s own `Some` shape) and
+    /// no `unresolved_destination` key at all — the field did not exist yet.
+    /// `#[serde(default)]` must still let it load.
+    #[test]
+    fn test_message_deserializes_old_pending_payload_without_unresolved_destination_field() {
+        let message = Message {
+            send: Some(send_event(addr(0xaa))),
+            ..Default::default()
+        };
+
+        let mut json = serde_json::to_value(&message).expect("message must serialize");
+        json.as_object_mut()
+            .expect("Message serializes as a JSON object")
+            .remove("unresolved_destination");
+
+        let restored: Message =
+            serde_json::from_value(json).expect("old pending payload shape must still deserialize");
+        assert_eq!(restored.unresolved_destination, None);
+        assert_eq!(
+            restored
+                .send
+                .expect("send must round-trip")
+                .destination_chain_id,
+            Some(100)
         );
     }
 }
