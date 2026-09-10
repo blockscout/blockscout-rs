@@ -113,7 +113,10 @@ impl BlockchainIdResolver {
                 Ok::<CacheValue, anyhow::Error>(chain_id)
             })
             .await
-            .map_err(|err| anyhow!(err.to_string()))
+            // `{:#}` unwraps anyhow's whole error chain into one string, so
+            // e.g. `reason` distinguishes a permanent 404 from a timeout
+            // instead of collapsing both to the same top-level context.
+            .map_err(|err| anyhow!("{err:#}"))
     }
 }
 
