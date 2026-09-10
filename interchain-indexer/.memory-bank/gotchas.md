@@ -352,6 +352,50 @@ longer silently drops failed-AMB aggregates.
 
 ---
 
+## Avalanche Peer Resolution Can Fail On The Source Side Too
+
+**Accepted scope:** [ADR-010](adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md)
+keeps `src_chain_id` NOT NULL and unresolved sources on the existing
+`indexer_failures`/replay path. The nullable-source consequences below are
+research findings, not instructions to expand the destination-metadata task.
+
+`ReceiveCrossChainMessage`, `MessageExecuted`, and `MessageExecutionFailed`
+resolve `sourceBlockchainID` through the same `BlockchainIdResolver` used for
+outbound destinations. An incoming event does not establish that the external
+Data API can supply an EVM chain ID. The observed destination is known from
+`ctx.chain_id`; the peer source can still fail resolution before `buffer.alter`.
+See `indexer/avalanche/mod.rs` and `blockchain_id_resolver.rs` under
+`interchain-indexer-logic/src/`.
+
+The current schema cannot store that partial identity: `crosschain_messages`
+has nullable destination but NOT NULL source. If source is made nullable,
+changing the entity alone is insufficient. In particular,
+`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL` in `database.rs` guards only
+`sender_address` on the source arm, while its destination arm also guards the
+chain ID. A nullable source would create a NULL-chain group unless that source
+guard is added. Message live projection and backfill likewise currently rely
+on source being non-null and only explicitly filter out NULL destinations.
+The API serializer also always builds source `ChainInfo`.
+
+These are current assumptions to revisit during a schema change, not evidence
+of existing NULL-source rows or an observed production incoming incident.
+
+The impact crosses process boundaries. `interchain-indexer-filters/src/lib.rs`
+is shared with the sibling `stats` service; its permissive arm for a bridge
+absent from configuration guards only the destination against NULL. A nullable
+source would pass that arm until an equivalent source guard is added. `stats`
+pins entity, filters, and migration to a common git revision in its Cargo.toml,
+so fixing this workspace alone does not update that consumer.
+
+The failure is not limited to reporting: message projection, canonical writes,
+pending persistence and cursor persistence share the maintenance transaction.
+If a newly allowed NULL source reaches a direction table that still requires
+both chains, the failed projection rolls back the entire flush. Startup
+backfill propagates its error too. Keep direction/token chain IDs mandatory
+and explicitly defer partial message identities before projection.
+
+---
+
 ## Cross-Bridge Resolver Persistence Leaks
 
 **Symptom:** Bridge B (with `process_unknown_chains: false`) resolves a previously unknown blockchain ID on the first lookup without hitting the Avalanche Data API.

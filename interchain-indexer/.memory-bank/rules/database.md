@@ -94,6 +94,17 @@ impl From<Config> for entity::ActiveModel {
 - Cursor marker fields must exactly match the SQL `ORDER BY` + tie-breaker fields
 - Marker decode/encode order must be stable and deterministic across pages
 
+## Protocol Metadata
+
+Per [ADR-010](../adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md),
+the planned `crosschain_messages.protocol_metadata` column and its surrounding
+types must be reusable across indexers. Use a shared extensible representation
+with typed protocol-specific payloads and explicit Read API `extra` rendering.
+In the selected destination-resolution use case, successfully resolved
+messages keep SQL NULL, not an empty JSON object, JSON null or resolved marker.
+Clear obsolete unresolved metadata when destination identity becomes known;
+do not reintroduce it from a stale snapshot. Source NOT NULL is unchanged.
+
 ## Client-Facing DB Errors
 
 - Never propagate raw DB error messages to API clients
