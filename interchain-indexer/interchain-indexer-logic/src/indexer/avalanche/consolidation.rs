@@ -247,6 +247,7 @@ impl Consolidate for Message {
             ),
             payload: ActiveValue::Set(source_data.payload.map(|p| p.to_vec())),
             stats_processed: ActiveValue::Set(0),
+            protocol_metadata: ActiveValue::Set(None),
             created_at: ActiveValue::NotSet,
             updated_at: ActiveValue::NotSet,
         };
