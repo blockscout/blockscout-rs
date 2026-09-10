@@ -18,7 +18,7 @@ FROM node:16-bullseye-slim
 WORKDIR /usr/src/
 
 RUN apt-get update && apt-get install -y chromium \
-    && npm link sol2uml@2.1 --only=production
+    && npm link sol2uml@2.5 --only=production
 
 COPY --from=build /app/target/release/visualizer-server ./
 ENTRYPOINT ["./visualizer-server"]
