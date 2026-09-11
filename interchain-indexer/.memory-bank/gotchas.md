@@ -352,6 +352,110 @@ longer silently drops failed-AMB aggregates.
 
 ---
 
+## Avalanche Peer Resolution Can Fail On The Source Side Too
+
+**Accepted scope:** [ADR-010](adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md)
+keeps `src_chain_id` NOT NULL and unresolved sources on the existing
+`indexer_failures`/replay path. The nullable-source consequences below are
+research findings, not instructions to expand the destination-metadata task.
+
+`ReceiveCrossChainMessage`, `MessageExecuted`, and `MessageExecutionFailed`
+resolve `sourceBlockchainID` through the same `BlockchainIdResolver` used for
+outbound destinations. An incoming event does not establish that the external
+Data API can supply an EVM chain ID. The observed destination is known from
+`ctx.chain_id`; the peer source can still fail resolution before `buffer.alter`.
+See `indexer/avalanche/mod.rs` and `blockchain_id_resolver.rs` under
+`interchain-indexer-logic/src/`.
+
+The current schema cannot store that partial identity: `crosschain_messages`
+has nullable destination but NOT NULL source. If source is made nullable,
+changing the entity alone is insufficient. In particular,
+`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL` in `database.rs` guards only
+`sender_address` on the source arm, while its destination arm also guards the
+chain ID. A nullable source would create a NULL-chain group unless that source
+guard is added. Message live projection and backfill likewise currently rely
+on source being non-null and only explicitly filter out NULL destinations.
+The API serializer also always builds source `ChainInfo`.
+
+These are current assumptions to revisit during a schema change, not evidence
+of existing NULL-source rows or an observed production incoming incident.
+
+The impact crosses process boundaries. `interchain-indexer-filters/src/lib.rs`
+is shared with the sibling `stats` service; its permissive arm for a bridge
+absent from configuration guards only the destination against NULL. A nullable
+source would pass that arm until an equivalent source guard is added. `stats`
+pins entity, filters, and migration to a common git revision in its Cargo.toml,
+so fixing this workspace alone does not update that consumer.
+
+The failure is not limited to reporting: message projection, canonical writes,
+pending persistence and cursor persistence share the maintenance transaction.
+If a newly allowed NULL source reaches a direction table that still requires
+both chains, the failed projection rolls back the entire flush. Startup
+backfill propagates its error too. Keep direction/token chain IDs mandatory
+and explicitly defer partial message identities before projection.
+
+---
+
+## Avalanche Data API Has Two Indistinguishable 404 Shapes
+
+**Symptom:** A blockchain ID that genuinely does not exist and a blockchain
+ID request hitting a mistyped or moved Data API path both return HTTP 404
+with `Content-Type: application/json` and an identical top-level
+`"error":"Not Found"` field. Classifying by status code, or by checking the
+body for a substring like `contains("not found")`, cannot tell them apart —
+`"Cannot GET /v1/networks/mainnet/blockchains/222/yH8D7Th..."` also contains
+`"error":"Not Found"` in the same envelope shape as the real not-found body.
+
+**Root cause:** The Data API's 404 error envelope is generic
+(`{"message": ..., "error": "Not Found", "statusCode": 404}`) regardless of
+*why* the route 404'd. Only the `message` field's exact text distinguishes
+"this blockchain ID is valid but unknown to the network" (`message:
+"Blockchain not found"`) from every other 404 cause. Fixtures captured
+against the live API (2026-09-10, four request shapes: unknown blockchain,
+changed handler path, unknown network, invalid ID) are preserved as tests in
+`interchain-indexer-logic/src/avalanche_data_api.rs`.
+
+**Fix:** `classify_error_response` in `avalanche_data_api.rs` treats a 404 as
+a confirmed missing destination (`DataApiError::BlockchainNotFound`) **only**
+when the body decodes into the error envelope, `message` is a string, and it
+equals `"Blockchain not found"` after `trim()` and case-insensitive
+comparison. Every other shape — a different `message`, an unparseable body,
+HTML from a proxy, or any non-404 status — stays `DataApiError::Status` and
+remains a retryable processing error, never a resolved-as-data outcome. Do
+not weaken this comparison to a substring match; do not classify by status
+code or `Content-Type` alone. See
+[ADR-010](adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md)
+for how this feeds `BlockchainIdResolver`'s destination-path
+`Resolution::Unresolved` outcome.
+
+---
+
+## Resolved Avalanche Mappings Must Take Precedence Over Negative Cache Entries
+
+`BlockchainIdResolver` shares its positive cache between source and destination
+lookups, while only destination lookups use the negative cache. A source lookup
+can therefore resolve an ID while its earlier negative entry is still alive.
+`resolve_destination` must check the positive cache first; otherwise it reports
+an already-known chain as unresolved until the negative TTL expires. With
+`process_unknown_chains = false`, this can incorrectly filter out sends without
+recording a failure for replay. The resolver's
+`destination_negative_cache_does_not_leak_into_source_path` test covers the
+sequence: negative destination → successful source → successful destination.
+
+---
+
+## Clamp Retry Backoff In Integer Space
+
+`failure_ledger::policy::capped_backoff_secs` computes growth in `f64`, but
+the configured cap is a `u64`. Above `2^53`, casting the cap to `f64` can
+round it upward: `9007199254740995` becomes `9007199254740996`. Clamping
+before casting back can therefore exceed the configured limit. Convert the
+computed delay to `u64` first, then apply `.min(cap_secs)`; Rust's saturating
+float-to-integer cast also handles infinite growth. The regression test
+`capped_backoff_respects_caps_above_f64_exact_integer_range` covers this.
+
+---
+
 ## Cross-Bridge Resolver Persistence Leaks
 
 **Symptom:** Bridge B (with `process_unknown_chains: false`) resolves a previously unknown blockchain ID on the first lookup without hitting the Avalanche Data API.
@@ -1989,3 +2093,33 @@ come to rest on the worst node in the pool and stay there.
 See also: *"RPC Pool Order Comes From `order`, Never From JSON Key Order"* and *"Some RPC
 Gateways Cross-Contaminate `eth_call` Responses Per Address"* — the same theme, a provider
 that answers confidently and wrongly.
+
+---
+
+## `google.protobuf.Struct` Serializes In `HashMap` Order, So Its JSON Keys Are Not Stable
+
+**Symptom:** `InterchainMessage.extra` and `IndexerStatus.extra_info` emit
+their keys in a different order on every process start. Nothing is wrong with
+the payload — the same keys and values are always there — but two responses
+from two pods are not byte-identical, and a snapshot/golden-file assertion on
+the serialized body would be flaky by construction.
+
+**Root cause:** `prost_wkt_types::Struct` is generated by prost without
+`btree_map`, so its field map is `std::collections::HashMap<String, Value>`
+(see the generated `google.protobuf.rs` in the `prost-wkt-types` build dir).
+Its hand-written `Serialize` impl iterates that map directly, and Rust's
+`HashMap` uses a per-process-random hash seed. Our own `build.rs` calls
+`.btree_map(["."])`, which is why every *other* map in this API is sorted —
+but it cannot reach inside an `extern_path`-ed well-known type.
+
+**Consequence worth knowing:** sorting a `serde_json::Value` before converting
+it into a `Struct` does nothing. `get_indexer_status`
+(`interchain-indexer-server/src/services/status.rs`) does exactly that with
+`sort_json_value` before `serde_json::from_value::<prost_wkt_types::Struct>`;
+the sort is discarded the moment the map becomes a `HashMap`.
+
+**Rule:** treat `Struct`-typed API fields as unordered JSON objects, which is
+what they are. Assert on parsed values (`body["extra"]["ns"]["field"]`), never
+on key order or on a serialized string. If a field ever genuinely needs a
+stable key order, it cannot be a `Struct` — it has to be a declared proto
+message or a `map<string, string>`, both of which `btree_map` does cover.

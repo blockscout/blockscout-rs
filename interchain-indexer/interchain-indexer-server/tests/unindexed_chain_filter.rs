@@ -45,6 +45,15 @@ async fn get_message_details_returns_hidden_row_with_flag() {
         init_timestamp: Set(Utc::now().naive_utc()),
         src_chain_id: Set(1),
         dst_chain_id: Set(None),
+        protocol_metadata: Set(Some(serde_json::json!({
+            "unresolved_destination": {
+                "reason": "Unable to resolve the destination chain",
+                "protocol": "avalanche_icm",
+                "blockchain_id": "0xaa",
+                "blockchain_id_cb58": "cb58-placeholder",
+                "network": "mainnet",
+            }
+        }))),
         ..Default::default()
     })
     .exec(conn.as_ref())
@@ -110,6 +119,11 @@ async fn get_message_details_returns_hidden_row_with_flag() {
         .find(|m| m["message_id"] == serde_json::json!(HIDDEN_MESSAGE_HEX))
         .expect("opt-in list must include the NULL-dst message");
     assert_eq!(hidden_item["has_unindexed_chain"], serde_json::json!(true));
+    assert_eq!(
+        hidden_item["extra"]["unresolved_destination"]["reason"],
+        serde_json::json!("Unable to resolve the destination chain"),
+        "the list view must render extra the same way details does; got {hidden_item}"
+    );
 }
 
 #[tokio::test]

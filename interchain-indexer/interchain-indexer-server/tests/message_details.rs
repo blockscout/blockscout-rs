@@ -21,6 +21,16 @@ use sea_orm::{ActiveValue::Set, EntityTrait, prelude::BigDecimal};
 const COLLIDING_MESSAGE_ID: i64 = 7777;
 const COLLIDING_MESSAGE_HEX: &str = "0x1e61";
 
+/// Public numeric message ID for the seeded unresolved-destination message.
+/// `9999 == 0x270f`.
+const UNRESOLVED_DESTINATION_MESSAGE_ID: i64 = 9999;
+const UNRESOLVED_DESTINATION_MESSAGE_HEX: &str = "0x270f";
+
+/// Public numeric message ID for the seeded fully-resolved message.
+/// `6666 == 0x1a0a`.
+const RESOLVED_MESSAGE_ID: i64 = 6666;
+const RESOLVED_MESSAGE_HEX: &str = "0x1a0a";
+
 /// Seeds a single numeric message ID under bridge 1 and bridge 2 with distinct
 /// transfer amounts so a wrong-bridge selection cannot pass silently.
 ///
@@ -166,5 +176,111 @@ async fn message_details_bridge_qualifier_contract() {
             .unwrap()
             .contains("invalid message_id"),
         "unexpected invalid-argument message: {body}"
+    );
+}
+
+/// A message with an unresolved Avalanche ICM destination: `dst_chain_id` is
+/// NULL and `protocol_metadata` carries the diagnostics `ProtocolMetadata`
+/// would produce. Read API must render the namespace as one nested `extra`
+/// object with exactly the five documented fields, keep `destination_chain`
+/// absent, and still report `has_unindexed_chain = true` (a NULL destination
+/// is unindexed by definition).
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn message_details_unresolved_destination_renders_extra_and_omits_destination_chain() {
+    let db = helpers::init_db(
+        "test",
+        "message_details_unresolved_destination_renders_extra_and_omits_destination_chain",
+    )
+    .await;
+    let base = helpers::init_interchain_indexer_server(db.db_url(), |x| x).await;
+    let conn = db.client();
+
+    crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+        id: Set(UNRESOLVED_DESTINATION_MESSAGE_ID),
+        bridge_id: Set(1),
+        status: Set(MessageStatus::Initiated),
+        init_timestamp: Set(Utc::now().naive_utc()),
+        src_chain_id: Set(1),
+        dst_chain_id: Set(None),
+        protocol_metadata: Set(Some(serde_json::json!({
+            "unresolved_destination": {
+                "reason": "Unable to resolve the destination chain",
+                "protocol": "avalanche_icm",
+                "blockchain_id": "0xaa",
+                "blockchain_id_cb58": "cb58-placeholder",
+                "network": "mainnet",
+            }
+        }))),
+        ..Default::default()
+    })
+    .exec(conn.as_ref())
+    .await
+    .unwrap();
+
+    let route = format!("/api/v1/interchain/messages/{UNRESOLVED_DESTINATION_MESSAGE_HEX}");
+    let details: serde_json::Value = test_server::send_get_request(&base, &route).await;
+
+    assert!(
+        details["destination_chain"].is_null(),
+        "unresolved destination must not synthesize a destination_chain; got {details}"
+    );
+    assert_eq!(details["has_unindexed_chain"], serde_json::json!(true));
+
+    let extra = details["extra"]
+        .as_object()
+        .expect("extra must be an object");
+    let keys: Vec<&str> = extra.keys().map(String::as_str).collect();
+    assert_eq!(
+        keys,
+        vec!["unresolved_destination"],
+        "extra must carry exactly the one namespace key, got {details}"
+    );
+    assert_eq!(
+        extra["unresolved_destination"],
+        serde_json::json!({
+            "reason": "Unable to resolve the destination chain",
+            "protocol": "avalanche_icm",
+            "blockchain_id": "0xaa",
+            "blockchain_id_cb58": "cb58-placeholder",
+            "network": "mainnet",
+        }),
+        "the namespace must be one nested object with the five documented \
+         fields, got {details}"
+    );
+}
+
+/// A normal, fully-resolved message must have an empty `extra` object — no
+/// resolved-marker, no leaked internal namespace.
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn message_details_resolved_message_has_empty_extra() {
+    let db = helpers::init_db("test", "message_details_resolved_message_has_empty_extra").await;
+    let base = helpers::init_interchain_indexer_server(db.db_url(), |x| x).await;
+    let conn = db.client();
+
+    crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+        id: Set(RESOLVED_MESSAGE_ID),
+        bridge_id: Set(1),
+        status: Set(MessageStatus::Initiated),
+        init_timestamp: Set(Utc::now().naive_utc()),
+        src_chain_id: Set(1),
+        dst_chain_id: Set(Some(100)),
+        ..Default::default()
+    })
+    .exec(conn.as_ref())
+    .await
+    .unwrap();
+
+    let route = format!("/api/v1/interchain/messages/{RESOLVED_MESSAGE_HEX}");
+    let details: serde_json::Value = test_server::send_get_request(&base, &route).await;
+
+    let is_empty = details["extra"]
+        .as_object()
+        .map(|m| m.is_empty())
+        .unwrap_or(true);
+    assert!(
+        is_empty,
+        "a resolved message must have empty extra; got {details}"
     );
 }

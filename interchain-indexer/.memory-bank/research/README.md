@@ -106,6 +106,9 @@ Small topics may keep some sections brief.
 - `avalanche-blockchain-id-resolution.md` - Avalanche-native blockchain ID to
   EVM chain ID resolution, runtime call sites, cache/persistence behavior, and
   current mismatches with intended semantics
+- `avalanche-unresolved-blockchain-ids.md` — production evidence and intended
+  handling for permanent unknown-direction outcomes, including adaptive retry
+  narrowing to singleton poison blocks
 - `message-lifecycle.md` — end-to-end message lifecycle: generic pipeline
   (LogStream, buffer, maintenance, checkpoints, persistence) + Avalanche as
   reference realization. Two-layer structure; future indexers get separate notes

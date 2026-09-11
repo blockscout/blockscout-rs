@@ -70,6 +70,37 @@ fn crosschain_messages_on_conflict() -> OnConflict {
         ))
     };
 
+    // Single source of truth for the resulting `dst_chain_id`, reused as
+    // both the column value and the condition the `protocol_metadata` rule
+    // below branches on — duplicating this SQL would risk the two rules
+    // silently disagreeing on whether the destination is known.
+    let dst_result_sql = format!(
+        "CASE WHEN {KEEP_TERMINAL} \
+         THEN crosschain_messages.dst_chain_id \
+         ELSE COALESCE(EXCLUDED.dst_chain_id, crosschain_messages.dst_chain_id) END"
+    );
+
+    // `unresolved_destination` diagnostics only make sense while the
+    // destination is unknown: as soon as the merged `dst_chain_id` is known,
+    // drop that namespace (merging can otherwise resurrect a stale snapshot
+    // from a late `Unresolved` observation, or leave a cleared row's
+    // diagnostics untouched). Any other namespace merges via plain `||` and
+    // is never removed — this rule is specific to `unresolved_destination`
+    // because that concept, by definition, loses meaning once identity is
+    // known. `NULLIF(..., '{{}}'::jsonb)` turns an empty merge result back
+    // into SQL NULL: an empty JSON object must never reach the column.
+    let protocol_metadata_sql = format!(
+        "NULLIF(\
+         CASE WHEN ({dst_result_sql}) IS NOT NULL \
+              THEN (COALESCE(crosschain_messages.protocol_metadata, '{{}}'::jsonb) \
+                    || COALESCE(EXCLUDED.protocol_metadata, '{{}}'::jsonb)) \
+                   - 'unresolved_destination' \
+              ELSE (COALESCE(crosschain_messages.protocol_metadata, '{{}}'::jsonb) \
+                    || COALESCE(EXCLUDED.protocol_metadata, '{{}}'::jsonb)) \
+         END, \
+         '{{}}'::jsonb)"
+    );
+
     OnConflict::columns([
         crosschain_messages::Column::Id,
         crosschain_messages::Column::BridgeId,
@@ -97,7 +128,7 @@ fn crosschain_messages_on_conflict() -> OnConflict {
     )
     .value(
         crosschain_messages::Column::DstChainId,
-        keep_existing_if_terminal("dst_chain_id"),
+        Expr::cust(dst_result_sql),
     )
     .value(
         crosschain_messages::Column::SrcTxHash,
@@ -118,6 +149,10 @@ fn crosschain_messages_on_conflict() -> OnConflict {
     .value(
         crosschain_messages::Column::Payload,
         prefer_incoming("payload"),
+    )
+    .value(
+        crosschain_messages::Column::ProtocolMetadata,
+        Expr::cust(protocol_metadata_sql),
     )
     .to_owned()
 }
@@ -491,6 +526,7 @@ mod tests {
                 recipient_address: ActiveValue::Set(Some(vec![0xCC])),
                 payload: ActiveValue::Set(None),
                 stats_processed: ActiveValue::Set(0),
+                protocol_metadata: ActiveValue::Set(None),
                 created_at: ActiveValue::NotSet,
                 updated_at: ActiveValue::NotSet,
             },
@@ -522,6 +558,7 @@ mod tests {
                 recipient_address: ActiveValue::Set(Some(vec![0xEE])),
                 payload: ActiveValue::Set(Some(vec![0xFA])),
                 stats_processed: ActiveValue::Set(0),
+                protocol_metadata: ActiveValue::Set(None),
                 created_at: ActiveValue::NotSet,
                 updated_at: ActiveValue::NotSet,
             },
@@ -872,6 +909,7 @@ mod tests {
                 recipient_address: ActiveValue::Set(Some(vec![0xEE])),
                 payload: ActiveValue::Set(Some(vec![0xFA])),
                 stats_processed: ActiveValue::Set(0),
+                protocol_metadata: ActiveValue::Set(None),
                 created_at: ActiveValue::NotSet,
                 updated_at: ActiveValue::NotSet,
             },
@@ -1067,5 +1105,152 @@ mod tests {
         assert_eq!(checkpoint.catchup_min_cursor, 1_000);
         assert_eq!(checkpoint.catchup_max_cursor, 4_500);
         assert_eq!(checkpoint.realtime_cursor, 5_500);
+    }
+
+    // --- protocol_metadata merge at upsert (avalanche-unresolved-destinations) ---
+
+    fn unresolved_meta_json(tag: &str) -> serde_json::Value {
+        serde_json::json!({
+            "unresolved_destination": {
+                "reason": "Unable to resolve the destination chain",
+                "protocol": "avalanche_icm",
+                "blockchain_id": format!("0x{tag}"),
+                "blockchain_id_cb58": tag,
+                "network": "mainnet",
+            }
+        })
+    }
+
+    /// A row shaped like a non-terminal, possibly-unresolved-destination
+    /// send: `dst_chain_id` / `protocol_metadata` are the two values under
+    /// test, everything else fixed so only the merge rule under test varies.
+    fn merge_test_row(
+        dst_chain_id: Option<i64>,
+        protocol_metadata: Option<serde_json::Value>,
+    ) -> ConsolidatedMessage {
+        ConsolidatedMessage {
+            is_final: false,
+            replace_existing: false,
+            message: crosschain_messages::ActiveModel {
+                id: ActiveValue::Set(MESSAGE_ID),
+                bridge_id: ActiveValue::Set(BRIDGE_ID),
+                status: ActiveValue::Set(MessageStatus::Initiated),
+                init_timestamp: ActiveValue::Set(ts(1_000)),
+                last_update_timestamp: ActiveValue::Set(Some(ts(1_000))),
+                src_chain_id: ActiveValue::Set(SRC_CHAIN),
+                dst_chain_id: ActiveValue::Set(dst_chain_id),
+                native_id: ActiveValue::Set(Some(vec![0xAB])),
+                src_tx_hash: ActiveValue::Set(Some(vec![0x11])),
+                dst_tx_hash: ActiveValue::Set(None),
+                sender_address: ActiveValue::Set(Some(vec![0x5E])),
+                recipient_address: ActiveValue::Set(Some(vec![0xEE])),
+                payload: ActiveValue::Set(Some(vec![0xFA])),
+                stats_processed: ActiveValue::Set(0),
+                protocol_metadata: ActiveValue::Set(protocol_metadata),
+                created_at: ActiveValue::NotSet,
+                updated_at: ActiveValue::NotSet,
+            },
+            transfers: vec![],
+            amb_confirmations: vec![],
+            amb_anomalies: vec![],
+        }
+    }
+
+    /// stored dst NULL + meta present, incoming dst NULL + meta present
+    /// (fresh) -> result is the incoming metadata: an ordinary diagnostics
+    /// refresh while the destination is still unresolved.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_both_unresolved_incoming_wins() {
+        let test_db = init_db("protocol_metadata_merge_both_unresolved_incoming_wins").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, merge_test_row(None, Some(unresolved_meta_json("aa")))).await;
+        flush(&db, merge_test_row(None, Some(unresolved_meta_json("bb")))).await;
+
+        let row = load(&db).await;
+        assert_eq!(row.dst_chain_id, None);
+        assert_eq!(row.protocol_metadata, Some(unresolved_meta_json("bb")));
+    }
+
+    /// stored dst NULL + meta present, incoming dst NULL + meta NULL ->
+    /// result is the stored metadata: a flush that carries no new
+    /// diagnostics must not erase the diagnostics already on record.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_incoming_null_keeps_stored() {
+        let test_db = init_db("protocol_metadata_merge_incoming_null_keeps_stored").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, merge_test_row(None, Some(unresolved_meta_json("aa")))).await;
+        flush(&db, merge_test_row(None, None)).await;
+
+        let row = load(&db).await;
+        assert_eq!(row.dst_chain_id, None);
+        assert_eq!(row.protocol_metadata, Some(unresolved_meta_json("aa")));
+    }
+
+    /// stored dst NULL + meta present, incoming dst known + meta NULL ->
+    /// destination resolved: metadata must be cleared to NULL, not merged.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_resolution_clears_metadata() {
+        let test_db = init_db("protocol_metadata_merge_resolution_clears_metadata").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, merge_test_row(None, Some(unresolved_meta_json("aa")))).await;
+        flush(&db, merge_test_row(Some(DST_CHAIN), None)).await;
+
+        let row = load(&db).await;
+        assert_eq!(row.dst_chain_id, Some(DST_CHAIN));
+        assert_eq!(
+            row.protocol_metadata, None,
+            "destination is now known: a resolved flush must clear metadata"
+        );
+    }
+
+    /// stored dst known + meta NULL, incoming dst NULL + meta present
+    /// (stale) -> a stale unresolved observation must neither resurrect old
+    /// diagnostics nor null out the already-known destination.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_stale_unresolved_does_not_regress() {
+        let test_db = init_db("protocol_metadata_merge_stale_unresolved_does_not_regress").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, merge_test_row(Some(DST_CHAIN), None)).await;
+        flush(&db, merge_test_row(None, Some(unresolved_meta_json("aa")))).await;
+
+        let row = load(&db).await;
+        assert_eq!(
+            row.dst_chain_id,
+            Some(DST_CHAIN),
+            "a stale NULL destination must not overwrite the already-known one"
+        );
+        assert_eq!(
+            row.protocol_metadata, None,
+            "a stale unresolved snapshot must not resurrect once destination is known"
+        );
+    }
+
+    /// stored dst NULL + meta NULL, incoming dst NULL + meta NULL -> result
+    /// stays NULL: an empty JSON object must never reach the column.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_all_null_stays_null() {
+        let test_db = init_db("protocol_metadata_merge_all_null_stays_null").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, merge_test_row(None, None)).await;
+        flush(&db, merge_test_row(None, None)).await;
+
+        let row = load(&db).await;
+        assert_eq!(row.dst_chain_id, None);
+        assert_eq!(row.protocol_metadata, None);
     }
 }

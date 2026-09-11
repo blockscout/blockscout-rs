@@ -46,17 +46,22 @@ use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
     StatsService,
     avalanche::settings::AvalancheIndexerSettings,
+    avalanche_data_api::blockchain_id_to_cb58,
     indexer::{
         failure_ledger::FailureLedger,
         range_driver::{BatchError, RangeDriver, RangeProcessor},
     },
     log_stream::LogBatch,
     message_buffer::{Key, MessageBuffer},
+    protocol_metadata::{
+        AvalancheIcmDestination, UnresolvedDestination, UnresolvedDestinationProtocol,
+        UnresolvedReason,
+    },
     secret::redact_urls,
 };
 
 use abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
-use blockchain_id_resolver::BlockchainIdResolver;
+use blockchain_id_resolver::{BlockchainIdResolver, Resolution};
 
 use types::{
     AnnotatedEvent, AnnotatedICTTSource, CallOutcome, Message, MessageExecutionOutcome,
@@ -572,21 +577,37 @@ impl CrosschainIndexer for AvalancheIndexer {
 ///    - at least one endpoint must equal `home_chain`
 fn should_process_message(
     source_chain_id: i64,
-    dest_chain_id: i64,
+    dest_chain_id: Option<i64>,
     chain_ids: &HashSet<i64>,
     process_unknown_chains: bool,
     home_chain: Option<i64>,
 ) -> bool {
     let source = chain_ids.contains(&source_chain_id);
-    let dest = chain_ids.contains(&dest_chain_id);
+    let dest = dest_chain_id.is_some_and(|id| chain_ids.contains(&id));
     let passes_chain_filter = (source && dest) || ((source || dest) && process_unknown_chains);
 
     let passes_home_chain_filter = match home_chain {
         None => true,
-        Some(chain_id) => source_chain_id == chain_id || dest_chain_id == chain_id,
+        Some(chain_id) => source_chain_id == chain_id || dest_chain_id == Some(chain_id),
     };
 
     passes_chain_filter && passes_home_chain_filter
+}
+
+/// Metric label for a destination resolution outcome. A closed set —
+/// `AVALANCHE_DESTINATION_RESOLUTION_TOTAL` documents why it must stay one.
+///
+/// Deliberately snake_case, and deliberately not
+/// `UnresolvedReason::as_str()`: that one is display text served to API
+/// clients and may be reworded, while these labels are a PromQL dimension
+/// that dashboards and alerts match on. The two are the same concept with
+/// opposite stability requirements — keep them apart.
+fn resolution_outcome_label(resolution: &Resolution) -> &'static str {
+    match resolution {
+        Resolution::Resolved(_) => "resolved",
+        Resolution::Unresolved(UnresolvedReason::UnknownIdentifier) => "unknown_identifier",
+        Resolution::Unresolved(UnresolvedReason::NoChainId) => "no_chain_id",
+    }
 }
 
 /// Extract the indexer message key from a Teleporter `messageID`.
@@ -1021,15 +1042,26 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
     let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
         .context("failed to parse message key")?;
 
+    let destination_blockchain_id: [u8; 32] = event.destinationBlockchainID.0;
     let dst_chain_hex = event.destinationBlockchainID.as_slice();
-    let dst_chain_id = ctx
+    let destination_hex = hex::encode_prefixed(dst_chain_hex);
+
+    let resolution = ctx
         .blockchain_id_resolver
-        .resolve(dst_chain_hex, ctx.process_unknown_chains)
+        .resolve_destination(dst_chain_hex, ctx.process_unknown_chains)
         .await?;
 
-    let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
+    metrics::AVALANCHE_DESTINATION_RESOLUTION_TOTAL
+        .with_label_values(&[
+            &ctx.bridge_id.to_string(),
+            resolution_outcome_label(&resolution),
+        ])
+        .inc();
 
-    let destination_chain_id = dst_chain_id;
+    let destination_chain_id = match resolution {
+        Resolution::Resolved(id) => Some(id),
+        Resolution::Unresolved(_) => None,
+    };
 
     if !should_process_message(
         ctx.chain_id,
@@ -1042,7 +1074,7 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
             message_id = %hex::encode(message_id_bytes),
             destination_blockchain_id = %destination_hex,
             source_chain_id = ctx.chain_id,
-            destination_chain_id,
+            destination_chain_id = ?destination_chain_id,
             block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
@@ -1052,6 +1084,19 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
             "skipping SendCrossChainMessage: filtered by bridge chain policy"
         );
         return Ok(());
+    }
+
+    if let Resolution::Unresolved(reason) = resolution {
+        tracing::warn!(
+            bridge_id = ctx.bridge_id,
+            source_chain_id = ctx.chain_id,
+            block_number = ctx.block_number,
+            transaction_hash = %transaction_hash,
+            destination_blockchain_id = %destination_hex,
+            network = ?ctx.blockchain_id_resolver.network(),
+            reason = ?reason,
+            "accepted send with unresolved destination"
+        );
     }
 
     let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
@@ -1084,6 +1129,21 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
                 destination_chain_id,
             });
             msg.transfer = transfer;
+            msg.unresolved_destination = match resolution {
+                Resolution::Unresolved(reason) => Some(UnresolvedDestination {
+                    reason: reason.as_str().to_owned(),
+                    protocol: UnresolvedDestinationProtocol::AvalancheIcm(
+                        AvalancheIcmDestination {
+                            blockchain_id: destination_hex.clone(),
+                            blockchain_id_cb58: blockchain_id_to_cb58(&destination_blockchain_id),
+                            network: ctx.blockchain_id_resolver.network(),
+                        },
+                    ),
+                }),
+                // Re-observing the same send with a now-resolved destination
+                // clears a stale marker directly in the buffer.
+                Resolution::Resolved(_) => None,
+            };
             Ok(())
         })
         .await?;
@@ -1096,7 +1156,7 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         log_index,
         signature = %topic0,
         destination_blockchain_id = %destination_hex,
-        destination_chain_id,
+        destination_chain_id = ?destination_chain_id,
         "processed SendCrossChainMessage"
     );
 
@@ -1124,7 +1184,7 @@ fn parse_execution_outcome_log(
                             block_number,
                             block_timestamp,
                             source_chain_id,
-                            destination_chain_id,
+                            destination_chain_id: Some(destination_chain_id),
                         })
                     }),
                 ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH => log
@@ -1138,7 +1198,7 @@ fn parse_execution_outcome_log(
                                 block_number,
                                 block_timestamp,
                                 source_chain_id,
-                                destination_chain_id,
+                                destination_chain_id: Some(destination_chain_id),
                             }
                             .into(),
                         )
@@ -1178,7 +1238,7 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
 
     if !should_process_message(
         source_chain_id,
-        ctx.chain_id,
+        Some(ctx.chain_id),
         ctx.chain_ids,
         ctx.process_unknown_chains,
         ctx.home_chain,
@@ -1244,7 +1304,7 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
                 block_number: ctx.block_number,
                 block_timestamp: ctx.block_timestamp,
                 source_chain_id,
-                destination_chain_id,
+                destination_chain_id: Some(destination_chain_id),
             });
             // Clear a source-side-less arm restored from the cold tier while
             // the kill switch was on: without this, an entry offloaded to
@@ -1304,7 +1364,7 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
 
     if !should_process_message(
         source_chain_id,
-        ctx.chain_id,
+        Some(ctx.chain_id),
         ctx.chain_ids,
         ctx.process_unknown_chains,
         ctx.home_chain,
@@ -1344,7 +1404,7 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
                 block_number: ctx.block_number,
                 block_timestamp: ctx.block_timestamp,
                 source_chain_id,
-                destination_chain_id,
+                destination_chain_id: Some(destination_chain_id),
             }));
             // Call unconditionally: parse_receiver_ictt_logs also enforces the
             // batched-receipt invariants (multiple/mismatched receiver logs in
@@ -1407,7 +1467,7 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
     if !should_process_message(
         source_chain_id,
-        ctx.chain_id,
+        Some(ctx.chain_id),
         ctx.chain_ids,
         ctx.process_unknown_chains,
         ctx.home_chain,
@@ -1448,7 +1508,7 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
                         block_number: ctx.block_number,
                         block_timestamp: ctx.block_timestamp,
                         source_chain_id,
-                        destination_chain_id,
+                        destination_chain_id: Some(destination_chain_id),
                     }
                     .into(),
                 ));
@@ -1482,15 +1542,21 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::{gate_receiver_ictt_arm, metrics, should_process_message};
-    use crate::indexer::avalanche::{abi::ITokenTransferrer, types::TokenTransfer};
+    use super::{
+        Resolution, gate_receiver_ictt_arm, metrics, resolution_outcome_label,
+        should_process_message,
+    };
+    use crate::{
+        indexer::avalanche::{abi::ITokenTransferrer, types::TokenTransfer},
+        protocol_metadata::UnresolvedReason,
+    };
     use alloy::primitives::{Address, U256};
     use rstest::rstest;
     use std::collections::HashSet;
 
     struct ShouldProcessMessageCase {
         source_chain_id: i64,
-        destination_chain_id: i64,
+        destination_chain_id: Option<i64>,
         process_unknown_chains: bool,
         home_chain: Option<i64>,
         expected: bool,
@@ -1499,128 +1565,173 @@ mod tests {
     #[rstest]
     #[case::process_unknown_false_no_home_known_to_known(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: false,
         home_chain: None,
         expected: true,
     })]
     #[case::process_unknown_false_no_home_known_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: false,
         home_chain: None,
         expected: false,
     })]
     #[case::process_unknown_false_no_home_unknown_to_known(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: false,
         home_chain: None,
         expected: false,
     })]
     #[case::process_unknown_false_no_home_unknown_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1000,
+        destination_chain_id: Some(1000),
         process_unknown_chains: false,
         home_chain: None,
         expected: false,
     })]
     #[case::process_unknown_false_home_known_and_not_home(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: false,
         home_chain: Some(1),
         expected: true,
     })]
     #[case::process_unknown_false_home_known_to_known_not_home(ShouldProcessMessageCase {
         source_chain_id: 2,
-        destination_chain_id: 3,
+        destination_chain_id: Some(3),
         process_unknown_chains: false,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_false_home_known_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: false,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_false_home_unknown_to_home(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1,
+        destination_chain_id: Some(1),
         process_unknown_chains: false,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_true_no_home_known_to_known(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: true,
         home_chain: None,
         expected: true,
     })]
     #[case::process_unknown_true_no_home_known_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: true,
         home_chain: None,
         expected: true,
     })]
     #[case::process_unknown_true_no_home_unknown_to_known(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: true,
         home_chain: None,
         expected: true,
     })]
     #[case::process_unknown_true_no_home_unknown_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1000,
+        destination_chain_id: Some(1000),
         process_unknown_chains: true,
         home_chain: None,
         expected: false,
     })]
     #[case::process_unknown_true_home_known_to_known_including_home(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: true,
     })]
     #[case::process_unknown_true_home_known_to_unknown_with_home_src(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: true,
     })]
     #[case::process_unknown_true_home_unknown_to_home(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1,
+        destination_chain_id: Some(1),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: true,
     })]
     #[case::process_unknown_true_home_known_to_known_without_home(ShouldProcessMessageCase {
         source_chain_id: 2,
-        destination_chain_id: 3,
+        destination_chain_id: Some(3),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_true_home_known_to_unknown_without_home(ShouldProcessMessageCase {
         source_chain_id: 2,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_true_home_unknown_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1000,
+        destination_chain_id: Some(1000),
         process_unknown_chains: true,
         home_chain: Some(1),
+        expected: false,
+    })]
+    // Unresolved destination (`None`) is a known-source, unknown-destination
+    // send — it must follow the exact same one-known/one-unknown policy as a
+    // numeric unknown chain id, not bypass it.
+    #[case::unresolved_destination_process_unknown_false_no_home(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: false,
+        home_chain: None,
+        expected: false,
+    })]
+    #[case::unresolved_destination_process_unknown_true_no_home(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: true,
+        home_chain: None,
+        expected: true,
+    })]
+    #[case::unresolved_destination_process_unknown_false_home_is_source(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: false,
+        home_chain: Some(1),
+        expected: false,
+    })]
+    #[case::unresolved_destination_process_unknown_true_home_is_source(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: true,
+        home_chain: Some(1),
+        expected: true,
+    })]
+    #[case::unresolved_destination_process_unknown_false_home_is_other(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: false,
+        home_chain: Some(2),
+        expected: false,
+    })]
+    #[case::unresolved_destination_process_unknown_true_home_is_other(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: true,
+        home_chain: Some(2),
         expected: false,
     })]
     fn should_process_message_cases(
@@ -1643,6 +1754,22 @@ mod tests {
                 home_chain
             ),
             expected
+        );
+    }
+
+    #[test]
+    fn resolution_outcome_label_covers_every_variant() {
+        assert_eq!(
+            resolution_outcome_label(&Resolution::Resolved(43114)),
+            "resolved"
+        );
+        assert_eq!(
+            resolution_outcome_label(&Resolution::Unresolved(UnresolvedReason::UnknownIdentifier)),
+            "unknown_identifier"
+        );
+        assert_eq!(
+            resolution_outcome_label(&Resolution::Unresolved(UnresolvedReason::NoChainId)),
+            "no_chain_id"
         );
     }
 

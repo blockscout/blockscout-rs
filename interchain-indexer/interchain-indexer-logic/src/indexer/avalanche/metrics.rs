@@ -24,4 +24,15 @@ lazy_static! {
         &["bridge_id", "outcome"],
     )
     .unwrap();
+
+    /// Destination blockchain ID resolution outcomes on the send path.
+    /// `outcome` is a closed set: `resolved`, `unknown_identifier`,
+    /// `no_chain_id`. Do not turn this into a free-form string; native ID
+    /// and tx hash do not belong in labels (cardinality).
+    pub static ref AVALANCHE_DESTINATION_RESOLUTION_TOTAL: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_avalanche_destination_resolution_total",
+        "Destination blockchain ID resolution outcomes per bridge, one increment per SendCrossChainMessage",
+        &["bridge_id", "outcome"],
+    )
+    .unwrap();
 }

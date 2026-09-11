@@ -1703,9 +1703,10 @@ definitions:
         type: string
       extra:
         type: object
-        additionalProperties:
-          type: string
-        title: additional parsed data
+        description: |-
+          Additional parsed data, keyed by concept namespace. Each value is an
+          arbitrary JSON object whose shape belongs to that namespace, so a new
+          concept is a new key rather than a new flat key prefix.
       transfers:
         type: array
         items:

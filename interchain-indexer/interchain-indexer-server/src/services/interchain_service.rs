@@ -17,12 +17,10 @@ use interchain_indexer_logic::{
     pagination::{
         ListMarker, MessagesPaginationLogic, PaginationDirection, TransfersPaginationLogic,
     },
+    protocol_metadata::ProtocolMetadata,
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 use tonic::{Request, Response, Status};
 
 use super::{
@@ -216,6 +214,17 @@ impl InterchainServiceImpl {
             message.dst_chain_id,
         );
 
+        // `extra` stays a present-but-empty object for a healthy message, as it
+        // has always been; only the namespaces a row actually carries appear
+        // inside it. A `Struct` never fails to build from a JSON object, so the
+        // fallback is the same empty object rather than a dropped field.
+        let extra = ProtocolMetadata::from_json_value(message.protocol_metadata.clone())
+            .map(|metadata| metadata.render_extra())
+            .unwrap_or_default();
+        let extra = Some(prost_wkt_types::Struct {
+            fields: serde_json::from_value(serde_json::Value::Object(extra)).unwrap_or_default(),
+        });
+
         Ok(InterchainMessage {
             bridge: self.get_bridge_info(message.bridge_id)?.into(),
             message_id: self.get_message_id_from_message(&message),
@@ -229,7 +238,7 @@ impl InterchainServiceImpl {
             receive_timestamp: message.last_update_timestamp.map(db_datetime_to_string),
             destination_transaction_hash: hex_string_opt(message.dst_tx_hash),
             payload,
-            extra: BTreeMap::new(),
+            extra,
             transfers,
             has_unindexed_chain,
         })
