@@ -1613,7 +1613,7 @@ mod tests {
 
     fn unresolved_destination_fixture() -> UnresolvedDestination {
         UnresolvedDestination {
-            reason: UnresolvedReason::UnknownIdentifier,
+            reason: UnresolvedReason::UnknownIdentifier.as_str().to_owned(),
             protocol: UnresolvedDestinationProtocol::AvalancheIcm(AvalancheIcmDestination {
                 blockchain_id: "0x02".to_string(),
                 blockchain_id_cb58: "cb58-placeholder".to_string(),

@@ -59,50 +59,43 @@ pub struct ProtocolMetadata {
 /// across bridges; everything protocol-specific lives in `protocol`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnresolvedDestination {
-    pub reason: UnresolvedReason,
+    /// Verbatim on both directions: whatever the indexer wrote is what the
+    /// Read API serves. Deliberately a `String` and not [`UnresolvedReason`]
+    /// — nothing reads this field back to branch on it (the upsert merge is
+    /// pure SQL and never parses the column), so decoding it into a closed
+    /// enum would only buy the ability to *lose* a row's diagnostics when
+    /// the wording changes. The vocabulary is constrained where it is
+    /// written, by [`UnresolvedReason::as_str`], not where it is read.
+    pub reason: String,
     #[serde(flatten)]
     pub protocol: UnresolvedDestinationProtocol,
 }
 
-/// Closed, universal set of reasons a destination failed to resolve.
+/// Closed, universal set of reasons a destination failed to resolve — the
+/// **write-side** vocabulary. Classification produces one of these; storage
+/// and serving see only the string it renders to, so this type has no serde
+/// impl and changing the wording can never fail to read an existing row.
 ///
-/// The JSON spelling of each variant is a sentence a human can read without
-/// a lookup table, because it is what `InterchainMessage.extra` hands to a
-/// client verbatim — the same text is what gets stored, so
-/// [`ProtocolMetadata`] rows read back the way they are served. Keep the
-/// wording protocol-neutral: this enum is the universal core of the concept,
-/// and every bridge that ever reuses it will be described by these same
-/// sentences.
-///
-/// Each variant also carries an `alias` for the snake_case spelling this
-/// enum shipped with, so rows written before the wording change still decode
-/// instead of silently losing their diagnostics. Any later re-wording must
-/// add its predecessor the same way.
+/// Keep the wording protocol-neutral: this is the universal core of the
+/// concept, and every bridge that reuses it will be described by these same
+/// sentences. Keep it human-readable too — the string is served verbatim to
+/// API clients, with no lookup table on their side.
 ///
 /// Not to be confused with the `outcome` label on
 /// `AVALANCHE_DESTINATION_RESOLUTION_TOTAL`, which stays snake_case: a
 /// metric label is a machine-side dimension, not display text.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnresolvedReason {
     /// The protocol registry does not know this identifier.
-    #[serde(
-        rename = "Unable to resolve the destination chain",
-        alias = "unknown_identifier"
-    )]
     UnknownIdentifier,
     /// The identifier is known to the registry, but no chain id is attached
     /// to it.
-    #[serde(
-        rename = "The destination chain has no EVM chain ID",
-        alias = "no_chain_id"
-    )]
     NoChainId,
 }
 
 impl UnresolvedReason {
-    /// The one spelling of this reason: stored in `protocol_metadata` and
-    /// served in `extra`. Kept in sync with the `serde` attributes above by
-    /// `serde_spelling_matches_as_str`.
+    /// The text written into `protocol_metadata`, and from there served in
+    /// `extra` unchanged. The only place a reason's wording is defined.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::UnknownIdentifier => "Unable to resolve the destination chain",
@@ -153,7 +146,7 @@ impl PublicMetadata for UnresolvedDestination {
 
     fn extra_value(&self) -> Value {
         let mut out = Map::new();
-        out.insert("reason".to_string(), self.reason.as_str().into());
+        out.insert("reason".to_string(), self.reason.clone().into());
         match &self.protocol {
             UnresolvedDestinationProtocol::AvalancheIcm(avalanche) => {
                 out.insert("protocol".to_string(), "avalanche_icm".into());
@@ -223,7 +216,7 @@ mod tests {
     fn sample() -> ProtocolMetadata {
         ProtocolMetadata {
             unresolved_destination: Some(UnresolvedDestination {
-                reason: UnresolvedReason::UnknownIdentifier,
+                reason: UnresolvedReason::UnknownIdentifier.as_str().to_owned(),
                 protocol: UnresolvedDestinationProtocol::AvalancheIcm(AvalancheIcmDestination {
                     blockchain_id:
                         "0x7fc93d85c6d62c5b2ac0b519c87010ea5294012d1e407030d6acd0021cac10d5"
@@ -276,36 +269,15 @@ mod tests {
         assert_eq!(extra, expected);
     }
 
-    /// The stored spelling and the served spelling are the same string by
-    /// design, so the `serde` attributes and `as_str` must never drift.
-    #[test]
-    fn serde_spelling_matches_as_str() {
-        for reason in [
-            UnresolvedReason::UnknownIdentifier,
-            UnresolvedReason::NoChainId,
-        ] {
-            assert_eq!(
-                serde_json::to_value(reason).expect("reason serializes"),
-                serde_json::json!(reason.as_str()),
-                "serde and as_str disagree for {reason:?}"
-            );
-            assert_eq!(
-                serde_json::from_value::<UnresolvedReason>(serde_json::json!(reason.as_str()))
-                    .expect("reason round-trips"),
-                reason
-            );
-        }
-    }
-
-    /// Rows written before the reasons were reworded must keep decoding —
-    /// otherwise a tolerant read turns them into missing diagnostics.
+    /// Whatever sits in the column is what `extra` serves — the reason is
+    /// never re-derived from the reading code's own vocabulary. Covers the
+    /// snake_case spelling this field shipped with, a reason a newer indexer
+    /// might write, and today's wording.
     #[rstest]
-    #[case("unknown_identifier", UnresolvedReason::UnknownIdentifier)]
-    #[case("no_chain_id", UnresolvedReason::NoChainId)]
-    fn legacy_snake_case_reason_still_decodes(
-        #[case] stored: &str,
-        #[case] expected: UnresolvedReason,
-    ) {
+    #[case("unknown_identifier")]
+    #[case("some_future_reason_this_build_never_heard_of")]
+    #[case("Unable to resolve the destination chain")]
+    fn stored_reason_is_served_verbatim(#[case] stored: &str) {
         let value = serde_json::json!({
             "unresolved_destination": {
                 "reason": stored,
@@ -319,11 +291,25 @@ mod tests {
         let unresolved = metadata
             .unresolved_destination
             .expect("namespace is present");
-        assert_eq!(unresolved.reason, expected);
+        assert_eq!(unresolved.reason, stored);
         assert_eq!(
             unresolved.extra_value()["reason"],
-            serde_json::json!(expected.as_str()),
-            "a legacy row must be served with the current wording"
+            serde_json::json!(stored),
+            "the Read API must not rewrite a stored reason"
+        );
+    }
+
+    /// The write path is where the vocabulary is constrained: every variant
+    /// renders to the sentence it is served as.
+    #[test]
+    fn every_reason_variant_renders_its_own_sentence() {
+        assert_eq!(
+            UnresolvedReason::UnknownIdentifier.as_str(),
+            "Unable to resolve the destination chain"
+        );
+        assert_eq!(
+            UnresolvedReason::NoChainId.as_str(),
+            "The destination chain has no EVM chain ID"
         );
     }
 

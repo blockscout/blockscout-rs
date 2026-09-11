@@ -1131,7 +1131,7 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
             msg.transfer = transfer;
             msg.unresolved_destination = match resolution {
                 Resolution::Unresolved(reason) => Some(UnresolvedDestination {
-                    reason,
+                    reason: reason.as_str().to_owned(),
                     protocol: UnresolvedDestinationProtocol::AvalancheIcm(
                         AvalancheIcmDestination {
                             blockchain_id: destination_hex.clone(),
