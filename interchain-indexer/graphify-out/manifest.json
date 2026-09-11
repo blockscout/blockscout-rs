@@ -300,8 +300,8 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/consolidation.rs": {
-    "mtime": 1789107620.4927313,
-    "ast_hash": "4b4ac23c682761d6110f5dd3a5583c6b",
+    "mtime": 1789123923.722689,
+    "ast_hash": "b843e39c9c66686f75848212d2beba6b",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/ictt_payload.rs": {
@@ -315,8 +315,8 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/mod.rs": {
-    "mtime": 1789120855.2916968,
-    "ast_hash": "f43397ddc123ee952290d8533cf5dfda",
+    "mtime": 1789123923.7075765,
+    "ast_hash": "341359b235c0873209b6bc26732b4e20",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/settings.rs": {
@@ -1240,7 +1240,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1789120868.740418,
+    "mtime": 1789123933.7272487,
     "ast_hash": "94e8d31b6d574e36c3586eed10d95676",
     "semantic_hash": ""
   },
@@ -1385,8 +1385,8 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/protocol_metadata.rs": {
-    "mtime": 1789120833.6837275,
-    "ast_hash": "2890a6e02c969a1a60afd7652ad2fbaa",
+    "mtime": 1789123923.6916742,
+    "ast_hash": "71d3898d870344ca51cdc1df5ed8549a",
     "semantic_hash": ""
   },
   "interchain-indexer-migration/src/m20260910_132423_add_protocol_metadata.rs": {
