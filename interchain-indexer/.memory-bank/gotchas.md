@@ -444,6 +444,18 @@ sequence: negative destination → successful source → successful destination.
 
 ---
 
+## Clamp Retry Backoff In Integer Space
+
+`failure_ledger::policy::capped_backoff_secs` computes growth in `f64`, but
+the configured cap is a `u64`. Above `2^53`, casting the cap to `f64` can
+round it upward: `9007199254740995` becomes `9007199254740996`. Clamping
+before casting back can therefore exceed the configured limit. Convert the
+computed delay to `u64` first, then apply `.min(cap_secs)`; Rust's saturating
+float-to-integer cast also handles infinite growth. The regression test
+`capped_backoff_respects_caps_above_f64_exact_integer_range` covers this.
+
+---
+
 ## Cross-Bridge Resolver Persistence Leaks
 
 **Symptom:** Bridge B (with `process_unknown_chains: false`) resolves a previously unknown blockchain ID on the first lookup without hitting the Avalanche Data API.

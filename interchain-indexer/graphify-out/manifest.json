@@ -315,8 +315,8 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/mod.rs": {
-    "mtime": 1789123923.7075765,
-    "ast_hash": "341359b235c0873209b6bc26732b4e20",
+    "mtime": 1789127209.8220387,
+    "ast_hash": "63026e56b6f776ad19b78fffabe90665",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/settings.rs": {
@@ -385,8 +385,8 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs": {
-    "mtime": 1789107971.015572,
-    "ast_hash": "3a9ac0a3f63144412c720d54eff62b62",
+    "mtime": 1789127219.5255964,
+    "ast_hash": "cf191ff68e47ac58663456b6a6eb8cd7",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/failure_ledger/settings.rs": {
@@ -1065,8 +1065,8 @@
     "semantic_hash": "3444ad3ef07802eac7c1f459868679e1"
   },
   ".memory-bank/gotchas.md": {
-    "mtime": 1789126133.00468,
-    "ast_hash": "da5496ad2372561ed8beb29d0c746d93",
+    "mtime": 1789127250.8732326,
+    "ast_hash": "d278a828a1e5798993fe116010d98dfd",
     "semantic_hash": ""
   },
   ".memory-bank/project-context.md": {

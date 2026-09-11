@@ -63,7 +63,7 @@ pub(crate) fn next_attempt_at(
 fn capped_backoff_secs(attempts: u32, base_secs: u64, cap_secs: u64) -> u64 {
     let exponent = attempts.saturating_sub(1).min(10_000) as i32;
     let backoff = base_secs as f64 * (9.0_f64 / 8.0).powi(exponent);
-    backoff.min(cap_secs as f64) as u64
+    (backoff as u64).min(cap_secs)
 }
 
 #[cfg(test)]
@@ -118,6 +118,15 @@ mod tests {
     fn capped_backoff_does_not_overflow_at_extreme_attempts() {
         let backoff = capped_backoff_secs(u32::MAX, 30, 3600);
         assert_eq!(backoff, 3600);
+    }
+
+    #[test]
+    fn capped_backoff_respects_caps_above_f64_exact_integer_range() {
+        // These caps round upward when converted to f64. Capping in
+        // floating point alone can therefore exceed the configured limit.
+        for cap_secs in [(1u64 << 53) + 3, (1u64 << 63) + 1025, u64::MAX - 1] {
+            assert_eq!(capped_backoff_secs(u32::MAX, 30, cap_secs), cap_secs);
+        }
     }
 
     #[test]

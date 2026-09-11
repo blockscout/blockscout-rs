@@ -3126,7 +3126,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_filters_src_lib_chainbridgefilter",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "chainbridgefilter"
     },
     {
@@ -3137,7 +3137,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_filters_src_lib_rs_option",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "option"
     },
     {
@@ -3148,7 +3148,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_filters_src_lib_rs_vec",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "vec"
     },
     {
@@ -4006,7 +4006,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_bridgedtokenaggdbrow",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "bridgedtokenaggdbrow"
     },
     {
@@ -4016,8 +4016,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_rs_option",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 18,
+      "community_name": "bridged_tokens_query.rs",
       "norm_label": "option"
     },
     {
@@ -4028,7 +4028,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_rs_string",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "string"
     },
     {
@@ -4039,7 +4039,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_bridgedtokenaggdbrow_marker",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": ".marker()"
     },
     {
@@ -4049,8 +4049,8 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_bridgedtokenlinkenriched",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 18,
+      "community_name": "bridged_tokens_query.rs",
       "norm_label": "bridgedtokenlinkenriched"
     },
     {
@@ -4060,8 +4060,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_rs_vec",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 18,
+      "community_name": "bridged_tokens_query.rs",
       "norm_label": "vec"
     },
     {
@@ -4072,7 +4072,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_forward_order_clause",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "forward_order_clause()"
     },
     {
@@ -4083,7 +4083,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_inverse_order_clause",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "inverse_order_clause()"
     },
     {
@@ -4094,7 +4094,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_count_column",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "count_column()"
     },
     {
@@ -4105,7 +4105,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_cursor_where_next",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "cursor_where_next()"
     },
     {
@@ -4116,7 +4116,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_rs_value",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "value"
     },
     {
@@ -4127,7 +4127,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_cursor_where_prev",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "cursor_where_prev()"
     },
     {
@@ -4138,7 +4138,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_bridged_tokens_query_build_pagination_from_bridged_tokens",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "build_pagination_from_bridged_tokens()"
     },
     {
@@ -5072,8 +5072,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaintotalcounters",
-      "community": 250,
-      "community_name": "JoinedTransfer",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "interchaintotalcounters"
     },
     {
@@ -5083,8 +5083,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_rs_naivedatetime",
-      "community": 250,
-      "community_name": "JoinedTransfer",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "naivedatetime"
     },
     {
@@ -5116,8 +5116,8 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_messagepathstatsrow",
-      "community": 24,
-      "community_name": "StatsService",
+      "community": 20,
+      "community_name": ".new",
       "norm_label": "messagepathstatsrow"
     },
     {
@@ -5127,8 +5127,8 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_joinedtransfer",
-      "community": 250,
-      "community_name": "JoinedTransfer",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "joinedtransfer"
     },
     {
@@ -5149,8 +5149,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_rs_bigdecimal",
-      "community": 250,
-      "community_name": "JoinedTransfer",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "bigdecimal"
     },
     {
@@ -5160,8 +5160,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_rs_decimal",
-      "community": 250,
-      "community_name": "JoinedTransfer",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "decimal"
     },
     {
@@ -5215,8 +5215,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_rs_rwlock",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 7,
+      "community_name": "init_db",
       "norm_label": "rwlock"
     },
     {
@@ -5248,8 +5248,8 @@
       "source_location": "L187",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_bridgechainusercountrow",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 7,
+      "community_name": "init_db",
       "norm_label": "bridgechainusercountrow"
     },
     {
@@ -5424,7 +5424,7 @@
       "source_location": "L754",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_new",
-      "community": 3,
+      "community": 20,
       "community_name": ".new",
       "norm_label": ".new()"
     },
@@ -5435,7 +5435,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_rs_self",
-      "community": 3,
+      "community": 20,
       "community_name": ".new",
       "norm_label": "self"
     },
@@ -5447,7 +5447,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_upsert_chains",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": ".upsert_chains()"
     },
     {
@@ -5633,8 +5633,8 @@
       "source_location": "L1203",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_create_or_update_stats_asset_edge",
-      "community": 20,
-      "community_name": ".upsert_chains",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": ".create_or_update_stats_asset_edge()"
     },
     {
@@ -5678,7 +5678,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_create_or_update_stats_messages",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": ".create_or_update_stats_messages()"
     },
     {
@@ -5688,8 +5688,8 @@
       "source_location": "L1597",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_stats_messages_row",
-      "community": 20,
-      "community_name": ".upsert_chains",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": ".get_stats_messages_row()"
     },
     {
@@ -5700,7 +5700,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_outgoing_message_paths",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": ".get_outgoing_message_paths()"
     },
     {
@@ -5711,7 +5711,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_incoming_message_paths",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": ".get_incoming_message_paths()"
     },
     {
@@ -5743,8 +5743,8 @@
       "source_location": "L1751",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_increment_message_stats_processed",
-      "community": 3,
-      "community_name": ".new",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": ".increment_message_stats_processed()"
     },
     {
@@ -5832,7 +5832,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_crosschain_messages",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": ".get_crosschain_messages()"
     },
     {
@@ -5854,7 +5854,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_crosschain_transfers",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": ".get_crosschain_transfers()"
     },
     {
@@ -6008,7 +6008,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_total_counters",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": ".get_total_counters()"
     },
     {
@@ -6019,7 +6019,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_get_daily_counters",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": ".get_daily_counters()"
     },
     {
@@ -6073,8 +6073,8 @@
       "source_location": "L3679",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_interchaindatabase_list_bridged_token_stats_for_chain",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": ".list_bridged_token_stats_for_chain()"
     },
     {
@@ -6106,8 +6106,8 @@
       "source_location": "L3753",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_build_pagination_from_messages",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "build_pagination_from_messages()"
     },
     {
@@ -6117,8 +6117,8 @@
       "source_location": "L3793",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_build_pagination_from_transfers",
-      "community": 250,
-      "community_name": "JoinedTransfer",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "build_pagination_from_transfers()"
     },
     {
@@ -6249,7 +6249,7 @@
       "source_location": "L4155",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_mock_db_upsert_chain",
-      "community": 3,
+      "community": 20,
       "community_name": ".new",
       "norm_label": "mock_db_upsert_chain()"
     },
@@ -6480,8 +6480,8 @@
       "source_location": "L5137",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_load_native_id_map_filters_missing_native_ids",
-      "community": 7,
-      "community_name": "init_db",
+      "community": 20,
+      "community_name": ".new",
       "norm_label": "load_native_id_map_filters_missing_native_ids()"
     },
     {
@@ -6525,7 +6525,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_counters_cover_all_filters",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "counters_cover_all_filters()"
     },
     {
@@ -6536,7 +6536,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_ids",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "message_ids()"
     },
     {
@@ -6546,8 +6546,8 @@
       "source_location": "L5514",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_transfer_ids",
-      "community": 250,
-      "community_name": "JoinedTransfer",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "transfer_ids()"
     },
     {
@@ -6558,7 +6558,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_seed_bridge_row",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "seed_bridge_row()"
     },
     {
@@ -6569,7 +6569,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_all_bridges_returns_seeded_rows_ordered",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_all_bridges_returns_seeded_rows_ordered()"
     },
     {
@@ -6580,7 +6580,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_focal_home_250_only_touching",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_focal_home_250_only_touching()"
     },
     {
@@ -6591,7 +6591,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_focal_set_1_250_only_pair",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_focal_set_1_250_only_pair()"
     },
     {
@@ -6602,7 +6602,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_focal_set_loopback_includes_100_100",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_focal_set_loopback_includes_100_100()"
     },
     {
@@ -6613,7 +6613,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_within_set_1_250_only_pair",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_within_set_1_250_only_pair()"
     },
     {
@@ -6624,7 +6624,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_null_dst_excluded_under_set_included_under_focal",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_null_dst_excluded_under_set_included_under_focal()"
     },
     {
@@ -6635,7 +6635,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_bridge_only_returns_bridge_2",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_bridge_only_returns_bridge_2()"
     },
     {
@@ -6646,7 +6646,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_full_triple_returns_matching_row",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_full_triple_returns_matching_row()"
     },
     {
@@ -6657,7 +6657,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_filtered_pagination_marker_round_trip",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_filtered_pagination_marker_round_trip()"
     },
     {
@@ -6668,7 +6668,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_transfers_focal_home_250_only_touching",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_transfers_focal_home_250_only_touching()"
     },
     {
@@ -6679,7 +6679,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_transfers_within_set_1_250_only_pair",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_transfers_within_set_1_250_only_pair()"
     },
     {
@@ -6690,7 +6690,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_transfers_bridge_only_returns_bridge_2",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_transfers_bridge_only_returns_bridge_2()"
     },
     {
@@ -6701,7 +6701,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_transfers_loopback_token_columns_included",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_transfers_loopback_token_columns_included()"
     },
     {
@@ -6712,7 +6712,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_counters_filter_parity_with_filtered_lists",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_counters_filter_parity_with_filtered_lists()"
     },
     {
@@ -6723,7 +6723,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_source_only_matches_src_column",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_source_only_matches_src_column()"
     },
     {
@@ -6734,7 +6734,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_destination_only_excludes_null_dst",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_destination_only_excludes_null_dst()"
     },
     {
@@ -6745,7 +6745,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_source_and_destination_intersect",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_source_and_destination_intersect()"
     },
     {
@@ -6756,7 +6756,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_transfers_source_and_destination_intersect",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_transfers_source_and_destination_intersect()"
     },
     {
@@ -6767,7 +6767,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_focal_plus_direction_narrows_not_replaces",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_focal_plus_direction_narrows_not_replaces()"
     },
     {
@@ -6778,7 +6778,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_get_crosschain_messages_direction_plus_bridge",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_get_crosschain_messages_direction_plus_bridge()"
     },
     {
@@ -6789,7 +6789,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_directional_filters_compose_with_tx_and_address_scopes",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_directional_filters_compose_with_tx_and_address_scopes()"
     },
     {
@@ -6800,7 +6800,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_transfers_use_own_token_chains_not_parent_message",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_transfers_use_own_token_chains_not_parent_message()"
     },
     {
@@ -6811,7 +6811,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_counters_parity_with_focal_direction_bridge_filter",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_counters_parity_with_focal_direction_bridge_filter()"
     },
     {
@@ -6822,7 +6822,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_directional_message_keyset_pagination_dense_and_newest_first",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_directional_message_keyset_pagination_dense_and_newest_first()"
     },
     {
@@ -6833,7 +6833,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_directional_transfer_keyset_pagination_dense_and_newest_first",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_directional_transfer_keyset_pagination_dense_and_newest_first()"
     },
     {
@@ -6843,8 +6843,8 @@
       "source_location": "L6252",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_migration_applies",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 7,
+      "community_name": "init_db",
       "norm_label": "stats_migration_applies()"
     },
     {
@@ -6854,8 +6854,8 @@
       "source_location": "L6265",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_asset_insert_and_get",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 20,
+      "community_name": ".new",
       "norm_label": "stats_asset_insert_and_get()"
     },
     {
@@ -6899,7 +6899,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_edge_insert_and_upsert",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "stats_edge_insert_and_upsert()"
     },
     {
@@ -6909,8 +6909,8 @@
       "source_location": "L6451",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_edge_decimals_null_and_update",
-      "community": 20,
-      "community_name": ".upsert_chains",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "stats_edge_decimals_null_and_update()"
     },
     {
@@ -6920,8 +6920,8 @@
       "source_location": "L6510",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_chains_upsert",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 20,
+      "community_name": ".new",
       "norm_label": "stats_chains_upsert()"
     },
     {
@@ -6954,7 +6954,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_transfer_stats_asset_id_null_and_set",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "transfer_stats_asset_id_null_and_set()"
     },
     {
@@ -6964,8 +6964,8 @@
       "source_location": "L7161",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_processed_seeded_messages_default_zero",
-      "community": 3,
-      "community_name": ".new",
+      "community": 7,
+      "community_name": "init_db",
       "norm_label": "stats_processed_seeded_messages_default_zero()"
     },
     {
@@ -6975,8 +6975,8 @@
       "source_location": "L7181",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_processed_seeded_transfers_default_zero",
-      "community": 3,
-      "community_name": ".new",
+      "community": 7,
+      "community_name": "init_db",
       "norm_label": "stats_processed_seeded_transfers_default_zero()"
     },
     {
@@ -6986,8 +6986,8 @@
       "source_location": "L7197",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_processed_increment_message_works",
-      "community": 3,
-      "community_name": ".new",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "stats_processed_increment_message_works()"
     },
     {
@@ -6997,8 +6997,8 @@
       "source_location": "L7226",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_processed_increment_transfer_works",
-      "community": 3,
-      "community_name": ".new",
+      "community": 7,
+      "community_name": "init_db",
       "norm_label": "stats_processed_increment_transfer_works()"
     },
     {
@@ -7008,8 +7008,8 @@
       "source_location": "L7254",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_processed_repeated_increments_increase_value",
-      "community": 3,
-      "community_name": ".new",
+      "community": 6,
+      "community_name": "InterchainDatabase",
       "norm_label": "stats_processed_repeated_increments_increase_value()"
     },
     {
@@ -7152,7 +7152,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_messages_days_chain_delete_cascades",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "stats_messages_days_chain_delete_cascades()"
     },
     {
@@ -7405,7 +7405,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_messages_insert_first_row",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "stats_messages_insert_first_row()"
     },
     {
@@ -7416,7 +7416,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_messages_upsert_increments_count",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "stats_messages_upsert_increments_count()"
     },
     {
@@ -7427,7 +7427,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_messages_reversed_direction_separate_row",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "stats_messages_reversed_direction_separate_row()"
     },
     {
@@ -7438,7 +7438,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_messages_chain_delete_cascades",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "stats_messages_chain_delete_cascades()"
     },
     {
@@ -7449,7 +7449,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_messages_migration_and_db_layer",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "stats_messages_migration_and_db_layer()"
     },
     {
@@ -7460,7 +7460,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_outgoing_all_time_reads_stats_messages",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_outgoing_all_time_reads_stats_messages()"
     },
     {
@@ -7471,7 +7471,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_incoming_all_time_reads_stats_messages",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_incoming_all_time_reads_stats_messages()"
     },
     {
@@ -7482,7 +7482,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_include_zero_outgoing_all_time_expands_known_chains",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_include_zero_outgoing_all_time_expands_known_chains()"
     },
     {
@@ -7493,7 +7493,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_include_zero_incoming_all_time_expands_known_chains",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_include_zero_incoming_all_time_expands_known_chains()"
     },
     {
@@ -7504,7 +7504,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_bounded_queries_sum_daily_rows_and_order_deterministically",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_bounded_queries_sum_daily_rows_and_order_deterministically()"
     },
     {
@@ -7515,7 +7515,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_bounded_queries_apply_open_and_half_open_ranges",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_bounded_queries_apply_open_and_half_open_ranges()"
     },
     {
@@ -7526,7 +7526,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_include_zero_bounded_queries_expand_known_chains",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_include_zero_bounded_queries_expand_known_chains()"
     },
     {
@@ -7548,7 +7548,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_outgoing_counterparty_filters_destinations",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_outgoing_counterparty_filters_destinations()"
     },
     {
@@ -7559,7 +7559,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_include_zero_counterparty_expands_requested_known_rows_only",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_include_zero_counterparty_expands_requested_known_rows_only()"
     },
     {
@@ -7570,7 +7570,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_incoming_counterparty_filters_sources",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_incoming_counterparty_filters_sources()"
     },
     {
@@ -7581,7 +7581,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_include_zero_incoming_counterparty_expands_requested_known_rows_only",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_include_zero_incoming_counterparty_expands_requested_known_rows_only()"
     },
     {
@@ -7592,7 +7592,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_include_zero_bounded_counterparty_expands_requested_known_rows_only",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_include_zero_bounded_counterparty_expands_requested_known_rows_only()"
     },
     {
@@ -7603,7 +7603,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_omit_zero_mode_keeps_stats_only_behavior",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_omit_zero_mode_keeps_stats_only_behavior()"
     },
     {
@@ -7625,7 +7625,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_sum_across_bridges_filter_and_compose_counterparty",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_sum_across_bridges_filter_and_compose_counterparty()"
     },
     {
@@ -7636,7 +7636,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_two_bridge_indexed_chains",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "two_bridge_indexed_chains()"
     },
     {
@@ -7647,7 +7647,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_default_excludes_pair_unindexed_for_its_bridge",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_default_excludes_pair_unindexed_for_its_bridge()"
     },
     {
@@ -7658,7 +7658,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_zero_chains_omits_chain_no_in_scope_bridge_indexes",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_zero_chains_omits_chain_no_in_scope_bridge_indexes()"
     },
     {
@@ -7669,7 +7669,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_zero_chains_keeps_nonzero_row_for_unlisted_chain",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_zero_chains_keeps_nonzero_row_for_unlisted_chain()"
     },
     {
@@ -7680,7 +7680,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_removed_bridge_included_present_but_empty_excluded",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_removed_bridge_included_present_but_empty_excluded()"
     },
     {
@@ -7691,7 +7691,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_empty_configured_pairs_restricts_nothing",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_empty_configured_pairs_restricts_nothing()"
     },
     {
@@ -7702,7 +7702,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_pruning_bridge_ids_disjunction_no_result_change",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_pruning_bridge_ids_disjunction_no_result_change()"
     },
     {
@@ -7713,7 +7713,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_message_paths_opt_in_returns_same_rows_until_projection_widens",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "message_paths_opt_in_returns_same_rows_until_projection_widens()"
     },
     {
@@ -7724,7 +7724,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_stats_bridge_delete_cascades_projection_rows",
       "community": 20,
-      "community_name": ".upsert_chains",
+      "community_name": ".new",
       "norm_label": "stats_bridge_delete_cascades_projection_rows()"
     },
     {
@@ -7878,7 +7878,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_seed_unindexed_chain_fixture_rows",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "seed_unindexed_chain_fixture_rows()"
     },
     {
@@ -7889,7 +7889,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_mock_indexed_chains",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "mock_indexed_chains()"
     },
     {
@@ -7900,7 +7900,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_default_filter",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "default_filter()"
     },
     {
@@ -7911,7 +7911,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_messages_default_hides_chain_not_indexed_by_own_bridge",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_messages_default_hides_chain_not_indexed_by_own_bridge()"
     },
     {
@@ -7922,7 +7922,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_messages_default_hides_null_destination",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_messages_default_hides_null_destination()"
     },
     {
@@ -7933,7 +7933,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_messages_opt_in_includes_unindexed",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_messages_opt_in_includes_unindexed()"
     },
     {
@@ -7944,7 +7944,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_transfers_default_hides_unindexed_by_own_bridge",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_transfers_default_hides_unindexed_by_own_bridge()"
     },
     {
@@ -7955,7 +7955,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_removed_bridge_rows_visible_and_unflagged",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_removed_bridge_rows_visible_and_unflagged()"
     },
     {
@@ -7966,7 +7966,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_hide_equals_flag_under_per_bridge",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_hide_equals_flag_under_per_bridge()"
     },
     {
@@ -7977,7 +7977,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_counters_parity_with_default_filtered_lists",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_counters_parity_with_default_filtered_lists()"
     },
     {
@@ -7988,7 +7988,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_reclassification_flips_only_that_bridges_rows",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_reclassification_flips_only_that_bridges_rows()"
     },
     {
@@ -7999,7 +7999,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_keyset_pagination_dense_under_indexed_filter",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_keyset_pagination_dense_under_indexed_filter()"
     },
     {
@@ -8010,7 +8010,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_empty_per_bridge_restricts_nothing",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_empty_per_bridge_restricts_nothing()"
     },
     {
@@ -8021,7 +8021,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_database_test_hide_equals_flag_covers_all_predicate_cases",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "test_hide_equals_flag_covers_all_predicate_cases()"
     },
     {
@@ -8174,8 +8174,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_error",
-      "community": 235,
-      "community_name": "ApiError",
+      "community": 87,
+      "community_name": "Status",
       "norm_label": "error.rs"
     },
     {
@@ -8185,8 +8185,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_error_apierror",
-      "community": 235,
-      "community_name": "ApiError",
+      "community": 87,
+      "community_name": "Status",
       "norm_label": "apierror"
     },
     {
@@ -8196,8 +8196,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_error_rs_string",
-      "community": 235,
-      "community_name": "ApiError",
+      "community": 87,
+      "community_name": "Status",
       "norm_label": "string"
     },
     {
@@ -8207,8 +8207,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_error_rs_error",
-      "community": 235,
-      "community_name": "ApiError",
+      "community": 87,
+      "community_name": "Status",
       "norm_label": "error"
     },
     {
@@ -8218,7 +8218,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_error_status",
-      "community": 23,
+      "community": 87,
       "community_name": "Status",
       "norm_label": "status"
     },
@@ -8229,7 +8229,7 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_error_rs_from",
-      "community": 23,
+      "community": 87,
       "community_name": "Status",
       "norm_label": "from"
     },
@@ -8240,8 +8240,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_error_status_from",
-      "community": 235,
-      "community_name": "ApiError",
+      "community": 87,
+      "community_name": "Status",
       "norm_label": ".from()"
     },
     {
@@ -8251,8 +8251,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_error_rs_self",
-      "community": 235,
-      "community_name": "ApiError",
+      "community": 87,
+      "community_name": "Status",
       "norm_label": "self"
     },
     {
@@ -8768,8 +8768,8 @@
       "source_location": "L117",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_consolidation_is_collision",
-      "community": 66,
-      "community_name": "Key",
+      "community": 22,
+      "community_name": "amb/types.rs",
       "norm_label": "is_collision()"
     },
     {
@@ -8790,8 +8790,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_consolidation_rs_duration",
-      "community": 66,
-      "community_name": "Key",
+      "community": 22,
+      "community_name": "amb/types.rs",
       "norm_label": "duration"
     },
     {
@@ -8823,8 +8823,8 @@
       "source_location": "L223",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_consolidation_build_destination_only",
-      "community": 22,
-      "community_name": "amb/types.rs",
+      "community": 66,
+      "community_name": "Key",
       "norm_label": "build_destination_only()"
     },
     {
@@ -8933,8 +8933,8 @@
       "source_location": "L411",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_consolidation_source_anomaly",
-      "community": 22,
-      "community_name": "amb/types.rs",
+      "community": 66,
+      "community_name": "Key",
       "norm_label": "source_anomaly()"
     },
     {
@@ -9989,8 +9989,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "amb/indexer.rs"
     },
     {
@@ -10011,8 +10011,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_address",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "address"
     },
     {
@@ -10099,8 +10099,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_arc",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "arc"
     },
     {
@@ -10121,8 +10121,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_b256",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "b256"
     },
     {
@@ -10209,8 +10209,8 @@
       "source_location": "L100",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_ambindexer_new",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": ".new()"
     },
     {
@@ -10220,8 +10220,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_result",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "result"
     },
     {
@@ -10231,8 +10231,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_self",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "self"
     },
     {
@@ -10253,8 +10253,8 @@
       "source_location": "L152",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_ambindexer_run",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": ".run()"
     },
     {
@@ -10275,8 +10275,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_log",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "log"
     },
     {
@@ -10319,8 +10319,8 @@
       "source_location": "L309",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_runcontext_log_filter",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": ".log_filter()"
     },
     {
@@ -10330,8 +10330,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_filter",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "filter"
     },
     {
@@ -10396,8 +10396,8 @@
       "source_location": "L342",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_ambindexer_start",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": ".start()"
     },
     {
@@ -10440,8 +10440,8 @@
       "source_location": "L499",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_signed_for_affirmation_event",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "signed_for_affirmation_event()"
     },
     {
@@ -10451,8 +10451,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_event",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "event"
     },
     {
@@ -10462,8 +10462,8 @@
       "source_location": "L514",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_registry_with_event",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "registry_with_event()"
     },
     {
@@ -10473,8 +10473,8 @@
       "source_location": "L531",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_undecodable_log",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "undecodable_log()"
     },
     {
@@ -10484,8 +10484,8 @@
       "source_location": "L544",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_mock_receipt",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "mock_receipt()"
     },
     {
@@ -10495,8 +10495,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "transactionreceipt",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "transactionreceipt"
     },
     {
@@ -10506,8 +10506,8 @@
       "source_location": "L576",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_mock_block",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "mock_block()"
     },
     {
@@ -10517,8 +10517,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_block",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "block"
     },
     {
@@ -10528,8 +10528,8 @@
       "source_location": "L596",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_ambdispatchmockservice",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "ambdispatchmockservice"
     },
     {
@@ -10539,8 +10539,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_service",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "service"
     },
     {
@@ -10550,8 +10550,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_requestpacket",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "requestpacket"
     },
     {
@@ -10561,8 +10561,8 @@
       "source_location": "L607",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_ambdispatchmockservice_poll_ready",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": ".poll_ready()"
     },
     {
@@ -10572,8 +10572,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_taskcontext",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "taskcontext"
     },
     {
@@ -10583,8 +10583,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_poll",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "poll"
     },
     {
@@ -10594,8 +10594,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_error",
-      "community": 65,
-      "community_name": "Result",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "error"
     },
     {
@@ -10605,8 +10605,8 @@
       "source_location": "L611",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_ambdispatchmockservice_call",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": ".call()"
     },
     {
@@ -10616,8 +10616,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_future",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "future"
     },
     {
@@ -10627,8 +10627,8 @@
       "source_location": "L632",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_json_response",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "json_response()"
     },
     {
@@ -10638,8 +10638,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "id",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "id"
     },
     {
@@ -10649,8 +10649,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_t",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "t"
     },
     {
@@ -10660,8 +10660,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_rs_responsepacket",
-      "community": 57,
-      "community_name": "AmbDispatchMockService",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "responsepacket"
     },
     {
@@ -10671,8 +10671,8 @@
       "source_location": "L640",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_mock_provider",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "mock_provider()"
     },
     {
@@ -10682,8 +10682,8 @@
       "source_location": "L645",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_chain_config",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "chain_config()"
     },
     {
@@ -10693,8 +10693,8 @@
       "source_location": "L664",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_run_context",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "run_context()"
     },
     {
@@ -10704,8 +10704,8 @@
       "source_location": "L695",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_amb_handler_failure_creates_indexer_failure_row_for_the_failing_block",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "amb_handler_failure_creates_indexer_failure_row_for_the_failing_block()"
     },
     {
@@ -10715,8 +10715,8 @@
       "source_location": "L770",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_indexer_repeated_amb_handler_failure_during_retry_does_not_resolve_existing_hole",
-      "community": 2,
-      "community_name": "amb/indexer.rs",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "repeated_amb_handler_failure_during_retry_does_not_resolve_existing_hole()"
     },
     {
@@ -10748,8 +10748,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "amb/settings.rs"
     },
     {
@@ -10759,8 +10759,8 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_ambindexersettings",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "ambindexersettings"
     },
     {
@@ -10770,8 +10770,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_rs_duration",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "duration"
     },
     {
@@ -10781,8 +10781,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_rs_default",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "default"
     },
     {
@@ -10792,8 +10792,8 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_ambindexersettings_default",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": ".default()"
     },
     {
@@ -10803,8 +10803,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_rs_self",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "self"
     },
     {
@@ -10814,8 +10814,8 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_default_pull_interval",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "default_pull_interval()"
     },
     {
@@ -10825,8 +10825,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_default_batch_size",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "default_batch_size()"
     },
     {
@@ -10836,8 +10836,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_default_receipt_concurrency",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "default_receipt_concurrency()"
     },
     {
@@ -10847,8 +10847,8 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_settings_default_clock_skew_tolerance",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 126,
+      "community_name": "AmbIndexer",
       "norm_label": "default_clock_skew_tolerance()"
     },
     {
@@ -10869,8 +10869,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_amb_types_direction",
-      "community": 22,
-      "community_name": "amb/types.rs",
+      "community": 66,
+      "community_name": "Key",
       "norm_label": "direction"
     },
     {
@@ -12904,8 +12904,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_option",
-      "community": 217,
-      "community_name": ".new",
+      "community": 30,
+      "community_name": "avalanche/mod.rs",
       "norm_label": "option"
     },
     {
@@ -13047,8 +13047,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_self",
-      "community": 209,
-      "community_name": "AvalancheIndexer",
+      "community": 217,
+      "community_name": ".new",
       "norm_label": "self"
     },
     {
@@ -13058,8 +13058,8 @@
       "source_location": "L214",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_avalancheindexer_clone_for_task",
-      "community": 209,
-      "community_name": "AvalancheIndexer",
+      "community": 217,
+      "community_name": ".new",
       "norm_label": ".clone_for_task()"
     },
     {
@@ -13245,8 +13245,8 @@
       "source_location": "L451",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_avalancheindexer_start",
-      "community": 209,
-      "community_name": "AvalancheIndexer",
+      "community": 217,
+      "community_name": ".new",
       "norm_label": ".start()"
     },
     {
@@ -13256,8 +13256,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_rs_error",
-      "community": 209,
-      "community_name": "AvalancheIndexer",
+      "community": 217,
+      "community_name": ".new",
       "norm_label": "error"
     },
     {
@@ -13355,8 +13355,8 @@
       "source_location": "L644",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_avalanche_mod_process_batch",
-      "community": 30,
-      "community_name": "avalanche/mod.rs",
+      "community": 217,
+      "community_name": ".new",
       "norm_label": "process_batch()"
     },
     {
@@ -15401,8 +15401,8 @@
       "source_location": "L204",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_failure_ledger_mod_record_bumps_the_epoch_after_its_write_not_only_before",
-      "community": 3,
-      "community_name": ".new",
+      "community": 7,
+      "community_name": "init_db",
       "norm_label": "record_bumps_the_epoch_after_its_write_not_only_before()"
     },
     {
@@ -15549,10 +15549,21 @@
       "norm_label": "capped_backoff_does_not_overflow_at_extreme_attempts()"
     },
     {
-      "label": "next_attempt_at_offsets_the_last_attempt_by_the_capped_backoff()",
+      "label": "capped_backoff_respects_caps_above_f64_exact_integer_range()",
       "file_type": "code",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
       "source_location": "L124",
+      "_origin": "ast",
+      "id": "interchain_indexer_logic_src_indexer_failure_ledger_policy_capped_backoff_respects_caps_above_f64_exact_integer_range",
+      "community": 25,
+      "community_name": "retry_scheduler.rs",
+      "norm_label": "capped_backoff_respects_caps_above_f64_exact_integer_range()"
+    },
+    {
+      "label": "next_attempt_at_offsets_the_last_attempt_by_the_capped_backoff()",
+      "file_type": "code",
+      "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
+      "source_location": "L133",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_offsets_the_last_attempt_by_the_capped_backoff",
       "community": 25,
@@ -15563,7 +15574,7 @@
       "label": "next_attempt_at_uses_the_base_delay_for_zero_attempts()",
       "file_type": "code",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L142",
+      "source_location": "L151",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_uses_the_base_delay_for_zero_attempts",
       "community": 25,
@@ -15574,7 +15585,7 @@
       "label": "next_attempt_at_still_lands_at_the_cap_for_a_huge_attempt_count()",
       "file_type": "code",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L157",
+      "source_location": "L166",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_still_lands_at_the_cap_for_a_huge_attempt_count",
       "community": 25,
@@ -15585,7 +15596,7 @@
       "label": "next_attempt_at_is_none_on_a_backoff_beyond_chrono_duration_bounds()",
       "file_type": "code",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L177",
+      "source_location": "L186",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_is_none_on_a_backoff_beyond_chrono_duration_bounds",
       "community": 25,
@@ -15596,7 +15607,7 @@
       "label": "next_attempt_at_is_none_when_the_timestamp_cannot_absorb_the_offset()",
       "file_type": "code",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L203",
+      "source_location": "L212",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_is_none_when_the_timestamp_cannot_absorb_the_offset",
       "community": 25,
@@ -15621,8 +15632,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_failure_ledger_settings_failureretrysettings",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 101,
+      "community_name": "failure_ledger/settings.rs",
       "norm_label": "failureretrysettings"
     },
     {
@@ -15665,8 +15676,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_failure_ledger_settings_rs_default",
-      "community": 50,
-      "community_name": "FailureRetrySettings",
+      "community": 101,
+      "community_name": "failure_ledger/settings.rs",
       "norm_label": "default"
     },
     {
@@ -16182,8 +16193,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_batcherror",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "batcherror"
     },
     {
@@ -16193,8 +16204,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_error",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "error"
     },
     {
@@ -16204,8 +16215,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_vec",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "vec"
     },
     {
@@ -16215,8 +16226,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_from",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "from"
     },
     {
@@ -16226,8 +16237,8 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_batcherror_from",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": ".from()"
     },
     {
@@ -16237,8 +16248,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_self",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 207,
+      "community_name": "Self",
       "norm_label": "self"
     },
     {
@@ -16248,8 +16259,8 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangeprocessor",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "rangeprocessor"
     },
     {
@@ -16259,8 +16270,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_send",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "send"
     },
     {
@@ -16270,8 +16281,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_sync",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "sync"
     },
     {
@@ -16281,8 +16292,8 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_attributed_ranges",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "attributed_ranges()"
     },
     {
@@ -16292,8 +16303,8 @@
       "source_location": "L74",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_with_reason",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "with_reason()"
     },
     {
@@ -16303,8 +16314,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_string",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "string"
     },
     {
@@ -16325,8 +16336,8 @@
       "source_location": "L99",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangedriver",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 207,
+      "community_name": "Self",
       "norm_label": "rangedriver"
     },
     {
@@ -16336,8 +16347,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_p",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 207,
+      "community_name": "Self",
       "norm_label": "p"
     },
     {
@@ -16347,8 +16358,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_arc",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 207,
+      "community_name": "Self",
       "norm_label": "arc"
     },
     {
@@ -16358,8 +16369,8 @@
       "source_location": "L105",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangedriver_p",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "rangedriver<p>"
     },
     {
@@ -16369,8 +16380,8 @@
       "source_location": "L106",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangedriver_p_new",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 207,
+      "community_name": "Self",
       "norm_label": ".new()"
     },
     {
@@ -16402,8 +16413,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_result",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "result"
     },
     {
@@ -16413,8 +16424,8 @@
       "source_location": "L198",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangedriver_p_handle_batch",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": ".handle_batch()"
     },
     {
@@ -16424,8 +16435,8 @@
       "source_location": "L294",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangedriver_p_retry_record",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": ".retry_record()"
     },
     {
@@ -16435,8 +16446,8 @@
       "source_location": "L322",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangedriver_p_run_retry_tick",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": ".run_retry_tick()"
     },
     {
@@ -16446,8 +16457,8 @@
       "source_location": "L335",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangedriver_p_run_retry_tick_at",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": ".run_retry_tick_at()"
     },
     {
@@ -16457,8 +16468,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_naivedatetime",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "naivedatetime"
     },
     {
@@ -16468,8 +16479,8 @@
       "source_location": "L379",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rangedriver_p_retry_chunk",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": ".retry_chunk()"
     },
     {
@@ -16479,8 +16490,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_hashmap",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "hashmap"
     },
     {
@@ -16490,8 +16501,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_option",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "option"
     },
     {
@@ -16501,8 +16512,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_dynprovider",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "dynprovider"
     },
     {
@@ -16512,8 +16523,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_ethereum",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "ethereum"
     },
     {
@@ -16523,8 +16534,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_filter",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "filter"
     },
     {
@@ -16600,8 +16611,8 @@
       "source_location": "L539",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_with_reason_pairs_every_range_with_a_clone_of_the_same_reason",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "with_reason_pairs_every_range_with_a_clone_of_the_same_reason()"
     },
     {
@@ -16611,8 +16622,8 @@
       "source_location": "L582",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mocklogsaction",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": "mocklogsaction"
     },
     {
@@ -16622,8 +16633,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_log",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "log"
     },
     {
@@ -16633,8 +16644,8 @@
       "source_location": "L596",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mocklogsservice",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "mocklogsservice"
     },
     {
@@ -16644,8 +16655,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_mutex",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "mutex"
     },
     {
@@ -16655,8 +16666,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_vecdeque",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "vecdeque"
     },
     {
@@ -16666,8 +16677,8 @@
       "source_location": "L601",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mocklogsservice_new",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 207,
+      "community_name": "Self",
       "norm_label": ".new()"
     },
     {
@@ -16677,8 +16688,8 @@
       "source_location": "L607",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mocklogsservice_push_logs",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": ".push_logs()"
     },
     {
@@ -16688,8 +16699,8 @@
       "source_location": "L611",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mocklogsservice_push_error",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": ".push_error()"
     },
     {
@@ -16699,8 +16710,8 @@
       "source_location": "L615",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mocklogsservice_push_block",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": ".push_block()"
     },
     {
@@ -16710,8 +16721,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_service",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "service"
     },
     {
@@ -16721,8 +16732,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_requestpacket",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "requestpacket"
     },
     {
@@ -16732,8 +16743,8 @@
       "source_location": "L625",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mocklogsservice_poll_ready",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": ".poll_ready()"
     },
     {
@@ -16743,8 +16754,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_taskcontext",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "taskcontext"
     },
     {
@@ -16754,8 +16765,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_poll",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "poll"
     },
     {
@@ -16765,8 +16776,8 @@
       "source_location": "L629",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mocklogsservice_call",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": ".call()"
     },
     {
@@ -16776,8 +16787,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_future",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "future"
     },
     {
@@ -16787,8 +16798,8 @@
       "source_location": "L646",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_build_logs_response",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "build_logs_response()"
     },
     {
@@ -16798,8 +16809,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_responsepacket",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 206,
+      "community_name": "MockLogsService",
       "norm_label": "responsepacket"
     },
     {
@@ -16809,8 +16820,8 @@
       "source_location": "L658",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_mock_provider",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "mock_provider()"
     },
     {
@@ -16820,8 +16831,8 @@
       "source_location": "L667",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "testrangeprocessor"
     },
     {
@@ -16831,8 +16842,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_rs_hashset",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "hashset"
     },
     {
@@ -16842,8 +16853,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "atomicusize",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "atomicusize"
     },
     {
@@ -16853,8 +16864,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "notify",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "notify"
     },
     {
@@ -16864,8 +16875,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "unboundedsender",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "unboundedsender"
     },
     {
@@ -16875,8 +16886,8 @@
       "source_location": "L698",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_new",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": ".new()"
     },
     {
@@ -16886,8 +16897,8 @@
       "source_location": "L717",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_with_provider",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": ".with_provider()"
     },
     {
@@ -16908,8 +16919,8 @@
       "source_location": "L728",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_slow_chain",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 207,
+      "community_name": "Self",
       "norm_label": ".slow_chain()"
     },
     {
@@ -16919,8 +16930,8 @@
       "source_location": "L734",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_block_chain",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 207,
+      "community_name": "Self",
       "norm_label": ".block_chain()"
     },
     {
@@ -16941,8 +16952,8 @@
       "source_location": "L750",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_bridge_id",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": ".bridge_id()"
     },
     {
@@ -16952,8 +16963,8 @@
       "source_location": "L754",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_chain_ids",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": ".chain_ids()"
     },
     {
@@ -16963,8 +16974,8 @@
       "source_location": "L758",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_provider",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": ".provider()"
     },
     {
@@ -16974,8 +16985,8 @@
       "source_location": "L763",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_log_filter",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": ".log_filter()"
     },
     {
@@ -16985,8 +16996,8 @@
       "source_location": "L768",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_batch_size",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": ".batch_size()"
     },
     {
@@ -16996,8 +17007,8 @@
       "source_location": "L772",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_testrangeprocessor_process",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 57,
+      "community_name": "BatchError",
       "norm_label": ".process()"
     },
     {
@@ -17018,8 +17029,8 @@
       "source_location": "L827",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_settings",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_settings()"
     },
     {
@@ -17029,8 +17040,8 @@
       "source_location": "L834",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_scheduler",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_scheduler()"
     },
     {
@@ -17040,8 +17051,8 @@
       "source_location": "L843",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_decision_time",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_decision_time()"
     },
     {
@@ -17139,8 +17150,8 @@
       "source_location": "L1428",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_pass_resolves_a_chunk_that_returns_zero_logs",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_pass_resolves_a_chunk_that_returns_zero_logs()"
     },
     {
@@ -17150,8 +17161,8 @@
       "source_location": "L1470",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_pass_chunking_leaves_only_the_failing_remainder",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_pass_chunking_leaves_only_the_failing_remainder()"
     },
     {
@@ -17161,8 +17172,8 @@
       "source_location": "L1524",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_pass_is_bounded_by_max_chunks_per_pass",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_pass_is_bounded_by_max_chunks_per_pass()"
     },
     {
@@ -17172,8 +17183,8 @@
       "source_location": "L1599",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_pass_fairness_reaches_chunks_beyond_a_permanently_failing_prefix",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_pass_fairness_reaches_chunks_beyond_a_permanently_failing_prefix()"
     },
     {
@@ -17183,8 +17194,8 @@
       "source_location": "L1661",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_pass_fetch_failure_re_records_the_chunk_without_escalating",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_pass_fetch_failure_re_records_the_chunk_without_escalating()"
     },
     {
@@ -17194,8 +17205,8 @@
       "source_location": "L1705",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_ticks_fetch_the_exact_adaptive_range_sequence",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_ticks_fetch_the_exact_adaptive_range_sequence()"
     },
     {
@@ -17205,8 +17216,8 @@
       "source_location": "L1748",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_missing_target_consumes_budget_without_starving_another_chain",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "missing_target_consumes_budget_without_starving_another_chain()"
     },
     {
@@ -17216,8 +17227,8 @@
       "source_location": "L1790",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_retry_tick_resolves_provider_and_filter_once_per_chain",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "retry_tick_resolves_provider_and_filter_once_per_chain()"
     },
     {
@@ -17227,8 +17238,8 @@
       "source_location": "L1827",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_cancellation_during_retry_fetch_keeps_ledger_coverage",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 48,
+      "community_name": ".new",
       "norm_label": "cancellation_during_retry_fetch_keeps_ledger_coverage()"
     },
     {
@@ -17249,8 +17260,8 @@
       "source_location": "L1915",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_replaytestmessage",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": "replaytestmessage"
     },
     {
@@ -17260,8 +17271,8 @@
       "source_location": "L1918",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_indexer_range_driver_replaytestmessage_consolidate",
-      "community": 39,
-      "community_name": "range_driver.rs",
+      "community": 2,
+      "community_name": "TestRangeProcessor",
       "norm_label": ".consolidate()"
     },
     {
@@ -17832,8 +17843,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_lib",
-      "community": 11,
-      "community_name": "Result",
+      "community": 109,
+      "community_name": "stats.rs",
       "norm_label": "interchain-indexer-logic/src/lib.rs"
     },
     {
@@ -20439,8 +20450,8 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_types_consolidate",
-      "community": 68,
-      "community_name": "Consolidate",
+      "community": 34,
+      "community_name": "BufferItem",
       "norm_label": "consolidate"
     },
     {
@@ -20450,8 +20461,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_types_rs_clone",
-      "community": 68,
-      "community_name": "Consolidate",
+      "community": 34,
+      "community_name": "BufferItem",
       "norm_label": "clone"
     },
     {
@@ -20461,8 +20472,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_types_rs_send",
-      "community": 68,
-      "community_name": "Consolidate",
+      "community": 34,
+      "community_name": "BufferItem",
       "norm_label": "send"
     },
     {
@@ -20472,8 +20483,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_message_buffer_types_rs_sync",
-      "community": 68,
-      "community_name": "Consolidate",
+      "community": 34,
+      "community_name": "BufferItem",
       "norm_label": "sync"
     },
     {
@@ -20483,8 +20494,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "serialize",
-      "community": 68,
-      "community_name": "Consolidate",
+      "community": 34,
+      "community_name": "BufferItem",
       "norm_label": "serialize"
     },
     {
@@ -20494,8 +20505,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "deserialize",
-      "community": 68,
-      "community_name": "Consolidate",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "deserialize"
     },
     {
@@ -20505,8 +20516,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "pagination.rs"
     },
     {
@@ -20538,8 +20549,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_outputpagination",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "outputpagination"
     },
     {
@@ -20560,8 +20571,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_rs_p",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 3,
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "p"
     },
     {
@@ -20615,8 +20626,8 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_paginationdirection",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "paginationdirection"
     },
     {
@@ -20670,8 +20681,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_rs_display",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "display"
     },
     {
@@ -20681,8 +20692,8 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_paginationdirection_fmt",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": ".fmt()"
     },
     {
@@ -20692,8 +20703,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_rs_formatter",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "formatter"
     },
     {
@@ -20891,7 +20902,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_bridgedtokenssortfield",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "bridgedtokenssortfield"
     },
     {
@@ -20901,8 +20912,8 @@
       "source_location": "L308",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_bridgedtokenssortfield_from_proto_sort",
-      "community": 11,
-      "community_name": "Result",
+      "community": 105,
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": ".from_proto_sort()"
     },
     {
@@ -20912,8 +20923,8 @@
       "source_location": "L322",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_statschainssortfield",
-      "community": 19,
-      "community_name": "stats_chains_query.rs",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "statschainssortfield"
     },
     {
@@ -20935,7 +20946,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_statssortorder",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "statssortorder"
     },
     {
@@ -20957,7 +20968,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_bridgedtokenspaginationlogic",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "bridgedtokenspaginationlogic"
     },
     {
@@ -21022,8 +21033,8 @@
       "source_location": "L529",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_statschainspaginationlogic",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "statschainspaginationlogic"
     },
     {
@@ -21088,8 +21099,8 @@
       "source_location": "L613",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_stats_chains_sort_wire_values_match_proto",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "stats_chains_sort_wire_values_match_proto()"
     },
     {
@@ -21099,8 +21110,8 @@
       "source_location": "L625",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_pagination_bridged_tokens_sort_wire_values_match_proto",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "bridged_tokens_sort_wire_values_match_proto()"
     },
     {
@@ -22783,7 +22794,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_settings",
       "community": 68,
-      "community_name": "Consolidate",
+      "community_name": "MessageBufferSettings",
       "norm_label": "interchain-indexer-logic/src/settings.rs"
     },
     {
@@ -22793,8 +22804,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_settings_messagebuffersettings",
-      "community": 28,
-      "community_name": "MessageBuffer",
+      "community": 68,
+      "community_name": "MessageBufferSettings",
       "norm_label": "messagebuffersettings"
     },
     {
@@ -22805,7 +22816,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_settings_rs_duration",
       "community": 68,
-      "community_name": "Consolidate",
+      "community_name": "MessageBufferSettings",
       "norm_label": "duration"
     },
     {
@@ -22816,7 +22827,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_settings_default_hot_ttl",
       "community": 68,
-      "community_name": "Consolidate",
+      "community_name": "MessageBufferSettings",
       "norm_label": "default_hot_ttl()"
     },
     {
@@ -22827,7 +22838,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_settings_default_maintenance_interval",
       "community": 68,
-      "community_name": "Consolidate",
+      "community_name": "MessageBufferSettings",
       "norm_label": "default_maintenance_interval()"
     },
     {
@@ -22837,8 +22848,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_settings_rs_default",
-      "community": 28,
-      "community_name": "MessageBuffer",
+      "community": 68,
+      "community_name": "MessageBufferSettings",
       "norm_label": "default"
     },
     {
@@ -22849,7 +22860,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_settings_messagebuffersettings_default",
       "community": 68,
-      "community_name": "Consolidate",
+      "community_name": "MessageBufferSettings",
       "norm_label": ".default()"
     },
     {
@@ -22860,7 +22871,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_settings_rs_self",
       "community": 68,
-      "community_name": "Consolidate",
+      "community_name": "MessageBufferSettings",
       "norm_label": "self"
     },
     {
@@ -22881,8 +22892,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": "indexedchains"
     },
     {
@@ -22892,8 +22903,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_hashmap",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": "hashmap"
     },
     {
@@ -22903,8 +22914,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_hashset",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": "hashset"
     },
     {
@@ -22947,8 +22958,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_vec",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": "vec"
     },
     {
@@ -22980,8 +22991,8 @@
       "source_location": "L94",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_may_observe",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".may_observe()"
     },
     {
@@ -22991,8 +23002,8 @@
       "source_location": "L104",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_bridge_count",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".bridge_count()"
     },
     {
@@ -23002,8 +23013,8 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_pair_count",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".pair_count()"
     },
     {
@@ -23013,8 +23024,8 @@
       "source_location": "L121",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_is_empty_config",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".is_empty_config()"
     },
     {
@@ -23024,8 +23035,8 @@
       "source_location": "L128",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_bridge_chain_counts",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".bridge_chain_counts()"
     },
     {
@@ -23035,8 +23046,8 @@
       "source_location": "L138",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_record_metrics",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".record_metrics()"
     },
     {
@@ -23046,8 +23057,8 @@
       "source_location": "L161",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_configured_pairs",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".configured_pairs()"
     },
     {
@@ -23057,8 +23068,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_option",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": "option"
     },
     {
@@ -23068,8 +23079,8 @@
       "source_location": "L196",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_chain_ids_for",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".chain_ids_for()"
     },
     {
@@ -23079,8 +23090,8 @@
       "source_location": "L216",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_configured_union",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".configured_union()"
     },
     {
@@ -23090,8 +23101,8 @@
       "source_location": "L250",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_selected_configured_union",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".selected_configured_union()"
     },
     {
@@ -23101,8 +23112,8 @@
       "source_location": "L274",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_configured_overlaps",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".configured_overlaps()"
     },
     {
@@ -23112,8 +23123,8 @@
       "source_location": "L302",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_message_has_unindexed",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".message_has_unindexed()"
     },
     {
@@ -23123,8 +23134,8 @@
       "source_location": "L307",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_indexedchains_transfer_has_unindexed",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 50,
+      "community_name": "IndexedChains",
       "norm_label": ".transfer_has_unindexed()"
     },
     {
@@ -23134,8 +23145,8 @@
       "source_location": "L318",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_chain_unindexed_condition",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "chain_unindexed_condition()"
     },
     {
@@ -23145,8 +23156,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "intocolumnref",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "intocolumnref"
     },
     {
@@ -23156,8 +23167,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_clone",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "clone"
     },
     {
@@ -23167,8 +23178,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_condition",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "condition"
     },
     {
@@ -23178,8 +23189,8 @@
       "source_location": "L367",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_message_countable_condition",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "message_countable_condition()"
     },
     {
@@ -23189,8 +23200,8 @@
       "source_location": "L385",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_transfer_identity_ready_condition",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "transfer_identity_ready_condition()"
     },
     {
@@ -23200,8 +23211,8 @@
       "source_location": "L436",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_render",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "render()"
     },
     {
@@ -23211,8 +23222,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_rs_string",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "string"
     },
     {
@@ -23299,8 +23310,8 @@
       "source_location": "L506",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_cols",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "cols()"
     },
     {
@@ -23310,8 +23321,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "entity",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "entity"
     },
     {
@@ -23321,8 +23332,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "column",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "column"
     },
     {
@@ -23332,8 +23343,8 @@
       "source_location": "L523",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_all_indexed_renders_false",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_all_indexed_renders_false()"
     },
     {
@@ -23343,8 +23354,8 @@
       "source_location": "L534",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_zero_bridges_renders_false",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_zero_bridges_renders_false()"
     },
     {
@@ -23354,8 +23365,8 @@
       "source_location": "L545",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_absent_bridge_renders_no_disjunct",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_absent_bridge_renders_no_disjunct()"
     },
     {
@@ -23365,8 +23376,8 @@
       "source_location": "L561",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_present_but_empty_renders_bare_bridge_eq",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_present_but_empty_renders_bare_bridge_eq()"
     },
     {
@@ -23376,8 +23387,8 @@
       "source_location": "L574",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_indexed_chains_test_chain_unindexed_condition_per_bridge_renders_not_in",
-      "community": 5,
-      "community_name": "indexed_chains.rs",
+      "community": 54,
+      "community_name": "chain_unindexed_condition",
       "norm_label": "test_chain_unindexed_condition_per_bridge_renders_not_in()"
     },
     {
@@ -23718,7 +23729,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "list_query.rs"
     },
     {
@@ -23729,7 +23740,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query_statslistquery",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "statslistquery"
     },
     {
@@ -23740,7 +23751,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query_rs_s",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "s"
     },
     {
@@ -23751,7 +23762,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query_rs_option",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "option"
     },
     {
@@ -23762,7 +23773,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_list_query_rs_p",
       "community": 105,
-      "community_name": "pagination.rs",
+      "community_name": "BridgedTokensPaginationLogic",
       "norm_label": "p"
     },
     {
@@ -24432,8 +24443,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_bridgedtokenlistrow",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 24,
+      "community_name": "StatsService",
       "norm_label": "bridgedtokenlistrow"
     },
     {
@@ -24641,8 +24652,8 @@
       "source_location": "L160",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsservice_recompute_stats_chains",
-      "community": 6,
-      "community_name": "InterchainDatabase",
+      "community": 24,
+      "community_name": "StatsService",
       "norm_label": ".recompute_stats_chains()"
     },
     {
@@ -24696,8 +24707,8 @@
       "source_location": "L221",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_service_statsservice_get_bridged_tokens_for_chain",
-      "community": 105,
-      "community_name": "pagination.rs",
+      "community": 24,
+      "community_name": "StatsService",
       "norm_label": ".get_bridged_tokens_for_chain()"
     },
     {
@@ -24784,8 +24795,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_statschainlistrow",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "statschainlistrow"
     },
     {
@@ -24795,8 +24806,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_rs_string",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 19,
+      "community_name": "stats_chains_query.rs",
       "norm_label": "string"
     },
     {
@@ -24806,8 +24817,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_rs_option",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "option"
     },
     {
@@ -24817,8 +24828,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_statschainlistrow_marker",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": ".marker()"
     },
     {
@@ -24850,8 +24861,8 @@
       "source_location": "L48",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_cursor_where_next",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 19,
+      "community_name": "stats_chains_query.rs",
       "norm_label": "cursor_where_next()"
     },
     {
@@ -24861,8 +24872,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_rs_vec",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 19,
+      "community_name": "stats_chains_query.rs",
       "norm_label": "vec"
     },
     {
@@ -24872,8 +24883,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_rs_value",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 19,
+      "community_name": "stats_chains_query.rs",
       "norm_label": "value"
     },
     {
@@ -24883,8 +24894,8 @@
       "source_location": "L74",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_cursor_where_prev",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 19,
+      "community_name": "stats_chains_query.rs",
       "norm_label": "cursor_where_prev()"
     },
     {
@@ -24894,8 +24905,8 @@
       "source_location": "L100",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_build_pagination",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 11,
+      "community_name": "Result",
       "norm_label": "build_pagination()"
     },
     {
@@ -24916,8 +24927,8 @@
       "source_location": "L151",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_build_bridge_scope_join",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 19,
+      "community_name": "stats_chains_query.rs",
       "norm_label": "build_bridge_scope_join()"
     },
     {
@@ -25235,8 +25246,8 @@
       "source_location": "L1207",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_test_bridge_scope_join_contiguous_with_predicate_appended_after",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 19,
+      "community_name": "stats_chains_query.rs",
       "norm_label": "test_bridge_scope_join_contiguous_with_predicate_appended_after()"
     },
     {
@@ -25246,8 +25257,8 @@
       "source_location": "L1230",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_stats_chains_query_test_bridge_scope_join_empty_configured_chain_ids_renders_activity_only",
-      "community": 48,
-      "community_name": "PaginationDirection",
+      "community": 19,
+      "community_name": "stats_chains_query.rs",
       "norm_label": "test_bridge_scope_join_empty_configured_chain_ids_renders_activity_only()"
     },
     {
@@ -25357,7 +25368,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_test_utils_mock_db",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "mock_db.rs"
     },
     {
@@ -25368,7 +25379,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_test_utils_mock_db_mock_base_ts",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "mock_base_ts()"
     },
     {
@@ -25379,7 +25390,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_test_utils_mock_db_rs_naivedatetime",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "naivedatetime"
     },
     {
@@ -25390,7 +25401,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_test_utils_mock_db_mock_init_ts",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "mock_init_ts()"
     },
     {
@@ -25401,7 +25412,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_test_utils_mock_db_fill_mock_interchain_database",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "fill_mock_interchain_database()"
     },
     {
@@ -25412,7 +25423,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_test_utils_mock_db_rs_databaseconnection",
       "community": 3,
-      "community_name": ".new",
+      "community_name": "fill_mock_interchain_database",
       "norm_label": "databaseconnection"
     },
     {
@@ -26401,8 +26412,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "token_info/settings.rs"
     },
     {
@@ -26412,8 +26423,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_blockscouttokeninfoclientsettings",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "blockscouttokeninfoclientsettings"
     },
     {
@@ -26423,8 +26434,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_option",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "option"
     },
     {
@@ -26434,8 +26445,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_string",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "string"
     },
     {
@@ -26445,8 +26456,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_vec",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "vec"
     },
     {
@@ -26456,8 +26467,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_duration",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "duration"
     },
     {
@@ -26467,8 +26478,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_default_ignore_chains",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "default_ignore_chains()"
     },
     {
@@ -26478,8 +26489,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_default_icon_retry_interval",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "default_icon_retry_interval()"
     },
     {
@@ -26489,8 +26500,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_default",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "default"
     },
     {
@@ -26500,8 +26511,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_blockscouttokeninfoclientsettings_default",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": ".default()"
     },
     {
@@ -26511,8 +26522,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_rs_self",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "self"
     },
     {
@@ -26522,8 +26533,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_tokeninfoservicesettings",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "tokeninfoservicesettings"
     },
     {
@@ -26533,8 +26544,8 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_default_onchain_retry_interval",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": "default_onchain_retry_interval()"
     },
     {
@@ -26544,8 +26555,8 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_token_info_settings_tokeninfoservicesettings_default",
-      "community": 17,
-      "community_name": "BlockscoutTokenInfoClient",
+      "community": 65,
+      "community_name": "BlockscoutTokenInfoClientSettings",
       "norm_label": ".default()"
     },
     {
@@ -26687,8 +26698,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_utils_rs_vec",
-      "community": 32,
-      "community_name": "InterchainServiceImpl",
+      "community": 23,
+      "community_name": ".new",
       "norm_label": "vec"
     },
     {
@@ -26699,7 +26710,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_logic_src_utils_vec_from_hex_prefixed",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "vec_from_hex_prefixed()"
     },
     {
@@ -30857,7 +30868,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_bridge_proto",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "bridge_proto.rs"
     },
     {
@@ -30868,7 +30879,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_bridge_proto_bridge_model_to_proto",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "bridge_model_to_proto()"
     },
     {
@@ -30879,7 +30890,7 @@
       "_origin": "ast",
       "id": "bridgemodel",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "bridgemodel"
     },
     {
@@ -30890,7 +30901,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_bridge_proto_rs_result",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "result"
     },
     {
@@ -30901,7 +30912,7 @@
       "_origin": "ast",
       "id": "bridge",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "bridge"
     },
     {
@@ -30912,7 +30923,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_bridge_proto_model",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "model()"
     },
     {
@@ -30923,7 +30934,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_bridge_proto_test_bridge_model_to_proto_no_configured_chains_is_empty",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "test_bridge_model_to_proto_no_configured_chains_is_empty()"
     },
     {
@@ -30934,7 +30945,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_bridge_proto_test_bridge_model_to_proto_multi_chain_is_sorted",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "test_bridge_model_to_proto_multi_chain_is_sorted()"
     },
     {
@@ -30945,7 +30956,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_bridge_proto_test_bridge_model_to_proto_preserves_other_fields",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "test_bridge_model_to_proto_preserves_other_fields()"
     },
     {
@@ -30956,7 +30967,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_bridge_proto_test_bridge_model_to_proto_ordering_is_deterministic_across_insertion_orders",
       "community": 87,
-      "community_name": "bridge_model_to_proto",
+      "community_name": "Status",
       "norm_label": "test_bridge_model_to_proto_ordering_is_deterministic_across_insertion_orders()"
     },
     {
@@ -31131,8 +31142,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_rs_arc",
-      "community": 32,
-      "community_name": "InterchainServiceImpl",
+      "community": 23,
+      "community_name": ".new",
       "norm_label": "arc"
     },
     {
@@ -31165,7 +31176,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_new",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".new()"
     },
     {
@@ -31186,8 +31197,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_rs_result",
-      "community": 23,
-      "community_name": "Status",
+      "community": 32,
+      "community_name": "InterchainServiceImpl",
       "norm_label": "result"
     },
     {
@@ -31198,7 +31209,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_rs_self",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "self"
     },
     {
@@ -31263,8 +31274,8 @@
       "source_location": "L258",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_joined_transfers_logic_to_proto",
-      "community": 23,
-      "community_name": "Status",
+      "community": 32,
+      "community_name": "InterchainServiceImpl",
       "norm_label": ".joined_transfers_logic_to_proto()"
     },
     {
@@ -31451,7 +31462,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_messages",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".get_messages()"
     },
     {
@@ -31462,7 +31473,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_rs_request",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "request"
     },
     {
@@ -31473,7 +31484,7 @@
       "_origin": "ast",
       "id": "getmessagesrequest",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "getmessagesrequest"
     },
     {
@@ -31484,7 +31495,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_rs_response",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "response"
     },
     {
@@ -31495,7 +31506,7 @@
       "_origin": "ast",
       "id": "getmessagesresponse",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "getmessagesresponse"
     },
     {
@@ -31505,8 +31516,8 @@
       "source_location": "L475",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_message_details",
-      "community": 23,
-      "community_name": "Status",
+      "community": 32,
+      "community_name": "InterchainServiceImpl",
       "norm_label": ".get_message_details()"
     },
     {
@@ -31516,8 +31527,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "getmessagedetailsrequest",
-      "community": 23,
-      "community_name": "Status",
+      "community": 32,
+      "community_name": "InterchainServiceImpl",
       "norm_label": "getmessagedetailsrequest"
     },
     {
@@ -31528,7 +31539,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_messages_by_transaction",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".get_messages_by_transaction()"
     },
     {
@@ -31539,7 +31550,7 @@
       "_origin": "ast",
       "id": "getmessagesbytransactionrequest",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "getmessagesbytransactionrequest"
     },
     {
@@ -31550,7 +31561,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_messages_by_address",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".get_messages_by_address()"
     },
     {
@@ -31561,7 +31572,7 @@
       "_origin": "ast",
       "id": "getmessagesbyaddressrequest",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "getmessagesbyaddressrequest"
     },
     {
@@ -31572,7 +31583,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_transfers",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".get_transfers()"
     },
     {
@@ -31583,7 +31594,7 @@
       "_origin": "ast",
       "id": "gettransfersrequest",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "gettransfersrequest"
     },
     {
@@ -31594,7 +31605,7 @@
       "_origin": "ast",
       "id": "gettransfersresponse",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "gettransfersresponse"
     },
     {
@@ -31605,7 +31616,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_transfers_by_transaction",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".get_transfers_by_transaction()"
     },
     {
@@ -31616,7 +31627,7 @@
       "_origin": "ast",
       "id": "gettransfersbytransactionrequest",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "gettransfersbytransactionrequest"
     },
     {
@@ -31627,7 +31638,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_transfers_by_address",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".get_transfers_by_address()"
     },
     {
@@ -31638,7 +31649,7 @@
       "_origin": "ast",
       "id": "gettransfersbyaddressrequest",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "gettransfersbyaddressrequest"
     },
     {
@@ -31649,7 +31660,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_chains",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".get_chains()"
     },
     {
@@ -31660,7 +31671,7 @@
       "_origin": "ast",
       "id": "getchainsrequest",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "getchainsrequest"
     },
     {
@@ -31671,7 +31682,7 @@
       "_origin": "ast",
       "id": "getchainsresponse",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "getchainsresponse"
     },
     {
@@ -31682,7 +31693,7 @@
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_interchain_service_interchainserviceimpl_get_bridges",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": ".get_bridges()"
     },
     {
@@ -31693,7 +31704,7 @@
       "_origin": "ast",
       "id": "getbridgesrequest",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "getbridgesrequest"
     },
     {
@@ -31704,7 +31715,7 @@
       "_origin": "ast",
       "id": "getbridgesresponse",
       "community": 23,
-      "community_name": "Status",
+      "community_name": ".new",
       "norm_label": "getbridgesresponse"
     },
     {
@@ -32594,8 +32605,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_utils_db_datetime_to_string",
-      "community": 32,
-      "community_name": "InterchainServiceImpl",
+      "community": 38,
+      "community_name": "services/utils.rs",
       "norm_label": "db_datetime_to_string()"
     },
     {
@@ -32605,8 +32616,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_utils_rs_naivedatetime",
-      "community": 32,
-      "community_name": "InterchainServiceImpl",
+      "community": 38,
+      "community_name": "services/utils.rs",
       "norm_label": "naivedatetime"
     },
     {
@@ -32616,8 +32627,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_utils_rs_string",
-      "community": 32,
-      "community_name": "InterchainServiceImpl",
+      "community": 38,
+      "community_name": "services/utils.rs",
       "norm_label": "string"
     },
     {
@@ -32627,8 +32638,8 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_utils_map_db_error",
-      "community": 38,
-      "community_name": "services/utils.rs",
+      "community": 87,
+      "community_name": "Status",
       "norm_label": "map_db_error()"
     },
     {
@@ -32638,8 +32649,8 @@
       "source_location": "",
       "_origin": "ast",
       "id": "interchain_indexer_server_src_services_utils_rs_error",
-      "community": 38,
-      "community_name": "services/utils.rs",
+      "community": 87,
+      "community_name": "Status",
       "norm_label": "error"
     },
     {
@@ -36726,7 +36737,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "code",
@@ -36771,8 +36782,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 205,
-      "community_name": "InterchainStatisticsService",
+      "community": 56,
+      "community_name": "InterchainService",
       "contributor": null,
       "file_type": "code",
       "norm_label": "get /api/v1/stats/daily",
@@ -36891,8 +36902,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 205,
-      "community_name": "InterchainStatisticsService",
+      "community": 56,
+      "community_name": "InterchainService",
       "contributor": null,
       "file_type": "code",
       "norm_label": "v1getdailystatisticsresponse",
@@ -36966,8 +36977,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 56,
-      "community_name": "InterchainService",
+      "community": 205,
+      "community_name": "InterchainStatisticsService",
       "contributor": null,
       "file_type": "code",
       "norm_label": "v1statschainslistpagination",
@@ -37011,7 +37022,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "document",
@@ -37026,7 +37037,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "rationale",
@@ -38876,7 +38887,7 @@
       "author": null,
       "captured_at": null,
       "community": 70,
-      "community_name": "Query F \u2014 Incoming ICTT Reconstruction Diagnostic",
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "query f \u2014 incoming ictt reconstruction diagnostic",
@@ -38891,7 +38902,7 @@
       "author": null,
       "captured_at": null,
       "community": 70,
-      "community_name": "Query F \u2014 Incoming ICTT Reconstruction Diagnostic",
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "query g \u2014 pending_messages backlog trend",
@@ -38906,7 +38917,7 @@
       "author": null,
       "captured_at": null,
       "community": 70,
-      "community_name": "Query F \u2014 Incoming ICTT Reconstruction Diagnostic",
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "reconstruct_incoming_ictt_transfers kill switch",
@@ -39055,8 +39066,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 70,
-      "community_name": "Query F \u2014 Incoming ICTT Reconstruction Diagnostic",
+      "community": 31,
+      "community_name": "Interchain Indexer Service README",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "reconstruct_incoming_ictt_transfers bridge flag",
@@ -39100,7 +39111,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "rationale",
@@ -39116,7 +39127,7 @@
       "author": null,
       "captured_at": null,
       "community": 70,
-      "community_name": "Query F \u2014 Incoming ICTT Reconstruction Diagnostic",
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "functional style for boolean logic",
@@ -39131,7 +39142,7 @@
       "author": null,
       "captured_at": null,
       "community": 70,
-      "community_name": "Query F \u2014 Incoming ICTT Reconstruction Diagnostic",
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "pending_messages cold storage retention is load-bearing",
@@ -39205,7 +39216,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "rationale",
@@ -39251,7 +39262,7 @@
       "author": null,
       "captured_at": null,
       "community": 70,
-      "community_name": "Query F \u2014 Incoming ICTT Reconstruction Diagnostic",
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "process_unknown_chains / home_chain_id filter pair",
@@ -39616,8 +39627,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 31,
-      "community_name": "Interchain Indexer Service README",
+      "community": 70,
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "just format (cargo sort + cargo fmt)",
@@ -39631,8 +39642,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 230,
-      "community_name": "Workflow: implementation-plan.md",
+      "community": 35,
+      "community_name": "Workflow: pr-description.md",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "coding-task-x.md handoff artifact",
@@ -39646,8 +39657,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 230,
-      "community_name": "Workflow: implementation-plan.md",
+      "community": 35,
+      "community_name": "Workflow: pr-description.md",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "implementation-plan-x.md artifact",
@@ -39766,8 +39777,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 230,
-      "community_name": "Workflow: implementation-plan.md",
+      "community": 35,
+      "community_name": "Workflow: pr-description.md",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "task to code completion standard",
@@ -39781,8 +39792,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 31,
-      "community_name": "Interchain Indexer Service README",
+      "community": 70,
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "just format as required final post-edit step",
@@ -39796,8 +39807,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 31,
-      "community_name": "Interchain Indexer Service README",
+      "community": 70,
+      "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "local dev workflow (just, sea-orm-cli, dotenv-cli)",
@@ -39871,8 +39882,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 230,
-      "community_name": "Workflow: implementation-plan.md",
+      "community": 35,
+      "community_name": "Workflow: pr-description.md",
       "contributor": null,
       "file_type": "document",
       "norm_label": "workflow: task-to-code.md",
@@ -39886,8 +39897,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 230,
-      "community_name": "Workflow: implementation-plan.md",
+      "community": 35,
+      "community_name": "Workflow: pr-description.md",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "coding handoff must be self-sufficient",
@@ -39901,8 +39912,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 230,
-      "community_name": "Workflow: implementation-plan.md",
+      "community": 35,
+      "community_name": "Workflow: pr-description.md",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "block the coding handoff on user confirmation",
@@ -41286,8 +41297,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 56,
-      "community_name": "InterchainService",
+      "community": 205,
+      "community_name": "InterchainStatisticsService",
       "contributor": null,
       "file_type": "code",
       "norm_label": "v1bridgedtokenslistpagination",
@@ -41421,8 +41432,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 56,
-      "community_name": "InterchainService",
+      "community": 205,
+      "community_name": "InterchainStatisticsService",
       "contributor": null,
       "file_type": "code",
       "norm_label": "v1pagination",
@@ -41577,7 +41588,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "concept",
@@ -41592,8 +41603,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
-      "community_name": "Rust Style Rules",
+      "community": 230,
+      "community_name": "Workflow: implementation-plan.md",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "persistence state (write result / update result)",
@@ -41607,8 +41618,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
-      "community_name": "Rust Style Rules",
+      "community": 230,
+      "community_name": "Workflow: implementation-plan.md",
       "contributor": null,
       "file_type": "concept",
       "norm_label": ".memory-bank/research/<topic>.md note",
@@ -41622,8 +41633,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
-      "community_name": "Rust Style Rules",
+      "community": 64,
+      "community_name": "Testing Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "conventions point to .memory-bank/rules/",
@@ -41637,8 +41648,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
-      "community_name": "Rust Style Rules",
+      "community": 64,
+      "community_name": "Testing Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "claude.md known gotchas summary",
@@ -41653,7 +41664,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "document",
       "norm_label": "error handling rules",
@@ -41667,7 +41678,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "document",
@@ -41682,8 +41693,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
-      "community_name": "Rust Style Rules",
+      "community": 64,
+      "community_name": "Testing Rules",
       "contributor": null,
       "file_type": "document",
       "norm_label": "claude.md \u2014 interchain indexer project instructions",
@@ -41698,7 +41709,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "anyhow::result for internal code",
@@ -41713,7 +41724,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "api error sanitization",
@@ -41728,7 +41739,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "checked/saturating arithmetic and euclidean division",
@@ -41743,7 +41754,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "always add context when propagating",
@@ -41758,7 +41769,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "log errors at the handling point",
@@ -41773,7 +41784,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "panic avoidance in runtime paths",
@@ -41788,7 +41799,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "thiserror for public api error types",
@@ -41802,7 +41813,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "rationale",
@@ -41817,7 +41828,7 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
+      "community": 70,
       "community_name": "Rust Style Rules",
       "contributor": null,
       "file_type": "rationale",
@@ -41833,7 +41844,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "prefer err(...)? / bail! / ensure! over return err",
@@ -41848,7 +41859,7 @@
       "author": null,
       "captured_at": null,
       "community": 59,
-      "community_name": "Rust Style Rules",
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "field-style tracing logging",
@@ -41862,8 +41873,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 59,
-      "community_name": "Rust Style Rules",
+      "community": 230,
+      "community_name": "Workflow: implementation-plan.md",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "claude.md memory protocol",
@@ -42344,8 +42355,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community": 59,
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "decimalsconflict domain marker type",
@@ -42359,8 +42370,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community": 59,
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "maintenance transaction (messages, transfers, stats, cursor)",
@@ -42375,7 +42386,7 @@
       "author": null,
       "captured_at": null,
       "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "stats_edge_decimals_conflict_total (test-isolation case study)",
@@ -42389,8 +42400,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 47,
-      "community_name": "bridge_contracts Is a Proxy, Not the Membership Set",
+      "community": 67,
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "asset-identity union-find merge",
@@ -42404,8 +42415,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 47,
-      "community_name": "bridge_contracts Is a Proxy, Not the Membership Set",
+      "community": 67,
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "query a \u2014 split-asset detector canary",
@@ -42419,8 +42430,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 47,
-      "community_name": "bridge_contracts Is a Proxy, Not the Membership Set",
+      "community": 67,
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "query b \u2014 merge refusal legitimacy diagnostic",
@@ -42434,8 +42445,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 47,
-      "community_name": "bridge_contracts Is a Proxy, Not the Membership Set",
+      "community": 67,
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "refused_chain_collision merge outcome",
@@ -42450,7 +42461,7 @@
       "author": null,
       "captured_at": null,
       "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "stats subsystem prometheus metrics reference",
@@ -42465,7 +42476,7 @@
       "author": null,
       "captured_at": null,
       "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "concept",
       "norm_label": "metrics env settings (prometheus)",
@@ -42509,8 +42520,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community": 59,
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "expected skips inside a shared transaction",
@@ -42524,8 +42535,8 @@
       "_origin": "semantic",
       "author": null,
       "captured_at": null,
-      "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community": 59,
+      "community_name": "Error Handling Rules",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "detect conflicts with select, never a failing insert",
@@ -42540,7 +42551,7 @@
       "author": null,
       "captured_at": null,
       "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "never assert a delta on a process-wide metric",
@@ -42570,7 +42581,7 @@
       "author": null,
       "captured_at": null,
       "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "a successful asset merge is nearly invisible in sql",
@@ -42585,7 +42596,7 @@
       "author": null,
       "captured_at": null,
       "community": 67,
-      "community_name": "Expected Skips Inside a Shared Transaction",
+      "community_name": "STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study)",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "no exact sum invariant between processed transfers and edge counts",
@@ -87884,7 +87895,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/avalanche/mod.rs",
-      "source_location": "L1079",
+      "source_location": "L1066",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_avalanche_mod_handle_send_cross_chain_message",
@@ -91613,6 +91624,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
+      "source_location": "L124",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy",
+      "target": "interchain_indexer_logic_src_indexer_failure_ledger_policy_capped_backoff_respects_caps_above_f64_exact_integer_range",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
       "source_location": "L63",
       "weight": 1.0,
       "_origin": "ast",
@@ -91646,7 +91668,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L177",
+      "source_location": "L186",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy",
@@ -91657,7 +91679,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L203",
+      "source_location": "L212",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy",
@@ -91668,7 +91690,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L124",
+      "source_location": "L133",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy",
@@ -91679,7 +91701,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L157",
+      "source_location": "L166",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy",
@@ -91690,7 +91712,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L142",
+      "source_location": "L151",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy",
@@ -91774,7 +91796,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L132",
+      "source_location": "L141",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_offsets_the_last_attempt_by_the_capped_backoff",
@@ -91786,7 +91808,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L160",
+      "source_location": "L169",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_still_lands_at_the_cap_for_a_huge_attempt_count",
@@ -91798,7 +91820,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L145",
+      "source_location": "L154",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_uses_the_base_delay_for_zero_attempts",
@@ -91870,7 +91892,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L125",
+      "source_location": "L134",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_offsets_the_last_attempt_by_the_capped_backoff",
@@ -91882,7 +91904,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L158",
+      "source_location": "L167",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_still_lands_at_the_cap_for_a_huge_attempt_count",
@@ -91894,7 +91916,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "interchain-indexer-logic/src/indexer/failure_ledger/policy.rs",
-      "source_location": "L143",
+      "source_location": "L152",
       "weight": 1.0,
       "_origin": "ast",
       "source": "interchain_indexer_logic_src_indexer_failure_ledger_policy_next_attempt_at_uses_the_base_delay_for_zero_attempts",
@@ -152952,5 +152974,5 @@
       "source_file": ".codex/skills/implementation-plan/SKILL.md"
     }
   ],
-  "built_at_commit": "4a41070cdb47622f93aa55ca0831509820dd9567"
+  "built_at_commit": "dc6b26f1e33a7c29af4f1ba93de3460ee74a36f4"
 }

@@ -1058,19 +1058,6 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         ])
         .inc();
 
-    if let Resolution::Unresolved(reason) = resolution {
-        tracing::warn!(
-            bridge_id = ctx.bridge_id,
-            source_chain_id = ctx.chain_id,
-            block_number = ctx.block_number,
-            transaction_hash = %transaction_hash,
-            destination_blockchain_id = %destination_hex,
-            network = ?ctx.blockchain_id_resolver.network(),
-            reason = ?reason,
-            "accepted send with unresolved destination"
-        );
-    }
-
     let destination_chain_id = match resolution {
         Resolution::Resolved(id) => Some(id),
         Resolution::Unresolved(_) => None,
@@ -1097,6 +1084,19 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
             "skipping SendCrossChainMessage: filtered by bridge chain policy"
         );
         return Ok(());
+    }
+
+    if let Resolution::Unresolved(reason) = resolution {
+        tracing::warn!(
+            bridge_id = ctx.bridge_id,
+            source_chain_id = ctx.chain_id,
+            block_number = ctx.block_number,
+            transaction_hash = %transaction_hash,
+            destination_blockchain_id = %destination_hex,
+            network = ?ctx.blockchain_id_resolver.network(),
+            reason = ?reason,
+            "accepted send with unresolved destination"
+        );
     }
 
     let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
