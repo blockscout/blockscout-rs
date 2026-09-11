@@ -315,8 +315,8 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/mod.rs": {
-    "mtime": 1789107620.493453,
-    "ast_hash": "cd8f1fbbba9748f66457ca5e6821aeab",
+    "mtime": 1789120855.2916968,
+    "ast_hash": "f43397ddc123ee952290d8533cf5dfda",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/settings.rs": {
@@ -455,8 +455,8 @@
     "semantic_hash": "2db343d6631d8b222dac4310dc1b6d98"
   },
   "interchain-indexer-logic/src/message_buffer/persistence.rs": {
-    "mtime": 1789107620.4942617,
-    "ast_hash": "a7f5743060879d9134c210395470f7ac",
+    "mtime": 1789120840.5050335,
+    "ast_hash": "6b9d858cb37aac9edf45d2627c3ad576",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/message_buffer/types.rs": {
@@ -775,8 +775,8 @@
     "semantic_hash": "c8f5e8c8499768ed16b1a6e0d2ed4bff"
   },
   "interchain-indexer-server/tests/message_details.rs": {
-    "mtime": 1789118930.7798474,
-    "ast_hash": "d99daa4821c333814d8722f711032d82",
+    "mtime": 1789120840.505312,
+    "ast_hash": "af852797ffbe11940fb9edd99a0208fd",
     "semantic_hash": ""
   },
   "interchain-indexer-server/tests/startup_works.rs": {
@@ -785,8 +785,8 @@
     "semantic_hash": "2d0cf576cfbb052cadcee232704eda71"
   },
   "interchain-indexer-server/tests/unindexed_chain_filter.rs": {
-    "mtime": 1789118935.9890852,
-    "ast_hash": "e1b09d50ca0088613ddf9d041c3bc2bb",
+    "mtime": 1789120840.50558,
+    "ast_hash": "5dba7d41f2a5bc7082c3fb45f3564b77",
     "semantic_hash": ""
   },
   "scripts/bigdecimal_rename.sh": {
@@ -1240,7 +1240,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1789119130.9620535,
+    "mtime": 1789120868.740418,
     "ast_hash": "94e8d31b6d574e36c3586eed10d95676",
     "semantic_hash": ""
   },
@@ -1385,8 +1385,8 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/protocol_metadata.rs": {
-    "mtime": 1789118901.9503698,
-    "ast_hash": "ae92c97cee7dd541fd6fa450401401cc",
+    "mtime": 1789120833.6837275,
+    "ast_hash": "2890a6e02c969a1a60afd7652ad2fbaa",
     "semantic_hash": ""
   },
   "interchain-indexer-migration/src/m20260910_132423_add_protocol_metadata.rs": {
