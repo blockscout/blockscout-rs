@@ -1,0 +1,53 @@
+specVersion: 0.0.5
+description: Subgraph for Gwei Name Service (.gwei)
+repository: https://github.com/blockscout/blockscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: NameNFT
+    network: sepolia
+    source:
+      abi: NameNFT
+      address: "0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6"
+      startBlock: 11142856
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Account
+        - Domain
+        - DomainState
+        - Registration
+        - NameRegistered
+        - NameRenewed
+        - ExpiryExtended
+        - Transfer
+        - Resolver
+        - AddrChanged
+        - MulticoinAddrChanged
+        - ContenthashChanged
+        - TokenIdToDomain
+        - PrimaryNameRecord
+      abis:
+        - name: NameNFT
+          file: ./abis/NameNFT.json
+      eventHandlers:
+        - event: NameRegistered(indexed uint256,string,indexed address,uint256)
+          handler: handleNameRegistered
+        - event: SubdomainRegistered(indexed uint256,indexed uint256,string)
+          handler: handleSubdomainRegistered
+        - event: NameRenewed(indexed uint256,uint256)
+          handler: handleNameRenewed
+        - event: PrimaryNameSet(indexed address,indexed uint256)
+          handler: handlePrimaryNameSet
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+        - event: AddrChanged(indexed bytes32,address)
+          handler: handleAddrChanged
+        - event: AddressChanged(indexed bytes32,uint256,bytes)
+          handler: handleAddressChanged
+        - event: ContenthashChanged(indexed bytes32,bytes)
+          handler: handleContenthashChanged
+      file: ./src/gwei-name-service.ts
