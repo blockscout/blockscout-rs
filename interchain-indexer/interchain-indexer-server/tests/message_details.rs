@@ -205,7 +205,7 @@ async fn message_details_unresolved_destination_renders_extra_and_omits_destinat
         dst_chain_id: Set(None),
         protocol_metadata: Set(Some(serde_json::json!({
             "unresolved_destination": {
-                "reason": "unknown_identifier",
+                "reason": "Unable to resolve the destination chain",
                 "protocol": "avalanche_icm",
                 "blockchain_id": "0xaa",
                 "blockchain_id_cb58": "cb58-placeholder",
@@ -239,7 +239,7 @@ async fn message_details_unresolved_destination_renders_extra_and_omits_destinat
     assert_eq!(
         extra["unresolved_destination"],
         serde_json::json!({
-            "reason": "unknown_identifier",
+            "reason": "Unable to resolve the destination chain",
             "protocol": "avalanche_icm",
             "blockchain_id": "0xaa",
             "blockchain_id_cb58": "cb58-placeholder",

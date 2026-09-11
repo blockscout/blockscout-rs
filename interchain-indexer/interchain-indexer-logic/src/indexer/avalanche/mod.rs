@@ -596,6 +596,12 @@ fn should_process_message(
 
 /// Metric label for a destination resolution outcome. A closed set —
 /// `AVALANCHE_DESTINATION_RESOLUTION_TOTAL` documents why it must stay one.
+///
+/// Deliberately snake_case, and deliberately not
+/// `UnresolvedReason::as_str()`: that one is display text served to API
+/// clients and may be reworded, while these labels are a PromQL dimension
+/// that dashboards and alerts match on. The two are the same concept with
+/// opposite stability requirements — keep them apart.
 fn resolution_outcome_label(resolution: &Resolution) -> &'static str {
     match resolution {
         Resolution::Resolved(_) => "resolved",

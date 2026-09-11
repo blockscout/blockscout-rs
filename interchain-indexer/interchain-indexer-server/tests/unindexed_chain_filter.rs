@@ -47,7 +47,7 @@ async fn get_message_details_returns_hidden_row_with_flag() {
         dst_chain_id: Set(None),
         protocol_metadata: Set(Some(serde_json::json!({
             "unresolved_destination": {
-                "reason": "unknown_identifier",
+                "reason": "Unable to resolve the destination chain",
                 "protocol": "avalanche_icm",
                 "blockchain_id": "0xaa",
                 "blockchain_id_cb58": "cb58-placeholder",
@@ -121,7 +121,7 @@ async fn get_message_details_returns_hidden_row_with_flag() {
     assert_eq!(hidden_item["has_unindexed_chain"], serde_json::json!(true));
     assert_eq!(
         hidden_item["extra"]["unresolved_destination"]["reason"],
-        serde_json::json!("unknown_identifier"),
+        serde_json::json!("Unable to resolve the destination chain"),
         "the list view must render extra the same way details does; got {hidden_item}"
     );
 }

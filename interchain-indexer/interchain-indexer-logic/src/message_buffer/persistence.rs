@@ -1112,7 +1112,7 @@ mod tests {
     fn unresolved_meta_json(tag: &str) -> serde_json::Value {
         serde_json::json!({
             "unresolved_destination": {
-                "reason": "unknown_identifier",
+                "reason": "Unable to resolve the destination chain",
                 "protocol": "avalanche_icm",
                 "blockchain_id": format!("0x{tag}"),
                 "blockchain_id_cb58": tag,
