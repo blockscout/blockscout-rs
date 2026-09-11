@@ -181,10 +181,10 @@ async fn message_details_bridge_qualifier_contract() {
 
 /// A message with an unresolved Avalanche ICM destination: `dst_chain_id` is
 /// NULL and `protocol_metadata` carries the diagnostics `ProtocolMetadata`
-/// would produce. Read API must render exactly the five documented `extra`
-/// keys, keep `destination_chain` absent, and still report
-/// `has_unindexed_chain = true` (a NULL destination is unindexed by
-/// definition).
+/// would produce. Read API must render the namespace as one nested `extra`
+/// object with exactly the five documented fields, keep `destination_chain`
+/// absent, and still report `has_unindexed_chain = true` (a NULL destination
+/// is unindexed by definition).
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn message_details_unresolved_destination_renders_extra_and_omits_destination_chain() {
@@ -230,34 +230,27 @@ async fn message_details_unresolved_destination_renders_extra_and_omits_destinat
     let extra = details["extra"]
         .as_object()
         .expect("extra must be an object");
-    let mut keys: Vec<&str> = extra.keys().map(String::as_str).collect();
-    keys.sort();
+    let keys: Vec<&str> = extra.keys().map(String::as_str).collect();
     assert_eq!(
         keys,
-        vec![
-            "unresolved_destination.blockchain_id",
-            "unresolved_destination.blockchain_id_cb58",
-            "unresolved_destination.network",
-            "unresolved_destination.protocol",
-            "unresolved_destination.reason",
-        ],
-        "extra must contain exactly the five documented keys, got {details}"
+        vec!["unresolved_destination"],
+        "extra must carry exactly the one namespace key, got {details}"
     );
     assert_eq!(
-        extra["unresolved_destination.reason"],
-        serde_json::json!("unknown_identifier")
-    );
-    assert_eq!(
-        extra["unresolved_destination.protocol"],
-        serde_json::json!("avalanche_icm")
-    );
-    assert_eq!(
-        extra["unresolved_destination.network"],
-        serde_json::json!("mainnet")
+        extra["unresolved_destination"],
+        serde_json::json!({
+            "reason": "unknown_identifier",
+            "protocol": "avalanche_icm",
+            "blockchain_id": "0xaa",
+            "blockchain_id_cb58": "cb58-placeholder",
+            "network": "mainnet",
+        }),
+        "the namespace must be one nested object with the five documented \
+         fields, got {details}"
     );
 }
 
-/// A normal, fully-resolved message must have an empty `extra` map — no
+/// A normal, fully-resolved message must have an empty `extra` object — no
 /// resolved-marker, no leaked internal namespace.
 #[tokio::test]
 #[ignore = "Needs database to run"]

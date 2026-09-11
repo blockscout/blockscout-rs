@@ -214,9 +214,16 @@ impl InterchainServiceImpl {
             message.dst_chain_id,
         );
 
+        // `extra` stays a present-but-empty object for a healthy message, as it
+        // has always been; only the namespaces a row actually carries appear
+        // inside it. A `Struct` never fails to build from a JSON object, so the
+        // fallback is the same empty object rather than a dropped field.
         let extra = ProtocolMetadata::from_json_value(message.protocol_metadata.clone())
             .map(|metadata| metadata.render_extra())
             .unwrap_or_default();
+        let extra = Some(prost_wkt_types::Struct {
+            fields: serde_json::from_value(serde_json::Value::Object(extra)).unwrap_or_default(),
+        });
 
         Ok(InterchainMessage {
             bridge: self.get_bridge_info(message.bridge_id)?.into(),

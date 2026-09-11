@@ -120,7 +120,7 @@ async fn get_message_details_returns_hidden_row_with_flag() {
         .expect("opt-in list must include the NULL-dst message");
     assert_eq!(hidden_item["has_unindexed_chain"], serde_json::json!(true));
     assert_eq!(
-        hidden_item["extra"]["unresolved_destination.reason"],
+        hidden_item["extra"]["unresolved_destination"]["reason"],
         serde_json::json!("unknown_identifier"),
         "the list view must render extra the same way details does; got {hidden_item}"
     );

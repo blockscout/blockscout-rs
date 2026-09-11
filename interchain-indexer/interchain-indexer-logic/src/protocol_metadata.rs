@@ -6,10 +6,15 @@
 //! Namespaces are additive: a new concept is a new field on
 //! [`ProtocolMetadata`], not a rewrite of existing ones. Whatever a given row
 //! actually has is what gets serialized — see [`ProtocolMetadata::to_json_value`].
+//!
+//! The same namespacing reaches the Read API: [`ProtocolMetadata::render_extra`]
+//! puts each public namespace under its own key in `InterchainMessage.extra`,
+//! as a nested JSON object rather than a set of dotted flat keys.
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 use crate::avalanche_data_api::AvalancheDataApiNetwork;
 
@@ -97,41 +102,47 @@ pub struct AvalancheIcmDestination {
 /// `InterchainMessage.extra` without deliberately writing an impl. Internal
 /// indexer metadata simply does not implement the trait — and so cannot leak.
 pub trait PublicMetadata {
-    /// Prefix for keys in `extra`. Matches the namespace's name in JSON.
-    const EXTRA_PREFIX: &'static str;
+    /// The namespace's key in `extra`. Matches its name in JSON.
+    const EXTRA_KEY: &'static str;
 
-    fn render_extra(&self, out: &mut BTreeMap<String, String>);
+    /// The namespace's public JSON object, exactly as a client sees it under
+    /// [`Self::EXTRA_KEY`]. Built field by field on purpose: the stored
+    /// payload may grow fields that must not be served, so `Serialize` on the
+    /// storage type is deliberately not reused here.
+    fn extra_value(&self) -> Value;
 }
 
 impl PublicMetadata for UnresolvedDestination {
-    const EXTRA_PREFIX: &'static str = "unresolved_destination";
+    const EXTRA_KEY: &'static str = "unresolved_destination";
 
-    fn render_extra(&self, out: &mut BTreeMap<String, String>) {
-        let prefix = Self::EXTRA_PREFIX;
+    fn extra_value(&self) -> Value {
+        let mut out = Map::new();
         out.insert(
-            format!("{prefix}.reason"),
+            "reason".to_string(),
             match self.reason {
-                UnresolvedReason::UnknownIdentifier => "unknown_identifier".to_string(),
-                UnresolvedReason::NoChainId => "no_chain_id".to_string(),
-            },
+                UnresolvedReason::UnknownIdentifier => "unknown_identifier",
+                UnresolvedReason::NoChainId => "no_chain_id",
+            }
+            .into(),
         );
         match &self.protocol {
             UnresolvedDestinationProtocol::AvalancheIcm(avalanche) => {
-                out.insert(format!("{prefix}.protocol"), "avalanche_icm".to_string());
+                out.insert("protocol".to_string(), "avalanche_icm".into());
                 out.insert(
-                    format!("{prefix}.blockchain_id"),
-                    avalanche.blockchain_id.clone(),
+                    "blockchain_id".to_string(),
+                    avalanche.blockchain_id.clone().into(),
                 );
                 out.insert(
-                    format!("{prefix}.blockchain_id_cb58"),
-                    avalanche.blockchain_id_cb58.clone(),
+                    "blockchain_id_cb58".to_string(),
+                    avalanche.blockchain_id_cb58.clone().into(),
                 );
                 out.insert(
-                    format!("{prefix}.network"),
-                    avalanche.network.as_ref().to_string(),
+                    "network".to_string(),
+                    avalanche.network.as_ref().to_string().into(),
                 );
             }
         }
+        Value::Object(out)
     }
 }
 
@@ -160,11 +171,15 @@ impl ProtocolMetadata {
         }
     }
 
-    /// Explicit public render, only via [`PublicMetadata`].
-    pub fn render_extra(&self) -> BTreeMap<String, String> {
-        let mut out = BTreeMap::new();
+    /// Explicit public render, only via [`PublicMetadata`]. One entry per
+    /// present namespace, each holding that namespace's own JSON object.
+    pub fn render_extra(&self) -> Map<String, Value> {
+        let mut out = Map::new();
         if let Some(unresolved_destination) = &self.unresolved_destination {
-            unresolved_destination.render_extra(&mut out);
+            out.insert(
+                UnresolvedDestination::EXTRA_KEY.to_string(),
+                unresolved_destination.extra_value(),
+            );
         }
         out
     }
@@ -215,19 +230,19 @@ mod tests {
     }
 
     #[test]
-    fn render_extra_has_exactly_the_five_documented_keys() {
-        let extra = sample().render_extra();
-        let keys: Vec<&str> = extra.keys().map(String::as_str).collect();
-        assert_eq!(
-            keys,
-            vec![
-                "unresolved_destination.blockchain_id",
-                "unresolved_destination.blockchain_id_cb58",
-                "unresolved_destination.network",
-                "unresolved_destination.protocol",
-                "unresolved_destination.reason",
-            ]
-        );
+    fn render_extra_nests_the_namespace_as_one_json_object() {
+        let extra = Value::Object(sample().render_extra());
+        let expected = serde_json::json!({
+            "unresolved_destination": {
+                "reason": "unknown_identifier",
+                "protocol": "avalanche_icm",
+                "blockchain_id":
+                    "0x7fc93d85c6d62c5b2ac0b519c87010ea5294012d1e407030d6acd0021cac10d5",
+                "blockchain_id_cb58": "yH8D7ThNJkxmtkuv2jgBa4P1Rn3Qpr4pPr7QYNfcdoS6k6HWp",
+                "network": "mainnet",
+            }
+        });
+        assert_eq!(extra, expected);
     }
 
     #[test]

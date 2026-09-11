@@ -312,7 +312,10 @@ message InterchainMessage {
   optional string destination_transaction_hash = 11;
   
   optional string payload = 12;
-  map<string, string> extra = 13; // additional parsed data
+  // Additional parsed data, keyed by concept namespace. Each value is an
+  // arbitrary JSON object whose shape belongs to that namespace, so a new
+  // concept is a new key rather than a new flat key prefix.
+  google.protobuf.Struct extra = 13;
 
   repeated InterchainTransfer transfers = 14;
 
