@@ -5,7 +5,7 @@ use std::time::Duration;
 use chrono::NaiveDateTime;
 
 /// Capped exponential backoff:
-///   `next_attempt_at = last_attempt_at + min(base * 2^(attempts - 1), cap)`
+///   `next_attempt_at = last_attempt_at + min(base * (9/8)^(attempts - 1), cap)`
 ///
 /// The instant is returned rather than a due/not-due boolean because the retry
 /// scheduler stores it: a session's due time is decided once, when it is
@@ -41,16 +41,29 @@ pub(crate) fn next_attempt_at(
     last_attempt_at.checked_add_signed(backoff)
 }
 
-/// `min(base * 2^(attempts - 1), cap)` in whole seconds, with saturating
-/// arithmetic throughout. `attempts` grows without bound because holes are
-/// retried forever, so `base * 2^attempts` **will** overflow eventually —
-/// saturate at `cap` rather than panic or wrap.
+/// `min(base * (9/8)^(attempts - 1), cap)` in whole seconds. `9/8` (12.5%
+/// growth per attempt) replaces a `2^n` doubling because doubling saturates
+/// `backoff_cap` far too fast to be useful: with the default `base=30s` /
+/// `cap=3600s`, `2^7 * 30s` already exceeds the cap, so attempt 8 is
+/// wholly indistinguishable from attempt 800 — every transient
+/// provider/RPC hiccup that outlives a few minutes gets parked at the full
+/// hour, right when it is most likely to still be recoverable. `9/8`
+/// keeps widening for ~40 attempts before flattening out at the same cap,
+/// trading a slightly slower retreat to the ceiling for far more retry
+/// density during the window realistic outages actually clear in.
+///
+/// `attempts` grows without bound (holes are retried forever), so the
+/// exponent is clamped before the cast to `i32`: `(9/8)^exponent` is
+/// already `f64::INFINITY` well before `exponent = 10_000` (it overflows
+/// around exponent ~6026), so the clamp loses no precision and keeps the
+/// cast safe for any `u32` input. `f64 -> u64` casts saturate in Rust (no
+/// panic, no UB), so an infinite or out-of-range backoff becomes
+/// `u64::MAX` here, which `.min(cap_secs)` then correctly clamps down to
+/// `cap_secs`.
 fn capped_backoff_secs(attempts: u32, base_secs: u64, cap_secs: u64) -> u64 {
-    let exponent = attempts.saturating_sub(1);
-    // `checked_shl` returns `None` once the shift amount reaches the type's
-    // bit width; saturate to `u64::MAX` instead of panicking.
-    let multiplier = 1u64.checked_shl(exponent).unwrap_or(u64::MAX);
-    base_secs.saturating_mul(multiplier).min(cap_secs)
+    let exponent = attempts.saturating_sub(1).min(10_000) as i32;
+    let backoff = base_secs as f64 * (9.0_f64 / 8.0).powi(exponent);
+    backoff.min(cap_secs as f64) as u64
 }
 
 #[cfg(test)]
@@ -67,12 +80,17 @@ mod tests {
     }
 
     #[test]
-    fn capped_backoff_widens_strictly_until_the_cap() {
+    fn capped_backoff_widens_for_far_more_than_the_old_doubling_horizon() {
         let base_secs = 30;
         let cap_secs = 3600;
 
+        // A `2^n` doubling saturated by attempt 8; `9/8` growth must still be
+        // strictly widening decades of attempts past that, so a transient
+        // failure that clears within a few hours keeps seeing progressively
+        // longer (but not yet maxed-out) gaps instead of jumping straight to
+        // the 1-hour cap.
         let mut previous = 0;
-        for attempts in 1..=7 {
+        for attempts in 1..=30 {
             let backoff = capped_backoff_secs(attempts, base_secs, cap_secs);
             assert!(
                 backoff > previous,
@@ -87,11 +105,11 @@ mod tests {
     }
 
     #[test]
-    fn capped_backoff_is_constant_at_the_cap_afterwards() {
+    fn capped_backoff_is_constant_at_the_cap_for_large_attempt_counts() {
         let base_secs = 30;
         let cap_secs = 3600;
 
-        for attempts in [8, 9, 20, 1_000] {
+        for attempts in [60, 100, 1_000, u32::MAX] {
             assert_eq!(capped_backoff_secs(attempts, base_secs, cap_secs), cap_secs);
         }
     }
@@ -108,13 +126,14 @@ mod tests {
         let base = Duration::from_secs(30);
         let cap = Duration::from_secs(3600);
 
-        // attempts = 3 => 30 * 2^2 = 120s.
+        // attempts = 3 => 30 * (9/8)^2 = 30 * 1.265625 = 37.96875s, truncated
+        // to 37s by the `f64 -> u64` cast.
         let due =
-            next_attempt_at(last_attempt_at, 3, base, cap).expect("a 120s offset is representable");
+            next_attempt_at(last_attempt_at, 3, base, cap).expect("a 37s offset is representable");
 
-        assert_eq!(due, last_attempt_at + chrono::Duration::seconds(120));
-        assert!(last_attempt_at + chrono::Duration::seconds(60) < due);
-        assert!(last_attempt_at + chrono::Duration::seconds(121) > due);
+        assert_eq!(due, last_attempt_at + chrono::Duration::seconds(37));
+        assert!(last_attempt_at + chrono::Duration::seconds(36) < due);
+        assert!(last_attempt_at + chrono::Duration::seconds(38) > due);
     }
 
     /// Zero is a real input, not a guarded one: the scheduler passes it after a
@@ -163,10 +182,11 @@ mod tests {
         // reaches the unrepresentable-offset branch, because `capped_backoff`
         // takes the `min` of the two — so a test written with a small
         // `attempts` passes identically against the panicking
-        // `Duration::seconds`, guarding nothing. `attempts = 64` saturates the
-        // shift and takes the backoff past chrono's `i64::MAX / 1_000` ceiling
-        // regardless of `base`.
-        let attempts = 64;
+        // `Duration::seconds`, guarding nothing. `9/8` growth is far slower
+        // than the old `2^n` doubling (which crossed this ceiling by
+        // `attempts = 64`), so reaching it now needs `attempts` in the
+        // hundreds regardless of `base`.
+        let attempts = 300;
         assert!(
             capped_backoff_secs(attempts, base.as_secs(), huge_cap.as_secs())
                 > (i64::MAX / 1_000) as u64,
