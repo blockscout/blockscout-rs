@@ -1,16 +1,16 @@
 # Graph Report - interchain-indexer  (2026-09-11)
 
 ## Corpus Check
-- 270 files · ~285,655 words
+- 270 files · ~285,823 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3876 nodes · 9205 edges · 242 communities (213 shown, 29 thin omitted)
+- 3876 nodes · 9205 edges · 241 communities (212 shown, 29 thin omitted)
 - Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 606 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a20af818`
+- Built from commit: `4a41070c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -69,10 +69,9 @@
 - stats_chains_bridge_filter.rs
 - logging.rs
 - amb/consolidation.rs
-- AmbChainConfig
 - TokenInfoService
 - InterchainService
-- json_response
+- AmbDispatchMockService
 - Codex Skill: implementation-plan
 - Rust Style Rules
 - ictt_payload.rs
@@ -279,7 +278,7 @@
 - **Partial Data Handling: nullable sides, horizon eligibility, union-find identity** — _memory_bank_adr_003_amb_event_based_transfers_nullable_transfer_sides, _memory_bank_adr_004_stats_observability_horizon_and_asset_union_find_observability_horizon, _memory_bank_adr_004_stats_observability_horizon_and_asset_union_find_asset_union_find, _memory_bank_adr_004_stats_observability_horizon_and_asset_union_find_indexer_contract, _memory_bank_adr_002_primary_chain_filtering_process_unknown_chains [INFERRED 0.85]
 - **Dual-Harness Thin Wrappers over One Canonical Workflow Set** — _memory_bank_workflows, _claude_skills_implementation_plan_skill, _codex_skills_implementation_plan_skill, _codex_skills_implementation_plan_agents_openai, _codex_skills_gh_issue_bug_canonical_workflow_delegation, _claude_claude_claude_code_overrides [INFERRED 0.95]
 
-## Communities (242 total, 29 thin omitted)
+## Communities (241 total, 29 thin omitted)
 
 ### Community 0 - "interchain-indexer-filters/src/lib.rs"
 Cohesion: 0.10
@@ -290,8 +289,8 @@ Cohesion: 0.06
 Nodes (66): Context, DefaultClock, HeaderMap, InMemoryState, base_node(), block_number_packet(), build_layered_http_provider(), build_layered_provider_from_services() (+58 more)
 
 ### Community 2 - "amb/indexer.rs"
-Cohesion: 0.26
-Nodes (18): amb_handler_failure_creates_indexer_failure_row_for_the_failing_block(), AmbDispatchMockService, mock_block(), mock_provider(), mock_receipt(), registry_with_event(), repeated_amb_handler_failure_during_retry_does_not_resolve_existing_hole(), Arc (+10 more)
+Cohesion: 0.34
+Nodes (15): amb_handler_failure_creates_indexer_failure_row_for_the_failing_block(), chain_config(), mock_block(), mock_provider(), mock_receipt(), registry_with_event(), repeated_amb_handler_failure_during_retry_does_not_resolve_existing_hole(), Address (+7 more)
 
 ### Community 3 - ".new"
 Cohesion: 0.10
@@ -371,7 +370,7 @@ Nodes (38): ADR-007: The Scan Floor Is Reconciled Against The Checkpoint, Not Ag
 
 ### Community 22 - "amb/types.rs"
 Cohesion: 0.18
-Nodes (23): is_collision(), Duration, AmbHeaderData, AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution, DestinationExecutionEvent, DestinationTransferDetails (+15 more)
+Nodes (24): build_destination_only(), source_anomaly(), AmbHeaderData, AnnotatedEvent, CollectedSignaturesEvent, DestinationExecution, DestinationExecutionEvent, DestinationTransferDetails (+16 more)
 
 ### Community 23 - "Status"
 Cohesion: 0.16
@@ -470,8 +469,8 @@ Cohesion: 0.15
 Nodes (44): DynSolValue, a_successful_drain_removes_the_queue_entry(), alter_amb(), apply_collected_signatures(), apply_validator_confirmation(), DestinationKind, dispatch_transaction(), drain_pending_message_hash_events() (+36 more)
 
 ### Community 47 - "bridge_contracts Is a Proxy, Not the Membership Set"
-Cohesion: 0.12
-Nodes (21): Runtime Verification Runbook, bridge_contracts Is a Proxy, Not the Membership Set, Canary vs Diagnostic Classification, IndexedChains::may_observe (in-memory eligibility), Observability Horizon Eligibility Rule, Query C — Hard Invariants Canary, Query D — Deferred Transfers Classified by Reason, Query E — Unindexed-Chain Edges Diagnostic (+13 more)
+Cohesion: 0.09
+Nodes (29): Runtime Verification Runbook, ADR-004 Stats Observability Horizon and Asset Union-Find, Asset-Identity Union-Find Merge, bridge_contracts Is a Proxy, Not the Membership Set, Canary vs Diagnostic Classification, IndexedChains::may_observe (in-memory eligibility), Observability Horizon Eligibility Rule, Query A — Split-Asset Detector Canary (+21 more)
 
 ### Community 48 - "PaginationDirection"
 Cohesion: 0.19
@@ -497,10 +496,6 @@ Nodes (10): init_logs(), is_suppressed(), matches_target(), Error, JaegerSetting
 Cohesion: 0.28
 Nodes (25): addr(), destination(), destination_transfer(), hash(), record_conflict(), Address, B256, NaiveDateTime (+17 more)
 
-### Community 54 - "AmbChainConfig"
-Cohesion: 0.31
-Nodes (8): AmbChainConfig, AmbContractConfig, chain_config(), Address, DynProvider, Ethereum, Option, Value
-
 ### Community 55 - "TokenInfoService"
 Cohesion: 0.18
 Nodes (17): Arc, Box, DateTime, DynProvider, Ethereum, HashMap, HashSet, Mutex (+9 more)
@@ -509,9 +504,9 @@ Nodes (17): Arc, Box, DateTime, DynProvider, Ethereum, HashMap, HashSet, Mutex (
 Cohesion: 0.10
 Nodes (26): Exposed REST Endpoints and Swagger URL, GET /api/v1/interchain/chains, GET /api/v1/interchain/messages/{message_id}, GET /api/v1/interchain/messages, GET /api/v1/interchain/messages:byAddress/{address}, GET /api/v1/interchain/messages:byTx/{tx_hash}, GET /api/v1/interchain/transfers, GET /api/v1/interchain/transfers:byAddress/{address} (+18 more)
 
-### Community 57 - "json_response"
-Cohesion: 0.29
-Nodes (6): Id, json_response(), Future, RequestPacket, ResponsePacket, T
+### Community 57 - "AmbDispatchMockService"
+Cohesion: 0.18
+Nodes (11): Id, AmbDispatchMockService, json_response(), Block, Future, Log, RequestPacket, ResponsePacket (+3 more)
 
 ### Community 58 - "Codex Skill: implementation-plan"
 Cohesion: 0.21
@@ -546,12 +541,12 @@ Cohesion: 0.25
 Nodes (5): Error, Filter, Poll, Result, TaskContext
 
 ### Community 66 - "Key"
-Cohesion: 0.17
-Nodes (20): amount_to_decimal(), build_destination_only(), build_destination_only_transfer(), build_source_led(), build_transfer(), destination_anomaly(), Message, ActiveModel (+12 more)
+Cohesion: 0.16
+Nodes (19): amount_to_decimal(), build_destination_only_transfer(), build_source_led(), build_transfer(), destination_anomaly(), is_collision(), Message, ActiveModel (+11 more)
 
 ### Community 67 - "Expected Skips Inside a Shared Transaction"
-Cohesion: 0.12
-Nodes (18): DecimalsConflict Domain Marker Type, Expected Skips Inside a Shared Transaction, Maintenance Transaction (messages, transfers, stats, cursor), Detect Conflicts with SELECT, Never a Failing INSERT, Never Assert a Delta on a Process-Wide Metric, STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study), ADR-004 Stats Observability Horizon and Asset Union-Find, Asset-Identity Union-Find Merge (+10 more)
+Cohesion: 0.22
+Nodes (10): DecimalsConflict Domain Marker Type, Expected Skips Inside a Shared Transaction, Maintenance Transaction (messages, transfers, stats, cursor), Detect Conflicts with SELECT, Never a Failing INSERT, Never Assert a Delta on a Process-Wide Metric, STATS_EDGE_DECIMALS_CONFLICT_TOTAL (test-isolation case study), A Successful Asset Merge Is Nearly Invisible in SQL, No Exact Sum Invariant Between Processed Transfers and Edge Counts (+2 more)
 
 ### Community 68 - "Consolidate"
 Cohesion: 0.21
@@ -782,8 +777,8 @@ Cohesion: 0.25
 Nodes (9): ADR-005: Failed-Range Ledger, Independent of Checkpoints, RangeDriver::run / run_retry_tick (indexer/range_driver.rs), Gotcha: The Retry Pass Starves The Forward Streams, And That Looks Like RPC Failure, AMB In-Memory Correlation Maps, FailureLedger / indexer_failures, Indexing Gaps, Retries, and Checkpoint Safety, LogBatch (Named Range), RangeDriver Retry Pass (+1 more)
 
 ### Community 126 - "AmbIndexer"
-Cohesion: 0.14
-Nodes (11): AmbIndexer, AtomicBool, AtomicU64, DashMap, JoinHandle, Message, NaiveDateTime, RwLock (+3 more)
+Cohesion: 0.12
+Nodes (17): AmbChainConfig, AmbContractConfig, AmbIndexer, AtomicBool, AtomicU64, DashMap, DynProvider, Ethereum (+9 more)
 
 ### Community 127 - "Model"
 Cohesion: 0.33
@@ -919,7 +914,7 @@ Nodes (4): Date, Model, Relation, DateTime
 
 ### Community 205 - "InterchainStatisticsService"
 Cohesion: 0.15
-Nodes (16): just check-envs / just generate-envs Requirement on ENV Changes, GET /api/v1/stats/chains, GET /api/v1/stats/common, GET /api/v1/stats/daily, GET /api/v1/stats/chain/{chain_id}/messages-paths/received, GET /api/v1/stats/chain/{chain_id}/messages-paths/sent, InterchainStatisticsService, v1GetChainsStatsResponse (+8 more)
+Nodes (16): GET /api/v1/stats/chain/{chain_id}/bridged-tokens, GET /api/v1/stats/chains, GET /api/v1/stats/common, GET /api/v1/stats/daily, GET /api/v1/stats/chain/{chain_id}/messages-paths/received, GET /api/v1/stats/chain/{chain_id}/messages-paths/sent, InterchainStatisticsService, v1GetBridgedTokensResponse (+8 more)
 
 ### Community 208 - "secret.rs"
 Cohesion: 0.11
@@ -1061,7 +1056,7 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.189) - this node is a cross-community bridge._
 - **Why does `init_db()` connect `init_db` to `amb/indexer.rs`, `.new`, `BufferItem`, `persistence.rs`, `.record_indexer_failures`, `InterchainDatabase`, `range_driver.rs`, `ChainInfoService`, `.get_checkpoint`, `bridged_tokens_query.rs`, `stats_chains_query.rs`, `.upsert_chains`, `StatsService`, `.new`, `MessageBuffer`?**
   _High betweenness centrality (0.078) - this node is a cross-community bridge._
-- **Why does `Key` connect `Key` to `BufferItem`, `persistence.rs`, `range_driver.rs`, `Option`, `SourceData`, `events.rs`, `amb/consolidation.rs`, `avalanche/mod.rs`, `avalanche/consolidation.rs`, `MessageBuffer`, `AmbIndexer`?**
+- **Why does `Key` connect `Key` to `BufferItem`, `persistence.rs`, `range_driver.rs`, `Option`, `SourceData`, `events.rs`, `amb/consolidation.rs`, `amb/types.rs`, `avalanche/mod.rs`, `avalanche/consolidation.rs`, `MessageBuffer`, `AmbIndexer`?**
   _High betweenness centrality (0.077) - this node is a cross-community bridge._
 - **Are the 256 inferred relationships involving `init_db()` (e.g. with `bridged_tokens_aggregation_input_output_total()` and `bridged_tokens_default_excludes_edge_unindexed_for_its_bridge()`) actually correct?**
   _`init_db()` has 256 INFERRED edges - model-reasoned connections that need verification._

@@ -430,6 +430,20 @@ for how this feeds `BlockchainIdResolver`'s destination-path
 
 ---
 
+## Resolved Avalanche Mappings Must Take Precedence Over Negative Cache Entries
+
+`BlockchainIdResolver` shares its positive cache between source and destination
+lookups, while only destination lookups use the negative cache. A source lookup
+can therefore resolve an ID while its earlier negative entry is still alive.
+`resolve_destination` must check the positive cache first; otherwise it reports
+an already-known chain as unresolved until the negative TTL expires. With
+`process_unknown_chains = false`, this can incorrectly filter out sends without
+recording a failure for replay. The resolver's
+`destination_negative_cache_does_not_leak_into_source_path` test covers the
+sequence: negative destination → successful source → successful destination.
+
+---
+
 ## Cross-Bridge Resolver Persistence Leaks
 
 **Symptom:** Bridge B (with `process_unknown_chains: false`) resolves a previously unknown blockchain ID on the first lookup without hitting the Avalanche Data API.
@@ -2097,4 +2111,3 @@ what they are. Assert on parsed values (`body["extra"]["ns"]["field"]`), never
 on key order or on a serialized string. If a field ever genuinely needs a
 stable key order, it cannot be a `Struct` — it has to be a declared proto
 message or a `map<string, string>`, both of which `btree_map` does cover.
-

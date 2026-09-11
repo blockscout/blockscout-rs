@@ -272,6 +272,13 @@ impl BlockchainIdResolver {
     ) -> Result<Resolution> {
         let key = Self::parse_key(blockchain_id)?;
 
+        // A source lookup may have resolved this ID since an earlier
+        // destination lookup cached its absence. Known mappings take
+        // precedence over that stale negative result.
+        if let Some(chain_id) = self.resolved.get(&key).await {
+            return Ok(Resolution::Resolved(chain_id));
+        }
+
         if let Some(reason) = self.unresolved.get(&key).await {
             return Ok(Resolution::Unresolved(reason));
         }
@@ -402,6 +409,12 @@ mod tests {
         // straight to the DB, finding the healed mapping.
         let source_result = resolver.resolve(&blockchain_id, true).await?;
         assert_eq!(source_result, 999_999);
+
+        // The source lookup has populated the positive cache. Subsequent
+        // sends must immediately use that mapping, even while the earlier
+        // negative entry is still alive.
+        let destination_result = resolver.resolve_destination(&blockchain_id, false).await?;
+        assert_eq!(destination_result, Resolution::Resolved(999_999));
 
         Ok(())
     }

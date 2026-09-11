@@ -295,8 +295,8 @@
     "semantic_hash": "70d933555bfa895931424e4bc2403ffc"
   },
   "interchain-indexer-logic/src/indexer/avalanche/blockchain_id_resolver.rs": {
-    "mtime": 1789107620.4922552,
-    "ast_hash": "9f7ba17e76239ce674105366aaab44fd",
+    "mtime": 1789126115.4631627,
+    "ast_hash": "18706381ce10173c5ff41a1ee9760512",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/avalanche/consolidation.rs": {
@@ -1065,8 +1065,8 @@
     "semantic_hash": "3444ad3ef07802eac7c1f459868679e1"
   },
   ".memory-bank/gotchas.md": {
-    "mtime": 1789119117.4046056,
-    "ast_hash": "e15e00c583c985f13f47063b732fd474",
+    "mtime": 1789126133.00468,
+    "ast_hash": "da5496ad2372561ed8beb29d0c746d93",
     "semantic_hash": ""
   },
   ".memory-bank/project-context.md": {
@@ -1240,7 +1240,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1789123933.7272487,
+    "mtime": 1789125642.8760197,
     "ast_hash": "94e8d31b6d574e36c3586eed10d95676",
     "semantic_hash": ""
   },
