@@ -66,6 +66,7 @@ impl Consolidate for Message {
             sender_address: ActiveValue::Set(self.sender_address.map(|a| a.as_slice().to_vec())),
             recipient_address: ActiveValue::Set(Some(recipient.as_slice().to_vec())),
             payload: ActiveValue::Set(None),
+            protocol_metadata: ActiveValue::Set(None),
             stats_processed: ActiveValue::Set(0),
             created_at: ActiveValue::NotSet,
             updated_at: ActiveValue::NotSet,
