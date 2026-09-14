@@ -52,9 +52,10 @@ Load-bearing details:
   *across* chains is relaxed. This is required, not incidental: cursor
   derivation bridges gaps between cold blocks as "scanned but empty", which is
   only true because batches of one chain and direction are processed in order.
-- **`retry_cursor` moves out of the struct into a `run` local.** It was the
-  only `&mut self` borrow in the type; removing it is what lets N handler
-  futures share `&self` with no `Arc`, no `Clone` and no `'static`.
+- **Retry scheduler state lives in the sibling retry future.** It is one
+  bridge-wide adaptive scheduler, not one driver per chain, so the shared
+  budget and one-task topology remain intact while handler futures share
+  `&self` with no `Arc`, no `Clone` and no `'static`.
 - **Cooperative, not parallel.** The unit of serialisation becomes one chain
   instead of one bridge. A throttled chain parks on its own
   `node.limiter.until_ready()` — a per-node limiter, so an await-point yield

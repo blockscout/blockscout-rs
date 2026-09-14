@@ -53,6 +53,42 @@ paths:
           in: query
           required: false
           type: boolean
+        - name: chain_ids
+          description: |-
+            Optional comma-separated chain ids filter, for example `123,456`.
+            When absent or empty, all known chains are returned. Selects the returned
+            rows by chain id. Unknown ids match nothing; duplicates are idempotent.
+            Malformed or out-of-int64-range values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids filter, for example `1,2`
+            (see GET /api/v1/interchain/bridges). Restricts the response to chains the
+            selected bridges index today -- the union of their
+            `Bridge.indexed_chain_ids`, derived from the in-memory bridges config,
+            never from historical `bridge_contracts` rows.
+            The returned rows are that union INTERSECTED with the chain directory this
+            endpoint serves, which is upserted from `chains.json`. The two coincide in
+            practice, but a chain that a selected bridge indexes and that has no entry
+            in the chain directory is listed by GET /api/v1/interchain/bridges and is
+            not returned here, because there is no chain row to return.
+            When absent or empty, no bridge restriction is applied. A non-empty
+            selection naming only unknown, removed, or contract-less bridges returns an
+            EMPTY list, not the full directory. Malformed or out-of-int32-range values
+            return InvalidArgument; duplicates are idempotent. Composes with
+            `chain_ids` and `include_unindexed_chains` through AND.
+
+            NOTE: this deliberately differs from GET /api/v1/stats/chains?bridge_ids=,
+            which additionally admits a chain with retained per-bridge stats history
+            for a selected bridge. For a bridge removed from configuration,
+            /stats/chains can still list its historical chains while this endpoint
+            lists none. That is by design: this endpoint applies the same
+            currently-configured membership that `Bridge.indexed_chain_ids` reports.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainService
   /api/v1/interchain/messages:
@@ -1091,6 +1127,16 @@ paths:
         - InterchainStatisticsService
   /api/v1/stats/common:
     get:
+      summary: |-
+        DEPRECATED: total_messages and total_transfers are always 0. Use the stats
+        service in interchain mode instead.
+      description: |-
+        Every call used to run an unbounded COUNT(*) over crosschain_messages plus
+        a joined COUNT(*) over crosschain_transfers, uncached — the heaviest query
+        this service served, growing with the canonical tables. The stats service
+        now precomputes the same numbers. The endpoint is kept, answering zeros
+        without querying, only so existing clients do not break, and will be
+        removed in a future API iteration.
       operationId: InterchainStatisticsService_GetCommonStatistics
       responses:
         "200":
@@ -1156,6 +1202,14 @@ paths:
         - InterchainStatisticsService
   /api/v1/stats/daily:
     get:
+      summary: |-
+        DEPRECATED: daily_messages and daily_transfers are always 0. Use the stats
+        service in interchain mode instead.
+      description: |-
+        Same reasoning as GetCommonStatistics: two uncached COUNT(*) queries per
+        call, now precomputed by the stats service. The endpoint is kept, answering
+        zeros without querying, only so existing clients do not break, and will be
+        removed in a future API iteration.
       operationId: InterchainStatisticsService_GetDailyStatistics
       responses:
         "200":
@@ -1368,13 +1422,13 @@ definitions:
         type: array
         items:
           type: string
-          format: int64
         description: |-
           Chain ids this bridge actually indexes today, sorted ascending. Derived
           from the in-memory bridges config (`IndexedChains`), not from historical
           `bridge_contracts` rows, so a bridge removed from config but still
           present in the `bridges` table (upserts never delete) reports an empty
           list here rather than stale contract history.
+          The ids are decimal strings, matching `ChainInfo.id`.
   v1BridgeInfo:
     type: object
     properties:
@@ -1426,7 +1480,6 @@ definitions:
         format: int32
       chain_id:
         type: string
-        format: int64
       start_block:
         type: string
         format: uint64
@@ -1539,9 +1592,14 @@ definitions:
       total_messages:
         type: string
         format: uint64
+        description: Always 0 since deprecation. Use the stats service in interchain mode.
       total_transfers:
         type: string
         format: uint64
+        description: Always 0 since deprecation. Use the stats service in interchain mode.
+    description: |-
+      DEPRECATED, and removed together with
+      InterchainStatisticsService.GetCommonStatistics in a future API iteration.
   v1GetDailyStatisticsResponse:
     type: object
     properties:
@@ -1550,9 +1608,14 @@ definitions:
       daily_messages:
         type: string
         format: uint64
+        description: Always 0 since deprecation. Use the stats service in interchain mode.
       daily_transfers:
         type: string
         format: uint64
+        description: Always 0 since deprecation. Use the stats service in interchain mode.
+    description: |-
+      DEPRECATED, and removed together with
+      InterchainStatisticsService.GetDailyStatistics in a future API iteration.
   v1GetIndexingProgressResponse:
     type: object
     properties:
@@ -1640,9 +1703,10 @@ definitions:
         type: string
       extra:
         type: object
-        additionalProperties:
-          type: string
-        title: additional parsed data
+        description: |-
+          Additional parsed data, keyed by concept namespace. Each value is an
+          arbitrary JSON object whose shape belongs to that namespace, so a new
+          concept is a new key rather than a new flat key prefix.
       transfers:
         type: array
         items:
@@ -1653,7 +1717,7 @@ definitions:
         description: |-
           True when this record's source or destination chain is not indexed by its
           own bridge (an unknown destination also counts). Such a record can never be
-          observed from both sides. Always present.
+          observed from both sides.
   v1InterchainTransfer:
     type: object
     properties:
@@ -1692,7 +1756,7 @@ definitions:
         description: |-
           True when this record's source or destination chain is not indexed by its
           own bridge (an unknown destination also counts). Such a record can never be
-          observed from both sides. Always present.
+          observed from both sides.
   v1MessagePathRow:
     type: object
     properties:

@@ -3025,8 +3025,10 @@ impl InterchainDatabase {
     /// remainder inherit that count and get `updated_at = now()`, pinning
     /// the remainder at the capped backoff and draining a one-hour hole over
     /// many hours instead of clearing on the next tick. `attempts = 1`, not
-    /// `0` — `policy::is_due` computes `base * 2^(attempts - 1)`, so `0`
-    /// must never be reachable.
+    /// `0` — `attempts` doubles as the exponent in
+    /// `policy::next_attempt_at` (`base * (9/8)^(attempts - 1)`) and as the
+    /// count `record` increments, so a remainder must start at a real
+    /// attempt.
     pub async fn resolve_indexer_failures(
         &self,
         bridge_id: i32,
@@ -3104,9 +3106,10 @@ impl InterchainDatabase {
                                     chain_id: ActiveValue::Set(chain_id),
                                     from_block: ActiveValue::Set(piece_from),
                                     to_block: ActiveValue::Set(piece_to),
-                                    // Not `0`: `policy::is_due` computes
-                                    // `base * 2^(attempts - 1)`, so `0` must
-                                    // never be reachable.
+                                    // Not `0`: `policy::next_attempt_at`
+                                    // computes `base * (9/8)^(attempts - 1)`
+                                    // and `record` increments this same
+                                    // count.
                                     attempts: ActiveValue::Set(1),
                                     reason: ActiveValue::Set(candidate.reason.clone()),
                                     created_at: ActiveValue::Set(Some(
@@ -3491,6 +3494,17 @@ impl InterchainDatabase {
     }
 
     /// Statistics
+    ///
+    /// DEPRECATED, and no longer reachable from the API: the only callers were
+    /// `/api/v1/stats/common` and `/api/v1/stats/daily`, which now answer zeros
+    /// without querying, because these unbounded uncached `COUNT(*)`s were the
+    /// heaviest work this service did and the stats service in interchain mode
+    /// precomputes the same numbers. Kept only so the deprecated endpoints can
+    /// be removed in one step; the parity tests below still exercise them.
+    ///
+    /// TODO(next API iteration): delete `get_total_counters`,
+    /// `get_daily_counters`, `InterchainTotalCounters`,
+    /// `InterchainDailyCounters` and their tests together with the endpoints.
     pub async fn get_total_counters(
         &self,
         timestamp: NaiveDateTime,
@@ -3527,6 +3541,8 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
+    /// DEPRECATED alongside [`Self::get_total_counters`] — see its doc comment
+    /// for why and for the removal plan.
     pub async fn get_daily_counters(
         &self,
         timestamp: NaiveDateTime,
@@ -7698,6 +7714,69 @@ mod tests {
         assert_eq!(
             stats_messages_days::Entity::find().count(db).await.unwrap(),
             1
+        );
+    }
+
+    /// avalanche-unresolved-destinations: an unresolved-destination row
+    /// (`dst_chain_id = NULL`, otherwise a completed message) must not be
+    /// projected. This locks in existing behavior — the `is_not_null()`
+    /// filter in `project_messages_batch` already excludes it — rather than
+    /// introducing anything new; `stats/**` is unchanged by that task.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_unresolved_destination_is_not_projected() {
+        let _db = init_db("stats_projection_unresolved_destination_is_not_projected").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: Set(92070),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Completed),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(None),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92070i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await
+                .map(|_| ())
+            })
+        })
+        .await
+        .unwrap();
+
+        let message = crosschain_messages::Entity::find_by_id((92070i64, 1i32))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            message.stats_processed, 0,
+            "an unresolved-destination row must not be marked processed"
+        );
+        assert_eq!(
+            stats_messages::Entity::find().count(db).await.unwrap(),
+            0,
+            "no directional stats_messages row may be created for it"
+        );
+        assert_eq!(
+            stats_messages_days::Entity::find().count(db).await.unwrap(),
+            0,
+            "no directional stats_messages_days row may be created for it"
         );
     }
 

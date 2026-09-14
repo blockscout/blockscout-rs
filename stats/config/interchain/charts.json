@@ -28,6 +28,14 @@
     "total_interchain_transfer_users": {
       "title": "Total interchain transfer users",
       "description": "Number of unique addresses that sent or received interchain transfers"
+    },
+    "new_messages_interchain_24h": {
+      "title": "New interchain messages (24h)",
+      "description": "Number of new interchain messages within the last 24 hours"
+    },
+    "new_transfers_interchain_24h": {
+      "title": "New interchain transfers (24h)",
+      "description": "Number of new interchain transfers within the last 24 hours"
     }
   },
   "line_charts": {

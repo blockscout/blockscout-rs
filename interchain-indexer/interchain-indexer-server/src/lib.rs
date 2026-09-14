@@ -3,6 +3,7 @@
 mod config;
 mod env_merge;
 mod indexers;
+mod logging;
 mod proto;
 mod server;
 mod services;

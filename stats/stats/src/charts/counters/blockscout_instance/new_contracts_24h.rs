@@ -57,7 +57,26 @@ pub type NewContracts24h =
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{point_construction::dt, simple_test::simple_test_counter};
+    use crate::tests::{normalize_sql, point_construction::dt, simple_test::simple_test_counter};
+
+    /// The 24h bounds must compare the bare column against constants, so that
+    /// `transactions_created_contract_code_indexed_at_index` stays usable.
+    #[test]
+    fn statement_is_correct() {
+        let actual = NewContracts24hStatement::get_statement(
+            dt("2025-01-02T00:00:00").and_utc(),
+            &IndexerMigrations::latest(),
+        );
+
+        let expected = r#"
+            SELECT COUNT(*) AS "value"
+            FROM "transactions"
+            WHERE "transactions"."status" = 1
+                AND ("transactions"."created_contract_code_indexed_at" >= '2025-01-01 00:00:00.000000 +00:00'
+                AND "transactions"."created_contract_code_indexed_at" <= '2025-01-02 00:00:00.000000 +00:00')
+        "#;
+        assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()))
+    }
 
     #[tokio::test]
     #[ignore = "needs database to run"]

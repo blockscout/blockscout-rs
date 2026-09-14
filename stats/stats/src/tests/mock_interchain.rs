@@ -58,7 +58,7 @@
 //! Covers at least two weeks, months and years with holes (gaps in dates).
 //! Dates: late Dec 2022, Jan 2023, early Feb 2023.
 
-use std::str::FromStr;
+use std::{ops::RangeBounds, str::FromStr};
 
 use chrono::{NaiveDate, NaiveDateTime};
 use interchain_indexer_filters::ChainBridgeFilter;
@@ -328,11 +328,9 @@ async fn bulk_insert(
         .unwrap();
 }
 
-/// Fills the interchain indexer DB with the mock fixture described in the
-/// module docs.
-pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_date: NaiveDate) {
-    let rows = mock_rows();
-
+/// The `chains` / `bridges` / `bridge_contracts` reference rows. Exactly once
+/// per database — the message/transfer helpers do not insert them.
+pub async fn fill_mock_interchain_reference_data(interchain: &DatabaseConnection) {
     // Reference rows first, so the foreign keys of the two canonical tables
     // resolve. `chains.name` and `bridges.name` are both `TEXT NOT NULL UNIQUE`.
     let chain_values: Vec<Value> = MOCK_CHAIN_IDS
@@ -382,13 +380,30 @@ pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_dat
         contract_values,
     )
     .await;
+}
 
-    let mut msg_values: Vec<Value> = Vec::with_capacity(rows.len() * MESSAGE_COLUMNS.len());
+/// The fixture's messages and their transfers, restricted to those whose
+/// `init_timestamp` date falls in `dates`.
+///
+/// Ids are assigned by walking the **whole** fixture, so filling it in two
+/// complementary ranges leaves the database identical to one full fill — which
+/// is what the backfill-convergence tests compare against.
+pub async fn fill_mock_interchain_messages_in_range(
+    interchain: &DatabaseConnection,
+    dates: impl RangeBounds<NaiveDate>,
+) {
+    let rows = mock_rows();
+
+    let mut msg_values: Vec<Value> = Vec::new();
     for (i, message) in rows.iter().enumerate() {
         // the tx hashes only have to be distinct and non-NULL; the row's position
-        // in the fixture is a convenient source of distinct bytes
+        // in the *whole* fixture is a convenient source of distinct bytes, kept
+        // stable regardless of which range is being inserted
         let src_tx_hash = message.has_src_tx.then(|| vec![(i + 1) as u8; 32]);
         let dst_tx_hash = message.has_dst_tx.then(|| vec![(i + 100) as u8; 32]);
+        if !dates.contains(&message.init_timestamp.date()) {
+            continue;
+        }
         msg_values.extend([
             Value::BigInt(Some(message.message_id)),
             Value::Int(Some(message.bridge_id)),
@@ -411,24 +426,32 @@ pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_dat
     // `UNIQUE (message_id, bridge_id, index)`), while the address cycling uses
     // the *global* transfer id so that exactly 8 distinct 20-byte addresses
     // appear — which is what `totalInterchainTransferUsers = 8` relies on.
+    //
+    // `transfer_id` is advanced by walking the *whole* fixture (not just the
+    // messages in `dates`), so that a staged fill in two complementary ranges
+    // assigns exactly the same ids — and therefore the same cycled addresses —
+    // as one full fill.
     let mut transfer_values: Vec<Value> = Vec::new();
     let mut transfer_id: i64 = 1;
     for message in rows.iter() {
+        let message_in_range = dates.contains(&message.init_timestamp.date());
         for (index, (token_src_chain_id, token_dst_chain_id)) in
             message.transfers.iter().enumerate()
         {
             let sender_idx = ((transfer_id - 1) % 8) as u8;
             let recipient_idx = ((transfer_id + 2) % 8) as u8;
-            transfer_values.extend([
-                Value::BigInt(Some(transfer_id)),
-                Value::BigInt(Some(message.message_id)),
-                Value::Int(Some(message.bridge_id)),
-                Value::SmallInt(Some(index as i16)),
-                Value::BigInt(Some(*token_src_chain_id)),
-                Value::BigInt(Some(*token_dst_chain_id)),
-                Value::Bytes(Some(Box::new(vec![sender_idx; 20]))),
-                Value::Bytes(Some(Box::new(vec![recipient_idx; 20]))),
-            ]);
+            if message_in_range {
+                transfer_values.extend([
+                    Value::BigInt(Some(transfer_id)),
+                    Value::BigInt(Some(message.message_id)),
+                    Value::Int(Some(message.bridge_id)),
+                    Value::SmallInt(Some(index as i16)),
+                    Value::BigInt(Some(*token_src_chain_id)),
+                    Value::BigInt(Some(*token_dst_chain_id)),
+                    Value::Bytes(Some(Box::new(vec![sender_idx; 20]))),
+                    Value::Bytes(Some(Box::new(vec![recipient_idx; 20]))),
+                ]);
+            }
             transfer_id += 1;
         }
     }
@@ -439,6 +462,13 @@ pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_dat
         transfer_values,
     )
     .await;
+}
+
+/// Fills the interchain indexer DB with the mock fixture described in the
+/// module docs.
+pub async fn fill_mock_interchain_data(interchain: &DatabaseConnection, _max_date: NaiveDate) {
+    fill_mock_interchain_reference_data(interchain).await;
+    fill_mock_interchain_messages_in_range(interchain, ..).await;
 }
 
 #[cfg(test)]

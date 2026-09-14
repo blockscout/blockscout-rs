@@ -240,6 +240,13 @@ impl IndexedChains {
     /// the [`Self::configured_union`] convention where empty means "restrict
     /// nothing". Keeping the types different is what stops the two from being
     /// confused.
+    ///
+    /// Two callers, both chain-directory views under a `bridge_ids` selection:
+    /// `/stats/chains` (zero-row candidates) and `GetChains`
+    /// (`/api/v1/interchain/chains?bridge_ids=`), which uses it as the whole
+    /// bridge restriction so its result matches each bridge's
+    /// `Bridge.indexed_chain_ids`. Both gate on the *parsed request*
+    /// `bridge_ids` being non-empty, never on this union's emptiness.
     pub fn selected_configured_union(&self, bridge_ids: &[i32]) -> Vec<i64> {
         let map = match self {
             IndexedChains::AllIndexed => return Vec::new(),

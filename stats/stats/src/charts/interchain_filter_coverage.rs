@@ -4,7 +4,7 @@
 //!
 //! This module exists so that "every interchain chart applies the shared
 //! predicate" is a property a test checks rather than a claim a reviewer
-//! re-verifies by reading thirteen files. Before the filter was introduced, four
+//! re-verifies by reading fifteen files. Before the filter was introduced, four
 //! of the fifteen interchain chart families silently ignored filtering
 //! altogether — precisely because coverage was procedural.
 //!
@@ -45,6 +45,7 @@ use crate::{
         InterchainFilter, InterchainFilterConfig, InterchainFilterTarget, InterchainFiltered,
     },
     counters::interchain::{
+        NewMessagesInterchain24hStatement, NewTransfersInterchain24hStatement,
         TotalInterchainMessagesReceivedStatement, TotalInterchainMessagesSentStatement,
         TotalInterchainMessagesStatement, TotalInterchainTransferUsersStatement,
         TotalInterchainTransfersReceivedStatement, TotalInterchainTransfersSentStatement,
@@ -97,6 +98,8 @@ fn registry() -> Vec<CoverageEntry> {
         NewTransfersInterchainStatement,
         NewTransfersSentInterchainStatement,
         NewTransfersReceivedInterchainStatement,
+        NewMessagesInterchain24hStatement,
+        NewTransfersInterchain24hStatement,
     ]
 }
 
@@ -257,7 +260,12 @@ fn registry_covers_every_configured_interchain_chart() {
 /// loads the config, rather than re-implementing it: a hand-rolled version and
 /// the production one disagreeing (on digits, for instance) would make this guard
 /// check ids that no deployment ever produces.
-fn snake_to_camel(key: &str) -> String {
+///
+/// `pub(super)` rather than private: `interchain_indexing_status_coverage`'s
+/// layer 2 (`crate::charts::interchain_indexing_status_coverage`, a sibling
+/// module under `crate::charts`) needs the exact same conversion for the exact
+/// same reason, and re-deriving it there would risk the two disagreeing.
+pub(super) fn snake_to_camel(key: &str) -> String {
     use convert_case::{Case, Casing};
     key.from_case(Case::Snake).to_case(Case::Camel)
 }

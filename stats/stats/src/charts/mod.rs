@@ -6,6 +6,8 @@ pub mod db_interaction;
 pub mod indexing_status;
 #[cfg(test)]
 mod interchain_filter_coverage;
+#[cfg(test)]
+mod interchain_indexing_status_coverage;
 pub mod lines;
 pub mod query_dispatch;
 pub mod types;

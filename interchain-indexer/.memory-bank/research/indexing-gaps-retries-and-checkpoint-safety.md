@@ -76,6 +76,14 @@ therefore not proof that every block was indexed:
 - Crash mid-batch, planned-stop drain, reorgs and AMB's in-memory correlation
   maps remain as they were — see the accepted non-goals below.
 
+**Adaptive replay, implemented 2026-09-08.** `retry_scheduler.rs` keeps one
+reconciled in-memory session per open ledger row, freezes active sweep ends and
+emits lazy chunks under the shared bridge budget. Per-session round-robin keeps
+tails reachable when due sets change. A fully unsuccessful sweep eventually
+halves request width to singleton blocks; only successful `resolve` removes
+coverage. Width/cursor/due remain disposable hints, while existing durability
+and adapter limitations below remain unchanged.
+
 What did **not** change, and is still the correct model: a checkpoint certifies
 *scanning*, not correctness. Cursor derivation is untouched, holes live in a
 separate record, and the two are read together only by the progress endpoint.
@@ -594,14 +602,18 @@ requested, and canonical rows produced from orphaned logs are not removed.
   full range processing.
 - There was no built-in range backlog / gap reconciliation using
   `indexer_failures`. There is now: `RangeDriver`'s retry tick reads the open
-  intervals, filters them by the backoff policy, re-fetches each in chunks of the
-  indexer's own `batch_size`, and resolves or re-records per chunk.
+  intervals as a full snapshot and reconciles them with per-row in-memory
+  scheduler sessions. Ready sessions lazily emit bridge-wide round-robin chunks;
+  request width starts at the indexer's `batch_size`, halves after configured
+  wholly unsuccessful sweeps, and only a successful ledger `resolve` counts as
+  progress. Backoff applies between complete sweeps, not within an active sweep.
 
 ## Edge Cases / Gotchas
 
-- A permanent `eth_getLogs` error is a livelock/stall, not a hole. There is no
-  adaptive range splitting even though `log_stream.rs` contains a TODO for bad
-  block isolation.
+- A permanent forward-path `eth_getLogs` error is a livelock/stall, not a hole:
+  no batch reaches `RangeDriver`, so nothing can be recorded. Once coverage is
+  in `indexer_failures`, retry fetch/process failures do use adaptive range
+  narrowing down to singleton requests, without classifying error strings.
 - Catchup and realtime are separate streams merged together. A
   range-specific catchup error can leave realtime progressing, and vice versa;
   a provider-wide outage usually affects both.

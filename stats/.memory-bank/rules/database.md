@@ -94,6 +94,69 @@ indexer entity re-exported from a sibling crate
 (`blockscout_db::entity::blocks`) when one exists, falling back to
 `FromQueryResult` + a raw `Statement` otherwise.
 
+## Keep Time Filters Sargable
+
+Indexer tables are large and every time-bounded chart query depends on a
+b-tree index over the filtered timestamp column
+(`blocks_timestamp_index`, `transactions_block_timestamp_index`,
+`transactions_created_contract_code_indexed_at_index`, ...). Postgres does not
+rearrange predicates algebraically, so the column has to appear **bare** on one
+side of the comparison:
+
+```sql
+-- Indexable: the column is compared to a constant
+WHERE blocks.timestamp >= $1 AND blocks.timestamp <= $2
+
+-- NOT indexable: the column sits inside an expression, so the planner
+-- can only sequential-scan the whole table
+WHERE $1 - blocks.timestamp at time zone 'UTC' <= interval '24 hours'
+```
+
+Both forms describe the same interval, which is why the second one survived in
+`interval_24h_filter` for a long time — it just made `newContracts24h`,
+`newVerifiedContracts24h` and `newOperationalTxns24h` scan their whole table
+on every update. Use `interval_24h_filter`/`datetime_range_filter`
+(`stats/src/charts/db_interaction/utils.rs`) rather than writing a bound by
+hand, and keep any new predicate in the same shape. Casting the *bound* is
+fine; casting or offsetting the *column* is not.
+
+Comparing a `timestamp without time zone` column against a bound passed as
+`DateTime<Utc>` (i.e. `timestamptz`) is fine: those cross-type operators are
+members of the `datetime_ops` btree operator family, so they still produce an
+index qual, and the session timezone is always UTC (see
+`.memory-bank/gotchas.md`).
+
+## Prefer `GROUP BY` Over `DISTINCT ON` For "First Row Per Key"
+
+`DISTINCT ON (key) ... ORDER BY key, ts` and `MIN(ts) ... GROUP BY key` mean the
+same thing, but only the second can be executed as a **partial aggregate**, i.e.
+collapsed inside each parallel worker before `Gather`. `DISTINCT ON` has no
+partial form: its `Unique` step runs in the leader, so every input row is
+funnelled through a single process.
+
+Measured on a production indexer (~3M `user_operations`, `EXPLAIN` only, no
+`ANALYZE`):
+
+| | `DISTINCT ON` | `GROUP BY` |
+|---|---|---|
+| rows through `Gather Merge` | 11,841,502 | 335,544 |
+| total estimated cost | 6,143,162 | 4,370,269 |
+
+Note what the planner did *not* do, contrary to the obvious assumption: it never
+full-sorted the input. It read `user_operations` through
+`user_operations_sender_factory_index` to get `sender` order for free and then
+ran an `Incremental Sort` with `sender` as the presorted key, which is cheap
+(+114K cost). So the win is parallelism, not sort-vs-hash — don't justify this
+rewrite by "avoiding a sort".
+
+The `GROUP BY` form also frees the planner to seq-scan instead of walking that
+index (1.99M vs 2.26M estimated, and far better real I/O locality on a
+full-table read). `new_aa_wallets.rs` uses the `GROUP BY` form for these reasons.
+
+`new_accounts.rs` still uses `DISTINCT ON (from_address_hash)`; it is the same
+rewrite, but with a much higher group cardinality, so it wants an `EXPLAIN`
+against a real indexer before being changed.
+
 ## Mode-Dispatching Read Helpers
 
 Several read helpers branch on `Mode` to hit the right indexer schema, e.g.

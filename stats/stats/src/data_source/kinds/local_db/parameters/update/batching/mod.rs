@@ -50,6 +50,12 @@ impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
     for BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
 where
     MainDep: DataSource,
+    // Always holds in practice: every `BatchStepBehaviour` impl in this
+    // codebase is over `Vec<TimespanValue<Resolution, _>>`, so any `MainDep`
+    // that actually type-checks against `BatchStep` below already satisfies
+    // this. Stated explicitly so `probe_gap_has_data` can check the probe's
+    // result for emptiness without needing to know the element type.
+    MainDep::Output: IntoIterator,
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
@@ -119,6 +125,20 @@ where
             );
         }
         Ok(())
+    }
+
+    /// Trigger-2 gap probe: exactly the query a real batch step performs
+    /// (`MainDep::query_data`), just checked for emptiness rather than
+    /// written to the database. See `UpdateBehaviour::probe_gap_has_data`'s
+    /// doc comment and `local_db::interchain_history_gap_has_data`, the only
+    /// caller.
+    async fn probe_gap_has_data(
+        cx: &UpdateContext<'_>,
+        range: UniversalRange<DateTime<Utc>>,
+        dependency_data_fetch_timer: &mut AggregateTimer,
+    ) -> Result<bool, ChartError> {
+        let data = MainDep::query_data(cx, range, dependency_data_fetch_timer).await?;
+        Ok(data.into_iter().next().is_some())
     }
 }
 

@@ -352,6 +352,110 @@ longer silently drops failed-AMB aggregates.
 
 ---
 
+## Avalanche Peer Resolution Can Fail On The Source Side Too
+
+**Accepted scope:** [ADR-010](adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md)
+keeps `src_chain_id` NOT NULL and unresolved sources on the existing
+`indexer_failures`/replay path. The nullable-source consequences below are
+research findings, not instructions to expand the destination-metadata task.
+
+`ReceiveCrossChainMessage`, `MessageExecuted`, and `MessageExecutionFailed`
+resolve `sourceBlockchainID` through the same `BlockchainIdResolver` used for
+outbound destinations. An incoming event does not establish that the external
+Data API can supply an EVM chain ID. The observed destination is known from
+`ctx.chain_id`; the peer source can still fail resolution before `buffer.alter`.
+See `indexer/avalanche/mod.rs` and `blockchain_id_resolver.rs` under
+`interchain-indexer-logic/src/`.
+
+The current schema cannot store that partial identity: `crosschain_messages`
+has nullable destination but NOT NULL source. If source is made nullable,
+changing the entity alone is insufficient. In particular,
+`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL` in `database.rs` guards only
+`sender_address` on the source arm, while its destination arm also guards the
+chain ID. A nullable source would create a NULL-chain group unless that source
+guard is added. Message live projection and backfill likewise currently rely
+on source being non-null and only explicitly filter out NULL destinations.
+The API serializer also always builds source `ChainInfo`.
+
+These are current assumptions to revisit during a schema change, not evidence
+of existing NULL-source rows or an observed production incoming incident.
+
+The impact crosses process boundaries. `interchain-indexer-filters/src/lib.rs`
+is shared with the sibling `stats` service; its permissive arm for a bridge
+absent from configuration guards only the destination against NULL. A nullable
+source would pass that arm until an equivalent source guard is added. `stats`
+pins entity, filters, and migration to a common git revision in its Cargo.toml,
+so fixing this workspace alone does not update that consumer.
+
+The failure is not limited to reporting: message projection, canonical writes,
+pending persistence and cursor persistence share the maintenance transaction.
+If a newly allowed NULL source reaches a direction table that still requires
+both chains, the failed projection rolls back the entire flush. Startup
+backfill propagates its error too. Keep direction/token chain IDs mandatory
+and explicitly defer partial message identities before projection.
+
+---
+
+## Avalanche Data API Has Two Indistinguishable 404 Shapes
+
+**Symptom:** A blockchain ID that genuinely does not exist and a blockchain
+ID request hitting a mistyped or moved Data API path both return HTTP 404
+with `Content-Type: application/json` and an identical top-level
+`"error":"Not Found"` field. Classifying by status code, or by checking the
+body for a substring like `contains("not found")`, cannot tell them apart —
+`"Cannot GET /v1/networks/mainnet/blockchains/222/yH8D7Th..."` also contains
+`"error":"Not Found"` in the same envelope shape as the real not-found body.
+
+**Root cause:** The Data API's 404 error envelope is generic
+(`{"message": ..., "error": "Not Found", "statusCode": 404}`) regardless of
+*why* the route 404'd. Only the `message` field's exact text distinguishes
+"this blockchain ID is valid but unknown to the network" (`message:
+"Blockchain not found"`) from every other 404 cause. Fixtures captured
+against the live API (2026-09-10, four request shapes: unknown blockchain,
+changed handler path, unknown network, invalid ID) are preserved as tests in
+`interchain-indexer-logic/src/avalanche_data_api.rs`.
+
+**Fix:** `classify_error_response` in `avalanche_data_api.rs` treats a 404 as
+a confirmed missing destination (`DataApiError::BlockchainNotFound`) **only**
+when the body decodes into the error envelope, `message` is a string, and it
+equals `"Blockchain not found"` after `trim()` and case-insensitive
+comparison. Every other shape — a different `message`, an unparseable body,
+HTML from a proxy, or any non-404 status — stays `DataApiError::Status` and
+remains a retryable processing error, never a resolved-as-data outcome. Do
+not weaken this comparison to a substring match; do not classify by status
+code or `Content-Type` alone. See
+[ADR-010](adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md)
+for how this feeds `BlockchainIdResolver`'s destination-path
+`Resolution::Unresolved` outcome.
+
+---
+
+## Resolved Avalanche Mappings Must Take Precedence Over Negative Cache Entries
+
+`BlockchainIdResolver` shares its positive cache between source and destination
+lookups, while only destination lookups use the negative cache. A source lookup
+can therefore resolve an ID while its earlier negative entry is still alive.
+`resolve_destination` must check the positive cache first; otherwise it reports
+an already-known chain as unresolved until the negative TTL expires. With
+`process_unknown_chains = false`, this can incorrectly filter out sends without
+recording a failure for replay. The resolver's
+`destination_negative_cache_does_not_leak_into_source_path` test covers the
+sequence: negative destination → successful source → successful destination.
+
+---
+
+## Clamp Retry Backoff In Integer Space
+
+`failure_ledger::policy::capped_backoff_secs` computes growth in `f64`, but
+the configured cap is a `u64`. Above `2^53`, casting the cap to `f64` can
+round it upward: `9007199254740995` becomes `9007199254740996`. Clamping
+before casting back can therefore exceed the configured limit. Convert the
+computed delay to `u64` first, then apply `.min(cap_secs)`; Rust's saturating
+float-to-integer cast also handles infinite growth. The regression test
+`capped_backoff_respects_caps_above_f64_exact_integer_range` covers this.
+
+---
+
 ## Cross-Bridge Resolver Persistence Leaks
 
 **Symptom:** Bridge B (with `process_unknown_chains: false`) resolves a previously unknown blockchain ID on the first lookup without hitting the Avalanche Data API.
@@ -972,6 +1076,65 @@ becomes real, the ledger needs a database-level non-overlap constraint
 
 ---
 
+## Failure Rows Are Coverage Sets, Not Stable Retry Tasks
+
+`record_indexer_failures` merges overlapping **and adjacent** ranges with
+`attempts = max(existing attempts) + 1`. Recording two failed halves therefore
+reconstitutes the parent; it does not preserve a retry split. During replay,
+recording a narrow `BatchError.attributed` inside an existing wide row also
+leaves the wide coverage intact. Only a successful `resolve` subtracts blocks.
+
+`resolve_indexer_failures` resets every affected remainder to `attempts = 1`
+while retaining the parent's timestamps. Thus `attempts` is neither a lifetime
+retry count nor the number of times each block was attempted. A retry policy
+derived only from `batch_size` and this counter can repeatedly revisit coarse
+widths after successful partial recovery. Any adaptive-width change must
+account for the **current remainder's width** and the reset semantics together.
+
+`retry_scheduler.rs` now emits one virtual chunk at a time under the shared
+budget, so singleton replay retains memory proportional to open ledger rows,
+not failed blocks. The coverage-set limitation remains: only `resolve` removes
+blocks and `attempts` is still approximate after union/difference.
+
+The adaptive retry scheduler accounts for these contracts with sticky in-memory
+width, progress confirmed only by successful `resolve`, and reconciliation by
+coverage overlap rather than DB row identity. Sources:
+`interchain-indexer-logic/src/database.rs`
+(`record_indexer_failures`, `resolve_indexer_failures`),
+`interchain-indexer-logic/src/indexer/range_driver.rs`, and ADR-005.
+
+---
+
+## A Retry Cursor Over Only Due Rows Can Revisit The Same Prefix Forever
+
+The old cursor over a pre-filtered due queue could starve interval tails. The
+adaptive scheduler instead reconciles the full open snapshot each tick and
+retains an active frontier per interval; ready sessions are selected round-robin
+by stable local id. A missing target still consumes its position, so it cannot
+pin a chain ahead of ready work elsewhere.
+
+Related, and also fixed: continuous adjacent forward failures used to keep
+updating one merged row's `updated_at` more often than its backoff expired, so
+that row never became due at all. A row's `attempts`/`updated_at` are now read
+exactly once, when the scheduler first bootstraps a session for it;
+reconciliation afterwards inherits that session's own `next_due_at` and ignores
+live DB values, so new records cannot postpone an already scheduled sweep
+(`retry_scheduler.rs::reconcile`, pinned by
+`changed_db_attempts_and_timestamp_do_not_reschedule_an_existing_session`).
+
+What a stable finite-backlog convergence claim still excludes is the opposite
+case: failures arriving faster than `max_chunks_per_pass` can replay them. A
+frozen sweep end guarantees each *started* sweep finishes, not that replay keeps
+up with an unbounded incoming stream.
+
+Sources: `interchain-indexer-logic/src/indexer/range_driver.rs`
+(`run_retry_tick`, `run_retry_tick_at`, `retry_chunk`),
+`interchain-indexer-logic/src/indexer/retry_scheduler.rs`,
+`interchain-indexer-logic/src/indexer/failure_ledger/policy.rs`, and
+`interchain-indexer-logic/src/database.rs::record_indexer_failures`.
+
+---
+
 ## The AMB Scan Floor Is The `amb_proxy` Contract's `started_at_block`
 
 **Symptom:** Lowering `omnibridge_mediator`'s `started_at_block` in
@@ -1242,7 +1405,7 @@ only what it applied, and `FailureLedger` carries a per-pair record epoch so a
 `record` landing inside a `resolve`'s round trip cannot be erased from the
 cache.
 
-`max_chunks_per_pass` still matters, and its default is still `2`: it now bounds
+`max_chunks_per_pass` still matters, and its default is `8`: it now bounds
 replay *RPC load* per pass against the same rate-limited endpoints rather than a
 pause. It remains bridge-wide across every due interval on every chain.
 
@@ -1851,3 +2014,223 @@ under an unchanged `topic0`, so the identity derivation differs too; see
 decode epochs".
 
 ---
+
+## Retyping A Numeric Proto Field To `string` Silently Turns Any Sort On It Lexicographic
+
+**Symptom:** After `ChainIndexingProgress.chain_id` was retyped from `int64`
+to `string`, `GET /api/v1/status/indexing` would have emitted chain ids
+`{1, 2, 100}` in the order `1, 100, 2`. Nothing fails to compile: the sort key
+is still valid, just a `String` now, and `String: Ord` is lexicographic.
+
+**Root cause:** `collect_indexing_progress`
+(`interchain-indexer-server/src/services/status.rs`) built the proto items
+first and sorted them afterwards with
+`items.sort_by_key(|item| (item.bridge_id, item.chain_id))`. The proto struct
+is the *wire* representation; once its `chain_id` is a decimal string, that
+line orders by string, not by number.
+
+**Why no test caught it:** the shared test fixture
+(`config/omnibridge/bridges.json`) declares only chains `{1, 100}`, whose
+lexicographic and numeric orders coincide. A two-element fixture cannot
+distinguish the two orderings at all — you need at least three ids where the
+widths differ, e.g. `{1, 2, 100}`.
+
+**Rule:** settle ordering on the domain type before converting to the wire
+type, per `.memory-bank/rules/rust-style.md`'s "Domain Types over Storage
+Types". `status.rs` now sorts the `IndexingTarget` slice on the numeric `i64`
+and stringifies only when the proto struct is built;
+`bridge_proto.rs`'s `indexed_chain_ids` likewise maps `to_string()` *after*
+`IndexedChains::chain_ids_for`'s numeric sort.
+
+**When you next stringify a numeric proto field, grep for every `sort`,
+`sort_by_key`, `BTreeMap`, `BTreeSet`, `min`, `max` and `binary_search` that
+touches it** — all of them change meaning silently, and only the ones with a
+three-plus-element, mixed-width fixture will fail a test.
+`test_collect_indexing_progress_orders_chain_ids_numerically` (`status.rs`)
+is the guard for this specific field; it was confirmed to fail against the
+lexicographic sort before landing.
+
+---
+
+## Third-Party Log Noise Is Suppressed In Code, Not Only Via `RUST_LOG`
+
+`alloy_transport_http` wraps every JSON-RPC call in
+`#[instrument(name = "request", ...)]`, and `#[instrument]` defaults to the
+**INFO** level. `blockscout-service-launcher`'s `TracingFormat::Default` fmt
+layer is built with `FmtSpan::NEW | FmtSpan::CLOSE`, so each RPC call prints
+two INFO lines (`request{method_names=eth_getTransactionReceipt}: ... new` /
+`... close time.busy=...`). At the indexer's request rate that buries every
+other log line — including our own INFO logs — which is why deployments used
+to carry `RUST_LOG=info,alloy_transport_http=warn`.
+
+The launcher hardcodes `EnvFilter::builder().with_default_directive(INFO)
+.from_env_lossy()`, so there is no way to inject extra *default* directives
+through it. The programmatic hook it does expose is
+`tracing::init_logs_with_filter`, which takes a `FilterFn<&Metadata>` layered
+on top of that `EnvFilter`. `interchain-indexer-server/src/logging.rs` uses it:
+`init_logs` there is a drop-in replacement for the launcher's `init_logs` and
+drops anything from `NOISY_TARGETS` above `NOISY_TARGET_MAX_LEVEL` (WARN).
+
+Two properties worth knowing before touching it:
+
+- The filter is **AND**-ed with the `EnvFilter`, so it can only ever silence,
+  never re-enable. To keep the debugging escape hatch, `suppressed_targets`
+  drops any target that is *named* in `RUST_LOG` (coarse substring check), so
+  `RUST_LOG=info,alloy_transport_http=debug` still works.
+- A `FilterFn` on the fmt layer filters span lifecycle events too (that is what
+  makes it work here at all), and it filters them by the **span's** metadata —
+  suppressing the `request` span's `new`/`close` lines does **not** suppress a
+  WARN/ERROR logged inside that span, since those events carry their own
+  metadata. Real RPC failures still surface.
+
+Adding a new noisy dependency? Append its target to `NOISY_TARGETS` rather than
+extending a deployment's `RUST_LOG`.
+
+---
+
+## Published Message Aggregates Count Terminal States Only — Downstream Totals Will Not Match
+
+**Symptom:** someone compares `stats_messages_days` / `stats_messages` against a naive
+`count(*)` over `crosschain_messages`, or against the stats service's
+`newMessagesInterchain` chart, and the numbers disagree by tens of percent. The instinct
+is that one side is losing rows.
+
+**Root cause:** our aggregates count messages that have reached a **terminal** state, i.e.
+`completed` plus `failed`. In-flight messages (`initiated`, `ready_to_claim`) are not
+counted. The stats service counts **every** message regardless of status, because its
+chart is "messages initiated per day", not "messages delivered per day".
+
+Measured on a live mainnet AMB/Omnibridge dataset filtered to `src=100 OR dst=100`
+(2026-09-04), and the arithmetic closes exactly in both directions:
+
+| | count |
+|---|---|
+| `stats_messages_days` (ours) | 50 262 |
+| raw `completed` | 50 238 |
+| raw `failed` | 24 |
+| raw `initiated` | 21 158 |
+| raw `ready_to_claim` | 270 |
+| stats service, all statuses | 71 690 |
+
+`50 238 + 24 = 50 262`, and the four statuses sum to `71 690`. So the gap is exactly the
+21 428 in-flight messages — neither side is dropping anything.
+
+**Why it matters:** the two numbers are both correct and answer different questions. If a
+UI ever shows ours next to the stats service's, they will differ by the in-flight backlog
+and look like a bug. Say which question is being answered before comparing.
+
+Related: `stats_chains_by_bridge` per-bridge uniques are not additive either (ADR-009).
+
+---
+
+## Message History Is Not Append-Only — We Mutate Rows Long After Their Day Has Passed
+
+**Symptom:** a downstream consumer caches per-day counts and they slowly go stale, or a
+re-derived aggregate disagrees with a snapshot taken earlier, with no rows added for those
+days.
+
+**Root cause:** a bridge message is initiated on one chain and claimed on another, and the
+delay is unbounded. When the claim lands we update the **existing** row — `status` moves
+toward a terminal state, `dst_tx_hash` is filled — and that row's `init_timestamp` still
+points at the original day. So the aggregate for a day weeks or months in the past changes
+without any insert.
+
+Measured on the live stand: a message initiated **2025-03-24** was updated **2026-09-04**
+to `completed` with `dst_tx_hash` set, and 2909 rows were touched within one hour.
+Re-scanning a range rewrites rows too, so `updated_at > init_timestamp` is the norm rather
+than the exception here.
+
+**Why it matters:** any consumer that assumes "days in the past are settled" is wrong for
+this indexer, and the error accumulates silently. It is also why observability-sensitive
+predicates change retroactively: a message only satisfies "destination-side observed" once
+its `dst_tx_hash` arrives, which can be months after the day it belongs to.
+
+The stats service hit exactly this — see its
+`.memory-bank/gotchas.md` → *"Interchain Chart History Drifts After Catch-Up Completes"*.
+
+---
+
+## A `null` RPC Result Is Never A Failover Signal, So A Half-Archive Node Is Invisible
+
+**Symptom:** `indexer_failures` fills with `transaction receipt not found for tx 0x…` for a
+chain whose configured primary node serves every one of those receipts fine when queried by
+hand. Forward indexing looks healthy; only the replay of historical ranges fails, forever,
+with `attempts` climbing into the hundreds.
+
+**Root cause, in three parts.**
+
+1. **A provider can be archive for logs and not for receipts.** `gnosis.drpc.org` returned
+   the *complete* `eth_getLogs` set for a 2024 Gnosis range — 344 logs, byte-identical to
+   two archive nodes — while returning `null` from `eth_getTransactionReceipt` for those
+   very same transaction hashes. Receipt history there is roughly the last 20k–100k blocks.
+   So the pipeline always gets far enough to fail at the receipt stage, and never at the
+   log stage. Do not infer "this node has the history" from a working `eth_getLogs`.
+
+2. **`null` is a successful response, so the pool never punishes it.** `failover_error`
+   (`provider_layers.rs`) only inspects JSON-RPC *error* payloads. An empty result reaches
+   `dispatch` as `Ok`, hits `mark_ok`, and clears the node's error counter — no cooldown, no
+   primary rotation. `fetch_receipts_for_transactions` then turns the `None` into a terminal
+   error for the whole chunk, with no retry against a different provider. A node that lies
+   by omission is treated as the healthiest node in the pool.
+
+3. **The replay pass saturates the pool by construction, so "catch-up is done" buys
+   nothing.** `pick_node` is a non-blocking round-robin: as soon as the primary's `max_rps`
+   cells are spent, the next request goes to the next node, and when every limiter is dry
+   `execute` falls through to `pick_node(true)`, which picks *uniformly at random* among
+   available nodes. A single 500-block AMB chunk on Gnosis holds 47–365 transactions, and
+   each one costs two calls (`eth_getTransactionReceipt` + an un-deduplicated
+   `eth_getBlockByNumber`) — 94–730 calls per chunk, issued 25 at a time against a pool
+   budget of 50 + 5 + 2 rps. The pool is saturated for the entire chunk even when the chain
+   is fully caught up, so a ~3.5% share of calls lands on the bad node. Over 153
+   transactions that is a 99.6% chance the chunk dies; over 365, 99.9998%. The same
+   interval then fails on every retry, indefinitely.
+
+Forward indexing survives the same code path only because 500 blocks take ~42 minutes to
+produce at head: the identical work spread over that window never exhausts the primary's
+budget, and recent receipts exist on the bad node anyway.
+
+**Diagnosis:** query the *same* hash against every provider in the chain's pool
+individually. A per-node split — some `OK`, some `null` — is this bug. Checking only the
+node you believe is primary proves nothing, because the pool spreads load across all of
+them regardless of `order`.
+
+**Related:** `primary_index` is a one-way ratchet. The only write outside construction is
+in `mark_error`; `health_tick` clears `disabled_until` and `consecutive_errors` but never
+re-homes the pointer to the highest-`order` node that recovered. With
+`cooldown_threshold: 1`, three consecutive errors permanently demote the preferred primary,
+and a node whose failure mode is `null` can never be demoted in turn — so the pointer can
+come to rest on the worst node in the pool and stay there.
+
+See also: *"RPC Pool Order Comes From `order`, Never From JSON Key Order"* and *"Some RPC
+Gateways Cross-Contaminate `eth_call` Responses Per Address"* — the same theme, a provider
+that answers confidently and wrongly.
+
+---
+
+## `google.protobuf.Struct` Serializes In `HashMap` Order, So Its JSON Keys Are Not Stable
+
+**Symptom:** `InterchainMessage.extra` and `IndexerStatus.extra_info` emit
+their keys in a different order on every process start. Nothing is wrong with
+the payload — the same keys and values are always there — but two responses
+from two pods are not byte-identical, and a snapshot/golden-file assertion on
+the serialized body would be flaky by construction.
+
+**Root cause:** `prost_wkt_types::Struct` is generated by prost without
+`btree_map`, so its field map is `std::collections::HashMap<String, Value>`
+(see the generated `google.protobuf.rs` in the `prost-wkt-types` build dir).
+Its hand-written `Serialize` impl iterates that map directly, and Rust's
+`HashMap` uses a per-process-random hash seed. Our own `build.rs` calls
+`.btree_map(["."])`, which is why every *other* map in this API is sorted —
+but it cannot reach inside an `extern_path`-ed well-known type.
+
+**Consequence worth knowing:** sorting a `serde_json::Value` before converting
+it into a `Struct` does nothing. `get_indexer_status`
+(`interchain-indexer-server/src/services/status.rs`) does exactly that with
+`sort_json_value` before `serde_json::from_value::<prost_wkt_types::Struct>`;
+the sort is discarded the moment the map becomes a `HashMap`.
+
+**Rule:** treat `Struct`-typed API fields as unordered JSON objects, which is
+what they are. Assert on parsed values (`body["extra"]["ns"]["field"]`), never
+on key order or on a serialized string. If a field ever genuinely needs a
+stable key order, it cannot be a `Struct` — it has to be a declared proto
+message or a `map<string, string>`, both of which `btree_map` does cover.

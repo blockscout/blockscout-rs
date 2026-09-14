@@ -42,6 +42,24 @@ impl InterchainStatisticsServiceImpl {
 
 #[async_trait::async_trait]
 impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
+    /// DEPRECATED — `GET /api/v1/stats/common`. Returns zero counters without
+    /// touching the database.
+    ///
+    /// Every call used to run an unbounded `COUNT(*)` over
+    /// `crosschain_messages` plus a joined `COUNT(*)` over
+    /// `crosschain_transfers`, uncached, inside one transaction — the heaviest
+    /// query this service served, growing with the canonical tables. The same
+    /// numbers now come from the stats service in interchain mode, which
+    /// precomputes them.
+    ///
+    /// The request is still parsed and its filters still validated, so a
+    /// malformed query keeps failing with `400` instead of silently returning
+    /// zeros. `timestamp` is still echoed back, because it is the request's own
+    /// value, not a computed statistic.
+    ///
+    /// TODO(next API iteration): remove this handler, the RPC and its messages
+    /// in `stats.proto`, the HTTP rule in `api_config_http.yaml`, and
+    /// `InterchainDatabase::get_total_counters` with its tests.
     async fn get_common_statistics(
         &self,
         request: Request<GetCommonStatisticsRequest>,
@@ -52,7 +70,9 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
             .unwrap_or_else(|| Utc::now().naive_utc());
 
-        let filter = build_chain_bridge_filter(
+        // Parsed and validated, then dropped: a malformed query keeps failing
+        // with `400` rather than silently answering zeros, and no query runs.
+        build_chain_bridge_filter(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
@@ -62,21 +82,22 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
-        let counters = self
-            .stats
-            .interchain_db()
-            .get_total_counters(timestamp, &filter)
-            .await
-            .map_err(map_stats_error)?;
-
         let response = GetCommonStatisticsResponse {
-            timestamp: super::utils::db_datetime_to_string(counters.timestamp),
-            total_messages: counters.total_messages,
-            total_transfers: counters.total_transfers,
+            timestamp: super::utils::db_datetime_to_string(timestamp),
+            total_messages: 0,
+            total_transfers: 0,
         };
         Ok(Response::new(response))
     }
 
+    /// DEPRECATED — `GET /api/v1/stats/daily`. Returns zero counters without
+    /// touching the database. Same reasoning, same removal plan as
+    /// [`Self::get_common_statistics`]; `date` is still the day of the
+    /// request's own `timestamp`.
+    ///
+    /// TODO(next API iteration): remove this handler, the RPC and its messages
+    /// in `stats.proto`, the HTTP rule in `api_config_http.yaml`, and
+    /// `InterchainDatabase::get_daily_counters` with its tests.
     async fn get_daily_statistics(
         &self,
         request: Request<GetDailyStatisticsRequest>,
@@ -87,7 +108,9 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
             .unwrap_or_else(|| Utc::now().naive_utc());
 
-        let filter = build_chain_bridge_filter(
+        // Parsed and validated, then dropped: a malformed query keeps failing
+        // with `400` rather than silently answering zeros, and no query runs.
+        build_chain_bridge_filter(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
@@ -97,17 +120,10 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
-        let counters = self
-            .stats
-            .interchain_db()
-            .get_daily_counters(timestamp, &filter)
-            .await
-            .map_err(map_stats_error)?;
-
         let response = GetDailyStatisticsResponse {
-            date: counters.date.to_string(),
-            daily_messages: counters.daily_messages,
-            daily_transfers: counters.daily_transfers,
+            date: timestamp.date().to_string(),
+            daily_messages: 0,
+            daily_transfers: 0,
         };
         Ok(Response::new(response))
     }

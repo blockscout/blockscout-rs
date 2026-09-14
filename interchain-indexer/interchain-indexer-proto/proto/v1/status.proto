@@ -37,7 +37,7 @@ message GetIndexingProgressRequest {
 
 message ChainIndexingProgress {
   int32  bridge_id                = 1;
-  int64  chain_id                 = 2;
+  string chain_id                 = 2;
 
   // The unscanned interval is [catchup_min_cursor, catchup_max_cursor], inclusive.
   // Both are "next block to scan" boundaries, so catch-up can close the interval

@@ -109,10 +109,19 @@ pub(crate) async fn collect_indexing_progress(
         .map(|(bridge_id, chain_id, blocks, _oldest)| ((bridge_id, chain_id), blocks))
         .collect();
 
-    let mut items: Vec<ChainIndexingProgress> = targets
+    // `ChainIndexingProgress.chain_id` is a decimal *string* on the wire, so the
+    // ordering must be settled on the numeric `i64` before the conversion:
+    // sorting the built items would put `{1, 2, 100}` in lexicographic order
+    // (`1, 100, 2`).
+    let mut selected: Vec<&IndexingTarget> = targets
         .iter()
         .filter(|target| bridge_id.is_none_or(|id| id == target.bridge_id))
         .filter(|target| chain_id.is_none_or(|id| id == target.chain_id))
+        .collect();
+    selected.sort_by_key(|target| (target.bridge_id, target.chain_id));
+
+    let items: Vec<ChainIndexingProgress> = selected
+        .into_iter()
         .map(|target| {
             let key = (target.bridge_id, target.chain_id);
             let checkpoint = checkpoints.get(&key);
@@ -129,7 +138,7 @@ pub(crate) async fn collect_indexing_progress(
 
             ChainIndexingProgress {
                 bridge_id: target.bridge_id,
-                chain_id: target.chain_id,
+                chain_id: target.chain_id.to_string(),
                 start_block: progress.start_block,
                 catchup_min_cursor: progress.catchup_min_cursor,
                 catchup_max_cursor: progress.catchup_max_cursor,
@@ -143,7 +152,6 @@ pub(crate) async fn collect_indexing_progress(
         })
         .collect();
 
-    items.sort_by_key(|item| (item.bridge_id, item.chain_id));
     Ok(items)
 }
 
@@ -435,7 +443,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(items.len(), 1);
-        assert_eq!((items[0].bridge_id, items[0].chain_id), (1, 1));
+        assert_eq!((items[0].bridge_id, items[0].chain_id.as_str()), (1, "1"));
         assert_eq!(items[0].failed_blocks, 100);
 
         let none = collect_indexing_progress(&db, &targets, Some(1), Some(100))
@@ -444,6 +452,56 @@ mod tests {
         assert!(
             none.is_empty(),
             "a filter matching no configured target must return an empty list, not an error"
+        );
+    }
+
+    /// `ChainIndexingProgress.chain_id` is a decimal string on the wire, so
+    /// ordering must be settled on the numeric `i64` before the conversion.
+    /// Chain ids `{1, 2, 100}` are the smallest set where a lexicographic sort
+    /// (`1, 100, 2`) and a numeric one disagree; sorting the built proto items
+    /// instead of the targets fails this test.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_collect_indexing_progress_orders_chain_ids_numerically() {
+        let test_db = init_db("collect_progress_numeric_chain_id_order").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_bridges_and_chains(&db).await;
+        db.upsert_chains(vec![chains::ActiveModel {
+            id: Set(2),
+            name: Set("chain-2".to_string()),
+            ..Default::default()
+        }])
+        .await
+        .unwrap();
+
+        // Declared out of numeric order so the ordering cannot come from the
+        // input sequence.
+        let targets = [
+            IndexingTarget {
+                bridge_id: 1,
+                chain_id: 100,
+                start_block: 1000,
+            },
+            IndexingTarget {
+                bridge_id: 1,
+                chain_id: 1,
+                start_block: 1000,
+            },
+            IndexingTarget {
+                bridge_id: 1,
+                chain_id: 2,
+                start_block: 1000,
+            },
+        ];
+
+        let items = collect_indexing_progress(&db, &targets, None, None)
+            .await
+            .unwrap();
+        let chain_ids: Vec<&str> = items.iter().map(|item| item.chain_id.as_str()).collect();
+        assert_eq!(
+            chain_ids,
+            vec!["1", "2", "100"],
+            "chain ids must be ordered numerically, not lexicographically; got {chain_ids:?}"
         );
     }
 }

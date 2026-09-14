@@ -72,7 +72,7 @@ that could escalate it.
 - `interchain-indexer-logic/src/indexer/range_driver.rs` — `RangeDriver::run`:
   `try_join_all` over one sequential handler per chain, raced in a
   `tokio::select!` against the retry future; `RangeProcessor` trait;
-  `retry_pending` default implementation
+  `run_retry_tick` / `retry_chunk` production replay path
 - `interchain-indexer-logic/src/indexer/failure_ledger/mod.rs` — the per-pair
   record epoch that makes `record`/`resolve` safe to interleave
 - `interchain-indexer-logic/src/log_stream.rs` — `LogStream::into_stream`
@@ -97,7 +97,7 @@ that could escalate it.
 | Element | Role |
 | --- | --- |
 | `CrosschainIndexer::start` | spawns exactly one tokio task per bridge |
-| `RangeDriver<P>` | owns the run loop for a whole bridge; `retry_cursor` is a `run` local, which is what lets N handlers share `&self` |
+| `RangeDriver<P>` | owns the run loop for a whole bridge; its retry future owns one persistent `RetryScheduler`, while N handlers share `&self` |
 | `RangeProcessor` | per-bridge trait; every method already takes `chain_id` |
 | `LogStream` | one per `(bridge, chain)`, internally two sub-streams |
 | `FailureLedger` | `Arc`-shared per bridge; `pairs_with_holes` cache keyed `(bridge_id, chain_id)` |

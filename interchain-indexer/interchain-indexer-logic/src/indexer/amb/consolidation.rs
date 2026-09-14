@@ -169,6 +169,7 @@ fn build_source_led(
         recipient_address: ActiveValue::Set(recipient_address.map(|a| a.as_slice().to_vec())),
         payload: ActiveValue::Set(Some(source_event.application_calldata.clone())),
         stats_processed: ActiveValue::Set(0),
+        protocol_metadata: ActiveValue::Set(None),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };
@@ -247,6 +248,7 @@ fn build_destination_only(
         recipient_address: ActiveValue::Set(Some(event.executor.as_slice().to_vec())),
         payload: ActiveValue::Set(None),
         stats_processed: ActiveValue::Set(0),
+        protocol_metadata: ActiveValue::Set(None),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     };

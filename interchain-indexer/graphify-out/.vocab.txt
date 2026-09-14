@@ -10,11 +10,14 @@ acknowledgement
 across
 action
 active
+activity
 actix
 acts
+actual
 adapters
 add
 added
+additive
 addr
 address
 addresses
@@ -45,6 +48,7 @@ ahead
 align
 alignment
 all
+allocate
 allow
 allowed
 allows
@@ -70,6 +74,7 @@ answer
 anyhow
 api
 app
+appeared
 appended
 appends
 applied
@@ -95,6 +100,7 @@ assets
 assign
 async
 atomic
+attempt
 attempts
 attributed
 attributes
@@ -126,6 +132,7 @@ beats
 because
 becomes
 before
+begin
 behavior
 being
 below
@@ -185,6 +192,7 @@ called
 callers
 can
 canary
+candidates
 cannot
 canonical
 canonicity
@@ -203,6 +211,7 @@ cause
 causes
 caveats
 ceil
+cell
 certifies
 cfg
 chain
@@ -232,6 +241,7 @@ classifies
 classify
 claude
 clause
+clean
 cleanup
 clear
 clearing
@@ -313,6 +323,7 @@ context
 contiguous
 contract
 contracts
+contribute
 contributes
 convention
 conventions
@@ -320,10 +331,12 @@ cooldown
 cooperative
 correct
 corrections
+correctly
 correctness
 correlation
 count
 countable
+counted
 counter
 counterpart
 counterparties
@@ -347,6 +360,7 @@ credit
 criteria
 cross
 crosschain
+crosses
 csv
 current
 cursor
@@ -436,6 +450,7 @@ direct
 direction
 directional
 directions
+directive
 directly
 directories
 directory
@@ -478,6 +493,7 @@ durable
 duration
 during
 dyn
+dynamic
 each
 eager
 earliest
@@ -498,6 +514,7 @@ enable
 enabled
 encode
 encodes
+encoding
 end
 endpoint
 endpoints
@@ -603,6 +620,7 @@ final
 finality
 finalized
 find
+finish
 finite
 fires
 first
@@ -687,6 +705,7 @@ guard
 guardrails
 guards
 half
+halves
 hand
 handle
 handler
@@ -729,7 +748,9 @@ how
 http
 hub
 human
+hundred
 hybrid
+hyper
 icm
 icon
 ictt
@@ -917,6 +938,7 @@ match
 matched
 matches
 matching
+materialized
 matrix
 matters
 max
@@ -930,6 +952,7 @@ meeting
 membership
 memory
 merge
+mergeable
 merged
 merges
 message
@@ -996,6 +1019,7 @@ newest
 next
 node
 nodes
+noisy
 non
 none
 nonneg
@@ -1016,6 +1040,7 @@ nulls
 number
 numbers
 numeric
+numerically
 numine
 object
 observability
@@ -1041,6 +1066,7 @@ open
 operational
 opposite
 opt
+opted
 option
 optional
 order
@@ -1059,6 +1085,7 @@ outgoing
 output
 outside
 over
+overcount
 overflow
 overlap
 overlapping
@@ -1074,6 +1101,7 @@ package
 packet
 padded
 page
+paginates
 pagination
 pair
 pairs
@@ -1171,6 +1199,7 @@ processed
 processes
 processing
 processor
+produce
 produces
 progress
 project
@@ -1264,6 +1293,7 @@ redis
 reenabled
 ref
 reference
+references
 reflect
 refresh
 refusal
@@ -1285,6 +1315,7 @@ rejects
 related
 relation
 relinks
+remain
 remainder
 remaining
 remote
@@ -1353,6 +1384,7 @@ review
 reviewer
 risk
 risks
+robins
 rollback
 root
 rotate
@@ -1379,6 +1411,7 @@ rust
 safe
 safety
 same
+sample
 sanitization
 sanitize
 saturating
@@ -1388,9 +1421,12 @@ scan
 scanned
 scanner
 scanning
+scheduled
+scheduler
 schema
 scheme
 scope
+scoped
 scopes
 scoping
 script
@@ -1408,6 +1444,7 @@ seeded
 seeding
 segment
 select
+selected
 selection
 selects
 self
@@ -1429,12 +1466,14 @@ server
 service
 services
 serving
+session
 set
 sets
 settings
 several
 shape
 shared
+sharing
 short
 shorter
 should
@@ -1451,8 +1490,10 @@ silently
 single
 singleton
 site
+sits
 size
 sized
+sketches
 skew
 skill
 skip
@@ -1460,6 +1501,7 @@ skipping
 skips
 slow
 snapshot
+snapshots
 sol
 solution
 solutions
@@ -1541,6 +1583,8 @@ sums
 superseded
 superset
 supervisor
+suppressed
+suppresses
 survives
 swagger
 sweep
@@ -1585,6 +1629,7 @@ throttled
 through
 throughput
 tick
+ticks
 tie
 tier
 tiered
@@ -1627,6 +1672,7 @@ treats
 tree
 trend
 triggers
+trillion
 trims
 trip
 triple
@@ -1655,6 +1701,7 @@ unconfigured
 undecodable
 under
 underflow
+unfiltered
 unflagged
 unhealed
 unindexed
@@ -1662,12 +1709,14 @@ union
 unions
 unique
 unknown
+unless
 unlisted
 unordered
 unrecordable
 unrelated
 unscaled
 unscanned
+unselected
 unset
 until
 untouched
@@ -1709,10 +1758,12 @@ versioning
 versions
 very
 via
+visibility
 visible
 vocabulary
 waits
 warn
+warning
 way
 weighted
 were
@@ -1720,10 +1771,13 @@ what
 when
 where
 which
+while
 whitespace
 whole
+wholly
 why
 wide
+widen
 widens
 width
 window
@@ -1737,6 +1791,7 @@ withdrawn
 withhold
 within
 without
+word
 work
 workaround
 worker

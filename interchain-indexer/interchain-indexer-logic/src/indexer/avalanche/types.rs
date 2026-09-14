@@ -4,6 +4,7 @@ use alloy::primitives::{Address, B256, FixedBytes};
 use serde::{Deserialize, Serialize};
 
 use super::abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
+use crate::protocol_metadata::UnresolvedDestination;
 
 pub type MessageId = FixedBytes<32>;
 
@@ -57,7 +58,9 @@ pub(crate) struct AnnotatedEvent<T> {
     pub(crate) block_number: i64,
     pub(crate) block_timestamp: chrono::NaiveDateTime,
     pub(crate) source_chain_id: i64,
-    pub(crate) destination_chain_id: i64,
+    /// `None` only for a send event whose destination could not be
+    /// resolved. receive/execution always know it: it is the local chain.
+    pub(crate) destination_chain_id: Option<i64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -74,4 +77,9 @@ pub(crate) struct Message {
     /// When true, consolidation can proceed without the send event,
     /// using destination-side timestamps as `init_timestamp`.
     pub(crate) source_chain_is_unknown: bool,
+    /// Diagnostics for an unresolved destination. Lives as long as the
+    /// numeric destination is unknown; `consolidate()` decides whether to
+    /// write it.
+    #[serde(default)]
+    pub(crate) unresolved_destination: Option<UnresolvedDestination>,
 }

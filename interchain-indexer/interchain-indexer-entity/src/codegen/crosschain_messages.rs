@@ -30,6 +30,8 @@ pub struct Model {
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub payload: Option<Vec<u8>>,
     pub stats_processed: i16,
+    #[sea_orm(column_type = "JsonBinary", nullable)]
+    pub protocol_metadata: Option<Json>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

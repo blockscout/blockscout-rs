@@ -231,7 +231,14 @@ enum ChartSubsetUpdateStatus {
 // Each field represents status of charts with corresponding dependency
 // as well as all charts with weaker requirements
 message UpdateStatus {
-  // Status of all enabled charts
+  // Status of all enabled charts.
+  //
+  // In `Interchain` mode this is the field to read, and it is unambiguous
+  // there: that mode force-disables every other start check, so the
+  // interchain catch-up gate is the only condition that can hold it at
+  // `WAITING_FOR_STARTING_CONDITION`. The five fields below describe
+  // Blockscout's database, which `Interchain` mode never reads, so their
+  // values there are not meaningful.
   ChartSubsetUpdateStatus all_status = 1;
   // Status of all enabled charts that are independent from any indexing
   ChartSubsetUpdateStatus independent_status = 2;

@@ -26,16 +26,17 @@ use parameters::{
         point::PassPoint,
     },
 };
-use sea_orm::{DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbBackend, DbErr, Statement};
 
 use crate::{
     ChartError, ChartKey, IndexingStatus, Mode,
     charts::{
-        ChartProperties, Named, chart_properties_portrait,
+        ChartProperties, Named, ResolutionKind, chart_properties_portrait,
         db_interaction::{
             read::{
-                get_chart_metadata, get_min_block_blockscout, interchain::get_min_block_interchain,
-                last_accurate_point, multichain::get_min_block_multichain,
+                get_chart_metadata, get_min_block_blockscout, get_min_date,
+                interchain::get_min_block_interchain, last_accurate_point,
+                multichain::get_min_block_multichain, recorded_min_chart_date,
                 recorded_min_indexer_block,
             },
             write::{clear_chart_data_and_updated_at, set_last_updated_at},
@@ -46,8 +47,10 @@ use crate::{
     },
     metrics,
     range::UniversalRange,
+    types::Timespan,
     utils::day_start,
 };
+use entity::sea_orm_active_enums::ChartType;
 
 use super::auxiliary::PartialCumulative;
 
@@ -249,11 +252,116 @@ where
                 .await
                 .map_err(ChartError::StatsDB)?;
         }
+        // Trigger 2 ("gap probe"): a day-resolution interchain line chart
+        // whose earliest stored date sits above the indexer's current
+        // filtered floor might be missing history the indexer has backfilled
+        // below its own predicate. Each guard term is load-bearing:
+        // - `!cx.force_full` — a rebuild is already happening, so skip both
+        //   reads (this also means a trigger-1 cycle never pays for
+        //   trigger 2);
+        // - `cx.mode == Mode::Interchain` — the other modes detect backfill
+        //   through the real `min_blockscout_block` and must not change;
+        // - `ChartType::Line` — counters store one point stamped at the
+        //   *current* timespan, so their floor is always today and an
+        //   ungated check would fire on every counter, every cycle, forever;
+        // - `ResolutionKind::Day` — lower resolutions rebuild only via the
+        //   daily sibling's marker below (`daily_sibling_rebuilt`); see
+        //   `interchain_history_gap_has_data`'s doc comment for why a
+        //   resolution chart's own probe would add cost without adding
+        //   correctness.
+        let interchain_line_gate = !cx.force_full
+            && cx.mode == Mode::Interchain
+            && ChartProps::chart_type() == ChartType::Line;
+        let own_floor_regressed =
+            if interchain_line_gate && ChartProps::resolution() == ResolutionKind::Day {
+                interchain_history_gap_has_data::<ChartProps, MainDep, ResolutionDep, Update>(
+                    cx,
+                    chart_id,
+                    dependency_data_fetch_timer,
+                )
+                .await?
+            } else {
+                None
+            };
+        // Propagation fix: both sides of `interchain_history_gap_has_data`'s
+        // comparison go through `ChartProps::Resolution::from_date`, and for a
+        // resolution chart a stored `date` already **is** the bucket's first day
+        // (`Week::into_date() == saturating_first_day()`, similarly for
+        // month/year). So once this chart's own comparison has fired once and
+        // normalised the stored floor to the bucket boundary, any further floor
+        // movement that stays inside that same bucket is invisible to it —
+        // forever, not just for one cycle. The **daily** chart's own comparison
+        // has no such blind spot (`Day::from_date` is the identity), so it is
+        // used as the family's reliable detector: when it fires, every lower
+        // resolution in the same family is forced to rebuild too, via a marker
+        // left in `cx.cache` under the chart *name* (shared across resolutions,
+        // unlike `ChartKey`).
+        //
+        // Reading a marker written by a *different* chart's `update_itself_inner`
+        // call within this same cycle is safe only because dependants are
+        // guaranteed to run after their dependencies: every lower-resolution
+        // interchain chart takes the daily local-db chart as its main dependency
+        // (`SumLowerResolution<MapParseTo<StripExt<…>>, …>`), and
+        // `enabled_members_with_deps`/`update_recursively` always update a
+        // chart's `MainDependencies` before the chart itself. So by the time a
+        // weekly/monthly/yearly chart's `update_itself_inner` runs in a given
+        // cycle, the daily chart in its family has already run in the same
+        // cycle and already written (or not written) the marker for this
+        // decision to read.
+        let daily_sibling_marker = interchain_backfill_marker_statement::<ChartProps>();
+        let daily_sibling_rebuilt = interchain_line_gate
+            && ChartProps::resolution() != ResolutionKind::Day
+            && cx
+                .cache
+                .get::<String>(&daily_sibling_marker)
+                .await
+                .is_some();
+        let backfill_rebuild = own_floor_regressed.is_some() || daily_sibling_rebuilt;
+        match &own_floor_regressed {
+            Some((stored_floor, indexer_floor)) => {
+                tracing::info!(
+                    chart =% ChartProps::key(),
+                    stored_floor =? stored_floor,
+                    indexer_floor =? indexer_floor,
+                    "interchain history floor regressed; recomputing the series from the \
+                     indexer's current filtered floor (backfill pickup, no clear)"
+                );
+            }
+            None if daily_sibling_rebuilt => {
+                tracing::info!(
+                    chart =% ChartProps::key(),
+                    "the daily chart in this interchain family rebuilt from a floor \
+                     regression this cycle; propagating the rebuild to this lower \
+                     resolution, whose own bucket-level floor comparison cannot see an \
+                     intra-bucket movement"
+                );
+            }
+            None => {}
+        }
+        // Only the daily chart writes the marker — it is the only reliable
+        // detector, and lower resolutions must not re-propagate a marker of
+        // their own (there is nothing below them to propagate to, and doing so
+        // would just be a no-op keyed the same way).
+        if interchain_line_gate
+            && ChartProps::resolution() == ResolutionKind::Day
+            && backfill_rebuild
+        {
+            cx.cache.insert(&daily_sibling_marker, "1".to_owned()).await;
+        }
+        // NOTE: only the `force_full` *argument* below is affected — `cx` itself
+        // (shared by every chart in the group) is never mutated. `cx.force_full`
+        // has a second job a few lines above (gating the
+        // `recorded_min_indexer_block` read), and conflating the two would change
+        // read behaviour in non-interchain modes. The local override reuses
+        // `Update::update_values`' existing "`last_accurate_point == None` ⇒
+        // recompute from `get_min_date`" contract, and gives per-chart
+        // granularity: within one group a base daily line may have regressed
+        // while its cumulative dependant has not.
         let last_accurate_point = last_accurate_point::<ChartProps, Query>(
             min_indexer_block,
             recorded,
             cx.stats_db,
-            cx.force_full,
+            cx.force_full || backfill_rebuild,
             ChartProps::approximate_trailing_points(),
             ChartProps::missing_date_policy(),
         )
@@ -287,6 +395,100 @@ fn postgres_timestamps_eq(time_1: DateTime<Utc>, time_2: DateTime<Utc>) -> bool 
     // therefore, we need to drop any values smaller than microsecond
     // microsecond = 10^(-6) => compare up to 6 digits after comma
     time_1.trunc_subsecs(6).eq(&time_2.trunc_subsecs(6))
+}
+
+/// Trigger 2: asks the question the trigger actually needs answered — *is
+/// there anything below this chart's stored floor that it would actually
+/// store?* — rather than trusting a floor comparison alone as the rebuild
+/// verdict.
+///
+/// `get_min_date`/`get_min_date_interchain` (the shared, filter-scoped
+/// indexer floor) is `min` of a message-filtered and a transfer-filtered
+/// floor — not anything scoped to *this* chart's own predicate (see
+/// `.memory-bank/gotchas.md` → "A Transfer's Token Chains Are Not Its
+/// Message's Route"). So a chart's own stored floor sitting above that shared
+/// floor does not, by itself, mean the chart is missing data: the gap between
+/// the two floors might contain only rows this chart's own predicate would
+/// never store anyway.
+///
+/// So instead of stopping at the comparison, this probes the chart's own main
+/// dependency directly over the gap — `Update::probe_gap_has_data`, which for
+/// `BatchUpdate` (every day-resolution interchain line chart) is exactly
+/// `MainDep::query_data` over the gap range, i.e. the very same operation a
+/// real batch step performs to fetch a range (see
+/// `local_db/parameters/update/batching/mod.rs`), just checked for
+/// emptiness instead of being written to the database. Returns
+/// `Some((stored_floor, indexer_floor))` only when that probe actually finds
+/// at least one point — i.e. only when a rebuild would pick up something this
+/// chart is actually missing.
+///
+/// This is exact and stateless: unlike a memory of "this pair was already
+/// proven unproductive" (which this replaces), nothing is remembered between
+/// cycles. A row that later lands inside the gap is picked up the very next
+/// cycle this runs — there is nothing that needs to be suppressed, and
+/// nothing that could suppress it by mistake.
+///
+/// Both floors go through `ChartProps::Resolution::from_date`, which is
+/// exactly how `BatchUpdate` derives `update_range_start`, so the comparison
+/// and the probe range are both in the units the rebuild will use.
+/// `get_min_date(cx)` is filter-scoped and memoised in `UpdateContext::cache`,
+/// so it costs one query pair per group update rather than one per chart.
+/// Restricted by the caller to day-resolution charts — see the gate in
+/// `update_itself_inner`.
+async fn interchain_history_gap_has_data<ChartProps, MainDep, ResolutionDep, Update>(
+    cx: &UpdateContext<'_>,
+    chart_id: i32,
+    dependency_data_fetch_timer: &mut AggregateTimer,
+) -> Result<Option<(ChartProps::Resolution, ChartProps::Resolution)>, ChartError>
+where
+    ChartProps: ChartProperties + ?Sized,
+    ChartProps::Resolution: Timespan + Ord + Clone + Debug,
+    MainDep: DataSource,
+    ResolutionDep: DataSource,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
+{
+    // a fresh chart, or one the fingerprint gate just cleared, has no floor to
+    // regress, and `BatchUpdate` already starts at `get_min_date` then
+    let Some(stored_floor) = recorded_min_chart_date(cx.stats_db, chart_id).await? else {
+        return Ok(None);
+    };
+    let stored_floor = ChartProps::Resolution::from_date(stored_floor);
+    let indexer_floor = ChartProps::Resolution::from_date(
+        get_min_date(cx)
+            .await
+            .map(|time| time.date())
+            .map_err(ChartError::IndexerDB)?,
+    );
+    if stored_floor <= indexer_floor {
+        return Ok(None);
+    }
+    let gap_range: UniversalRange<DateTime<Utc>> = (indexer_floor.saturating_start_timestamp()
+        ..stored_floor.saturating_start_timestamp())
+        .into();
+    let has_data = Update::probe_gap_has_data(cx, gap_range, dependency_data_fetch_timer).await?;
+    if has_data {
+        Ok(Some((stored_floor, indexer_floor)))
+    } else {
+        Ok(None)
+    }
+}
+
+/// The `cx.cache` key used to propagate "the daily chart in this family fired
+/// trigger 2 this cycle" to its weekly/monthly/yearly siblings.
+///
+/// Keyed by `ChartProps::name()`, not `ChartProps::key()`: the name is exactly
+/// what every resolution of one chart family shares, and `UpdateCache` is keyed
+/// by an arbitrary `Statement`, so a synthetic one (never executed) is used
+/// purely as a namespaced string key. `db_backend` is irrelevant here — chosen
+/// once (`Postgres`) for a stable, unexecuted key.
+fn interchain_backfill_marker_statement<ChartProps>() -> Statement
+where
+    ChartProps: ChartProperties + ?Sized,
+{
+    Statement::from_string(
+        DbBackend::Postgres,
+        format!("interchain_backfill_marker::{}", ChartProps::name()),
+    )
 }
 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> DataSource
@@ -680,6 +882,329 @@ mod tests {
                 .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
+        }
+    }
+
+    /// FINDING 2's replacement for trigger 2: rather than remembering that a
+    /// stored-floor comparison already proved unproductive (which is what
+    /// `81b1dfb5` did, and which this replaces), `interchain_history_gap_has_data`
+    /// probes the chart's own main dependency directly over the gap and
+    /// rebuilds only when that probe finds something. The two tests below
+    /// share the same setup: a message-family interchain line chart whose own
+    /// predicate never matches the row that pulls the shared,
+    /// filter-scoped indexer floor down (see
+    /// `interchain_history_gap_has_data`'s doc comment, and
+    /// `.memory-bank/gotchas.md` → "A Transfer's Token Chains Are Not Its
+    /// Message's Route" for why this divergence exists at all). Filtering on
+    /// `dst_chain_ids` reproduces it directly, since the same list is applied
+    /// to `crosschain_messages.dst_chain_id` and to
+    /// `crosschain_transfers.token_dst_chain_id` independently.
+    mod interchain_history_gap_probe {
+        use chrono::{DateTime, Days, NaiveDate, Utc};
+        use interchain_indexer_filters::ChainBridgeFilter;
+        use pretty_assertions::assert_eq;
+        use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
+
+        use crate::{
+            ChartProperties, InterchainFilter, Mode,
+            charts::{
+                db_interaction::read::{find_chart, recorded_min_chart_date},
+                lines::interchain::new_messages_interchain::{self, NewMessagesInterchain},
+            },
+            data_source::{
+                DataSource, UpdateContext,
+                types::{IndexerMigrations, UpdateParameters},
+            },
+            tests::{
+                mock_interchain::test_interchain_filter,
+                simple_test::prepare_interchain_chart_test_unfilled,
+            },
+        };
+
+        use super::super::interchain_backfill_marker_statement;
+
+        const BRIDGE_ID: i32 = 1;
+        const SRC_CHAIN: i64 = 10;
+        /// A message ending here fails the test's `dst_chain_ids` filter.
+        const OTHER_DST_CHAIN: i64 = 20;
+        /// The filter's configured `dst_chain_ids` target.
+        const TARGET_DST_CHAIN: i64 = 30;
+
+        async fn exec(interchain: &DatabaseConnection, sql: String) {
+            interchain
+                .execute(Statement::from_string(DbBackend::Postgres, sql))
+                .await
+                .unwrap();
+        }
+
+        async fn insert_reference_rows(interchain: &DatabaseConnection) {
+            for chain_id in [SRC_CHAIN, OTHER_DST_CHAIN, TARGET_DST_CHAIN] {
+                exec(
+                    interchain,
+                    format!(
+                        "INSERT INTO chains (id, name) VALUES ({chain_id}, 'chain_{chain_id}')"
+                    ),
+                )
+                .await;
+            }
+            exec(
+                interchain,
+                format!(
+                    "INSERT INTO bridges (id, name) VALUES ({BRIDGE_ID}, 'bridge_{BRIDGE_ID}')"
+                ),
+            )
+            .await;
+        }
+
+        /// A message whose own route matches the filter (`dst = TARGET_DST_CHAIN`):
+        /// the message-family chart actually stores a row for it.
+        async fn insert_matching_message(
+            interchain: &DatabaseConnection,
+            id: i64,
+            init_timestamp: &str,
+        ) {
+            insert_message_and_transfer(interchain, id, init_timestamp, TARGET_DST_CHAIN).await;
+        }
+
+        /// A message whose own route does NOT match the filter (`dst =
+        /// OTHER_DST_CHAIN`), paired with a transfer whose own token route DOES
+        /// (`token_dst_chain_id = TARGET_DST_CHAIN`) — the "transfer's token
+        /// chains are not its message's route" case. Passes
+        /// `transfers_condition()`, fails `messages_condition()`.
+        async fn insert_diverging_message(
+            interchain: &DatabaseConnection,
+            id: i64,
+            init_timestamp: &str,
+        ) {
+            insert_message_and_transfer(interchain, id, init_timestamp, OTHER_DST_CHAIN).await;
+        }
+
+        /// Inserts one message (route `SRC_CHAIN -> message_dst_chain`) and its
+        /// one transfer, whose token route is always `SRC_CHAIN ->
+        /// TARGET_DST_CHAIN` regardless of `message_dst_chain` — the token route
+        /// deliberately does not follow the message's own route, matching the
+        /// gotcha this test reproduces.
+        async fn insert_message_and_transfer(
+            interchain: &DatabaseConnection,
+            id: i64,
+            init_timestamp: &str,
+            message_dst_chain: i64,
+        ) {
+            exec(
+                interchain,
+                format!(
+                    "INSERT INTO crosschain_messages \
+                     (id, bridge_id, init_timestamp, src_chain_id, dst_chain_id) \
+                     VALUES ({id}, {BRIDGE_ID}, '{init_timestamp}', {SRC_CHAIN}, {message_dst_chain})"
+                ),
+            )
+            .await;
+            exec(
+                interchain,
+                format!(
+                    "INSERT INTO crosschain_transfers \
+                     (id, message_id, bridge_id, index, token_src_chain_id, token_dst_chain_id) \
+                     VALUES ({id}, {id}, {BRIDGE_ID}, 0, {SRC_CHAIN}, {TARGET_DST_CHAIN})"
+                ),
+            )
+            .await;
+        }
+
+        fn filter() -> InterchainFilter {
+            test_interchain_filter(ChainBridgeFilter {
+                dst_chain_ids: Some(vec![TARGET_DST_CHAIN]),
+                ..Default::default()
+            })
+        }
+
+        fn parameters<'a>(
+            stats_db: &'a DatabaseConnection,
+            indexer_db: &'a DatabaseConnection,
+            update_time: DateTime<Utc>,
+        ) -> UpdateParameters<'a> {
+            UpdateParameters {
+                stats_db,
+                mode: Mode::Interchain,
+                multichain_filter: None,
+                interchain_filter: filter(),
+                indexer_db,
+                indexer_applied_migrations: IndexerMigrations::latest(),
+                second_indexer_db: None,
+                enabled_update_charts_recursive: NewMessagesInterchain::all_dependencies_chart_keys(
+                ),
+                update_time_override: Some(update_time),
+                force_full: false,
+            }
+        }
+
+        /// FINDING 2's required regression test: a row that lands *inside* the
+        /// gap on a later cycle must reach the chart, even when the shared,
+        /// filter-scoped indexer floor does not move at all between the cycle
+        /// that first proves the gap unproductive and the cycle the new row
+        /// appears — i.e. the exact `(stored_floor, indexer_floor)` pair is
+        /// byte-for-byte identical across both cycles.
+        ///
+        /// This must fail against `81b1dfb5`'s memory-based code: that commit
+        /// recorded the pair `(floor_10th, floor_1st)` as "unproductive" after
+        /// cycle 1 below, and cycle 2 presents that *exact same pair* (message
+        /// 3's own date does not move the shared floor — see the comment at
+        /// its insertion below) — so the memory would recognize it as an
+        /// already-proven-unproductive repeat and suppress the rebuild,
+        /// permanently losing message 3. The probe added here has no such
+        /// memory: it re-queries the gap every cycle and finds message 3
+        /// regardless of what any previous cycle concluded.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn gap_probe_picks_up_a_row_that_lands_inside_the_gap_later() {
+            let _ = tracing_subscriber::fmt::try_init();
+            let (init_time, db, indexer) =
+                prepare_interchain_chart_test_unfilled::<NewMessagesInterchain>(
+                    "gap_probe_picks_up_a_row_that_lands_inside_the_gap_later",
+                )
+                .await;
+            insert_reference_rows(&indexer).await;
+            // only the matching message exists so far — the chart's initial
+            // build sees a floor that agrees with the (not yet backfilled)
+            // indexer floor, so trigger 2 has nothing to fire on yet
+            insert_matching_message(&indexer, 1, "2023-01-10 10:00:00").await;
+
+            let chart_id = find_chart(&db, &new_messages_interchain::Properties::key())
+                .await
+                .unwrap()
+                .expect("chart row must exist after init_recursively");
+            let floor_10th = NaiveDate::from_ymd_opt(2023, 1, 10).unwrap();
+            let floor_3rd = NaiveDate::from_ymd_opt(2023, 1, 3).unwrap();
+            let marker =
+                || interchain_backfill_marker_statement::<new_messages_interchain::Properties>();
+
+            // cycle 0: initial build.
+            let cx0 =
+                UpdateContext::from_params_now_or_override(parameters(&db, &indexer, init_time));
+            NewMessagesInterchain::update_recursively(&cx0)
+                .await
+                .unwrap();
+            assert_eq!(
+                recorded_min_chart_date(&db, chart_id).await.unwrap(),
+                Some(floor_10th),
+                "the fresh chart's floor is the only message that passes the filter"
+            );
+
+            // the indexer backfills an earlier message whose OWN route fails the
+            // filter, but whose transfer's token route matches it — this pulls
+            // the shared indexer floor below the chart's stored floor without
+            // ever giving the chart new data to store there
+            insert_diverging_message(&indexer, 2, "2023-01-01 10:00:00").await;
+
+            let update_time_1 = init_time.checked_add_days(Days::new(1)).unwrap();
+            let cx1 = UpdateContext::from_params_now_or_override(parameters(
+                &db,
+                &indexer,
+                update_time_1,
+            ));
+            NewMessagesInterchain::update_recursively(&cx1)
+                .await
+                .unwrap();
+            assert_eq!(
+                cx1.cache.get::<String>(&marker()).await,
+                None,
+                "the gap between Jan 1 and Jan 10 has nothing this chart's own filter would \
+                 store yet — the probe must find nothing and must not rebuild"
+            );
+            assert_eq!(
+                recorded_min_chart_date(&db, chart_id).await.unwrap(),
+                Some(floor_10th),
+                "an unproductive gap must not move the stored floor"
+            );
+
+            // the indexer now backfills a message that genuinely lands INSIDE
+            // the gap and matches this chart's own filter. Crucially, the
+            // shared indexer floor does NOT move: message 2's transfer still
+            // pins the transfer-filtered floor at Jan 1st, which is lower than
+            // message 3's own Jan 3rd — so `get_min_date_interchain`, and
+            // therefore the raw `(stored_floor, indexer_floor)` pair, is
+            // byte-for-byte identical to cycle 1's. This is exactly the
+            // scenario the memory-based fix mishandled.
+            insert_matching_message(&indexer, 3, "2023-01-03 10:00:00").await;
+
+            let update_time_2 = update_time_1.checked_add_days(Days::new(1)).unwrap();
+            let cx2 = UpdateContext::from_params_now_or_override(parameters(
+                &db,
+                &indexer,
+                update_time_2,
+            ));
+            NewMessagesInterchain::update_recursively(&cx2)
+                .await
+                .unwrap();
+            assert_eq!(
+                cx2.cache.get::<String>(&marker()).await,
+                Some("1".to_owned()),
+                "the probe must find message 3 inside the gap and trigger a rebuild"
+            );
+            assert_eq!(
+                recorded_min_chart_date(&db, chart_id).await.unwrap(),
+                Some(floor_3rd),
+                "message 3 must actually reach the chart"
+            );
+        }
+
+        /// FINDING 2's steady-state requirement: a permanent gap with
+        /// genuinely nothing this chart's own filter would store must not
+        /// cause a rebuild on any cycle — the probe is exact, not a heuristic
+        /// that fires speculatively.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn gap_probe_never_rebuilds_a_permanently_empty_gap() {
+            let _ = tracing_subscriber::fmt::try_init();
+            let (init_time, db, indexer) =
+                prepare_interchain_chart_test_unfilled::<NewMessagesInterchain>(
+                    "gap_probe_never_rebuilds_a_permanently_empty_gap",
+                )
+                .await;
+            insert_reference_rows(&indexer).await;
+            insert_matching_message(&indexer, 1, "2023-01-10 10:00:00").await;
+
+            let chart_id = find_chart(&db, &new_messages_interchain::Properties::key())
+                .await
+                .unwrap()
+                .expect("chart row must exist after init_recursively");
+            let floor_10th = NaiveDate::from_ymd_opt(2023, 1, 10).unwrap();
+            let marker =
+                || interchain_backfill_marker_statement::<new_messages_interchain::Properties>();
+
+            let cx0 =
+                UpdateContext::from_params_now_or_override(parameters(&db, &indexer, init_time));
+            NewMessagesInterchain::update_recursively(&cx0)
+                .await
+                .unwrap();
+
+            // the indexer backfills the same diverging message as the sibling
+            // test — pulls the shared floor down without ever giving the
+            // chart new data — and nothing else ever lands in the gap for the
+            // rest of this test
+            insert_diverging_message(&indexer, 2, "2023-01-01 10:00:00").await;
+
+            let mut update_time = init_time;
+            for cycle in 1..=4 {
+                update_time = update_time.checked_add_days(Days::new(1)).unwrap();
+                let cx = UpdateContext::from_params_now_or_override(parameters(
+                    &db,
+                    &indexer,
+                    update_time,
+                ));
+                NewMessagesInterchain::update_recursively(&cx)
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    cx.cache.get::<String>(&marker()).await,
+                    None,
+                    "cycle {cycle}: a permanently empty gap must never trigger a rebuild"
+                );
+                assert_eq!(
+                    recorded_min_chart_date(&db, chart_id).await.unwrap(),
+                    Some(floor_10th),
+                    "cycle {cycle}: the stored floor must stay put"
+                );
+            }
         }
     }
 }
