@@ -15,7 +15,11 @@ async fn compilers<Compiler: EvmCompiler>(list_url: &str) -> EvmCompilersPool<Co
         .await
         .expect("Fetch releases");
     let threads_semaphore = Arc::new(Semaphore::new(1));
-    EvmCompilersPool::new(Arc::new(fetcher), threads_semaphore)
+    EvmCompilersPool::new_with_executor(
+        Arc::new(fetcher),
+        threads_semaphore,
+        Arc::new(crate::NativeCompilerExecutor::default()),
+    )
 }
 
 mod solidity {

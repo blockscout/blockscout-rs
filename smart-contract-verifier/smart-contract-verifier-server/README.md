@@ -67,8 +67,13 @@ verification_attempts = 3
 request_timeout = 10
 
 [compilers]
-# Maximum number of concurrent compilations. If omitted, number of CPU cores would be used
+# Maximum concurrent compiler invocations, including version probes. If omitted, the number of
+# CPU cores is used. In Docker mode this is the remote-job limit.
 max_threads = 8
+
+# Compiler-backed endpoints fail to start until this is changed explicitly.
+[compilers.execution]
+type = "disabled"
 
 [metrics]
 # When disabled, metrics are not available
@@ -84,6 +89,144 @@ enabled = false
 # An endpoint where jaeger collects all traces
 agent_endpoint = "localhost:6831"
 ```
+
+For local development, native execution accepts the same invocation timeout and output-size keys:
+
+```toml
+[compilers.execution]
+type = "native"
+execution_timeout_seconds = 120
+max_output_bytes = 33554432
+```
+
+Both fields retain these defaults when omitted and reject zero. Set them from Kubernetes-style
+environment variables as `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__EXECUTION_TIMEOUT_SECONDS`
+and `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__MAX_OUTPUT_BYTES`. Benchmark representative
+`viaIR` and optimizer workloads before choosing a deployment-specific timeout.
+
+### Isolated compiler execution
+
+Production deployments should run compiler jobs on a dedicated Docker host reached over SSH. The
+service uploads request-specific source inputs through the Docker API, starts one fresh container
+for one invocation, and removes the container and its anonymous job volume after completion. Compiler
+binaries are SHA-256 content-addressed and kept in named volumes on the Docker host, so a compiler is
+transferred only on the first cache miss and then mounted read-only into later jobs. The Kubernetes
+pod does not need a Docker socket or a shared filesystem with the Docker host.
+
+```toml
+[compilers]
+max_threads = 8
+
+[compilers.execution]
+type = "docker"
+addr = "ssh://compiler-runner@compiler-vm.example.org"
+key_path = "/home/app/.ssh/id_ed25519"
+# Tags are rejected. Preload this exact digest on the remote host before starting the service.
+runner_image = "ghcr.io/blockscout/smart-contract-verifier-compiler-runner@sha256:<64-hex-digest>"
+platform = "linux/amd64"
+connect_timeout_seconds = 30
+api_timeout_seconds = 30
+execution_timeout_seconds = 120
+memory_limit_bytes = 1073741824
+nano_cpus = 2000000000
+pids_limit = 64
+max_upload_bytes = 268435456
+max_output_bytes = 33554432
+# Optional: a hardened runtime installed on the external host, such as gVisor.
+# runtime = "runsc"
+```
+
+`connect_timeout_seconds` independently bounds the lazy SSH host-key preflight. Docker API
+requests use the greater of `api_timeout_seconds` and `execution_timeout_seconds`, so cold-cache
+uploads retain the compiler execution budget. Attach and wait streams remain bounded by
+`execution_timeout_seconds` after their response headers arrive.
+
+Upload tarballs are assembled in bounded anonymous temporary files and streamed to the Docker
+host. During a cold cache fill, a job spool and one compiler-seed spool can coexist; size pod
+ephemeral storage for up to roughly `2 * max_threads * max_upload_bytes` of concurrent spooling.
+The verifier does not retain complete tarballs in memory.
+
+Build the minimal runner image with `compiler-runner.Dockerfile`, push it, and preload the selected
+digest on the dedicated VM. Mount the SSH private key and a pinned `known_hosts` file into the
+service pod. The remote SSH account must be dedicated to this service. The configured compiler list
+must match `platform` (the production defaults download Linux amd64 compiler binaries).
+
+Each job keeps `/tmp` as a size-bounded `noexec` home directory. `TMPDIR` points to a separate,
+private, size-bounded executable tmpfs at `/compiler-tmp`; this is required by the PyInstaller
+one-file Vyper release binaries and is removed with the container.
+
+Compiler volumes are named `scv-compiler-v1-sha256-<digest>` and must use the local volume driver
+with exactly these labels: `org.blockscout.smart-contract-verifier.compiler-cache=true`,
+`org.blockscout.smart-contract-verifier.compiler-cache-schema=1`, and
+`org.blockscout.smart-contract-verifier.compiler-digest=sha256:<digest>`. The volume root must contain
+the corresponding binary as `/compiler`. On first use after process startup, the service hashes that
+remote file before trusting an existing volume. A missing or invalid compiler is staged through a
+digest-specific initializer container, checked again on the Docker VM, and atomically published
+before any job can mount it. Initializer names also serialize cache fills across multiple verifier
+pods. Job containers mount these volumes read-only; normal job cleanup retains them. To avoid
+cold-start transfers on a WAN link, warm the required compiler versions with the SSH round-trip tests
+or representative verification requests before directing production traffic to a new Docker host.
+
+Cached compiler volumes are retained indefinitely. Prune labeled `scv-compiler-v1-sha256-*`
+volumes only during drained maintenance, after the corresponding compiler versions have been
+retired; deleting them during traffic can race with job creation.
+
+Remote initialization starts with a strict SSH host-key preflight: the target must already exist in
+`known_hosts` and its key must match. Keep that file present and immutable for the pod lifetime.
+Bollard 0.21 uses `accept-new` for the separate SSH sessions carrying Docker requests and exposes no
+strict-host-key override; enforcing the same strict policy on every transport session requires an
+upstream or connector change. Jobs carry an `org.blockscout.smart-contract-verifier.expires-at`
+label; the service reaps expired jobs before the executor first becomes ready and every 30 seconds
+afterward. Configure an independent timer on the dedicated Docker VM to force-remove expired labeled
+containers as well, so jobs are reclaimed even while every verifier pod is down.
+
+Compiler-backed endpoints fail to start when execution remains `disabled`. In Docker mode, static
+configuration errors still fail startup, but the service does not contact the compiler VM until the
+first compiler-readiness probe or compiler request. Transient SSH, Docker daemon, orphan-cleanup, or
+runner-image failures are request/readiness failures and are retried; they do not prevent Sourcify
+and the server from starting. There is no Docker-to-native fallback. `native` remains available for
+tests and local development only.
+
+Use `/health` as the process-liveness probe. Use `/health?service=compiler` as the compiler dependency
+readiness probe; it returns HTTP 503 without exposing connection details until strict SSH validation,
+the Docker daemon, initial orphan cleanup, and the pinned runner image are available. The equivalent
+gRPC health request uses `service = "compiler"`. Readiness is pod-wide in Kubernetes: a mixed pod
+cannot be removed from compiler traffic while remaining routable for Sourcify. If Sourcify must stay
+available during a compiler-VM outage, keep pod readiness on `/health`, monitor the compiler probe
+separately, or deploy Sourcify and compiler-backed endpoints as separate workloads.
+
+When the metrics endpoint is enabled, the compiler runner exports:
+
+- `smart_contract_verifier_compiler_runner_jobs_total{executor,outcome}` for success, compiler
+  failure, OOM, validation/limit/timeout/infrastructure errors, and canceled requests;
+- `smart_contract_verifier_compiler_runner_operation_duration_seconds{executor,operation,family}`
+  for total, queue, prepare, create, upload, execute, and cleanup timing;
+- `smart_contract_verifier_compiler_runner_transfer_bytes_total{executor,direction,family}` for
+  successfully transferred input/output bytes (Docker archive framing is included);
+- `smart_contract_verifier_compiler_runner_jobs_current{executor,state}` and
+  `smart_contract_verifier_compiler_runner_max_concurrent_jobs{executor}` for runner queue and slot
+  utilization;
+- `smart_contract_verifier_compiler_runner_active_containers{family}` for container lifecycles
+  currently managed by the process; and
+- `smart_contract_verifier_compiler_runner_orphan_cleanup_sweeps_total{trigger,outcome}` plus
+  `smart_contract_verifier_compiler_runner_orphan_cleanup_containers_total{family,outcome}` for
+  lazy initialization and periodic recovery.
+
+All labels use fixed, low-cardinality values. Sum
+`smart_contract_verifier_compiler_runner_max_concurrent_jobs{executor="shared"}` across healthy
+replica scrape targets to verify configured runner-slot capacity. Its value comes from
+`compilers.max_threads`, the single admission limit shared by compilations and compiler version
+probes. The active-container gauge is process-local and resets on restart; use the orphan-cleanup
+counters to observe recovery of containers left behind by a terminated process.
+
+The repository includes ignored end-to-end transport/cache and real-Vyper tests. Set `SCV_TEST_DOCKER_ADDR`,
+`SCV_TEST_DOCKER_RUNNER_IMAGE`, and optionally `SCV_TEST_DOCKER_KEY_PATH` and
+`SCV_TEST_DOCKER_PLATFORM`, then run the `ssh_docker_round_trip` and
+`ssh_docker_vyper_round_trip` tests with `--ignored` before deploying a new runner image or Docker
+Engine version. Each test runs its compiler twice to cover a cold fill followed by a cache hit. The
+Vyper test downloads the checksum-verified Linux amd64 release and compiles a standard-JSON contract
+inside the isolated container. That real-Vyper test currently requires `linux/amd64`, matching the
+architecture of the published Linux Vyper release binary.
 
 ### Environment variables
 

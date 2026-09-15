@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use super::{evm_compilers, solc_compiler_cli, Error};
-use crate::{DetailedVersion, Language, Version};
+use crate::{
+    CommandArgument, CompilerExecutor, CompilerInvocation, DetailedVersion, JobFile, Language,
+    Version,
+};
 use anyhow::Context;
 use async_trait::async_trait;
 use foundry_compilers::{
@@ -72,28 +75,29 @@ impl evm_compilers::EvmCompiler for SolcCompiler {
     type CompilationError = artifacts::solc::Error;
 
     async fn compile(
+        executor: &dyn CompilerExecutor,
         compiler_path: &Path,
         compiler_version: &DetailedVersion,
         input: &Self::CompilerInput,
     ) -> Result<Value, Error> {
         if compiler_version.to_semver() < &semver::Version::new(0, 4, 11) {
-            let output = solc_compiler_cli::compile_using_cli(compiler_path, input)
+            let output = solc_compiler_cli::compile_using_cli(executor, compiler_path, input)
                 .await
                 .context("error compiling using cli")?;
             return Ok(
                 serde_json::to_value(output).context("serializing compiler output into value")?
             );
         }
-        let solc = foundry_compilers::solc::Solc::new_with_version(
-            compiler_path,
-            compiler_version.to_semver().to_owned(),
+        let input = serde_json::to_vec(input).context("serializing compiler input")?;
+        let invocation = CompilerInvocation::new(
+            JobFile::executable("compiler", "bin/solc", compiler_path)?,
+            vec![CommandArgument::literal("--standard-json")],
+            input,
         );
-        let output = solc
-            .async_compile_output(input)
-            .await
-            .context("compilation")?;
-        let output_value =
-            serde_json::from_slice(&output).context("deserializing compiler output into value")?;
+        let output = executor.execute(invocation).await?;
+        output.ensure_success("solc")?;
+        let output_value = serde_json::from_slice(&output.stdout)
+            .context("deserializing compiler output into value")?;
 
         Ok(output_value)
     }

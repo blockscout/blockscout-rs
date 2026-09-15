@@ -13,6 +13,8 @@ alloy-json-abi = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 blockscout-display-bytes = { workspace = true }
+bollard = { workspace = true }
+openssh = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 cron = { workspace = true }
@@ -40,16 +42,20 @@ solidity-metadata = { workspace = true }
 sourcify = { workspace = true }
 sscanf = { workspace = true }
 tempfile = { workspace = true }
+tar = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "process", "rt", "time"] }
+tokio-util = { workspace = true, features = ["io"] }
 tracing = { workspace = true }
 url = { workspace = true, features = ["serde"] }
+uuid = { workspace = true }
 verification-common = { workspace = true }
 vyper-cbor-auxdata = { workspace = true }
 
 era-compiler-common = { workspace = true }
 
 [dev-dependencies]
+bollard = { workspace = true, features = ["pipe"] }
 pretty_assertions = { workspace = true }
 quick-xml = { workspace = true, features = ["serialize"] }
 rand = { workspace = true }

@@ -5,7 +5,8 @@
 This service serves as the core component for all activities related to smart-contract verification in BlockScout. It is essential for enabling smart-contract verification functionality on your instance.
 
 ## Requirements
-No additional dependencies
+Production compiler endpoints require a dedicated Docker host reachable over SSH. Native execution
+is intended only for local development and tests.
 
 ## How to enable
 Set the following ENVs on blockscout instance:
@@ -35,6 +36,16 @@ Here, we describe variables specific to this service. Variables common to all se
 | `SMART_CONTRACT_VERIFIER__SOURCIFY__POLL_INTERVAL_MS`          |          | Interval in milliseconds between polls of an async Sourcify (v2) verification job | `1000`                                                             |
 | `SMART_CONTRACT_VERIFIER__SOURCIFY__MAX_POLL_ATTEMPTS`         |          | Max number of polls of an async Sourcify (v2) verification job before giving up. Must be at least 1 | `120`                                            |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__MAX_THREADS`              |          | Maximum number of concurrent compilations                               | `8`                                                                          |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__TYPE`          | yes      | Compiler execution mode: `docker` in production, `native` for local development | `disabled`                                                            |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__EXECUTION_TIMEOUT_SECONDS` | native/docker | Maximum duration of one compiler invocation; tune with representative workloads | `120`                                                          |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__MAX_OUTPUT_BYTES` | native/docker | Maximum combined compiler stdout and stderr size                       | `33554432`                                                                   |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__ADDR`          | docker   | Dedicated Docker host reached through SSH                               |                                                                              |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__KEY_PATH`      |          | SSH private key path inside the verifier container                      | SSH client default                                                           |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__RUNNER_IMAGE`  | docker   | Preloaded runner image pinned by `@sha256:<64 hex characters>`          |                                                                              |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__PLATFORM`      |          | Runner platform; compiler download lists must match                     | `linux/amd64`                                                                |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__CONNECT_TIMEOUT_SECONDS` | docker | Startup SSH host-key preflight timeout in seconds                       | `30`                                                                         |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__API_TIMEOUT_SECONDS` | docker | Docker API request timeout in seconds, raised to at least the execution timeout | `30`                                                                  |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__RUNTIME`       |          | Optional hardened runtime installed on the external Docker host         | Docker default                                                               |
 
 [anchor]: <> (anchors.envs.end)
 

@@ -34,3 +34,9 @@ pub enum Error {
     #[error("{0:#?}")]
     Internal(#[from] anyhow::Error),
 }
+
+impl From<crate::compiler::ExecutionError> for Error {
+    fn from(error: crate::compiler::ExecutionError) -> Self {
+        Self::Internal(anyhow::Error::new(error))
+    }
+}

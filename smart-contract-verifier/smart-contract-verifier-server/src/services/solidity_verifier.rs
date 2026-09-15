@@ -15,7 +15,8 @@ use crate::{
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, EvmCompilersPool, SolcCompiler, SolcValidator,
+    find_methods, solidity, CompilerExecutor, ConcurrencyLimitedCompilerExecutor, EvmCompilersPool,
+    SolcCompiler, SolcValidator,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     LookupMethodsRequest, LookupMethodsResponse,
@@ -29,11 +30,23 @@ pub struct SolidityVerifierService {
 }
 
 impl SolidityVerifierService {
-    pub async fn new(
+    pub async fn new_with_executor(
         settings: SoliditySettings,
         compilers_threads_semaphore: Arc<Semaphore>,
+        executor: Arc<dyn CompilerExecutor>,
     ) -> anyhow::Result<Self> {
-        let solc_validator = Arc::new(SolcValidator::default());
+        let executor = Arc::new(ConcurrencyLimitedCompilerExecutor::with_semaphore(
+            executor,
+            compilers_threads_semaphore,
+        ));
+        Self::new_with_admitted_executor(settings, executor).await
+    }
+
+    pub(crate) async fn new_with_admitted_executor(
+        settings: SoliditySettings,
+        executor: Arc<dyn CompilerExecutor>,
+    ) -> anyhow::Result<Self> {
+        let solc_validator = Arc::new(SolcValidator::new(executor.clone()));
         let fetcher = common::initialize_fetcher(
             settings.fetcher,
             settings.compilers_dir.clone(),
@@ -44,7 +57,7 @@ impl SolidityVerifierService {
         .context("solidity fetcher initialization")?;
 
         let compilers: EvmCompilersPool<SolcCompiler> =
-            EvmCompilersPool::new(fetcher, compilers_threads_semaphore);
+            EvmCompilersPool::new_with_admitted_executor(fetcher, executor);
         compilers.load_from_dir(&settings.compilers_dir).await;
 
         Ok(Self {

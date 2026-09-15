@@ -2,7 +2,6 @@
 
 use crate::{
     proto::{
-        health_actix::route_health,
         health_server::HealthServer,
         solidity_verifier_actix::route_solidity_verifier,
         solidity_verifier_server::SolidityVerifierServer,
@@ -16,14 +15,17 @@ use crate::{
         },
     },
     services::{
-        zksync_solidity_verifier, HealthService, SolidityVerifierService, SourcifyVerifierService,
-        VyperVerifierService,
+        route_health, zksync_solidity_verifier, HealthService, SolidityVerifierService,
+        SourcifyVerifierService, VyperVerifierService,
     },
-    settings::Settings,
+    settings::{CompilerExecutionSettings, Settings},
 };
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
-use std::sync::Arc;
-use tokio::sync::Semaphore;
+use smart_contract_verifier::{
+    CompilerExecutor, ConcurrencyLimitedCompilerExecutor, DockerCompilerExecutor,
+    NativeCompilerExecutor,
+};
+use std::{sync::Arc, time::Duration};
 
 #[derive(Clone)]
 struct HttpRouter {
@@ -82,17 +84,51 @@ fn grpc_router(
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    let compilers_lock = Arc::new(Semaphore::new(settings.compilers.max_threads.get()));
+    let compiler_endpoints_enabled =
+        settings.solidity.enabled || settings.vyper.enabled || settings.zksync_solidity.enabled;
+    let raw_compiler_executor: Arc<dyn CompilerExecutor> = match &settings.compilers.execution {
+        CompilerExecutionSettings::Disabled if compiler_endpoints_enabled => anyhow::bail!(
+            "compiler execution is disabled while a compiler-backed endpoint is enabled"
+        ),
+        CompilerExecutionSettings::Disabled => Arc::new(NativeCompilerExecutor::default()),
+        CompilerExecutionSettings::Native {
+            execution_timeout_seconds,
+            max_output_bytes,
+        } => Arc::new(NativeCompilerExecutor::new(
+            Duration::from_secs(*execution_timeout_seconds),
+            *max_output_bytes,
+        )?),
+        CompilerExecutionSettings::Docker { .. } => Arc::new(DockerCompilerExecutor::new(
+            settings
+                .compilers
+                .execution
+                .docker_executor_settings()
+                .expect("docker settings must exist for Docker mode"),
+        )?),
+    };
+    let compiler_executor: Arc<dyn CompilerExecutor> =
+        Arc::new(ConcurrencyLimitedCompilerExecutor::new(
+            raw_compiler_executor,
+            settings.compilers.max_threads,
+        ));
 
     let solidity_verifier = match settings.solidity.enabled {
         true => Some(Arc::new(
-            SolidityVerifierService::new(settings.solidity, compilers_lock.clone()).await?,
+            SolidityVerifierService::new_with_admitted_executor(
+                settings.solidity,
+                compiler_executor.clone(),
+            )
+            .await?,
         )),
         false => None,
     };
     let vyper_verifier = match settings.vyper.enabled {
         true => Some(Arc::new(
-            VyperVerifierService::new(settings.vyper, compilers_lock.clone()).await?,
+            VyperVerifierService::new_with_admitted_executor(
+                settings.vyper,
+                compiler_executor.clone(),
+            )
+            .await?,
         )),
         false => None,
     };
@@ -104,15 +140,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     };
     let zksync_solidity_verifier = match settings.zksync_solidity.enabled {
         true => Some(Arc::new(
-            zksync_solidity_verifier::Service::new(
+            zksync_solidity_verifier::Service::new_with_admitted_executor(
                 settings.zksync_solidity,
-                compilers_lock.clone(),
+                compiler_executor.clone(),
             )
             .await?,
         )),
         false => None,
     };
-    let health = Arc::new(HealthService::default());
+    let health = Arc::new(HealthService::new(
+        compiler_endpoints_enabled.then_some(compiler_executor),
+    ));
     let grpc_router = grpc_router(
         solidity_verifier.clone(),
         vyper_verifier.clone(),

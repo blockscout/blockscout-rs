@@ -12,7 +12,7 @@ use std::{
     collections::HashMap,
     fmt::{Debug, Display},
     marker::PhantomData,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
 };
@@ -128,13 +128,7 @@ where
 
     #[instrument(skip(self), level = "debug")]
     async fn fetch_file(&self, ver: &Ver) -> Result<(Bytes, H256), FetchError> {
-        let file_info = {
-            let versions = self.versions.read();
-            versions
-                .get(ver)
-                .cloned()
-                .ok_or_else(|| FetchError::NotFound(ver.clone().to_string()))?
-        };
+        let file_info = self.file_info(ver)?;
 
         let response = reqwest::get(file_info.url)
             .await
@@ -146,6 +140,14 @@ where
             .map_err(anyhow::Error::msg)
             .map_err(FetchError::Fetch)?;
         Ok((data, file_info.sha256))
+    }
+
+    fn file_info(&self, ver: &Ver) -> Result<FileInfo, FetchError> {
+        let versions = self.versions.read();
+        versions
+            .get(ver)
+            .cloned()
+            .ok_or_else(|| FetchError::NotFound(ver.clone().to_string()))
     }
 }
 
@@ -159,6 +161,12 @@ where
     async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
         let (data, hash) = self.fetch_file(ver).await?;
         super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
+            .await
+    }
+
+    async fn validate_file(&self, ver: &Self::Version, path: &Path) -> Result<(), FetchError> {
+        let expected = self.file_info(ver)?.sha256;
+        super::fetcher::validate_existing_executable(path, expected, ver, self.validator.as_deref())
             .await
     }
 
@@ -235,6 +243,7 @@ mod tests {
     };
     use foundry_compilers::solc::Solc;
     use pretty_assertions::assert_eq;
+    use sha2::{Digest, Sha256};
     use std::{env::temp_dir, str::FromStr};
     use wiremock::{
         matchers::{method, path},
@@ -463,6 +472,54 @@ mod tests {
                 panic!("fetcher: can't download vyper compiler {compiler_version}")
             });
         }
+    }
+
+    #[tokio::test]
+    async fn validating_preloaded_file_uses_list_checksum_without_downloading_compiler() {
+        let mock_server = MockServer::start().await;
+        let compiler = b"preloaded compiler";
+        let checksum = hex::encode(Sha256::digest(compiler));
+        let list = format!(
+            r#"{{
+                "builds": [{{
+                    "path": "{}/compiler",
+                    "longVersion": "0.4.13+commit.0fb4cb1a",
+                    "sha256": "{}"
+                }}]
+            }}"#,
+            mock_server.uri(),
+            checksum
+        );
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(list))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/compiler"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(compiler))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let compiler_path = tmp_dir.path().join("solc");
+        std::fs::write(&compiler_path, compiler).unwrap();
+        let fetcher: ListFetcher<DetailedVersion> = ListFetcher::new(
+            Url::parse(&mock_server.uri()).unwrap(),
+            tmp_dir.path().to_path_buf(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let version = DetailedVersion::from_str("0.4.13+commit.0fb4cb1a").unwrap();
+
+        fetcher
+            .validate_file(&version, &compiler_path)
+            .await
+            .expect("preloaded compiler should match authoritative list checksum");
     }
 
     const ZKSOLC_LIST_JSON: &str = r#"{

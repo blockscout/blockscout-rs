@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use super::{evm_compilers, Error};
-use crate::{DetailedVersion, Language, Version};
+use crate::{
+    CommandArgument, CompilerExecutor, CompilerInvocation, DetailedVersion, JobFile, Language,
+};
 use anyhow::Context;
 use async_trait::async_trait;
 use foundry_compilers::artifacts;
@@ -112,21 +114,21 @@ impl evm_compilers::EvmCompiler for VyperCompiler {
     type CompilationError = artifacts::vyper::VyperCompilationError;
 
     async fn compile(
+        executor: &dyn CompilerExecutor,
         compiler_path: &Path,
-        compiler_version: &DetailedVersion,
+        _compiler_version: &DetailedVersion,
         input: &Self::CompilerInput,
     ) -> Result<Value, Error> {
-        // we use `solc::Solc` because `solc::Solc` does the same thing under the hood.
-        let solc = foundry_compilers::solc::Solc::new_with_version(
-            compiler_path,
-            compiler_version.to_semver().to_owned(),
+        let input = serde_json::to_vec(input).context("serializing compiler input")?;
+        let invocation = CompilerInvocation::new(
+            JobFile::executable("compiler", "bin/vyper", compiler_path)?,
+            vec![CommandArgument::literal("--standard-json")],
+            input,
         );
-        let output = solc
-            .async_compile_output(input)
-            .await
-            .context("compilation")?;
-        let output_value =
-            serde_json::from_slice(&output).context("deserializing compiler output into value")?;
+        let output = executor.execute(invocation).await?;
+        output.ensure_success("vyper")?;
+        let output_value = serde_json::from_slice(&output.stdout)
+            .context("deserializing compiler output into value")?;
 
         Ok(output_value)
     }

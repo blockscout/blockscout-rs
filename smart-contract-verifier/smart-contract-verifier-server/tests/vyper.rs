@@ -32,9 +32,13 @@ async fn global_service() -> &'static Arc<VyperVerifierService> {
         .get_or_init(|| async {
             let settings = Settings::default();
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = VyperVerifierService::new(settings.vyper, Arc::new(compilers_lock))
-                .await
-                .expect("couldn't initialize the service");
+            let service = VyperVerifierService::new_with_executor(
+                settings.vyper,
+                Arc::new(compilers_lock),
+                Arc::new(smart_contract_verifier::NativeCompilerExecutor::default()),
+            )
+            .await
+            .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
