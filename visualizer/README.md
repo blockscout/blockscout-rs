@@ -87,7 +87,7 @@ globally on your device as mentioned in the repo instructions. Notice that the c
 may fail with other versions and service may not work correctly.
 
 For testing on **Windows** you need to rewrite some code due to the way the service is implemented. Change
-[99 line in `src/handlers.rs`](./src/handlers.rs#L99) with:
+[99 line in `src/handlers.rs`](https://github.com/blockscout/blockscout-rs/blob/main/libs/recache/src/handler.rs) with:
 
 ```let output = Command::new("cmd").arg("/C").arg("sol2uml").args(args).output().await?;```
 
