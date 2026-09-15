@@ -132,7 +132,10 @@ message data.
   sharing the table. The xDai indexer (`interchain-indexer-logic/src/indexer/xdai/`)
   reuses this table as-is for its own validator confirmations — no new table,
   no migration beyond a `COMMENT ON TABLE` recording the reuse
-  (`m20260830_120000_add_xdai_indexer`). A rename was considered and rejected:
+  (`m20260915_120000_add_xdai_and_cross_asset_stats`, folded with the
+  cross-asset stats schema change and renamed accordingly — see
+  [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md)). A
+  table rename was considered and rejected:
   it would need a migration, an entity regeneration, and churn across every
   consumer for zero behavioural gain.
 - `amb_message_anomalies` — AMB-specific `messageId` collision captures.

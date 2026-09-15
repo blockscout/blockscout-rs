@@ -8,8 +8,10 @@ in the rows.
 This runbook currently covers the stats subsystem's observability-horizon
 eligibility rule and asset-identity union-find merge. Design rationale for
 that area lives in
-[ADR-004](../adr/004-stats-observability-horizon-and-asset-union-find.md);
-this document does not re-argue it, it only tells you what to run and how to
+[ADR-004](../adr/004-stats-observability-horizon-and-asset-union-find.md) and,
+for the two-asset-column / per-transfer-linkage model added on top of it, in
+[ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md); this
+document does not re-argue either, it only tells you what to run and how to
 read the output. If a query's expected result surprises you, read the ADR
 section it references before assuming a bug.
 
@@ -83,58 +85,73 @@ contents alone. Use the metrics instead:
 
 | Metric | Type | Labels | What it tells you |
 | --- | --- | --- | --- |
-| `interchain_indexer_stats_asset_merges_total` | counter | `outcome` (`merged`, `refused_chain_collision`) | Every merge attempt, by outcome. `refused_chain_collision` rising is query A/B territory. |
+| `interchain_indexer_stats_asset_merges_total` | counter | `outcome` (`merged`, `refused_chain_collision`, `refused_token_on_chain`) | Every merge attempt, by outcome, for `mirror` transfers only. Either refused outcome rising is query A/B territory; both mean the same diagnosis — bad token data, or a converting route the indexer declared `mirror`. |
 | `interchain_indexer_stats_asset_merge_repointed_transfers` | histogram | none | `crosschain_transfers` rows repointed per successful merge — how expensive merges are getting. |
 | `interchain_indexer_stats_edge_rescaled_fold_total` | counter | `mode` (`scaled_up`, `scaled_down`, `unscaled_unknown_decimals`, `unscaled_overflow`) | How a merge combined two edges' `cumulative_amount` when decimals differed or were missing. |
 | `interchain_indexer_stats_edge_mixed_amount_side_total` | counter | none | A merge folded two edges that had different `amount_side` (source vs. destination) — result is approximate. |
 | `interchain_indexer_stats_edge_decimals_conflict_total` | counter | none | Non-merge counting-path skip: a transfer's amount could not be safely folded into an existing edge because decimals changed. Distinct from a merge refusal. |
-| `interchain_indexer_stats_transfers_deferred_total` | counter | `reason` (`identity_incomplete`, `awaiting_confirmation`) | Deferral **events**, not distinct rows — a row re-increments every time its canonical key is flushed again and still isn't eligible. |
+| `interchain_indexer_stats_transfers_deferred_total` | counter | `reason` (`identity_incomplete`, `awaiting_confirmation`, `linkage_unknown`, `conversion_endpoint_unresolved`, `amount_side_missing`) | Deferral **events**, not distinct rows — a row re-increments every time its canonical key is flushed again and still isn't eligible. The last three reasons are [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md) additions — see the unclassified-rows query (H) for `linkage_unknown` specifically. |
+| `interchain_indexer_stats_asset_linkage_contradiction_total` | counter | `kind` (`conversion_self_asset`, `cross_asset_edge_collapsed`) | [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md): an indexer's declared linkage disagrees with the resolved asset graph. Never fatal, always worth investigating — see the gotcha "A `conversion` Transfer's Two Endpoints Are Never Merged". |
+| `interchain_indexer_stats_transfer_asset_linkage_unset_total` | counter | none | A transfer reached the write chokepoint with `asset_linkage` left `NotSet` by its indexer — should be zero always; see the gotcha "The `..Default::default()` Omission Silently Defers Every Transfer From An Indexer". |
 
-(Verified against `interchain-indexer-logic/src/stats/metrics.rs`. All six
-names, label sets, and enum values in the table above match the source
-exactly.)
+(Verified against `interchain-indexer-logic/src/stats/metrics.rs`.)
 
 **There is deliberately no exact invariant of the form "sum of
 `stats_asset_edges.transfers_count` equals the number of counted
 transfers."** Two paths mark a transfer `stats_processed` without it ever
-contributing to an edge: the chain-collision refusal (identity stays
-unknown, `stats_asset_id` is `NULL`) and the decimals conflict on the
-counting path (identity is known, `stats_asset_id` is set, but the amount is
-skipped). SQL cannot tell these two apart from a transfer row alone in the
-aggregate case — that's exactly what `STATS_EDGE_DECIMALS_CONFLICT_TOTAL`
-and the `refused_chain_collision` outcome quantify. A gap between processed
-transfers and summed edge counts is expected; don't chase it as a bug by
-itself — check those two counters first.
+contributing to an edge: a refused merge (identity stays unknown, both
+`src_stats_asset_id` and `dst_stats_asset_id` are `NULL`) and the decimals
+conflict on the counting path (identity is known, both columns are set, but
+the amount is skipped). SQL cannot tell these two apart from a transfer row
+alone in the aggregate case — that's exactly what
+`STATS_EDGE_DECIMALS_CONFLICT_TOTAL` and the two refusal outcomes quantify. A
+gap between processed transfers and summed edge counts is expected; don't
+chase it as a bug by itself — check those counters first.
 
 **The diagnostic reading that makes queries D and A interpretable, on
 `crosschain_transfers`:**
 
-- `stats_asset_id IS NULL AND stats_processed > 0` → identity is genuinely
-  unknown or ambiguous (the chain-collision refusal is the only remaining way
-  to reach this, once the row has actually been processed);
-- a **set** `stats_asset_id` together with `stats_processed > 0` and no
-  matching contribution in `stats_asset_edges` → identity is known, but this
+- `asset_linkage IS NULL` → the indexer has not yet stated this transfer's
+  linkage. Deferred unconditionally, `stats_processed` stays `0`. Not the
+  same state as either row below — see query H for the operational query
+  that surfaces these specifically.
+- `src_stats_asset_id IS NULL AND dst_stats_asset_id IS NULL AND
+  stats_processed > 0` → identity is genuinely unknown or ambiguous (a
+  refused merge is the only remaining way to reach this for a `mirror`
+  transfer, once the row has actually been processed);
+- **both columns set** together with `stats_processed > 0` and no matching
+  contribution in `stats_asset_edges` → identity is known, but this
   transfer's amount specifically was not counted (the decimals-conflict
-  skip).
+  skip, or — for a `conversion` transfer — the `amount_side_missing`
+  deferral, which additionally leaves `stats_processed = 0`, so check that
+  column too before concluding "counted but skipped").
+- **both columns set, unequal** (`src_stats_asset_id <> dst_stats_asset_id`)
+  → a `conversion` transfer that resolved its two endpoints to two different
+  assets, exactly as designed. Do not read this as a split-asset defect —
+  that is what canary A's `asset_linkage = 'mirror'` qualification exists to
+  exclude.
 
-`stats_asset_id IS NULL` on its own, with `stats_processed = 0`, is not
-evidence of anything — it is simply the normal state of a deferred or
-not-yet-projected transfer that hasn't been decided on yet (see query D for
-the full breakdown of why a row might still be at `stats_processed = 0`).
-Only once `stats_processed > 0` does a `NULL` `stats_asset_id` mean the
-chain-collision refusal specifically; reading NULL alone as "identity
-conflict" will misclassify ordinary backlog as a defect.
+Both `src_stats_asset_id IS NULL AND dst_stats_asset_id IS NULL` with
+`stats_processed = 0` is not evidence of anything by itself — it is simply
+the normal state of a deferred or not-yet-projected transfer that hasn't been
+decided on yet (see query D for the full breakdown of why a row might still
+be at `stats_processed = 0`). Only once `stats_processed > 0` does both
+columns `NULL` mean a refused merge specifically; reading NULL alone as
+"identity conflict" will misclassify ordinary backlog as a defect.
 
-Both processed cases leave the row `stats_processed`'d so projection does not
-re-warn on it every cycle — this is deliberate, not a stuck row.
+Processed cases leave the row `stats_processed`'d so projection does not
+re-warn on it every cycle — this is deliberate, not a stuck row. A
+`linkage_unknown` row is the one deferral that stays at `stats_processed = 0`
+indefinitely until an operator intervenes (query H) — it is not self-healing
+the way `identity_incomplete` / `awaiting_confirmation` are.
 
 ---
 
 ## Canaries — run routinely
 
-### C. Hard invariants (all four columns must read 0)
+### C. Hard invariants (all five columns must read 0)
 
-**What it checks:** four structural guarantees that hold regardless of
+**What it checks:** five structural guarantees that hold regardless of
 config or data completeness — nothing in the design should ever produce
 double-counting or an orphaned row.
 
@@ -149,10 +166,12 @@ SELECT (SELECT count(*) FROM crosschain_transfers WHERE stats_processed > 1) AS 
        (SELECT count(*) FROM stats_assets a
           WHERE NOT EXISTS (SELECT 1 FROM stats_asset_tokens t WHERE t.stats_asset_id = a.id)) AS orphan_assets,
        (SELECT count(*) FROM stats_asset_edges e
-          WHERE NOT EXISTS (SELECT 1 FROM stats_assets a WHERE a.id = e.stats_asset_id)) AS dangling_edges;
+          WHERE NOT EXISTS (SELECT 1 FROM stats_assets a WHERE a.id = e.src_stats_asset_id)) AS dangling_edges_src,
+       (SELECT count(*) FROM stats_asset_edges e
+          WHERE NOT EXISTS (SELECT 1 FROM stats_assets a WHERE a.id = e.dst_stats_asset_id)) AS dangling_edges_dst;
 ```
 
-**Expected result:** `0 | 0 | 0 | 0`.
+**Expected result:** `0 | 0 | 0 | 0 | 0`.
 
 **What each column means if nonzero:**
 - `transfers_over_counted` / `messages_over_counted` — a row was counted more
@@ -165,11 +184,17 @@ SELECT (SELECT count(*) FROM crosschain_transfers WHERE stats_processed > 1) AS 
   same transaction; an orphan means an asset row survived a merge or
   creation without its token rows, or the merge's delete-the-loser step ran
   against the wrong id.
-- `dangling_edges` — a `stats_asset_edges` row pointing at a `stats_assets`
-  id that no longer exists. `stats_asset_edges.stats_asset_id` has an
-  `ON DELETE CASCADE` foreign key to `stats_assets(id)`, so this should be
-  enforced by the schema itself; seeing this means either the FK is missing
-  on your schema version or something bypassed it (e.g. a manual `DELETE`).
+- `dangling_edges_src` / `dangling_edges_dst` — a `stats_asset_edges` row
+  pointing at a `stats_assets` id that no longer exists, on the source or
+  destination side respectively. Both `src_stats_asset_id` and
+  `dst_stats_asset_id` have an `ON DELETE CASCADE` foreign key to
+  `stats_assets(id)`, so either column reading nonzero should be enforced by
+  the schema itself; seeing this means either the FK is missing on your
+  schema version or something bypassed it (e.g. a manual `DELETE`). Checking
+  both columns separately matters post-[ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md):
+  a `conversion` edge's two sides can be deleted independently (they are two
+  different `stats_assets` rows), so a single combined check could mask one
+  side dangling while the other is fine.
 
 **What to do next:** any nonzero value here is a "stop and investigate"
 signal, not a "keep an eye on it" one. Capture the specific row ids (`SELECT
@@ -177,12 +202,13 @@ id FROM crosschain_transfers WHERE stats_processed > 1 LIMIT 20`, etc.) and
 treat it as a bug report against the merge/projection code, not against
 input data.
 
-### A. Split-asset detector (the headline check — must return zero rows)
+### A. Split-asset detector (the headline check — must return zero rows for `mirror` transfers)
 
-**What it checks:** any pair of transfer endpoints whose tokens are
-currently mapped to *different* `stats_assets`. This is the literal
-definition of a split asset — the exact defect the union-find asset-merge
-design (ADR-004 Decision 2) exists to eliminate.
+**What it checks:** any pair of `mirror`-linkage transfer endpoints whose
+tokens are currently mapped to *different* `stats_assets`. This is the
+literal definition of a split asset — the exact defect the union-find
+asset-merge design (ADR-004 Decision 2) exists to eliminate, for the
+lock/mint bridges that design covers.
 
 **Why it matters:** without eager union-find merging, this query can return
 real, permanent splits — a transfer landing on two components silently
@@ -191,7 +217,17 @@ generalizes from). Under the current design a merge should join the two
 components as soon as such a transfer is observed, so this should always
 come back empty on any database that has been fully projected under it.
 
-**Why the query requires `t.stats_processed > 0`:** a freshly flushed
+**Why `AND t.asset_linkage = 'mirror'` is load-bearing, not optional
+filtering** ([ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md)):
+a `conversion` transfer's two endpoints are *supposed* to map to two
+different `stats_assets` — that is the entire point of the cross-asset edge
+model, not a defect. Without this clause, the first xDai transfer ever
+projected would make this canary fire permanently, turning the split-asset
+detector into constant noise instead of a signal. If you are running this
+query against a database predating ADR-011 (no `asset_linkage` column), drop
+the clause; if `asset_linkage` exists, never drop it.
+
+**Why the query also requires `t.stats_processed > 0`:** a freshly flushed
 transfer that projection has not reached yet can already have both its token
 endpoints mapped to two different `stats_assets` by *earlier* transfers —
 and it is precisely this not-yet-projected transfer whose merge would join
@@ -211,6 +247,7 @@ JOIN stats_asset_tokens s ON s.chain_id = t.token_src_chain_id AND s.token_addre
 JOIN stats_asset_tokens d ON d.chain_id = t.token_dst_chain_id AND d.token_address = t.token_dst_address
 WHERE s.stats_asset_id <> d.stats_asset_id
   AND t.stats_processed > 0
+  AND t.asset_linkage = 'mirror'
 GROUP BY 1,2,3,4,5,6,7
 ORDER BY transfers DESC;
 ```
@@ -477,16 +514,66 @@ meant to reduce this backlog, expect the *existing* accumulated rows to
 still be sitting here; what to actually watch is whether it keeps *growing*
 the way it used to.
 
+### H. Unclassified transfers (`asset_linkage IS NULL`) — stuck-row query
+
+**What it checks:** transfers whose indexer has never stated `asset_linkage`,
+grouped by bridge. Served by `crosschain_transfers_unclassified_idx`
+(a partial index on `id` `WHERE asset_linkage IS NULL`), so this is cheap to
+run on a large table even though it's a full scan of a normally-tiny set.
+
+**Why it matters** ([ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md)):
+unlike `identity_incomplete` / `awaiting_confirmation`, a `linkage_unknown`
+deferral does not self-heal as more chain data arrives — it can only be
+resolved by the indexer actually stating a linkage on a later flush (via the
+write-once `COALESCE`), or by manual intervention. In healthy operation this
+should be **zero rows**, always: every shipped indexer states its linkage on
+every transfer it builds (`interchain_indexer_entity::new_transfer`), and the
+`flush_to_final_storage` chokepoint counts + warns (and `debug_assert!`s in
+debug builds) on any omission. A nonzero, non-transient result here means
+either a bug in an indexer's transfer constructor, or a genuinely new indexer
+that has not been updated to declare linkage yet.
+
+```sql
+SELECT t.bridge_id, b.type, count(*) AS unclassified,
+       min(t.id) AS example, min(t.created_at) AS oldest
+FROM crosschain_transfers t JOIN bridges b ON b.id = t.bridge_id
+WHERE t.asset_linkage IS NULL
+GROUP BY 1, 2 ORDER BY unclassified DESC;
+```
+
+**Expected result:** zero rows.
+
+**Recovery procedure, if this returns rows:**
+
+1. Identify why the indexer for the affected `bridge_id` left `asset_linkage`
+   unset — check `STATS_TRANSFER_ASSET_LINKAGE_UNSET_TOTAL` and the
+   `tracing::warn!` it's paired with for the specific `message_id`s, and fix
+   the transfer constructor to start from `new_transfer(linkage)`.
+2. Once the fix is deployed and the indexer re-flushes the affected
+   transfers (the write-once `COALESCE` fills `NULL -> value` on that later
+   flush), restart with
+   `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START=true`.
+3. **Do not** reset `stats_processed` and do **not** run a full rebuild. A
+   deferred (`linkage_unknown`) row was never counted, so its marker is
+   already `0` — the backfill candidate query selects exactly
+   `stats_processed = 0` rows with a per-run cursor
+   (`database.rs`'s `backfill_stats_projection_round`, transfer-phase
+   query), which will pick these rows up on its own once their
+   `asset_linkage` is no longer `NULL`. Resetting markers or rebuilding
+   would double-count rows this bridge already had counted correctly before
+   the bug.
+
 ---
 
 ## Quick reference
 
 | Query | Kind | Expected result | If it deviates |
 | --- | --- | --- | --- |
-| C — hard invariants | canary | `0, 0, 0, 0` | stop; bug in shared projection/merge code, not a data issue |
+| C — hard invariants | canary | `0, 0, 0, 0, 0` | stop; bug in shared projection/merge code, not a data issue |
 | A — split-asset detector | canary | zero rows | run B for each returned pair before concluding anything |
 | B — refusal legitimacy | diagnostic | row returned = correct refusal; empty = merge should have happened | empty result is a real defect — file it |
 | D — deferred-transfer reasons | diagnostic | mostly expected buckets; two "watch" buckets | growth in `one-sided, peer unindexed` or unbounded `COMPLETE AND CONFIRMED` is a bug signal |
 | E — unindexed-chain edges | diagnostic | rows present wherever a bridge has unconfigured chains | unexpectedly empty means opt-in retention isn't running; cross-check against real config, not `bridge_contracts` |
 | F — incoming ICTT reconstruction | diagnostic | rows present where reachable, but only if `process_unknown_chains: true` and `home_chain_id` admits it | check `process_unknown_chains`/`home_chain_id` first, then the scenario/kill switch, before worrying |
 | G — pending_messages trend | diagnostic | `oldest` stops receding indefinitely | still climbing at the old rate → leak persists |
+| H — unclassified transfers (`asset_linkage IS NULL`) | canary | zero rows | fix the offending indexer's transfer constructor, then `BACKFILL_ON_START=true` — no marker reset, no rebuild |

@@ -1202,7 +1202,8 @@ impl InterchainDatabase {
     #[allow(clippy::too_many_arguments)]
     pub async fn create_or_update_stats_asset_edge(
         &self,
-        stats_asset_id: i64,
+        src_stats_asset_id: i64,
+        dst_stats_asset_id: i64,
         bridge_id: i32,
         src_chain_id: i64,
         dst_chain_id: i64,
@@ -1210,11 +1211,15 @@ impl InterchainDatabase {
         amount_side: EdgeAmountSide,
         decimals: Option<i16>,
     ) -> anyhow::Result<()> {
+        // Tuple order re-derived from the regenerated entity: sea-orm-cli emits
+        // `#[sea_orm(primary_key)]` in table column order, which puts the two
+        // asset columns after `bridge_id` (they were appended after it).
         let existing = stats_asset_edges::Entity::find_by_id((
-            stats_asset_id,
             src_chain_id,
             dst_chain_id,
             bridge_id,
+            src_stats_asset_id,
+            dst_stats_asset_id,
         ))
         .one(self.db.as_ref())
         .await?;
@@ -1233,7 +1238,8 @@ impl InterchainDatabase {
                     stats_asset_edges::Column::UpdatedAt,
                     Expr::current_timestamp().into(),
                 )
-                .filter(stats_asset_edges::Column::StatsAssetId.eq(stats_asset_id))
+                .filter(stats_asset_edges::Column::SrcStatsAssetId.eq(src_stats_asset_id))
+                .filter(stats_asset_edges::Column::DstStatsAssetId.eq(dst_stats_asset_id))
                 .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
                 .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
                 .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id))
@@ -1242,7 +1248,8 @@ impl InterchainDatabase {
                 .map_err(|e| {
                     tracing::error!(
                         err = ?e,
-                        stats_asset_id,
+                        src_stats_asset_id,
+                        dst_stats_asset_id,
                         bridge_id,
                         src_chain_id,
                         dst_chain_id,
@@ -1252,7 +1259,8 @@ impl InterchainDatabase {
                 })?;
         } else {
             let model = stats_asset_edges::ActiveModel {
-                stats_asset_id: ActiveValue::Set(stats_asset_id),
+                src_stats_asset_id: ActiveValue::Set(src_stats_asset_id),
+                dst_stats_asset_id: ActiveValue::Set(dst_stats_asset_id),
                 bridge_id: ActiveValue::Set(bridge_id),
                 src_chain_id: ActiveValue::Set(src_chain_id),
                 dst_chain_id: ActiveValue::Set(dst_chain_id),
@@ -1268,7 +1276,8 @@ impl InterchainDatabase {
                 .map_err(|e| {
                     tracing::error!(
                         err = ?e,
-                        stats_asset_id,
+                        src_stats_asset_id,
+                        dst_stats_asset_id,
                         bridge_id,
                         src_chain_id,
                         dst_chain_id,
@@ -1283,7 +1292,8 @@ impl InterchainDatabase {
     /// Updates decimals for an existing edge. Does not change `amount_side`.
     pub async fn update_edge_decimals(
         &self,
-        stats_asset_id: i64,
+        src_stats_asset_id: i64,
+        dst_stats_asset_id: i64,
         bridge_id: i32,
         src_chain_id: i64,
         dst_chain_id: i64,
@@ -1295,7 +1305,8 @@ impl InterchainDatabase {
                 stats_asset_edges::Column::UpdatedAt,
                 Expr::current_timestamp().into(),
             )
-            .filter(stats_asset_edges::Column::StatsAssetId.eq(stats_asset_id))
+            .filter(stats_asset_edges::Column::SrcStatsAssetId.eq(src_stats_asset_id))
+            .filter(stats_asset_edges::Column::DstStatsAssetId.eq(dst_stats_asset_id))
             .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
             .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
             .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id))
@@ -1304,7 +1315,8 @@ impl InterchainDatabase {
             .map_err(|e| {
                 tracing::error!(
                     err = ?e,
-                    stats_asset_id,
+                    src_stats_asset_id,
+                    dst_stats_asset_id,
                     bridge_id,
                     src_chain_id,
                     dst_chain_id,
@@ -1314,7 +1326,8 @@ impl InterchainDatabase {
             })?;
         if res.rows_affected == 0 {
             tracing::warn!(
-                stats_asset_id,
+                src_stats_asset_id,
+                dst_stats_asset_id,
                 bridge_id,
                 src_chain_id,
                 dst_chain_id,
@@ -1722,11 +1735,14 @@ impl InterchainDatabase {
         Ok(rows)
     }
 
-    /// Assigns a stats asset to a transfer. Transfer may keep stats_asset_id = NULL.
+    /// Assigns the two stats asset endpoints to a transfer. Either or both may
+    /// stay `None` (identity unknown/ambiguous). Projection-owned columns —
+    /// see `crosschain_transfers_on_conflict`, which never touches them.
     pub async fn assign_transfer_stats_asset(
         &self,
         transfer_id: i64,
-        stats_asset_id: Option<i64>,
+        src_stats_asset_id: Option<i64>,
+        dst_stats_asset_id: Option<i64>,
     ) -> anyhow::Result<()> {
         let transfer = match crosschain_transfers::Entity::find_by_id(transfer_id)
             .one(self.db.as_ref())
@@ -1734,14 +1750,15 @@ impl InterchainDatabase {
         {
             Some(t) => t,
             None => {
-                tracing::error!(transfer_id, "Transfer not found for stats_asset_id assign");
+                tracing::error!(transfer_id, "Transfer not found for stats asset assign");
                 return Err(anyhow::anyhow!("Transfer {} not found", transfer_id));
             }
         };
         let mut am: crosschain_transfers::ActiveModel = transfer.into();
-        am.stats_asset_id = ActiveValue::Set(stats_asset_id);
+        am.src_stats_asset_id = ActiveValue::Set(src_stats_asset_id);
+        am.dst_stats_asset_id = ActiveValue::Set(dst_stats_asset_id);
         am.update(self.db.as_ref()).await.map_err(|e| {
-            tracing::error!(err = ?e, transfer_id, "Failed to assign transfer stats_asset_id");
+            tracing::error!(err = ?e, transfer_id, "Failed to assign transfer stats asset");
             e
         })?;
         Ok(())
@@ -3426,15 +3443,28 @@ impl InterchainDatabase {
                 .await?;
             }
 
+            // `aid` can now sit on either column, so fetch every edge touching
+            // it on either side and then pair the asset column with the chain
+            // column by side below. Filtering on either column alone would
+            // write one token's decimals onto the other asset's side of a
+            // conversion edge.
             let edges = stats_asset_edges::Entity::find()
-                .filter(stats_asset_edges::Column::StatsAssetId.eq(aid))
+                .filter(
+                    Condition::any()
+                        .add(stats_asset_edges::Column::SrcStatsAssetId.eq(aid))
+                        .add(stats_asset_edges::Column::DstStatsAssetId.eq(aid)),
+                )
                 .all(self.db.as_ref())
                 .await?;
 
             for edge in edges {
                 let amount_side_matches_chain = match edge.amount_side {
-                    EdgeAmountSide::Source => edge.src_chain_id == chain_id,
-                    EdgeAmountSide::Destination => edge.dst_chain_id == chain_id,
+                    EdgeAmountSide::Source => {
+                        edge.src_stats_asset_id == aid && edge.src_chain_id == chain_id
+                    }
+                    EdgeAmountSide::Destination => {
+                        edge.dst_stats_asset_id == aid && edge.dst_chain_id == chain_id
+                    }
                 };
                 if !amount_side_matches_chain {
                     continue;
@@ -3450,7 +3480,14 @@ impl InterchainDatabase {
                                 stats_asset_edges::Column::UpdatedAt,
                                 Expr::current_timestamp().into(),
                             )
-                            .filter(stats_asset_edges::Column::StatsAssetId.eq(edge.stats_asset_id))
+                            .filter(
+                                stats_asset_edges::Column::SrcStatsAssetId
+                                    .eq(edge.src_stats_asset_id),
+                            )
+                            .filter(
+                                stats_asset_edges::Column::DstStatsAssetId
+                                    .eq(edge.dst_stats_asset_id),
+                            )
                             .filter(stats_asset_edges::Column::BridgeId.eq(edge.bridge_id))
                             .filter(stats_asset_edges::Column::SrcChainId.eq(edge.src_chain_id))
                             .filter(stats_asset_edges::Column::DstChainId.eq(edge.dst_chain_id))
@@ -3459,7 +3496,8 @@ impl InterchainDatabase {
                     }
                     Some(existing) if existing != td => {
                         tracing::warn!(
-                            stats_asset_id = edge.stats_asset_id,
+                            src_stats_asset_id = edge.src_stats_asset_id,
+                            dst_stats_asset_id = edge.dst_stats_asset_id,
                             src_chain_id = edge.src_chain_id,
                             dst_chain_id = edge.dst_chain_id,
                             existing,
@@ -3835,7 +3873,9 @@ mod tests {
     use interchain_indexer_entity::{
         bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
         indexer_failures,
-        sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferType},
+        sea_orm_active_enums::{
+            BridgeType, EdgeAmountSide, MessageStatus, TransferAssetLinkage, TransferType,
+        },
         stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_chains_by_bridge,
         stats_messages, stats_messages_days, tokens,
     };
@@ -5292,6 +5332,7 @@ mod tests {
                 src_amount: Set(Some(BigDecimal::from(11u32))),
                 dst_amount: Set(Some(BigDecimal::from(11u32))),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
             crosschain_transfers::ActiveModel {
@@ -5305,6 +5346,7 @@ mod tests {
                 src_amount: Set(Some(BigDecimal::from(22u32))),
                 dst_amount: Set(Some(BigDecimal::from(22u32))),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
         ])
@@ -5400,6 +5442,7 @@ mod tests {
                 src_amount: Set(Some(BigDecimal::from(33u32))),
                 dst_amount: Set(Some(BigDecimal::from(33u32))),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
             crosschain_transfers::ActiveModel {
@@ -5413,6 +5456,7 @@ mod tests {
                 src_amount: Set(Some(BigDecimal::from(44u32))),
                 dst_amount: Set(Some(BigDecimal::from(44u32))),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
         ])
@@ -6405,6 +6449,7 @@ mod tests {
         interchain_db
             .create_or_update_stats_asset_edge(
                 asset.id,
+                asset.id,
                 1,
                 1,
                 2,
@@ -6414,7 +6459,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 2i64, 1i32, asset.id, asset.id))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -6427,6 +6472,7 @@ mod tests {
         interchain_db
             .create_or_update_stats_asset_edge(
                 asset.id,
+                asset.id,
                 1,
                 1,
                 2,
@@ -6436,7 +6482,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let edge2 = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
+        let edge2 = stats_asset_edges::Entity::find_by_id((1i64, 2i64, 1i32, asset.id, asset.id))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -6475,6 +6521,7 @@ mod tests {
         interchain_db
             .create_or_update_stats_asset_edge(
                 asset.id,
+                asset.id,
                 1,
                 1,
                 2,
@@ -6484,7 +6531,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 2i64, 1i32, asset.id, asset.id))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -6493,10 +6540,10 @@ mod tests {
         assert_eq!(edge.amount_side, EdgeAmountSide::Destination);
 
         interchain_db
-            .update_edge_decimals(asset.id, 1, 1, 2, 6)
+            .update_edge_decimals(asset.id, asset.id, 1, 1, 2, 6)
             .await
             .unwrap();
-        let edge2 = stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
+        let edge2 = stats_asset_edges::Entity::find_by_id((1i64, 2i64, 1i32, asset.id, asset.id))
             .one(interchain_db.db.as_ref())
             .await
             .unwrap()
@@ -6761,6 +6808,7 @@ mod tests {
             sender_address: Set(Some(addr_t1.clone())),
             recipient_address: Set(Some(addr_t2.clone())),
             stats_processed: Set(0),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(conn.as_ref())
@@ -7136,14 +7184,15 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(transfer_row.stats_asset_id, None);
+        assert_eq!(transfer_row.src_stats_asset_id, None);
+        assert_eq!(transfer_row.dst_stats_asset_id, None);
 
         let asset = interchain_db
             .create_stats_asset(Some("T".to_string()), None, None)
             .await
             .unwrap();
         interchain_db
-            .assign_transfer_stats_asset(transfer_id, Some(asset.id))
+            .assign_transfer_stats_asset(transfer_id, Some(asset.id), Some(asset.id))
             .await
             .unwrap();
         let row2 = crosschain_transfers::Entity::find_by_id(transfer_id)
@@ -7151,7 +7200,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(row2.stats_asset_id, Some(asset.id));
+        assert_eq!(row2.src_stats_asset_id, Some(asset.id));
+        assert_eq!(row2.dst_stats_asset_id, Some(asset.id));
     }
 
     // --- stats_processed (incremental markers) ---
@@ -7890,6 +7940,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(5_000u64))),
             token_src_address: Set(Some(addr_a.clone())),
             token_dst_address: Set(Some(addr_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -7922,9 +7973,10 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_processed, 1);
-        assert!(t.stats_asset_id.is_some());
-        let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        assert!(t.src_stats_asset_id.is_some());
+        assert!(t.dst_stats_asset_id.is_some());
+        let aid = t.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -7966,6 +8018,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(1_000u64))),
             token_src_address: Set(Some(token_a.clone())),
             token_dst_address: Set(Some(token_a.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8003,6 +8056,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(2_000u64))),
             token_src_address: Set(Some(token_a.clone())),
             token_dst_address: Set(Some(token_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8038,7 +8092,11 @@ mod tests {
             "skipped transfer marked processed so it is not retried every cycle"
         );
         assert!(
-            t.stats_asset_id.is_none(),
+            t.src_stats_asset_id.is_none(),
+            "skipped transfer is left without a stats asset"
+        );
+        assert!(
+            t.dst_stats_asset_id.is_none(),
             "skipped transfer is left without a stats asset"
         );
     }
@@ -8080,6 +8138,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(50u64))),
             token_src_address: Set(Some(addr_a.clone())),
             token_dst_address: Set(Some(addr_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8111,8 +8170,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let aid = t.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -8156,6 +8215,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(200u64))),
             token_src_address: Set(Some(addr_a.clone())),
             token_dst_address: Set(Some(addr_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8187,8 +8247,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let aid = t.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -8223,6 +8283,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(10u64))),
             token_src_address: Set(Some(addr_a.clone())),
             token_dst_address: Set(Some(addr_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8274,6 +8335,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(7u64))),
             token_src_address: Set(Some(addr_a.clone())),
             token_dst_address: Set(Some(addr_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8305,8 +8367,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let aid = t.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -8353,6 +8415,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(50u64))),
             token_src_address: Set(Some(addr_a.clone())),
             token_dst_address: Set(Some(addr_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8384,8 +8447,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let aid = t.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -8424,6 +8487,7 @@ mod tests {
                 dst_amount: Set(Some(BigDecimal::from(dst_amt))),
                 token_src_address: Set(Some(addr_a.clone())),
                 token_dst_address: Set(Some(addr_b.clone())),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             })
             .exec(db)
@@ -8463,9 +8527,10 @@ mod tests {
             .unwrap();
         assert_eq!(t1.stats_processed, 1);
         assert_eq!(t2.stats_processed, 1);
-        let aid = t1.stats_asset_id.unwrap();
-        assert_eq!(t2.stats_asset_id, Some(aid));
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let aid = t1.src_stats_asset_id.unwrap();
+        assert_eq!(t2.src_stats_asset_id, Some(aid));
+        assert_eq!(t2.dst_stats_asset_id, Some(aid));
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -8530,7 +8595,8 @@ mod tests {
         .unwrap();
 
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-            stats_asset_id: Set(aid),
+            src_stats_asset_id: Set(aid),
+            dst_stats_asset_id: Set(aid),
             bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(100),
@@ -8559,6 +8625,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(1u64))),
             token_src_address: Set(Some(addr_a.clone())),
             token_dst_address: Set(Some(addr_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8622,14 +8689,21 @@ mod tests {
             "transfer must be marked processed despite the conflict"
         );
         assert_eq!(
-            t.stats_asset_id,
+            t.src_stats_asset_id,
+            Some(aid),
+            "decimals-conflict-skipped transfer still links its unambiguously resolved asset \
+             (unlike a genuine mapping conflict, identity was already known here — only the \
+             amount could not be safely counted)"
+        );
+        assert_eq!(
+            t.dst_stats_asset_id,
             Some(aid),
             "decimals-conflict-skipped transfer still links its unambiguously resolved asset \
              (unlike a genuine mapping conflict, identity was already known here — only the \
              amount could not be safely counted)"
         );
 
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -8708,7 +8782,8 @@ mod tests {
         .await
         .unwrap();
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-            stats_asset_id: Set(aid),
+            src_stats_asset_id: Set(aid),
+            dst_stats_asset_id: Set(aid),
             bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(100),
@@ -8783,7 +8858,12 @@ mod tests {
             .unwrap();
         assert_eq!(decimals_conflict_transfer.stats_processed, 1);
         assert_eq!(
-            decimals_conflict_transfer.stats_asset_id,
+            decimals_conflict_transfer.src_stats_asset_id,
+            Some(aid),
+            "decimals conflict: identity was already known, so the asset stays linked"
+        );
+        assert_eq!(
+            decimals_conflict_transfer.dst_stats_asset_id,
             Some(aid),
             "decimals conflict: identity was already known, so the asset stays linked"
         );
@@ -8795,7 +8875,11 @@ mod tests {
             .unwrap();
         assert_eq!(mapping_conflict_transfer.stats_processed, 1);
         assert!(
-            mapping_conflict_transfer.stats_asset_id.is_none(),
+            mapping_conflict_transfer.src_stats_asset_id.is_none(),
+            "mapping conflict: identity is genuinely unresolved, so there is no asset to link"
+        );
+        assert!(
+            mapping_conflict_transfer.dst_stats_asset_id.is_none(),
             "mapping conflict: identity is genuinely unresolved, so there is no asset to link"
         );
     }
@@ -8897,6 +8981,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(1u64))),
             token_src_address: Set(Some(addr_small.clone())),
             token_dst_address: Set(Some(addr_big1.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -8944,7 +9029,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(t.stats_asset_id, Some(aid_big));
+        assert_eq!(t.src_stats_asset_id, Some(aid_big));
+        assert_eq!(t.dst_stats_asset_id, Some(aid_big));
 
         // --- Part 2: an exact tie (1 token each) breaks to the lower id.
         let addr_c = [0xf5u8; 20].to_vec();
@@ -8999,6 +9085,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(1u64))),
             token_src_address: Set(Some(addr_c.clone())),
             token_dst_address: Set(Some(addr_d.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -9039,7 +9126,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(
-            t2.stats_asset_id,
+            t2.src_stats_asset_id,
+            Some(aid_c),
+            "on a tie the lower id must win"
+        );
+        assert_eq!(
+            t2.dst_stats_asset_id,
             Some(aid_c),
             "on a tie the lower id must win"
         );
@@ -9094,6 +9186,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(1u64))),
             token_src_address: Set(Some(addr_a.clone())),
             token_dst_address: Set(Some(addr_b.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -9126,7 +9219,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_processed, 1);
-        let aid = t.stats_asset_id.unwrap();
+        let aid = t.src_stats_asset_id.unwrap();
         let asset = stats_assets::Entity::find_by_id(aid)
             .one(db)
             .await
@@ -9159,6 +9252,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(3u64))),
             token_src_address: Set(Some([0x81u8; 20].to_vec())),
             token_dst_address: Set(Some([0x82u8; 20].to_vec())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -9191,7 +9285,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_processed, 1);
-        let asset = stats_assets::Entity::find_by_id(t.stats_asset_id.unwrap())
+        let asset = stats_assets::Entity::find_by_id(t.src_stats_asset_id.unwrap())
             .one(db)
             .await
             .unwrap()
@@ -9227,7 +9321,8 @@ mod tests {
         .unwrap();
 
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-            stats_asset_id: Set(aid),
+            src_stats_asset_id: Set(aid),
+            dst_stats_asset_id: Set(aid),
             bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(100),
@@ -9273,12 +9368,167 @@ mod tests {
         assert_eq!(asset.name.as_deref(), Some("Bridged"));
         assert_eq!(asset.symbol.as_deref(), Some("BRG"));
 
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(edge.decimals, Some(12));
+    }
+
+    /// ADR-011 finding 4: with two asset columns, the asset column and the
+    /// chain column must be paired **by side**. Propagating a token's
+    /// decimals onto a cross-asset edge must only fill the side that token
+    /// actually belongs to.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_enrichment_propagate_fills_only_the_correct_side_of_a_conversion_edge() {
+        let _db = init_db("stats_enrichment_conversion_edge_sides").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let ic = InterchainDatabase::new(_db.client());
+
+        let addr_src = [0xb0u8; 20].to_vec(); // chain 1, e.g. DAI
+        let addr_dst = [0xb1u8; 20].to_vec(); // chain 100, e.g. native xDAI
+
+        let asset_src = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        let asset_dst = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db)
+        .await
+        .unwrap()
+        .id;
+        assert_ne!(
+            asset_src, asset_dst,
+            "a conversion's two sides are two different assets"
+        );
+
+        stats_asset_tokens::Entity::insert_many([
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(asset_src),
+                chain_id: Set(1),
+                token_address: Set(addr_src.clone()),
+                ..Default::default()
+            },
+            stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(asset_dst),
+                chain_id: Set(100),
+                token_address: Set(addr_dst.clone()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        // A cross-asset edge whose amount_side is Source (chain 1 / asset_src).
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            src_stats_asset_id: Set(asset_src),
+            dst_stats_asset_id: Set(asset_dst),
+            bridge_id: Set(1),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(100),
+            transfers_count: Set(1),
+            cumulative_amount: Set(BigDecimal::from(1_000u64)),
+            decimals: Set(None),
+            amount_side: Set(EdgeAmountSide::Source),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        // Propagate the DESTINATION token's decimals first: must NOT fill
+        // the Source-sided edge, even though it touches the same edge row.
+        ic.upsert_token_info(tokens::ActiveModel {
+            chain_id: Set(100),
+            address: Set(addr_dst.clone()),
+            name: Set(Some("xDai".to_string())),
+            symbol: Set(Some("xDAI".to_string())),
+            decimals: Set(Some(18)),
+            token_icon: Set(None),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let dst_token = tokens::Entity::find()
+            .filter(tokens::Column::ChainId.eq(100i64))
+            .filter(tokens::Column::Address.eq(addr_dst.clone()))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        ic.propagate_token_info_to_stats_tables(100, &addr_dst, &dst_token)
+            .await
+            .unwrap();
+
+        let edge_after_dst =
+            stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, asset_src, asset_dst))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(
+            edge_after_dst.decimals, None,
+            "the destination token's decimals must not fill a Source-sided edge"
+        );
+
+        // Now propagate the SOURCE token's decimals: this must fill it.
+        ic.upsert_token_info(tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(addr_src.clone()),
+            name: Set(Some("Dai".to_string())),
+            symbol: Set(Some("DAI".to_string())),
+            decimals: Set(Some(18)),
+            token_icon: Set(None),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let src_token = tokens::Entity::find()
+            .filter(tokens::Column::ChainId.eq(1i64))
+            .filter(tokens::Column::Address.eq(addr_src.clone()))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        ic.propagate_token_info_to_stats_tables(1, &addr_src, &src_token)
+            .await
+            .unwrap();
+
+        let edge_after_src =
+            stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, asset_src, asset_dst))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(
+            edge_after_src.decimals,
+            Some(18),
+            "the source token's decimals must fill a Source-sided edge"
+        );
+
+        // Metadata propagation also lands on the correct asset only.
+        let src_asset_row = stats_assets::Entity::find_by_id(asset_src)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(src_asset_row.symbol.as_deref(), Some("DAI"));
+        let dst_asset_row = stats_assets::Entity::find_by_id(asset_dst)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(dst_asset_row.symbol.as_deref(), Some("xDAI"));
     }
 
     #[tokio::test]
@@ -9317,7 +9567,8 @@ mod tests {
         .unwrap();
 
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-            stats_asset_id: Set(aid),
+            src_stats_asset_id: Set(aid),
+            dst_stats_asset_id: Set(aid),
             bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(200i64),
@@ -9355,7 +9606,7 @@ mod tests {
             .await
             .unwrap();
 
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 200i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 200i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -9394,7 +9645,8 @@ mod tests {
         .unwrap();
 
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-            stats_asset_id: Set(aid),
+            src_stats_asset_id: Set(aid),
+            dst_stats_asset_id: Set(aid),
             bridge_id: Set(1),
             src_chain_id: Set(1),
             dst_chain_id: Set(100),
@@ -9432,7 +9684,7 @@ mod tests {
             .await
             .unwrap();
 
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -9526,6 +9778,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(100u64))),
             token_src_address: Set(Some([0x33u8; 20].to_vec())),
             token_dst_address: Set(Some([0x44u8; 20].to_vec())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -9558,8 +9811,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let aid = t.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -9590,6 +9843,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(42u64))),
             token_src_address: Set(Some([0x55u8; 20].to_vec())),
             token_dst_address: Set(Some([0x66u8; 20].to_vec())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -9616,7 +9870,8 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_processed, 1);
-        assert!(t.stats_asset_id.is_some());
+        assert!(t.src_stats_asset_id.is_some());
+        assert!(t.dst_stats_asset_id.is_some());
 
         let r2 = ic
             .backfill_stats_projection_round(&IndexedChains::AllIndexed, i64::MIN, 50, i64::MIN, 50)
@@ -9658,6 +9913,7 @@ mod tests {
             dst_amount: Set(Some(BigDecimal::from(7u64))),
             token_src_address: Set(Some([0x77u8; 20].to_vec())),
             token_dst_address: Set(Some([0x88u8; 20].to_vec())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -9748,6 +10004,7 @@ mod tests {
         interchain_db
             .create_or_update_stats_asset_edge(
                 asset.id,
+                asset.id,
                 1,
                 1,
                 100,
@@ -9759,7 +10016,7 @@ mod tests {
             .unwrap();
         let transfer_id = 1i64;
         interchain_db
-            .assign_transfer_stats_asset(transfer_id, Some(asset.id))
+            .assign_transfer_stats_asset(transfer_id, Some(asset.id), Some(asset.id))
             .await
             .unwrap();
 
@@ -9777,7 +10034,7 @@ mod tests {
                 .is_none()
         );
         assert!(
-            stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 100i64, 1i32))
+            stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, asset.id, asset.id))
                 .one(interchain_db.db.as_ref())
                 .await
                 .unwrap()
@@ -9788,7 +10045,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(t.stats_asset_id, None);
+        assert_eq!(t.src_stats_asset_id, None);
+        assert_eq!(t.dst_stats_asset_id, None);
     }
 
     // --- stats_messages: directional chain-to-chain message counts ---
@@ -11699,6 +11957,7 @@ mod tests {
         interchain_db
             .create_or_update_stats_asset_edge(
                 asset.id,
+                asset.id,
                 1,
                 1,
                 2,
@@ -11730,7 +11989,7 @@ mod tests {
                 .is_some()
         );
         assert!(
-            stats_asset_edges::Entity::find_by_id((asset.id, 1i64, 2i64, 1i32))
+            stats_asset_edges::Entity::find_by_id((1i64, 2i64, 1i32, asset.id, asset.id))
                 .one(db)
                 .await
                 .unwrap()
@@ -11811,6 +12070,7 @@ mod tests {
             token_src_address: Set(Some(vec![tok; 20])),
             token_dst_address: Set(Some(vec![tok.wrapping_add(1); 20])),
             stats_processed: Set(0),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         };
         crosschain_transfers::Entity::insert_many([
@@ -11894,6 +12154,7 @@ mod tests {
             token_src_address: Set(token_src_address),
             token_dst_address: Set(token_dst_address),
             stats_processed: Set(0),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         }
     }
@@ -12001,7 +12262,8 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(t.stats_processed, 0);
-            assert!(t.stats_asset_id.is_none());
+            assert!(t.src_stats_asset_id.is_none());
+            assert!(t.dst_stats_asset_id.is_none());
         }
         assert_eq!(stats_assets::Entity::find().count(db).await.unwrap(), 0);
         assert_eq!(
@@ -12047,7 +12309,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(t.stats_processed, 1);
-            let aid = t.stats_asset_id.unwrap();
+            let aid = t.src_stats_asset_id.unwrap();
             let tokens = stats_asset_tokens::Entity::find()
                 .filter(stats_asset_tokens::Column::StatsAssetId.eq(aid))
                 .all(db)
@@ -12058,7 +12320,7 @@ mod tests {
                 2,
                 "transfer {id} asset must hold both token mappings"
             );
-            let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+            let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
                 .one(db)
                 .await
                 .unwrap()
@@ -12126,8 +12388,8 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_processed, 1);
-        let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let aid = t.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -12156,7 +12418,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t2.stats_processed, 1);
-        let edge2 = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let edge2 = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -12432,7 +12694,8 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(t.stats_processed, 1);
-            assert!(t.stats_asset_id.is_some());
+            assert!(t.src_stats_asset_id.is_some());
+            assert!(t.dst_stats_asset_id.is_some());
         }
         let row = stats_messages::Entity::find_by_id((1i64, 100i64, 5i32))
             .one(db)
@@ -12505,8 +12768,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let aid = t.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        let aid = t.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -12674,11 +12937,15 @@ mod tests {
         assert_eq!(t1.stats_processed, 1);
         assert_eq!(t2.stats_processed, 1);
         assert_eq!(
-            t1.stats_asset_id, t2.stats_asset_id,
+            t1.src_stats_asset_id, t2.src_stats_asset_id,
             "same token pair must resolve to the same asset regardless of projection path"
         );
-        let aid = t1.stats_asset_id.unwrap();
-        let edge = stats_asset_edges::Entity::find_by_id((aid, 1i64, 100i64, 1i32))
+        assert_eq!(
+            t1.dst_stats_asset_id, t2.dst_stats_asset_id,
+            "same token pair must resolve to the same asset regardless of projection path"
+        );
+        let aid = t1.src_stats_asset_id.unwrap();
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -13040,9 +13307,9 @@ mod tests {
             .unwrap()
             .unwrap();
         let asset_id = special_after
-            .stats_asset_id
+            .src_stats_asset_id
             .expect("special transfer must have resolved an asset");
-        let edge = stats_asset_edges::Entity::find_by_id((asset_id, 1i64, 100i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, asset_id, asset_id))
             .one(db)
             .await
             .unwrap()
@@ -13168,6 +13435,7 @@ mod tests {
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(250),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
             crosschain_transfers::ActiveModel {
@@ -13179,6 +13447,7 @@ mod tests {
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(100),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
             crosschain_transfers::ActiveModel {
@@ -13190,6 +13459,7 @@ mod tests {
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(250),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
             crosschain_transfers::ActiveModel {
@@ -13201,6 +13471,7 @@ mod tests {
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(100),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
             crosschain_transfers::ActiveModel {
@@ -13212,6 +13483,7 @@ mod tests {
                 token_src_chain_id: Set(250),
                 token_dst_chain_id: Set(1),
                 token_ids: Set(None),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
                 ..Default::default()
             },
         ])
@@ -13746,8 +14018,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let asset_x = t1.stats_asset_id.unwrap();
-        let asset_y = t2.stats_asset_id.unwrap();
+        let asset_x = t1.src_stats_asset_id.unwrap();
+        let asset_y = t2.src_stats_asset_id.unwrap();
         assert_ne!(asset_x, asset_y, "must start as two disjoint components");
 
         // Transfer 3: B(100) -> C(200), bridging the two components.
@@ -13819,7 +14091,7 @@ mod tests {
             (97002i64, 200i64, 300i64),
             (97003i64, 100i64, 200i64),
         ] {
-            let edge = stats_asset_edges::Entity::find_by_id((winner, src, dst, 1i32))
+            let edge = stats_asset_edges::Entity::find_by_id((src, dst, 1i32, winner, winner))
                 .one(db)
                 .await
                 .unwrap()
@@ -13837,7 +14109,12 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(
-                t.stats_asset_id,
+                t.src_stats_asset_id,
+                Some(winner),
+                "transfer {transfer_id} must be repointed to the surviving asset"
+            );
+            assert_eq!(
+                t.dst_stats_asset_id,
                 Some(winner),
                 "transfer {transfer_id} must be repointed to the surviving asset"
             );
@@ -13876,7 +14153,8 @@ mod tests {
         .await
         .unwrap();
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-            stats_asset_id: Set(aid),
+            src_stats_asset_id: Set(aid),
+            dst_stats_asset_id: Set(aid),
             bridge_id: Set(bridge_id),
             src_chain_id: Set(edge_src_chain_id),
             dst_chain_id: Set(edge_dst_chain_id),
@@ -13925,7 +14203,9 @@ mod tests {
             token_src_address: Set(Some(src_address)),
             token_dst_address: Set(Some(dst_address)),
             stats_processed: Set(1),
-            stats_asset_id: Set(None),
+            src_stats_asset_id: Set(None),
+            dst_stats_asset_id: Set(None),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
             ..Default::default()
         })
         .exec(db)
@@ -14014,7 +14294,7 @@ mod tests {
                 .is_none(),
             "the loser must be gone"
         );
-        let edge = stats_asset_edges::Entity::find_by_id((w_id, 601i64, 602i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((601i64, 602i64, 1i32, w_id, w_id))
             .one(db)
             .await
             .unwrap()
@@ -14036,7 +14316,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(
-            t.stats_asset_id,
+            t.src_stats_asset_id,
+            Some(w_id),
+            "the repair-path trigger must be linked to the winner"
+        );
+        assert_eq!(
+            t.dst_stats_asset_id,
             Some(w_id),
             "the repair-path trigger must be linked to the winner"
         );
@@ -14115,7 +14400,7 @@ mod tests {
         .await
         .unwrap();
 
-        let edge = stats_asset_edges::Entity::find_by_id((w_id, 611i64, 612i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((611i64, 612i64, 1i32, w_id, w_id))
             .one(db)
             .await
             .unwrap()
@@ -14210,7 +14495,7 @@ mod tests {
         .await
         .unwrap();
 
-        let edge = stats_asset_edges::Entity::find_by_id((w_id, 621i64, 622i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((621i64, 622i64, 1i32, w_id, w_id))
             .one(db)
             .await
             .unwrap()
@@ -14304,7 +14589,7 @@ mod tests {
         .await
         .unwrap();
 
-        let edge = stats_asset_edges::Entity::find_by_id((w_id, 631i64, 632i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((631i64, 632i64, 1i32, w_id, w_id))
             .one(db)
             .await
             .unwrap()
@@ -14392,7 +14677,7 @@ mod tests {
         .await
         .unwrap();
 
-        let edge = stats_asset_edges::Entity::find_by_id((w_id, 641i64, 642i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((641i64, 642i64, 1i32, w_id, w_id))
             .one(db)
             .await
             .unwrap()
@@ -14485,7 +14770,7 @@ mod tests {
             "an overflow must fall back to an unscaled add, never fail"
         );
 
-        let edge = stats_asset_edges::Entity::find_by_id((w_id, 651i64, 652i64, 1i32))
+        let edge = stats_asset_edges::Entity::find_by_id((651i64, 652i64, 1i32, w_id, w_id))
             .one(db)
             .await
             .unwrap()
@@ -14553,7 +14838,8 @@ mod tests {
         .await
         .unwrap();
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-            stats_asset_id: Set(x_id),
+            src_stats_asset_id: Set(x_id),
+            dst_stats_asset_id: Set(x_id),
             bridge_id: Set(1),
             src_chain_id: Set(700),
             dst_chain_id: Set(701),
@@ -14592,7 +14878,8 @@ mod tests {
         .await
         .unwrap();
         stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-            stats_asset_id: Set(y_id),
+            src_stats_asset_id: Set(y_id),
+            dst_stats_asset_id: Set(y_id),
             bridge_id: Set(1),
             src_chain_id: Set(700),
             dst_chain_id: Set(702),
@@ -14678,14 +14965,14 @@ mod tests {
             2,
             "no new edge row may have been created for the refused transfer"
         );
-        let x_edge = stats_asset_edges::Entity::find_by_id((x_id, 700i64, 701i64, 1i32))
+        let x_edge = stats_asset_edges::Entity::find_by_id((700i64, 701i64, 1i32, x_id, x_id))
             .one(db)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(x_edge.transfers_count, 1);
         assert_eq!(x_edge.cumulative_amount, BigDecimal::from(10u64));
-        let y_edge = stats_asset_edges::Entity::find_by_id((y_id, 700i64, 702i64, 1i32))
+        let y_edge = stats_asset_edges::Entity::find_by_id((700i64, 702i64, 1i32, y_id, y_id))
             .one(db)
             .await
             .unwrap()
@@ -14700,7 +14987,11 @@ mod tests {
             .unwrap();
         assert_eq!(t.stats_processed, 1, "refused transfer marked processed");
         assert!(
-            t.stats_asset_id.is_none(),
+            t.src_stats_asset_id.is_none(),
+            "refused transfer keeps no stats asset link"
+        );
+        assert!(
+            t.dst_stats_asset_id.is_none(),
             "refused transfer keeps no stats asset link"
         );
     }
@@ -14909,24 +15200,447 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(
-            t1.stats_asset_id,
+            t1.src_stats_asset_id,
             Some(c_id),
             "transfer 1's asset id must be resolved through the transitive remap, not dangle at `a`"
         );
-        assert_eq!(t2.stats_asset_id, Some(c_id));
+        assert_eq!(t1.dst_stats_asset_id, Some(c_id));
+        assert_eq!(t2.src_stats_asset_id, Some(c_id));
+        assert_eq!(t2.dst_stats_asset_id, Some(c_id));
 
-        let edge1 = stats_asset_edges::Entity::find_by_id((c_id, 801i64, 802i64, 1i32))
+        let edge1 = stats_asset_edges::Entity::find_by_id((801i64, 802i64, 1i32, c_id, c_id))
             .one(db)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(edge1.transfers_count, 1);
-        let edge2 = stats_asset_edges::Entity::find_by_id((c_id, 802i64, 803i64, 1i32))
+        let edge2 = stats_asset_edges::Entity::find_by_id((802i64, 803i64, 1i32, c_id, c_id))
             .one(db)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(edge2.transfers_count, 1);
+    }
+
+    /// ADR-011 contradiction guard 2: a `mirror` transfer joining two tokens
+    /// already tied together by a pre-existing `conversion` edge must merge
+    /// the two components into one self-edge without violating the PK, in
+    /// two separate maintenance batches (so the cross-asset edge from batch 1
+    /// is already committed by the time batch 2's merge runs).
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_cross_asset_edge_collapsed_by_separate_batches_reports_the_contradiction() {
+        let _db = init_db("test_cross_asset_edge_collapsed_separate_batches").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        let token_dai = [0x90u8; 20].to_vec();
+        let token_native = [0x91u8; 20].to_vec();
+
+        // Batch 1: a `conversion` transfer resolves its two endpoints to two
+        // different assets, joined by one cross-asset edge.
+        crosschain_messages::Entity::insert(completed_message(92500, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92500),
+            message_id: Set(92500),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(Some(BigDecimal::from(1_000u64))),
+            dst_amount: Set(Some(BigDecimal::from(1_000u64))),
+            token_src_address: Set(Some(token_dai.clone())),
+            token_dst_address: Set(Some(token_native.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Conversion)),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92500i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92500i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t1 = crosschain_transfers::Entity::find_by_id(92500i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let asset_a = t1.src_stats_asset_id.expect("source endpoint resolves");
+        let asset_b = t1
+            .dst_stats_asset_id
+            .expect("destination endpoint resolves");
+        assert_ne!(
+            asset_a, asset_b,
+            "a conversion transfer's two endpoints must not be merged"
+        );
+
+        let cross_edge =
+            stats_asset_edges::Entity::find_by_id((1i64, 100i64, 1i32, asset_a, asset_b))
+                .one(db)
+                .await
+                .unwrap()
+                .expect("the conversion edge must exist");
+        assert_eq!(cross_edge.transfers_count, 1);
+
+        // Batch 2, a separate transaction: a `mirror` transfer joining the
+        // SAME two tokens must merge the two components -- the cross-asset
+        // edge collapse this batch's `merge_assets` call can actually see
+        // (unlike the same-batch case, where the edge from transfer 1 is not
+        // committed yet when transfer 2's merge runs).
+        crosschain_messages::Entity::insert(completed_message(92501, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92501),
+            message_id: Set(92501),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(Some(BigDecimal::from(500u64))),
+            dst_amount: Set(Some(BigDecimal::from(500u64))),
+            token_src_address: Set(Some(token_dai.clone())),
+            token_dst_address: Set(Some(token_native.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92501i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92501i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        // Exactly one of the two original assets survives.
+        let a_row = stats_assets::Entity::find_by_id(asset_a)
+            .one(db)
+            .await
+            .unwrap();
+        let b_row = stats_assets::Entity::find_by_id(asset_b)
+            .one(db)
+            .await
+            .unwrap();
+        let winner = match (a_row.is_some(), b_row.is_some()) {
+            (true, false) => asset_a,
+            (false, true) => asset_b,
+            other => panic!("expected exactly one survivor, got {other:?}"),
+        };
+
+        let t1_after = crosschain_transfers::Entity::find_by_id(92500i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let t2_after = crosschain_transfers::Entity::find_by_id(92501i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t1_after.src_stats_asset_id, Some(winner));
+        assert_eq!(t1_after.dst_stats_asset_id, Some(winner));
+        assert_eq!(t2_after.src_stats_asset_id, Some(winner));
+        assert_eq!(t2_after.dst_stats_asset_id, Some(winner));
+
+        let edges = stats_asset_edges::Entity::find()
+            .filter(stats_asset_edges::Column::SrcStatsAssetId.eq(winner))
+            .filter(stats_asset_edges::Column::DstStatsAssetId.eq(winner))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(
+            edges.len(),
+            1,
+            "the cross-asset edge must collapse into exactly one self-edge, no PK violation"
+        );
+        assert_eq!(edges[0].transfers_count, 2);
+        assert_eq!(edges[0].cumulative_amount, BigDecimal::from(1_500u64));
+    }
+
+    /// Same scenario as
+    /// [`test_cross_asset_edge_collapsed_by_separate_batches_reports_the_contradiction`],
+    /// but both transfers arrive in **one** `project_transfers_batch` call.
+    /// Contradiction guard 2 cannot fire here (the conversion edge is not yet
+    /// committed when the mirror transfer's merge runs within the same
+    /// batch) -- guard 1's post-remap check is what catches this shape
+    /// instead. The regression this guards is item 10e2 (ADR-011): the *data*
+    /// outcome must be identical to the two-batch case regardless of which
+    /// guard fires.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_cross_asset_edge_collapse_is_reported_the_same_way_within_one_batch() {
+        let _db = init_db("test_cross_asset_edge_collapse_one_batch").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        let token_dai = [0x92u8; 20].to_vec();
+        let token_native = [0x93u8; 20].to_vec();
+
+        crosschain_messages::Entity::insert_many([
+            completed_message(92510, 1, 100),
+            completed_message(92511, 1, 100),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+        crosschain_transfers::Entity::insert_many([
+            crosschain_transfers::ActiveModel {
+                id: Set(92510),
+                message_id: Set(92510),
+                bridge_id: Set(1),
+                index: Set(0),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(100),
+                src_amount: Set(Some(BigDecimal::from(1_000u64))),
+                dst_amount: Set(Some(BigDecimal::from(1_000u64))),
+                token_src_address: Set(Some(token_dai.clone())),
+                token_dst_address: Set(Some(token_native.clone())),
+                asset_linkage: Set(Some(TransferAssetLinkage::Conversion)),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+            crosschain_transfers::ActiveModel {
+                id: Set(92511),
+                message_id: Set(92511),
+                bridge_id: Set(1),
+                index: Set(0),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(100),
+                src_amount: Set(Some(BigDecimal::from(500u64))),
+                dst_amount: Set(Some(BigDecimal::from(500u64))),
+                token_src_address: Set(Some(token_dai.clone())),
+                token_dst_address: Set(Some(token_native.clone())),
+                asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
+                stats_processed: Set(0),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        db.transaction(|tx| {
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(
+                    tx,
+                    &[(92510i64, 1i32), (92511i64, 1i32)],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                crate::stats::projection::project_transfers_batch(
+                    tx,
+                    &[92510i64, 92511i64],
+                    &IndexedChains::AllIndexed,
+                )
+                .await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let t1 = crosschain_transfers::Entity::find_by_id(92510i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        let t2 = crosschain_transfers::Entity::find_by_id(92511i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Same outcome shape as the two-separate-batches case: one surviving
+        // asset shared by both transfers, one self-edge summing both.
+        let winner = t1.src_stats_asset_id.expect("identity must resolve");
+        assert_eq!(t1.dst_stats_asset_id, Some(winner));
+        assert_eq!(t2.src_stats_asset_id, Some(winner));
+        assert_eq!(t2.dst_stats_asset_id, Some(winner));
+
+        let edges = stats_asset_edges::Entity::find()
+            .filter(stats_asset_edges::Column::SrcStatsAssetId.eq(winner))
+            .filter(stats_asset_edges::Column::DstStatsAssetId.eq(winner))
+            .all(db)
+            .await
+            .unwrap();
+        assert_eq!(
+            edges.len(),
+            1,
+            "must collapse into exactly one self-edge, no PK violation, whether the merge \
+             happens within one batch or across two"
+        );
+        assert_eq!(edges[0].transfers_count, 2);
+        assert_eq!(edges[0].cumulative_amount, BigDecimal::from(1_500u64));
+    }
+
+    /// A `conversion` transfer whose `amount_side` amount is absent must
+    /// defer -- never borrow the opposite side's amount, unlike `mirror`.
+    /// `stats_processed` stays `0` and nothing is written until the missing
+    /// amount is supplied, at which point it is counted exactly once.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_conversion_amount_side_missing_defers_without_marking_processed() {
+        let _db = init_db("test_conversion_amount_side_missing").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        let token_dai = [0x94u8; 20].to_vec();
+        let token_native = [0x95u8; 20].to_vec();
+
+        // `completed_message` sets `src_tx_hash`, so the source chain (1) is
+        // indexed and `amount_side` will be `Source` -- but `src_amount` is
+        // missing. A conversion transfer must not borrow `dst_amount` across
+        // sides the way a mirror transfer's fallback would.
+        crosschain_messages::Entity::insert(completed_message(92520, 1, 100))
+            .exec(db)
+            .await
+            .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(92520),
+            message_id: Set(92520),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(1),
+            token_dst_chain_id: Set(100),
+            src_amount: Set(None),
+            dst_amount: Set(Some(BigDecimal::from(2_000_000u64))),
+            token_src_address: Set(Some(token_dai.clone())),
+            token_dst_address: Set(Some(token_native.clone())),
+            asset_linkage: Set(Some(TransferAssetLinkage::Conversion)),
+            stats_processed: Set(0),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+
+        let processed = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &[(92520i64, 1i32)],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await?;
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &[92520i64],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            processed, 0,
+            "a deferred transfer is neither counted nor skipped"
+        );
+
+        let t = crosschain_transfers::Entity::find_by_id(92520i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.stats_processed, 0, "deferred, not skipped");
+        assert_eq!(
+            t.src_stats_asset_id, None,
+            "no identity link while deferred"
+        );
+        assert_eq!(t.dst_stats_asset_id, None);
+        assert!(
+            stats_asset_edges::Entity::find()
+                .all(db)
+                .await
+                .unwrap()
+                .is_empty(),
+            "no edge contribution while deferred"
+        );
+
+        // Supply the missing amount and re-project: must now be counted
+        // exactly once, and the amount must be exactly the newly supplied
+        // source amount -- nothing borrowed from the destination side.
+        let mut active: crosschain_transfers::ActiveModel = t.into();
+        active.src_amount = Set(Some(BigDecimal::from(1_000u64)));
+        active.update(db).await.unwrap();
+
+        let processed2 = db
+            .transaction(|tx| {
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &[92520i64],
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(processed2, 1);
+
+        let t2 = crosschain_transfers::Entity::find_by_id(92520i64)
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(t2.stats_processed, 1);
+        assert!(t2.src_stats_asset_id.is_some());
+        assert!(t2.dst_stats_asset_id.is_some());
+
+        let edges = stats_asset_edges::Entity::find().all(db).await.unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].transfers_count, 1);
+        assert_eq!(
+            edges[0].cumulative_amount,
+            BigDecimal::from(1_000u64),
+            "the amount must come from the same side as amount_side (src), never borrowed \
+             from dst"
+        );
     }
 
     /// A late upsert that fills a previously missing token endpoint on an
@@ -15000,7 +15714,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(t.stats_processed, 1);
-        let aid = t.stats_asset_id.unwrap();
+        let aid = t.src_stats_asset_id.unwrap();
         let tokens_before = stats_asset_tokens::Entity::find()
             .filter(stats_asset_tokens::Column::StatsAssetId.eq(aid))
             .all(db)
@@ -15011,7 +15725,7 @@ mod tests {
             1,
             "only the known side is linked initially"
         );
-        let edge_before = stats_asset_edges::Entity::find_by_id((aid, 1i64, 900i64, 1i32))
+        let edge_before = stats_asset_edges::Entity::find_by_id((1i64, 900i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -15051,7 +15765,12 @@ mod tests {
             .unwrap();
         assert_eq!(t2.stats_processed, 1, "marker must not change");
         assert_eq!(
-            t2.stats_asset_id,
+            t2.src_stats_asset_id,
+            Some(aid),
+            "stays linked to the same asset"
+        );
+        assert_eq!(
+            t2.dst_stats_asset_id,
             Some(aid),
             "stays linked to the same asset"
         );
@@ -15072,7 +15791,7 @@ mod tests {
                 .any(|t| t.chain_id == 900 && t.token_address == addr_dst)
         );
 
-        let edge_after = stats_asset_edges::Entity::find_by_id((aid, 1i64, 900i64, 1i32))
+        let edge_after = stats_asset_edges::Entity::find_by_id((1i64, 900i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
@@ -15183,10 +15902,14 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(
-            t1.stats_asset_id, t2.stats_asset_id,
+            t1.src_stats_asset_id, t2.src_stats_asset_id,
             "both hops must resolve to ONE asset, not two"
         );
-        let aid = t1.stats_asset_id.unwrap();
+        assert_eq!(
+            t1.dst_stats_asset_id, t2.dst_stats_asset_id,
+            "both hops must resolve to ONE asset, not two"
+        );
+        let aid = t1.src_stats_asset_id.unwrap();
 
         let tokens = stats_asset_tokens::Entity::find()
             .filter(stats_asset_tokens::Column::StatsAssetId.eq(aid))
@@ -15202,13 +15925,13 @@ mod tests {
 
         // Per task Decision 8, multi-hop is counted per hop: two edges, each
         // with transfers_count = 1, not one collapsed edge.
-        let edge1 = stats_asset_edges::Entity::find_by_id((aid, 1001i64, 1002i64, 1i32))
+        let edge1 = stats_asset_edges::Entity::find_by_id((1001i64, 1002i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(edge1.transfers_count, 1);
-        let edge2 = stats_asset_edges::Entity::find_by_id((aid, 1002i64, 1003i64, 1i32))
+        let edge2 = stats_asset_edges::Entity::find_by_id((1002i64, 1003i64, 1i32, aid, aid))
             .one(db)
             .await
             .unwrap()

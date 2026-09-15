@@ -3,7 +3,8 @@ use std::{str::FromStr, time::Duration};
 use anyhow::{Context, Result};
 use interchain_indexer_entity::{
     amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{MessageStatus, TransferType},
+    new_transfer,
+    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage, TransferType},
 };
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 
@@ -361,11 +362,7 @@ fn build_transfer(
             destination_transfer.map(|t| t.recipient.as_slice().to_vec()),
         ),
         token_ids: ActiveValue::Set(None),
-        stats_processed: ActiveValue::Set(0),
-        stats_asset_id: ActiveValue::Set(None),
-        created_at: ActiveValue::NotSet,
-        updated_at: ActiveValue::NotSet,
-        id: ActiveValue::NotSet,
+        ..new_transfer(TransferAssetLinkage::Mirror)
     })
 }
 
@@ -392,11 +389,7 @@ fn build_destination_only_transfer(
         sender_address: ActiveValue::Set(None),
         recipient_address: ActiveValue::Set(Some(transfer.recipient.as_slice().to_vec())),
         token_ids: ActiveValue::Set(None),
-        stats_processed: ActiveValue::Set(0),
-        stats_asset_id: ActiveValue::Set(None),
-        created_at: ActiveValue::NotSet,
-        updated_at: ActiveValue::NotSet,
-        id: ActiveValue::NotSet,
+        ..new_transfer(TransferAssetLinkage::Mirror)
     })
 }
 

@@ -444,12 +444,23 @@ FROM (
            (CASE WHEN s.name IS NULL OR btrim(s.name) = '' THEN 1 ELSE 0 END)::int AS name_blank,
            COALESCE(s.name, '') AS name_sort
     FROM (
-        SELECT stats_asset_id,
-               COALESCE(SUM(CASE WHEN dst_chain_id = $1 THEN transfers_count ELSE 0 END), 0)::bigint AS input_transfers_count,
-               COALESCE(SUM(CASE WHEN src_chain_id = $1 THEN transfers_count ELSE 0 END), 0)::bigint AS output_transfers_count
-        FROM stats_asset_edges
-        WHERE {edges_where}
-        GROUP BY stats_asset_id
+        -- The alias is load-bearing: the middle layer selects `agg.stats_asset_id`
+        -- and joins `stats_assets s ON s.id = agg.stats_asset_id`, the outer layer
+        -- selects `a.stats_asset_id`, and `BridgedTokenAggDbRow` reads the column by
+        -- name. Returning `asset_id` here fails every bridged-tokens request.
+        SELECT asset_id AS stats_asset_id,
+               COALESCE(SUM(input), 0)::bigint  AS input_transfers_count,
+               COALESCE(SUM(output), 0)::bigint AS output_transfers_count
+        FROM (
+            SELECT dst_stats_asset_id AS asset_id, transfers_count AS input, 0::bigint AS output
+            FROM stats_asset_edges
+            WHERE ({edges_where}) AND dst_chain_id = $1
+            UNION ALL
+            SELECT src_stats_asset_id AS asset_id, 0::bigint AS input, transfers_count AS output
+            FROM stats_asset_edges
+            WHERE ({edges_where}) AND src_chain_id = $1
+        ) u
+        GROUP BY asset_id
     ) agg
     INNER JOIN stats_assets s ON s.id = agg.stats_asset_id
 ) a
@@ -642,7 +653,8 @@ mod tests {
         seed_bridge(db, bridge_id).await;
         for (src, dst, cnt) in edges {
             stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-                stats_asset_id: Set(stats_asset_id),
+                src_stats_asset_id: Set(stats_asset_id),
+                dst_stats_asset_id: Set(stats_asset_id),
                 bridge_id: Set(bridge_id),
                 src_chain_id: Set(src),
                 dst_chain_id: Set(dst),

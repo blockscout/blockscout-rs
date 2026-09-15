@@ -4,8 +4,8 @@ use alloy::primitives::{Address, U256};
 use anyhow::{Context, Result};
 use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
-    amb_messages_confirmations, crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{MessageStatus, TransferType},
+    amb_messages_confirmations, crosschain_messages, crosschain_transfers, new_transfer,
+    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage, TransferType},
 };
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 
@@ -219,11 +219,7 @@ fn build_transfer(
         sender_address: ActiveValue::Set(message.sender_address.map(address_bytes)),
         recipient_address: ActiveValue::Set(Some(address_bytes(recipient))),
         token_ids: ActiveValue::Set(None),
-        stats_processed: ActiveValue::Set(0),
-        stats_asset_id: ActiveValue::Set(None),
-        created_at: ActiveValue::NotSet,
-        updated_at: ActiveValue::NotSet,
-        id: ActiveValue::NotSet,
+        ..new_transfer(TransferAssetLinkage::Conversion)
     })
 }
 

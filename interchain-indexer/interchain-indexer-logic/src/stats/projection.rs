@@ -9,7 +9,7 @@ use bigdecimal::RoundingMode;
 use chrono::Utc;
 use interchain_indexer_entity::{
     bridges, crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus},
+    sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferAssetLinkage},
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_messages, stats_messages_days,
     tokens,
 };
@@ -28,16 +28,17 @@ use super::{
         IndexedChains, message_countable_condition, transfer_identity_ready_condition,
     },
     metrics::{
-        STATS_ASSET_MERGE_REPOINTED_TRANSFERS, STATS_ASSET_MERGES_TOTAL,
-        STATS_EDGE_DECIMALS_CONFLICT_TOTAL, STATS_EDGE_MIXED_AMOUNT_SIDE_TOTAL,
-        STATS_EDGE_RESCALED_FOLD_TOTAL, STATS_TRANSFERS_DEFERRED_TOTAL,
+        STATS_ASSET_LINKAGE_CONTRADICTION_TOTAL, STATS_ASSET_MERGE_REPOINTED_TRANSFERS,
+        STATS_ASSET_MERGES_TOTAL, STATS_EDGE_DECIMALS_CONFLICT_TOTAL,
+        STATS_EDGE_MIXED_AMOUNT_SIDE_TOTAL, STATS_EDGE_RESCALED_FOLD_TOTAL,
+        STATS_TRANSFERS_DEFERRED_TOTAL,
     },
 };
 
-/// Batch size for repointing `crosschain_transfers.stats_asset_id` during an
-/// asset merge. A Rust constant, not a setting — chunking bounds statement
-/// size and bind count, not lock duration (the whole merge runs inside the
-/// caller's transaction regardless).
+/// Batch size for repointing `crosschain_transfers.src_stats_asset_id` /
+/// `dst_stats_asset_id` during an asset merge. A Rust constant, not a setting
+/// — chunking bounds statement size and bind count, not lock duration (the
+/// whole merge runs inside the caller's transaction regardless).
 const STATS_MERGE_REPOINT_CHUNK: u64 = 5_000;
 
 /// Distinct `(chain_id, token_address)` from transfers — for [`TokenInfoService::kickoff_token_fetch_for_stats_enrichment`]
@@ -333,15 +334,58 @@ fn non_empty_opt(s: Option<String>) -> Option<String> {
     s.filter(|t| !t.trim().is_empty())
 }
 
-/// Fill empty `stats_assets` fields from `tokens` (source token first, then destination).
+/// Fill empty `stats_assets` fields from `tokens`. Two independent passes: a
+/// transfer's source token can only ever enrich its `src_asset`, and its
+/// destination token only its `dst_asset` — an asset is one token identity, so
+/// `name`/`symbol`/`icon_url` must not become first-non-blank-wins across two
+/// unrelated tokens on a conversion transfer. For a `mirror` transfer the two
+/// ids are equal, and running the source pass fully before the destination
+/// pass reproduces today's source-first-then-destination behaviour exactly.
 async fn enrich_stats_assets_for_batch(
     tx: &DatabaseTransaction,
     transfers: &[crosschain_transfers::Model],
-    asset_ids: &[i64],
+    asset_id_pairs: &[(i64, i64)],
     token_rows: &HashMap<TokenKey, tokens::Model>,
 ) -> Result<(), DbErr> {
+    enrich_stats_assets_side(
+        tx,
+        transfers,
+        asset_id_pairs,
+        token_rows,
+        |pair| pair.0,
+        |t| {
+            t.token_src_address
+                .as_ref()
+                .map(|addr| (t.token_src_chain_id, addr.clone()))
+        },
+    )
+    .await?;
+    enrich_stats_assets_side(
+        tx,
+        transfers,
+        asset_id_pairs,
+        token_rows,
+        |pair| pair.1,
+        |t| {
+            t.token_dst_address
+                .as_ref()
+                .map(|addr| (t.token_dst_chain_id, addr.clone()))
+        },
+    )
+    .await
+}
+
+async fn enrich_stats_assets_side(
+    tx: &DatabaseTransaction,
+    transfers: &[crosschain_transfers::Model],
+    asset_id_pairs: &[(i64, i64)],
+    token_rows: &HashMap<TokenKey, tokens::Model>,
+    side_asset: impl Fn(&(i64, i64)) -> i64,
+    side_key: impl Fn(&crosschain_transfers::Model) -> Option<TokenKey>,
+) -> Result<(), DbErr> {
     let mut seen: HashSet<i64> = HashSet::new();
-    for &aid in asset_ids {
+    for pair in asset_id_pairs {
+        let aid = side_asset(pair);
         if !seen.insert(aid) {
             continue;
         }
@@ -350,35 +394,14 @@ async fn enrich_stats_assets_for_batch(
         let mut pick_symbol = None;
         let mut pick_icon = None;
 
-        for (t, &a) in transfers.iter().zip(asset_ids.iter()) {
-            if a != aid {
+        for (t, p) in transfers.iter().zip(asset_id_pairs.iter()) {
+            if side_asset(p) != aid {
                 continue;
             }
-            let Some(addr) = &t.token_src_address else {
+            let Some(key) = side_key(t) else {
                 continue;
             };
-            let ks = (t.token_src_chain_id, addr.clone());
-            if let Some(row) = token_rows.get(&ks) {
-                if pick_name.is_none() {
-                    pick_name = non_empty_opt(row.name.clone());
-                }
-                if pick_symbol.is_none() {
-                    pick_symbol = non_empty_opt(row.symbol.clone());
-                }
-                if pick_icon.is_none() {
-                    pick_icon = non_empty_opt(row.token_icon.clone());
-                }
-            }
-        }
-        for (t, &a) in transfers.iter().zip(asset_ids.iter()) {
-            if a != aid {
-                continue;
-            }
-            let Some(addr) = &t.token_dst_address else {
-                continue;
-            };
-            let kd = (t.token_dst_chain_id, addr.clone());
-            if let Some(row) = token_rows.get(&kd) {
+            if let Some(row) = token_rows.get(&key) {
                 if pick_name.is_none() {
                     pick_name = non_empty_opt(row.name.clone());
                 }
@@ -497,26 +520,93 @@ async fn asset_has_token_on_chain(
         .is_some())
 }
 
-/// Resolve the stats asset for a transfer's endpoints, linking tokens as needed.
+/// Outcome of resolving a transfer's stats asset(s).
+enum AssetResolution {
+    /// `(src_asset, dst_asset)` — for a `mirror` transfer these are always
+    /// equal.
+    Resolved(i64, i64),
+    /// The endpoints cannot be reconciled (mapping conflict, or a merge
+    /// refused on chain collision). The caller marks the transfer processed
+    /// with no asset link — identity is genuinely unknown or ambiguous.
+    Conflict,
+    /// A `conversion` transfer has only one known endpoint, so there is no
+    /// second asset to name. The caller must **not** mark this transfer
+    /// processed — it is a deferral, not a skip, and is re-evaluated the next
+    /// time this transfer's canonical key is flushed.
+    Deferred,
+}
+
+/// Resolve the stats asset(s) for a transfer's endpoints, linking tokens as
+/// needed. Dispatches on `t.asset_linkage`, which the indexer stated when it
+/// built the transfer:
 ///
-/// Returns `Ok(None)` when the endpoints cannot be reconciled to a single asset
-/// (e.g. corrupt token data that would map one asset to two tokens on a chain,
-/// or a merge refused on chain collision). The caller skips such a transfer's
-/// stats projection instead of failing the whole batch — every link is
-/// preceded by a `SELECT`, so a conflict is detected without issuing an
-/// `INSERT` that would poison the shared maintenance transaction (which also
-/// carries message and cursor persistence).
+/// - `mirror` — both endpoints name the same logical asset (today's
+///   union-find behaviour, unchanged).
+/// - `conversion` — the two endpoints are two different assets by
+///   construction (e.g. a converting bridge), resolved independently.
+/// - `NULL` — unreachable here: [`transfer_identity_ready_condition`] already
+///   excludes rows with an unstated linkage from the query that selects
+///   `t`.
+async fn ensure_asset_for_transfer(
+    tx: &DatabaseTransaction,
+    t: &crosschain_transfers::Model,
+    token_to_asset: &mut HashMap<TokenKey, i64>,
+    merged_away: &mut HashMap<i64, i64>,
+    reported_contradiction_pairs: &mut HashSet<(i64, i64)>,
+) -> Result<AssetResolution, DbErr> {
+    match t.asset_linkage {
+        Some(TransferAssetLinkage::Mirror) => Ok(
+            match ensure_mirror_asset_for_transfer(
+                tx,
+                t,
+                token_to_asset,
+                merged_away,
+                reported_contradiction_pairs,
+            )
+            .await?
+            {
+                Some(id) => AssetResolution::Resolved(id, id),
+                None => AssetResolution::Conflict,
+            },
+        ),
+        Some(TransferAssetLinkage::Conversion) => {
+            ensure_conversion_asset_for_transfer(tx, t, token_to_asset).await
+        }
+        None => {
+            tracing::error!(
+                transfer_id = t.id,
+                "stats projection: transfer reached asset resolution with a NULL \
+                 asset_linkage; transfer_identity_ready_condition should have \
+                 excluded this row"
+            );
+            Ok(AssetResolution::Conflict)
+        }
+    }
+}
+
+/// `mirror` resolution: both endpoints name the same logical asset. This is
+/// the original single-asset union-find, byte-for-byte unchanged from before
+/// per-transfer linkage existed.
+///
+/// Returns `Ok(None)` when the endpoints cannot be reconciled to a single
+/// asset (e.g. corrupt token data that would map one asset to two tokens on a
+/// chain, or a merge refused on chain collision). The caller skips such a
+/// transfer's stats projection instead of failing the whole batch — every
+/// link is preceded by a `SELECT`, so a conflict is detected without issuing
+/// an `INSERT` that would poison the shared maintenance transaction (which
+/// also carries message and cursor persistence).
 ///
 /// When a transfer's two endpoints resolve to two *different* stats assets,
 /// this is not corruption — asset identity is an incrementally discovered
 /// connected-component problem, and two complete transfers on fully indexed
 /// chains can legitimately form disjoint components that a later transfer
 /// bridges. That case is resolved via [`merge_assets`] (a union), not a skip.
-async fn ensure_asset_for_transfer(
+async fn ensure_mirror_asset_for_transfer(
     tx: &DatabaseTransaction,
     t: &crosschain_transfers::Model,
     token_to_asset: &mut HashMap<TokenKey, i64>,
     merged_away: &mut HashMap<i64, i64>,
+    reported_contradiction_pairs: &mut HashSet<(i64, i64)>,
 ) -> Result<Option<i64>, DbErr> {
     // A transfer side whose token is unknown (its bridge event was never
     // observed) contributes no endpoint to reconcile.
@@ -557,7 +647,16 @@ async fn ensure_asset_for_transfer(
         (Some(k_src), Some(k_dst)) => match (a, b) {
             (Some(x), Some(y)) if x == y => x,
             (Some(x), Some(y)) => {
-                match merge_assets(tx, x, y, token_to_asset, merged_away).await? {
+                match merge_assets(
+                    tx,
+                    x,
+                    y,
+                    token_to_asset,
+                    merged_away,
+                    reported_contradiction_pairs,
+                )
+                .await?
+                {
                     Some(winner) => winner,
                     None => return Ok(None),
                 }
@@ -568,8 +667,13 @@ async fn ensure_asset_for_transfer(
                         transfer_id = t.id,
                         stats_asset_id = x,
                         chain_id = k_dst.0,
-                        "stats projection: stats asset already has a different token on the destination chain; skipping transfer"
+                        "stats projection: stats asset already has a different token on the \
+                         destination chain; skipping transfer (bad token data, or a converting \
+                         route the indexer declared as mirror)"
                     );
+                    STATS_ASSET_MERGES_TOTAL
+                        .with_label_values(&["refused_token_on_chain"])
+                        .inc();
                     return Ok(None);
                 }
                 try_link_token(tx, x, k_dst.0, k_dst.1.clone()).await?;
@@ -582,8 +686,13 @@ async fn ensure_asset_for_transfer(
                         transfer_id = t.id,
                         stats_asset_id = y,
                         chain_id = k_src.0,
-                        "stats projection: stats asset already has a different token on the source chain; skipping transfer"
+                        "stats projection: stats asset already has a different token on the \
+                         source chain; skipping transfer (bad token data, or a converting route \
+                         the indexer declared as mirror)"
                     );
+                    STATS_ASSET_MERGES_TOTAL
+                        .with_label_values(&["refused_token_on_chain"])
+                        .inc();
                     return Ok(None);
                 }
                 try_link_token(tx, y, k_src.0, k_src.1.clone()).await?;
@@ -627,6 +736,73 @@ async fn ensure_asset_for_transfer(
     };
 
     Ok(Some(asset_id))
+}
+
+/// `conversion` resolution: the two endpoints are two different assets by
+/// construction, so each side is resolved independently — no
+/// `asset_has_token_on_chain` probe and no cross-side link is ever attempted.
+/// This path is collision-free by construction: the PK
+/// `(stats_asset_id, chain_id)` cannot collide on a freshly created asset, and
+/// `UNIQUE (chain_id, token_address)` cannot fire because the lookup precedes
+/// the insert.
+async fn ensure_conversion_asset_for_transfer(
+    tx: &DatabaseTransaction,
+    t: &crosschain_transfers::Model,
+    token_to_asset: &mut HashMap<TokenKey, i64>,
+) -> Result<AssetResolution, DbErr> {
+    let src_key = t
+        .token_src_address
+        .clone()
+        .map(|addr| (t.token_src_chain_id, addr));
+    let dst_key = t
+        .token_dst_address
+        .clone()
+        .map(|addr| (t.token_dst_chain_id, addr));
+
+    let src_asset = match &src_key {
+        Some(k) => Some(resolve_or_create_conversion_endpoint(tx, token_to_asset, k).await?),
+        None => None,
+    };
+    let dst_asset = match &dst_key {
+        Some(k) => Some(resolve_or_create_conversion_endpoint(tx, token_to_asset, k).await?),
+        None => None,
+    };
+
+    match (src_asset, dst_asset) {
+        (Some(s), Some(d)) => Ok(AssetResolution::Resolved(s, d)),
+        // No token info on either side: nothing to map — mirrors the mirror
+        // path's (None, None) arm. Unreachable in practice:
+        // `transfer_identity_ready_condition`'s `at_least_one_known` clause
+        // already excludes this row.
+        (None, None) => Ok(AssetResolution::Conflict),
+        // Exactly one endpoint known: there is no second asset to name.
+        // Writing src = dst would assert precisely the identity `conversion`
+        // denies, so defer instead of guessing.
+        _ => {
+            STATS_TRANSFERS_DEFERRED_TOTAL
+                .with_label_values(&["conversion_endpoint_unresolved"])
+                .inc();
+            Ok(AssetResolution::Deferred)
+        }
+    }
+}
+
+async fn resolve_or_create_conversion_endpoint(
+    tx: &DatabaseTransaction,
+    token_to_asset: &mut HashMap<TokenKey, i64>,
+    key: &TokenKey,
+) -> Result<i64, DbErr> {
+    if let Some(&id) = token_to_asset.get(key) {
+        return Ok(id);
+    }
+    if let Some(id) = lookup_token_asset(tx, key.0, key.1.clone()).await? {
+        token_to_asset.insert(key.clone(), id);
+        return Ok(id);
+    }
+    let id = insert_stats_asset(tx).await?;
+    try_link_token(tx, id, key.0, key.1.clone()).await?;
+    token_to_asset.insert(key.clone(), id);
+    Ok(id)
 }
 
 /// Follows `merged_away` (loser -> winner) to the current owner of `id`.
@@ -697,6 +873,7 @@ async fn merge_assets(
     b: i64,
     token_to_asset: &mut HashMap<TokenKey, i64>,
     merged_away: &mut HashMap<i64, i64>,
+    reported_contradiction_pairs: &mut HashSet<(i64, i64)>,
 ) -> Result<Option<i64>, DbErr> {
     // --- Pass 1: validate (SELECT only) ---
 
@@ -723,7 +900,8 @@ async fn merge_assets(
             stats_asset_id_a = a,
             stats_asset_id_b = b,
             chain_id = collision_chain,
-            "stats projection: refusing asset merge, both components hold a token on the same chain"
+            "stats projection: refusing asset merge, both components hold a token on the same \
+             chain (bad token data, or a converting route the indexer declared as mirror)"
         );
         STATS_ASSET_MERGES_TOTAL
             .with_label_values(&["refused_chain_collision"])
@@ -746,19 +924,34 @@ async fn merge_assets(
         }
     };
 
+    // Every edge touching either component: both sides are captured because
+    // `winner` is itself `a` or `b`, so a pre-existing winner-only edge and
+    // every loser-touching edge (self, one-sided, or a direct cross edge
+    // between the two components) are all fetched by this one filter.
     let edges = stats_asset_edges::Entity::find()
-        .filter(stats_asset_edges::Column::StatsAssetId.is_in([a, b]))
+        .filter(
+            Condition::any()
+                .add(stats_asset_edges::Column::SrcStatsAssetId.is_in([a, b]))
+                .add(stats_asset_edges::Column::DstStatsAssetId.is_in([a, b])),
+        )
         .all(tx)
         .await?;
-    let mut winner_edges: HashMap<(i32, i64, i64), stats_asset_edges::Model> = HashMap::new();
-    let mut loser_edges: Vec<stats_asset_edges::Model> = Vec::new();
+
+    // Group by the post-merge key (loser -> winner on both columns). A group
+    // with more than one row is a collision that must fold into one row; see
+    // the three shapes in the module docs / ADR-011.
+    let map_component = |x: i64| if x == loser { winner } else { x };
+    type PostMergeKey = (i64, i64, i32, i64, i64);
+    let mut groups: HashMap<PostMergeKey, Vec<stats_asset_edges::Model>> = HashMap::new();
     for e in edges {
-        let key = (e.bridge_id, e.src_chain_id, e.dst_chain_id);
-        if e.stats_asset_id == winner {
-            winner_edges.insert(key, e);
-        } else {
-            loser_edges.push(e);
-        }
+        let key = (
+            map_component(e.src_stats_asset_id),
+            map_component(e.dst_stats_asset_id),
+            e.bridge_id,
+            e.src_chain_id,
+            e.dst_chain_id,
+        );
+        groups.entry(key).or_default().push(e);
     }
 
     // --- Pass 2: mutate, strictly ordered ---
@@ -778,127 +971,177 @@ async fn merge_assets(
         .exec(tx)
         .await?;
 
-    // 2. Edges: repoint when the winner has no row for the key, fold otherwise.
+    // 2. Edges: for each post-merge key, fold every colliding row into one
+    // target row and delete the rest. A group of one row whose key is already
+    // its post-merge key needs no write at all (an edge untouched by this
+    // merge, fetched only because one column happened to equal the winner).
     let mut edges_folded = 0usize;
-    for loser_edge in loser_edges {
-        let (bridge_id, src_chain_id, dst_chain_id) = (
-            loser_edge.bridge_id,
-            loser_edge.src_chain_id,
-            loser_edge.dst_chain_id,
-        );
-        let key = (bridge_id, src_chain_id, dst_chain_id);
-        match winner_edges.get(&key) {
-            None => {
-                stats_asset_edges::Entity::update_many()
-                    .col_expr(stats_asset_edges::Column::StatsAssetId, Expr::value(winner))
-                    .col_expr(
-                        stats_asset_edges::Column::UpdatedAt,
-                        Expr::current_timestamp().into(),
-                    )
-                    .filter(stats_asset_edges::Column::StatsAssetId.eq(loser))
-                    .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
-                    .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
-                    .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id))
-                    .exec(tx)
-                    .await?;
-            }
-            Some(winner_edge) => {
-                edges_folded += 1;
+    for (post_key, mut group) in groups {
+        if group.len() == 1
+            && (group[0].src_stats_asset_id, group[0].dst_stats_asset_id)
+                == (post_key.0, post_key.1)
+        {
+            continue;
+        }
 
-                let (add_amount, mode) = match (winner_edge.decimals, loser_edge.decimals) {
-                    (Some(dw), Some(dl)) if dw != dl => {
-                        match rescale_edge_amount(&loser_edge.cumulative_amount, dl, dw) {
-                            Some(scaled) => (
-                                scaled,
-                                Some(if dw > dl { "scaled_up" } else { "scaled_down" }),
-                            ),
-                            None => (
-                                loser_edge.cumulative_amount.clone(),
-                                Some("unscaled_overflow"),
-                            ),
-                        }
+        // Contradiction guard 2: a pre-existing edge directly between the two
+        // components being merged (a real cross-asset route, e.g. an earlier
+        // `conversion` transfer) collapsing onto a self-edge because a
+        // `mirror` transfer just joined the same two components.
+        let is_cross_pair = |e: &stats_asset_edges::Model| {
+            (e.src_stats_asset_id == a && e.dst_stats_asset_id == b)
+                || (e.src_stats_asset_id == b && e.dst_stats_asset_id == a)
+        };
+        if post_key.0 == post_key.1 && group.iter().any(is_cross_pair) {
+            tracing::warn!(
+                winner_stats_asset_id = winner,
+                loser_stats_asset_id = loser,
+                bridge_id = post_key.2,
+                src_chain_id = post_key.3,
+                dst_chain_id = post_key.4,
+                "stats projection: folding a cross-asset edge into a self-edge; the two assets \
+                 were declared both converting and mirrored"
+            );
+            STATS_ASSET_LINKAGE_CONTRADICTION_TOTAL
+                .with_label_values(&["cross_asset_edge_collapsed"])
+                .inc();
+            reported_contradiction_pairs.insert((post_key.0, post_key.1));
+        }
+
+        edges_folded += group.len().saturating_sub(1);
+
+        // Deterministic target: prefer the row already at the post-merge key
+        // (no repoint needed for it), else the earliest-created row.
+        group.sort_by_key(|e| e.created_at);
+        let target_idx = group
+            .iter()
+            .position(|e| (e.src_stats_asset_id, e.dst_stats_asset_id) == (post_key.0, post_key.1))
+            .unwrap_or(0);
+        let target = group.remove(target_idx);
+
+        let mut acc_count = target.transfers_count;
+        let mut acc_amount = target.cumulative_amount.clone();
+        let mut acc_decimals = target.decimals;
+        let acc_side = target.amount_side.clone();
+
+        for loser_edge in &group {
+            let (add_amount, mode) = match (acc_decimals, loser_edge.decimals) {
+                (Some(dw), Some(dl)) if dw != dl => {
+                    match rescale_edge_amount(&loser_edge.cumulative_amount, dl, dw) {
+                        Some(scaled) => (
+                            scaled,
+                            Some(if dw > dl { "scaled_up" } else { "scaled_down" }),
+                        ),
+                        None => (
+                            loser_edge.cumulative_amount.clone(),
+                            Some("unscaled_overflow"),
+                        ),
                     }
-                    (Some(_), Some(_)) => (loser_edge.cumulative_amount.clone(), None),
-                    _ => (
-                        loser_edge.cumulative_amount.clone(),
-                        Some("unscaled_unknown_decimals"),
-                    ),
-                };
-                if let Some(mode) = mode {
-                    tracing::warn!(
-                        stats_asset_id = winner,
-                        bridge_id,
-                        src_chain_id,
-                        dst_chain_id,
-                        winner_decimals = ?winner_edge.decimals,
-                        loser_decimals = ?loser_edge.decimals,
-                        scaled = mode,
-                        "stats projection: rescaling folded edge amount"
-                    );
-                    STATS_EDGE_RESCALED_FOLD_TOTAL
-                        .with_label_values(&[mode])
-                        .inc();
                 }
-
-                if winner_edge.amount_side != loser_edge.amount_side {
-                    tracing::warn!(
-                        stats_asset_id = winner,
-                        bridge_id,
-                        src_chain_id,
-                        dst_chain_id,
-                        winner_side = ?winner_edge.amount_side,
-                        loser_side = ?loser_edge.amount_side,
-                        "stats projection: folding edge rows with different amount_side; cumulative amount is approximate"
-                    );
-                    STATS_EDGE_MIXED_AMOUNT_SIDE_TOTAL.inc();
-                }
-
-                let new_decimals = winner_edge.decimals.or(loser_edge.decimals);
-                let mut ub = stats_asset_edges::Entity::update_many()
-                    .col_expr(
-                        stats_asset_edges::Column::TransfersCount,
-                        Expr::col(stats_asset_edges::Column::TransfersCount)
-                            .add(loser_edge.transfers_count),
-                    )
-                    .col_expr(
-                        stats_asset_edges::Column::CumulativeAmount,
-                        Expr::col(stats_asset_edges::Column::CumulativeAmount).add(add_amount),
-                    )
-                    .col_expr(
-                        stats_asset_edges::Column::UpdatedAt,
-                        Expr::current_timestamp().into(),
-                    )
-                    .filter(stats_asset_edges::Column::StatsAssetId.eq(winner))
-                    .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
-                    .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
-                    .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id));
-                if winner_edge.decimals.is_none() && new_decimals.is_some() {
-                    ub = ub.col_expr(
-                        stats_asset_edges::Column::Decimals,
-                        Expr::value(new_decimals),
-                    );
-                }
-                ub.exec(tx).await?;
-
-                stats_asset_edges::Entity::delete_many()
-                    .filter(stats_asset_edges::Column::StatsAssetId.eq(loser))
-                    .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
-                    .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
-                    .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id))
-                    .exec(tx)
-                    .await?;
+                (Some(_), Some(_)) => (loser_edge.cumulative_amount.clone(), None),
+                _ => (
+                    loser_edge.cumulative_amount.clone(),
+                    Some("unscaled_unknown_decimals"),
+                ),
+            };
+            if let Some(mode) = mode {
+                tracing::warn!(
+                    stats_asset_id = winner,
+                    bridge_id = post_key.2,
+                    src_chain_id = post_key.3,
+                    dst_chain_id = post_key.4,
+                    acc_decimals = ?acc_decimals,
+                    loser_decimals = ?loser_edge.decimals,
+                    scaled = mode,
+                    "stats projection: rescaling folded edge amount"
+                );
+                STATS_EDGE_RESCALED_FOLD_TOTAL
+                    .with_label_values(&[mode])
+                    .inc();
             }
+
+            if acc_side != loser_edge.amount_side {
+                tracing::warn!(
+                    stats_asset_id = winner,
+                    bridge_id = post_key.2,
+                    src_chain_id = post_key.3,
+                    dst_chain_id = post_key.4,
+                    acc_side = ?acc_side,
+                    loser_side = ?loser_edge.amount_side,
+                    "stats projection: folding edge rows with different amount_side; cumulative amount is approximate"
+                );
+                STATS_EDGE_MIXED_AMOUNT_SIDE_TOTAL.inc();
+            }
+
+            if acc_decimals.is_none() {
+                acc_decimals = loser_edge.decimals;
+            }
+            acc_count += loser_edge.transfers_count;
+            acc_amount += add_amount;
+        }
+
+        let mut ub = stats_asset_edges::Entity::update_many()
+            .col_expr(
+                stats_asset_edges::Column::TransfersCount,
+                Expr::value(acc_count),
+            )
+            .col_expr(
+                stats_asset_edges::Column::CumulativeAmount,
+                Expr::value(acc_amount),
+            )
+            .col_expr(
+                stats_asset_edges::Column::UpdatedAt,
+                Expr::current_timestamp().into(),
+            )
+            .filter(stats_asset_edges::Column::SrcStatsAssetId.eq(target.src_stats_asset_id))
+            .filter(stats_asset_edges::Column::DstStatsAssetId.eq(target.dst_stats_asset_id))
+            .filter(stats_asset_edges::Column::BridgeId.eq(target.bridge_id))
+            .filter(stats_asset_edges::Column::SrcChainId.eq(target.src_chain_id))
+            .filter(stats_asset_edges::Column::DstChainId.eq(target.dst_chain_id));
+        if target.decimals.is_none() && acc_decimals.is_some() {
+            ub = ub.col_expr(
+                stats_asset_edges::Column::Decimals,
+                Expr::value(acc_decimals),
+            );
+        }
+        if (target.src_stats_asset_id, target.dst_stats_asset_id) != (post_key.0, post_key.1) {
+            ub = ub
+                .col_expr(
+                    stats_asset_edges::Column::SrcStatsAssetId,
+                    Expr::value(post_key.0),
+                )
+                .col_expr(
+                    stats_asset_edges::Column::DstStatsAssetId,
+                    Expr::value(post_key.1),
+                );
+        }
+        ub.exec(tx).await?;
+
+        for e in &group {
+            stats_asset_edges::Entity::delete_many()
+                .filter(stats_asset_edges::Column::SrcStatsAssetId.eq(e.src_stats_asset_id))
+                .filter(stats_asset_edges::Column::DstStatsAssetId.eq(e.dst_stats_asset_id))
+                .filter(stats_asset_edges::Column::BridgeId.eq(e.bridge_id))
+                .filter(stats_asset_edges::Column::SrcChainId.eq(e.src_chain_id))
+                .filter(stats_asset_edges::Column::DstChainId.eq(e.dst_chain_id))
+                .exec(tx)
+                .await?;
         }
     }
 
     // 3. Transfers, chunked. Self-terminating: each pass removes its rows from
-    // the predicate. Never touches `stats_processed`.
+    // the predicate (a row with the loser on both sides is fixed in one pass
+    // by the `CASE` expressions below). Never touches `stats_processed`.
     let mut repointed: u64 = 0;
     loop {
         let ids: Vec<i64> = crosschain_transfers::Entity::find()
             .select_only()
             .column(crosschain_transfers::Column::Id)
-            .filter(crosschain_transfers::Column::StatsAssetId.eq(loser))
+            .filter(
+                Condition::any()
+                    .add(crosschain_transfers::Column::SrcStatsAssetId.eq(loser))
+                    .add(crosschain_transfers::Column::DstStatsAssetId.eq(loser)),
+            )
             .order_by_asc(crosschain_transfers::Column::Id)
             .limit(STATS_MERGE_REPOINT_CHUNK)
             .into_tuple()
@@ -911,8 +1154,16 @@ async fn merge_assets(
         run_in_batches(&ids, 1, |batch| async {
             crosschain_transfers::Entity::update_many()
                 .col_expr(
-                    crosschain_transfers::Column::StatsAssetId,
-                    Expr::value(winner),
+                    crosschain_transfers::Column::SrcStatsAssetId,
+                    Expr::cust(format!(
+                        "CASE WHEN src_stats_asset_id = {loser} THEN {winner} ELSE src_stats_asset_id END"
+                    )),
+                )
+                .col_expr(
+                    crosschain_transfers::Column::DstStatsAssetId,
+                    Expr::cust(format!(
+                        "CASE WHEN dst_stats_asset_id = {loser} THEN {winner} ELSE dst_stats_asset_id END"
+                    )),
                 )
                 .col_expr(
                     crosschain_transfers::Column::UpdatedAt,
@@ -999,27 +1250,43 @@ fn token_decimals(token_rows: &HashMap<TokenKey, tokens::Model>, k: &TokenKey) -
     token_rows.get(k).and_then(|m| m.decimals)
 }
 
-/// Raw transfer amount for an edge's side, falling back to the opposite side
-/// when the requested side is unknown (e.g. a destination-only transfer has no
-/// source amount). Defaults to zero only when neither side has an amount.
+/// Raw transfer amount for an edge's side.
+///
+/// For a `mirror` transfer, falls back to the opposite side's raw amount when
+/// the chosen side's amount is `NULL` (e.g. a destination-only transfer has no
+/// source amount) and defaults to zero only when neither side has an amount —
+/// the fee-difference approximation ADR-004 accepts, since both sides are the
+/// same asset.
+///
+/// For a `conversion` transfer the two sides are *different* assets, so no
+/// fallback is applied and no zero default is substituted: `None` means "this
+/// transfer cannot be safely counted from this side yet", which the caller
+/// turns into a deferral (`amount_side_missing`), not a zero.
 fn transfer_amount_for_side(
     transfer: &crosschain_transfers::Model,
     amount_side: &EdgeAmountSide,
-) -> BigDecimal {
+) -> Option<BigDecimal> {
     let (primary, fallback) = match amount_side {
         EdgeAmountSide::Source => (&transfer.src_amount, &transfer.dst_amount),
         EdgeAmountSide::Destination => (&transfer.dst_amount, &transfer.src_amount),
     };
-    primary
-        .clone()
-        .or_else(|| fallback.clone())
-        .unwrap_or_else(|| BigDecimal::from(0u64))
+    if transfer.asset_linkage == Some(TransferAssetLinkage::Conversion) {
+        primary.clone()
+    } else {
+        Some(
+            primary
+                .clone()
+                .or_else(|| fallback.clone())
+                .unwrap_or_else(|| BigDecimal::from(0u64)),
+        )
+    }
 }
 
-// `(stats_asset_id, bridge_id, src_chain_id, dst_chain_id)` — edges are
-// bridge-qualified: the same logical asset moving over the same chain edge on
-// two different bridges is two distinct rows.
-type EdgeKey = (i64, i32, i64, i64);
+// `(src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id, dst_chain_id)`
+// — edges are bridge-qualified and now binary: the same logical asset pair
+// moving over the same chain edge on two different bridges is two distinct
+// rows, and a mirror transfer's pair always has `src == dst`.
+type EdgeKey = (i64, i64, i32, i64, i64);
 
 async fn load_stats_asset_edges_for_keys(
     tx: &DatabaseTransaction,
@@ -1033,14 +1300,15 @@ async fn load_stats_asset_edges_for_keys(
         uniq.insert(*k);
     }
     let list: Vec<EdgeKey> = uniq.into_iter().collect();
-    // Four bind params per tuple now that the key carries bridge_id.
-    let batch_size = (crate::bulk::PG_BIND_PARAM_LIMIT / 4).max(1);
+    // Five bind params per tuple now that the key carries both asset columns.
+    let batch_size = (crate::bulk::PG_BIND_PARAM_LIMIT / 5).max(1);
     let mut out = HashMap::new();
     for batch in list.chunks(batch_size) {
         let rows = stats_asset_edges::Entity::find()
             .filter(
                 Expr::tuple([
-                    Expr::col(stats_asset_edges::Column::StatsAssetId).into(),
+                    Expr::col(stats_asset_edges::Column::SrcStatsAssetId).into(),
+                    Expr::col(stats_asset_edges::Column::DstStatsAssetId).into(),
                     Expr::col(stats_asset_edges::Column::BridgeId).into(),
                     Expr::col(stats_asset_edges::Column::SrcChainId).into(),
                     Expr::col(stats_asset_edges::Column::DstChainId).into(),
@@ -1052,7 +1320,8 @@ async fn load_stats_asset_edges_for_keys(
         for r in rows {
             out.insert(
                 (
-                    r.stats_asset_id,
+                    r.src_stats_asset_id,
+                    r.dst_stats_asset_id,
                     r.bridge_id,
                     r.src_chain_id,
                     r.dst_chain_id,
@@ -1078,7 +1347,8 @@ async fn load_stats_asset_edges_for_keys(
 struct DecimalsConflict;
 
 fn warn_edge_decimals_mismatch(
-    stats_asset_id: i64,
+    src_stats_asset_id: i64,
+    dst_stats_asset_id: i64,
     bridge_id: i32,
     src_chain_id: i64,
     dst_chain_id: i64,
@@ -1086,7 +1356,8 @@ fn warn_edge_decimals_mismatch(
     inc: i16,
 ) -> DecimalsConflict {
     tracing::warn!(
-        stats_asset_id,
+        src_stats_asset_id,
+        dst_stats_asset_id,
         bridge_id,
         src_chain_id,
         dst_chain_id,
@@ -1099,16 +1370,20 @@ fn warn_edge_decimals_mismatch(
 }
 
 /// Resolves the transfer amount for this edge, updates `working_decimals`, and
-/// flags a mismatch instead of failing the batch.
+/// flags a mismatch instead of failing the batch. The caller must have already
+/// excluded the `conversion` "amount side missing" deferral — this always
+/// resolves to a concrete amount.
 fn edge_transfer_amount_for_side(
     amount_side: &EdgeAmountSide,
     working_decimals: &mut Option<i16>,
     transfer: &crosschain_transfers::Model,
     src_decimals: Option<i16>,
     dst_decimals: Option<i16>,
-    stats_asset_id: i64,
+    src_stats_asset_id: i64,
+    dst_stats_asset_id: i64,
 ) -> Result<BigDecimal, DecimalsConflict> {
-    let amount = transfer_amount_for_side(transfer, amount_side);
+    let amount =
+        transfer_amount_for_side(transfer, amount_side).unwrap_or_else(|| BigDecimal::from(0u64));
     let incoming_dec = match amount_side {
         EdgeAmountSide::Source => src_decimals,
         EdgeAmountSide::Destination => dst_decimals,
@@ -1117,7 +1392,8 @@ fn edge_transfer_amount_for_side(
         && stored != inc
     {
         return Err(warn_edge_decimals_mismatch(
-            stats_asset_id,
+            src_stats_asset_id,
+            dst_stats_asset_id,
             transfer.bridge_id,
             transfer.token_src_chain_id,
             transfer.token_dst_chain_id,
@@ -1151,12 +1427,22 @@ enum EdgeAccum {
 }
 
 impl EdgeAccum {
+    fn amount_side(&self) -> &EdgeAmountSide {
+        match self {
+            EdgeAccum::FromDb { amount_side, .. } => amount_side,
+            EdgeAccum::NewInBatch { amount_side, .. } => amount_side,
+        }
+    }
+
     /// Applies one transfer's amount to this accumulator. `Err(DecimalsConflict)`
     /// means the caller must skip this specific transfer (mark it processed,
     /// no edge contribution) rather than abort — see [`DecimalsConflict`].
+    /// The caller must have already excluded the `conversion`
+    /// "amount side missing" deferral for this transfer.
     fn apply_transfer(
         &mut self,
-        stats_asset_id: i64,
+        src_stats_asset_id: i64,
+        dst_stats_asset_id: i64,
         transfer: &crosschain_transfers::Model,
         src_decimals: Option<i16>,
         dst_decimals: Option<i16>,
@@ -1175,7 +1461,8 @@ impl EdgeAccum {
                     transfer,
                     src_decimals,
                     dst_decimals,
-                    stats_asset_id,
+                    src_stats_asset_id,
+                    dst_stats_asset_id,
                 )?;
                 *delta_count += 1;
                 *delta_amount += amount;
@@ -1193,13 +1480,38 @@ impl EdgeAccum {
                     transfer,
                     src_decimals,
                     dst_decimals,
-                    stats_asset_id,
+                    src_stats_asset_id,
+                    dst_stats_asset_id,
                 )?;
                 *count += 1;
                 *cumulative += amount;
                 Ok(())
             }
         }
+    }
+}
+
+/// Pure classifier for why a candidate transfer was not returned by the
+/// identity-ready query — used only for the `STATS_TRANSFERS_DEFERRED_TOTAL`
+/// metric label, kept separate from the SQL predicate logic so it can be unit
+/// tested without a database or a shared process-wide counter.
+///
+/// `linkage_unknown` is checked **first**: a row with both an unknown linkage
+/// and a missing endpoint cannot be resolved by the endpoint arriving on its
+/// own, so reporting `identity_incomplete` for it would point an operator at
+/// the wrong thing.
+fn deferral_reason(t: &crosschain_transfers::Model, indexed: &IndexedChains) -> &'static str {
+    if t.asset_linkage.is_none() {
+        return "linkage_unknown";
+    }
+    let identity_incomplete = (t.token_src_address.is_none()
+        && indexed.may_observe(t.bridge_id, t.token_src_chain_id))
+        || (t.token_dst_address.is_none()
+            && indexed.may_observe(t.bridge_id, t.token_dst_chain_id));
+    if identity_incomplete {
+        "identity_incomplete"
+    } else {
+        "awaiting_confirmation"
     }
 }
 
@@ -1299,17 +1611,8 @@ pub async fn project_transfers_batch(
                 .all(tx)
                 .await?;
             for t in &deferred_rows {
-                let identity_incomplete = (t.token_src_address.is_none()
-                    && indexed.may_observe(t.bridge_id, t.token_src_chain_id))
-                    || (t.token_dst_address.is_none()
-                        && indexed.may_observe(t.bridge_id, t.token_dst_chain_id));
-                let reason = if identity_incomplete {
-                    "identity_incomplete"
-                } else {
-                    "awaiting_confirmation"
-                };
                 STATS_TRANSFERS_DEFERRED_TOTAL
-                    .with_label_values(&[reason])
+                    .with_label_values(&[deferral_reason(t, indexed)])
                     .inc();
             }
         }
@@ -1343,70 +1646,122 @@ pub async fn project_transfers_batch(
     // become a loser of a later merge, so every asset id resolved before the
     // remap below must be corrected through `resolve_merged` (transitively).
     let mut merged_away: HashMap<i64, i64> = HashMap::new();
+    // De-duplicates contradiction guards 1 and 2 within this batch: guard 2
+    // (inside `merge_assets`) and guard 1 (below, post-remap) can both
+    // observe the same underlying event, and one event must produce one
+    // signal — see the module docs / ADR-011.
+    let mut reported_contradiction_pairs: HashSet<(i64, i64)> = HashSet::new();
 
-    // Resolve each transfer's stats asset. A transfer whose endpoints cannot be
-    // reconciled to a single asset (corrupt token data, conflicting mapping, or
-    // a merge refused on chain collision) is skipped rather than aborting the
-    // batch — otherwise one bad transfer would roll back the shared
-    // maintenance transaction (message + cursor writes) every cycle. Skipped
-    // countable transfers are still marked processed below so they are not
-    // retried forever; skipped already-counted (repair-path) transfers simply
-    // keep their existing link untouched.
+    // Resolve each transfer's stats asset(s). A transfer whose endpoints cannot
+    // be reconciled (corrupt token data, conflicting mapping, or a merge
+    // refused on chain collision) is skipped rather than aborting the batch —
+    // otherwise one bad transfer would roll back the shared maintenance
+    // transaction (message + cursor writes) every cycle. Skipped countable
+    // transfers are still marked processed below so they are not retried
+    // forever; skipped already-counted (repair-path) transfers simply keep
+    // their existing link untouched. A `conversion` transfer with only one
+    // known endpoint is a *deferral*, not a skip: it must never be marked
+    // processed, on either path.
     //
     // `identity_ready` holds for every row this query returned, so
     // `ensure_asset_for_transfer` runs unconditionally; only *counting*
     // (edge accumulation + `stats_processed`/`transfers_count`/
     // `cumulative_amount`) is gated on `stats_processed == 0`.
     let mut proj_transfers: Vec<crosschain_transfers::Model> = Vec::with_capacity(transfers.len());
-    let mut asset_ids: Vec<i64> = Vec::with_capacity(transfers.len());
+    let mut asset_pairs: Vec<(i64, i64)> = Vec::with_capacity(transfers.len());
     let mut edge_key_per_transfer: Vec<EdgeKey> = Vec::with_capacity(transfers.len());
     let mut skipped_ids: Vec<i64> = Vec::new();
     let mut repair_transfers: Vec<crosschain_transfers::Model> = Vec::new();
-    let mut repair_asset_ids: Vec<i64> = Vec::new();
-    let mut repair_updates: Vec<(i64, i64)> = Vec::new();
+    let mut repair_asset_pairs: Vec<(i64, i64)> = Vec::new();
+    let mut repair_updates: Vec<(i64, i64, i64)> = Vec::new();
     for t in &transfers {
         let countable = t.stats_processed == 0;
-        match ensure_asset_for_transfer(tx, t, &mut token_to_asset, &mut merged_away).await? {
-            Some(asset_id) if countable => {
+        match ensure_asset_for_transfer(
+            tx,
+            t,
+            &mut token_to_asset,
+            &mut merged_away,
+            &mut reported_contradiction_pairs,
+        )
+        .await?
+        {
+            AssetResolution::Resolved(src, dst) if countable => {
                 edge_key_per_transfer.push((
-                    asset_id,
+                    src,
+                    dst,
                     t.bridge_id,
                     t.token_src_chain_id,
                     t.token_dst_chain_id,
                 ));
-                asset_ids.push(asset_id);
+                asset_pairs.push((src, dst));
                 proj_transfers.push(t.clone());
             }
-            Some(asset_id) => {
+            AssetResolution::Resolved(src, dst) => {
                 // Repair path: identity maintenance only. Never touches
                 // `stats_processed`, `transfers_count`, or `cumulative_amount`.
-                repair_asset_ids.push(asset_id);
+                repair_asset_pairs.push((src, dst));
                 repair_transfers.push(t.clone());
-                repair_updates.push((t.id, asset_id));
+                repair_updates.push((t.id, src, dst));
             }
-            None if countable => skipped_ids.push(t.id),
+            AssetResolution::Conflict if countable => skipped_ids.push(t.id),
             // Repair-path refusal: keep the existing link, do nothing further.
             // `merge_assets` already logged/metric-recorded the refusal.
-            None => {}
+            AssetResolution::Conflict => {}
+            // Deferred either way: leave the row exactly as it is. It is
+            // re-evaluated the next time this transfer's canonical key is
+            // flushed.
+            AssetResolution::Deferred => {}
         }
     }
 
     // A merge inside the loop above can invalidate asset ids resolved for
     // *earlier* transfers in this same batch (work item 4): remap every
     // collected asset id through the transitive `merged_away` chain before
-    // any of them is used again, so no dangling `stats_asset_id` is ever read
-    // or written from here on.
-    for id in asset_ids.iter_mut() {
-        *id = resolve_merged(&merged_away, *id);
+    // any of them is used again, so no dangling asset id is ever read or
+    // written from here on. Both components of every pair are remapped
+    // independently.
+    for pair in asset_pairs.iter_mut() {
+        pair.0 = resolve_merged(&merged_away, pair.0);
+        pair.1 = resolve_merged(&merged_away, pair.1);
     }
     for key in edge_key_per_transfer.iter_mut() {
         key.0 = resolve_merged(&merged_away, key.0);
+        key.1 = resolve_merged(&merged_away, key.1);
     }
-    for id in repair_asset_ids.iter_mut() {
-        *id = resolve_merged(&merged_away, *id);
+    for pair in repair_asset_pairs.iter_mut() {
+        pair.0 = resolve_merged(&merged_away, pair.0);
+        pair.1 = resolve_merged(&merged_away, pair.1);
     }
-    for (_, aid) in repair_updates.iter_mut() {
-        *aid = resolve_merged(&merged_away, *aid);
+    for (_, src, dst) in repair_updates.iter_mut() {
+        *src = resolve_merged(&merged_away, *src);
+        *dst = resolve_merged(&merged_away, *dst);
+    }
+
+    // Contradiction guard 1, run post-remap (see the module docs / ADR-011 for
+    // why it cannot run inline in `ensure_conversion_asset_for_transfer`): a
+    // `conversion` transfer whose two endpoints now resolve to the *same*
+    // asset. Covers both the counted and repair sets, de-duplicated against
+    // guard 2 (and against itself) by `reported_contradiction_pairs`.
+    for (t, pair) in proj_transfers
+        .iter()
+        .zip(&asset_pairs)
+        .chain(repair_transfers.iter().zip(&repair_asset_pairs))
+    {
+        if t.asset_linkage == Some(TransferAssetLinkage::Conversion)
+            && pair.0 == pair.1
+            && reported_contradiction_pairs.insert(*pair)
+        {
+            tracing::warn!(
+                transfer_id = t.id,
+                bridge_id = t.bridge_id,
+                stats_asset_id = pair.0,
+                "stats projection: conversion transfer resolves to one asset; an earlier \
+                 mirror declaration or bad token data already merged them"
+            );
+            STATS_ASSET_LINKAGE_CONTRADICTION_TOTAL
+                .with_label_values(&["conversion_self_asset"])
+                .inc();
+        }
     }
 
     let existing_edges = load_stats_asset_edges_for_keys(tx, &edge_key_per_transfer).await?;
@@ -1414,14 +1769,19 @@ pub async fn project_transfers_batch(
     let mut decimals_conflict_ids: Vec<i64> = Vec::new();
     // Paired with `decimals_conflict_ids`: unlike a mapping conflict, a
     // decimals conflict fires *after* `ensure_asset_for_transfer` already
-    // resolved this transfer's asset unambiguously — only the amount could
-    // not be safely counted. Carry the resolved id forward so it can still be
-    // linked (see the write-up below).
-    let mut decimals_conflict_asset_ids: Vec<(i64, i64)> = Vec::new();
+    // resolved this transfer's asset(s) unambiguously — only the amount could
+    // not be safely counted. Carry the resolved pair forward so it can still
+    // be linked (see the write-up below).
+    let mut decimals_conflict_asset_pairs: Vec<(i64, i64, i64)> = Vec::new();
+    // A `conversion` transfer whose edge-side amount is absent (work item
+    // 10i). Deferred exactly like `conversion_endpoint_unresolved`: never
+    // marked processed, never linked, never contributes to the edge.
+    let mut deferred_amount_ids: HashSet<i64> = HashSet::new();
 
-    for (t, &asset_id) in proj_transfers.iter().zip(&asset_ids) {
+    for (t, &(src_asset, dst_asset)) in proj_transfers.iter().zip(&asset_pairs) {
         let edge_key: EdgeKey = (
-            asset_id,
+            src_asset,
+            dst_asset,
             t.bridge_id,
             t.token_src_chain_id,
             t.token_dst_chain_id,
@@ -1438,6 +1798,38 @@ pub async fn project_transfers_batch(
             .get(&(t.message_id, t.bridge_id))
             .is_some_and(|message| message.src_tx_hash.is_some());
 
+        // Determine this edge's amount_side without mutating `edge_acc` yet:
+        // either the side already fixed by an existing DB row, the side a
+        // sibling transfer in this batch already picked for a brand-new edge,
+        // or (first transfer to touch a brand-new edge) the side a fresh edge
+        // would use.
+        let amount_side = match existing_edges.get(&edge_key) {
+            Some(edge) => edge.amount_side.clone(),
+            None => match edge_acc.get(&edge_key) {
+                Some(acc) => acc.amount_side().clone(),
+                None => {
+                    if source_chain_indexed || src_dec.is_some() {
+                        EdgeAmountSide::Source
+                    } else {
+                        EdgeAmountSide::Destination
+                    }
+                }
+            },
+        };
+
+        // Conversion amounts never fall back across sides (work item 10i): if
+        // this transfer's chosen-side amount is absent, defer it entirely
+        // rather than write a wrong asset's quantity onto this edge.
+        if t.asset_linkage == Some(TransferAssetLinkage::Conversion)
+            && transfer_amount_for_side(t, &amount_side).is_none()
+        {
+            deferred_amount_ids.insert(t.id);
+            STATS_TRANSFERS_DEFERRED_TOTAL
+                .with_label_values(&["amount_side_missing"])
+                .inc();
+            continue;
+        }
+
         // A decimals conflict (task Decision 7) skips only this transfer — it
         // never aborts the batch. Every accumulator mutation happens strictly
         // after the conflict check inside `apply_transfer`, so a `Err` here
@@ -1453,7 +1845,7 @@ pub async fn project_transfers_batch(
                         delta_count: 0,
                         delta_amount: BigDecimal::from(0u64),
                     };
-                    match acc.apply_transfer(asset_id, t, src_dec, dst_dec) {
+                    match acc.apply_transfer(src_asset, dst_asset, t, src_dec, dst_dec) {
                         Ok(()) => {
                             v.insert(acc);
                             Ok(())
@@ -1461,12 +1853,12 @@ pub async fn project_transfers_batch(
                         Err(e) => Err(e),
                     }
                 } else {
-                    let (amount_side, decimals) = if source_chain_indexed || src_dec.is_some() {
-                        (EdgeAmountSide::Source, src_dec)
-                    } else {
-                        (EdgeAmountSide::Destination, dst_dec)
+                    let decimals = match amount_side {
+                        EdgeAmountSide::Source => src_dec,
+                        EdgeAmountSide::Destination => dst_dec,
                     };
-                    let cumulative = transfer_amount_for_side(t, &amount_side);
+                    let cumulative = transfer_amount_for_side(t, &amount_side)
+                        .unwrap_or_else(|| BigDecimal::from(0u64));
                     v.insert(EdgeAccum::NewInBatch {
                         amount_side,
                         working_decimals: decimals,
@@ -1476,31 +1868,38 @@ pub async fn project_transfers_batch(
                     Ok(())
                 }
             }
-            Entry::Occupied(mut o) => o.get_mut().apply_transfer(asset_id, t, src_dec, dst_dec),
+            Entry::Occupied(mut o) => o
+                .get_mut()
+                .apply_transfer(src_asset, dst_asset, t, src_dec, dst_dec),
         };
 
         if outcome.is_err() {
             decimals_conflict_ids.push(t.id);
-            decimals_conflict_asset_ids.push((t.id, asset_id));
+            decimals_conflict_asset_pairs.push((t.id, src_asset, dst_asset));
         }
     }
 
-    // Remove decimals-conflict transfers from the counted set — they are
-    // skipped (marked processed, edge not incremented), but unlike a genuine
-    // mapping conflict their `stats_asset_id` is still linked below: identity
-    // was already resolved unambiguously; only the amount could not be
-    // safely folded into the edge aggregate.
+    // Remove decimals-conflict and amount-deferred transfers from the counted
+    // set. Decimals-conflict transfers are skipped (marked processed, edge not
+    // incremented) but their asset link is still written below — identity was
+    // already resolved unambiguously; only the amount could not be safely
+    // folded into the edge aggregate. Amount-deferred transfers are removed
+    // entirely: no link, no processed marker, no edge contribution — the same
+    // treatment as `conversion_endpoint_unresolved`.
     let decimals_conflict_set: HashSet<i64> = decimals_conflict_ids.into_iter().collect();
     let decimals_conflict_count = decimals_conflict_set.len();
-    let (proj_transfers, asset_ids): (Vec<_>, Vec<_>) = if decimals_conflict_set.is_empty() {
-        (proj_transfers, asset_ids)
-    } else {
-        proj_transfers
-            .into_iter()
-            .zip(asset_ids)
-            .filter(|(t, _)| !decimals_conflict_set.contains(&t.id))
-            .unzip()
-    };
+    let (proj_transfers, asset_pairs): (Vec<_>, Vec<_>) =
+        if decimals_conflict_set.is_empty() && deferred_amount_ids.is_empty() {
+            (proj_transfers, asset_pairs)
+        } else {
+            proj_transfers
+                .into_iter()
+                .zip(asset_pairs)
+                .filter(|(t, _)| {
+                    !decimals_conflict_set.contains(&t.id) && !deferred_amount_ids.contains(&t.id)
+                })
+                .unzip()
+        };
 
     for (key, accum) in edge_acc {
         match accum {
@@ -1511,7 +1910,8 @@ pub async fn project_transfers_batch(
                 delta_amount,
                 ..
             } => {
-                let (stats_asset_id, bridge_id, src_chain_id, dst_chain_id) = key;
+                let (src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id, dst_chain_id) =
+                    key;
                 let mut ub = stats_asset_edges::Entity::update_many()
                     .col_expr(
                         stats_asset_edges::Column::TransfersCount,
@@ -1525,7 +1925,8 @@ pub async fn project_transfers_batch(
                         stats_asset_edges::Column::UpdatedAt,
                         Expr::current_timestamp().into(),
                     )
-                    .filter(stats_asset_edges::Column::StatsAssetId.eq(stats_asset_id))
+                    .filter(stats_asset_edges::Column::SrcStatsAssetId.eq(src_stats_asset_id))
+                    .filter(stats_asset_edges::Column::DstStatsAssetId.eq(dst_stats_asset_id))
                     .filter(stats_asset_edges::Column::BridgeId.eq(bridge_id))
                     .filter(stats_asset_edges::Column::SrcChainId.eq(src_chain_id))
                     .filter(stats_asset_edges::Column::DstChainId.eq(dst_chain_id));
@@ -1542,9 +1943,11 @@ pub async fn project_transfers_batch(
                 count,
                 cumulative,
             } => {
-                let (stats_asset_id, bridge_id, src_chain_id, dst_chain_id) = key;
+                let (src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id, dst_chain_id) =
+                    key;
                 stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-                    stats_asset_id: Set(stats_asset_id),
+                    src_stats_asset_id: Set(src_stats_asset_id),
+                    dst_stats_asset_id: Set(dst_stats_asset_id),
                     bridge_id: Set(bridge_id),
                     src_chain_id: Set(src_chain_id),
                     dst_chain_id: Set(dst_chain_id),
@@ -1565,18 +1968,25 @@ pub async fn project_transfers_batch(
     // metadata that fills a still-empty `stats_assets` field.
     let mut enrich_transfers = proj_transfers.clone();
     enrich_transfers.extend(repair_transfers.iter().cloned());
-    let mut enrich_asset_ids = asset_ids.clone();
-    enrich_asset_ids.extend(repair_asset_ids.iter().copied());
-    enrich_stats_assets_for_batch(tx, &enrich_transfers, &enrich_asset_ids, &token_rows).await?;
+    let mut enrich_asset_pairs = asset_pairs.clone();
+    enrich_asset_pairs.extend(repair_asset_pairs.iter().copied());
+    enrich_stats_assets_for_batch(tx, &enrich_transfers, &enrich_asset_pairs, &token_rows).await?;
 
-    let mut by_asset: HashMap<i64, Vec<i64>> = HashMap::new();
-    for (t, &aid) in proj_transfers.iter().zip(&asset_ids) {
-        by_asset.entry(aid).or_default().push(t.id);
+    let mut by_pair: HashMap<(i64, i64), Vec<i64>> = HashMap::new();
+    for (t, &pair) in proj_transfers.iter().zip(&asset_pairs) {
+        by_pair.entry(pair).or_default().push(t.id);
     }
-    for (aid, ids) in by_asset {
+    for ((src, dst), ids) in by_pair {
         run_in_batches(&ids, 1, |batch| async {
             crosschain_transfers::Entity::update_many()
-                .col_expr(crosschain_transfers::Column::StatsAssetId, Expr::value(aid))
+                .col_expr(
+                    crosschain_transfers::Column::SrcStatsAssetId,
+                    Expr::value(src),
+                )
+                .col_expr(
+                    crosschain_transfers::Column::DstStatsAssetId,
+                    Expr::value(dst),
+                )
                 .col_expr(
                     crosschain_transfers::Column::StatsProcessed,
                     Expr::col(crosschain_transfers::Column::StatsProcessed).add(1),
@@ -1596,9 +2006,9 @@ pub async fn project_transfers_batch(
 
     // Mark mapping-conflict-skipped transfers processed, with no stats asset
     // link: the mapping conflict means asset identity is genuinely unknown or
-    // ambiguous for this transfer (its endpoints could not be reconciled to
-    // one asset), so there is no id to write. `stats_asset_id IS NULL` after
-    // this update means exactly that — identity unknown.
+    // ambiguous for this transfer (its endpoints could not be reconciled), so
+    // there is no id to write. Both asset columns `IS NULL` after this update
+    // means exactly that — identity unknown.
     if !skipped_ids.is_empty() {
         run_in_batches(&skipped_ids, 1, |batch| async {
             crosschain_transfers::Entity::update_many()
@@ -1620,35 +2030,45 @@ pub async fn project_transfers_batch(
     }
 
     // Mark decimals-conflict-skipped transfers processed *and* link the
-    // resolved asset. ADR-004 Decision 3 separates counting from identity:
-    // here counting failed (the edge amount could not be safely folded in,
-    // so `transfers_count`/`cumulative_amount` are untouched and this batch's
-    // `stats_asset_edges` mutation above never saw this transfer) but
-    // identity succeeded — `ensure_asset_for_transfer` resolved this exact
-    // transfer to `asset_id` unambiguously before the conflict fired.
+    // resolved asset pair. ADR-004 Decision 3 separates counting from
+    // identity: here counting failed (the edge amount could not be safely
+    // folded in, so `transfers_count`/`cumulative_amount` are untouched and
+    // this batch's `stats_asset_edges` mutation above never saw this
+    // transfer) but identity succeeded — `ensure_asset_for_transfer` resolved
+    // this exact transfer's pair unambiguously before the conflict fired.
     // Discarding that identity would conflate the two concerns again and
     // collapse this case with a genuine mapping conflict. After this update,
-    // `stats_asset_id` set together with `stats_processed > 0` and no edge
+    // both asset columns set together with `stats_processed > 0` and no edge
     // contribution reads unambiguously as "identity known, amount not
-    // counted" — distinct from `stats_asset_id IS NULL`, which stays reserved
+    // counted" — distinct from both columns `IS NULL`, which stays reserved
     // for "identity unknown" (the mapping-conflict case above).
     //
     // This is inert for counting: `stats_processed` is already non-zero after
     // this same update (it is set together with the link, gated by the same
     // `StatsProcessed.eq(0i16)` filter used everywhere else in this
     // function), so the repair path's `StatsProcessed.gt(0i16)` filter is the
-    // only thing that can ever touch `stats_asset_id` for this row again, and
-    // it never touches `stats_processed`/`transfers_count`/
-    // `cumulative_amount`. Nothing can recount this transfer either way.
-    if !decimals_conflict_asset_ids.is_empty() {
-        let mut by_asset_decimals_conflict: HashMap<i64, Vec<i64>> = HashMap::new();
-        for (tid, aid) in decimals_conflict_asset_ids {
-            by_asset_decimals_conflict.entry(aid).or_default().push(tid);
+    // only thing that can ever touch these columns for this row again, and it
+    // never touches `stats_processed`/`transfers_count`/`cumulative_amount`.
+    // Nothing can recount this transfer either way.
+    if !decimals_conflict_asset_pairs.is_empty() {
+        let mut by_pair_decimals_conflict: HashMap<(i64, i64), Vec<i64>> = HashMap::new();
+        for (tid, src, dst) in decimals_conflict_asset_pairs {
+            by_pair_decimals_conflict
+                .entry((src, dst))
+                .or_default()
+                .push(tid);
         }
-        for (aid, ids) in by_asset_decimals_conflict {
+        for ((src, dst), ids) in by_pair_decimals_conflict {
             run_in_batches(&ids, 1, |batch| async {
                 crosschain_transfers::Entity::update_many()
-                    .col_expr(crosschain_transfers::Column::StatsAssetId, Expr::value(aid))
+                    .col_expr(
+                        crosschain_transfers::Column::SrcStatsAssetId,
+                        Expr::value(src),
+                    )
+                    .col_expr(
+                        crosschain_transfers::Column::DstStatsAssetId,
+                        Expr::value(dst),
+                    )
                     .col_expr(
                         crosschain_transfers::Column::StatsProcessed,
                         Expr::col(crosschain_transfers::Column::StatsProcessed).add(1),
@@ -1667,18 +2087,25 @@ pub async fn project_transfers_batch(
         }
     }
 
-    // Repair path: link the (possibly merged) asset id for an already-counted
+    // Repair path: link the (possibly merged) asset pair for an already-counted
     // transfer. Idempotent, and deliberately excludes `stats_processed`,
     // `transfers_count`, and `cumulative_amount` — see the function docs.
     if !repair_updates.is_empty() {
-        let mut by_asset_repair: HashMap<i64, Vec<i64>> = HashMap::new();
-        for (tid, aid) in repair_updates {
-            by_asset_repair.entry(aid).or_default().push(tid);
+        let mut by_pair_repair: HashMap<(i64, i64), Vec<i64>> = HashMap::new();
+        for (tid, src, dst) in repair_updates {
+            by_pair_repair.entry((src, dst)).or_default().push(tid);
         }
-        for (aid, ids) in by_asset_repair {
+        for ((src, dst), ids) in by_pair_repair {
             run_in_batches(&ids, 1, |batch| async {
                 crosschain_transfers::Entity::update_many()
-                    .col_expr(crosschain_transfers::Column::StatsAssetId, Expr::value(aid))
+                    .col_expr(
+                        crosschain_transfers::Column::SrcStatsAssetId,
+                        Expr::value(src),
+                    )
+                    .col_expr(
+                        crosschain_transfers::Column::DstStatsAssetId,
+                        Expr::value(dst),
+                    )
                     .col_expr(
                         crosschain_transfers::Column::UpdatedAt,
                         Expr::current_timestamp().into(),
@@ -1722,7 +2149,9 @@ mod token_key_tests {
             recipient_address: None,
             token_ids: None,
             stats_processed: 0,
-            stats_asset_id: None,
+            src_stats_asset_id: None,
+            dst_stats_asset_id: None,
+            asset_linkage: None,
             created_at: None,
             updated_at: None,
         };
@@ -1736,6 +2165,94 @@ mod token_key_tests {
         assert_eq!(keys.len(), 2);
         assert!(keys.contains(&(1, a)));
         assert!(keys.contains(&(100, b)));
+    }
+}
+
+// Isolated coverage for `deferral_reason`, the pure classifier behind the
+// `STATS_TRANSFERS_DEFERRED_TOTAL` metric label (work item 10a). Per
+// `.memory-bank/rules/testing.md`, metric emission must be covered by a unit
+// test on the pure decision function rather than a before/after delta on the
+// shared `lazy_static` counter — no database, no shared process state, so
+// this cannot race with any other test.
+#[cfg(test)]
+mod deferral_reason_tests {
+    use super::deferral_reason;
+    use interchain_indexer_entity::{
+        crosschain_transfers, sea_orm_active_enums::TransferAssetLinkage,
+    };
+    use sea_orm::prelude::BigDecimal;
+
+    use crate::stats::indexed_chains::IndexedChains;
+
+    fn transfer(
+        asset_linkage: Option<TransferAssetLinkage>,
+        token_src_address: Option<Vec<u8>>,
+        token_dst_address: Option<Vec<u8>>,
+    ) -> crosschain_transfers::Model {
+        crosschain_transfers::Model {
+            id: 1,
+            message_id: 1,
+            bridge_id: 1,
+            index: 0,
+            r#type: None,
+            token_src_chain_id: 1,
+            token_dst_chain_id: 100,
+            src_amount: Some(BigDecimal::from(0u64)),
+            dst_amount: Some(BigDecimal::from(0u64)),
+            token_src_address,
+            token_dst_address,
+            sender_address: None,
+            recipient_address: None,
+            token_ids: None,
+            stats_processed: 0,
+            src_stats_asset_id: None,
+            dst_stats_asset_id: None,
+            asset_linkage,
+            created_at: None,
+            updated_at: None,
+        }
+    }
+
+    #[test]
+    fn unknown_linkage_is_reported_first_even_with_a_missing_endpoint() {
+        let t = transfer(None, None, Some(vec![1]));
+        assert_eq!(
+            deferral_reason(&t, &IndexedChains::AllIndexed),
+            "linkage_unknown",
+            "an unstated linkage cannot be resolved by the endpoint arriving, so it \
+             must take precedence over identity_incomplete"
+        );
+    }
+
+    #[test]
+    fn missing_endpoint_on_an_indexed_chain_is_identity_incomplete() {
+        let t = transfer(Some(TransferAssetLinkage::Mirror), None, Some(vec![1]));
+        assert_eq!(
+            deferral_reason(&t, &IndexedChains::AllIndexed),
+            "identity_incomplete"
+        );
+    }
+
+    #[test]
+    fn both_endpoints_known_falls_back_to_awaiting_confirmation() {
+        let t = transfer(
+            Some(TransferAssetLinkage::Mirror),
+            Some(vec![1]),
+            Some(vec![2]),
+        );
+        assert_eq!(
+            deferral_reason(&t, &IndexedChains::AllIndexed),
+            "awaiting_confirmation"
+        );
+    }
+
+    #[test]
+    fn missing_endpoint_on_an_unindexed_chain_is_not_identity_incomplete() {
+        let indexed = IndexedChains::from_pairs([(1, 1)]); // bridge 1 indexes chain 1 only
+        let t = transfer(Some(TransferAssetLinkage::Mirror), Some(vec![1]), None);
+        // token_dst_chain_id (100) is unindexed for bridge 1, so the missing
+        // destination endpoint can never arrive -- not an identity gap.
+        assert_eq!(deferral_reason(&t, &indexed), "awaiting_confirmation");
     }
 }
 
@@ -1775,7 +2292,9 @@ mod edge_transfer_amount_for_side_tests {
             recipient_address: None,
             token_ids: None,
             stats_processed: 0,
-            stats_asset_id: None,
+            src_stats_asset_id: None,
+            dst_stats_asset_id: None,
+            asset_linkage: None,
             created_at: None,
             updated_at: None,
         }
@@ -1792,6 +2311,7 @@ mod edge_transfer_amount_for_side_tests {
             Some(18),
             Some(6),
             42,
+            43,
         )
         .expect("matching decimals must not conflict");
         assert_eq!(amount, BigDecimal::from(10u64));
@@ -1813,6 +2333,7 @@ mod edge_transfer_amount_for_side_tests {
             Some(17), // disagrees with working_decimals (18)
             Some(6),
             42,
+            43,
         )
         .expect_err("a decimals mismatch must be reported as a conflict, not silently accepted");
         // `DecimalsConflict` carries no fields; reaching this arm at all is
@@ -1835,6 +2356,7 @@ mod edge_transfer_amount_for_side_tests {
             Some(9),
             Some(6),
             42,
+            43,
         )
         .expect("no prior decimals means nothing to conflict with");
         assert_eq!(amount, BigDecimal::from(10u64));
@@ -1850,8 +2372,25 @@ mod edge_transfer_amount_for_side_tests {
         let t = transfer(None, Some(20));
         assert_eq!(
             transfer_amount_for_side(&t, &EdgeAmountSide::Source),
-            BigDecimal::from(20u64),
-            "a destination-only transfer falls back to dst_amount for the source side"
+            Some(BigDecimal::from(20u64)),
+            "a mirror destination-only transfer falls back to dst_amount for the source side"
+        );
+    }
+
+    #[test]
+    fn conversion_never_falls_back_across_sides() {
+        let mut t = transfer(None, Some(20));
+        t.asset_linkage =
+            Some(interchain_indexer_entity::sea_orm_active_enums::TransferAssetLinkage::Conversion);
+        assert_eq!(
+            transfer_amount_for_side(&t, &EdgeAmountSide::Source),
+            None,
+            "a conversion transfer must defer rather than borrow the other asset's amount"
+        );
+        assert_eq!(
+            transfer_amount_for_side(&t, &EdgeAmountSide::Destination),
+            Some(BigDecimal::from(20u64)),
+            "the side that does have an amount still resolves normally"
         );
     }
 }

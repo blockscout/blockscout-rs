@@ -382,7 +382,7 @@ mod tests {
     use chrono::Utc;
     use interchain_indexer_entity::{
         bridges, chains, crosschain_messages, crosschain_transfers, pending_messages,
-        sea_orm_active_enums::MessageStatus,
+        sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
     };
     use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter, prelude::BigDecimal};
     use serde::{Deserialize, Serialize};
@@ -432,6 +432,7 @@ mod tests {
                     token_src_address: ActiveValue::Set(Some(vec![0x11u8; 20])),
                     token_dst_address: ActiveValue::Set(Some(vec![0x22u8; 20])),
                     stats_processed: ActiveValue::Set(0),
+                    asset_linkage: ActiveValue::Set(Some(TransferAssetLinkage::Mirror)),
                     ..Default::default()
                 }],
                 amb_confirmations: vec![],
@@ -546,7 +547,8 @@ mod tests {
             t.stats_processed, 1,
             "a Partial entry must still reach the stats hook and count"
         );
-        assert!(t.stats_asset_id.is_some());
+        assert!(t.src_stats_asset_id.is_some());
+        assert!(t.dst_stats_asset_id.is_some());
 
         assert!(
             buffer.inner.get(&key).is_some(),

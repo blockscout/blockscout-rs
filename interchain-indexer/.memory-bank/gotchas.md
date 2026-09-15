@@ -470,67 +470,213 @@ float-to-integer cast also handles infinite growth. The regression test
 
 ## Stats Asset Mapping Conflicts Merge; Only Same-Chain Collisions Skip
 
-**Symptom:** A transfer whose two endpoints already map to two different
-`stats_assets` no longer stalls as a fragmented pair — the components are
-merged automatically, visible as `interchain_indexer_stats_asset_merges_total{outcome="merged"}`
-increasing. The skip that remains is rarer: a warning like `stats projection:
-stats asset already has a different token on the destination chain; skipping
-transfer` (or `...two different tokens on one chain; skipping`), paired with
-`interchain_indexer_stats_asset_merges_total{outcome="refused_chain_collision"}`.
-Separately, `stats projection: skipping transfer due to stats_asset_edges
-decimals mismatch` paired with `interchain_indexer_stats_edge_decimals_conflict_total`
-is a different, non-corrupting skip — see below.
+*(Rewritten 2026-09-15 for [ADR-011](adr/011-cross-asset-edges-and-per-transfer-linkage.md)'s
+two-column `src_stats_asset_id` / `dst_stats_asset_id` and per-transfer
+`asset_linkage`. Everything below about `merge_assets` and the refusal paths
+applies to `mirror` transfers only — a `conversion` transfer never merges its
+two endpoints; see "A `conversion` Transfer's Two Endpoints Are Never Merged,
+Even When They Look Mergeable" below.)*
+
+**Symptom:** A `mirror` transfer whose two endpoints already map to two
+different `stats_assets` no longer stalls as a fragmented pair — the
+components are merged automatically, visible as
+`interchain_indexer_stats_asset_merges_total{outcome="merged"}` increasing.
+The skip that remains is rarer: a warning like `stats projection: stats asset
+already has a different token on the destination chain; skipping transfer`
+(or `...two different tokens on one chain; skipping`), paired with
+`interchain_indexer_stats_asset_merges_total{outcome="refused_chain_collision"}`
+(a merge that would place two different tokens of one chain into one asset)
+or `{outcome="refused_token_on_chain"}` (the counterpart-side lookup found the
+asset already holding a different token on that chain, refused before a merge
+was even attempted — added in ADR-011 so this path is observable too, not
+just logged). Separately, `stats projection: skipping transfer due to
+stats_asset_edges decimals mismatch` paired with
+`interchain_indexer_stats_edge_decimals_conflict_total` is a different,
+non-corrupting skip — see below.
 
 **Root cause:** Asset identity is an incrementally discovered connected-component
-problem — two complete transfers on fully indexed chains can legitimately form
-disjoint components (`{A,B}` and `{C,D}`) that a later `B→C` transfer must join.
-`ensure_asset_for_transfer` resolves this via `merge_assets`: a transactional,
-validate-then-mutate union (weighted — the component with more linked tokens
-wins, ties go to the lower id) that repoints the loser's `stats_asset_tokens`,
-`stats_asset_edges` (folding amounts, rescaling for a decimals difference), and
-`crosschain_transfers.stats_asset_id`, then deletes the loser `stats_assets`
-row, all inside the same transaction as the triggering transfer. The only
-genuine refusal left is a merge that would place two different tokens of one
-chain into one `stats_asset` (a `stats_asset` can hold at most one token per
-chain) — that case cannot be resolved automatically and cannot be forced
-without corrupting the chain-uniqueness invariant.
+problem — two complete `mirror` transfers on fully indexed chains can
+legitimately form disjoint components (`{A,B}` and `{C,D}`) that a later
+`B→C` transfer must join. `ensure_asset_for_transfer`'s `mirror` branch
+resolves this via `merge_assets`: a transactional, validate-then-mutate union
+(weighted — the component with more linked tokens wins, ties go to the lower
+id) that repoints the loser's `stats_asset_tokens`, `stats_asset_edges`
+(folding amounts on both the `src_stats_asset_id` and `dst_stats_asset_id`
+columns now, rescaling for a decimals difference), and
+`crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id` (via a single
+`CASE WHEN … THEN winner ELSE …` update per column, so a row with the loser on
+both sides is fixed in one pass), then deletes the loser `stats_assets` row,
+all inside the same transaction as the triggering transfer. The only genuine
+refusal left is a merge that would place two different tokens of one chain
+into one `stats_asset` (a `stats_asset` can hold at most one token per chain)
+— that case cannot be resolved automatically and cannot be forced without
+corrupting the chain-uniqueness invariant.
 
 A decimals conflict is a separate, unrelated skip on the *counting* path:
 by the time it fires, this transfer's asset identity is already resolved
 unambiguously (directly or via a merge) — the conflict is only about whether
 this transfer's amount can be safely folded into the edge aggregate. It never
 aborts the batch (task Decision 7) and, since identity succeeded here, the
-transfer still links its resolved `stats_asset_id`.
+transfer still links its resolved asset pair.
 
 **Impact:** Canonical `crosschain_messages` / `crosschain_transfers` rows are
 never at risk in any of these paths. For a successful merge, the database
 changes: the winner asset absorbs the loser's tokens, edges, and transfers,
 and the loser row is gone — by design, not a side effect to repair. For a
-refused chain-collision merge, the transaction leaves the database
+refused-merge (either outcome label), the transaction leaves the database
 byte-identical: nothing is mutated beyond marking the triggering transfer
-`stats_processed += 1` with `stats_asset_id` left `NULL`. For a decimals
-conflict, `stats_processed += 1` and `stats_asset_id` is set to the resolved
-asset, with no `stats_asset_edges` contribution.
+`stats_processed += 1` with both `src_stats_asset_id` and
+`dst_stats_asset_id` left `NULL`. For a decimals conflict,
+`stats_processed += 1` and both columns are set to the resolved pair
+(`src == dst` for a mirror transfer), with no `stats_asset_edges`
+contribution.
 
-Read `crosschain_transfers.stats_asset_id` accordingly: `NULL` means identity
-is genuinely unknown or ambiguous (the chain-collision refusal is the only
-remaining case); a set `stats_asset_id` with `stats_processed > 0` and no
-corresponding edge contribution means identity is known but this transfer's
-amount was not counted (the decimals-conflict case). Either way the skipped
-row is marked processed so it does not re-warn every maintenance cycle;
-ongoing warnings usually mean new transfers keep hitting the same bad token
-data or a backfill is processing historical rows.
+Read `crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id`
+accordingly: both `NULL` means identity is genuinely unknown or ambiguous (a
+refused-merge mirror transfer, or a linkage the indexer has not stated yet —
+see the `asset_linkage IS NULL` deferral, a different, non-processed state);
+both set with `stats_processed > 0` and no corresponding edge contribution
+means identity is known but this transfer's amount was not counted (the
+decimals-conflict case). Either way the skipped row is marked processed so it
+does not re-warn every maintenance cycle; ongoing warnings usually mean new
+transfers keep hitting the same bad token data or a backfill is processing
+historical rows.
 
 **Fix:** A successful merge needs no manual repair — it already is the repair.
-A chain-collision refusal is a genuine data problem: verify the token address
-recorded per chain for both components (a token's address was likely
-misattributed to the wrong chain), fix the source data, then reset the
-affected transfers' `stats_processed` for re-projection. For local
-development, a fresh reindex may be simpler.
+A refused merge is a genuine data problem: verify the token address recorded
+per chain for both components (a token's address was likely misattributed to
+the wrong chain, **or** a converting route was declared `mirror` by mistake —
+check `asset_linkage` on the transfers involved first, since that is now a
+possible cause the warning message itself calls out), fix the source data,
+then reset the affected transfers' `stats_processed` for re-projection. For
+local development, a fresh reindex may be simpler.
 
 To confirm this at runtime against a live database, see
 `.memory-bank/runbooks/runtime-verification.md` queries A (split-asset
-detector) and B (refusal legitimacy check).
+detector, now qualified to `mirror` rows only) and B (refusal legitimacy
+check).
+
+---
+
+## A `conversion` Transfer's Two Endpoints Are Never Merged, Even When They Look Mergeable
+
+**Symptom:** A converting bridge's two assets (e.g. Ethereum DAI and Gnosis
+native xDAI) stay as two separate `stats_assets` rows joined by one
+cross-asset `stats_asset_edges` row, even though a naive read might expect
+"this is clearly the same economic movement, why doesn't it merge like the
+mirror case does?"
+
+**Root cause:** This is the entire point of [ADR-011](adr/011-cross-asset-edges-and-per-transfer-linkage.md)
+and is not a bug. `ensure_asset_for_transfer`'s `conversion` branch resolves
+each endpoint independently via `lookup_token_asset` / `insert_stats_asset`,
+and never calls `merge_assets`. Two contradiction guards exist specifically to
+flag it when a `mirror` declaration or bad token data has caused the two
+sides to *end up* being the same asset anyway
+(`STATS_ASSET_LINKAGE_CONTRADICTION_TOTAL{kind="conversion_self_asset"}`), or
+when a later mirror merge folds a pre-existing cross-asset edge into a
+self-edge (`{kind="cross_asset_edge_collapsed"}`) — both are warn-and-continue
+diagnostics, not corrections.
+
+**Fix:** Do not "fix" two assets for one converting route as if it were
+fragmentation. If the two sides genuinely should be one asset (i.e. the
+bridge is not actually converting), the fix is on the indexer side: the
+transfer constructor is declaring the wrong linkage.
+
+---
+
+## The `..Default::default()` Omission Silently Defers Every Transfer From An Indexer
+
+**Symptom:** Every transfer from one specific bridge/indexer sits at
+`stats_processed = 0` forever, both `src_stats_asset_id` and
+`dst_stats_asset_id` stay `NULL`, and
+`STATS_TRANSFERS_DEFERRED_TOTAL{reason="linkage_unknown"}` climbs steadily —
+with no other symptom. The code that builds the transfer looks completely
+ordinary.
+
+**Root cause:** `crosschain_transfers::ActiveModel`'s `Default` impl leaves
+every field `ActiveValue::NotSet`, including `asset_linkage`. A `NotSet`
+column is *omitted from the INSERT column list*, so on first insert the
+column takes the database's default — SQL `NULL` — even though nothing looks
+wrong in the constructor. Avalanche's three transfer constructors originally
+built with `..Default::default()` and did not set `asset_linkage`,
+`stats_processed`, or an asset link at all, so there was no local cue a stats
+column was missing.
+
+**Fix:** Every transfer constructor must start from
+`interchain_indexer_entity::new_transfer(linkage)`
+(`interchain-indexer-entity/src/manual/`), which sets `asset_linkage`,
+`stats_processed = 0`, and both asset columns to `NotSet`/`None` correctly,
+then `..` the rest in from there — never from `Default::default()` directly.
+This is a correct-default-path fix, not enforcement: `ActiveModel` is a
+public struct with public fields, so a seventh site can still write
+`ActiveModel { .., ..Default::default() }` and compile. The actual guard is
+at the single write chokepoint, `message_buffer::persistence::flush_to_final_storage`:
+it `debug_assert!`s that `asset_linkage` was `Set` (so this fires loudly in
+the first test that flushes such a transfer, since tests build in debug) and
+in release warns + increments
+`STATS_TRANSFER_ASSET_LINKAGE_UNSET_TOTAL` + leaves the value unset, so the
+row defers rather than being silently stamped with a guessed `mirror`. If you
+add a new indexer, use `new_transfer` and expect a debug-build panic
+immediately if you forget — that is the intended, loud failure mode.
+
+---
+
+## `stats_asset_edges`'s Regenerated Primary-Key Tuple Order Is Table-Column Order, Not PK-Declaration Order
+
+**Symptom:** After regenerating entities
+(`interchain-indexer-entity/src/codegen/stats_asset_edges.rs`), the
+`Model`'s `#[sea_orm(primary_key)]` field order does not match the `PRIMARY
+KEY (...)` clause in the migration SQL, and a `find_by_id((...))` call
+written to match the SQL's column order fails to compile or resolves to the
+wrong row.
+
+**Root cause:** `sea-orm-cli generate entity` emits primary-key fields in
+**table column order** (the order `\d stats_asset_edges` would print them),
+not in the order they appear inside `PRIMARY KEY (...)`. Since
+`bridge_id` was appended to the table by an earlier migration
+(`m20260720_120000_add_read_filters_and_bridge_stats`) and
+`src_stats_asset_id` / `dst_stats_asset_id` were appended after that by a
+later one, the generated tuple is
+`(src_chain_id, dst_chain_id, bridge_id, src_stats_asset_id, dst_stats_asset_id)`
+— not the SQL declaration's
+`(src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id, dst_chain_id)`
+and not the historical `(stats_asset_id, src_chain_id, dst_chain_id,
+bridge_id)` order either.
+
+**Fix:** After any migration that changes `stats_asset_edges`'s columns,
+regenerate entities and **read the generated `Model` struct** to derive the
+`find_by_id` tuple order — never assume it matches the migration SQL or patch
+an old tuple by inserting an extra element. `database.rs`'s
+`create_or_update_stats_asset_edge` and any test calling `find_by_id` on this
+entity must be re-derived this way every time the column set changes.
+
+---
+
+## AMB `replace_existing` Does Not Roll Back The Asset Graph, So Write-Once Does Not Protect A Replacement Row
+
+**Symptom:** (Not yet reachable — AMB only ever declares `mirror` — but a
+real hazard for any future bridge that emits `conversion` *and* has a
+message-replacement path like AMB's collision handling.) A replaced
+`crosschain_transfers` row's `asset_linkage` is not what an earlier flush for
+the *displaced* body had declared, even though `asset_linkage` is supposed to
+be write-once.
+
+**Root cause:** the AMB `messageId`-collision path
+(`message_buffer/persistence.rs`'s `replace_existing` filter and
+`delete_replaced_messages`) deletes the parent `crosschain_messages` row
+first; `ON DELETE CASCADE` removes its `crosschain_transfers` row with it, and
+the replacement body is inserted as a **fresh row** with
+`stats_processed = 0` and no asset link. Write-once protects a value already
+stored *on a row*, not the identity of "this canonical key" across a
+replacement — the asset graph built from the displaced body's tokens is not
+rolled back either, because `stats_asset_tokens` is keyed by token, not by
+transfer.
+
+**Fix:** Not applicable today (no reachable case). If a future bridge
+combines `conversion` transfers with a collision-replacement path, the
+replacement row must re-declare `asset_linkage` from scratch exactly like any
+new row — do not assume a prior flush's declaration survives a
+`replace_existing` cycle.
 
 ---
 
@@ -869,6 +1015,35 @@ per endpoint disagreeing) correctly does not flag it, because it is not a
 split. If a genuine split is suspected, verify via the split detector
 described in `gotchas.md`, "Stats Asset Mapping Conflicts Merge; Only
 Same-Chain Collisions Skip," rather than by eyeballing address equality.
+
+---
+
+## ICTT Can Register Multiple Remote Contracts On One Remote Chain
+
+**Symptom:** A second legitimate ICTT Remote on an already represented chain
+hits the stats asset's one-token-per-chain guard, even though both transfers
+are lock/mint transfers of the same home asset.
+
+**Root cause:** ICTT does not enforce one Remote per blockchain. The Home's
+registration and collateral accounting are keyed by `(remoteBlockchainID,
+remoteTokenTransferrerAddress)`. Its registration guard rejects a duplicate
+pair, and rejects a Remote on the Home's own chain; it does not reject a second
+Remote address on another chain. Standard `ERC20TokenRemote` is itself an
+ERC20 contract, so two deployments have two token addresses while representing
+the same home asset. This does not require changing the backing token of an
+existing Home, or replacing code at an existing Remote address.
+
+**Implication:** Under the current transferrer-address identity convention,
+`Home@A → Remote1@B` followed by `Home@A → Remote2@B` reaches the same-chain
+mapping refusal in `stats/projection.rs`. Calling the second transfer a
+conversion merely to avoid the constraint is not justified by standard ICTT
+semantics. Supporting this topology needs an explicit asset-model decision.
+
+Verified against Avalanche documentation and Ava Labs source on 2026-09-15:
+
+- [ICTT design](https://docs.avax.network/academy/avalanche-l1/erc20-bridge/02-avalanche-interchain-token-transfer/02-bridge-design).
+- [Home registration checks](https://github.com/ava-labs/icm-services/blob/b952c604bdf403b847ae88bb2e2e31f13627572e/icm-contracts/avalanche/ictt/TokenHome/TokenHome.sol#L158-L209).
+- [ERC20 Remote implementation](https://github.com/ava-labs/icm-services/blob/b952c604bdf403b847ae88bb2e2e31f13627572e/icm-contracts/avalanche/ictt/TokenRemote/ERC20TokenRemoteUpgradeable.sol#L72-L89).
 
 ---
 
@@ -1925,9 +2100,18 @@ The fix is the same zero-address sentinel pattern the down-migration of
 `crosschain_transfers.token_dst_address` (Eth→Gno) or `token_src_address`
 (Gno→Eth), with `TransferType::Erc20ToNative` / `NativeToErc20` — never
 `Native`, which means native on *both* sides. This makes the Gnosis leg a
-real, non-NULL endpoint, so `ensure_asset_for_transfer`'s union-find links
-`(100, 0x00…00)` and the Ethereum-side ERC-20 into one `stats_assets` row
-with no stats-layer change.
+real, non-NULL endpoint, so `ensure_asset_for_transfer`'s `conversion` branch
+(ADR-011) can resolve it to its own `stats_assets` row rather than deferring
+with `identity_incomplete`.
+
+**Post-ADR-011 correction:** the sentinel and the Ethereum-side ERC-20 land in
+**two separate** `stats_assets` rows joined by one `stats_asset_edges` row
+(`src_stats_asset_id` = the Ethereum DAI/USDS asset, `dst_stats_asset_id` = the
+Gnosis native-xDAI asset, for an Eth→Gno transfer), never merged into one
+shared row — merging them was the exact bug ADR-011 exists to fix. Do not
+"fix" a test or a live observation showing two assets for a DAI↔xDAI pair as
+if it were the fragmentation problem ADR-004's union-find addresses; that
+union-find still applies to `mirror` transfers only.
 
 That alone is not sufficient, though — a real `tokens` row for
 `(100, 0x00…00)` must also exist, seeded by `XDaiIndexer::start()` (mirrors
@@ -1963,7 +2147,12 @@ never be able to stop ingestion), and is self-healing on the next restart.
 later writes a native leg on chain `100`, it must reuse
 `xdai::types::NATIVE_SENTINEL` rather than its own zero-address literal, or
 the two bridges' native xDAI legs form two disjoint `stats_assets` rows for
-the same coin instead of merging.
+the same coin instead of sharing one. This still holds under ADR-011's
+per-endpoint `conversion` resolution: `(100, NATIVE_SENTINEL)` is looked up
+per side regardless of linkage, so reusing the constant is what makes a
+second bridge's native leg land in the *same* Gnosis-native asset as xDai's,
+even though it no longer also merges with whatever asset sits on the other
+end of either bridge's edge.
 
 ---
 

@@ -133,9 +133,13 @@ Related tables (all three additive aggregates are bridge-qualified since
 
 - `stats_messages_days` — keyed by `(date, bridge_id, src_chain_id,
   dst_chain_id)`, the same directional count split by day
-- `stats_asset_edges` — keyed by `(stats_asset_id, bridge_id, src_chain_id,
-  dst_chain_id)`; `stats_assets` / `stats_asset_tokens` stay global (only the
-  movement/count edges gain the bridge dimension)
+- `stats_asset_edges` — keyed by `(src_stats_asset_id, dst_stats_asset_id,
+  bridge_id, src_chain_id, dst_chain_id)` since
+  [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md) split
+  the single `stats_asset_id` column into a binary pair (equal for a
+  `mirror` edge, independent for a `conversion` one); `stats_assets` /
+  `stats_asset_tokens` stay global (only the movement/count edges gain the
+  bridge dimension)
 
 The schema is introduced in:
 

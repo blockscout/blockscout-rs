@@ -1479,11 +1479,21 @@ mod tests {
 
     /// Proves the native sentinel actually clears
     /// `transfer_identity_ready_condition` instead of deferring as
-    /// `identity_incomplete`: a completed Gno→Eth transfer reaches
-    /// `stats_processed = 1`, its two endpoints (Gnosis sentinel + Ethereum
-    /// ERC-20) merge into one shared `stats_assets` row, and the resulting
-    /// edge's `decimals` comes from the seeded sentinel row rather than
-    /// ending up NULL.
+    /// `identity_incomplete`, AND that xDai's `conversion` linkage keeps its
+    /// two endpoints as two separate assets (not merged, unlike the old
+    /// single-asset union-find): a completed Gno→Eth transfer reaches
+    /// `stats_processed = 1`, its `src_stats_asset_id` (Gnosis native
+    /// sentinel) and `dst_stats_asset_id` (Ethereum DAI) resolve to two
+    /// *different* `stats_assets` rows joined by one cross-asset
+    /// `stats_asset_edges` row, and that edge's `decimals` comes from the
+    /// seeded sentinel row rather than ending up NULL.
+    ///
+    /// This is the exact behaviour ADR-011 (cross-asset edges and
+    /// per-transfer linkage) exists to change: before that work, DAI and
+    /// native xDAI were incorrectly folded into one shared `stats_assets`
+    /// row by the mirror-only union-find. See
+    /// `completed_transfer_reaches_one_shared_stats_asset_with_sentinel_decimals`
+    /// in git history for the prior (superseded) contract.
     ///
     /// Gno→Eth specifically, not Eth→Gno: `amount_side` is sticky to
     /// whichever side is *source*-indexed
@@ -1497,7 +1507,7 @@ mod tests {
     /// this unit-level test.)
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn completed_transfer_reaches_one_shared_stats_asset_with_sentinel_decimals() {
+    async fn completed_transfer_reaches_two_assets_joined_by_a_conversion_edge() {
         let db = init_db("xdai_stats_projection_sentinel").await;
         let interchain_db = InterchainDatabase::new(db.client());
         seed_bridge_and_chains(&interchain_db).await;
@@ -1644,15 +1654,27 @@ mod tests {
             .unwrap()
             .expect("transfer row must still exist");
         assert_eq!(projected.stats_processed, 1);
-        let asset_id = projected
-            .stats_asset_id
-            .expect("identity must resolve, not defer");
+        assert_eq!(
+            projected.asset_linkage,
+            Some(interchain_indexer_entity::sea_orm_active_enums::TransferAssetLinkage::Conversion)
+        );
+        let src_asset_id = projected
+            .src_stats_asset_id
+            .expect("source (Gnosis sentinel) identity must resolve, not defer");
+        let dst_asset_id = projected
+            .dst_stats_asset_id
+            .expect("destination (Ethereum DAI) identity must resolve, not defer");
+        assert_ne!(
+            src_asset_id, dst_asset_id,
+            "a conversion transfer's two endpoints must resolve to two different assets, \
+             never merged by the mirror union-find"
+        );
 
-        let asset_tokens: Vec<(i64, Vec<u8>)> =
+        let src_asset_tokens: Vec<(i64, Vec<u8>)> =
             interchain_indexer_entity::stats_asset_tokens::Entity::find()
                 .filter(
                     interchain_indexer_entity::stats_asset_tokens::Column::StatsAssetId
-                        .eq(asset_id),
+                        .eq(src_asset_id),
                 )
                 .all(conn)
                 .await
@@ -1660,26 +1682,50 @@ mod tests {
                 .into_iter()
                 .map(|row| (row.chain_id, row.token_address))
                 .collect();
-        assert!(
-            asset_tokens.contains(&(GNO, NATIVE_SENTINEL.as_slice().to_vec())),
-            "the sentinel endpoint must be linked into the shared asset: {asset_tokens:?}"
+        assert_eq!(
+            src_asset_tokens,
+            vec![(GNO, NATIVE_SENTINEL.as_slice().to_vec())],
+            "the sentinel endpoint must be linked into its own asset, alone: {src_asset_tokens:?}"
         );
-        assert!(
-            asset_tokens.contains(&(ETH, dai_address().as_slice().to_vec())),
-            "the Ethereum ERC-20 endpoint must be linked into the same asset: {asset_tokens:?}"
+
+        let dst_asset_tokens: Vec<(i64, Vec<u8>)> =
+            interchain_indexer_entity::stats_asset_tokens::Entity::find()
+                .filter(
+                    interchain_indexer_entity::stats_asset_tokens::Column::StatsAssetId
+                        .eq(dst_asset_id),
+                )
+                .all(conn)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|row| (row.chain_id, row.token_address))
+                .collect();
+        assert_eq!(
+            dst_asset_tokens,
+            vec![(ETH, dai_address().as_slice().to_vec())],
+            "the Ethereum DAI endpoint must be linked into its own asset, alone: {dst_asset_tokens:?}"
         );
 
         let edge = interchain_indexer_entity::stats_asset_edges::Entity::find_by_id((
-            asset_id, GNO, ETH, BRIDGE_ID,
+            GNO,
+            ETH,
+            BRIDGE_ID,
+            src_asset_id,
+            dst_asset_id,
         ))
         .one(conn)
         .await
         .unwrap()
-        .expect("edge row must exist");
+        .expect("cross-asset edge row must exist, joining the two assets");
         assert_eq!(
             edge.decimals,
             Some(18),
             "decimals must come from the seeded sentinel row, not end up NULL"
+        );
+        assert_eq!(edge.transfers_count, 1);
+        assert_eq!(
+            edge.cumulative_amount,
+            sea_orm::prelude::BigDecimal::from(9_000u64)
         );
     }
 }

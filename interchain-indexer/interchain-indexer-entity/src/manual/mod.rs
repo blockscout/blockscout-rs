@@ -1,6 +1,29 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use crate::{bridge_contracts, indexer_checkpoints};
+use sea_orm::ActiveValue::Set;
+
+use crate::{
+    bridge_contracts, crosschain_transfers, indexer_checkpoints,
+    sea_orm_active_enums::TransferAssetLinkage,
+};
+
+/// Every transfer an indexer builds must state its asset linkage. There is no
+/// default: `NULL` means "the indexer does not know yet" and defers the row
+/// from stats projection indefinitely, so an accidentally-omitted value is a
+/// silent stats outage for that bridge.
+///
+/// Start every `crosschain_transfers::ActiveModel` from here rather than from
+/// `Default::default()`. This is the correct default path, not enforcement —
+/// see the chokepoint check in `message_buffer::persistence`.
+pub fn new_transfer(linkage: TransferAssetLinkage) -> crosschain_transfers::ActiveModel {
+    crosschain_transfers::ActiveModel {
+        asset_linkage: Set(Some(linkage)),
+        stats_processed: Set(0),
+        src_stats_asset_id: Set(None),
+        dst_stats_asset_id: Set(None),
+        ..Default::default()
+    }
+}
 
 impl indexer_checkpoints::Model {
     pub fn validated_realtime_cursor(&self) -> u64 {

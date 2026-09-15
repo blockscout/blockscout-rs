@@ -35,6 +35,18 @@ pub enum MessageStatus {
     ReadyToClaim,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(
+    rs_type = "String",
+    db_type = "Enum",
+    enum_name = "transfer_asset_linkage"
+)]
+pub enum TransferAssetLinkage {
+    #[sea_orm(string_value = "mirror")]
+    Mirror,
+    #[sea_orm(string_value = "conversion")]
+    Conversion,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "transfer_type")]
 pub enum TransferType {
     #[sea_orm(string_value = "erc20")]

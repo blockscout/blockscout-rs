@@ -14,6 +14,8 @@ pub mod filters {
     pub use interchain_indexer_filters::ChainBridgeFilter;
 }
 mod message_buffer;
+#[cfg(test)]
+mod migration_two_phase_test;
 pub mod protocol_metadata;
 mod provider_layers;
 pub mod secret;

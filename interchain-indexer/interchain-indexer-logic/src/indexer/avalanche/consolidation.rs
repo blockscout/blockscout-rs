@@ -6,7 +6,8 @@ use alloy::{
 };
 use anyhow::{Context, Result, bail};
 use interchain_indexer_entity::{
-    crosschain_messages, crosschain_transfers, sea_orm_active_enums::MessageStatus,
+    crosschain_messages, crosschain_transfers, new_transfer,
+    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
 };
 use itertools::Itertools;
 use sea_orm::{ActiveValue, prelude::BigDecimal};
@@ -354,7 +355,7 @@ fn build_transfer(
                 token_src_address: ActiveValue::Set(Some(src_token_addr.as_slice().to_vec())),
                 token_dst_address: ActiveValue::Set(Some(dst_token_addr.as_slice().to_vec())),
                 recipient_address: ActiveValue::Set(recipient_address.as_slice().to_vec().into()),
-                ..Default::default()
+                ..new_transfer(TransferAssetLinkage::Mirror)
             };
 
             Ok(model)
@@ -398,7 +399,7 @@ fn build_transfer(
                 token_dst_address: ActiveValue::Set(Some(dst_token_addr.as_slice().to_vec())),
                 // If call failed, use fallback recipient
                 recipient_address: ActiveValue::Set(recipient_address.as_slice().to_vec().into()),
-                ..Default::default()
+                ..new_transfer(TransferAssetLinkage::Mirror)
             };
 
             Ok(model)
@@ -745,7 +746,7 @@ fn build_reconstructed_transfer(
         token_src_address: ActiveValue::Set(Some(header.originSenderAddress.as_slice().to_vec())),
         token_dst_address: ActiveValue::Set(Some(header.destinationAddress.as_slice().to_vec())),
         recipient_address: ActiveValue::Set(Some(recipient_address.as_slice().to_vec())),
-        ..Default::default()
+        ..new_transfer(TransferAssetLinkage::Mirror)
     })
 }
 

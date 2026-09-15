@@ -4104,6 +4104,7 @@ dependencies = [
  "reqwest-retry",
  "rstest",
  "sea-orm",
+ "sea-orm-migration",
  "serde",
  "serde_json",
  "serde_with",
