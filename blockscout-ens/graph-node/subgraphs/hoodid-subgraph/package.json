@@ -1,0 +1,17 @@
+{
+  "name": "hoodid-bens-subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Blockscout BENS-compatible subgraph for HoodID .hood names.",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy:local": "graph create hoodid/hoodid-bens --node http://localhost:8020 && graph deploy hoodid/hoodid-bens --node http://localhost:8020 --ipfs http://localhost:5001",
+    "deploy": "node scripts/deploy-subgraph.js",
+    "deploy:graph": "graph deploy hoodid/hoodid-bens"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "^0.97.1",
+    "@graphprotocol/graph-ts": "^0.36.0"
+  }
+}
