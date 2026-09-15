@@ -2,7 +2,7 @@
 
 use crate::{
     entity::subgraph::domain::DomainWithAddress,
-    protocols::{hash_name::hex, AddressResolveTechnique, DomainName, Protocol},
+    protocols::{hash_name::hex, is_ens_normalized, AddressResolveTechnique, DomainName, Protocol},
     subgraph::{sql, sql::DbErr},
 };
 use alloy::primitives::Address;
@@ -36,7 +36,21 @@ pub async fn resolve_addresses(
                 resolve_primary_name_record(pool, &protocols, &addresses).await?
             }
         };
-        result.extend(found_domains);
+        // Primary names come from user-controlled records: hide names that
+        // are not already ENSIP-15 normalized, since normalizing them for
+        // display can make them look like a canonical name of a different
+        // address (e.g. `Metamask.eth` rendered as `metamask.eth`)
+        result.extend(found_domains.into_iter().filter(|domain| {
+            let normalized = is_ens_normalized(&domain.domain_name);
+            if !normalized {
+                tracing::warn!(
+                    domain_name = domain.domain_name,
+                    resolved_address = domain.resolved_address,
+                    "hiding unnormalized primary name",
+                );
+            }
+            normalized
+        }));
     }
     Ok(result)
 }
