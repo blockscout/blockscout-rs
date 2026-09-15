@@ -12,6 +12,7 @@ enum TransformationType {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 enum TransformationReason {
+    CallProtection,
     CborAuxdata,
     ConstructorArguments,
     Immutable,
@@ -41,6 +42,17 @@ impl Transformation {
             reason: TransformationReason::CborAuxdata,
             offset,
             id: Some(id.into()),
+        }
+    }
+
+    /// Call protection address is always located right after the `PUSH20` opcode
+    /// at the beginning of the runtime code.
+    pub fn call_protection() -> Self {
+        Self {
+            r#type: TransformationType::Replace,
+            reason: TransformationReason::CallProtection,
+            offset: 1,
+            id: None,
         }
     }
 
