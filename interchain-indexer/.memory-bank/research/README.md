@@ -151,3 +151,10 @@ Small topics may keep some sections brief.
   onto `interchain-indexer-logic/src/indexer/cleanup_guard.rs` and
   `interchain-indexer-logic/src/indexer/evm/`.
   cross-reference
+- `amb-destination-only-missing-source-gap.md` — why some AMB/Omnibridge
+  (`bridge_id = 1`) messages permanently keep `src_tx_hash = NULL`:
+  `build_destination_only` finalizes and evicts the buffer entry before a
+  late-arriving source event can be merged in; contrasts with Avalanche's
+  wait-then-give-up model; includes production evidence (Gnosis↔Ethereum,
+  `home_chain_id = 100`) and the `stats`-service counter symptom this
+  produces
