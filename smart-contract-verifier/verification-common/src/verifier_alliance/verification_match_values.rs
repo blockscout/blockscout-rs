@@ -10,6 +10,9 @@ use std::collections::BTreeMap;
 #[serde(rename_all = "camelCase")]
 #[readonly::make]
 pub struct Values {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde_as(as = "Option<blockscout_display_bytes::serde_as::Hex>")]
+    pub call_protection: Option<Bytes>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     #[serde_as(as = "BTreeMap<_, blockscout_display_bytes::serde_as::Hex>")]
     pub cbor_auxdata: BTreeMap<String, Bytes>,
@@ -31,6 +34,11 @@ impl From<Values> for serde_json::Value {
 }
 
 impl Values {
+    pub fn add_call_protection(&mut self, value: impl Into<Bytes>) -> &mut Self {
+        self.call_protection = Some(value.into());
+        self
+    }
+
     pub fn add_cbor_auxdata(
         &mut self,
         key: impl Into<String>,
