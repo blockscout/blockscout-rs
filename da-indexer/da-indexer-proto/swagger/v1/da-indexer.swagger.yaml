@@ -5,6 +5,7 @@ info:
 tags:
   - name: CelestiaService
   - name: EigenDaService
+  - name: EigenDaV2Service
   - name: Health
 consumes:
   - application/json
@@ -95,6 +96,29 @@ paths:
           type: boolean
       tags:
         - EigenDaService
+  /api/v1/eigenda/v2/blobs/{commitment}:
+    get:
+      operationId: EigenDaV2Service_GetBlob
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1EigenDaV2Blob'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: commitment
+          in: path
+          required: true
+          type: string
+        - name: proxyBaseUrl
+          in: query
+          required: false
+          type: string
+      tags:
+        - EigenDaV2Service
   /health:
     get:
       summary: |-
@@ -225,6 +249,11 @@ definitions:
       size:
         type: string
         format: uint64
+      data:
+        type: string
+  v1EigenDaV2Blob:
+    type: object
+    properties:
       data:
         type: string
   v1HealthCheckResponse:
