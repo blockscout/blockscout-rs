@@ -27,5 +27,7 @@
     },
     "expected_runtime_match_type": "full",
     "expected_runtime_transformations": [],
-    "expected_runtime_values": {}
+    "expected_runtime_values": {},
+
+    "expected_evm_compiler_version": "v0.8.28+commit.acc7d8f9"
 }
