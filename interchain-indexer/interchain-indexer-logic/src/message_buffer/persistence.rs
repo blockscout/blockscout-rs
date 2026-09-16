@@ -173,10 +173,6 @@ fn crosschain_transfers_on_conflict() -> OnConflict {
         crosschain_transfers::Column::Index,
     ])
     .value(
-        crosschain_transfers::Column::Type,
-        Expr::cust(r#"COALESCE(EXCLUDED."type", crosschain_transfers."type")"#),
-    )
-    .value(
         crosschain_transfers::Column::TokenSrcChainId,
         Expr::cust("EXCLUDED.token_src_chain_id"),
     )
@@ -536,7 +532,7 @@ mod tests {
     use chrono::{DateTime, NaiveDateTime};
     use interchain_indexer_entity::{
         bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
-        sea_orm_active_enums::{MessageStatus, TransferAssetLinkage, TransferType},
+        sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
         stats_assets,
     };
     use sea_orm::{
@@ -667,7 +663,6 @@ mod tests {
             message_id: ActiveValue::Set(MESSAGE_ID),
             bridge_id: ActiveValue::Set(BRIDGE_ID),
             index: ActiveValue::Set(0),
-            r#type: ActiveValue::Set(Some(TransferType::Erc20)),
             token_src_chain_id: ActiveValue::Set(SRC_CHAIN),
             token_dst_chain_id: ActiveValue::Set(DST_CHAIN),
             src_amount: ActiveValue::Set(amount(src_amount)),

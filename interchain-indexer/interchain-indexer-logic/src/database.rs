@@ -4,7 +4,7 @@ use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, indexer_failures, pending_messages,
-    sea_orm_active_enums::{EdgeAmountSide, MessageStatus, TransferType},
+    sea_orm_active_enums::{EdgeAmountSide, MessageStatus},
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_chains_by_bridge,
     stats_messages, tokens,
 };
@@ -74,7 +74,6 @@ pub struct JoinedTransfer {
     pub message_id: i64,
     pub bridge_id: i32,
     pub index: i16,
-    pub r#type: Option<TransferType>,
     pub token_src_chain_id: i64,
     pub token_dst_chain_id: i64,
     pub src_amount: Option<BigDecimal>,
@@ -1132,10 +1131,20 @@ impl InterchainDatabase {
         chain_id: i64,
         token_address: Vec<u8>,
     ) -> anyhow::Result<()> {
+        let token_type = tokens::Entity::find_by_id((chain_id, token_address.clone()))
+            .one(self.db.as_ref())
+            .await?
+            .map(|token| token.r#type)
+            .unwrap_or_else(|| {
+                interchain_indexer_entity::sea_orm_active_enums::TokenType::from_address(
+                    &token_address,
+                )
+            });
         let model = stats_asset_tokens::ActiveModel {
             stats_asset_id: ActiveValue::Set(stats_asset_id),
             chain_id: ActiveValue::Set(chain_id),
             token_address: ActiveValue::Set(token_address),
+            r#type: ActiveValue::Set(token_type),
             ..Default::default()
         };
         match stats_asset_tokens::Entity::insert(model)
@@ -2458,7 +2467,6 @@ impl InterchainDatabase {
                         .column(crosschain_transfers::Column::MessageId)
                         .column(crosschain_transfers::Column::BridgeId)
                         .column(crosschain_transfers::Column::Index)
-                        .column(crosschain_transfers::Column::Type)
                         .column(crosschain_transfers::Column::TokenSrcChainId)
                         .column(crosschain_transfers::Column::TokenDstChainId)
                         .column(crosschain_transfers::Column::SrcAmount)
@@ -3358,19 +3366,35 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
-    pub async fn upsert_token_info(&self, token_info: tokens::ActiveModel) -> anyhow::Result<()> {
+    pub async fn upsert_token_info(
+        &self,
+        mut token_info: tokens::ActiveModel,
+    ) -> anyhow::Result<()> {
+        let explicit_type = !token_info.r#type.is_not_set();
+        if !explicit_type
+            && let ActiveValue::Set(address) | ActiveValue::Unchanged(address) = &token_info.address
+        {
+            token_info.r#type = ActiveValue::Set(
+                interchain_indexer_entity::sea_orm_active_enums::TokenType::from_address(address),
+            );
+        }
+        let mut on_conflict =
+            OnConflict::columns([tokens::Column::ChainId, tokens::Column::Address]);
+        on_conflict
+            .update_columns([
+                tokens::Column::Name,
+                tokens::Column::Symbol,
+                tokens::Column::Decimals,
+                tokens::Column::TokenIcon,
+            ])
+            .value(tokens::Column::UpdatedAt, Expr::current_timestamp());
+        // A metadata-only refresh must not replace an explicit registry kind
+        // with the default used for a newly discovered contract token.
+        if explicit_type {
+            on_conflict.update_column(tokens::Column::Type);
+        }
         tokens::Entity::insert(token_info)
-            .on_conflict(
-                OnConflict::columns([tokens::Column::ChainId, tokens::Column::Address])
-                    .update_columns([
-                        tokens::Column::Name,
-                        tokens::Column::Symbol,
-                        tokens::Column::Decimals,
-                        tokens::Column::TokenIcon,
-                    ])
-                    .value(tokens::Column::UpdatedAt, Expr::current_timestamp())
-                    .to_owned(),
-            )
+            .on_conflict(on_conflict.to_owned())
             .exec(self.db.as_ref())
             .await?;
 
@@ -3405,6 +3429,17 @@ impl InterchainDatabase {
 
         for link in links {
             let aid = link.stats_asset_id;
+            if link.r#type != token.r#type {
+                stats_asset_tokens::Entity::update(stats_asset_tokens::ActiveModel {
+                    stats_asset_id: ActiveValue::Unchanged(aid),
+                    chain_id: ActiveValue::Unchanged(link.chain_id),
+                    r#type: ActiveValue::Set(token.r#type.clone()),
+                    updated_at: ActiveValue::Set(now),
+                    ..Default::default()
+                })
+                .exec(self.db.as_ref())
+                .await?;
+            }
             let Some(asset) = stats_assets::Entity::find_by_id(aid)
                 .one(self.db.as_ref())
                 .await?
@@ -3873,9 +3908,7 @@ mod tests {
     use interchain_indexer_entity::{
         bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
         indexer_failures,
-        sea_orm_active_enums::{
-            BridgeType, EdgeAmountSide, MessageStatus, TransferAssetLinkage, TransferType,
-        },
+        sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferAssetLinkage},
         stats_asset_edges, stats_asset_tokens, stats_assets, stats_chains, stats_chains_by_bridge,
         stats_messages, stats_messages_days, tokens,
     };
@@ -5326,7 +5359,6 @@ mod tests {
                 message_id: Set(3001),
                 bridge_id: Set(1),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(100),
                 src_amount: Set(Some(BigDecimal::from(11u32))),
@@ -5340,7 +5372,6 @@ mod tests {
                 message_id: Set(3001),
                 bridge_id: Set(2),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(250),
                 src_amount: Set(Some(BigDecimal::from(22u32))),
@@ -5436,7 +5467,6 @@ mod tests {
                 message_id: Set(4001),
                 bridge_id: Set(1),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(100),
                 src_amount: Set(Some(BigDecimal::from(33u32))),
@@ -5450,7 +5480,6 @@ mod tests {
                 message_id: Set(4002),
                 bridge_id: Set(2),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(250),
                 src_amount: Set(Some(BigDecimal::from(44u32))),
@@ -6798,7 +6827,6 @@ mod tests {
             message_id: Set(50_007),
             bridge_id: Set(1),
             index: Set(0),
-            r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(c6),
             token_dst_chain_id: Set(c7),
             src_amount: Set(Some(BigDecimal::from(1u64))),
@@ -13431,7 +13459,6 @@ mod tests {
                 message_id: Set(2001),
                 bridge_id: Set(1),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(250),
                 token_ids: Set(None),
@@ -13443,7 +13470,6 @@ mod tests {
                 message_id: Set(2002),
                 bridge_id: Set(2),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(100),
                 token_ids: Set(None),
@@ -13455,7 +13481,6 @@ mod tests {
                 message_id: Set(2003),
                 bridge_id: Set(3),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(250),
                 token_ids: Set(None),
@@ -13467,7 +13492,6 @@ mod tests {
                 message_id: Set(2005),
                 bridge_id: Set(4),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(1),
                 token_dst_chain_id: Set(100),
                 token_ids: Set(None),
@@ -13479,7 +13503,6 @@ mod tests {
                 message_id: Set(2006),
                 bridge_id: Set(1),
                 index: Set(0),
-                r#type: Set(Some(TransferType::Erc20)),
                 token_src_chain_id: Set(250),
                 token_dst_chain_id: Set(1),
                 token_ids: Set(None),

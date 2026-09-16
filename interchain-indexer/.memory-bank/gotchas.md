@@ -2079,12 +2079,11 @@ retroactively fix an already-populated (wrong) edge value.
 
 ---
 
-## The xDai Native-Leg Sentinel Must Be Seeded As A `tokens` Row
+## Native Token Identity Must Survive Missing Seed Metadata
 
-**Symptom:** Every stats projection batch touching an xDai transfer logs
-`Background token info fetch failed` at `warn`, forever; or an xDai
-transfer's `stats_asset_edges` row has `decimals = NULL` even though the
-transfer itself resolved to a shared `stats_assets` row correctly.
+**Symptom:** A native token appears as a zero-address contract in an API
+response, its metadata lookup tries ERC-20 calls, or its statistics edge has
+`decimals = NULL` after an unsuccessful metadata seed.
 
 **Root cause:** The Gnosis leg of every xDai transfer is native xDAI, which
 has no token contract and therefore no address to record. Leaving that side
@@ -2093,13 +2092,11 @@ only accepts a `NULL` token endpoint when its chain is *unindexed* for the
 bridge — Gnosis is very much indexed here, so every xDai transfer would
 defer forever with `stats_processed = 0`, invisible in bridged-token stats.
 
-The fix is the same zero-address sentinel pattern the down-migration of
-`m20260508_082944_add_amb_indexer` already uses as a neutral placeholder:
+The internal storage key is the twenty-byte zero-address sentinel:
 `interchain-indexer-logic/src/indexer/xdai/types.rs::NATIVE_SENTINEL`
 (`0x0000000000000000000000000000000000000000` on chain `100`), written to
 `crosschain_transfers.token_dst_address` (Eth→Gno) or `token_src_address`
-(Gno→Eth), with `TransferType::Erc20ToNative` / `NativeToErc20` — never
-`Native`, which means native on *both* sides. This makes the Gnosis leg a
+(Gno→Eth). This makes the Gnosis leg a
 real, non-NULL endpoint, so `ensure_asset_for_transfer`'s `conversion` branch
 (ADR-011) can resolve it to its own `stats_assets` row rather than deferring
 with `identity_incomplete`.
@@ -2113,35 +2110,34 @@ shared row — merging them was the exact bug ADR-011 exists to fix. Do not
 if it were the fragmentation problem ADR-004's union-find addresses; that
 union-find still applies to `mirror` transfers only.
 
-That alone is not sufficient, though — a real `tokens` row for
-`(100, 0x00…00)` must also exist, seeded by `XDaiIndexer::start()` (mirrors
-`AmbIndexer::new`'s `stats.interchain_db_arc()` pattern; deliberately not in
-`server::run`, which must not know indexer specifics). Two concrete failures
-follow if it is missing, both traced in `xdai-bridge-indexer`'s task
-artifacts:
+**Type belongs to the token, independently of transfers.** Under
+[ADR-012](./adr/012-chain-local-token-types.md), `tokens.type` is authoritative
+and `stats_asset_tokens.type` carries its statistics projection. Both are
+non-null. `crosschain_transfers.type` and the mixed transfer enum variants are
+removed. `asset_linkage` still independently declares `mirror` or `conversion`.
 
-- `TokenInfoService::kickoff_token_fetch_for_stats_enrichment`
-  (`token_info/service.rs`) decides whether to fetch purely from
-  `db.get_token_info(chain_id, address)` — `Ok(None)` ⇒ fetch. It does
-  **not** consult `error_cache` (that only short-circuits the request-time
-  `get_token_info` path); with no row, every stats projection batch that
-  touches an xDai transfer re-spawns a doomed `eth_call` against a
-  non-contract address, forever.
-- `stats_asset_edges.decimals` is read per side from the `tokens` table
-  (`stats/projection.rs`), and which side supplies it depends on the sticky
-  `amount_side` (`EdgeAmountSide::Source` whenever the message's *source*
-  chain was indexed — see "Stats Edge Amount Side Must Follow Indexed
-  Source Presence" above). For a Gno→Eth transfer the source chain is
-  Gnosis, so `decimals` is read from the sentinel's own row; without it,
-  the edge's `decimals` ends up `NULL` even though asset identity resolved
-  correctly.
+Before registry metadata exists, the shared `TokenType::from_address`
+fallback in `interchain-indexer-entity/src/manual/mod.rs` recognizes exactly
+twenty zero bytes as native. An empty address or another zero-byte length is
+not that sentinel. Other keys fall back to ERC-20 because all currently
+indexed contract tokens are ERC-20; an explicit registry kind, including an
+NFT kind, takes precedence over the fallback.
 
-**Fix:** Seed exactly one row —
-`chain_id = 100, address = 0x00…00, symbol = "xDAI", name = "xDai",
-decimals = 18` — via the existing idempotent `upsert_token_info`. A seed
-failure is a `warn`, not a startup abort (same rationale as
-`evm/log_stream_builder.rs::seed_catchup_floor`: metadata enrichment must
-never be able to stop ingestion), and is self-healing on the next restart.
+Both transfer and statistics APIs return `type = NATIVE` and a null address
+for native tokens. `TokenInfoService` skips contract fetching for the native
+storage key in both request-time lookup and stats enrichment, even when the
+metadata seed is missing. Do not remove these guards on the assumption that
+startup always manages to seed metadata.
+
+**Seed metadata separately:** `XDaiIndexer::start()` writes exactly one row —
+`chain_id = 100, address = 0x00…00, type = native, symbol = "xDAI", name =
+"xDai", decimals = 18` — through idempotent `upsert_token_info`. This remains
+indexer-specific work rather than a `server::run` responsibility. A failure
+logs a warning and does not stop ingestion; the seed retries on the next
+restart. Missing metadata can still leave edge decimals null: projection
+reads decimals from the endpoint selected by the sticky `amount_side`, so
+Gno→Eth edges need the Gnosis sentinel's metadata. Missing metadata must not
+change native identity, leak the sentinel, or cause a contract-fetch loop.
 
 **The sentinel constant is shared, not xDai-private.** If another bridge
 later writes a native leg on chain `100`, it must reuse
@@ -2423,3 +2419,14 @@ what they are. Assert on parsed values (`body["extra"]["ns"]["field"]`), never
 on key order or on a serialized string. If a field ever genuinely needs a
 stable key order, it cannot be a `Struct` — it has to be a declared proto
 message or a `map<string, string>`, both of which `btree_map` does cover.
+
+
+## Raw SQL Must Cast PostgreSQL Enums For SeaORM ActiveEnum Decoding
+
+SeaORM-generated entity selects cast enum columns appropriately, but a raw SQL
+`QueryResult::try_get::<TokenType>` expects the enum's Rust representation
+(`String` / SQL `TEXT`). Selecting `sat.type` directly fails at runtime with
+"SQL type TEXT is not compatible with SQL type token_type". Select
+`sat.type::text AS token_type` when decoding the raw stats query; see
+`interchain-indexer-logic/src/bridged_tokens_query.rs` and its database-backed
+token-list tests. A successful `cargo check` cannot catch this mismatch.

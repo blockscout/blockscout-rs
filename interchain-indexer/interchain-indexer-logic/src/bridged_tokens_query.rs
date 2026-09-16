@@ -2,6 +2,7 @@
 
 //! Aggregated bridged-token stats per `stats_asset` for a chain (`/stats/bridged-tokens`).
 
+use interchain_indexer_entity::sea_orm_active_enums::TokenType;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};
 
 use crate::{
@@ -57,6 +58,7 @@ impl BridgedTokenAggDbRow {
 pub struct BridgedTokenLinkEnriched {
     pub chain_id: i64,
     pub token_address: Vec<u8>,
+    pub token_type: TokenType,
     pub name: Option<String>,
     pub symbol: Option<String>,
     pub icon_url: Option<String>,
@@ -542,6 +544,7 @@ pub async fn fetch_bridged_token_items_for_assets(
 SELECT sat.stats_asset_id,
        sat.chain_id,
        sat.token_address,
+       sat.type::text AS token_type,
        t.name AS token_name,
        t.symbol AS token_symbol,
        t.token_icon AS token_icon,
@@ -562,6 +565,7 @@ ORDER BY sat.stats_asset_id, sat.chain_id, sat.token_address
         let aid: i64 = r.try_get("", "stats_asset_id")?;
         let chain_id: i64 = r.try_get("", "chain_id")?;
         let token_address: Vec<u8> = r.try_get("", "token_address")?;
+        let token_type: TokenType = r.try_get("", "token_type")?;
         let name: Option<String> = r.try_get("", "token_name").ok();
         let symbol: Option<String> = r.try_get("", "token_symbol").ok();
         let icon: Option<String> = r.try_get("", "token_icon").ok();
@@ -569,6 +573,7 @@ ORDER BY sat.stats_asset_id, sat.chain_id, sat.token_address
         map.entry(aid).or_default().push(BridgedTokenLinkEnriched {
             chain_id,
             token_address,
+            token_type,
             name,
             symbol,
             icon_url: icon,
@@ -978,8 +983,65 @@ mod tests {
         assert_eq!(enriched.symbol.as_deref(), Some("TS"));
         assert_eq!(enriched.icon_url.as_deref(), Some("http://i"));
         assert_eq!(enriched.decimals, Some(8));
+        assert_eq!(enriched.token_type, TokenType::Erc20);
         let bare = list.iter().find(|t| t.chain_id == 2).unwrap();
         assert!(bare.name.is_none());
+        assert_eq!(bare.token_type, TokenType::Erc20);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_native_type_survives_missing_metadata() {
+        let g = init_db("bridged_tokens_native_type").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1]).await;
+        let database = crate::InterchainDatabase::new(db.clone());
+        let asset = database.create_stats_asset(None, None, None).await.unwrap();
+        database
+            .link_token_to_stats_asset(asset.id, 1, vec![0; 20])
+            .await
+            .unwrap();
+
+        let rows = fetch_bridged_token_items_for_assets(db.as_ref(), &[asset.id], None)
+            .await
+            .unwrap();
+        let token = &rows[&asset.id][0];
+        assert_eq!(token.token_type, TokenType::Native);
+        assert_eq!(token.token_address, vec![0; 20]);
+        assert!(token.name.is_none());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_type_follows_late_metadata_enrichment() {
+        let g = init_db("bridged_tokens_late_type").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1]).await;
+        let database = crate::InterchainDatabase::new(db.clone());
+        let asset = database.create_stats_asset(None, None, None).await.unwrap();
+        let address = vec![0x11; 20];
+        database
+            .link_token_to_stats_asset(asset.id, 1, address.clone())
+            .await
+            .unwrap();
+        let token = tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(address.clone()),
+            r#type: Set(TokenType::Erc721),
+            ..Default::default()
+        })
+        .exec_with_returning(db.as_ref())
+        .await
+        .unwrap();
+        database
+            .propagate_token_info_to_stats_tables(1, &address, &token)
+            .await
+            .unwrap();
+
+        let rows = fetch_bridged_token_items_for_assets(db.as_ref(), &[asset.id], None)
+            .await
+            .unwrap();
+        assert_eq!(rows[&asset.id][0].token_type, TokenType::Erc721);
     }
 
     #[tokio::test]

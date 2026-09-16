@@ -9,7 +9,7 @@ use anyhow::{Context, anyhow};
 use interchain_indexer_entity::{
     crosschain_messages::Model as CrosschainMessageModel,
     crosschain_transfers::Model as CrosschainTransferModel,
-    sea_orm_active_enums::{MessageStatus as DbMessageStatus, TransferType},
+    sea_orm_active_enums::{MessageStatus as DbMessageStatus, TokenType as DbTokenType},
     tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
@@ -277,8 +277,6 @@ impl InterchainServiceImpl {
             transfer.token_src_chain_id,
             transfer.token_dst_chain_id,
         );
-        let (source_token_type, destination_token_type) =
-            token_types_for_transfer_type(transfer.r#type.as_ref());
 
         Ok(InterchainTransfer {
             bridge: self.get_bridge_info(message.bridge_id)?.into(),
@@ -290,7 +288,6 @@ impl InterchainServiceImpl {
                 .get_token_info_opt(
                     transfer.token_src_chain_id,
                     transfer.token_src_address.clone(),
-                    source_token_type,
                 )
                 .await,
             source_amount: transfer.src_amount.as_ref().map(|a| a.to_plain_string()),
@@ -301,7 +298,6 @@ impl InterchainServiceImpl {
                 .get_token_info_opt(
                     transfer.token_dst_chain_id,
                     transfer.token_dst_address.clone(),
-                    destination_token_type,
                 )
                 .await,
             destination_amount: transfer.dst_amount.as_ref().map(|a| a.to_plain_string()),
@@ -321,8 +317,6 @@ impl InterchainServiceImpl {
             transfer.token_src_chain_id,
             transfer.token_dst_chain_id,
         );
-        let (source_token_type, destination_token_type) =
-            token_types_for_transfer_type(transfer.r#type.as_ref());
 
         Ok(InterchainTransfer {
             bridge: self.get_bridge_info(transfer.bridge_id)?.into(),
@@ -334,7 +328,6 @@ impl InterchainServiceImpl {
                 .get_token_info_opt(
                     transfer.token_src_chain_id,
                     transfer.token_src_address.clone(),
-                    source_token_type,
                 )
                 .await,
             source_amount: transfer.src_amount.as_ref().map(|a| a.to_plain_string()),
@@ -345,7 +338,6 @@ impl InterchainServiceImpl {
                 .get_token_info_opt(
                     transfer.token_dst_chain_id,
                     transfer.token_dst_address.clone(),
-                    destination_token_type,
                 )
                 .await,
             destination_amount: transfer.dst_amount.as_ref().map(|a| a.to_plain_string()),
@@ -390,49 +382,39 @@ impl InterchainServiceImpl {
 
     /// Token info for an optional token address: `None` when the transfer side's
     /// token is unknown (the corresponding bridge event has not been observed).
-    ///
-    /// `token_type` is the side's classification derived from
-    /// `crosschain_transfers.type` (see [`token_types_for_transfer_type`]),
-    /// never from comparing `address` against the native sentinel: the type
-    /// column is the single source of truth for which side is native.
     async fn get_token_info_opt(
         &self,
         chain_id: i64,
         address: Option<Vec<u8>>,
-        token_type: TokenType,
     ) -> Option<TokenInfo> {
         match address {
-            Some(address) => self.get_token_info(chain_id, address, token_type).await,
+            Some(address) => self.get_token_info(chain_id, address).await,
             None => None,
         }
     }
 
-    async fn get_token_info(
-        &self,
-        chain_id: i64,
-        address: Vec<u8>,
-        token_type: TokenType,
-    ) -> Option<TokenInfo> {
+    async fn get_token_info(&self, chain_id: i64, address: Vec<u8>) -> Option<TokenInfo> {
         let address_hex = to_hex_prefixed(address.as_slice());
+        let fallback_type = token_type_to_proto(&DbTokenType::from_address(&address));
         self.token_info_service
             .clone()
             .get_token_info(chain_id, address)
             .await
             .inspect_err(|e| tracing::error!(err = ?e, chain_id, address =? address_hex, "Failed to get token info"))
             .ok()
-            .map(|model| token_info_logic_to_proto(model, token_type))
+            .map(token_info_logic_to_proto)
             .unwrap_or_else(|| {
                 // void TokenInfo (at least store address and chain id) --
                 // still omitting address_hash for a native side, so a lookup
                 // failure never leaks the sentinel to the API.
                 TokenInfo {
-                    address_hash: (token_type != TokenType::TokenTypeNative)
+                    address_hash: (fallback_type != TokenType::Native)
                         .then(|| address_hex.clone()),
                     name: None,
                     symbol: None,
                     decimals: None,
                     icon_url: None,
-                    r#type: token_type as i32,
+                    r#type: fallback_type as i32,
                 }
             })
             .into()
@@ -848,38 +830,21 @@ fn message_status_to_proto(status: &DbMessageStatus) -> MessageStatus {
     }
 }
 
-/// Per-side `TokenType`, derived from `crosschain_transfers.type` — never
-/// from comparing an address against the native sentinel. `NULL` maps to
-/// `UNSPECIFIED` rather than defaulting to `ERC_20`: that default would
-/// become wrong the moment any indexer writes a non-ERC-20 transfer without
-/// setting the column, which is exactly what `UNSPECIFIED` exists to
-/// surface (Avalanche currently writes `NULL` for every transfer and is
-/// expected to report `UNSPECIFIED` until a separate follow-up task sets
-/// its `type` column).
-fn token_types_for_transfer_type(transfer_type: Option<&TransferType>) -> (TokenType, TokenType) {
-    match transfer_type {
-        Some(TransferType::Erc20) => (TokenType::TokenTypeErc20, TokenType::TokenTypeErc20),
-        Some(TransferType::Erc20ToNative) => {
-            (TokenType::TokenTypeErc20, TokenType::TokenTypeNative)
-        }
-        Some(TransferType::NativeToErc20) => {
-            (TokenType::TokenTypeNative, TokenType::TokenTypeErc20)
-        }
-        Some(TransferType::Native) => (TokenType::TokenTypeNative, TokenType::TokenTypeNative),
-        Some(TransferType::Erc721) => (TokenType::TokenTypeErc721, TokenType::TokenTypeErc721),
-        Some(TransferType::Erc1155) => (TokenType::TokenTypeErc1155, TokenType::TokenTypeErc1155),
-        None => (
-            TokenType::TokenTypeUnspecified,
-            TokenType::TokenTypeUnspecified,
-        ),
+pub(super) fn token_type_to_proto(token_type: &DbTokenType) -> TokenType {
+    match token_type {
+        DbTokenType::Erc20 => TokenType::Erc20,
+        DbTokenType::Native => TokenType::Native,
+        DbTokenType::Erc721 => TokenType::Erc721,
+        DbTokenType::Erc1155 => TokenType::Erc1155,
     }
 }
 
-fn token_info_logic_to_proto(model: TokenInfoModel, token_type: TokenType) -> TokenInfo {
+fn token_info_logic_to_proto(model: TokenInfoModel) -> TokenInfo {
+    let token_type = token_type_to_proto(&model.r#type);
     TokenInfo {
         // Omitted exactly for a native side: the frontend must not render
         // the internal zero-address sentinel as if it were a real contract.
-        address_hash: (token_type != TokenType::TokenTypeNative)
+        address_hash: (token_type != TokenType::Native)
             .then(|| to_hex_prefixed(model.address.as_slice())),
         name: model.name,
         symbol: model.symbol,
@@ -893,49 +858,11 @@ fn token_info_logic_to_proto(model: TokenInfoModel, token_type: TokenType) -> To
 mod tests {
     use super::*;
 
-    // One case per row of the mapping table in `token_types_for_transfer_type`'s
-    // doc comment, including the currently-unreachable erc721/erc1155 rows
-    // (no indexer writes them today, but the enum carries them) and the
-    // NULL -> UNSPECIFIED row Avalanche relies on until its own follow-up.
-    #[test]
-    fn token_types_for_transfer_type_covers_every_mapping_row() {
-        assert_eq!(
-            token_types_for_transfer_type(Some(&TransferType::Erc20)),
-            (TokenType::TokenTypeErc20, TokenType::TokenTypeErc20)
-        );
-        assert_eq!(
-            token_types_for_transfer_type(Some(&TransferType::Erc20ToNative)),
-            (TokenType::TokenTypeErc20, TokenType::TokenTypeNative)
-        );
-        assert_eq!(
-            token_types_for_transfer_type(Some(&TransferType::NativeToErc20)),
-            (TokenType::TokenTypeNative, TokenType::TokenTypeErc20)
-        );
-        assert_eq!(
-            token_types_for_transfer_type(Some(&TransferType::Native)),
-            (TokenType::TokenTypeNative, TokenType::TokenTypeNative)
-        );
-        assert_eq!(
-            token_types_for_transfer_type(Some(&TransferType::Erc721)),
-            (TokenType::TokenTypeErc721, TokenType::TokenTypeErc721)
-        );
-        assert_eq!(
-            token_types_for_transfer_type(Some(&TransferType::Erc1155)),
-            (TokenType::TokenTypeErc1155, TokenType::TokenTypeErc1155)
-        );
-        assert_eq!(
-            token_types_for_transfer_type(None),
-            (
-                TokenType::TokenTypeUnspecified,
-                TokenType::TokenTypeUnspecified
-            )
-        );
-    }
-
-    fn token_model(address: &[u8]) -> TokenInfoModel {
+    fn token_model(address: &[u8], token_type: DbTokenType) -> TokenInfoModel {
         TokenInfoModel {
             chain_id: 100,
             address: address.to_vec(),
+            r#type: token_type,
             symbol: Some("xDAI".to_string()),
             name: Some("xDai".to_string()),
             token_icon: None,
@@ -947,18 +874,16 @@ mod tests {
 
     #[test]
     fn token_info_logic_to_proto_omits_address_hash_exactly_for_native() {
-        let model = token_model(&[0u8; 20]);
-
-        let native = token_info_logic_to_proto(model.clone(), TokenType::TokenTypeNative);
+        let native = token_info_logic_to_proto(token_model(&[0u8; 20], DbTokenType::Native));
         assert_eq!(native.address_hash, None);
         // The frontend still needs these to render an amount for a native side.
         assert_eq!(native.name, Some("xDai".to_string()));
         assert_eq!(native.symbol, Some("xDAI".to_string()));
         assert_eq!(native.decimals, Some("18".to_string()));
-        assert_eq!(native.r#type, TokenType::TokenTypeNative as i32);
+        assert_eq!(native.r#type, TokenType::Native as i32);
 
-        let erc20 = token_info_logic_to_proto(model, TokenType::TokenTypeErc20);
+        let erc20 = token_info_logic_to_proto(token_model(&[1u8; 20], DbTokenType::Erc20));
         assert!(erc20.address_hash.is_some());
-        assert_eq!(erc20.r#type, TokenType::TokenTypeErc20 as i32);
+        assert_eq!(erc20.r#type, TokenType::Erc20 as i32);
     }
 }

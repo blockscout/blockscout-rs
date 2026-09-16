@@ -14,7 +14,7 @@ use alloy::{
 };
 use anyhow::{Context, Result, anyhow, ensure};
 use dashmap::DashMap;
-use interchain_indexer_entity::tokens;
+use interchain_indexer_entity::{sea_orm_active_enums::TokenType, tokens};
 use sea_orm::ActiveValue;
 use serde_json::Value;
 use tokio::task::JoinHandle;
@@ -161,7 +161,7 @@ impl XDaiIndexer {
     }
 
     /// Seeds the `(100, 0x00…00)` sentinel `tokens` row this indexer's own
-    /// transfers depend on for stats eligibility. Lives here, not in
+    /// transfers use for native metadata and stats decimals. Lives here, not in
     /// `server::run`, which must not know indexer specifics -- mirrors how
     /// `AmbIndexer::new` gets its DB handle from `stats.interchain_db_arc()`.
     ///
@@ -170,9 +170,8 @@ impl XDaiIndexer {
     /// `evm/log_stream_builder.rs::seed_catchup_floor` -- metadata enrichment
     /// must not be able to stop ingestion. See the gotcha in
     /// `.memory-bank/gotchas.md` for what a missing row actually costs
-    /// (a permanent `Background token info fetch failed` warn stream, and a
-    /// possible NULL `stats_asset_edges.decimals`), which is why this is not
-    /// cosmetic despite being non-blocking.
+    /// (missing display metadata and possible NULL `stats_asset_edges.decimals`).
+    /// Native classification does not depend on this seed succeeding.
     async fn seed_native_sentinel_token(&self) {
         seed_native_sentinel_token_into(&self.db, self.bridge_id).await;
     }
@@ -326,6 +325,7 @@ async fn seed_native_sentinel_token_into(db: &InterchainDatabase, bridge_id: i32
     let seed = tokens::ActiveModel {
         chain_id: ActiveValue::Set(GNOSIS_CHAIN_ID),
         address: ActiveValue::Set(NATIVE_SENTINEL.as_slice().to_vec()),
+        r#type: ActiveValue::Set(TokenType::Native),
         symbol: ActiveValue::Set(Some("xDAI".to_string())),
         name: ActiveValue::Set(Some("xDai".to_string())),
         decimals: ActiveValue::Set(Some(18)),
@@ -337,8 +337,8 @@ async fn seed_native_sentinel_token_into(db: &InterchainDatabase, bridge_id: i32
             err = ?err,
             bridge_id,
             chain_id = GNOSIS_CHAIN_ID,
-            "failed to seed the native xDAI sentinel tokens row; stats enrichment will \
-             keep re-attempting a doomed fetch against it until this succeeds"
+            "failed to seed native xDAI metadata; native classification is preserved, \
+             but name and decimals will be unavailable until the next successful seed"
         );
     }
 }
@@ -1425,11 +1425,8 @@ mod tests {
     /// `decimals = 18` — the value `stats_asset_edges` reads — and that a
     /// restart is a no-op rather than a conflict.
     ///
-    /// Why this matters beyond tidiness: with no row,
-    /// `TokenInfoService::kickoff_token_fetch_for_stats_enrichment` decides
-    /// to fetch from `db.get_token_info` alone and never consults its
-    /// `error_cache`, so every stats projection batch touching an xDai
-    /// transfer re-spawns a doomed `eth_call` against a non-contract address.
+    /// Native identity remains known without the seed, but its human-readable
+    /// metadata and edge decimals must come from this row (never ERC-20 RPC).
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn seed_native_sentinel_token_creates_the_row_and_is_idempotent() {
@@ -1445,6 +1442,7 @@ mod tests {
             .expect("token lookup succeeds")
             .expect("the sentinel row must exist after the seed");
 
+        assert_eq!(row.r#type, TokenType::Native);
         assert_eq!(row.decimals, Some(18), "stats_asset_edges reads this");
         assert_eq!(row.symbol.as_deref(), Some("xDAI"));
         assert_eq!(row.name.as_deref(), Some("xDai"));
@@ -1457,20 +1455,9 @@ mod tests {
             .await
             .expect("token lookup succeeds")
             .expect("the sentinel row must survive a second seed");
+        assert_eq!(again.r#type, TokenType::Native);
         assert_eq!(again.decimals, Some(18));
         assert_eq!(again.symbol.as_deref(), Some("xDAI"));
-
-        // `kickoff_token_fetch_for_stats_enrichment` treats a row with
-        // decimals plus a non-empty name/symbol as "no fetch needed"; assert
-        // that predicate directly rather than trying to observe an absent
-        // log line.
-        let needs_fetch = again.decimals.is_none()
-            || (again.name.as_ref().is_none_or(|s| s.is_empty())
-                && again.symbol.as_ref().is_none_or(|s| s.is_empty()));
-        assert!(
-            !needs_fetch,
-            "the seeded row must make the stats-enrichment fetch decision a no-op"
-        );
     }
 
     fn dai_address() -> Address {
@@ -1517,6 +1504,7 @@ mod tests {
             .upsert_token_info(interchain_indexer_entity::tokens::ActiveModel {
                 chain_id: Set(GNO),
                 address: Set(NATIVE_SENTINEL.as_slice().to_vec()),
+                r#type: Set(TokenType::Native),
                 symbol: Set(Some("xDAI".to_string())),
                 name: Set(Some("xDai".to_string())),
                 decimals: Set(Some(18)),

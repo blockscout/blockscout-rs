@@ -4143,6 +4143,7 @@ dependencies = [
  "prost-wkt-build",
  "prost-wkt-types",
  "serde",
+ "serde_json",
  "serde_with",
  "tonic",
  "tonic-prost",

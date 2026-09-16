@@ -1,6 +1,37 @@
 ALTER TYPE bridge_type   ADD VALUE IF NOT EXISTS 'xdai';
-ALTER TYPE transfer_type ADD VALUE IF NOT EXISTS 'erc20_to_native';
-ALTER TYPE transfer_type ADD VALUE IF NOT EXISTS 'native_to_erc20';
+-- Token kind belongs to a chain-local token, independently of any transfer.
+-- This migration precedes all xDai ingestion; existing production tokens are
+-- ERC-20. Preserve explicit NFT classifications from the legacy transfer field.
+CREATE TYPE token_type AS ENUM ('erc20', 'native', 'erc721', 'erc1155');
+ALTER TABLE tokens ADD COLUMN type token_type NOT NULL DEFAULT 'erc20';
+ALTER TABLE stats_asset_tokens ADD COLUMN type token_type NOT NULL DEFAULT 'erc20';
+
+UPDATE tokens SET type = 'native'
+WHERE address = decode(repeat('00', 20), 'hex');
+UPDATE stats_asset_tokens SET type = 'native'
+WHERE token_address = decode(repeat('00', 20), 'hex');
+
+-- Fail visibly on contradictory historical kinds rather than choosing a type
+-- arbitrarily. This scan does not rewrite the large transfer table.
+CREATE TEMP TABLE legacy_token_kinds ON COMMIT DROP AS
+SELECT DISTINCT chain_id, address, type::text::token_type AS type
+FROM (
+  SELECT token_src_chain_id AS chain_id, token_src_address AS address, type
+  FROM crosschain_transfers WHERE type IN ('erc721', 'erc1155')
+  UNION ALL
+  SELECT token_dst_chain_id, token_dst_address, type
+  FROM crosschain_transfers WHERE type IN ('erc721', 'erc1155')
+) endpoints
+WHERE address IS NOT NULL;
+CREATE UNIQUE INDEX ON legacy_token_kinds (chain_id, address);
+INSERT INTO tokens (chain_id, address, type)
+SELECT chain_id, address, type FROM legacy_token_kinds
+ON CONFLICT (chain_id, address) DO UPDATE SET type = EXCLUDED.type;
+UPDATE stats_asset_tokens AS sat SET type = t.type
+FROM tokens AS t WHERE t.chain_id = sat.chain_id AND t.address = sat.token_address;
+
+ALTER TABLE crosschain_transfers DROP COLUMN type;
+DROP TYPE transfer_type;
 
 -- The table name is AMB-flavoured; its contents are not. Record the shared
 -- ownership in the database itself, where the next reader of \d+ will see it.

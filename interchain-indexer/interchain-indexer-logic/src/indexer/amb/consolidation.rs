@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use interchain_indexer_entity::{
     amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
     new_transfer,
-    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage, TransferType},
+    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
 };
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 
@@ -348,7 +348,6 @@ fn build_transfer(
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
         index: ActiveValue::Set(0),
-        r#type: ActiveValue::Set(Some(TransferType::Erc20)),
         token_src_chain_id: ActiveValue::Set(token_src_chain_id),
         token_dst_chain_id: ActiveValue::Set(token_dst_chain_id),
         src_amount: ActiveValue::Set(src_amount),
@@ -379,7 +378,6 @@ fn build_destination_only_transfer(
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
         index: ActiveValue::Set(0),
-        r#type: ActiveValue::Set(Some(TransferType::Erc20)),
         token_src_chain_id: ActiveValue::Set(destination.source_chain_id),
         token_dst_chain_id: ActiveValue::Set(destination.destination_chain_id),
         src_amount: ActiveValue::Set(None),

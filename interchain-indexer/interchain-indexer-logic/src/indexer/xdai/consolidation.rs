@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
     amb_messages_confirmations, crosschain_messages, crosschain_transfers, new_transfer,
-    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage, TransferType},
+    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
 };
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 
@@ -162,14 +162,13 @@ fn build_transfer(
     direction: Direction,
     message: &Message,
 ) -> Result<crosschain_transfers::ActiveModel> {
-    let (recipient, value, token_src_address, token_dst_address, transfer_type) =
+    let (recipient, value, token_src_address, token_dst_address) =
         match (&message.source_request, &message.signature_request) {
             (Some(source), _) => (
                 source.event.recipient,
                 source.event.value,
                 source.event.source_asset,
                 NATIVE_SENTINEL,
-                TransferType::Erc20ToNative,
             ),
             (None, Some(signature_request)) => (
                 signature_request.event.recipient,
@@ -178,7 +177,6 @@ fn build_transfer(
                 // Explicit only from Home v7; the legacy 104-byte layout
                 // (Home v6) hardcodes DAI (`parseMessage`).
                 signature_request.event.token.unwrap_or(DAI),
-                TransferType::NativeToErc20,
             ),
             (None, None) => unreachable!("consolidate() returns early without a source event"),
         };
@@ -209,7 +207,6 @@ fn build_transfer(
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
         index: ActiveValue::Set(0),
-        r#type: ActiveValue::Set(Some(transfer_type)),
         token_src_chain_id: ActiveValue::Set(direction.initiator_chain_id()),
         token_dst_chain_id: ActiveValue::Set(direction.destination_chain_id()),
         src_amount: ActiveValue::Set(Some(src_amount)),
@@ -399,7 +396,6 @@ mod tests {
         );
         let t = &consolidated.transfers[0];
         assert_eq!(set_value!(t.index), 0);
-        assert_eq!(set_value!(t.r#type), Some(TransferType::Erc20ToNative));
         assert_eq!(
             set_value!(t.token_src_address),
             Some(addr(0xDA).as_slice().to_vec())
@@ -539,7 +535,6 @@ mod tests {
         );
 
         let t = &consolidated.transfers[0];
-        assert_eq!(set_value!(t.r#type), Some(TransferType::NativeToErc20));
         assert_eq!(
             set_value!(t.token_src_address),
             Some(NATIVE_SENTINEL.as_slice().to_vec())
@@ -564,7 +559,6 @@ mod tests {
         let consolidated = message.consolidate(&key).unwrap().unwrap();
 
         let t = &consolidated.transfers[0];
-        assert_eq!(set_value!(t.r#type), Some(TransferType::NativeToErc20));
         assert_eq!(
             set_value!(t.token_src_address),
             Some(NATIVE_SENTINEL.as_slice().to_vec())

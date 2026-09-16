@@ -9,7 +9,9 @@ use bigdecimal::RoundingMode;
 use chrono::Utc;
 use interchain_indexer_entity::{
     bridges, crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{BridgeType, EdgeAmountSide, MessageStatus, TransferAssetLinkage},
+    sea_orm_active_enums::{
+        BridgeType, EdgeAmountSide, MessageStatus, TokenType, TransferAssetLinkage,
+    },
     stats_asset_edges, stats_asset_tokens, stats_assets, stats_messages, stats_messages_days,
     tokens,
 };
@@ -473,10 +475,16 @@ async fn try_link_token(
     chain_id: i64,
     token_address: Vec<u8>,
 ) -> Result<(), DbErr> {
+    let token_type = tokens::Entity::find_by_id((chain_id, token_address.clone()))
+        .one(tx)
+        .await?
+        .map(|token| token.r#type)
+        .unwrap_or_else(|| TokenType::from_address(&token_address));
     let model = stats_asset_tokens::ActiveModel {
         stats_asset_id: Set(stats_asset_id),
         chain_id: Set(chain_id),
         token_address: Set(token_address),
+        r#type: Set(token_type),
         ..Default::default()
     };
     stats_asset_tokens::Entity::insert(model).exec(tx).await?;
@@ -2152,7 +2160,6 @@ mod token_key_tests {
             message_id: 1,
             bridge_id: 1,
             index: 0,
-            r#type: None,
             token_src_chain_id: 1,
             token_dst_chain_id: 100,
             src_amount: Some(BigDecimal::from(0u64)),
@@ -2208,7 +2215,6 @@ mod deferral_reason_tests {
             message_id: 1,
             bridge_id: 1,
             index: 0,
-            r#type: None,
             token_src_chain_id: 1,
             token_dst_chain_id: 100,
             src_amount: Some(BigDecimal::from(0u64)),
@@ -2295,7 +2301,6 @@ mod edge_transfer_amount_for_side_tests {
             message_id: 1,
             bridge_id: 1,
             index: 0,
-            r#type: None,
             token_src_chain_id: 1,
             token_dst_chain_id: 100,
             src_amount: src_amount.map(BigDecimal::from),

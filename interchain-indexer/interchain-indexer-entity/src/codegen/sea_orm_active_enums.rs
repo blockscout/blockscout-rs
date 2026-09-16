@@ -35,6 +35,18 @@ pub enum MessageStatus {
     ReadyToClaim,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "token_type")]
+pub enum TokenType {
+    #[sea_orm(string_value = "erc20")]
+    Erc20,
+    #[sea_orm(string_value = "native")]
+    Native,
+    #[sea_orm(string_value = "erc721")]
+    Erc721,
+    #[sea_orm(string_value = "erc1155")]
+    Erc1155,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(
     rs_type = "String",
     db_type = "Enum",
@@ -45,20 +57,4 @@ pub enum TransferAssetLinkage {
     Mirror,
     #[sea_orm(string_value = "conversion")]
     Conversion,
-}
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "transfer_type")]
-pub enum TransferType {
-    #[sea_orm(string_value = "erc20")]
-    Erc20,
-    #[sea_orm(string_value = "erc721")]
-    Erc721,
-    #[sea_orm(string_value = "native")]
-    Native,
-    #[sea_orm(string_value = "erc1155")]
-    Erc1155,
-    #[sea_orm(string_value = "erc20_to_native")]
-    Erc20ToNative,
-    #[sea_orm(string_value = "native_to_erc20")]
-    NativeToErc20,
 }

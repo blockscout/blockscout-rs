@@ -97,8 +97,18 @@ ALTER TABLE crosschain_transfers
 
 DROP TYPE transfer_asset_linkage;
 
--- No-op. PostgreSQL cannot drop a value from an enum type (ALTER TYPE ...
--- DROP VALUE does not exist), so 'xdai', 'erc20_to_native' and
--- 'native_to_erc20' cannot be removed here. The table comment is likewise
--- left in place -- it is documentation, not schema, and removing it would
--- only make the reuse harder to discover on a rolled-back database.
+-- The legacy enum cannot represent mixed endpoints. Restore only homogeneous
+-- kinds; mixed or missing token metadata remains NULL on this lossy rollback.
+CREATE TYPE transfer_type AS ENUM ('erc20', 'erc721', 'native', 'erc1155');
+ALTER TABLE crosschain_transfers ADD COLUMN type transfer_type;
+UPDATE crosschain_transfers AS tr SET type = src.type::text::transfer_type
+FROM tokens AS src, tokens AS dst
+WHERE src.chain_id = tr.token_src_chain_id AND src.address = tr.token_src_address
+  AND dst.chain_id = tr.token_dst_chain_id AND dst.address = tr.token_dst_address
+  AND src.type = dst.type;
+ALTER TABLE stats_asset_tokens DROP COLUMN type;
+ALTER TABLE tokens DROP COLUMN type;
+DROP TYPE token_type;
+
+-- PostgreSQL cannot remove the 'xdai' bridge enum value. The table comment
+-- likewise remains as documentation of the shared confirmations storage.

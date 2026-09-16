@@ -1815,6 +1815,7 @@ definitions:
         type: string
       token_address:
         type: string
+        description: Null for a native token, which has no contract address.
       name:
         type: string
       symbol:
@@ -1824,6 +1825,8 @@ definitions:
       decimals:
         type: integer
         format: int64
+      type:
+        $ref: '#/definitions/v1TokenType'
   v1StatsBridgedTokenRow:
     type: object
     properties:
@@ -1888,7 +1891,7 @@ definitions:
       address_hash:
         type: string
         description: |-
-          Absent iff `type == TOKEN_TYPE_NATIVE`: a native side has no token
+          Null iff `type == NATIVE`: a native side has no token
           contract, so it must not carry the zero-address sentinel some indexers
           (xDai) write internally for it.
       name:
@@ -1904,16 +1907,13 @@ definitions:
   v1TokenType:
     type: string
     enum:
-      - TOKEN_TYPE_UNSPECIFIED
-      - TOKEN_TYPE_ERC_20
-      - TOKEN_TYPE_NATIVE
-      - TOKEN_TYPE_ERC_721
-      - TOKEN_TYPE_ERC_1155
-    default: TOKEN_TYPE_UNSPECIFIED
-    description: |-
-      Per-side classification of a TokenInfo. UNSPECIFIED is the proto3 default,
-      so a transfer whose type column was never set (e.g. Avalanche today)
-      reports it rather than being silently labelled ERC_20.
+      - UNSPECIFIED
+      - ERC20
+      - NATIVE
+      - ERC721
+      - ERC1155
+    default: UNSPECIFIED
+    description: Classification stored with each token. UNSPECIFIED is the proto3 default.
 securityDefinitions:
   ApiKeyAuth:
     type: apiKey
