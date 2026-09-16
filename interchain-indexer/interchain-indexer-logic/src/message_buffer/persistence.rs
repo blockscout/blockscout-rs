@@ -16,7 +16,7 @@ use std::collections::HashSet;
 
 use super::{BufferItem, Consolidate, ConsolidatedMessage, Key};
 use crate::{
-    bulk::{batched_upsert, run_in_batches},
+    bulk::{self, batched_upsert, run_in_chunks},
     message_buffer::cursor::{BridgeId, Cursor, CursorBlocksBuilder, Cursors},
     stats::metrics::STATS_TRANSFER_ASSET_LINKAGE_UNSET_TOTAL,
 };
@@ -265,7 +265,9 @@ async fn delete_replaced_messages(
         .into_iter()
         .collect();
 
-    run_in_batches(&keys, 2, |batch| async {
+    // Row-valued `IN`: size by `ROW_IN_KEY_CHUNK`, not by bind width — see
+    // `bulk::ROW_IN_KEY_CHUNK`.
+    run_in_chunks(&keys, bulk::ROW_IN_KEY_CHUNK, |batch| async {
         crosschain_messages::Entity::delete_many()
             .filter(
                 Expr::tuple([
@@ -411,8 +413,10 @@ pub(super) async fn remove_finalized_from_pending(
         .map(|k| (k.message_id, k.bridge_id as i32))
         .collect();
 
-    // row width = 2 (message_id, bridge_id)
-    run_in_batches(&keys, 2, |batch| async {
+    // Row-valued `IN`: size by `ROW_IN_KEY_CHUNK`, not by bind width — see
+    // `bulk::ROW_IN_KEY_CHUNK`. This is the statement that kept overflowing the
+    // planner stack at the old `PG_BIND_PARAM_LIMIT / 2` sizing.
+    run_in_chunks(&keys, bulk::ROW_IN_KEY_CHUNK, |batch| async {
         pending_messages::Entity::delete_many()
             .filter(
                 Expr::tuple([
@@ -540,7 +544,10 @@ mod tests {
         prelude::BigDecimal,
     };
 
-    use super::{ConsolidatedMessage, flush_to_final_storage};
+    use super::{
+        BridgeId, ConsolidatedMessage, Key, delete_replaced_messages, flush_to_final_storage,
+        remove_finalized_from_pending,
+    };
     use crate::{InterchainDatabase, test_utils::init_db};
 
     const BRIDGE_ID: i32 = 7;
@@ -1341,5 +1348,54 @@ mod tests {
         let row = load(&db).await;
         assert_eq!(row.dst_chain_id, None);
         assert_eq!(row.protocol_metadata, None);
+    }
+
+    /// Cohort size that exceeds PostgreSQL's planner stack for a row-valued
+    /// `IN` (measured threshold: 7 500-8 000 tuples at the default
+    /// `max_stack_depth = 2048kB`), while staying far below the bind-parameter
+    /// ceiling that the old `run_in_batches(&keys, 2, …)` sizing respected.
+    ///
+    /// That combination is the point: these statements were *bind-safe* and
+    /// still crashed. Under the old sizing the whole cohort went out as one
+    /// 10 000-tuple statement and Postgres answered `stack depth limit
+    /// exceeded`; `ROW_IN_KEY_CHUNK` splits it into five statements instead.
+    const OVER_STACK_DEPTH_COHORT: i64 = 10_000;
+
+    /// Regression test for the statement that crashed buffer maintenance 72
+    /// times during the 2026-09-16 verification run. No rows are seeded — the
+    /// failure is in parsing/planning, so an empty table reproduces it.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_remove_finalized_from_pending_cohort_over_stack_depth() {
+        let test_db = init_db("remove_finalized_pending_over_stack_depth").await;
+        let db = InterchainDatabase::new(test_db.client());
+
+        let keys: Vec<Key> = (1..=OVER_STACK_DEPTH_COHORT)
+            .map(|id| Key::new(id, BRIDGE_ID as BridgeId))
+            .collect();
+
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        remove_finalized_from_pending(&tx, &keys).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    /// Sibling of the above: same row-valued `IN` DELETE shape, same cohort,
+    /// different table. It never fired in production only because replacement
+    /// cohorts stayed small — it carried the identical exposure.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_delete_replaced_messages_cohort_over_stack_depth() {
+        let test_db = init_db("delete_replaced_messages_over_stack_depth").await;
+        let db = InterchainDatabase::new(test_db.client());
+
+        let pks: Vec<(i64, i32)> = (1..=OVER_STACK_DEPTH_COHORT)
+            .map(|id| (id, BRIDGE_ID))
+            .collect();
+
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        delete_replaced_messages(&tx, &pks).await.unwrap();
+        tx.commit().await.unwrap();
     }
 }

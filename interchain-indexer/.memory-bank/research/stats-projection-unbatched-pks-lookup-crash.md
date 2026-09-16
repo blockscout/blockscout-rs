@@ -170,6 +170,24 @@ See `.memory-bank/rules/database.md` §Batching for the corrected rule.**
   across consecutive maintenance cycles)
 - both errors share the same log line and root cause; either should be
   treated as this bug, not as independent incidents
+- **`Query Error` vs `Execution Error` tells you which statement failed, and
+  is the fastest way to localise a recurrence.** SeaORM prefixes the message
+  with `Query Error` for `find()`/`all()` and `Execution Error` for `exec()`.
+  The 2026-09-16 verification run failed 72 times with `Execution Error:
+  error returned from database: stack depth limit exceeded` — a *write*, not
+  the `SELECT` the original incident blamed. Do not assume a recurrence is the
+  same statement because the database error text matches.
+- **Get the statement text from the Postgres server log, not the service
+  log.** sqlx only logs SQL for statements that cross the slow-statement
+  threshold, so a fast-failing statement never appears. PostgreSQL logs
+  `STATEMENT:` next to every `ERROR:`, which named the culprit immediately:
+  `docker logs <pg-container> | grep -A1 "stack depth limit exceeded" | grep STATEMENT`.
+  The `$N` placeholders in that text also give the tuple count directly — the
+  failing DELETE carried 16 006 binds, i.e. 8 003 tuples.
+- the slow-statement warnings that precede the crash are a **red herring for
+  localisation**: they were emitted by the (correctly chunked, 2 000-tuple)
+  stats `SELECT`, which was slow but never failed, while the statement that
+  actually failed was fast enough to never be logged by sqlx at all
 - **not** the cause: a separate, expected `WARN sqlx::query: slow statement`
   for the batched `crosschain_messages` upsert (`bulk.rs`/`persistence.rs`)
   was initially suspected but ruled out — that upsert is a flat multi-row
@@ -257,31 +275,53 @@ Update this note when:
   (`remove_finalized_from_pending`) are both 32 767-tuple row-valued `IN`
   DELETEs in the same maintenance transaction, fed by the same cohort —
   bind-safe but carrying the identical `OR`-tree stack-depth exposure.
-  **Deliberately deferred, still unfixed** — see Deferred below.
+  Deferred from the first fix — **and that deferral was wrong**:
+  `remove_finalized_from_pending` was the statement that kept crashing
+  maintenance afterwards. Fixed in the follow-up; see Failure Modes below.
   `persistence.rs:447` (`fetch_cursors`) is also an unchunked row-valued `IN`
   but is config-sized (bounded by `(bridge_id, chain_id)` pairs in config,
   not by cohort size), and is audited **safe** — no action needed.
-- the exact tuple-count threshold at which `stack depth limit exceeded`
-  becomes reachable in this repo's production Postgres configuration (depends
-  on `max_stack_depth` and query shape/joins; not yet empirically pinned down
-  beyond "well under 40632 tuples, since that cohort hit the bind-count
-  ceiling instead"). Still open — the 2026-09-16 fix does not resolve this
-  empirically, it sizes `ROW_IN_KEY_CHUNK` with an order-of-magnitude margin
-  below the known upper bound instead.
+- ~~the exact tuple-count threshold at which `stack depth limit exceeded`
+  becomes reachable~~ — **resolved empirically (2026-09-16)**, by issuing
+  `PREPARE` statements of growing tuple count against this repo's Postgres at
+  the default `max_stack_depth = 2048kB`:
+
+  | tuples | 2-column key | 5-column key |
+  |--------|--------------|--------------|
+  | 6 000  | ok           | ok           |
+  | 7 500  | ok           | —            |
+  | 8 000  | **overflow** | **overflow** |
+
+  The threshold sits between **7 500 and 8 000 tuples**, and — the useful part
+  — **it is set by the length of the `OR`-list, not the width of each tuple**.
+  A 5-column key overflows at the same tuple count as a 2-column one, so a
+  single count-based constant covers every key shape and there is no need to
+  scale `ROW_IN_KEY_CHUNK` per key width. `ROW_IN_KEY_CHUNK = 2_000` therefore
+  keeps a measured ~3.8x margin, and the old `PG_BIND_PARAM_LIMIT / 2` sizing
+  (32 767 tuples) was ~4x *over* the ceiling. The threshold still moves with
+  `max_stack_depth` and the deployment's actual thread stack limit, so
+  re-measure before raising the constant.
 
 ## Deferred
 
 Filed during the 2026-09-16 fix (`stats-projection-unbatched-cohort-queries`),
 deliberately left out of that change to keep the hotfix diff tight:
 
-- **`message_buffer/persistence.rs:268` (`delete_replaced_messages`) and
-  `:415` (`remove_finalized_from_pending`)** — both `run_in_batches(&keys, 2,
-  …)` wrapping a row-valued `IN` DELETE at 32 767 tuples per chunk. Bind-safe,
-  but carrying the identical `OR`-tree stack-depth exposure, in the same
-  maintenance transaction, fed by the same cohort. Two one-line changes to
-  `run_in_chunks(&keys, bulk::ROW_IN_KEY_CHUNK, …)` once those existed in
-  `bulk.rs` — which the 2026-09-16 fix created, specifically so this follow-up
-  would not have to add them itself.
+- ~~**`message_buffer/persistence.rs:268` (`delete_replaced_messages`) and
+  `:415` (`remove_finalized_from_pending`)**~~ — **no longer deferred; this
+  deferral was the mistake that left the incident unfixed.** Both were
+  `run_in_batches(&keys, 2, …)` around a row-valued `IN` DELETE at 32 767
+  tuples per chunk, and `:415` was the statement that crashed maintenance 72
+  times in the post-fix verification run. Both now use
+  `run_in_chunks(&keys, bulk::ROW_IN_KEY_CHUNK, …)`.
+
+  **Lesson for future triage:** the first fix was scoped by asking which
+  queries were *unchunked*, then trimmed by YAGNI to the loudest of them. The
+  right question was which statements are **row-valued `IN` at all** —
+  `DELETE` and `UPDATE` just as much as `SELECT`, already-chunked just as much
+  as unchunked, since `PG_BIND_PARAM_LIMIT / width` chunking is itself ~4x
+  over the ceiling. Reach for `grep in_tuples`, not for a list of known-broken
+  call sites.
 - a cohort capacity cap on the hot message buffer
   (`message_buffer/buffer.rs`, `plan_maintenance`) — the only fix that
   addresses transaction *duration* under a pathological cohort; chunking

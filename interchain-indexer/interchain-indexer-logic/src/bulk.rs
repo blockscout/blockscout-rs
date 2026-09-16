@@ -22,17 +22,22 @@ pub const PG_BIND_PARAM_LIMIT: usize = u16::MAX as usize;
 /// while parsing and planning, so the binding ceiling is `max_stack_depth`, not
 /// the bind-parameter count, and no bind arithmetic can express it. Sizing by
 /// `PG_BIND_PARAM_LIMIT / width` is bind-safe but *not* stack-safe: it leaves a
-/// row-valued `IN` at up to 32 767 tuples, the same order as the cohorts that
-/// overflowed the planner stack in production.
+/// row-valued `IN` at up to 32 767 tuples, roughly four times over the measured
+/// ceiling.
 /// See `.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md`.
 ///
-/// At 2 000 keys the widest tuple in this codebase (5 columns) uses 10 000 of
-/// the 65 535 available bind parameters (~15%), leaving headroom no realistic
-/// bridge/chain config can consume. The stack-depth threshold itself was never
-/// measured — it is only bounded from above at ~40 600 tuples, inferred from the
-/// later bind-count failure on a larger cohort — so 2 000 is an order of
-/// magnitude below that *upper bound*, not below a measured limit. Treat this
-/// constant as a margin argument, and do not raise it without measuring.
+/// **Measured** against this repo's PostgreSQL at the default
+/// `max_stack_depth = 2048kB`: a parameterised row-valued `IN` overflows the
+/// planner stack between 7 500 and 8 000 tuples. The threshold is set by the
+/// *length* of the `OR`-list, not the width of each tuple — a 5-column key
+/// overflows at the same count as a 2-column one — so one constant covers every
+/// shape. 2 000 keeps a ~3.8x margin. At that size the widest tuple here
+/// (5 columns) uses 10 000 of the 65 535 bind parameters (~15%), so bind count
+/// is never the binding constraint.
+///
+/// Do not raise this without re-measuring: the margin is against a threshold
+/// that moves with `max_stack_depth` and with the deployment's actual thread
+/// stack limit.
 ///
 /// Use this for row-valued `IN` only. For flat statements (`INSERT … VALUES`,
 /// single-column `is_in()`), bind arithmetic is correct — use
