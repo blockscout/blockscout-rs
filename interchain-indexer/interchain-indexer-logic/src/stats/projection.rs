@@ -1736,6 +1736,20 @@ pub async fn project_transfers_batch(
         *src = resolve_merged(&merged_away, *src);
         *dst = resolve_merged(&merged_away, *dst);
     }
+    // The de-duplication set is remapped for the same reason, and it is easy to
+    // forget: guard 2 records a pair using the ids that were current when *its*
+    // merge ran, but a later merge in the same batch can move both of them on.
+    // Comparing a post-remap pair against pre-remap keys would report one
+    // underlying contradiction twice, under two different labels.
+    reported_contradiction_pairs = reported_contradiction_pairs
+        .into_iter()
+        .map(|(src, dst)| {
+            (
+                resolve_merged(&merged_away, src),
+                resolve_merged(&merged_away, dst),
+            )
+        })
+        .collect();
 
     // Contradiction guard 1, run post-remap (see the module docs / ADR-011 for
     // why it cannot run inline in `ensure_conversion_asset_for_transfer`): a

@@ -643,6 +643,37 @@ mod tests {
         id
     }
 
+    /// Adds one **cross-asset** edge: `src_asset` on `src_chain` moving to a
+    /// *different* `dst_asset` on `dst_chain`. Every other helper here seeds
+    /// `src = dst`, which is the mirror shape; this is the converting-bridge
+    /// shape the binary edge key exists for.
+    #[allow(clippy::too_many_arguments)]
+    async fn add_cross_asset_edge(
+        db: &DatabaseConnection,
+        src_asset: i64,
+        dst_asset: i64,
+        bridge_id: i32,
+        src_chain: i64,
+        dst_chain: i64,
+        count: i64,
+    ) {
+        seed_bridge(db, bridge_id).await;
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            src_stats_asset_id: Set(src_asset),
+            dst_stats_asset_id: Set(dst_asset),
+            bridge_id: Set(bridge_id),
+            src_chain_id: Set(src_chain),
+            dst_chain_id: Set(dst_chain),
+            transfers_count: Set(count),
+            cumulative_amount: Set(BigDecimal::from(0u64)),
+            amount_side: Set(EdgeAmountSide::Source),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
     /// Adds edges on `bridge_id` to an existing stats asset.
     async fn add_asset_edges_on_bridge(
         db: &DatabaseConnection,
@@ -1407,6 +1438,84 @@ mod tests {
         let both = query(Some(&[1, 2])).await;
         assert_eq!(both.len(), 1);
         assert_eq!(both[0].output_transfers_count, 8);
+    }
+
+    /// The xDai shape, at the read boundary: three assets joined by four
+    /// cross-asset routes. Every other read-path test seeds `src = dst`, so
+    /// without this one the capability the binary edge key was introduced for
+    /// is never exercised through the query at all.
+    ///
+    /// Focal chain `1` must yield the two Ethereum assets separately -- that
+    /// separation is the whole point of the task. Focal chain `100` must yield
+    /// one `xDAI` row aggregating both incoming routes, because on Gnosis they
+    /// really are one coin.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_cross_asset_edges_split_by_focal_chain() {
+        let g = init_db("bridged_tokens_cross_asset_focal").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 100]).await;
+        seed_bridge(db.as_ref(), 3).await;
+
+        let dai = seed_asset_edges_on_bridge(db.as_ref(), Some("DAI".into()), 3, vec![]).await;
+        let usds = seed_asset_edges_on_bridge(db.as_ref(), Some("USDS".into()), 3, vec![]).await;
+        let xdai = seed_asset_edges_on_bridge(db.as_ref(), Some("xDAI".into()), 3, vec![]).await;
+
+        // Eth -> Gno: both Ethereum assets converge on the one Gnosis asset.
+        add_cross_asset_edge(db.as_ref(), dai, xdai, 3, 1, 100, 7).await;
+        add_cross_asset_edge(db.as_ref(), usds, xdai, 3, 1, 100, 5).await;
+        // Gno -> Eth: the user picks which Ethereum asset to receive.
+        add_cross_asset_edge(db.as_ref(), xdai, dai, 3, 100, 1, 2).await;
+        add_cross_asset_edge(db.as_ref(), xdai, usds, 3, 100, 1, 3).await;
+
+        let query = |focal: i64| {
+            let db = db.clone();
+            async move {
+                list_bridged_token_stats_for_chain(
+                    db.as_ref(),
+                    focal,
+                    None,
+                    None,
+                    None,
+                    StatsListQuery {
+                        sort: BridgedTokensSortField::Name,
+                        order: StatsSortOrder::Asc,
+                        page_size: 50,
+                        last_page: false,
+                        input_pagination: None,
+                        q: None,
+                    },
+                )
+                .await
+                .unwrap()
+                .0
+            }
+        };
+
+        let eth = query(1).await;
+        assert_eq!(
+            eth.iter().map(|r| r.name.clone()).collect::<Vec<_>>(),
+            vec![Some("DAI".to_string()), Some("USDS".to_string())],
+            "focal chain 1 must list the two Ethereum assets separately, and must not \
+             list xDAI, which has no token there"
+        );
+        // DAI: 7 out to Gnosis, 2 back in. USDS: 5 out, 3 in.
+        assert_eq!(eth[0].output_transfers_count, 7);
+        assert_eq!(eth[0].input_transfers_count, 2);
+        assert_eq!(eth[0].total_transfers_count, 9);
+        assert_eq!(eth[1].output_transfers_count, 5);
+        assert_eq!(eth[1].input_transfers_count, 3);
+        assert_eq!(eth[1].total_transfers_count, 8);
+
+        let gno = query(100).await;
+        assert_eq!(
+            gno.iter().map(|r| r.name.clone()).collect::<Vec<_>>(),
+            vec![Some("xDAI".to_string())],
+            "focal chain 100 must collapse both incoming routes into the single Gnosis asset"
+        );
+        assert_eq!(gno[0].input_transfers_count, 12, "7 from DAI + 5 from USDS");
+        assert_eq!(gno[0].output_transfers_count, 5, "2 to DAI + 3 to USDS");
+        assert_eq!(gno[0].total_transfers_count, 17);
     }
 
     #[tokio::test]
