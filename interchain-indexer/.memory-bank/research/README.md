@@ -147,6 +147,11 @@ Small topics may keep some sections brief.
   `AmountLimitExceeded` and `outOfLimitAmount()` must not be read as stuck
   funds, the full implementation upgrade history of both proxies, and what would
   have to be new versus reused. Pre-implementation: no xDai indexer exists yet
+- `stats-projection-unbatched-pks-lookup-crash.md` — production incident:
+  `project_messages_batch`'s unchunked composite-key `IN` lookup crashes
+  buffer maintenance two ways (`stack depth limit exceeded` and `too many
+  arguments for query`) depending on flushed-cohort size, why it differs from
+  the documented bind-limit gotcha, and the intended fix
 - Follow-up: migrate Avalanche's inline cleanup guard / EVM log orchestration
   onto `interchain-indexer-logic/src/indexer/cleanup_guard.rs` and
   `interchain-indexer-logic/src/indexer/evm/`.

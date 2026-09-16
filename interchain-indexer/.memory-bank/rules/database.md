@@ -48,6 +48,46 @@ for batch in items.chunks(batch_size) {
 
 Use `batched_upsert()` or `run_in_batches()` from `bulk.rs`.
 
+### Two different ceilings: flat statements vs. row-valued `IN`
+
+The `PG_BIND_PARAM_LIMIT / columns_per_row` rule above is correct **only for
+flat statements** — it does not generalize to every shape that looks like a
+batching problem. There are two independent ceilings, and confusing them is
+exactly how a production incident happened (see
+`.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md`).
+
+- **Flat statements** — `INSERT ... VALUES`, single-column `is_in()`.
+  PostgreSQL folds these into a flat `ScalarArrayOpExpr`, so sizing by bind
+  count is correct. Use `batched_upsert()` / `run_in_batches()`. **But count
+  *all* binds carried by the statement, not just the id list** —
+  `col_expr(...add(1))`, `Expr::value(x)`, and filter constants each consume
+  one bind too, so `run_in_batches(&ids, 1, …)` on a statement with any other
+  bound value overflows before the id list alone would. `stats/projection.rs`
+  had exactly this bug at four `run_in_batches(&ids, 1, …)` sites carrying
+  `SrcStatsAssetId`/`DstStatsAssetId` values beyond the id list; the fix was
+  `run_in_batches(&ids, 4, …)`, not `1`.
+- **Row-valued `IN`** — `(a, b) IN ((...),(...))`, e.g. SeaORM's
+  `Expr::tuple([...]).in_tuples(...)`. PostgreSQL expands this into an
+  `OR`-tree of row comparisons and recurses over it while parsing and
+  planning, so the real ceiling is `max_stack_depth`, **not** the bind-param
+  count — and no bind arithmetic can express it.
+  `PG_BIND_PARAM_LIMIT / columns_per_row` is **bind-safe but not stack-safe**:
+  32 767 tuples in a 2-column row-`IN` is exactly the shape that overflowed a
+  production planner stack while using barely half the bind budget. Use
+  `bulk::ROW_IN_KEY_CHUNK` (a fixed, margin-justified constant — not derived
+  from `PG_BIND_PARAM_LIMIT`) and `bulk::run_in_chunks()` for the write side;
+  hand-roll a `for batch in keys.chunks(chunk) { ...; results.extend(...) }`
+  read-accumulator loop for the read side (`run_in_batches`'s closure cannot
+  lend out a mutable accumulator). This applies equally to `SELECT`,
+  `UPDATE`, and `DELETE` row-valued `IN` statements — chunk the **load**,
+  never the aggregation that runs on top of it, when the query result feeds a
+  cross-row aggregation (see `stats/projection.rs`'s
+  `project_messages_batch` / `project_transfers_batch` for the
+  concatenate-then-aggregate pattern this requires).
+
+Never "simplify" a row-valued `IN` back to `PG_BIND_PARAM_LIMIT / width` —
+that is bind arithmetic solving the wrong ceiling.
+
 ## Entity Generation
 
 - Auto-generated entities go in `interchain-indexer-entity/src/codegen/`

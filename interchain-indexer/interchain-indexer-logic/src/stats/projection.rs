@@ -23,7 +23,7 @@ use sea_orm::{
     sea_query::{Expr, OnConflict},
 };
 
-use crate::bulk::run_in_batches;
+use crate::bulk::{ROW_IN_KEY_CHUNK, run_in_batches, run_in_chunks};
 
 use super::{
     indexed_chains::{
@@ -89,45 +89,63 @@ pub async fn project_messages_batch(
     message_pks: &[(i64, i32)], // [(message_id, bridge_id)]
     indexed: &IndexedChains,
 ) -> Result<usize, DbErr> {
+    project_messages_batch_with_chunk(tx, message_pks, indexed, ROW_IN_KEY_CHUNK).await
+}
+
+/// Chunk-size-injectable variant. `pub(crate)` purely so the chunk-boundary
+/// equivalence tests in `database.rs` can drive it at a tiny chunk size.
+pub(crate) async fn project_messages_batch_with_chunk(
+    tx: &DatabaseTransaction,
+    message_pks: &[(i64, i32)], // [(message_id, bridge_id)]
+    indexed: &IndexedChains,
+    chunk: usize,
+) -> Result<usize, DbErr> {
     if message_pks.is_empty() {
         return Ok(0);
     }
     let unique: HashSet<(i64, i32)> = message_pks.iter().copied().collect();
     let pks: Vec<(i64, i32)> = unique.into_iter().collect();
+    let chunk = chunk.max(1);
 
-    let rows = crosschain_messages::Entity::find()
-        .join(
-            JoinType::InnerJoin,
-            crosschain_messages::Relation::Bridges.def(),
-        )
-        .filter(
-            Expr::tuple([
-                Expr::col((crosschain_messages::Entity, crosschain_messages::Column::Id)).into(),
-                Expr::col((
-                    crosschain_messages::Entity,
-                    crosschain_messages::Column::BridgeId,
-                ))
-                .into(),
-            ])
-            .in_tuples(pks.iter().copied()),
-        )
-        .filter(
-            Expr::col((
-                crosschain_messages::Entity,
-                crosschain_messages::Column::StatsProcessed,
-            ))
-            .eq(0i16),
-        )
-        .filter(message_countable_condition(indexed))
-        .filter(
-            Expr::col((
-                crosschain_messages::Entity,
-                crosschain_messages::Column::DstChainId,
-            ))
-            .is_not_null(),
-        )
-        .all(tx)
-        .await?;
+    let mut rows = Vec::with_capacity(pks.len());
+    for batch in pks.chunks(chunk) {
+        rows.extend(
+            crosschain_messages::Entity::find()
+                .join(
+                    JoinType::InnerJoin,
+                    crosschain_messages::Relation::Bridges.def(),
+                )
+                .filter(
+                    Expr::tuple([
+                        Expr::col((crosschain_messages::Entity, crosschain_messages::Column::Id))
+                            .into(),
+                        Expr::col((
+                            crosschain_messages::Entity,
+                            crosschain_messages::Column::BridgeId,
+                        ))
+                        .into(),
+                    ])
+                    .in_tuples(batch.iter().copied()),
+                )
+                .filter(
+                    Expr::col((
+                        crosschain_messages::Entity,
+                        crosschain_messages::Column::StatsProcessed,
+                    ))
+                    .eq(0i16),
+                )
+                .filter(message_countable_condition(indexed))
+                .filter(
+                    Expr::col((
+                        crosschain_messages::Entity,
+                        crosschain_messages::Column::DstChainId,
+                    ))
+                    .is_not_null(),
+                )
+                .all(tx)
+                .await?,
+        );
+    }
 
     if rows.is_empty() {
         return Ok(0);
@@ -213,7 +231,7 @@ pub async fn project_messages_batch(
     }
 
     let mark: Vec<(i64, i32)> = rows.iter().map(|m| (m.id, m.bridge_id)).collect();
-    run_in_batches(&mark, 2, |batch| async {
+    run_in_chunks(&mark, chunk, |batch| async {
         crosschain_messages::Entity::update_many()
             .col_expr(
                 crosschain_messages::Column::StatsProcessed,
@@ -250,14 +268,14 @@ type MessageKey = (i64, i32);
 async fn load_token_asset_map(
     tx: &DatabaseTransaction,
     pairs: &HashSet<TokenKey>,
+    chunk: usize,
 ) -> Result<HashMap<TokenKey, i64>, DbErr> {
     if pairs.is_empty() {
         return Ok(HashMap::new());
     }
     let list: Vec<TokenKey> = pairs.iter().cloned().collect();
-    let batch_size = crate::bulk::PG_BIND_PARAM_LIMIT / 2;
     let mut map = HashMap::new();
-    for batch in list.chunks(batch_size.max(1)) {
+    for batch in list.chunks(chunk.max(1)) {
         let rows = stats_asset_tokens::Entity::find()
             .filter(
                 Expr::tuple([
@@ -279,14 +297,14 @@ async fn load_token_asset_map(
 async fn load_token_rows_map(
     tx: &DatabaseTransaction,
     pairs: &HashSet<TokenKey>,
+    chunk: usize,
 ) -> Result<HashMap<TokenKey, tokens::Model>, DbErr> {
     if pairs.is_empty() {
         return Ok(HashMap::new());
     }
     let list: Vec<TokenKey> = pairs.iter().cloned().collect();
-    let batch_size = crate::bulk::PG_BIND_PARAM_LIMIT / 2;
     let mut map = HashMap::new();
-    for batch in list.chunks(batch_size.max(1)) {
+    for batch in list.chunks(chunk.max(1)) {
         let rows = tokens::Entity::find()
             .filter(
                 Expr::tuple([
@@ -307,14 +325,14 @@ async fn load_token_rows_map(
 async fn load_message_rows_map(
     tx: &DatabaseTransaction,
     pairs: &HashSet<MessageKey>,
+    chunk: usize,
 ) -> Result<HashMap<MessageKey, crosschain_messages::Model>, DbErr> {
     if pairs.is_empty() {
         return Ok(HashMap::new());
     }
     let list: Vec<MessageKey> = pairs.iter().copied().collect();
-    let batch_size = crate::bulk::PG_BIND_PARAM_LIMIT / 2;
     let mut map = HashMap::new();
-    for batch in list.chunks(batch_size.max(1)) {
+    for batch in list.chunks(chunk.max(1)) {
         let rows = crosschain_messages::Entity::find()
             .filter(
                 Expr::tuple([
@@ -1299,6 +1317,7 @@ type EdgeKey = (i64, i64, i32, i64, i64);
 async fn load_stats_asset_edges_for_keys(
     tx: &DatabaseTransaction,
     keys: &[EdgeKey],
+    chunk: usize,
 ) -> Result<HashMap<EdgeKey, stats_asset_edges::Model>, DbErr> {
     if keys.is_empty() {
         return Ok(HashMap::new());
@@ -1308,10 +1327,8 @@ async fn load_stats_asset_edges_for_keys(
         uniq.insert(*k);
     }
     let list: Vec<EdgeKey> = uniq.into_iter().collect();
-    // Five bind params per tuple now that the key carries both asset columns.
-    let batch_size = (crate::bulk::PG_BIND_PARAM_LIMIT / 5).max(1);
     let mut out = HashMap::new();
-    for batch in list.chunks(batch_size) {
+    for batch in list.chunks(chunk.max(1)) {
         let rows = stats_asset_edges::Entity::find()
             .filter(
                 Expr::tuple([
@@ -1549,53 +1566,79 @@ pub async fn project_transfers_batch(
     transfer_ids: &[i64],
     indexed: &IndexedChains,
 ) -> Result<usize, DbErr> {
+    project_transfers_batch_with_chunk(tx, transfer_ids, indexed, ROW_IN_KEY_CHUNK).await
+}
+
+/// Chunk-size-injectable variant. `pub(crate)` purely so the chunk-boundary
+/// equivalence tests in `database.rs` can drive it at a tiny chunk size.
+///
+/// ⚠️ Only the loads inside this function may be chunked. Everything from
+/// `transfers.is_empty()` onward aggregates across the entire cohort (the
+/// `merged_away` union-find and its post-loop transitive remap,
+/// `reported_contradiction_pairs`, `edge_acc`, and an unconditioned
+/// `stats_asset_edges` insert with no `on_conflict`) and **must run exactly
+/// once per cohort**. Never split `transfer_ids` at the caller and call this
+/// function once per chunk — that silently corrupts asset identity across
+/// chunk boundaries.
+pub(crate) async fn project_transfers_batch_with_chunk(
+    tx: &DatabaseTransaction,
+    transfer_ids: &[i64],
+    indexed: &IndexedChains,
+    chunk: usize,
+) -> Result<usize, DbErr> {
     if transfer_ids.is_empty() {
         return Ok(0);
     }
     let unique_ids: HashSet<i64> = transfer_ids.iter().copied().collect();
     let mut ids: Vec<i64> = unique_ids.into_iter().collect();
     ids.sort_unstable();
+    let chunk = chunk.max(1);
 
-    let transfers = crosschain_transfers::Entity::find()
-        .join(
-            JoinType::InnerJoin,
-            crosschain_transfers::Relation::CrosschainMessages.def(),
-        )
-        .join(
-            JoinType::InnerJoin,
-            crosschain_messages::Relation::Bridges.def(),
-        )
-        .filter(transfer_identity_ready_condition(indexed))
-        .filter(
-            Condition::any()
-                .add(
-                    Expr::col((
-                        crosschain_transfers::Entity,
-                        crosschain_transfers::Column::StatsProcessed,
-                    ))
-                    .gt(0i16),
+    let mut transfers = Vec::with_capacity(ids.len());
+    for batch in ids.chunks(chunk) {
+        transfers.extend(
+            crosschain_transfers::Entity::find()
+                .join(
+                    JoinType::InnerJoin,
+                    crosschain_transfers::Relation::CrosschainMessages.def(),
                 )
-                .add(
-                    Condition::all()
+                .join(
+                    JoinType::InnerJoin,
+                    crosschain_messages::Relation::Bridges.def(),
+                )
+                .filter(transfer_identity_ready_condition(indexed))
+                .filter(
+                    Condition::any()
                         .add(
                             Expr::col((
                                 crosschain_transfers::Entity,
                                 crosschain_transfers::Column::StatsProcessed,
                             ))
-                            .eq(0i16),
+                            .gt(0i16),
                         )
-                        .add(message_countable_condition(indexed)),
-                ),
-        )
-        .filter(
-            Expr::col((
-                crosschain_transfers::Entity,
-                crosschain_transfers::Column::Id,
-            ))
-            .is_in(ids.clone()),
-        )
-        .all(tx)
-        .await?;
+                        .add(
+                            Condition::all()
+                                .add(
+                                    Expr::col((
+                                        crosschain_transfers::Entity,
+                                        crosschain_transfers::Column::StatsProcessed,
+                                    ))
+                                    .eq(0i16),
+                                )
+                                .add(message_countable_condition(indexed)),
+                        ),
+                )
+                .filter(
+                    Expr::col((
+                        crosschain_transfers::Entity,
+                        crosschain_transfers::Column::Id,
+                    ))
+                    .is_in(batch.iter().copied()),
+                )
+                .all(tx)
+                .await?,
+        );
+    }
 
     // Deferral bookkeeping: any requested id that the eligibility filters above
     // did not return is deferred, not lost — it stays `stats_processed = 0` and
@@ -1610,18 +1653,20 @@ pub async fn project_transfers_batch(
             .filter(|id| !projected_ids.contains(id))
             .collect();
         if !deferred_ids.is_empty() {
-            let deferred_rows = crosschain_transfers::Entity::find()
-                .filter(crosschain_transfers::Column::Id.is_in(deferred_ids))
-                // Exclude rows a concurrent writer already finished between the
-                // caller's initial candidate selection and this transaction:
-                // those are done, not deferred, and must not be metric-counted.
-                .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
-                .all(tx)
-                .await?;
-            for t in &deferred_rows {
-                STATS_TRANSFERS_DEFERRED_TOTAL
-                    .with_label_values(&[deferral_reason(t, indexed)])
-                    .inc();
+            for batch in deferred_ids.chunks(chunk) {
+                let deferred_rows = crosschain_transfers::Entity::find()
+                    .filter(crosschain_transfers::Column::Id.is_in(batch.iter().copied()))
+                    // Exclude rows a concurrent writer already finished between the
+                    // caller's initial candidate selection and this transaction:
+                    // those are done, not deferred, and must not be metric-counted.
+                    .filter(crosschain_transfers::Column::StatsProcessed.eq(0i16))
+                    .all(tx)
+                    .await?;
+                for t in &deferred_rows {
+                    STATS_TRANSFERS_DEFERRED_TOTAL
+                        .with_label_values(&[deferral_reason(t, indexed)])
+                        .inc();
+                }
             }
         }
     }
@@ -1630,7 +1675,6 @@ pub async fn project_transfers_batch(
         return Ok(0);
     }
 
-    let mut transfers = transfers;
     transfers.sort_by_key(|t| t.id);
 
     let mut pairs: HashSet<TokenKey> = HashSet::new();
@@ -1644,9 +1688,9 @@ pub async fn project_transfers_batch(
         }
         message_keys.insert((t.message_id, t.bridge_id));
     }
-    let mut token_to_asset = load_token_asset_map(tx, &pairs).await?;
-    let token_rows = load_token_rows_map(tx, &pairs).await?;
-    let message_rows = load_message_rows_map(tx, &message_keys).await?;
+    let mut token_to_asset = load_token_asset_map(tx, &pairs, chunk).await?;
+    let token_rows = load_token_rows_map(tx, &pairs, chunk).await?;
+    let message_rows = load_message_rows_map(tx, &message_keys, chunk).await?;
 
     use std::collections::hash_map::Entry;
 
@@ -1786,7 +1830,7 @@ pub async fn project_transfers_batch(
         }
     }
 
-    let existing_edges = load_stats_asset_edges_for_keys(tx, &edge_key_per_transfer).await?;
+    let existing_edges = load_stats_asset_edges_for_keys(tx, &edge_key_per_transfer, chunk).await?;
     let mut edge_acc: HashMap<EdgeKey, EdgeAccum> = HashMap::new();
     let mut decimals_conflict_ids: Vec<i64> = Vec::new();
     // Paired with `decimals_conflict_ids`: unlike a mapping conflict, a
@@ -1999,7 +2043,8 @@ pub async fn project_transfers_batch(
         by_pair.entry(pair).or_default().push(t.id);
     }
     for ((src, dst), ids) in by_pair {
-        run_in_batches(&ids, 1, |batch| async {
+        // width 4, not 1: this statement carries bound values beyond the id list.
+        run_in_batches(&ids, 4, |batch| async {
             crosschain_transfers::Entity::update_many()
                 .col_expr(
                     crosschain_transfers::Column::SrcStatsAssetId,
@@ -2032,7 +2077,8 @@ pub async fn project_transfers_batch(
     // there is no id to write. Both asset columns `IS NULL` after this update
     // means exactly that — identity unknown.
     if !skipped_ids.is_empty() {
-        run_in_batches(&skipped_ids, 1, |batch| async {
+        // width 4, not 1: this statement carries bound values beyond the id list.
+        run_in_batches(&skipped_ids, 4, |batch| async {
             crosschain_transfers::Entity::update_many()
                 .col_expr(
                     crosschain_transfers::Column::StatsProcessed,
@@ -2081,7 +2127,8 @@ pub async fn project_transfers_batch(
                 .push(tid);
         }
         for ((src, dst), ids) in by_pair_decimals_conflict {
-            run_in_batches(&ids, 1, |batch| async {
+            // width 4, not 1: this statement carries bound values beyond the id list.
+            run_in_batches(&ids, 4, |batch| async {
                 crosschain_transfers::Entity::update_many()
                     .col_expr(
                         crosschain_transfers::Column::SrcStatsAssetId,
@@ -2118,7 +2165,8 @@ pub async fn project_transfers_batch(
             by_pair_repair.entry((src, dst)).or_default().push(tid);
         }
         for ((src, dst), ids) in by_pair_repair {
-            run_in_batches(&ids, 1, |batch| async {
+            // width 4, not 1: this statement carries bound values beyond the id list.
+            run_in_batches(&ids, 4, |batch| async {
                 crosschain_transfers::Entity::update_many()
                     .col_expr(
                         crosschain_transfers::Column::SrcStatsAssetId,

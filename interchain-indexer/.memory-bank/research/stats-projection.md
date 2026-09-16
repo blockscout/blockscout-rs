@@ -330,6 +330,16 @@ Primary places to inspect:
   authoritative production semantics for message counts are in
   `interchain-indexer-logic/src/stats/projection.rs` and
   `interchain-indexer-logic/src/stats/indexed_chains.rs`
+- `project_messages_batch`'s initial canonical-row reload used to issue an
+  unchunked composite-key `IN` (`Expr::tuple(...).in_tuples(pks)`) over the
+  full flushed cohort, crashing maintenance with `stack depth limit exceeded`
+  or `too many arguments for query` during large catch-up bursts. Fixed: every
+  row-valued `IN` in this module now chunks its **load** at
+  `bulk::ROW_IN_KEY_CHUNK`, leaving the aggregation bodies whole — note that
+  `project_transfers_batch` aggregates across the entire cohort and must never
+  be chunked at the function or caller level. See
+  `stats-projection-unbatched-pks-lookup-crash.md` for the incident writeup
+  and `.memory-bank/rules/database.md` §Batching for the sizing rule
 
 ## Change Triggers
 

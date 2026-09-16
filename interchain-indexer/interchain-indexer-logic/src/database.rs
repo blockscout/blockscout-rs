@@ -8568,6 +8568,489 @@ mod tests {
         assert_eq!(edge.cumulative_amount, BigDecimal::from(1887u64));
     }
 
+    // --- stats-projection-unbatched-cohort-queries: bound cohort-sized queries ---
+
+    // Test 1 (the test that would have caught the incident): the failure
+    // happens during statement construction, not row processing, so this needs
+    // no seeded message rows at all. On pre-fix code this fails in about a
+    // second with `too many arguments for query: ~80000`; after the fix it
+    // must return `Ok(0)`.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_messages_batch_cohort_above_bind_limit_returns_zero() {
+        let _db = init_db("stats_projection_messages_cohort_above_bind_limit").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        let pks: Vec<(i64, i32)> = (1..=40_000i64).map(|i| (i, 1i32)).collect();
+        let result = db
+            .transaction(|tx| {
+                let pks = pks.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_messages_batch(
+                        tx,
+                        &pks,
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(result, 0);
+    }
+
+    // Test 2 (mirror of Test 1, via `project_transfers_batch`): covers both
+    // broken queries #2 and #3 in one shot. With zero rows returned, the
+    // `transfer_ids.len() > transfers.len()` deferral branch is also taken, so
+    // all 70 000 synthetic ids flow into the deferral lookup as well (70 001
+    // binds pre-fix -> also rejected).
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_transfers_batch_cohort_above_bind_limit_returns_zero() {
+        let _db = init_db("stats_projection_transfers_cohort_above_bind_limit").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+
+        let ids: Vec<i64> = (1..=70_000i64).collect();
+        let result = db
+            .transaction(|tx| {
+                let ids = ids.clone();
+                Box::pin(async move {
+                    crate::stats::projection::project_transfers_batch(
+                        tx,
+                        &ids,
+                        &IndexedChains::AllIndexed,
+                    )
+                    .await
+                })
+            })
+            .await
+            .unwrap();
+        assert_eq!(result, 0);
+    }
+
+    // Test 3 (guards I1/I2 — chunk-boundary equivalence for
+    // `project_messages_batch_with_chunk`): the identical fixture is run twice,
+    // once at `chunk = 3` (three uneven chunks straddling both edge and day
+    // boundaries) and once at `chunk = usize::MAX` (effectively unchunked), in
+    // two separate databases, and the resulting row sets must be equal.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_messages_batch_chunked_matches_unchunked() {
+        type MessagesState = (
+            Vec<(i32, i64, i64, i64)>, // stats_messages: (bridge, src, dst, count)
+            Vec<(NaiveDate, i32, i64, i64, i64)>, // stats_messages_days
+            Vec<(i64, i16)>,           // (message id, stats_processed)
+            usize,                     // return value
+        );
+
+        async fn run_fixture(db_name: &str, chunk: usize) -> MessagesState {
+            let _db = init_db(db_name).await;
+            let conn = _db.client();
+            let db = conn.as_ref();
+            seed_minimal_bridge(db).await;
+
+            let day1 = NaiveDate::from_ymd_opt(2026, 3, 3).unwrap();
+            let day2 = NaiveDate::from_ymd_opt(2026, 3, 4).unwrap();
+            // Four distinct (date, edge) buckets from the two seeded chains and
+            // two dates alone, unevenly split across `chunk = 3`.
+            let specs: Vec<(i64, i64, i64, chrono::NaiveDate)> = vec![
+                (95001, 1, 100, day1),
+                (95002, 1, 100, day1),
+                (95003, 1, 100, day2),
+                (95004, 100, 1, day1),
+                (95005, 100, 1, day1),
+                (95006, 100, 1, day2),
+                (95007, 100, 1, day2),
+            ];
+            let models: Vec<_> = specs
+                .iter()
+                .map(|(id, src, dst, day)| {
+                    completed_message_at(*id, *src, *dst, day.and_hms_opt(1, 0, 0).unwrap())
+                })
+                .collect();
+            crosschain_messages::Entity::insert_many(models)
+                .exec(db)
+                .await
+                .unwrap();
+
+            let ids: Vec<i64> = specs.iter().map(|(id, ..)| *id).collect();
+            let pks: Vec<(i64, i32)> = ids.iter().map(|id| (*id, 1i32)).collect();
+
+            let result = db
+                .transaction(|tx| {
+                    let pks = pks.clone();
+                    Box::pin(async move {
+                        crate::stats::projection::project_messages_batch_with_chunk(
+                            tx,
+                            &pks,
+                            &IndexedChains::AllIndexed,
+                            chunk,
+                        )
+                        .await
+                    })
+                })
+                .await
+                .unwrap();
+
+            let mut stats_msgs: Vec<(i32, i64, i64, i64)> = stats_messages::Entity::find()
+                .filter(stats_messages::Column::BridgeId.eq(1i32))
+                .all(db)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|r| {
+                    (
+                        r.bridge_id,
+                        r.src_chain_id,
+                        r.dst_chain_id,
+                        r.messages_count,
+                    )
+                })
+                .collect();
+            stats_msgs.sort();
+
+            let mut stats_days: Vec<(NaiveDate, i32, i64, i64, i64)> =
+                stats_messages_days::Entity::find()
+                    .filter(stats_messages_days::Column::BridgeId.eq(1i32))
+                    .all(db)
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|r| {
+                        (
+                            r.date,
+                            r.bridge_id,
+                            r.src_chain_id,
+                            r.dst_chain_id,
+                            r.messages_count,
+                        )
+                    })
+                    .collect();
+            stats_days.sort();
+
+            let mut processed: Vec<(i64, i16)> = crosschain_messages::Entity::find()
+                .filter(crosschain_messages::Column::Id.is_in(ids.clone()))
+                .all(db)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|m| (m.id, m.stats_processed))
+                .collect();
+            processed.sort();
+
+            (stats_msgs, stats_days, processed, result)
+        }
+
+        let chunked = run_fixture("stats_projection_messages_chunked_matches_unchunked_a", 3).await;
+        let unchunked = run_fixture(
+            "stats_projection_messages_chunked_matches_unchunked_b",
+            usize::MAX,
+        )
+        .await;
+
+        assert_eq!(chunked, unchunked);
+        assert_eq!(chunked.3, 7, "all seven eligible messages were counted");
+        assert!(
+            chunked.2.iter().all(|(_, sp)| *sp == 1),
+            "every seeded message must be marked processed, including via the chunked mark-update"
+        );
+        // Two edges (1->100, 100->1), each split across two days.
+        assert_eq!(chunked.0.len(), 2);
+        assert_eq!(chunked.1.len(), 4);
+    }
+
+    // Test 4 (the R2 guard — chunk-boundary equivalence for
+    // `project_transfers_batch_with_chunk`): the fixture includes a transitive
+    // asset merge whose participants straddle the chunk-1/chunk-3 boundary at
+    // `chunk = 3` (mirrors `test_merge_transitive_within_one_batch`'s proven
+    // merge shape). If a future change chunks the function body instead of
+    // only its load, the cross-chunk merge stops being remapped and this
+    // equivalence diverges. Asserts database state only — no Prometheus
+    // counter deltas, per `.memory-bank/rules/testing.md`.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn stats_projection_transfers_batch_chunked_matches_unchunked() {
+        type TransfersState = (
+            Vec<(i32, i64, i64, i64, i64, i64, BigDecimal)>, // stats_asset_edges
+            Vec<(i64, i16, Option<i64>, Option<i64>)>,       // (id, stats_processed, src, dst)
+            usize,                                           // return value
+        );
+
+        async fn run_fixture(db_name: &str, chunk: usize) -> TransfersState {
+            let _db = init_db(db_name).await;
+            let conn = _db.client();
+            let db = conn.as_ref();
+            seed_minimal_bridge(db).await;
+            chains::Entity::insert_many([801, 802, 803, 804, 805].map(|id| chains::ActiveModel {
+                id: Set(id),
+                name: Set(format!("chain{id}")),
+                ..Default::default()
+            }))
+            .exec(db)
+            .await
+            .unwrap();
+
+            let addr_x = [0x91u8; 20].to_vec();
+            let addr_y = [0x92u8; 20].to_vec();
+            let addr_p = [0x93u8; 20].to_vec();
+            let addr_q = [0x94u8; 20].to_vec();
+            let tok_a = [0x95u8; 20].to_vec();
+            let tok_b = [0x96u8; 20].to_vec();
+            let tok_c1 = [0x97u8; 20].to_vec();
+            let tok_c2 = [0x98u8; 20].to_vec();
+            let tok_c3 = [0x99u8; 20].to_vec();
+
+            // Pre-existing single/multi-chain asset components, exactly the
+            // `test_merge_transitive_within_one_batch` shape: `a` (1 chain) and
+            // `b` (1 chain) merge on a tie (lower id wins), then the winner
+            // merges into `c` (3 chains, strictly bigger) — a transitive merge
+            // where an early winner becomes a later loser.
+            let a_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+                ..Default::default()
+            })
+            .exec_with_returning(db)
+            .await
+            .unwrap()
+            .id;
+            stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(a_id),
+                chain_id: Set(801),
+                token_address: Set(tok_a.clone()),
+                ..Default::default()
+            })
+            .exec(db)
+            .await
+            .unwrap();
+
+            let b_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+                ..Default::default()
+            })
+            .exec_with_returning(db)
+            .await
+            .unwrap()
+            .id;
+            stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+                stats_asset_id: Set(b_id),
+                chain_id: Set(802),
+                token_address: Set(tok_b.clone()),
+                ..Default::default()
+            })
+            .exec(db)
+            .await
+            .unwrap();
+
+            let c_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+                ..Default::default()
+            })
+            .exec_with_returning(db)
+            .await
+            .unwrap()
+            .id;
+            stats_asset_tokens::Entity::insert_many([
+                stats_asset_tokens::ActiveModel {
+                    stats_asset_id: Set(c_id),
+                    chain_id: Set(803),
+                    token_address: Set(tok_c1.clone()),
+                    ..Default::default()
+                },
+                stats_asset_tokens::ActiveModel {
+                    stats_asset_id: Set(c_id),
+                    chain_id: Set(804),
+                    token_address: Set(tok_c2.clone()),
+                    ..Default::default()
+                },
+                stats_asset_tokens::ActiveModel {
+                    stats_asset_id: Set(c_id),
+                    chain_id: Set(805),
+                    token_address: Set(tok_c3.clone()),
+                    ..Default::default()
+                },
+            ])
+            .exec(db)
+            .await
+            .unwrap();
+            assert!(a_id < b_id && b_id < c_id);
+
+            // Nine transfers across three chunks of three (chunk = 3): two
+            // filler edges on the seeded chain pair (M: 1<->100 via addr_x/
+            // addr_y, N: 1<->100 via addr_p/addr_q) padding the cohort and
+            // giving multiple edges, plus the two merge transfers — the first
+            // (chunk 1) merges `a`/`b`, the second (chunk 3) merges the
+            // chunk-1 winner into `c`.
+            let ids = [
+                95101i64, 95102, 95103, 95104, 95105, 95106, 95107, 95108, 95109,
+            ];
+            for id in ids {
+                crosschain_messages::Entity::insert(completed_message(id, 1, 100))
+                    .exec(db)
+                    .await
+                    .unwrap();
+            }
+
+            let filler =
+                |id: i64, addr_src: Vec<u8>, addr_dst: Vec<u8>| crosschain_transfers::ActiveModel {
+                    id: Set(id),
+                    message_id: Set(id),
+                    bridge_id: Set(1),
+                    index: Set(0),
+                    token_src_chain_id: Set(1),
+                    token_dst_chain_id: Set(100),
+                    src_amount: Set(Some(BigDecimal::from(10u64))),
+                    dst_amount: Set(Some(BigDecimal::from(1u64))),
+                    token_src_address: Set(Some(addr_src)),
+                    token_dst_address: Set(Some(addr_dst)),
+                    asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
+                    ..Default::default()
+                };
+
+            crosschain_transfers::Entity::insert(filler(ids[0], addr_x.clone(), addr_y.clone()))
+                .exec(db)
+                .await
+                .unwrap();
+            crosschain_transfers::Entity::insert(transfer_active_model(
+                ids[1],
+                ids[1],
+                1,
+                801,
+                802,
+                Some(tok_a.clone()),
+                Some(tok_b.clone()),
+            ))
+            .exec(db)
+            .await
+            .unwrap();
+            crosschain_transfers::Entity::insert(filler(ids[2], addr_x.clone(), addr_y.clone()))
+                .exec(db)
+                .await
+                .unwrap();
+            crosschain_transfers::Entity::insert(filler(ids[3], addr_p.clone(), addr_q.clone()))
+                .exec(db)
+                .await
+                .unwrap();
+            crosschain_transfers::Entity::insert(filler(ids[4], addr_p.clone(), addr_q.clone()))
+                .exec(db)
+                .await
+                .unwrap();
+            crosschain_transfers::Entity::insert(filler(ids[5], addr_p.clone(), addr_q.clone()))
+                .exec(db)
+                .await
+                .unwrap();
+            crosschain_transfers::Entity::insert(transfer_active_model(
+                ids[6],
+                ids[6],
+                1,
+                802,
+                803,
+                Some(tok_b.clone()),
+                Some(tok_c1.clone()),
+            ))
+            .exec(db)
+            .await
+            .unwrap();
+            crosschain_transfers::Entity::insert(filler(ids[7], addr_x.clone(), addr_y.clone()))
+                .exec(db)
+                .await
+                .unwrap();
+            crosschain_transfers::Entity::insert(filler(ids[8], addr_p.clone(), addr_q.clone()))
+                .exec(db)
+                .await
+                .unwrap();
+
+            let id_vec: Vec<i64> = ids.to_vec();
+            let result = db
+                .transaction(|tx| {
+                    let id_vec = id_vec.clone();
+                    Box::pin(async move {
+                        crate::stats::projection::project_transfers_batch_with_chunk(
+                            tx,
+                            &id_vec,
+                            &IndexedChains::AllIndexed,
+                            chunk,
+                        )
+                        .await
+                    })
+                })
+                .await
+                .unwrap();
+
+            let mut edges: Vec<(i32, i64, i64, i64, i64, i64, BigDecimal)> =
+                stats_asset_edges::Entity::find()
+                    .all(db)
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|e| {
+                        (
+                            e.bridge_id,
+                            e.src_chain_id,
+                            e.dst_chain_id,
+                            e.src_stats_asset_id,
+                            e.dst_stats_asset_id,
+                            e.transfers_count,
+                            e.cumulative_amount,
+                        )
+                    })
+                    .collect();
+            edges.sort_by_key(|e| (e.0, e.1, e.2, e.3, e.4));
+
+            let mut transfers: Vec<(i64, i16, Option<i64>, Option<i64>)> =
+                crosschain_transfers::Entity::find()
+                    .filter(crosschain_transfers::Column::Id.is_in(id_vec.clone()))
+                    .all(db)
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|t| {
+                        (
+                            t.id,
+                            t.stats_processed,
+                            t.src_stats_asset_id,
+                            t.dst_stats_asset_id,
+                        )
+                    })
+                    .collect();
+            transfers.sort_by_key(|t| t.0);
+
+            (edges, transfers, result)
+        }
+
+        let chunked =
+            run_fixture("stats_projection_transfers_chunked_matches_unchunked_a", 3).await;
+        let unchunked = run_fixture(
+            "stats_projection_transfers_chunked_matches_unchunked_b",
+            usize::MAX,
+        )
+        .await;
+
+        assert_eq!(chunked, unchunked);
+        assert_eq!(chunked.2, 9, "all nine transfers were newly counted");
+        assert!(
+            chunked.1.iter().all(|(_, sp, ..)| *sp == 1),
+            "every transfer must be marked processed"
+        );
+
+        // The merged component (transfers 2 and 7) converges on one final
+        // stats_asset_id, distinct from the two filler edges' assets.
+        let merged_asset = chunked.1[1].2.expect("transfer 2 must have a src asset");
+        assert_eq!(chunked.1[1].3, Some(merged_asset));
+        assert_eq!(chunked.1[6].2, Some(merged_asset));
+        assert_eq!(chunked.1[6].3, Some(merged_asset));
+        // Exactly 4 stats_asset_edges rows: filler edge M, filler edge N, and
+        // the two merge-transfer edges (801<->802, 802<->803), both on the
+        // same final merged asset.
+        assert_eq!(chunked.0.len(), 4);
+        let merge_edges: Vec<_> = chunked
+            .0
+            .iter()
+            .filter(|(_, _, _, src, dst, ..)| *src == merged_asset && *dst == merged_asset)
+            .collect();
+        assert_eq!(merge_edges.len(), 2);
+    }
+
     // task Decision 7: a `decimals` mismatch on the non-merge counting path is
     // still anomalous (warned + metric-tracked), but must no longer abort the
     // shared maintenance transaction — that would roll back cursor writes

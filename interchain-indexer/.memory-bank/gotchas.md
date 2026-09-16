@@ -330,6 +330,44 @@ longer silently drops failed-AMB aggregates.
 
 **Fix:** Use `batched_upsert()` or `run_in_batches()` from `bulk.rs`. Calculate batch size as `65535 / columns_per_row`.
 
+**This does not cover row-valued `IN` — see the next gotcha.** The fix above
+only bounds *bind count*; a row-valued `IN` has a second, lower, and less
+predictable ceiling that bind arithmetic cannot express.
+
+---
+
+## Row-Valued `IN` Has A Second, Lower Ceiling: Planner Stack Depth, Not Bind Count
+
+**Symptom:** `stack depth limit exceeded`, appearing on the *same* query shape
+that elsewhere fails with `too many arguments for query: N` depending on
+cohort size — both are the same underlying bug (see
+`.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md`).
+
+**Root cause:** A composite/row-valued `IN` — `(a, b) IN ((...),(...))`, e.g.
+SeaORM's `Expr::tuple([...]).in_tuples(...)` — is expanded by PostgreSQL into
+an `OR`-tree of row comparisons, and the parser/planner recurses over that
+tree. The ceiling this hits is `max_stack_depth`, not the 65535 bind-parameter
+count above — and it is **lower and reached first**: 32 767 tuples in a
+2-column row-`IN` (exactly `PG_BIND_PARAM_LIMIT / 2`, i.e. the "correctly
+chunked" size by the bind-count rule) is precisely the shape that overflowed a
+production planner stack while using barely half the bind budget. Applying the
+"PostgreSQL Bind Parameter Limit" fix above (`PG_BIND_PARAM_LIMIT / width`) to
+a row-valued `IN` is **bind-safe but not stack-safe** and was the mistake that
+let this bug propagate to multiple sites in `stats/projection.rs` and
+`stats/service.rs` before it was caught.
+
+**Fix:** Use `bulk::ROW_IN_KEY_CHUNK` (a fixed, margin-justified-not-derived
+constant) and `bulk::run_in_chunks()` for the write side; a hand-rolled
+`for batch in keys.chunks(chunk) { ...; results.extend(...) }`
+read-accumulator loop for the read side. Applies to `SELECT`, `UPDATE`, and
+`DELETE` alike. When the query result feeds a cross-row aggregation (union-find
+merges, additive counters, contradiction de-dup sets), chunk only the **load**
+— chunking the aggregation itself is a silent correctness regression, not a
+performance tweak; see `stats/projection.rs`'s `project_transfers_batch` for
+why. See `.memory-bank/rules/database.md` §Batching for the full rule and
+`.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md` for the
+incident this was found in.
+
 ---
 
 ## Indexer Cleanup Guard Runs on Panic
