@@ -17,8 +17,8 @@ type into source/destination fields was deferred because it required changes
 to existing transfer rows and serving contracts. It was not a constraint that
 prevented putting type on the token registry. Transfer-derived types cannot
 describe a token returned independently by the statistics API, and the mixed
-variants multiply as new token kinds are added. Avalanche also left the old
-transfer field unset despite its indexed token contracts being ERC-20.
+variants multiply as new token kinds are added. All existing production
+transfers are ERC-20; NFT ingestion is not supported.
 
 The xDai migration has not been deployed outside a disposable local development
 database, so its schema can be revised before deployment.
@@ -60,9 +60,11 @@ database, so its schema can be revised before deployment.
 
 All schema changes are incorporated into
 `m20260915_120000_add_xdai_and_cross_asset_stats`. Existing deployed token
-contracts are ERC-20; the migration marks the native sentinel explicitly and
-preserves historical explicit NFT kinds before dropping the legacy field.
-Its uniqueness check rejects an endpoint recorded with both NFT kinds.
+contracts and transfers are guaranteed to be ERC-20. The default initializes
+both token tables without scanning transfers or reconstructing absent token
+metadata. ERC721/ERC1155 enum variants do not imply historical NFT support and
+require no backfill. The migration also recognizes the reserved native key in
+the small token tables, preserving native identity after a down/up cycle.
 
 The new type columns grow the small registry and statistics mapping tables,
 not the multimillion-row transfer table. Removing a PostgreSQL column is not

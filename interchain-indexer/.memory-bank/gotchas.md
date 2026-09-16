@@ -2158,8 +2158,8 @@ Before registry metadata exists, the shared `TokenType::from_address`
 fallback in `interchain-indexer-entity/src/manual/mod.rs` recognizes exactly
 twenty zero bytes as native. An empty address or another zero-byte length is
 not that sentinel. Other keys fall back to ERC-20 because all currently
-indexed contract tokens are ERC-20; an explicit registry kind, including an
-NFT kind, takes precedence over the fallback.
+indexed contract tokens are ERC-20; an explicit registry kind takes precedence
+over the fallback. NFT ingestion is not supported.
 
 Both transfer and statistics APIs return `type = NATIVE` and a null address
 for native tokens. `TokenInfoService` skips contract fetching for the native

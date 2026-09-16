@@ -1013,39 +1013,6 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn bridged_tokens_type_follows_late_metadata_enrichment() {
-        let g = init_db("bridged_tokens_late_type").await;
-        let db = g.client();
-        seed_chains(db.as_ref(), &[1]).await;
-        let database = crate::InterchainDatabase::new(db.clone());
-        let asset = database.create_stats_asset(None, None, None).await.unwrap();
-        let address = vec![0x11; 20];
-        database
-            .link_token_to_stats_asset(asset.id, 1, address.clone())
-            .await
-            .unwrap();
-        let token = tokens::Entity::insert(tokens::ActiveModel {
-            chain_id: Set(1),
-            address: Set(address.clone()),
-            r#type: Set(TokenType::Erc721),
-            ..Default::default()
-        })
-        .exec_with_returning(db.as_ref())
-        .await
-        .unwrap();
-        database
-            .propagate_token_info_to_stats_tables(1, &address, &token)
-            .await
-            .unwrap();
-
-        let rows = fetch_bridged_token_items_for_assets(db.as_ref(), &[asset.id], None)
-            .await
-            .unwrap();
-        assert_eq!(rows[&asset.id][0].token_type, TokenType::Erc721);
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database"]
     async fn stats_service_bridged_tokens_wiring() {
         let g = init_db("stats_svc_bridged").await;
         let db = g.client();

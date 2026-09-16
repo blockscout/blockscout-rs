@@ -47,7 +47,7 @@ impl bridge_contracts::Model {
 
 /// Classify a storage key before optional contract metadata is available.
 /// The exact twenty-byte zero address is reserved for a chain's native coin.
-/// Existing explicit registry types (including NFTs) take precedence over this
+/// Existing explicit registry types take precedence over this
 /// fallback; all currently indexed contract tokens are ERC-20.
 impl crate::sea_orm_active_enums::TokenType {
     pub fn from_address(address: &[u8]) -> Self {

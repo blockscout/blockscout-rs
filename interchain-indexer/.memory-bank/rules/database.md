@@ -103,6 +103,10 @@ that is bind arithmetic solving the wrong ceiling.
 - Create new migrations with `just new-migration <name>`
 - Use `from_sql()` helper for raw SQL when needed
 - Test migrations with `just migrate-fresh`
+- Base backfills on kinds supported by deployed indexers and known production
+  data, not every value reserved in an enum. Before the xDai migration,
+  production transfers are ERC-20 only; ERC-721/ERC-1155 ingestion is unsupported.
+  Do not scan `crosschain_transfers` to recover hypothetical NFT classifications.
 
 ## Type Conversions
 
