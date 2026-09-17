@@ -1815,6 +1815,7 @@ definitions:
         type: string
       token_address:
         type: string
+        description: Null for a native token, which has no contract address.
       name:
         type: string
       symbol:
@@ -1824,6 +1825,8 @@ definitions:
       decimals:
         type: integer
         format: int64
+      type:
+        $ref: '#/definitions/v1TokenType'
   v1StatsBridgedTokenRow:
     type: object
     properties:
@@ -1887,6 +1890,10 @@ definitions:
     properties:
       address_hash:
         type: string
+        description: |-
+          Null iff `type == NATIVE`: a native side has no token
+          contract, so it must not carry the zero-address sentinel some indexers
+          (xDai) write internally for it.
       name:
         type: string
       symbol:
@@ -1895,6 +1902,18 @@ definitions:
         type: string
       icon_url:
         type: string
+      type:
+        $ref: '#/definitions/v1TokenType'
+  v1TokenType:
+    type: string
+    enum:
+      - UNSPECIFIED
+      - ERC20
+      - NATIVE
+      - ERC721
+      - ERC1155
+    default: UNSPECIFIED
+    description: Classification stored with each token. UNSPECIFIED is the proto3 default.
 securityDefinitions:
   ApiKeyAuth:
     type: apiKey

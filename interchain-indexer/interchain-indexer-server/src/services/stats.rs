@@ -2,6 +2,7 @@
 
 use super::{
     chain_info_proto::chain_model_to_proto,
+    interchain_service::token_type_to_proto,
     utils::{build_chain_bridge_filter, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
 };
 use crate::{
@@ -462,11 +463,13 @@ fn bridged_row_to_proto(row: BridgedTokenListRow) -> StatsBridgedTokenRow {
             .into_iter()
             .map(|t| StatsBridgedTokenItem {
                 chain_id: t.chain_id.to_string(),
-                token_address: to_hex_prefixed(t.token_address.as_slice()),
+                token_address: (token_type_to_proto(&t.token_type) != TokenType::Native)
+                    .then(|| to_hex_prefixed(t.token_address.as_slice())),
                 name: t.name,
                 symbol: t.symbol,
                 icon_url: t.icon_url,
                 decimals: t.decimals.map(|d| d as u32),
+                r#type: token_type_to_proto(&t.token_type) as i32,
             })
             .collect(),
     }

@@ -58,7 +58,7 @@ run:
     INTERCHAIN_INDEXER__CHAINS_CONFIG=config/full-mainnet/chains.json \
     INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json \
     INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE=500 \
-    INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
+    INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info.services.blockscout.com \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS=8021 \
     cargo run --bin interchain-indexer-server
 

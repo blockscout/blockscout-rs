@@ -81,6 +81,16 @@ That inaccuracy is confined to a slice clients opt into.
 
 ### 2. Asset identity is union-find, with eager merge
 
+> **Narrowed by [ADR-011](011-cross-asset-edges-and-per-transfer-linkage.md)
+> (2026-09-15):** this union-find is sound evidence for a lock/mint bridge,
+> where "same token address" and "same asset" coincide by protocol design. It
+> is not evidence for a *converting* bridge (xDai: locks an Ethereum ERC-20,
+> credits Gnosis' native coin — a different asset by design). ADR-011 keeps
+> this union-find exactly as described below for transfers an indexer declares
+> `mirror`, and stops applying it to transfers declared `conversion`, whose two
+> endpoints resolve to two independent assets joined by a binary
+> `stats_asset_edges` row instead of being merged into one.
+
 A transfer is an edge joining two token vertices; an asset is a connected
 component. Resolving a transfer's asset is a `union`:
 
@@ -167,6 +177,11 @@ source-vs-destination fee difference. No per-side sum columns. Multi-hop
 transfers are counted per hop, not per user action. Already-split production
 assets are not repaired in place; the supported recovery is a clean reindex,
 though a split heals if a new countable transfer bridges the components.
+
+> See also [ADR-011](011-cross-asset-edges-and-per-transfer-linkage.md): a
+> converting bridge's DAI/USDS/xDAI are three assets by design, and no single
+> row is expected to answer "total stable value bridged" — that would be a
+> separate asset-group/peg layer, deliberately not built here or there.
 
 ## Alternatives Considered
 

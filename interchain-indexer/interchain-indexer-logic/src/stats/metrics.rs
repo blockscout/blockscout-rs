@@ -20,25 +20,59 @@ lazy_static! {
     /// Deferral EVENTS (not distinct rows): a row is re-evaluated whenever its
     /// canonical key is flushed again, so repeated deferral increments repeatedly.
     /// `reason` is `identity_incomplete` (a token endpoint is missing and its
-    /// chain is still indexed for the bridge) or `awaiting_confirmation` (the
+    /// chain is still indexed for the bridge), `awaiting_confirmation` (the
     /// parent message is not yet finalized and its destination chain is still
-    /// indexed for the bridge).
+    /// indexed for the bridge), `linkage_unknown` (the indexer has not yet
+    /// stated the transfer's asset linkage), `conversion_endpoint_unresolved`
+    /// (a cross-asset transfer with only one known token endpoint) or
+    /// `amount_side_missing` (a conversion whose `amount_side` has no amount).
     pub static ref STATS_TRANSFERS_DEFERRED_TOTAL: IntCounterVec = register_int_counter_vec!(
         "interchain_indexer_stats_transfers_deferred_total",
         "transfer stats deferral events by reason (events, not distinct rows): \
-         identity_incomplete (missing token endpoint, chain still indexed) or \
-         awaiting_confirmation (parent message unconfirmed, destination chain still indexed)",
+         identity_incomplete (missing token endpoint, chain still indexed), \
+         awaiting_confirmation (parent message unconfirmed, destination chain still indexed), \
+         linkage_unknown (asset_linkage not yet stated), \
+         conversion_endpoint_unresolved (cross-asset transfer, only one endpoint known) or \
+         amount_side_missing (conversion transfer whose amount_side amount is absent)",
         &["reason"],
     )
     .unwrap();
 
-    /// Stats asset union-find merges by outcome: `merged` or
-    /// `refused_chain_collision` (both components hold a token on the same
-    /// chain, the only unresolvable conflict).
+    /// Stats asset union-find merges by outcome: `merged`,
+    /// `refused_chain_collision` (a merge would place two different tokens of
+    /// one chain into one asset), or `refused_token_on_chain` (a mirror
+    /// transfer's counterpart-side lookup found the asset already holding a
+    /// different token on that chain, so the transfer's identity resolution
+    /// itself was refused before a merge was even attempted). Both refusals
+    /// mean the same thing operationally: bad token data, or a converting
+    /// route the indexer declared as `mirror`.
     pub static ref STATS_ASSET_MERGES_TOTAL: IntCounterVec = register_int_counter_vec!(
         "interchain_indexer_stats_asset_merges_total",
         "stats asset component merges by outcome",
         &["outcome"],
+    )
+    .unwrap();
+
+    /// Declared-linkage contradictions, by kind: `conversion_self_asset` (a
+    /// conversion transfer whose endpoints already resolve to one asset) or
+    /// `cross_asset_edge_collapsed` (a merge folded a cross-asset edge into a
+    /// self-edge). Both mean an indexer's declarations disagree with the asset
+    /// graph; neither is fatal.
+    pub static ref STATS_ASSET_LINKAGE_CONTRADICTION_TOTAL: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_stats_asset_linkage_contradiction_total",
+        "declared-linkage contradictions by kind: conversion_self_asset or cross_asset_edge_collapsed",
+        &["kind"],
+    )
+    .unwrap();
+
+    /// A transfer reached the write chokepoint (`flush_to_final_storage`) with
+    /// `asset_linkage` left `NotSet` by its indexer. The row is written with
+    /// the column omitted (defers indefinitely) rather than guessed. In debug
+    /// builds this is also a `debug_assert!` failure, so it should never fire
+    /// outside a bug in a new indexer's transfer constructor.
+    pub static ref STATS_TRANSFER_ASSET_LINKAGE_UNSET_TOTAL: IntCounter = register_int_counter!(
+        "interchain_indexer_stats_transfer_asset_linkage_unset_total",
+        "transfers reaching the flush chokepoint with asset_linkage left NotSet by the indexer"
     )
     .unwrap();
 

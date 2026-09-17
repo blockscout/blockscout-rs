@@ -1,3 +1,4 @@
+pub(crate) mod abi_registry;
 pub(crate) mod log_stream_builder;
 pub(crate) mod receipt_fetch;
 pub(crate) mod transaction_grouping;

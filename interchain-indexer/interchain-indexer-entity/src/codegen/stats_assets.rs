@@ -19,24 +19,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::crosschain_transfers::Entity")]
-    CrosschainTransfers,
-    #[sea_orm(has_many = "super::stats_asset_edges::Entity")]
-    StatsAssetEdges,
     #[sea_orm(has_many = "super::stats_asset_tokens::Entity")]
     StatsAssetTokens,
-}
-
-impl Related<super::crosschain_transfers::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::CrosschainTransfers.def()
-    }
-}
-
-impl Related<super::stats_asset_edges::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::StatsAssetEdges.def()
-    }
 }
 
 impl Related<super::stats_asset_tokens::Entity> for Entity {

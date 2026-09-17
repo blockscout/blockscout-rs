@@ -126,10 +126,10 @@ before/after windows — 2 failures in 6 runs. Serializing the two tests would
 only hold until a third test touching the same counter was added.
 
 - Cover the **behavior** the metric exists to confirm with database-state
-  assertions instead (the affected row's `stats_processed`, `stats_asset_id`,
-  the resulting aggregate row, etc.) — these are what actually pin the
-  contract, and are already present alongside the metric assertion in most
-  cases.
+  assertions instead (the affected row's `stats_processed`,
+  `src_stats_asset_id` / `dst_stats_asset_id`, the resulting aggregate row,
+  etc.) — these are what actually pin the contract, and are already present
+  alongside the metric assertion in most cases.
 - Cover **metric emission itself** with a unit test on the pure decision
   function that increments the counter (no database, no shared process
   state), not through an integration test that shares a process-wide

@@ -196,11 +196,13 @@ message GetChainsStatsRequest {
 
 message StatsBridgedTokenItem {
   string chain_id = 1;
-  string token_address = 2;
+  // Null for a native token, which has no contract address.
+  optional string token_address = 2;
   optional string name = 3;
   optional string symbol = 4;
   optional string icon_url = 5;
   optional uint32 decimals = 6;
+  TokenType type = 7;
 }
 
 message StatsBridgedTokenRow {

@@ -16,8 +16,9 @@ use std::collections::HashSet;
 
 use super::{BufferItem, Consolidate, ConsolidatedMessage, Key};
 use crate::{
-    bulk::{batched_upsert, run_in_batches},
+    bulk::{self, batched_upsert, run_in_chunks},
     message_buffer::cursor::{BridgeId, Cursor, CursorBlocksBuilder, Cursors},
+    stats::metrics::STATS_TRANSFER_ASSET_LINKAGE_UNSET_TOTAL,
 };
 
 fn pending_messages_on_conflict() -> OnConflict {
@@ -172,10 +173,6 @@ fn crosschain_transfers_on_conflict() -> OnConflict {
         crosschain_transfers::Column::Index,
     ])
     .value(
-        crosschain_transfers::Column::Type,
-        Expr::cust(r#"COALESCE(EXCLUDED."type", crosschain_transfers."type")"#),
-    )
-    .value(
         crosschain_transfers::Column::TokenSrcChainId,
         Expr::cust("EXCLUDED.token_src_chain_id"),
     )
@@ -210,6 +207,17 @@ fn crosschain_transfers_on_conflict() -> OnConflict {
     .value(
         crosschain_transfers::Column::TokenIds,
         prefer_incoming("token_ids"),
+    )
+    // Write-once, and deliberately the reverse of `prefer_incoming` above:
+    // once an indexer has declared a linkage, a later flush can never change
+    // it. `NULL -> value` still applies (an indexer that only learns the
+    // linkage on a later flush can still state it); `value -> different value`
+    // is silently dropped. `src_stats_asset_id` / `dst_stats_asset_id` are
+    // deliberately absent from this OnConflict: they are projection-owned,
+    // exactly as `stats_asset_id` was, and a flush must never clobber them.
+    .value(
+        crosschain_transfers::Column::AssetLinkage,
+        Expr::cust("COALESCE(crosschain_transfers.asset_linkage, EXCLUDED.asset_linkage)"),
     )
     .value(
         crosschain_transfers::Column::UpdatedAt,
@@ -257,7 +265,9 @@ async fn delete_replaced_messages(
         .into_iter()
         .collect();
 
-    run_in_batches(&keys, 2, |batch| async {
+    // Row-valued `IN`: size by `ROW_IN_KEY_CHUNK`, not by bind width — see
+    // `bulk::ROW_IN_KEY_CHUNK`.
+    run_in_chunks(&keys, bulk::ROW_IN_KEY_CHUNK, |batch| async {
         crosschain_messages::Entity::delete_many()
             .filter(
                 Expr::tuple([
@@ -295,6 +305,43 @@ pub(super) async fn offload_stale_to_pending<T: Consolidate>(
     batched_upsert(tx, &models, pending_messages_on_conflict()).await
 }
 
+/// The single production write chokepoint for `crosschain_transfers` is this
+/// module's `flush_to_final_storage` — every indexer's transfers reach the
+/// database through it. Every transfer constructor is expected to start from
+/// `interchain_indexer_entity::new_transfer`, which always sets
+/// `asset_linkage`; an `ActiveValue::NotSet` here means some constructor built
+/// the row a different way (most likely `..Default::default()`, whose
+/// `ActiveModel::default()` leaves every field `NotSet`).
+///
+/// A `NotSet` column is omitted from the INSERT column list, so
+/// `EXCLUDED.asset_linkage` would be the column default (`NULL`), and the
+/// write-once `COALESCE` in `crosschain_transfers_on_conflict` would then keep
+/// `NULL` forever -- silently deferring every transfer from that indexer. Do
+/// not substitute a guessed default here: a wrong `mirror` is the one
+/// irreversible direction (it unions two assets), which is exactly what the
+/// deferral design exists to prevent. Leave the value unset so the row defers
+/// like any other unclassified transfer.
+fn reject_unset_asset_linkage(transfers: &[crosschain_transfers::ActiveModel]) {
+    for transfer in transfers {
+        if matches!(transfer.asset_linkage, ActiveValue::NotSet) {
+            debug_assert!(
+                false,
+                "crosschain_transfers.asset_linkage must be Set by every transfer \
+                 constructor; found NotSet for bridge_id={:?} message_id={:?}",
+                transfer.bridge_id, transfer.message_id
+            );
+            tracing::warn!(
+                bridge_id = ?transfer.bridge_id,
+                message_id = ?transfer.message_id,
+                "stats projection: transfer reached flush_to_final_storage with \
+                 asset_linkage NotSet; leaving it unset so the row defers instead \
+                 of guessing"
+            );
+            STATS_TRANSFER_ASSET_LINKAGE_UNSET_TOTAL.inc();
+        }
+    }
+}
+
 pub(super) async fn flush_to_final_storage(
     tx: &DatabaseTransaction,
     consolidated_entries: Vec<ConsolidatedMessage>,
@@ -313,6 +360,8 @@ pub(super) async fn flush_to_final_storage(
     let transfers = transfers.into_iter().flatten().collect::<Vec<_>>();
     let amb_confirmations = amb_confirmations.into_iter().flatten().collect::<Vec<_>>();
     let amb_anomalies = amb_anomalies.into_iter().flatten().collect::<Vec<_>>();
+
+    reject_unset_asset_linkage(&transfers);
 
     delete_replaced_messages(tx, &replacement_pks).await?;
     batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
@@ -364,8 +413,10 @@ pub(super) async fn remove_finalized_from_pending(
         .map(|k| (k.message_id, k.bridge_id as i32))
         .collect();
 
-    // row width = 2 (message_id, bridge_id)
-    run_in_batches(&keys, 2, |batch| async {
+    // Row-valued `IN`: size by `ROW_IN_KEY_CHUNK`, not by bind width — see
+    // `bulk::ROW_IN_KEY_CHUNK`. This is the statement that kept overflowing the
+    // planner stack at the old `PG_BIND_PARAM_LIMIT / 2` sizing.
+    run_in_chunks(&keys, bulk::ROW_IN_KEY_CHUNK, |batch| async {
         pending_messages::Entity::delete_many()
             .filter(
                 Expr::tuple([
@@ -485,7 +536,7 @@ mod tests {
     use chrono::{DateTime, NaiveDateTime};
     use interchain_indexer_entity::{
         bridges, chains, crosschain_messages, crosschain_transfers, indexer_checkpoints,
-        sea_orm_active_enums::{MessageStatus, TransferType},
+        sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
         stats_assets,
     };
     use sea_orm::{
@@ -493,7 +544,10 @@ mod tests {
         prelude::BigDecimal,
     };
 
-    use super::{ConsolidatedMessage, flush_to_final_storage};
+    use super::{
+        BridgeId, ConsolidatedMessage, Key, delete_replaced_messages, flush_to_final_storage,
+        remove_finalized_from_pending,
+    };
     use crate::{InterchainDatabase, test_utils::init_db};
 
     const BRIDGE_ID: i32 = 7;
@@ -616,7 +670,6 @@ mod tests {
             message_id: ActiveValue::Set(MESSAGE_ID),
             bridge_id: ActiveValue::Set(BRIDGE_ID),
             index: ActiveValue::Set(0),
-            r#type: ActiveValue::Set(Some(TransferType::Erc20)),
             token_src_chain_id: ActiveValue::Set(SRC_CHAIN),
             token_dst_chain_id: ActiveValue::Set(DST_CHAIN),
             src_amount: ActiveValue::Set(amount(src_amount)),
@@ -627,7 +680,9 @@ mod tests {
             recipient_address: ActiveValue::Set(recipient_address),
             token_ids: ActiveValue::Set(None),
             stats_processed: ActiveValue::Set(0),
-            stats_asset_id: ActiveValue::Set(None),
+            src_stats_asset_id: ActiveValue::Set(None),
+            dst_stats_asset_id: ActiveValue::Set(None),
+            asset_linkage: ActiveValue::Set(Some(TransferAssetLinkage::Mirror)),
             created_at: ActiveValue::NotSet,
             updated_at: ActiveValue::NotSet,
             id: ActiveValue::NotSet,
@@ -688,12 +743,13 @@ mod tests {
     async fn mark_transfer_projected(
         db: &InterchainDatabase,
         stats_processed: i16,
-        stats_asset_id: Option<i64>,
+        aid: Option<i64>,
     ) {
         let transfer = load_transfer(db).await;
         let mut active: crosschain_transfers::ActiveModel = transfer.into();
         active.stats_processed = ActiveValue::Set(stats_processed);
-        active.stats_asset_id = ActiveValue::Set(stats_asset_id);
+        active.src_stats_asset_id = ActiveValue::Set(aid);
+        active.dst_stats_asset_id = ActiveValue::Set(aid);
         active.update(db.db.as_ref()).await.unwrap();
     }
 
@@ -806,7 +862,8 @@ mod tests {
 
         let transfer = load_transfer(&db).await;
         assert_eq!(transfer.stats_processed, 1);
-        assert_eq!(transfer.stats_asset_id, Some(stats_asset_id));
+        assert_eq!(transfer.src_stats_asset_id, Some(stats_asset_id));
+        assert_eq!(transfer.dst_stats_asset_id, Some(stats_asset_id));
         assert_eq!(transfer.token_src_address, Some(vec![0xAA]));
         assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
     }
@@ -874,13 +931,52 @@ mod tests {
 
         let transfer = load_transfer(&db).await;
         assert_eq!(transfer.stats_processed, 1);
-        assert_eq!(transfer.stats_asset_id, Some(stats_asset_id));
+        assert_eq!(transfer.src_stats_asset_id, Some(stats_asset_id));
+        assert_eq!(transfer.dst_stats_asset_id, Some(stats_asset_id));
         assert_eq!(transfer.token_src_address, Some(vec![0xAA]));
         assert_eq!(transfer.token_dst_address, Some(vec![0xBB]));
         assert_eq!(
             transfer.sender_address,
             Some(vec![0x1A]),
             "the later send-derived flush enriches the previously-NULL sender_address"
+        );
+    }
+
+    /// `asset_linkage` is write-once via `crosschain_transfers_on_conflict`'s
+    /// `COALESCE(stored, incoming)` -- deliberately the reverse argument order
+    /// of every other `prefer_incoming` column. `NULL -> value` still applies
+    /// (an indexer that only learns the linkage on a later flush can still
+    /// state it); `value -> different value` is silently dropped.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_asset_linkage_is_write_once() {
+        let test_db = init_db("flush_asset_linkage_write_once").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        // First flush: the indexer has not yet stated the linkage.
+        let mut entry = destination_only_completed_with_transfer();
+        entry.transfers[0].asset_linkage = ActiveValue::Set(None);
+        flush(&db, entry).await;
+        assert_eq!(load_transfer(&db).await.asset_linkage, None);
+
+        // Second flush: NULL -> value applies.
+        let mut entry = destination_only_completed_with_transfer();
+        entry.transfers[0].asset_linkage = ActiveValue::Set(Some(TransferAssetLinkage::Mirror));
+        flush(&db, entry).await;
+        assert_eq!(
+            load_transfer(&db).await.asset_linkage,
+            Some(TransferAssetLinkage::Mirror)
+        );
+
+        // Third flush: value -> different value is dropped.
+        let mut entry = destination_only_completed_with_transfer();
+        entry.transfers[0].asset_linkage = ActiveValue::Set(Some(TransferAssetLinkage::Conversion));
+        flush(&db, entry).await;
+        assert_eq!(
+            load_transfer(&db).await.asset_linkage,
+            Some(TransferAssetLinkage::Mirror),
+            "a stored linkage must never be overwritten by a later, different flush"
         );
     }
 
@@ -1252,5 +1348,54 @@ mod tests {
         let row = load(&db).await;
         assert_eq!(row.dst_chain_id, None);
         assert_eq!(row.protocol_metadata, None);
+    }
+
+    /// Cohort size that exceeds PostgreSQL's planner stack for a row-valued
+    /// `IN` (measured threshold: 7 500-8 000 tuples at the default
+    /// `max_stack_depth = 2048kB`), while staying far below the bind-parameter
+    /// ceiling that the old `run_in_batches(&keys, 2, …)` sizing respected.
+    ///
+    /// That combination is the point: these statements were *bind-safe* and
+    /// still crashed. Under the old sizing the whole cohort went out as one
+    /// 10 000-tuple statement and Postgres answered `stack depth limit
+    /// exceeded`; `ROW_IN_KEY_CHUNK` splits it into five statements instead.
+    const OVER_STACK_DEPTH_COHORT: i64 = 10_000;
+
+    /// Regression test for the statement that crashed buffer maintenance 72
+    /// times during the 2026-09-16 verification run. No rows are seeded — the
+    /// failure is in parsing/planning, so an empty table reproduces it.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_remove_finalized_from_pending_cohort_over_stack_depth() {
+        let test_db = init_db("remove_finalized_pending_over_stack_depth").await;
+        let db = InterchainDatabase::new(test_db.client());
+
+        let keys: Vec<Key> = (1..=OVER_STACK_DEPTH_COHORT)
+            .map(|id| Key::new(id, BRIDGE_ID as BridgeId))
+            .collect();
+
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        remove_finalized_from_pending(&tx, &keys).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    /// Sibling of the above: same row-valued `IN` DELETE shape, same cohort,
+    /// different table. It never fired in production only because replacement
+    /// cohorts stayed small — it carried the identical exposure.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_delete_replaced_messages_cohort_over_stack_depth() {
+        let test_db = init_db("delete_replaced_messages_over_stack_depth").await;
+        let db = InterchainDatabase::new(test_db.client());
+
+        let pks: Vec<(i64, i32)> = (1..=OVER_STACK_DEPTH_COHORT)
+            .map(|id| (id, BRIDGE_ID))
+            .collect();
+
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        delete_replaced_messages(&tx, &pks).await.unwrap();
+        tx.commit().await.unwrap();
     }
 }

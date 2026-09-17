@@ -9,6 +9,7 @@ use interchain_indexer_logic::{
     indexer::{
         amb::{AmbChainConfig, AmbContractConfig, AmbIndexer},
         avalanche::{AvalancheChainConfig, AvalancheIndexer},
+        xdai::{XDaiChainConfig, XDaiContractConfig, XDaiIndexer},
     },
 };
 use std::{collections::HashMap, sync::Arc};
@@ -153,6 +154,62 @@ pub async fn spawn_configured_indexers(
                 }
 
                 tracing::info!(bridge_id = bridge.bridge_id, "Started AMB indexer");
+                indexers.push(indexer);
+            }
+            BridgeType::Xdai => {
+                let configs = build_xdai_chain_configs(bridge, &chain_lookup, chain_providers);
+
+                if configs.is_empty() {
+                    tracing::warn!(
+                        bridge_id = bridge.bridge_id,
+                        "No viable chain configurations for xDai indexer, skipping"
+                    );
+                    continue;
+                }
+
+                let indexer: Arc<dyn CrosschainIndexer> = match bridge.indexer_type {
+                    IndexerType::XDai => {
+                        let indexer = XDaiIndexer::new(
+                            stats.clone(),
+                            bridge.bridge_id,
+                            configs,
+                            &settings.xdai_indexer,
+                            &settings.buffer_settings,
+                        )
+                        .with_context(|| {
+                            format!(
+                                "failed to spawn xDai indexer for bridge {}",
+                                bridge.bridge_id
+                            )
+                        })?;
+
+                        Arc::new(indexer)
+                    }
+                    _ => {
+                        tracing::error!(
+                            bridge_id = bridge.bridge_id,
+                            indexer_type =? bridge.indexer_type,
+                            "Unsupported indexer type for xDai bridge"
+                        );
+                        continue;
+                    }
+                };
+
+                if let Err(err) = indexer.start().await.with_context(|| {
+                    format!(
+                        "failed to start xDai indexer for bridge {}",
+                        bridge.bridge_id
+                    )
+                }) {
+                    tracing::error!(
+                        bridge_id = bridge.bridge_id,
+                        err = ?err,
+                        "Failed to start xDai indexer"
+                    );
+                    continue;
+                }
+
+                tracing::info!(bridge_id = bridge.bridge_id, "Started xDai indexer");
                 indexers.push(indexer);
             }
             _ => {
@@ -321,6 +378,85 @@ fn parse_contract_abi(
     }
 }
 
+/// xDai has exactly one contract kind per chain (unlike AMB's proxy +
+/// mediator pair), so every configured contract on the chain -- across every
+/// version -- feeds one `XDaiChainConfig`, mirroring `build_amb_chain_configs`
+/// without the mediator split.
+fn build_xdai_chain_configs(
+    bridge: &BridgeConfig,
+    chain_lookup: &HashMap<i64, ChainConfig>,
+    chain_providers: &HashMap<i64, DynProvider<Ethereum>>,
+) -> Vec<XDaiChainConfig> {
+    let mut chain_configs = Vec::new();
+    for plan in plan_bridge(bridge) {
+        let chain_id = plan.chain_id;
+        let Some(_chain_config) = chain_lookup.get(&chain_id) else {
+            tracing::warn!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "Chain configuration missing for xDai indexer"
+            );
+            continue;
+        };
+
+        let Some(provider) = chain_providers.get(&chain_id) else {
+            tracing::warn!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "No configured provider for chain"
+            );
+            continue;
+        };
+
+        let contracts: Vec<XDaiContractConfig> = plan
+            .contracts
+            .iter()
+            .filter_map(|contract| {
+                let address = parse_contract_address(
+                    bridge.bridge_id,
+                    chain_id,
+                    contract.kind.as_deref(),
+                    contract.version,
+                    &contract.address,
+                )?;
+                Some(XDaiContractConfig {
+                    address,
+                    version: contract.version,
+                    started_at_block: contract.started_at_block,
+                    abi: parse_contract_abi(
+                        bridge.bridge_id,
+                        chain_id,
+                        "xdai_proxy",
+                        contract.abi.as_ref(),
+                    ),
+                })
+            })
+            .collect();
+
+        if contracts.is_empty() {
+            tracing::error!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "xDai bridge requires at least one usable contract per chain"
+            );
+            continue;
+        }
+
+        let Some(start_block) = plan.start_block() else {
+            continue;
+        };
+
+        chain_configs.push(XDaiChainConfig {
+            chain_id,
+            provider: provider.clone(),
+            start_block,
+            contracts,
+        });
+    }
+
+    chain_configs
+}
+
 fn build_avalanche_chain_configs(
     bridge: &BridgeConfig,
     chain_lookup: &HashMap<i64, ChainConfig>,
@@ -482,6 +618,10 @@ pub(crate) fn plan_bridge(bridge: &BridgeConfig) -> Vec<ChainPlan<'_>> {
     let mut plans: Vec<ChainPlan<'_>> = group_contracts_by_chain(&bridge.contracts)
         .into_iter()
         .map(|(chain_id, contracts)| {
+            // xDai falls into the `_` (min-across-contracts) branch
+            // deliberately, not by omission: it has one contract kind per
+            // chain (`kind` stays unset, like Avalanche), so there is no
+            // AMB-style proxy/mediator split to prefer a floor from.
             let floor_contracts = match bridge.bridge_type {
                 BridgeType::Amb => contracts
                     .iter()
