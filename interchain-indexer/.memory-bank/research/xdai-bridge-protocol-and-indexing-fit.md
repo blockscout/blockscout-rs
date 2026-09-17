@@ -236,16 +236,10 @@ objects:
   doc comment says the enum is there so a transaction-hash-keyed epoch becomes a
   new arm rather than a redesign.
 
-The only blocker is the `ensure!` in `native_id_blob`
-(`indexer/xdai/types.rs`), which rejects a value that does not fit in 28 bytes.
-That guard was written on the premise that every message must yield a working
-explorer link — and the official explorer cannot render legacy transfers at all,
-so the premise does not hold. Today the guard makes the handler return `Err`, so
-those messages are **not indexed at all** (this is the source of the
-`failed to process xDai event` log lines). The `native_id = NULL` alternative is
-also worse: `get_message_id_from_message` then falls back to
-`format!("0x{:x}", message.id)`, leaking the internal buffer key into the public
-API for an equally dead link.
+Before the legacy-destination fix, nonce-only encoding rejected hash-based
+identifiers and the source-event consolidation gate prevented destination-only
+reconstruction. These are historical failure causes, not current restrictions.
+The current implementation stores raw hashes rather than NULL native IDs.
 
 The implemented change classifies the unchanged destination `bytes32` at event
 level: `value <= u64::MAX` is a nonce, and any larger value is retained as the
@@ -446,40 +440,34 @@ transaction hash. Full reconstruction from that one log:
 | `token_dst_address` | `NATIVE_SENTINEL` (the Gnosis leg is native xDAI) |
 | `sender_address` | source receipt `from` (the receipt fetch helper exposes it without a separate transaction lookup) |
 
-The source receipt and its block are fetched together. The lookup also proves
-whether a legacy bridge source event exists and supplies a direction-safe asset:
+The source receipt and its block are fetched together. The decoder attempts to
+recognize a source event; no match does not prove that no historical event exists.
+Asset resolution remains direction-safe:
 Gno→Eth legacy messages always pay DAI, while only Eth→Gno compares its Ethereum
 source block to the DAI/USDS cutover.
 
-**What actually blocks this today** is the early return in
-`indexer/xdai/consolidation.rs`:
+The implementation now allows destination-derived consolidation for hash-based
+identities with fetched source receipt/block data. Ordinary nonce-based
+completion-only entries still wait for their source event. Reconstructed
+messages appear directly as Completed, without a synthetic Initiated phase.
 
-```rust
-(None, None) => return Ok(None),
-```
+When a source event is recognized, preserve its observed amount and validate
+its recipient. If it is not recognized, reconstruct from completion.value for
+both amounts. This covers Ethereum plain deposits and late Gnosis→Ethereum
+claims pointing to old source-event versions. For the latter, emit a WARN that
+source indexing is incomplete and the source amount is inferred from completion;
+source hash, sender and timestamp remain available from the source receipt/block.
+All API fields can therefore be populated without independently observing the
+source amount or validating the source recipient. In fallback mode src_amount
+is inferred from payout, so a historical fee difference is not recoverable here.
+The API currently exposes no provenance/partial-indexing marker; WARN is the
+only indication. This tradeoff is accepted for minimal legacy support.
 
-Its comment gives three reasons — "no recipient, no timestamp to anchor
-`init_timestamp` on, and no direction to derive `native_id` from" — and the
-table above answers all three for this specific event (recipient is in the
-event; the timestamp is the destination block's; the direction is implied by
-which side emits `AffirmationCompleted`). Note the consequence of the gate as it
-stands: a group-3 message currently produces **no row at all** — the destination
-evidence sits in the buffer and never consolidates.
+No old grammar windows or Transfer subscription are added. Recognized malformed
+or conflicting events and RPC failures still return errors.
 
-The cost of lifting the gate is that such a message appears already `Completed`,
-with no `Initiated` phase — arguably correct, since an unhonoured plain transfer
-is not a bridge message. Structurally this is the destination-only shape the
-codebase already has (`build_destination_only` in AMB, `CompletionEvent` in
-xDai). Lifting it would also need care so it does **not** apply in the nonce
-era, where a destination-only observation means "source not yet indexed" and
-should keep waiting rather than fabricating a completed row.
-
-The minimal implementation now reconstructs this completed path without adding
-a `Transfer` subscription: a missing bridge source event is accepted only for
-Eth→Gno, and the completion amount is used for both sides in that single
-plain-transfer fallback. A `Transfer` subscription would only be warranted
-for a distinct feature — surfacing deposits the validators never honoured — and
-should be scoped as such, not folded into message indexing.
+A Transfer subscription would be a separate feature for deposits validators
+never honoured, not part of this completed-message reconstruction.
 
 ## Step-by-Step Flow
 
@@ -760,15 +748,18 @@ bridge. Entirely valid; the backlog drains within days.
 **3. A legacy plain-transfer deposit (1).** See *Plain-transfer deposits* above.
 The gap here is unbounded: this one was 44 days.
 
-**Indexing rules that follow.** A `SignedForAffirmation` must **never create** a
-buffer entry — only attach to one, or queue. Otherwise group 1 manufactures one
-phantom `Initiated` message per orphaned signature (343 of them over three
-weeks) alongside the correct row. The AMB indexer already has the right shape
-(`handle_validator_confirmation` queues unknown keys into
-`pending_message_hash_events`); the queue needs a bound, since here it would
-accumulate for weeks with nothing ever draining it. And a floored indexer must
-still be able to *decode* a tx-hash `bytes32` on destination events rather than
-erroring out on it.
+**Implemented indexing rules.** SignedForAffirmation may create an ordinary
+buffer entry, but a confirmation alone cannot create a published Initiated
+message or transfer: consolidation returns None until sufficient evidence
+arrives. Hash-based confirmations emit WARN and use normal pending offload/restore.
+There is no separate orphan-confirmation insert or new queue. An orphan may
+remain pending indefinitely; late confirmations need not reach the technical
+confirmations table. This limitation is accepted, with manual reindexing available.
+
+Legacy completions reconstruct from the referenced source receipt/block even
+below scan floors. A non-recognized old source-event topic does not block a
+Gno→Eth completion: use completion amount as inferred source amount and warn.
+Nonce-based destination-only messages still wait for their source event.
 
 ## Architecture Fit
 

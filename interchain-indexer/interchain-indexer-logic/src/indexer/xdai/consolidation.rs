@@ -175,10 +175,9 @@ fn resolve_input(message: &Message) -> Result<Option<ResolvedInput>> {
                     );
                     event.value
                 }
-                None if direction == Direction::EthToGno => completion.event().event.value,
-                None => {
-                    anyhow::bail!("GnoToEth reconstructed source is missing legacy source event")
-                }
+                // Older source event grammars may be outside the indexed epochs.
+                // Preserve the completed transfer using the observed payout amount.
+                None => completion.event().event.value,
             };
             let (token_src_address, token_dst_address) = match direction {
                 Direction::EthToGno => (source.ethereum_asset, NATIVE_SENTINEL),
@@ -787,7 +786,7 @@ mod tests {
     }
 
     #[test]
-    fn reconstructed_gno_to_eth_without_source_event_is_rejected() {
+    fn reconstructed_gno_to_eth_without_source_event_uses_completion_amount() {
         let source_hash = hash(0x35);
         let message = Message {
             identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
@@ -812,7 +811,28 @@ mod tests {
             ..Default::default()
         };
         let key = key_from_native_id(source_hash.as_ref(), 3).unwrap();
-        assert!(message.consolidate(&key).is_err());
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+        assert!(consolidated.is_final);
+        assert_eq!(
+            set_value!(consolidated.message.status),
+            MessageStatus::Completed
+        );
+        assert_eq!(
+            set_value!(consolidated.message.src_tx_hash),
+            Some(source_hash.to_vec())
+        );
+        assert_eq!(
+            set_value!(consolidated.message.sender_address),
+            Some(addr(3).to_vec())
+        );
+        let transfer = &consolidated.transfers[0];
+        assert_eq!(set_value!(transfer.src_amount), Some(BigDecimal::from(1)));
+        assert_eq!(set_value!(transfer.dst_amount), Some(BigDecimal::from(1)));
+        assert_eq!(
+            set_value!(transfer.token_src_address),
+            Some(NATIVE_SENTINEL.to_vec())
+        );
+        assert_eq!(set_value!(transfer.token_dst_address), Some(DAI.to_vec()));
     }
 
     #[test]

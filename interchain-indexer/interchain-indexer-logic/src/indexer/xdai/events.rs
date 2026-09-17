@@ -577,7 +577,22 @@ async fn reconstruct_source(
     let counterpart = ctx
         .counterpart_chain
         .context("missing counterpart xDai chain configuration for legacy source reconstruction")?;
-    fetch_reconstructed_source(counterpart, direction, source_hash, destination_recipient).await
+    let source =
+        fetch_reconstructed_source(counterpart, direction, source_hash, destination_recipient)
+            .await?;
+    if direction == Direction::GnoToEth && source.legacy_source_event.is_none() {
+        tracing::warn!(
+            bridge_id = ctx.bridge_id,
+            chain_id = ctx.chain_id,
+            block_number = ctx.block_number,
+            source_chain_id = counterpart.chain_id,
+            source_tx_hash = %source_hash,
+            source_block_number = source.block_number,
+            "xDai transfer source is incompletely indexed: source contract event version is \
+             not recognized; using destination completion amount for source amount"
+        );
+    }
+    Ok(source)
 }
 
 async fn fetch_reconstructed_source(
@@ -700,10 +715,6 @@ fn decode_legacy_source_event(
                         .is_some_and(|topic| modern_topics.contains(topic))
             }),
             "source receipt contains unsupported modern xDai source-request grammar"
-        );
-        ensure!(
-            direction == Direction::EthToGno,
-            "GnoToEth legacy source receipt has no UserRequestForSignature event"
         );
     }
 
@@ -977,7 +988,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_decoder_ignores_another_proxy_and_allows_only_eth_plain_fallback() {
+    fn legacy_decoder_ignores_another_proxy_and_allows_missing_source_fallback() {
         let proxy = Address::repeat_byte(1);
         let recipient = Address::repeat_byte(2);
         let log = rpc_log(
@@ -998,7 +1009,10 @@ mod tests {
             .unwrap(),
             None
         );
-        assert!(decode_legacy_source_event(Direction::GnoToEth, proxy, &[log], recipient).is_err());
+        assert_eq!(
+            decode_legacy_source_event(Direction::GnoToEth, proxy, &[log], recipient).unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -1067,8 +1081,13 @@ mod tests {
         );
     }
 
+    #[rstest::rstest]
+    #[case(true)]
+    #[case(false)]
     #[tokio::test]
-    async fn reconstructed_source_uses_counterpart_provider_receipt_and_block() {
+    async fn reconstructed_source_uses_counterpart_provider_receipt_and_block(
+        #[case] recognized_source_event: bool,
+    ) {
         let asserter = Asserter::new();
         let provider = ProviderBuilder::new()
             .connect_mocked_client(asserter.clone())
@@ -1085,6 +1104,13 @@ mod tests {
             }
             .encode_log_data(),
         );
+        if !recognized_source_event {
+            // A historical event topic outside the decoder's supported grammar.
+            source_log.inner.data = LogData::new_unchecked(
+                vec![keccak256("UserRequestForSignature(address,uint256)")],
+                source_log.data().data.clone(),
+            );
+        }
         source_log.transaction_hash = Some(source_hash);
         source_log.block_number = Some(39_557_691);
         source_log.log_index = Some(79);
@@ -1134,7 +1160,7 @@ mod tests {
         assert_eq!(reconstructed.ethereum_asset, super::super::version::DAI);
         assert_eq!(
             reconstructed.legacy_source_event,
-            Some(LegacySourceEvent {
+            recognized_source_event.then_some(LegacySourceEvent {
                 recipient,
                 value: U256::from(49_240u64),
             })

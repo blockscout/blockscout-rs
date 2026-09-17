@@ -2210,9 +2210,15 @@ Hash completions fetch the counterpart receipt and block before mutating the
 buffer. Their `native_id` and `src_tx_hash` are the raw source hash; sender and
 initial timestamp come from that receipt/block. A matching legacy two-argument
 source event supplies the observed source amount and recipient, while the
-destination completion independently supplies the destination amount. Only an
-Eth→Gno plain transfer may omit the bridge source event and use the completion
-amount as the constrained no-fee fallback.
+destination completion independently supplies the destination amount. When the
+source event is not recognized, completion.value supplies both amounts, including
+late Gno→Eth claims. That source amount is inferred, not independently observed;
+Gno→Eth reconstruction emits a WARN with source hash/block and destination context.
+Sender and source timestamp still come from the fetched receipt/block. Full API
+fields do not imply full source verification: fallback cannot independently
+validate source recipient or preserve a source/payout amount difference. The API
+has no provenance marker for inferred src_amount; the WARN is the only indication.
+This is an accepted limitation, not a request to add historical grammar support.
 
 A hash-based `SignedForAffirmation` alone must not manufacture a transfer or
 be attached to the genuine nonce-based message for the same source transaction:
@@ -2234,8 +2240,16 @@ Two reconstruction traps matter when implementing this support:
   `UserRequestForAffirmation(address,uint256)`. Decode the correct proxy's
   event to preserve its observed source amount and validate recipient;
   do not replace that amount with completion.value. A missing bridge source
-  event is expected for an Ethereum plain token transfer, but not for a
-  Gnosis native send, whose fallback emits UserRequestForSignature.
+  event is expected for an Ethereum plain token transfer. A Gnosis native send
+  emits UserRequestForSignature, but an older event topic can be unrecognized
+  by the decoder. Missing recognition must not prevent a successful legacy
+  completion from being indexed. Malformed recognized events and recipient
+  conflicts still fail rather than being silently replaced by the fallback.
+- Solidity event names are part of topic0. A sol! declaration named
+  `LegacyUserRequestForSignature` hashes that literal name, not the historical
+  `UserRequestForSignature` name. Tests that encode with the same declaration
+  cannot detect this mismatch; use the actual on-chain signature in fixtures.
+  Full historical grammar support remains outside the current fallback fix.
 
 Standalone hash confirmations use the ordinary buffer/pending path and emit a
 WARN; they do not perform source RPC and do not bypass the confirmations FK.
