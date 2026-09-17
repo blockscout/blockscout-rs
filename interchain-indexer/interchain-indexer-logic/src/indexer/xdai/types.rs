@@ -41,6 +41,43 @@ impl Direction {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum MessageIdentity {
+    Nonce(U256),
+    SourceTransactionHash(B256),
+}
+
+impl MessageIdentity {
+    pub(crate) fn source(value: U256) -> Result<Self> {
+        ensure!(
+            value <= U256::from(u64::MAX),
+            "xDai source nonce {value} exceeds u64::MAX"
+        );
+        Ok(Self::Nonce(value))
+    }
+
+    pub(crate) fn destination(value: U256) -> Self {
+        if value <= U256::from(u64::MAX) {
+            Self::Nonce(value)
+        } else {
+            Self::SourceTransactionHash(B256::from(value.to_be_bytes::<32>()))
+        }
+    }
+
+    pub(crate) fn native_id(self, direction: Direction) -> Result<[u8; 32]> {
+        match self {
+            Self::Nonce(nonce) => {
+                ensure!(
+                    nonce <= U256::from(u64::MAX),
+                    "xDai nonce {nonce} exceeds u64::MAX"
+                );
+                native_id_blob(direction.initiator_chain_id(), nonce)
+            }
+            Self::SourceTransactionHash(hash) => Ok(hash.0),
+        }
+    }
+}
+
 /// `initiator_chain_id (4 B, BE) ‖ nonce (28 B, BE)` — the 32-byte blob the
 /// official bridge explorer keys transactions on. Byte-identical to what
 /// `bridge.gnosischain.com/bridge-explorer` uses, so writing it to
@@ -76,7 +113,7 @@ pub(crate) fn key_from_native_id(native_id: &[u8; 32], bridge_id: i32) -> Result
     ))
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AnnotatedEvent<T> {
     pub(crate) event: T,
     pub(crate) transaction_hash: B256,
@@ -84,7 +121,7 @@ pub(crate) struct AnnotatedEvent<T> {
     pub(crate) block_timestamp: NaiveDateTime,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct UserRequestForAffirmationEvent {
     pub(crate) recipient: Address,
     pub(crate) value: U256,
@@ -98,9 +135,9 @@ pub(crate) struct UserRequestForAffirmationEvent {
 
 /// Payload shared by both destination-completion events
 /// (`AffirmationCompleted` and `RelayedMessage`): each carries only
-/// `(recipient, value)` beyond the nonce, which is already known from the
-/// source event and not re-stored here.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// `(recipient, value)` beyond the identity, which is stored once on the
+/// buffered message.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CompletionEvent {
     pub(crate) recipient: Address,
     pub(crate) value: U256,
@@ -113,7 +150,7 @@ pub(crate) struct CompletionEvent {
 /// direction check in `consolidation.rs::status_and_finality` is what
 /// actually keeps a `CollectedSignatures` that resolved onto the wrong key
 /// from producing `ReadyToClaim`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Completion {
     Affirmation(AnnotatedEvent<CompletionEvent>),
     Relayed(AnnotatedEvent<CompletionEvent>),
@@ -125,9 +162,16 @@ impl Completion {
             Self::Affirmation(event) | Self::Relayed(event) => event,
         }
     }
+
+    pub(crate) fn direction(&self) -> Direction {
+        match self {
+            Self::Affirmation(_) => Direction::EthToGno,
+            Self::Relayed(_) => Direction::GnoToEth,
+        }
+    }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct UserRequestForSignatureEvent {
     pub(crate) recipient: Address,
     pub(crate) value: U256,
@@ -137,7 +181,7 @@ pub(crate) struct UserRequestForSignatureEvent {
     pub(crate) token: Option<Address>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CollectedSignaturesEvent {
     pub(crate) authority_responsible_for_relay: Address,
     pub(crate) message_hash: B256,
@@ -146,7 +190,7 @@ pub(crate) struct CollectedSignaturesEvent {
     pub(crate) count: U256,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ValidatorConfirmation {
     pub(crate) validator_address: Address,
     pub(crate) tx_hash: B256,
@@ -154,8 +198,25 @@ pub(crate) struct ValidatorConfirmation {
     pub(crate) block_timestamp: NaiveDateTime,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct LegacySourceEvent {
+    pub(crate) recipient: Address,
+    pub(crate) value: U256,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ReconstructedSource {
+    pub(crate) transaction_hash: B256,
+    pub(crate) block_number: u64,
+    pub(crate) block_timestamp: NaiveDateTime,
+    pub(crate) sender_address: Address,
+    pub(crate) ethereum_asset: Address,
+    pub(crate) legacy_source_event: Option<LegacySourceEvent>,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub(crate) struct Message {
+    pub(crate) identity: Option<MessageIdentity>,
     pub(crate) direction: Option<Direction>,
     // Eth→Gno
     pub(crate) source_request: Option<AnnotatedEvent<UserRequestForAffirmationEvent>>,
@@ -167,6 +228,7 @@ pub(crate) struct Message {
     // in one map for both `SignedForAffirmation` and `SignedForUserRequest`.
     pub(crate) validator_confirmations: HashMap<Address, ValidatorConfirmation>,
     pub(crate) destination_execution: Option<Completion>,
+    pub(crate) reconstructed_source: Option<ReconstructedSource>,
     /// `receipt.from` of the transaction that emitted the source event
     /// (`UserRequestForAffirmation` or `UserRequestForSignature`). Never
     /// taken from any event field — see the AMB "header sender is not the
@@ -224,6 +286,100 @@ mod tests {
     fn native_id_blob_rejects_a_nonce_that_does_not_fit_in_28_bytes() {
         let oversized_nonce = U256::from(1u8) << 225;
         assert!(native_id_blob(1, oversized_nonce).is_err());
+    }
+
+    #[test]
+    fn message_identity_classifies_source_and_destination_boundaries() {
+        for nonce in [U256::ZERO, U256::from(u64::MAX)] {
+            assert_eq!(
+                MessageIdentity::source(nonce).unwrap(),
+                MessageIdentity::Nonce(nonce)
+            );
+            assert_eq!(
+                MessageIdentity::destination(nonce),
+                MessageIdentity::Nonce(nonce)
+            );
+        }
+
+        let two_to_64 = U256::from(u64::MAX) + U256::from(1u8);
+        assert!(MessageIdentity::source(two_to_64).is_err());
+        assert_eq!(
+            MessageIdentity::destination(two_to_64),
+            MessageIdentity::SourceTransactionHash(B256::from(two_to_64.to_be_bytes::<32>()))
+        );
+        assert_eq!(
+            MessageIdentity::destination(U256::MAX),
+            MessageIdentity::SourceTransactionHash(B256::from(U256::MAX.to_be_bytes::<32>()))
+        );
+    }
+
+    #[test]
+    fn hash_identity_native_id_preserves_all_leading_zero_bytes() {
+        for bytes in [
+            hex_to_blob("0000000100000001000000000000000000000000000000000000000000000000"),
+            hex_to_blob("0000000000000001000000000000000000000000000000000000000000000000"),
+        ] {
+            let identity = MessageIdentity::destination(U256::from_be_bytes(bytes));
+            assert_eq!(
+                identity,
+                MessageIdentity::SourceTransactionHash(B256::from(bytes))
+            );
+            assert_eq!(identity.native_id(Direction::EthToGno).unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn manually_constructed_oversized_nonce_is_rejected() {
+        let identity = MessageIdentity::Nonce(U256::from(u64::MAX) + U256::from(1u8));
+        assert!(identity.native_id(Direction::EthToGno).is_err());
+    }
+
+    #[test]
+    fn all_incident_observations_classify_as_source_transaction_hashes() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/xdai/legacy/identity_observations.json"
+        ))
+        .unwrap();
+        let observations = fixture["observations"].as_array().unwrap();
+        assert_eq!(observations.len(), 352);
+
+        for observation in observations {
+            let hash: B256 = observation["identity"].as_str().unwrap().parse().unwrap();
+            let value = U256::from_be_slice(hash.as_slice());
+            assert_eq!(
+                MessageIdentity::destination(value),
+                MessageIdentity::SourceTransactionHash(hash)
+            );
+            assert!(MessageIdentity::source(value).is_err());
+        }
+    }
+
+    #[test]
+    fn pending_message_state_round_trips_with_reconstructed_source() {
+        let source_hash = B256::repeat_byte(0x35);
+        let message = Message {
+            identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
+            direction: Some(Direction::GnoToEth),
+            reconstructed_source: Some(ReconstructedSource {
+                transaction_hash: source_hash,
+                block_number: 39_557_691,
+                block_timestamp: chrono::DateTime::from_timestamp(1_744_646_380, 0)
+                    .unwrap()
+                    .naive_utc(),
+                sender_address: Address::repeat_byte(1),
+                ethereum_asset: Address::repeat_byte(2),
+                legacy_source_event: Some(LegacySourceEvent {
+                    recipient: Address::repeat_byte(3),
+                    value: U256::from(49_240u64),
+                }),
+            }),
+            ..Default::default()
+        };
+        let encoded = serde_json::to_value(&message).unwrap();
+        let decoded: Message = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.identity, message.identity);
+        assert_eq!(decoded.direction, message.direction);
+        assert_eq!(decoded.reconstructed_source, message.reconstructed_source);
     }
 
     /// Pins the preimage's field order and length against `Message.sol`'s

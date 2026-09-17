@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use alloy::primitives::{Address, U256};
-use anyhow::{Context, Result};
+use alloy::primitives::{Address, B256, U256};
+use anyhow::{Context, Result, ensure};
 use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
     amb_messages_confirmations, crosschain_messages, crosschain_transfers, new_transfer,
@@ -12,59 +12,33 @@ use sea_orm::{ActiveValue, prelude::BigDecimal};
 use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
 
 use super::{
-    types::{Direction, Message, NATIVE_SENTINEL, native_id_blob},
+    types::{Direction, Message, MessageIdentity, NATIVE_SENTINEL},
     version::DAI,
 };
 
 impl Consolidate for Message {
     fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>> {
-        // Mirrors the AMB `pending_messages` pattern (and the Avalanche
-        // `SourceData` gate): without a source event there is no recipient,
-        // no timestamp to anchor `init_timestamp` on, and no direction to
-        // derive `native_id` from. The buffer keeps whatever destination-side
-        // evidence has arrived and retries once the source event lands.
-        //
-        // `source_request` takes priority when (hypothetically) both were
-        // somehow set on one entry: a buffer key is derived from one
-        // direction's nonce/messageHash space, so in practice at most one of
-        // the two is ever populated for a given key.
-        let (direction, nonce, recipient, src_tx_hash, init_timestamp) =
-            match (&self.source_request, &self.signature_request) {
-                (Some(source), _) => (
-                    Direction::EthToGno,
-                    source.event.nonce,
-                    source.event.recipient,
-                    source.transaction_hash,
-                    source.block_timestamp,
-                ),
-                (None, Some(signature_request)) => (
-                    Direction::GnoToEth,
-                    signature_request.event.nonce,
-                    signature_request.event.recipient,
-                    signature_request.transaction_hash,
-                    signature_request.block_timestamp,
-                ),
-                (None, None) => return Ok(None),
-            };
-
-        let native_id = native_id_blob(direction.initiator_chain_id(), nonce)?;
+        let Some(input) = resolve_input(self)? else {
+            return Ok(None);
+        };
+        let native_id = input.identity.native_id(input.direction)?;
         let (status, last_update_timestamp, dst_tx_hash, is_final) =
-            status_and_finality(direction, self);
-        let transfer = build_transfer(key, direction, self)?;
+            status_and_finality(input.direction, self);
+        let transfer = build_transfer(key, &input, self)?;
 
         let message_model = crosschain_messages::ActiveModel {
             id: ActiveValue::Set(key.message_id),
             bridge_id: ActiveValue::Set(key.bridge_id as i32),
             status: ActiveValue::Set(status),
-            init_timestamp: ActiveValue::Set(init_timestamp),
+            init_timestamp: ActiveValue::Set(input.init_timestamp),
             last_update_timestamp: ActiveValue::Set(last_update_timestamp),
-            src_chain_id: ActiveValue::Set(direction.initiator_chain_id()),
-            dst_chain_id: ActiveValue::Set(Some(direction.destination_chain_id())),
+            src_chain_id: ActiveValue::Set(input.direction.initiator_chain_id()),
+            dst_chain_id: ActiveValue::Set(Some(input.direction.destination_chain_id())),
             native_id: ActiveValue::Set(Some(native_id.to_vec())),
-            src_tx_hash: ActiveValue::Set(Some(src_tx_hash.as_slice().to_vec())),
+            src_tx_hash: ActiveValue::Set(Some(input.src_tx_hash.as_slice().to_vec())),
             dst_tx_hash: ActiveValue::Set(dst_tx_hash),
-            sender_address: ActiveValue::Set(self.sender_address.map(|a| a.as_slice().to_vec())),
-            recipient_address: ActiveValue::Set(Some(recipient.as_slice().to_vec())),
+            sender_address: ActiveValue::Set(Some(address_bytes(input.sender))),
+            recipient_address: ActiveValue::Set(Some(address_bytes(input.recipient))),
             payload: ActiveValue::Set(None),
             protocol_metadata: ActiveValue::Set(None),
             stats_processed: ActiveValue::Set(0),
@@ -102,6 +76,128 @@ impl Consolidate for Message {
             amb_anomalies: Vec::new(),
         }))
     }
+}
+
+struct ResolvedInput {
+    direction: Direction,
+    identity: MessageIdentity,
+    src_tx_hash: B256,
+    init_timestamp: NaiveDateTime,
+    sender: Address,
+    recipient: Address,
+    src_value: U256,
+    token_src_address: Address,
+    token_dst_address: Address,
+}
+
+fn resolve_input(message: &Message) -> Result<Option<ResolvedInput>> {
+    let Some(identity) = message.identity else {
+        return Ok(None);
+    };
+
+    let resolved = match (&message.source_request, &message.signature_request) {
+        (Some(source), _) => {
+            ensure!(
+                message.direction == Some(Direction::EthToGno),
+                "xDai source direction mismatch"
+            );
+            ensure!(
+                identity == MessageIdentity::Nonce(source.event.nonce),
+                "xDai source identity mismatch"
+            );
+            let Some(sender) = message.sender_address else {
+                return Ok(None);
+            };
+            ResolvedInput {
+                direction: Direction::EthToGno,
+                identity,
+                src_tx_hash: source.transaction_hash,
+                init_timestamp: source.block_timestamp,
+                sender,
+                recipient: source.event.recipient,
+                src_value: source.event.value,
+                token_src_address: source.event.source_asset,
+                token_dst_address: NATIVE_SENTINEL,
+            }
+        }
+        (None, Some(source)) => {
+            ensure!(
+                message.direction == Some(Direction::GnoToEth),
+                "xDai signature-request direction mismatch"
+            );
+            ensure!(
+                identity == MessageIdentity::Nonce(source.event.nonce),
+                "xDai signature-request identity mismatch"
+            );
+            let Some(sender) = message.sender_address else {
+                return Ok(None);
+            };
+            ResolvedInput {
+                direction: Direction::GnoToEth,
+                identity,
+                src_tx_hash: source.transaction_hash,
+                init_timestamp: source.block_timestamp,
+                sender,
+                recipient: source.event.recipient,
+                src_value: source.event.value,
+                token_src_address: NATIVE_SENTINEL,
+                token_dst_address: source.event.token.unwrap_or(DAI),
+            }
+        }
+        (None, None) => {
+            let (
+                MessageIdentity::SourceTransactionHash(source_hash),
+                Some(completion),
+                Some(source),
+            ) = (
+                identity,
+                &message.destination_execution,
+                &message.reconstructed_source,
+            )
+            else {
+                return Ok(None);
+            };
+            let direction = completion.direction();
+            ensure!(
+                message.direction == Some(direction),
+                "xDai reconstructed direction mismatch"
+            );
+            ensure!(
+                source.transaction_hash == source_hash,
+                "xDai reconstructed source hash mismatch"
+            );
+            let recipient = completion.event().event.recipient;
+            let src_value = match &source.legacy_source_event {
+                Some(event) => {
+                    ensure!(
+                        event.recipient == recipient,
+                        "xDai reconstructed recipient mismatch"
+                    );
+                    event.value
+                }
+                None if direction == Direction::EthToGno => completion.event().event.value,
+                None => {
+                    anyhow::bail!("GnoToEth reconstructed source is missing legacy source event")
+                }
+            };
+            let (token_src_address, token_dst_address) = match direction {
+                Direction::EthToGno => (source.ethereum_asset, NATIVE_SENTINEL),
+                Direction::GnoToEth => (NATIVE_SENTINEL, source.ethereum_asset),
+            };
+            ResolvedInput {
+                direction,
+                identity,
+                src_tx_hash: source_hash,
+                init_timestamp: source.block_timestamp,
+                sender: source.sender_address,
+                recipient,
+                src_value,
+                token_src_address,
+                token_dst_address,
+            }
+        }
+    };
+    Ok(Some(resolved))
 }
 
 /// `(direction, destination_execution)` is the whole contract, mirroring
@@ -159,28 +255,9 @@ fn status_and_finality(
 /// note in the body for why that distinction matters here.
 fn build_transfer(
     key: &Key,
-    direction: Direction,
+    input: &ResolvedInput,
     message: &Message,
 ) -> Result<crosschain_transfers::ActiveModel> {
-    let (recipient, value, token_src_address, token_dst_address) =
-        match (&message.source_request, &message.signature_request) {
-            (Some(source), _) => (
-                source.event.recipient,
-                source.event.value,
-                source.event.source_asset,
-                NATIVE_SENTINEL,
-            ),
-            (None, Some(signature_request)) => (
-                signature_request.event.recipient,
-                signature_request.event.value,
-                NATIVE_SENTINEL,
-                // Explicit only from Home v7; the legacy 104-byte layout
-                // (Home v6) hardcodes DAI (`parseMessage`).
-                signature_request.event.token.unwrap_or(DAI),
-            ),
-            (None, None) => unreachable!("consolidate() returns early without a source event"),
-        };
-
     // `dst_amount` comes from the destination event's own `value` whenever
     // that event has been observed, and falls back to the source value only
     // for a message still in flight.
@@ -197,7 +274,7 @@ fn build_transfer(
     // Reading the mirrored value instead would make that divergence
     // undetectable, since `FeeDistributedFrom*` is deliberately not
     // subscribed.
-    let src_amount = amount_to_decimal(value)?;
+    let src_amount = amount_to_decimal(input.src_value)?;
     let dst_amount = match &message.destination_execution {
         Some(completion) => amount_to_decimal(completion.event().event.value)?,
         None => src_amount.clone(),
@@ -207,14 +284,14 @@ fn build_transfer(
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
         index: ActiveValue::Set(0),
-        token_src_chain_id: ActiveValue::Set(direction.initiator_chain_id()),
-        token_dst_chain_id: ActiveValue::Set(direction.destination_chain_id()),
+        token_src_chain_id: ActiveValue::Set(input.direction.initiator_chain_id()),
+        token_dst_chain_id: ActiveValue::Set(input.direction.destination_chain_id()),
         src_amount: ActiveValue::Set(Some(src_amount)),
         dst_amount: ActiveValue::Set(Some(dst_amount)),
-        token_src_address: ActiveValue::Set(Some(address_bytes(token_src_address))),
-        token_dst_address: ActiveValue::Set(Some(address_bytes(token_dst_address))),
-        sender_address: ActiveValue::Set(message.sender_address.map(address_bytes)),
-        recipient_address: ActiveValue::Set(Some(address_bytes(recipient))),
+        token_src_address: ActiveValue::Set(Some(address_bytes(input.token_src_address))),
+        token_dst_address: ActiveValue::Set(Some(address_bytes(input.token_dst_address))),
+        sender_address: ActiveValue::Set(Some(address_bytes(input.sender))),
+        recipient_address: ActiveValue::Set(Some(address_bytes(input.recipient))),
         token_ids: ActiveValue::Set(None),
         ..new_transfer(TransferAssetLinkage::Conversion)
     })
@@ -238,9 +315,9 @@ mod tests {
 
     use super::*;
     use crate::indexer::xdai::types::{
-        AnnotatedEvent, CollectedSignaturesEvent, Completion, CompletionEvent,
-        UserRequestForAffirmationEvent, UserRequestForSignatureEvent, ValidatorConfirmation,
-        key_from_native_id,
+        AnnotatedEvent, CollectedSignaturesEvent, Completion, CompletionEvent, LegacySourceEvent,
+        MessageIdentity, ReconstructedSource, UserRequestForAffirmationEvent,
+        UserRequestForSignatureEvent, ValidatorConfirmation, key_from_native_id, native_id_blob,
     };
 
     macro_rules! set_value {
@@ -266,6 +343,7 @@ mod tests {
 
     fn source_request(nonce: u64, recipient: Address, block_ts: NaiveDateTime) -> Message {
         Message {
+            identity: Some(MessageIdentity::Nonce(U256::from(nonce))),
             direction: Some(Direction::EthToGno),
             source_request: Some(AnnotatedEvent {
                 event: UserRequestForAffirmationEvent {
@@ -285,6 +363,7 @@ mod tests {
 
     fn signature_request(nonce: u64, recipient: Address, block_ts: NaiveDateTime) -> Message {
         Message {
+            identity: Some(MessageIdentity::Nonce(U256::from(nonce))),
             direction: Some(Direction::GnoToEth),
             signature_request: Some(AnnotatedEvent {
                 event: UserRequestForSignatureEvent {
@@ -602,5 +681,245 @@ mod tests {
             "an Eth→Gno message must never become ReadyToClaim, even if \
              signatures_collected is (erroneously) set on it"
         );
+    }
+
+    #[test]
+    fn reconstructed_gno_to_eth_preserves_source_and_destination_amounts() {
+        let source_hash = hash(0x35);
+        let recipient = addr(0x42);
+        let message = Message {
+            identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
+            direction: Some(Direction::GnoToEth),
+            destination_execution: Some(Completion::Relayed(AnnotatedEvent {
+                event: CompletionEvent {
+                    recipient,
+                    value: U256::from(900u64),
+                },
+                transaction_hash: hash(0x22),
+                block_number: 20,
+                block_timestamp: ts(2_000),
+            })),
+            reconstructed_source: Some(ReconstructedSource {
+                transaction_hash: source_hash,
+                block_number: 39_557_691,
+                block_timestamp: ts(1_000),
+                sender_address: addr(0x55),
+                ethereum_asset: DAI,
+                legacy_source_event: Some(LegacySourceEvent {
+                    recipient,
+                    value: U256::from(1_000u64),
+                }),
+            }),
+            ..Default::default()
+        };
+        let key = key_from_native_id(source_hash.as_ref(), 3).unwrap();
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+        assert!(consolidated.is_final);
+        assert_eq!(
+            set_value!(consolidated.message.native_id),
+            Some(source_hash.to_vec())
+        );
+        assert_eq!(
+            set_value!(consolidated.message.src_tx_hash),
+            Some(source_hash.to_vec())
+        );
+        assert_eq!(
+            set_value!(consolidated.message.sender_address),
+            Some(addr(0x55).to_vec())
+        );
+        let transfer = &consolidated.transfers[0];
+        assert_eq!(
+            set_value!(transfer.src_amount),
+            Some(BigDecimal::from(1_000))
+        );
+        assert_eq!(set_value!(transfer.dst_amount), Some(BigDecimal::from(900)));
+        assert_eq!(
+            set_value!(transfer.token_src_address),
+            Some(NATIVE_SENTINEL.to_vec())
+        );
+        assert_eq!(set_value!(transfer.token_dst_address), Some(DAI.to_vec()));
+    }
+
+    #[test]
+    fn reconstructed_eth_to_gno_plain_transfer_uses_completion_amount() {
+        let source_hash = hash(0x37);
+        let recipient = addr(0x42);
+        let message = Message {
+            identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
+            direction: Some(Direction::EthToGno),
+            destination_execution: Some(Completion::Affirmation(AnnotatedEvent {
+                event: CompletionEvent {
+                    recipient,
+                    value: U256::from(1_460u64),
+                },
+                transaction_hash: hash(0x66),
+                block_number: 40,
+                block_timestamp: ts(2_000),
+            })),
+            reconstructed_source: Some(ReconstructedSource {
+                transaction_hash: source_hash,
+                block_number: 22_027_902,
+                block_timestamp: ts(1_000),
+                sender_address: addr(0x55),
+                ethereum_asset: DAI,
+                legacy_source_event: None,
+            }),
+            ..Default::default()
+        };
+        let key = key_from_native_id(source_hash.as_ref(), 3).unwrap();
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+        let transfer = &consolidated.transfers[0];
+        assert_eq!(
+            set_value!(transfer.src_amount),
+            Some(BigDecimal::from(1_460))
+        );
+        assert_eq!(
+            set_value!(transfer.dst_amount),
+            Some(BigDecimal::from(1_460))
+        );
+        assert_eq!(set_value!(transfer.token_src_address), Some(DAI.to_vec()));
+        assert_eq!(
+            set_value!(transfer.token_dst_address),
+            Some(NATIVE_SENTINEL.to_vec())
+        );
+    }
+
+    #[test]
+    fn reconstructed_gno_to_eth_without_source_event_is_rejected() {
+        let source_hash = hash(0x35);
+        let message = Message {
+            identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
+            direction: Some(Direction::GnoToEth),
+            destination_execution: Some(Completion::Relayed(AnnotatedEvent {
+                event: CompletionEvent {
+                    recipient: addr(1),
+                    value: U256::ONE,
+                },
+                transaction_hash: hash(2),
+                block_number: 2,
+                block_timestamp: ts(2),
+            })),
+            reconstructed_source: Some(ReconstructedSource {
+                transaction_hash: source_hash,
+                block_number: 1,
+                block_timestamp: ts(1),
+                sender_address: addr(3),
+                ethereum_asset: DAI,
+                legacy_source_event: None,
+            }),
+            ..Default::default()
+        };
+        let key = key_from_native_id(source_hash.as_ref(), 3).unwrap();
+        assert!(message.consolidate(&key).is_err());
+    }
+
+    #[test]
+    fn all_real_completed_incident_fixtures_reconstruct_expected_rows() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/xdai/legacy/completed_incidents.json"
+        ))
+        .unwrap();
+        let incidents = fixture["incidents"].as_array().unwrap();
+        assert_eq!(incidents.len(), 4);
+
+        for incident in incidents {
+            let source_hash: B256 = incident["source_hash"].as_str().unwrap().parse().unwrap();
+            let destination_hash: B256 = incident["destination_hash"]
+                .as_str()
+                .unwrap()
+                .parse()
+                .unwrap();
+            let sender: Address = incident["sender"].as_str().unwrap().parse().unwrap();
+            let recipient: Address = incident["recipient"].as_str().unwrap().parse().unwrap();
+            let source_value = U256::from_str(
+                incident["source_value"]
+                    .as_str()
+                    .unwrap_or_else(|| incident["dai_transfer_value"].as_str().unwrap()),
+            )
+            .unwrap();
+            let destination_value =
+                U256::from_str(incident["destination_value"].as_str().unwrap()).unwrap();
+            let source_block = incident["source_block"].as_u64().unwrap();
+            let direction = match incident["direction"].as_str().unwrap() {
+                "gno_to_eth" => Direction::GnoToEth,
+                "eth_to_gno_plain" => Direction::EthToGno,
+                other => panic!("unexpected fixture direction {other}"),
+            };
+            let completion_event = AnnotatedEvent {
+                event: CompletionEvent {
+                    recipient,
+                    value: destination_value,
+                },
+                transaction_hash: destination_hash,
+                block_number: incident["destination_block"].as_i64().unwrap(),
+                block_timestamp: ts(incident["destination_timestamp"].as_i64().unwrap()),
+            };
+            let completion = match direction {
+                Direction::EthToGno => Completion::Affirmation(completion_event),
+                Direction::GnoToEth => Completion::Relayed(completion_event),
+            };
+            let message = Message {
+                identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
+                direction: Some(direction),
+                destination_execution: Some(completion),
+                reconstructed_source: Some(ReconstructedSource {
+                    transaction_hash: source_hash,
+                    block_number: source_block,
+                    block_timestamp: ts(incident["source_timestamp"].as_i64().unwrap()),
+                    sender_address: sender,
+                    ethereum_asset: crate::indexer::xdai::version::legacy_ethereum_asset(
+                        direction,
+                        source_block,
+                    )
+                    .unwrap(),
+                    legacy_source_event: (direction == Direction::GnoToEth).then_some(
+                        LegacySourceEvent {
+                            recipient,
+                            value: source_value,
+                        },
+                    ),
+                }),
+                ..Default::default()
+            };
+            let key = key_from_native_id(source_hash.as_ref(), 3).unwrap();
+            let consolidated = message.consolidate(&key).unwrap().unwrap();
+            let output = &consolidated.message;
+            let transfer = &consolidated.transfers[0];
+
+            assert!(consolidated.is_final);
+            assert_eq!(set_value!(output.native_id), Some(source_hash.to_vec()));
+            assert_eq!(set_value!(output.src_tx_hash), Some(source_hash.to_vec()));
+            assert_eq!(set_value!(output.sender_address), Some(sender.to_vec()));
+            assert_eq!(
+                set_value!(output.recipient_address),
+                Some(recipient.to_vec())
+            );
+            assert_eq!(
+                set_value!(transfer.src_amount),
+                Some(amount_to_decimal(source_value).unwrap())
+            );
+            assert_eq!(
+                set_value!(transfer.dst_amount),
+                Some(amount_to_decimal(destination_value).unwrap())
+            );
+            match direction {
+                Direction::EthToGno => {
+                    assert_eq!(set_value!(transfer.token_src_address), Some(DAI.to_vec()));
+                    assert_eq!(
+                        set_value!(transfer.token_dst_address),
+                        Some(NATIVE_SENTINEL.to_vec())
+                    );
+                }
+                Direction::GnoToEth => {
+                    assert_eq!(
+                        set_value!(transfer.token_src_address),
+                        Some(NATIVE_SENTINEL.to_vec())
+                    );
+                    assert_eq!(set_value!(transfer.token_dst_address), Some(DAI.to_vec()));
+                }
+            }
+        }
     }
 }

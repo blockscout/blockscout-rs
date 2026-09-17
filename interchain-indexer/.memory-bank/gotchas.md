@@ -2190,51 +2190,63 @@ end of either bridge's edge.
 
 ---
 
-## xDai Messages Straddling The Epoch Floor Are Deliberately Not Indexed
+## xDai Destination Events Can Carry Legacy Source Hashes Above The Epoch Floor
 
-**Symptom:** An xDai buffer entry accumulates a destination event
-(`AffirmationCompleted` or `RelayedMessage`) but never consolidates, so the
-message never appears in `crosschain_messages`. It settles into
-`pending_messages` and stays there.
+The 2025-04-15 floors (Ethereum `22273407`, Gnosis `39569937`) constrain
+which logs are scanned, not the identity of messages completing there.
+The research note's **The epoch boundary is not clean on the destination
+side** documents 348 orphaned hash-based affirmations, three delayed Gno→Eth
+claims and one affirmed Ethereum plain-transfer deposit. A maintenance pause
+did not eliminate this population. Identity cannot be inferred solely from
+the destination contract version.
 
-**Root cause:** `xdai/consolidation.rs::consolidate` returns `Ok(None)` unless
-`source_request` or `signature_request` is set — a destination event alone is
-not enough to build a row. Both destination handlers reach the buffer through
-`alter`, which *creates* the entry, so a destination-only entry is reachable
-and then simply waits forever for a source that will never arrive.
+Destination `bytes32` values are now classified per event: values through
+`u64::MAX` are nonces, while larger values are raw 32-byte source transaction
+hashes. The eight-byte threshold is about the numeric value (24 leading zero
+bytes for a nonce), not about four or eight leading zero bytes. Source events
+remain nonce-only and reject values above `u64::MAX`.
 
-This is reachable only in one window: a message whose source event sits **below
-the configured epoch floor** (Ethereum `22273407` / Gnosis `39569937`) while
-its destination event sits above it. Both floors are the 2025-04-15 upgrade
-blocks, so the candidate population is exactly "messages in flight across that
-upgrade".
+Hash completions fetch the counterpart receipt and block before mutating the
+buffer. Their `native_id` and `src_tx_hash` are the raw source hash; sender and
+initial timestamp come from that receipt/block. A matching legacy two-argument
+source event supplies the observed source amount and recipient, while the
+destination completion independently supplies the destination amount. Only an
+Eth→Gno plain transfer may omit the bridge source event and use the completion
+amount as the constrained no-fee fallback.
 
-**This is intentional, not a bug to fix.** Two reasons:
+A hash-based `SignedForAffirmation` alone must not manufacture a transfer or
+be attached to the genuine nonce-based message for the same source transaction:
+those are distinct on-chain signing buckets. A successful legacy completion
+is stronger evidence: its bytes32 identifies the source transaction on the
+opposite chain, enabling a targeted source lookup even below the scan floor.
+For an Ethereum plain ERC-20 transfer, no bridge source event exists at all;
+only later affirmation makes it an observable cross-chain transfer.
 
-1. **It should be empty in practice.** The bridge is taken down for maintenance
-   to upgrade its contracts, so there should be no message in flight across the
-   upgrade boundary at all.
-2. **A destination-only row could not be built correctly anyway.** For
-   Ethereum→Gnosis the source asset comes from the version-keyed grammar table
-   *at the source block* (`UserRequestForAffirmation` carries no token field).
-   With no source event there is no source block, so `token_src_address` would
-   have to be `NULL` — and a NULL token address on an indexed chain is never
-   stats-eligible (`stats/indexed_chains.rs::transfer_identity_ready_condition`),
-   which is the exact problem the native sentinel exists to avoid. The row
-   would be permanently deferred from stats, i.e. no better than not existing.
+Two reconstruction traps matter when implementing this support:
 
-AMB *does* synthesize such rows (`amb/consolidation.rs::build_destination_only`),
-and that asymmetry is deliberate: AMB's destination event carries the full
-header (sender, executor, both chain ids), so a complete row is derivable from
-it. xDai's carries only `(recipient, value, nonce)`.
+- A source block number belongs to the **source chain**. For a Gno→Eth
+  claim, Gnosis block `39557691` must never be compared with Ethereum's
+  USDS cutover `23748179`. The legacy 104-byte message format selects DAI
+  through `Message.parseMessage`; only Eth→Gno uses Ethereum source-block
+  asset thresholds. An asset resolver should require direction explicitly.
+- The fetched source receipt can contain the legacy two-argument
+  `UserRequestForSignature(address,uint256)` or
+  `UserRequestForAffirmation(address,uint256)`. Decode the correct proxy's
+  event to preserve its observed source amount and validate recipient;
+  do not replace that amount with completion.value. A missing bridge source
+  event is expected for an Ethereum plain token transfer, but not for a
+  Gnosis native send, whose fallback emits UserRequestForSignature.
 
-**If this ever needs to change** — e.g. an upgrade ships without a maintenance
-pause — the honest fix is to lower `started_at_block` for the affected side and
-implement the pre-2025-04-15 grammar, not to synthesize partial rows. Below
-that floor the `bytes32` in these events is a *transaction hash*, not a nonce,
-under an unchanged `topic0`, so the identity derivation differs too; see
-`.memory-bank/research/xdai-bridge-protocol-and-indexing-fit.md` §"Resulting
-decode epochs".
+Standalone hash confirmations use the ordinary buffer/pending path and emit a
+WARN; they do not perform source RPC and do not bypass the confirmations FK.
+Consequently an orphan can remain pending indefinitely, and a confirmation
+arriving after a completed message was flushed can form a new pending entry.
+This is an accepted limitation, not a reason to create a phantom message.
+
+See [xDai protocol research](./research/xdai-bridge-protocol-and-indexing-fit.md),
+sections **The epoch boundary is not clean on the destination side** and
+**Plain-transfer deposits**. Ordinary nonce-based destination-only entries
+still need their source event; do not generalize legacy reconstruction to them.
 
 ---
 

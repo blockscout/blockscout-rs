@@ -2,23 +2,34 @@ use std::{collections::HashMap, sync::Arc};
 
 use alloy::{
     dyn_abi::{DynSolValue, EventExt},
-    primitives::{Address, B256, U256},
+    primitives::{Address, B256, U256, keccak256},
     rpc::types::{Block, Log},
+    sol_types::SolEvent,
 };
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use dashmap::DashMap;
 
-use crate::message_buffer::{Key, MessageBuffer};
+use crate::{
+    indexer::evm::fetch_receipts_for_transactions,
+    message_buffer::{Key, MessageBuffer},
+};
 
 use super::{
     abi::{AbiRegistry, LogResolution},
+    indexer::XDaiChainConfig,
     types::{
-        AnnotatedEvent, CollectedSignaturesEvent, Completion, CompletionEvent, Direction, Message,
+        AnnotatedEvent, CollectedSignaturesEvent, Completion, CompletionEvent, Direction,
+        LegacySourceEvent, Message, MessageIdentity, ReconstructedSource,
         UserRequestForAffirmationEvent, UserRequestForSignatureEvent, ValidatorConfirmation,
-        compute_message_hash, key_from_native_id, native_id_blob,
+        compute_message_hash, key_from_native_id,
     },
-    version::{XDaiSide, grammar_for},
+    version::{XDaiSide, grammar_for, legacy_ethereum_asset},
 };
+
+alloy::sol! {
+    event LegacyUserRequestForAffirmation(address recipient, uint256 value);
+    event LegacyUserRequestForSignature(address recipient, uint256 value);
+}
 
 pub(super) struct EventContext<'a> {
     pub(super) bridge_id: i32,
@@ -34,6 +45,7 @@ pub(super) struct EventContext<'a> {
     pub(super) foreign_bridge_address: Address,
     pub(super) message_hash_lookup: &'a Arc<DashMap<B256, Key>>,
     pub(super) pending_message_hash_events: &'a Arc<DashMap<B256, PendingMessageHashEvents>>,
+    pub(super) counterpart_chain: Option<&'a XDaiChainConfig>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -182,6 +194,7 @@ async fn handle_user_request_for_affirmation(
     let recipient = expect_address(decoded.body.first(), "recipient")?;
     let value = expect_uint(decoded.body.get(1), "value")?;
     let nonce = expect_nonce(decoded.body.get(2), "nonce")?;
+    let identity = MessageIdentity::source(nonce)?;
 
     // Never from a log (no token field exists) and never from a `latest`
     // RPC call (would relabel history): the version-block-keyed grammar
@@ -191,7 +204,7 @@ async fn handle_user_request_for_affirmation(
         .source_asset
         .context("xDai Foreign grammar has no source_asset")?;
 
-    let native_id = native_id_blob(Direction::EthToGno.initiator_chain_id(), nonce)?;
+    let native_id = identity.native_id(Direction::EthToGno)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -209,7 +222,9 @@ async fn handle_user_request_for_affirmation(
 
     ctx.buffer
         .alter(key, ctx.chain_id as u64, block_number, |message| {
+            ensure_identity_and_direction(message, identity, Direction::EthToGno)?;
             message.direction = Some(Direction::EthToGno);
+            message.identity = Some(identity);
             message.source_request = Some(annotated);
             message.sender_address = Some(transaction_from);
             Ok(())
@@ -226,8 +241,9 @@ async fn handle_signed_for_affirmation(
     let decoded = event.decode_log(log.data())?;
     let signer = expect_address(decoded.indexed.first(), "signer")?;
     let nonce = expect_nonce(decoded.body.first(), "nonce")?;
+    let identity = MessageIdentity::destination(nonce);
 
-    let native_id = native_id_blob(Direction::EthToGno.initiator_chain_id(), nonce)?;
+    let native_id = identity.native_id(Direction::EthToGno)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -238,8 +254,24 @@ async fn handle_signed_for_affirmation(
         block_timestamp,
     };
 
+    if let MessageIdentity::SourceTransactionHash(source_hash) = identity {
+        tracing::warn!(
+            bridge_id = ctx.bridge_id,
+            chain_id = ctx.chain_id,
+            block_number,
+            tx_hash = ?log.transaction_hash,
+            log_index = ?log.log_index,
+            validator_address = %signer,
+            source_tx_hash = %source_hash,
+            "observed legacy xDai confirmation keyed by source transaction hash"
+        );
+    }
+
     ctx.buffer
         .alter(key, ctx.chain_id as u64, block_number, |message| {
+            ensure_identity_and_direction(message, identity, Direction::EthToGno)?;
+            message.identity = Some(identity);
+            message.direction = Some(Direction::EthToGno);
             message.validator_confirmations.insert(signer, confirmation);
             Ok(())
         })
@@ -255,9 +287,10 @@ async fn handle_affirmation_completed(
     let decoded = event.decode_log(log.data())?;
     let recipient = expect_address(decoded.body.first(), "recipient")?;
     let value = expect_uint(decoded.body.get(1), "value")?;
-    let nonce = expect_nonce(decoded.body.get(2), "nonce")?;
+    let value_or_hash = expect_nonce(decoded.body.get(2), "nonce")?;
+    let identity = MessageIdentity::destination(value_or_hash);
 
-    let native_id = native_id_blob(Direction::EthToGno.initiator_chain_id(), nonce)?;
+    let native_id = identity.native_id(Direction::EthToGno)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -268,9 +301,27 @@ async fn handle_affirmation_completed(
         block_timestamp,
     };
 
+    let completion = Completion::Affirmation(annotated);
+    let reconstructed_source = match identity {
+        MessageIdentity::Nonce(_) => None,
+        MessageIdentity::SourceTransactionHash(source_hash) => {
+            Some(reconstruct_source(ctx, Direction::EthToGno, source_hash, recipient).await?)
+        }
+    };
+
     ctx.buffer
         .alter(key, ctx.chain_id as u64, block_number, |message| {
-            message.destination_execution = Some(Completion::Affirmation(annotated));
+            ensure_completion_compatible(
+                message,
+                identity,
+                Direction::EthToGno,
+                &completion,
+                reconstructed_source.as_ref(),
+            )?;
+            message.identity = Some(identity);
+            message.direction = Some(Direction::EthToGno);
+            message.destination_execution = Some(completion);
+            message.reconstructed_source = reconstructed_source;
             Ok(())
         })
         .await
@@ -287,13 +338,14 @@ async fn handle_user_request_for_signature(
     let recipient = expect_address(decoded.body.first(), "recipient")?;
     let value = expect_uint(decoded.body.get(1), "value")?;
     let nonce = expect_nonce(decoded.body.get(2), "nonce")?;
+    let identity = MessageIdentity::source(nonce)?;
     let token = match decoded.body.get(3) {
         Some(DynSolValue::Address(token)) => Some(*token),
         None => None,
         other => bail!("expected optional address token, got {other:?}"),
     };
 
-    let native_id = native_id_blob(Direction::GnoToEth.initiator_chain_id(), nonce)?;
+    let native_id = identity.native_id(Direction::GnoToEth)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -311,6 +363,8 @@ async fn handle_user_request_for_signature(
 
     ctx.buffer
         .alter(key, ctx.chain_id as u64, block_number, |message| {
+            ensure_identity_and_direction(message, identity, Direction::GnoToEth)?;
+            message.identity = Some(identity);
             message.direction = Some(Direction::GnoToEth);
             message.signature_request = Some(annotated);
             message.sender_address = Some(transaction_from);
@@ -431,12 +485,10 @@ async fn handle_relayed_message(
     let decoded = event.decode_log(log.data())?;
     let recipient = expect_address(decoded.body.first(), "recipient")?;
     let value = expect_uint(decoded.body.get(1), "value")?;
-    // The ABI still names this parameter `transactionHash` and the
-    // Solidity comment still calls it one, but since Foreign v9 / Home v6 it
-    // carries the Home (Gnosis) nonce -- see the protocol primer.
-    let nonce = expect_nonce(decoded.body.get(2), "transactionHash")?;
+    let value_or_hash = expect_nonce(decoded.body.get(2), "transactionHash")?;
+    let identity = MessageIdentity::destination(value_or_hash);
 
-    let native_id = native_id_blob(Direction::GnoToEth.initiator_chain_id(), nonce)?;
+    let native_id = identity.native_id(Direction::GnoToEth)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -447,12 +499,215 @@ async fn handle_relayed_message(
         block_timestamp,
     };
 
+    let completion = Completion::Relayed(annotated);
+    let reconstructed_source = match identity {
+        MessageIdentity::Nonce(_) => None,
+        MessageIdentity::SourceTransactionHash(source_hash) => {
+            Some(reconstruct_source(ctx, Direction::GnoToEth, source_hash, recipient).await?)
+        }
+    };
+
     ctx.buffer
         .alter(key, ctx.chain_id as u64, block_number, |message| {
-            message.destination_execution = Some(Completion::Relayed(annotated));
+            ensure_completion_compatible(
+                message,
+                identity,
+                Direction::GnoToEth,
+                &completion,
+                reconstructed_source.as_ref(),
+            )?;
+            message.identity = Some(identity);
+            message.direction = Some(Direction::GnoToEth);
+            message.destination_execution = Some(completion);
+            message.reconstructed_source = reconstructed_source;
             Ok(())
         })
         .await
+}
+
+fn ensure_identity_and_direction(
+    message: &Message,
+    identity: MessageIdentity,
+    direction: Direction,
+) -> Result<()> {
+    ensure!(
+        message.identity.is_none_or(|existing| existing == identity),
+        "conflicting xDai message identity"
+    );
+    ensure!(
+        message
+            .direction
+            .is_none_or(|existing| existing == direction),
+        "conflicting xDai message direction"
+    );
+    Ok(())
+}
+
+fn ensure_completion_compatible(
+    message: &Message,
+    identity: MessageIdentity,
+    direction: Direction,
+    completion: &Completion,
+    reconstructed_source: Option<&ReconstructedSource>,
+) -> Result<()> {
+    ensure_identity_and_direction(message, identity, direction)?;
+    ensure!(
+        message
+            .destination_execution
+            .as_ref()
+            .is_none_or(|existing| existing == completion),
+        "conflicting xDai completion payload"
+    );
+    ensure!(
+        message
+            .reconstructed_source
+            .as_ref()
+            .is_none_or(|existing| Some(existing) == reconstructed_source),
+        "conflicting xDai reconstructed source"
+    );
+    Ok(())
+}
+
+async fn reconstruct_source(
+    ctx: &EventContext<'_>,
+    direction: Direction,
+    source_hash: B256,
+    destination_recipient: Address,
+) -> Result<ReconstructedSource> {
+    let counterpart = ctx
+        .counterpart_chain
+        .context("missing counterpart xDai chain configuration for legacy source reconstruction")?;
+    fetch_reconstructed_source(counterpart, direction, source_hash, destination_recipient).await
+}
+
+async fn fetch_reconstructed_source(
+    counterpart: &XDaiChainConfig,
+    direction: Direction,
+    source_hash: B256,
+    destination_recipient: Address,
+) -> Result<ReconstructedSource> {
+    let proxy_address = counterpart_proxy_address(counterpart)?;
+    let mut receipts = fetch_receipts_for_transactions(&counterpart.provider, [source_hash], 1)
+        .await
+        .with_context(|| format!("failed to reconstruct xDai source {source_hash}"))?;
+    let receipt = receipts
+        .remove(&source_hash)
+        .with_context(|| format!("missing fetched xDai source receipt {source_hash}"))?;
+    let block_number = receipt.block.header.number;
+    let block_timestamp =
+        chrono::DateTime::from_timestamp(receipt.block.header.timestamp as i64, 0)
+            .map(|timestamp| timestamp.naive_utc())
+            .context("invalid reconstructed xDai source block timestamp")?;
+    let legacy_source_event = decode_legacy_source_event(
+        direction,
+        proxy_address,
+        &receipt.logs,
+        destination_recipient,
+    )?;
+
+    Ok(ReconstructedSource {
+        transaction_hash: source_hash,
+        block_number,
+        block_timestamp,
+        sender_address: receipt.transaction_from,
+        ethereum_asset: legacy_ethereum_asset(direction, block_number)?,
+        legacy_source_event,
+    })
+}
+
+fn counterpart_proxy_address(chain: &XDaiChainConfig) -> Result<Address> {
+    let Some(first) = chain.contracts.first().map(|contract| contract.address) else {
+        bail!(
+            "counterpart xDai chain {} has no proxy contracts",
+            chain.chain_id
+        );
+    };
+    ensure!(
+        chain
+            .contracts
+            .iter()
+            .all(|contract| contract.address == first),
+        "counterpart xDai chain {} has multiple proxy addresses",
+        chain.chain_id
+    );
+    Ok(first)
+}
+
+fn decode_legacy_source_event(
+    direction: Direction,
+    proxy_address: Address,
+    logs: &[Log],
+    destination_recipient: Address,
+) -> Result<Option<LegacySourceEvent>> {
+    let legacy_topic = match direction {
+        Direction::EthToGno => LegacyUserRequestForAffirmation::SIGNATURE_HASH,
+        Direction::GnoToEth => LegacyUserRequestForSignature::SIGNATURE_HASH,
+    };
+    let matching = logs
+        .iter()
+        .filter(|log| log.address() == proxy_address && log.topic0() == Some(&legacy_topic))
+        .collect::<Vec<_>>();
+    ensure!(
+        matching.len() <= 1,
+        "multiple matching legacy xDai source events"
+    );
+
+    let decoded = matching
+        .first()
+        .map(|log| -> Result<LegacySourceEvent> {
+            let event = match direction {
+                Direction::EthToGno => {
+                    let event = LegacyUserRequestForAffirmation::decode_log_validate(&log.inner)
+                        .context("malformed legacy UserRequestForAffirmation")?;
+                    LegacySourceEvent {
+                        recipient: event.data.recipient,
+                        value: event.data.value,
+                    }
+                }
+                Direction::GnoToEth => {
+                    let event = LegacyUserRequestForSignature::decode_log_validate(&log.inner)
+                        .context("malformed legacy UserRequestForSignature")?;
+                    LegacySourceEvent {
+                        recipient: event.data.recipient,
+                        value: event.data.value,
+                    }
+                }
+            };
+            ensure!(
+                event.recipient == destination_recipient,
+                "legacy xDai source recipient mismatch"
+            );
+            Ok(event)
+        })
+        .transpose()?;
+
+    if decoded.is_none() {
+        let modern_topics = match direction {
+            Direction::EthToGno => [
+                keccak256("UserRequestForAffirmation(address,uint256,bytes32)"),
+                B256::ZERO,
+            ],
+            Direction::GnoToEth => [
+                keccak256("UserRequestForSignature(address,uint256,bytes32)"),
+                keccak256("UserRequestForSignature(address,uint256,bytes32,address)"),
+            ],
+        };
+        ensure!(
+            !logs.iter().any(|log| {
+                log.address() == proxy_address
+                    && log
+                        .topic0()
+                        .is_some_and(|topic| modern_topics.contains(topic))
+            }),
+            "source receipt contains unsupported modern xDai source-request grammar"
+        );
+        ensure!(
+            direction == Direction::EthToGno,
+            "GnoToEth legacy source receipt has no UserRequestForSignature event"
+        );
+    }
+
+    Ok(decoded)
 }
 
 /// Publishes the correlation queue's occupancy. Called from every site that
@@ -659,5 +914,231 @@ fn expect_nonce(value: Option<&DynSolValue>, name: &str) -> Result<U256> {
     match value {
         Some(DynSolValue::FixedBytes(value, 32)) => Ok(U256::from_be_slice(value.as_slice())),
         other => bail!("expected bytes32 {name}, got {other:?}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::{
+        primitives::{Bytes, LogData},
+        providers::{Provider, ProviderBuilder},
+        rpc::types::TransactionReceipt,
+        transports::mock::Asserter,
+    };
+
+    use super::*;
+
+    fn rpc_log(address: Address, data: LogData) -> Log {
+        Log {
+            inner: alloy::primitives::Log { address, data },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn legacy_decoder_decodes_both_directions_and_preserves_source_value() {
+        let proxy = Address::repeat_byte(1);
+        let recipient = Address::repeat_byte(2);
+        let affirmation = LegacyUserRequestForAffirmation {
+            recipient,
+            value: U256::from(1_001u64),
+        };
+        let signature = LegacyUserRequestForSignature {
+            recipient,
+            value: U256::from(2_002u64),
+        };
+
+        assert_eq!(
+            decode_legacy_source_event(
+                Direction::EthToGno,
+                proxy,
+                &[rpc_log(proxy, affirmation.encode_log_data())],
+                recipient,
+            )
+            .unwrap(),
+            Some(LegacySourceEvent {
+                recipient,
+                value: U256::from(1_001u64)
+            })
+        );
+        assert_eq!(
+            decode_legacy_source_event(
+                Direction::GnoToEth,
+                proxy,
+                &[rpc_log(proxy, signature.encode_log_data())],
+                recipient,
+            )
+            .unwrap(),
+            Some(LegacySourceEvent {
+                recipient,
+                value: U256::from(2_002u64)
+            })
+        );
+    }
+
+    #[test]
+    fn legacy_decoder_ignores_another_proxy_and_allows_only_eth_plain_fallback() {
+        let proxy = Address::repeat_byte(1);
+        let recipient = Address::repeat_byte(2);
+        let log = rpc_log(
+            Address::repeat_byte(3),
+            LegacyUserRequestForAffirmation {
+                recipient,
+                value: U256::ONE,
+            }
+            .encode_log_data(),
+        );
+        assert_eq!(
+            decode_legacy_source_event(
+                Direction::EthToGno,
+                proxy,
+                std::slice::from_ref(&log),
+                recipient,
+            )
+            .unwrap(),
+            None
+        );
+        assert!(decode_legacy_source_event(Direction::GnoToEth, proxy, &[log], recipient).is_err());
+    }
+
+    #[test]
+    fn legacy_decoder_rejects_malformed_multiple_and_recipient_mismatch() {
+        let proxy = Address::repeat_byte(1);
+        let recipient = Address::repeat_byte(2);
+        let valid = rpc_log(
+            proxy,
+            LegacyUserRequestForSignature {
+                recipient,
+                value: U256::ONE,
+            }
+            .encode_log_data(),
+        );
+        let malformed = rpc_log(
+            proxy,
+            LogData::new_unchecked(
+                vec![LegacyUserRequestForSignature::SIGNATURE_HASH],
+                Bytes::from_static(&[0u8; 1]),
+            ),
+        );
+        assert!(
+            decode_legacy_source_event(Direction::GnoToEth, proxy, &[malformed], recipient,)
+                .is_err()
+        );
+        assert!(
+            decode_legacy_source_event(
+                Direction::GnoToEth,
+                proxy,
+                &[valid.clone(), valid.clone()],
+                recipient,
+            )
+            .is_err()
+        );
+        assert!(
+            decode_legacy_source_event(
+                Direction::GnoToEth,
+                proxy,
+                &[valid],
+                Address::repeat_byte(4),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn modern_source_request_never_becomes_plain_fallback() {
+        let proxy = Address::repeat_byte(1);
+        let modern = rpc_log(
+            proxy,
+            LogData::new_unchecked(
+                vec![keccak256(
+                    "UserRequestForAffirmation(address,uint256,bytes32)",
+                )],
+                Bytes::from(vec![0u8; 96]),
+            ),
+        );
+        assert!(
+            decode_legacy_source_event(
+                Direction::EthToGno,
+                proxy,
+                &[modern],
+                Address::repeat_byte(2),
+            )
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn reconstructed_source_uses_counterpart_provider_receipt_and_block() {
+        let asserter = Asserter::new();
+        let provider = ProviderBuilder::new()
+            .connect_mocked_client(asserter.clone())
+            .erased();
+        let proxy = Address::repeat_byte(1);
+        let recipient = Address::repeat_byte(2);
+        let sender = Address::repeat_byte(3);
+        let source_hash = B256::repeat_byte(0x35);
+        let mut source_log = rpc_log(
+            proxy,
+            LegacyUserRequestForSignature {
+                recipient,
+                value: U256::from(49_240u64),
+            }
+            .encode_log_data(),
+        );
+        source_log.transaction_hash = Some(source_hash);
+        source_log.block_number = Some(39_557_691);
+        source_log.log_index = Some(79);
+        let receipt: TransactionReceipt = serde_json::from_value(serde_json::json!({
+            "type": "0x2",
+            "status": "0x1",
+            "cumulativeGasUsed": "0x1",
+            "logsBloom": format!("0x{}", "00".repeat(256)),
+            "logs": [source_log],
+            "transactionHash": source_hash,
+            "transactionIndex": "0x0",
+            "blockHash": B256::repeat_byte(4),
+            "blockNumber": "0x25b9a3b",
+            "gasUsed": "0x1",
+            "effectiveGasPrice": "0x1",
+            "from": sender,
+            "to": proxy,
+            "contractAddress": null
+        }))
+        .unwrap();
+        asserter.push_success(&Some(receipt));
+
+        let mut block: Block = Block::default();
+        block.header.inner.number = 39_557_691;
+        block.header.inner.timestamp = 1_744_646_380;
+        asserter.push_success(&Some(block));
+
+        let counterpart = XDaiChainConfig {
+            chain_id: 100,
+            provider,
+            start_block: 39_569_937,
+            contracts: vec![super::super::indexer::XDaiContractConfig {
+                address: proxy,
+                version: 7,
+                started_at_block: 39_569_937,
+                abi: None,
+            }],
+        };
+        let reconstructed =
+            fetch_reconstructed_source(&counterpart, Direction::GnoToEth, source_hash, recipient)
+                .await
+                .unwrap();
+
+        assert_eq!(reconstructed.transaction_hash, source_hash);
+        assert_eq!(reconstructed.block_number, 39_557_691);
+        assert_eq!(reconstructed.sender_address, sender);
+        assert_eq!(reconstructed.ethereum_asset, super::super::version::DAI);
+        assert_eq!(
+            reconstructed.legacy_source_event,
+            Some(LegacySourceEvent {
+                recipient,
+                value: U256::from(49_240u64),
+            })
+        );
+        assert!(asserter.read_q().is_empty());
     }
 }

@@ -12,9 +12,18 @@ Gnosis consensus-layer minting path beyond what is observable from logs, and
 the AMB/Omnibridge message lifecycle itself (see
 `amb-omnibridge-token-reconstruction.md` and `message-lifecycle.md`).
 
-Status: **no xDai indexer exists in this repo.** Nothing in `config/` or
-`interchain-indexer-logic/src/indexer/` references it. This note is
-pre-implementation research.
+Status: **the xDai indexer now exists** —
+`interchain-indexer-logic/src/indexer/xdai/` and `config/xdai/`, running as
+`bridge_id = 3`. The config floors both sides at the current epoch
+(Foreign v9 / Home v6), so only the nonce-identified era is indexed today.
+Sections below marked as proposals were written before implementation; where
+they disagree with the code, the code wins.
+
+The proxy upgrade history of both sides — every implementation, its block, and
+what it changed in the log surface — is in *Implementation Upgrade History*
+below; it is the source of the `version` / `started_at_block` pairs in
+`config/xdai/bridges.json`. Validator-set facts are in *Validator set* in that
+same section.
 
 ## Short Answer
 
@@ -209,9 +218,62 @@ needs no serving-layer work — `get_message_id_from_message`
 `ui_url` template `…/bridge-explorer/transaction/{{message_id}}` then resolves
 correctly.
 
-Limitation: 28 bytes cannot hold a 32-byte transaction hash, so the encoding is
-undefined for the pre-2025-04-15 tx-hash era. A further argument for flooring
-`started_at_block` at Foreign v9 / Home v6.
+#### Legacy (tx-hash) era: store the transaction hash verbatim
+
+28 bytes cannot hold a 32-byte transaction hash, so the encoding above has no
+form for the pre-2025-04-15 era. **The decision is to store the raw source
+transaction hash as `native_id` for those messages.** Nothing in the stack
+objects:
+
+- `native_id` is `Option<Vec<u8>>` → `bytea`, no length constraint;
+- `get_crosschain_message` (`interchain-indexer-logic/src/database.rs`)
+  dispatches purely on length — `> 8 bytes` → look up by `native_id`, `<= 8` →
+  interpret as the `id` PK. A 32-byte hash lands in the `native_id` branch.
+  Variable length is already exercised: a test there uses a **16-byte**
+  `native_id`;
+- `get_message_id_from_message` just hex-encodes the blob;
+- `IdentityStrategy` in `indexer/xdai/version.rs` exists for exactly this — its
+  doc comment says the enum is there so a transaction-hash-keyed epoch becomes a
+  new arm rather than a redesign.
+
+The only blocker is the `ensure!` in `native_id_blob`
+(`indexer/xdai/types.rs`), which rejects a value that does not fit in 28 bytes.
+That guard was written on the premise that every message must yield a working
+explorer link — and the official explorer cannot render legacy transfers at all,
+so the premise does not hold. Today the guard makes the handler return `Err`, so
+those messages are **not indexed at all** (this is the source of the
+`failed to process xDai event` log lines). The `native_id = NULL` alternative is
+also worse: `get_message_id_from_message` then falls back to
+`format!("0x{:x}", message.id)`, leaking the internal buffer key into the public
+API for an equally dead link.
+
+The implemented change classifies the unchanged destination `bytes32` at event
+level: `value <= u64::MAX` is a nonce, and any larger value is retained as the
+raw source transaction hash. Source events remain nonce-only and reject larger
+values. This deliberately uses an eight-byte numeric threshold (a uniform hash
+is misclassified with probability 2⁻¹⁹²), so hashes with four or eight leading
+zero bytes are still preserved when their remaining high bytes are non-zero.
+Configured source grammar windows remain nonce-based; no unsupported old scan
+window was added.
+
+Caveat, recorded honestly: in the legacy era the protocol's own identity is
+`hashMsg = keccak(recipient ‖ value ‖ bytes32)`, not the bare transaction hash —
+one transaction could in principle carry several `relayTokens` calls sharing a
+hash, which is precisely the ambiguity the nonce upgrade removed. But `hashMsg`
+is not usable as a buffer key in either era, because
+`SignedForAffirmation(signer, bytes32)` carries no recipient or value; the
+`bytes32` is the only key the event grammar offers. Keying on it is forced, not
+chosen. Empirically the risk is nil: 1500 legacy `UserRequestForAffirmation`
+events sampled across Ethereum blocks 21882741–22273111 gave 1500 distinct
+transactions and **zero** carrying more than one deposit. Worth a counter (like
+AMB's `AMB_IDENTITY_CONFLICTS_TOTAL`) if two different `(recipient, value)`
+pairs ever arrive under one legacy `bytes32`, rather than silently merging.
+
+Two consequences to document for consumers: the legacy `ui_url` will 404 (no
+worse than the message being absent, but suppressing the link when the id is not
+in encoded form is a reasonable product call), and a raw hash does not encode
+its chain the way the 4-byte prefix does — `src_chain_id` on the row is what
+tells you which explorer to open.
 
 ### Message body layout (`libraries/Message.sol`)
 
@@ -292,6 +354,132 @@ vault to sUSDS.
 DAI and USDS are both 18-decimal and convert 1:1, but they are distinct
 addresses and must stay distinct in `token_*_address` and in stats asset
 linking — collapsing them would hide the migration.
+
+### Plain-transfer deposits (sending straight to the bridge address)
+
+The two directions look superficially alike and are fundamentally different.
+
+**Gnosis → Ethereum: supported and fully observable.** The home implementation
+has a payable fallback:
+
+```solidity
+function() public payable {
+    require(msg.data.length == 0);
+    nativeTransfer(msg.sender);
+}
+function relayTokens(address _receiver) external payable { nativeTransfer(_receiver); }
+```
+
+Both paths reach `nativeTransfer`, which emits `UserRequestForSignature`. The
+only difference is the recipient: the fallback uses `msg.sender`. So "just send
+xDAI to the bridge" is a first-class path, it emits the event, and nothing
+special is needed to index it. Group 2 above is exactly this.
+
+**Ethereum → Gnosis: a gap, not a path.** The foreign implementation has **no
+fallback at all** (no `function ()` anywhere in its sources) and no
+`onTokenTransfer` — DAI and USDS are plain ERC-20s, whose `transfer` does not
+notify the recipient. The bridge's code therefore never runs: no event, no
+nonce, no storage write. Only the token's own `Transfer` log exists, and the
+deposit can be honoured only by off-chain validator monitoring, keyed on the
+transaction hash because nothing else exists.
+
+Related asymmetry: `relayTokens` enforces `require(withinLimit(_amount))` at the
+source, while a plain transfer bypasses it entirely — the limit is then hit on
+the destination side in `withinExecutionLimit`, with the parking consequences
+described under *Failure Modes*.
+
+**This is the original mechanism, not a later addition.** Foreign v1 and v2
+(2018-10-08 → 2019-12-24) declare no source event at all, so watching the
+token's `Transfer` to the bridge address was the *only* way to deposit from
+Ethereum. `relayTokens` / `UserRequestForAffirmation` arrived at v3
+(block 9161003, 2019-12-25) and sat alongside it for years — on-chain for new
+deposits, off-chain monitoring for the legacy path, with the docs warning
+against `transfer`. It is now dead: the v10 `recoverUSDS` doc comment exists
+precisely to retrieve tokens "mistakenly sent to this contract after the Hashi
+integration, as the Transfer event will no longer be supported". Bracketed
+empirically — still honoured on 2025-04-25 (the worked example below), and
+absent across Gnosis blocks 45473867–48293152, where 2000 consecutive
+`AffirmationCompleted` events contain zero legacy-format identifiers.
+
+Worked example: Ethereum `0x37b3752a…` (block 22027902, 2025-03-12) is a plain
+`transfer` of 1460.00000000000001019 DAI to the bridge, whose only log is the
+DAI `Transfer` — no bridge event. Gnosis `0x66f605d4…` (block 39738154,
+2025-04-25) then carries `SignedForAffirmation` + `AddedReceiver` +
+`AffirmationCompleted` for `(0x2F137840…, same value, 0x37b3752a…)`, and
+`numAffirmationsSigned` = `2**255 | 4` — 44 days later, four validators
+honoured it and the xDAI was minted.
+
+**How to index these — not by subscribing to `Transfer`.** That filter is cheap
+(`address = DAI|USDS`, `topic0 = Transfer`, `topic2 = bridge`, all indexed) but
+wrong, because it cannot tell a deposit from everything else that moves tokens
+into the bridge:
+
+- `relayTokens` itself does `erc20token().transferFrom(msg.sender, address(this), _amount)`,
+  so **every ordinary deposit emits an identical `Transfer(user → bridge)`**;
+- `XDaiBridgePeripheral` transfers USDS in before calling `relayTokens`;
+- `refillBridge()` / `_withdraw` pull from the sUSDS/sDAI vault back into the
+  bridge; the one-shot `swapSDAIToUSDS()` moved the entire reserve;
+- ordinary mistaken transfers that validators never honour.
+
+The first two are separable by "no `UserRequestForAffirmation` from the bridge
+in the same transaction" — free, since receipts are fetched anyway
+(`indexer/evm/receipt_fetch.rs`). The internal flows need an address allowlist,
+which is fragile. The last class is *undecidable at source time*: a plain
+transfer becomes a bridge message only retroactively, when it is affirmed.
+
+Derive it from the destination instead. `AffirmationCompleted(recipient, value,
+bytes32)` is self-sufficient, because in this era the `bytes32` *is* the source
+transaction hash. Full reconstruction from that one log:
+
+| column | source |
+|---|---|
+| `status` | `Completed` — the event only fires at threshold |
+| `src_chain_id` / `dst_chain_id` | `1` / `100`, fixed: `AffirmationCompleted` exists only on the Home side, so the direction is Eth→Gno by construction |
+| `src_tx_hash` | the `bytes32` itself |
+| `dst_tx_hash` | the log's own transaction |
+| `native_id` | the same `bytes32` (see *Legacy (tx-hash) era* above) |
+| `recipient_address` | event `recipient` |
+| `init_timestamp` | source block timestamp from the targeted receipt lookup |
+| `last_update_timestamp` | destination block timestamp |
+| `src_amount` / `dst_amount` | event `value` for both; this direction has no fee, and no source event exists to differ from it |
+| `token_src_address` | epoch table — DAI below Ethereum block 23748179, USDS from it |
+| `token_dst_address` | `NATIVE_SENTINEL` (the Gnosis leg is native xDAI) |
+| `sender_address` | source receipt `from` (the receipt fetch helper exposes it without a separate transaction lookup) |
+
+The source receipt and its block are fetched together. The lookup also proves
+whether a legacy bridge source event exists and supplies a direction-safe asset:
+Gno→Eth legacy messages always pay DAI, while only Eth→Gno compares its Ethereum
+source block to the DAI/USDS cutover.
+
+**What actually blocks this today** is the early return in
+`indexer/xdai/consolidation.rs`:
+
+```rust
+(None, None) => return Ok(None),
+```
+
+Its comment gives three reasons — "no recipient, no timestamp to anchor
+`init_timestamp` on, and no direction to derive `native_id` from" — and the
+table above answers all three for this specific event (recipient is in the
+event; the timestamp is the destination block's; the direction is implied by
+which side emits `AffirmationCompleted`). Note the consequence of the gate as it
+stands: a group-3 message currently produces **no row at all** — the destination
+evidence sits in the buffer and never consolidates.
+
+The cost of lifting the gate is that such a message appears already `Completed`,
+with no `Initiated` phase — arguably correct, since an unhonoured plain transfer
+is not a bridge message. Structurally this is the destination-only shape the
+codebase already has (`build_destination_only` in AMB, `CompletionEvent` in
+xDai). Lifting it would also need care so it does **not** apply in the nonce
+era, where a destination-only observation means "source not yet indexed" and
+should keep waiting rather than fabricating a completed row.
+
+The minimal implementation now reconstructs this completed path without adding
+a `Transfer` subscription: a missing bridge source event is accepted only for
+Eth→Gno, and the completion amount is used for both sides in that single
+plain-transfer fallback. A `Transfer` subscription would only be warranted
+for a distinct feature — surfacing deposits the validators never honoured — and
+should be scoped as such, not folded into message indexing.
 
 ## Step-by-Step Flow
 
@@ -443,6 +631,34 @@ Versions 4 and 6 were skipped — `upgradeTo` only requires an increasing number
 Foreign v9 / Home v6 landed the same day, as did Foreign v10 / Home v7 — the
 sides are upgraded in coordinated pairs.
 
+`config/xdai/bridges.json` encodes the two current windows per side (v9/v10 on
+chain 1, v6/v7 on chain 100) with these exact `started_at_block` values.
+
+### Validator set
+
+Read on chain from the Home validator-management contract
+`0xB289f0e6fBDFf8EEE340498a56e1787B303F1B6D` (the docs' "4-of-7" is confirmed,
+not just asserted):
+
+| | |
+|---|---|
+| `validatorCount()` | 7 |
+| `requiredSignatures()` | 4 |
+
+**The set rotates, and that is a trap for any historical analysis.** Every
+address observed signing during the April–May 2025 drain —
+`0x4D1c96B9…`, `0x587C0d02…`, `0xfA98B60E…`, `0xc073C8E5…` — returns
+`isValidator == false` today, while addresses seen signing recently
+(`0x82b00cA9…`, `0x1312E989…`) return `true`. Spot-checked with archive calls:
+`isValidator(0x4D1c96B9…)` at Gnosis block 39931990 and
+`isValidator(0x587C0d02…)` at 39738154 both return `true`. So membership must
+always be read **at the block in question**, never at `latest` — otherwise a
+legitimate historical affirmation looks like it came from a non-validator.
+
+The indexer does not check validator membership (the contract already enforces
+`_onlyValidator`), so this matters for investigation and for
+`amb_messages_confirmations` interpretation, not for correctness of indexing.
+
 ### Breaking changes, category A — `topic0` changes (detectable)
 
 | When | Event | Before | After |
@@ -503,9 +719,56 @@ Home (Gnosis `0x7301CFA0…`):
 | B (v6) | 39569937 – 43027712 | `UserRequestForSignature(address,uint256,bytes32)` | nonce / 104 B |
 | C (v7) | 43027713 – … | `UserRequestForSignature(address,uint256,bytes32,address)` | nonce / 104 or 124 B |
 
-Starting an indexer at `started_at_block` = 22273407 / 39569937 collapses this
-to a single grammar per side. Full history needs three grammars per side plus a
-separate branch for Foreign epoch A.
+Starting an indexer at `started_at_block` = 22273407 / 39569937 collapses the
+*source* side to a single grammar. It does **not** do the same for the
+destination side — see below.
+
+### The epoch boundary is not clean on the destination side
+
+A floored indexer still receives tx-hash-identified `bytes32` on destination
+events long after the boundary, because identity is fixed when a message is
+*initiated*, not when it is completed. Measured against a real incident log
+(352 unique `failed to process xDai event` records, `bridge_id = 3`,
+2025-04-15 → 2025-05-07), the arrivals fall into three groups:
+
+**1. Orphaned affirmations from validators still on the old notation (348).**
+A validator calls `executeAffirmation(recipient, value, bytes32)` passing the
+*Ethereum transaction hash* for a message that does have a nonce. Verified
+example: Gnosis tx `0x01ab7aa9…` affirms
+`(0x9A760aa1…, 25000e18, 0x579c029a…)`, while the Ethereum source
+`0x579c029a…` (block 22423136, after the v9 upgrade) emitted
+`UserRequestForAffirmation(…, nonce = 0x151)`. The two `hashMsg` buckets are
+disjoint, and the counters prove the outcome:
+
+| bucket | signatures | processed |
+|---|---|---|
+| tx hash | 1 | no |
+| nonce `0x151` | 4 | **yes** |
+
+So the broken affirmation lands in its own bucket and never reaches threshold,
+while the real message completes on the other six validators. 4-of-7 absorbs one
+broken validator with no user impact. It was three validators initially
+(`0xfA98B60E…`, `0xc073C8E5…` for ~1.5 h after the upgrade) and then
+`0x4D1c96B9…` alone for three weeks, ~19/day.
+
+**2. Legacy Gno→Eth claims (3).** A message initiated before Home v6 and
+executed on Ethereum after it. `RelayedMessage` then carries the Gnosis source
+transaction hash. Verified: `0x35323f04…` is a Gnosis transaction at block
+39557691 (2025-04-14, i.e. below the floor) — a plain native send to the home
+bridge. Entirely valid; the backlog drains within days.
+
+**3. A legacy plain-transfer deposit (1).** See *Plain-transfer deposits* above.
+The gap here is unbounded: this one was 44 days.
+
+**Indexing rules that follow.** A `SignedForAffirmation` must **never create** a
+buffer entry — only attach to one, or queue. Otherwise group 1 manufactures one
+phantom `Initiated` message per orphaned signature (343 of them over three
+weeks) alongside the correct row. The AMB indexer already has the right shape
+(`handle_validator_confirmation` queues unknown keys into
+`pending_message_hash_events`); the queue needs a bound, since here it would
+accumulate for weeks with nothing ever draining it. And a floored indexer must
+still be able to *decode* a tx-hash `bytes32` on destination events rather than
+erroring out on it.
 
 ## Architecture Fit
 
@@ -779,8 +1042,13 @@ it will appear in the upgrade history); or a fee manager is configured and
 - Should the two genuinely stuck messages (81.74 xDAI total) get a dedicated
   `MessageStatus`, or is leaving them `Initiated` acceptable given the volume?
   Modelling them properly requires state the logs do not carry.
-- For Foreign epoch A (before block 9161003), is indexing the ERC-20 `Transfer`
-  to the bridge address worth the extra contract subscription, or should the
-  indexer simply floor at a later block?
-- Does the official explorer address the pre-2025-04-15 tx-hash era at all, and
-  if so under what key? The `chain_id ‖ nonce` encoding cannot represent it.
+- Exactly when did validators stop honouring plain-transfer deposits? Bracketed
+  to somewhere between 2025-04-25 and Gnosis block 45473867; narrowing it needs
+  a sweep of `AffirmationCompleted` across the intervening range for
+  legacy-format identifiers.
+- Was the validator set rotated once or several times since May 2025, and when?
+  Only spot-checked at two blocks; the full `ValidatorAdded`/`ValidatorRemoved`
+  history on `0xB289f0e6…` was not swept.
+- Surfacing unhonoured plain transfers (money sent to the bridge that never
+  became a message) is a plausible separate feature. Does anyone want it, and is
+  the internal-flow allowlist it requires maintainable?

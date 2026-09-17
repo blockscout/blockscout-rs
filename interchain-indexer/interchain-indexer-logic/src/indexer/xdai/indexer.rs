@@ -234,6 +234,16 @@ impl XDaiIndexer {
         let mut failed_blocks: Vec<u64> = Vec::new();
         let mut last_err: Option<anyhow::Error> = None;
         let mut failed_count = 0usize;
+        let counterpart_chain_id = match chain_id {
+            1 => Some(100),
+            100 => Some(1),
+            _ => None,
+        };
+        let counterpart_chain = counterpart_chain_id.and_then(|counterpart_chain_id| {
+            ctx.chains
+                .iter()
+                .find(|chain| chain.chain_id == counterpart_chain_id)
+        });
 
         for (hash, logs) in logs_by_tx {
             let Some(receipt) = receipts.get(&hash) else {
@@ -260,6 +270,7 @@ impl XDaiIndexer {
                 foreign_bridge_address: ctx.foreign_bridge_address,
                 message_hash_lookup: &ctx.message_hash_lookup,
                 pending_message_hash_events: &ctx.pending_message_hash_events,
+                counterpart_chain,
             };
             if let Err(err) = events::dispatch_transaction(
                 &event_ctx,
@@ -979,6 +990,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(&src_ctx, &[source_log], &eth_block, sender)
             .await
@@ -993,6 +1005,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(&conf1_ctx, &[conf1_log], &gno_block_1, validator1)
             .await
@@ -1007,6 +1020,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(&conf2_ctx, &[conf2_log], &gno_block_2, validator2)
             .await
@@ -1021,6 +1035,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(&conf3_ctx, &[conf3_log], &gno_block_3, validator3)
             .await
@@ -1035,6 +1050,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(
             &conf4_ctx,
@@ -1138,6 +1154,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(&ctx, &[log_a, log_b], &block, sender)
             .await
@@ -1239,6 +1256,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(&signature_ctx, &[signature_log], &gno_block, sender)
             .await
@@ -1253,6 +1271,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(&relayed_ctx, &[relayed_log], &eth_block, Address::ZERO)
             .await
@@ -1362,6 +1381,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(
             &collected_ctx,
@@ -1386,6 +1406,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(
             &signature_ctx,
@@ -1569,6 +1590,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(
             &signature_ctx,
@@ -1588,6 +1610,7 @@ mod tests {
             foreign_bridge_address: foreign_addr,
             message_hash_lookup: &message_hash_lookup,
             pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
         };
         events::dispatch_transaction(
             &relayed_ctx,

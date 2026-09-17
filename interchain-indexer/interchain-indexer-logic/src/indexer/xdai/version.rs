@@ -1,6 +1,8 @@
 use alloy::primitives::{Address, address};
 use anyhow::{Result, bail};
 
+use super::types::Direction;
+
 /// Vocabulary follows the underlying `tokenbridge-contracts`: **Home =
 /// Gnosis**, **Foreign = Ethereum** — counter-intuitive, and the source of
 /// the `ForeignToHome` / `HomeToForeign` naming seen in `amb/types.rs`.
@@ -18,10 +20,9 @@ pub(crate) enum XDaiVersion {
     HomeV7,
 }
 
-/// Per-epoch message-identity derivation. `Nonce` is the only arm this
-/// iteration constructs (the supported post-2025-04-15 epoch); the enum
-/// exists so an earlier, transaction-hash-keyed epoch is a new arm rather
-/// than a redesign.
+/// Source-event identity derivation for the configured scan epochs. Some
+/// destination events in those same windows still carry a legacy source
+/// transaction hash and are classified at event level.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum IdentityStrategy {
     Nonce,
@@ -74,7 +75,20 @@ pub(crate) const HOME_EPOCH_FLOOR_BLOCK: u64 = 39_569_937;
 /// `consolidation.rs`'s transfer construction, which needs the same
 /// fallback.
 pub(crate) const DAI: Address = address!("6B175474E89094C44Da98b954EedeAC495271d0F");
-const USDS: Address = address!("dC035D45d973E3EC169d2276DDab16f1e407384F");
+pub(crate) const USDS: Address = address!("dC035D45d973E3EC169d2276DDab16f1e407384F");
+pub(crate) const LEGACY_DAI_EPOCH_START_BLOCK: u64 = 9_161_003;
+pub(crate) const USDS_EPOCH_START_BLOCK: u64 = 23_748_179;
+
+pub(crate) fn legacy_ethereum_asset(direction: Direction, source_block: u64) -> Result<Address> {
+    match direction {
+        Direction::GnoToEth => Ok(DAI),
+        Direction::EthToGno if source_block < LEGACY_DAI_EPOCH_START_BLOCK => bail!(
+            "unsupported legacy Ethereum source block {source_block}; DAI epoch starts at {LEGACY_DAI_EPOCH_START_BLOCK}"
+        ),
+        Direction::EthToGno if source_block < USDS_EPOCH_START_BLOCK => Ok(DAI),
+        Direction::EthToGno => Ok(USDS),
+    }
+}
 
 pub(crate) static FOREIGN_EVENTS: &[&str] = &["UserRequestForAffirmation", "RelayedMessage"];
 pub(crate) static HOME_EVENTS: &[&str] = &[
@@ -225,5 +239,34 @@ mod tests {
     fn grammar_for_unknown_side_and_version_returns_error() {
         assert!(grammar_for(XDaiSide::Foreign, 11).is_err());
         assert!(grammar_for(XDaiSide::Home, 5).is_err());
+    }
+
+    #[test]
+    fn legacy_asset_uses_only_ethereum_blocks_for_eth_to_gno() {
+        assert!(legacy_ethereum_asset(Direction::EthToGno, 9_161_002).is_err());
+        assert_eq!(
+            legacy_ethereum_asset(Direction::EthToGno, 9_161_003).unwrap(),
+            DAI
+        );
+        assert_eq!(
+            legacy_ethereum_asset(Direction::EthToGno, 23_748_178).unwrap(),
+            DAI
+        );
+        assert_eq!(
+            legacy_ethereum_asset(Direction::EthToGno, 23_748_179).unwrap(),
+            USDS
+        );
+    }
+
+    #[test]
+    fn legacy_gno_to_eth_always_resolves_dai() {
+        assert_eq!(
+            legacy_ethereum_asset(Direction::GnoToEth, 39_557_691).unwrap(),
+            DAI
+        );
+        assert_eq!(
+            legacy_ethereum_asset(Direction::GnoToEth, u64::MAX).unwrap(),
+            DAI
+        );
     }
 }
