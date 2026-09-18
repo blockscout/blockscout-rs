@@ -5235,6 +5235,7 @@ dependencies = [
  "futures",
  "hex",
  "lazy_static",
+ "libc",
  "mismatch",
  "nonempty",
  "openssh",

@@ -8,6 +8,12 @@ This service serves as the core component for all activities related to smart-co
 Production compiler endpoints require a dedicated Docker host reachable over SSH. Native execution
 is intended only for local development and tests.
 
+> **Upgrading:** compiler execution is now explicit. The Solidity, Vyper and zkSync endpoints are
+> enabled by default, and the service refuses to start while
+> `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__TYPE` is unset (`disabled`). Before upgrading an
+> existing deployment, set it to `docker` together with the Docker settings below, or to `native`
+> to keep the previous in-process behavior in local development.
+
 ## How to enable
 Set the following ENVs on blockscout instance:
 - `MICROSERVICE_SC_VERIFIER_ENABLED=true`
@@ -37,8 +43,8 @@ Here, we describe variables specific to this service. Variables common to all se
 | `SMART_CONTRACT_VERIFIER__SOURCIFY__MAX_POLL_ATTEMPTS`         |          | Max number of polls of an async Sourcify (v2) verification job before giving up. Must be at least 1 | `120`                                            |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__MAX_THREADS`              |          | Maximum number of concurrent compilations                               | `8`                                                                          |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__TYPE`          | yes      | Compiler execution mode: `docker` in production, `native` for local development | `disabled`                                                            |
-| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__EXECUTION_TIMEOUT_SECONDS` | native/docker | Maximum duration of one compiler invocation; tune with representative workloads | `120`                                                          |
-| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__MAX_OUTPUT_BYTES` | native/docker | Maximum combined compiler stdout and stderr size                       | `33554432`                                                                   |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__EXECUTION_TIMEOUT_SECONDS` | native/docker | Maximum duration of one compiler invocation; tune with representative workloads | `600`                                                          |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__MAX_OUTPUT_BYTES` | native/docker | Maximum combined compiler stdout and stderr size                       | `268435456`                                                                  |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__ADDR`          | docker   | Dedicated Docker host reached through SSH                               |                                                                              |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__KEY_PATH`      |          | SSH private key path inside the verifier container                      | SSH client default                                                           |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__RUNNER_IMAGE`  | docker   | Preloaded runner image pinned by `@sha256:<64 hex characters>`          |                                                                              |

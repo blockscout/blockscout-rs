@@ -21,9 +21,9 @@ pub use concurrency::ConcurrencyLimitedCompilerExecutor;
 pub use docker::{DockerCompilerExecutor, DockerCompilerExecutorSettings};
 pub use native::NativeCompilerExecutor;
 
-const DEFAULT_EXECUTION_TIMEOUT_SECS: u64 = 120;
+const DEFAULT_EXECUTION_TIMEOUT_SECS: u64 = 600;
 const DEFAULT_MAX_UPLOAD_BYTES: u64 = 256 * 1024 * 1024;
-const DEFAULT_MAX_OUTPUT_BYTES: usize = 32 * 1024 * 1024;
+const DEFAULT_MAX_OUTPUT_BYTES: usize = 256 * 1024 * 1024;
 
 async fn deliver_stdin<W>(
     writer: &mut W,
@@ -375,6 +375,12 @@ pub trait CompilerExecutor: Send + Sync {
         &self,
         invocation: CompilerInvocation,
     ) -> Result<ExecutionOutput, ExecutionError>;
+
+    /// Work that must not hold an admission slot, such as filling a shared compiler cache.
+    /// `ConcurrencyLimitedCompilerExecutor` runs it before admitting the invocation.
+    async fn prepare(&self, _invocation: &CompilerInvocation) -> Result<(), ExecutionError> {
+        Ok(())
+    }
 
     async fn health_check(&self) -> Result<(), ExecutionError> {
         Ok(())

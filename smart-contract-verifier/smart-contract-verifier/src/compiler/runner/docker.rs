@@ -2,6 +2,7 @@ use super::{
     deliver_stdin,
     metrics::{self, ContainerFamily},
     CompilerExecutor, CompilerInvocation, ExecutionError, ExecutionOutput, JobFileContent,
+    DEFAULT_EXECUTION_TIMEOUT_SECS, DEFAULT_MAX_OUTPUT_BYTES, DEFAULT_MAX_UPLOAD_BYTES,
 };
 use anyhow::Context;
 use async_trait::async_trait;
@@ -21,6 +22,8 @@ use bollard::{
 };
 use bytes::Bytes;
 use futures::StreamExt;
+use serde::Deserialize;
+use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -61,21 +64,80 @@ const COMPILER_TMPFS_SIZE_BYTES: i64 = 256 * 1024 * 1024;
 const CLEANUP_GRACE_SECONDS: u64 = 300;
 const JANITOR_INTERVAL_SECONDS: u64 = 30;
 
-#[derive(Clone, Debug)]
+#[serde_as]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DockerCompilerExecutorSettings {
     pub addr: String,
+    #[serde(default)]
     pub key_path: Option<PathBuf>,
     pub runner_image: String,
+    #[serde(default = "default_platform")]
     pub platform: String,
+    #[serde(default = "default_connect_timeout_seconds")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub connect_timeout_seconds: u64,
+    #[serde(default = "default_api_timeout_seconds")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub api_timeout_seconds: u64,
+    #[serde(default = "default_execution_timeout_seconds")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub execution_timeout_seconds: u64,
+    #[serde(default = "default_memory_limit_bytes")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub memory_limit_bytes: i64,
+    #[serde(default = "default_nano_cpus")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub nano_cpus: i64,
+    #[serde(default = "default_pids_limit")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub pids_limit: i64,
+    #[serde(default = "default_max_upload_bytes")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub max_upload_bytes: usize,
+    #[serde(default = "default_max_output_bytes")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub max_output_bytes: usize,
+    #[serde(default)]
     pub runtime: Option<String>,
+}
+
+fn default_platform() -> String {
+    "linux/amd64".to_string()
+}
+
+fn default_connect_timeout_seconds() -> u64 {
+    30
+}
+
+fn default_api_timeout_seconds() -> u64 {
+    30
+}
+
+fn default_execution_timeout_seconds() -> u64 {
+    DEFAULT_EXECUTION_TIMEOUT_SECS
+}
+
+fn default_memory_limit_bytes() -> i64 {
+    1024 * 1024 * 1024
+}
+
+fn default_nano_cpus() -> i64 {
+    2_000_000_000
+}
+
+/// Threads count against this limit. zksolc runs a thread per visible host CPU plus one child
+/// process per contract, and `nano_cpus` does not reduce the number of visible CPUs.
+fn default_pids_limit() -> i64 {
+    1024
+}
+
+fn default_max_upload_bytes() -> usize {
+    DEFAULT_MAX_UPLOAD_BYTES as usize
+}
+
+fn default_max_output_bytes() -> usize {
+    DEFAULT_MAX_OUTPUT_BYTES
 }
 
 impl DockerCompilerExecutorSettings {
@@ -87,9 +149,32 @@ impl DockerCompilerExecutorSettings {
         self.api_timeout_seconds.max(self.execution_timeout_seconds)
     }
 
+    /// Per-compiler deadline for validating and seeding one cache volume.
     fn container_lifecycle_timeout_seconds(&self) -> u64 {
         self.execution_timeout_seconds
             .saturating_add(self.request_timeout_seconds().saturating_mul(2))
+    }
+
+    /// Worst case of `run_created_container`: attach, start, the bounded run, and the final inspect.
+    fn container_run_timeout_seconds(&self) -> u64 {
+        self.execution_timeout_seconds
+            .saturating_add(self.request_timeout_seconds().saturating_mul(3))
+    }
+
+    /// Longest time a live owner keeps its initializer in the `created` state: the create request,
+    /// the seed upload, and the attach and start requests.
+    fn initializer_start_timeout_seconds(&self) -> u64 {
+        self.execution_timeout_seconds
+            .saturating_add(self.request_timeout_seconds().saturating_mul(3))
+    }
+
+    /// Longest cache-helper lifetime covered by its expiry label: create, the seed upload, one run,
+    /// and removal.
+    fn cache_helper_lifetime_seconds(&self) -> u64 {
+        self.request_timeout_seconds()
+            .saturating_mul(2)
+            .saturating_add(self.execution_timeout_seconds)
+            .saturating_add(self.container_run_timeout_seconds())
     }
 
     /// Budget for validating and seeding all compilers of one job, including waits for other
@@ -100,10 +185,12 @@ impl DockerCompilerExecutorSettings {
             .saturating_mul(compiler_count)
     }
 
-    /// The job container is created before its cache phase and must outlive it plus one run.
+    /// The job container is created before its cache phase, so its expiry label must cover the
+    /// create request, the whole cache phase, the job upload, one run, and removal.
     fn job_container_lifecycle_timeout_seconds(&self, compiler_count: usize) -> u64 {
         self.cache_phase_timeout_seconds(compiler_count)
-            .saturating_add(self.container_lifecycle_timeout_seconds())
+            .saturating_add(self.request_timeout_seconds().saturating_mul(3))
+            .saturating_add(self.container_run_timeout_seconds())
     }
 }
 
@@ -289,10 +376,11 @@ impl DockerCompilerExecutor {
             .await
             .context("ping remote Docker daemon")
             .map_err(ExecutionError::Infrastructure)?;
-        reap_expired_containers(&self.docker, "initialization")
-            .await
-            .context("reap expired compiler containers")
-            .map_err(ExecutionError::Infrastructure)?;
+        // Best effort, as in the periodic janitor: one container that cannot be removed must not
+        // keep the executor from becoming ready.
+        if let Err(error) = reap_expired_containers(&self.docker, "initialization").await {
+            tracing::warn!(error = ?error, "failed to reap expired compiler containers");
+        }
         self.docker
             .inspect_image(&self.settings.runner_image)
             .await
@@ -457,7 +545,7 @@ impl DockerCompilerExecutor {
         initialize: bool,
     ) -> Result<ContainerCreateBody, ExecutionError> {
         let expiry = unix_timestamp()?
-            .saturating_add(self.settings.container_lifecycle_timeout_seconds())
+            .saturating_add(self.settings.cache_helper_lifetime_seconds())
             .saturating_add(CLEANUP_GRACE_SECONDS);
         let labels = HashMap::from([
             (JOB_LABEL.to_string(), "true".to_string()),
@@ -554,6 +642,29 @@ impl DockerCompilerExecutor {
             host_config: Some(host_config),
             ..Default::default()
         })
+    }
+
+    /// One deadline covers the whole phase, including digest-lock waits, so a job container
+    /// created before it cannot outlive the expiry label the janitor enforces.
+    async fn ensure_compilers_cached(
+        &self,
+        compilers: &PreparedCompilers,
+        admission_permit: Option<Arc<OwnedSemaphorePermit>>,
+    ) -> Result<(), ExecutionError> {
+        let cache_timeout_seconds = self
+            .settings
+            .cache_phase_timeout_seconds(compilers.by_digest.len());
+        timeout(Duration::from_secs(cache_timeout_seconds), async {
+            for (digest, source) in &compilers.by_digest {
+                self.ensure_compiler_cached(digest, source, admission_permit.clone())
+                    .await?;
+            }
+            Ok::<(), ExecutionError>(())
+        })
+        .await
+        .map_err(|_| ExecutionError::Timeout {
+            seconds: cache_timeout_seconds,
+        })?
     }
 
     async fn ensure_compiler_cached(
@@ -817,7 +928,19 @@ impl DockerCompilerExecutor {
                     if let Some(container_id) = abandoned_initializer_id(
                         &container,
                         unix_timestamp()?,
-                        self.settings.request_timeout_seconds(),
+                        InitializerBudgets {
+                            stopped_grace_seconds: self.settings.request_timeout_seconds(),
+                            // The grace absorbs the local archive build and clock skew.
+                            unstarted_seconds: self
+                                .settings
+                                .initializer_start_timeout_seconds()
+                                .saturating_add(CLEANUP_GRACE_SECONDS),
+                            running_seconds: self
+                                .settings
+                                .execution_timeout_seconds
+                                .saturating_add(self.settings.request_timeout_seconds())
+                                .saturating_add(CLEANUP_GRACE_SECONDS),
+                        },
                     ) {
                         force_remove_container(&self.docker, &container_id)
                             .await
@@ -1081,22 +1204,9 @@ impl CompilerExecutor for DockerCompilerExecutor {
                 // Creating the job first pins every named cache volume for the duration of cache
                 // validation and execution. A missing volume is atomically recreated with verifier
                 // ownership labels from the mount configuration, then seeded below before start.
-                // One deadline covers the whole phase, including digest-lock waits, so the job
-                // container cannot outlive the expiry label the janitor enforces.
-                let cache_timeout_seconds = self
-                    .settings
-                    .cache_phase_timeout_seconds(compilers.by_digest.len());
-                timeout(Duration::from_secs(cache_timeout_seconds), async {
-                    for (digest, source) in &compilers.by_digest {
-                        self.ensure_compiler_cached(digest, source, admission_permit.clone())
-                            .await?;
-                    }
-                    Ok::<(), ExecutionError>(())
-                })
-                .await
-                .map_err(|_| ExecutionError::Timeout {
-                    seconds: cache_timeout_seconds,
-                })??;
+                // `prepare` normally filled the caches already, so this usually only confirms them.
+                self.ensure_compilers_cached(&compilers, admission_permit.clone())
+                    .await?;
 
                 // Executables are mounted from cache volumes, so a job without other files would
                 // only upload an empty tar.
@@ -1138,6 +1248,28 @@ impl CompilerExecutor for DockerCompilerExecutor {
         .await;
         observation.finish(&result);
         result
+    }
+
+    /// Fills the compiler caches before admission, so jobs waiting on a cold fill (their own or
+    /// another one of the same compiler) do not hold an admission slot. The volumes are not pinned
+    /// here; `execute` confirms them again after its job container pins them.
+    async fn prepare(&self, invocation: &CompilerInvocation) -> Result<(), ExecutionError> {
+        invocation.validate()?;
+        let max_upload_bytes = self.settings.max_upload_bytes;
+        let prepare_invocation = invocation.clone();
+        let compiler_cache = self.compiler_cache.clone();
+        let compilers = tokio::task::spawn_blocking(move || {
+            prepare_compilers(
+                &prepare_invocation,
+                max_upload_bytes,
+                &compiler_cache.local_digests,
+            )
+        })
+        .await
+        .context("join compiler digest task")
+        .map_err(ExecutionError::Infrastructure)??;
+        self.ensure_initialized().await?;
+        self.ensure_compilers_cached(&compilers, None).await
     }
 
     async fn health_check(&self) -> Result<(), ExecutionError> {
@@ -1309,23 +1441,39 @@ fn observed_container_family(labels: Option<&HashMap<String, String>>) -> &'stat
     }
 }
 
-/// Returns the id of an initializer whose owner stopped it but never removed it. The grace period
-/// leaves a live owner time to inspect the exit state before its own cleanup removes the container.
+/// How long a live owner may keep its initializer in each state before it counts as abandoned.
+#[derive(Clone, Copy, Debug)]
+struct InitializerBudgets {
+    /// Leaves a live owner time to inspect the exit state before its own cleanup removes it.
+    stopped_grace_seconds: u64,
+    /// Measured from creation; an owner that died before starting the container never will.
+    unstarted_seconds: u64,
+    /// Measured from start; a live owner removes the container after its run timeout.
+    running_seconds: u64,
+}
+
+/// Returns the id of an initializer whose owner can no longer be making progress with it.
 fn abandoned_initializer_id(
     container: &ContainerInspectResponse,
     now: u64,
-    grace_seconds: u64,
+    budgets: InitializerBudgets,
 ) -> Option<String> {
     let state = container.state.as_ref()?;
-    if !matches!(
-        state.status,
-        Some(ContainerStateStatusEnum::EXITED | ContainerStateStatusEnum::DEAD)
-    ) {
-        return None;
-    }
-    let finished_at = chrono::DateTime::parse_from_rfc3339(state.finished_at.as_deref()?).ok()?;
-    let finished_at = u64::try_from(finished_at.timestamp()).ok()?;
-    if now.saturating_sub(finished_at) < grace_seconds {
+    let (since, budget) = match state.status? {
+        ContainerStateStatusEnum::EXITED | ContainerStateStatusEnum::DEAD => {
+            (state.finished_at.as_deref()?, budgets.stopped_grace_seconds)
+        }
+        ContainerStateStatusEnum::CREATED => {
+            (container.created.as_deref()?, budgets.unstarted_seconds)
+        }
+        ContainerStateStatusEnum::RUNNING => {
+            (state.started_at.as_deref()?, budgets.running_seconds)
+        }
+        _ => return None,
+    };
+    let since = chrono::DateTime::parse_from_rfc3339(since).ok()?;
+    let since = u64::try_from(since.timestamp()).ok()?;
+    if now.saturating_sub(since) < budget {
         return None;
     }
     container.id.clone()
@@ -1879,19 +2027,23 @@ mod tests {
         let mut settings = settings();
         assert_eq!(settings.request_timeout_seconds(), 30);
         assert_eq!(settings.container_lifecycle_timeout_seconds(), 90);
-        assert_eq!(settings.job_container_lifecycle_timeout_seconds(1), 180);
-        assert_eq!(settings.job_container_lifecycle_timeout_seconds(2), 270);
+        assert_eq!(settings.container_run_timeout_seconds(), 120);
+        assert_eq!(settings.cache_helper_lifetime_seconds(), 210);
+        assert_eq!(settings.job_container_lifecycle_timeout_seconds(1), 300);
+        assert_eq!(settings.job_container_lifecycle_timeout_seconds(2), 390);
 
         settings.api_timeout_seconds = 45;
         assert_eq!(settings.request_timeout_seconds(), 45);
         assert_eq!(settings.container_lifecycle_timeout_seconds(), 120);
-        assert_eq!(settings.job_container_lifecycle_timeout_seconds(2), 360);
-        // The job container expiry covers the full cache phase plus one container run.
+        assert_eq!(settings.container_run_timeout_seconds(), 165);
+        assert_eq!(settings.initializer_start_timeout_seconds(), 165);
+        // Create, seed upload, one run, and removal.
+        assert_eq!(settings.cache_helper_lifetime_seconds(), 45 + 30 + 165 + 45);
+        // Create, the full cache phase, the job upload, one run, and removal.
         assert_eq!(settings.cache_phase_timeout_seconds(2), 240);
         assert_eq!(
             settings.job_container_lifecycle_timeout_seconds(2),
-            settings.cache_phase_timeout_seconds(2)
-                + settings.container_lifecycle_timeout_seconds()
+            45 + 240 + 45 + 165 + 45
         );
     }
 
@@ -2224,43 +2376,53 @@ mod tests {
     }
 
     #[test]
-    fn only_stopped_initializers_past_grace_are_abandoned() {
-        let finished_at = "2026-01-01T00:00:00.123456789Z";
-        let finished = chrono::DateTime::parse_from_rfc3339(finished_at)
+    fn initializers_past_their_state_budget_are_abandoned() {
+        let timestamp = "2026-01-01T00:00:00.123456789Z";
+        let at = chrono::DateTime::parse_from_rfc3339(timestamp)
             .unwrap()
             .timestamp() as u64;
         let container = |status| ContainerInspectResponse {
             id: Some("initializer-id".to_string()),
+            created: Some(timestamp.to_string()),
             state: Some(bollard::models::ContainerState {
                 status: Some(status),
-                finished_at: Some(finished_at.to_string()),
+                started_at: Some(timestamp.to_string()),
+                finished_at: Some(timestamp.to_string()),
                 ..Default::default()
             }),
             ..Default::default()
         };
+        let budgets = InitializerBudgets {
+            stopped_grace_seconds: 30,
+            unstarted_seconds: 600,
+            running_seconds: 300,
+        };
 
-        for status in [
-            ContainerStateStatusEnum::EXITED,
-            ContainerStateStatusEnum::DEAD,
+        for (status, budget) in [
+            (ContainerStateStatusEnum::EXITED, 30),
+            (ContainerStateStatusEnum::DEAD, 30),
+            (ContainerStateStatusEnum::CREATED, 600),
+            (ContainerStateStatusEnum::RUNNING, 300),
         ] {
             assert_eq!(
-                abandoned_initializer_id(&container(status), finished + 30, 30).as_deref(),
-                Some("initializer-id")
+                abandoned_initializer_id(&container(status), at + budget, budgets).as_deref(),
+                Some("initializer-id"),
+                "{status:?}"
             );
             assert_eq!(
-                abandoned_initializer_id(&container(status), finished + 29, 30),
-                None
+                abandoned_initializer_id(&container(status), at + budget - 1, budgets),
+                None,
+                "{status:?}"
             );
         }
-        for status in [
-            ContainerStateStatusEnum::CREATED,
-            ContainerStateStatusEnum::RUNNING,
-        ] {
-            assert_eq!(
-                abandoned_initializer_id(&container(status), finished + 3600, 30),
-                None
-            );
-        }
+        assert_eq!(
+            abandoned_initializer_id(
+                &container(ContainerStateStatusEnum::RESTARTING),
+                at + 3600,
+                budgets
+            ),
+            None
+        );
     }
 
     #[test]

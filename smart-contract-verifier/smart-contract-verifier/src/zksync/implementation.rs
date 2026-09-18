@@ -87,8 +87,6 @@ pub fn choose_best_success(successes: Vec<VerificationSuccess>) -> Option<Verifi
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Invalid compiler input: {0}")]
-    InvalidInput(String),
     #[error("Zk compiler not found: {0}")]
     ZkCompilerNotFound(String),
     #[error("Evm compiler not found: {0}")]
@@ -107,7 +105,6 @@ pub async fn verify(
     let evm_compiler_version = request.solc_compiler;
     let mut compiler_input = request.content;
 
-    ZkSolcCompiler::validate_input(&compiler_input)?;
     compiler_input.normalize_output_selection(&zk_compiler_version);
 
     // retrieves both usual solidity and zksync era solidity evm compiler versions
@@ -390,10 +387,6 @@ pub trait ZkSyncCompiler {
     type CompilerInput;
     type CompilerOutput: CompilerOutput + DeserializeOwned;
 
-    fn validate_input(_input: &Self::CompilerInput) -> Result<(), Error> {
-        Ok(())
-    }
-
     async fn compile(
         executor: &dyn CompilerExecutor,
         zk_compiler_path: &Path,
@@ -452,7 +445,6 @@ impl<ZkC: ZkSyncCompiler> ZkSyncCompilers<ZkC> {
         evm_compiler_path: &Path,
         input: &ZkC::CompilerInput,
     ) -> Result<(ZkC::CompilerOutput, Value), Error> {
-        ZkC::validate_input(input)?;
         let raw_compiler_output = ZkC::compile(
             self.executor.as_ref(),
             zk_compiler_path,
@@ -582,23 +574,12 @@ impl ZkSyncCompiler for ZkSolcCompiler {
     type CompilerInput = Input;
     type CompilerOutput = output::Output;
 
-    fn validate_input(input: &Self::CompilerInput) -> Result<(), Error> {
-        input
-            .settings
-            .validate()
-            .map_err(|err| Error::InvalidInput(err.to_string()))
-    }
-
     async fn compile(
         executor: &dyn CompilerExecutor,
         zk_compiler_path: &Path,
         evm_compiler_path: &Path,
         input: &Self::CompilerInput,
     ) -> Result<Value, SolcError> {
-        input
-            .settings
-            .validate()
-            .map_err(|err| SolcError::Message(err.to_string()))?;
         let input = serde_json::to_vec(input)?;
         let invocation = CompilerInvocation::new(
             JobFile::executable("zksolc", "bin/zksolc", zk_compiler_path)
@@ -630,30 +611,6 @@ mod tests {
     use crate::{ExecutionError, ExecutionOutput};
     use std::sync::Mutex;
 
-    struct UnusedFetcher<V>(PhantomData<V>);
-
-    impl<V> Default for UnusedFetcher<V> {
-        fn default() -> Self {
-            Self(PhantomData)
-        }
-    }
-
-    #[async_trait]
-    impl<V: Send + Sync> Fetcher for UnusedFetcher<V> {
-        type Version = V;
-
-        async fn fetch(
-            &self,
-            _version: &Self::Version,
-        ) -> Result<PathBuf, crate::compiler::FetchError> {
-            panic!("input validation must happen before fetching a compiler")
-        }
-
-        fn all_versions(&self) -> Vec<Self::Version> {
-            Vec::new()
-        }
-    }
-
     #[derive(Default)]
     struct RecordingExecutor {
         invocation: Mutex<Option<CompilerInvocation>>,
@@ -677,12 +634,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn zksolc_stages_both_compilers_without_llvm_options() {
+    async fn zksolc_stages_both_compilers_and_never_forwards_llvm_options() {
+        // Requests are rejected at the API boundary; serialization is the last line of defense.
         let input: Input = serde_json::from_value(serde_json::json!({
             "language": "Solidity",
             "sources": {},
             "settings": {
-                "optimizer": { "enabled": false }
+                "optimizer": { "enabled": false },
+                "LLVMOptions": ["--exec-on-ir-change=/bin/true"]
             }
         }))
         .unwrap();
@@ -708,64 +667,5 @@ mod tests {
         );
         assert_eq!(invocation.files().len(), 2);
         assert!(!String::from_utf8_lossy(invocation.stdin()).contains("LLVMOptions"));
-    }
-
-    #[tokio::test]
-    async fn zksolc_rejects_llvm_options_before_executor_invocation() {
-        let input: Input = serde_json::from_value(serde_json::json!({
-            "language": "Solidity",
-            "sources": {},
-            "settings": {
-                "optimizer": { "enabled": false },
-                "LLVMOptions": ["--exec-on-ir-change=/bin/true"]
-            }
-        }))
-        .unwrap();
-        assert!(serde_json::to_string(&input)
-            .unwrap()
-            .find("LLVMOptions")
-            .is_none());
-        let executor = RecordingExecutor::default();
-
-        let error = ZkSolcCompiler::compile(
-            &executor,
-            Path::new("/cache/zksolc"),
-            Path::new("/cache/solc"),
-            &input,
-        )
-        .await
-        .unwrap_err();
-
-        assert!(error.to_string().contains("LLVMOptions is not supported"));
-        assert!(executor.invocation.lock().unwrap().is_none());
-    }
-
-    #[tokio::test]
-    async fn zksync_compilers_classifies_llvm_options_as_invalid_input() {
-        let input: Input = serde_json::from_value(serde_json::json!({
-            "language": "Solidity",
-            "sources": {},
-            "settings": {
-                "optimizer": { "enabled": false },
-                "LLVMOptions": ["--exec-on-ir-change=/bin/true"]
-            }
-        }))
-        .unwrap();
-        let executor = Arc::new(RecordingExecutor::default());
-        let compilers = ZkSyncCompilers::<ZkSolcCompiler>::new_with_admitted_executor(
-            Arc::new(UnusedFetcher::<DetailedVersion>::default()),
-            Arc::new(UnusedFetcher::<DetailedVersion>::default()),
-            Arc::new(UnusedFetcher::<CompactVersion>::default()),
-            executor.clone(),
-        );
-
-        let error = compilers
-            .compile(Path::new("/cache/zksolc"), Path::new("/cache/solc"), &input)
-            .await
-            .unwrap_err();
-
-        assert!(matches!(error, Error::InvalidInput(_)));
-        assert!(error.to_string().contains("LLVMOptions is not supported"));
-        assert!(executor.invocation.lock().unwrap().is_none());
     }
 }

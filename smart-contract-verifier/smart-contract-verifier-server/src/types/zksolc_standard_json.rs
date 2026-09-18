@@ -70,28 +70,23 @@ mod tests {
 
     #[test]
     fn rejects_llvm_options_as_bad_request() {
-        for llvm_options in [
-            serde_json::json!([]),
-            serde_json::json!(["--exec-on-ir-change=/bin/true"]),
-        ] {
-            let request = request_with_settings(serde_json::json!({
-                "optimizer": { "enabled": false },
-                "LLVMOptions": llvm_options,
-            }));
+        let request = request_with_settings(serde_json::json!({
+            "optimizer": { "enabled": false },
+            "LLVMOptions": ["--exec-on-ir-change=/bin/true"],
+        }));
 
-            let error = VerificationRequest::try_from(request).unwrap_err();
-            assert!(matches!(error, StandardJsonParseError::BadRequest(_)));
-            assert!(error.to_string().contains("LLVMOptions is not supported"));
-        }
+        let error = VerificationRequest::try_from(request).unwrap_err();
+        assert!(matches!(error, StandardJsonParseError::BadRequest(_)));
+        assert!(error.to_string().contains("LLVMOptions is not supported"));
     }
 
     #[test]
     fn accepts_standard_input_without_llvm_options() {
-        let request = request_with_settings(serde_json::json!({
-            "optimizer": { "enabled": false },
-        }));
-
-        let request = VerificationRequest::try_from(request).unwrap();
-        assert!(request.content.settings.llvm_options.is_none());
+        for settings in [
+            serde_json::json!({ "optimizer": { "enabled": false } }),
+            serde_json::json!({ "optimizer": { "enabled": false }, "LLVMOptions": [] }),
+        ] {
+            VerificationRequest::try_from(request_with_settings(settings)).unwrap();
+        }
     }
 }

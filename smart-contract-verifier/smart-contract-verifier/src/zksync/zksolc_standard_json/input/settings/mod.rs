@@ -66,8 +66,9 @@ pub struct Settings {
 impl Settings {
     /// Rejects settings that the verification service cannot safely pass to zksolc.
     pub fn validate(&self) -> anyhow::Result<()> {
+        // An empty list carries no options, so it is as safe as an absent one.
         anyhow::ensure!(
-            self.llvm_options.is_none(),
+            self.llvm_options.as_ref().is_none_or(Vec::is_empty),
             "settings.LLVMOptions is not supported by the verification service"
         );
         Ok(())

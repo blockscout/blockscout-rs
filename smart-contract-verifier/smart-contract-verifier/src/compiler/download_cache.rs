@@ -3,7 +3,7 @@
 use super::fetcher::{FetchError, Fetcher, Version};
 use crate::metrics;
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -16,8 +16,9 @@ enum CachedFile {
     Unvalidated(PathBuf),
     Validated {
         path: PathBuf,
-        // Preloaded compilers are copied out of their potentially writable source directory before
-        // validation. Keeping the guard alive binds all later executions to those checked bytes.
+        // Preloaded compilers that another user could change are copied out of their source
+        // directory before validation. Keeping the guard alive binds later executions to those
+        // checked bytes.
         _snapshot: Option<Arc<tempfile::TempPath>>,
     },
 }
@@ -91,7 +92,7 @@ impl<Ver: Version> DownloadCache<Ver> {
             Some(CachedFile::Unvalidated(file)) => {
                 tracing::info!(target: "compiler_cache", "validating preloaded file version {}", ver);
                 let validation: Result<_, FetchError> = async {
-                    let (path, guard) = snapshot_preloaded_file(&file).await?;
+                    let (path, guard) = stable_preloaded_file(&file).await?;
                     fetcher.validate_file(ver, &path).await?;
                     Ok((path, guard))
                 }
@@ -100,7 +101,7 @@ impl<Ver: Version> DownloadCache<Ver> {
                     Ok((path, guard)) => {
                         *entry = Some(CachedFile::Validated {
                             path: path.clone(),
-                            _snapshot: Some(guard),
+                            _snapshot: guard,
                         });
                         metrics::DOWNLOAD_CACHE_HITS.inc();
                         Ok(path)
@@ -171,9 +172,11 @@ impl<Ver: Version> DownloadCache<Ver> {
     }
 }
 
-async fn snapshot_preloaded_file(
+/// Returns a path whose bytes cannot change after validation: the preloaded file itself when only
+/// this user or root can change it, otherwise a private snapshot kept alive by the returned guard.
+async fn stable_preloaded_file(
     source: &Path,
-) -> Result<(PathBuf, Arc<tempfile::TempPath>), FetchError> {
+) -> Result<(PathBuf, Option<Arc<tempfile::TempPath>>), FetchError> {
     let source = source.to_path_buf();
     Ok(tokio::task::spawn_blocking(move || {
         let metadata = std::fs::symlink_metadata(&source)?;
@@ -182,6 +185,9 @@ async fn snapshot_preloaded_file(
                 std::io::ErrorKind::InvalidInput,
                 "preloaded compiler must be a regular file",
             ));
+        }
+        if only_this_user_or_root_can_change(&source)? {
+            return Ok((source, None));
         }
 
         let mut source = std::fs::File::open(source)?;
@@ -196,9 +202,36 @@ async fn snapshot_preloaded_file(
         }
         let guard = Arc::new(snapshot.into_temp_path());
         let path = guard.to_path_buf();
-        Ok((path, guard))
+        Ok((path, Some(guard)))
     })
     .await??)
+}
+
+/// Whether neither `path` nor any directory leading to it can be changed or replaced by a user
+/// other than this process's user or root.
+#[cfg(unix)]
+fn only_this_user_or_root_can_change(path: &Path) -> std::io::Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+
+    // SAFETY: `geteuid` has no preconditions and always succeeds.
+    let euid = unsafe { libc::geteuid() };
+    let path = std::fs::canonicalize(path)?;
+    for component in path.ancestors() {
+        let metadata = std::fs::metadata(component)?;
+        let trusted_owner = metadata.uid() == euid || metadata.uid() == 0;
+        // Other users may add entries to a sticky directory, but cannot rename or remove ours.
+        let sticky_directory = metadata.is_dir() && metadata.mode() & 0o1000 != 0;
+        let writable_by_others = metadata.mode() & 0o022 != 0 && !sticky_directory;
+        if !trusted_owner || writable_by_others {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+#[cfg(not(unix))]
+fn only_this_user_or_root_can_change(_path: &Path) -> std::io::Result<bool> {
+    Ok(false)
 }
 
 fn read_dir_paths(dir: &PathBuf) -> std::io::Result<impl Iterator<Item = PathBuf>> {
@@ -206,13 +239,29 @@ fn read_dir_paths(dir: &PathBuf) -> std::io::Result<impl Iterator<Item = PathBuf
     Ok(paths)
 }
 
+/// Keeps every directory whose name parses as a version. When several names parse to the same
+/// version (e.g. with and without the `v` prefix), the canonical one wins.
 fn filter_versions<Ver: Version>(dirs: impl Iterator<Item = PathBuf>) -> HashMap<Ver, PathBuf> {
-    dirs.filter_map(|path| {
-        let name = path.file_name()?.to_str()?;
-        let version = Ver::from_str(name).ok()?;
-        (version.to_string() == name).then_some((version, path))
-    })
-    .collect()
+    let mut versions = HashMap::new();
+    for path in dirs {
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let Ok(version) = Ver::from_str(name) else {
+            continue;
+        };
+        let canonical = version.to_string() == name;
+        match versions.entry(version) {
+            Entry::Vacant(entry) => {
+                entry.insert(path);
+            }
+            Entry::Occupied(mut entry) if canonical => {
+                entry.insert(path);
+            }
+            Entry::Occupied(_) => {}
+        }
+    }
+    versions
 }
 
 #[cfg(test)]
@@ -376,11 +425,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preloaded_compiler_is_validated_once_before_becoming_a_cache_hit() {
+    async fn shared_preloaded_compiler_is_snapshotted_and_validated_once() {
+        use std::os::unix::fs::PermissionsExt;
+
         let ver = evm_version::DetailedVersion::from_str("0.7.0+commit.9e61f92b").unwrap();
         let dir = tempfile::tempdir().unwrap();
         let version_dir = dir.path().join(ver.to_string());
         std::fs::create_dir(&version_dir).unwrap();
+        // Another user could replace the compiler in a world-writable directory.
+        std::fs::set_permissions(&version_dir, std::fs::Permissions::from_mode(0o777)).unwrap();
         let preloaded_path = version_dir.join("solc");
         std::fs::write(&preloaded_path, b"trusted compiler").unwrap();
 
@@ -528,5 +581,76 @@ mod tests {
 
         assert!(cache.try_get(&symlinked_version).await.is_none());
         assert!(cache.try_get(&symlinked_compiler).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn private_preloaded_compiler_is_validated_in_place() {
+        struct InPlaceFetcher;
+
+        #[async_trait]
+        impl Fetcher for InPlaceFetcher {
+            type Version = evm_version::DetailedVersion;
+
+            async fn fetch(&self, _ver: &Self::Version) -> Result<PathBuf, FetchError> {
+                panic!("valid preloaded compiler must not be downloaded")
+            }
+
+            async fn validate_file(
+                &self,
+                _ver: &Self::Version,
+                _path: &std::path::Path,
+            ) -> Result<(), FetchError> {
+                Ok(())
+            }
+
+            fn all_versions(&self) -> Vec<Self::Version> {
+                vec![]
+            }
+        }
+
+        let ver = new_version(6);
+        let dir = tempfile::tempdir().unwrap();
+        let version_dir = dir.path().join(ver.to_string());
+        std::fs::create_dir(&version_dir).unwrap();
+        let preloaded_path = version_dir.join("solc");
+        std::fs::write(&preloaded_path, b"trusted compiler").unwrap();
+
+        let cache = DownloadCache::default();
+        cache
+            .load_from_dir(&dir.path().to_path_buf())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            cache.get(&InPlaceFetcher, &ver).await.unwrap(),
+            preloaded_path,
+            "a compiler only this user can change needs no snapshot"
+        );
+    }
+
+    #[test]
+    fn non_canonical_version_directories_are_kept_and_canonical_ones_win() {
+        let canonical = evm_version::DetailedVersion::from_str("v0.8.4+commit.dea1b9ec").unwrap();
+        let only_non_canonical =
+            evm_version::DetailedVersion::from_str("v0.8.5+commit.a4f2e591").unwrap();
+
+        let versions: HashMap<evm_version::DetailedVersion, PathBuf> = super::filter_versions(
+            [
+                "0.8.4+commit.dea1b9ec",
+                "v0.8.4+commit.dea1b9ec",
+                "0.8.5+commit.a4f2e591",
+            ]
+            .into_iter()
+            .map(PathBuf::from),
+        );
+
+        assert_eq!(
+            versions.get(&canonical),
+            Some(&PathBuf::from("v0.8.4+commit.dea1b9ec"))
+        );
+        assert_eq!(
+            versions.get(&only_non_canonical),
+            Some(&PathBuf::from("0.8.5+commit.a4f2e591"))
+        );
     }
 }

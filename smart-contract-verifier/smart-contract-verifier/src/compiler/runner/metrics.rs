@@ -140,6 +140,14 @@ impl QueueCancellationObservation {
     pub(super) fn admitted(mut self) {
         self.admitted = true;
     }
+
+    /// Records a job that failed before admission, instead of counting it as canceled.
+    pub(super) fn rejected(mut self, error: &ExecutionError) {
+        self.admitted = true;
+        COMPILER_RUNNER_JOBS_TOTAL
+            .with_label_values(&[self.executor, classify_error(error)])
+            .inc();
+    }
 }
 
 impl Drop for QueueCancellationObservation {
@@ -184,15 +192,21 @@ fn classify_outcome(result: &Result<ExecutionOutput, ExecutionError>) -> &'stati
         Ok(output) if output.oom_killed => "oom_killed",
         Ok(output) if output.exit_code == 0 => "success",
         Ok(_) => "compiler_failure",
-        Err(ExecutionError::InvalidInvocation(_)) => "invalid_invocation",
-        Err(ExecutionError::UploadLimitExceeded { .. }) => "upload_limit",
-        Err(ExecutionError::OutputLimitExceeded { .. }) => "output_limit",
-        Err(ExecutionError::Timeout { .. }) => "timeout",
-        Err(ExecutionError::CompilerFailed {
+        Err(error) => classify_error(error),
+    }
+}
+
+fn classify_error(error: &ExecutionError) -> &'static str {
+    match error {
+        ExecutionError::InvalidInvocation(_) => "invalid_invocation",
+        ExecutionError::UploadLimitExceeded { .. } => "upload_limit",
+        ExecutionError::OutputLimitExceeded { .. } => "output_limit",
+        ExecutionError::Timeout { .. } => "timeout",
+        ExecutionError::CompilerFailed {
             oom_killed: true, ..
-        }) => "oom_killed",
-        Err(ExecutionError::CompilerFailed { .. }) => "compiler_failure",
-        Err(ExecutionError::Infrastructure(_)) => "infrastructure_error",
+        } => "oom_killed",
+        ExecutionError::CompilerFailed { .. } => "compiler_failure",
+        ExecutionError::Infrastructure(_) => "infrastructure_error",
     }
 }
 

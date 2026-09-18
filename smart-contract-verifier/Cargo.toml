@@ -35,6 +35,7 @@ era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-commo
 foundry-compilers = { version = "0.19" }
 futures = { version = "0.3" }
 hex = { version = "0.4" }
+libc = { version = "0.2" }
 lazy_static = { version = "1" }
 minicbor = { version = "0.26" }
 mismatch = { version = "1.0" }

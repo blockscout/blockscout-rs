@@ -20,7 +20,7 @@ use crate::{
     },
     settings::{CompilerExecutionSettings, Settings},
 };
-use blockscout_service_launcher::launcher::{self, LaunchSettings};
+use blockscout_service_launcher::launcher::{self, ConfigSettings, LaunchSettings};
 use smart_contract_verifier::{
     CompilerExecutor, ConcurrencyLimitedCompilerExecutor, DockerCompilerExecutor,
     NativeCompilerExecutor,
@@ -84,12 +84,11 @@ fn grpc_router(
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    let compiler_endpoints_enabled =
-        settings.solidity.enabled || settings.vyper.enabled || settings.zksync_solidity.enabled;
+    // Programmatically built settings bypass `Settings::build`, so enforce the same checks here.
+    ConfigSettings::validate(&settings)?;
+    let compiler_endpoints_enabled = settings.compiler_endpoints_enabled();
     let raw_compiler_executor: Arc<dyn CompilerExecutor> = match &settings.compilers.execution {
-        CompilerExecutionSettings::Disabled if compiler_endpoints_enabled => anyhow::bail!(
-            "compiler execution is disabled while a compiler-backed endpoint is enabled"
-        ),
+        // Validation rejects `Disabled` while any compiler-backed endpoint is enabled.
         CompilerExecutionSettings::Disabled => Arc::new(NativeCompilerExecutor::default()),
         CompilerExecutionSettings::Native {
             execution_timeout_seconds,
@@ -98,13 +97,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             Duration::from_secs(*execution_timeout_seconds),
             *max_output_bytes,
         )?),
-        CompilerExecutionSettings::Docker { .. } => Arc::new(DockerCompilerExecutor::new(
-            settings
-                .compilers
-                .execution
-                .docker_executor_settings()
-                .expect("docker settings must exist for Docker mode"),
-        )?),
+        CompilerExecutionSettings::Docker(docker) => {
+            Arc::new(DockerCompilerExecutor::new(docker.clone())?)
+        }
     };
     let compiler_executor: Arc<dyn CompilerExecutor> =
         Arc::new(ConcurrencyLimitedCompilerExecutor::new(

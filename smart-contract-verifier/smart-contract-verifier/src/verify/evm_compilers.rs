@@ -16,7 +16,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Semaphore;
-use tracing::instrument;
+use tracing::{instrument, Instrument};
 
 #[async_trait]
 pub trait EvmCompiler {
@@ -148,7 +148,6 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
                 "compile contract with foundry-compilers",
                 ver = compiler_version.to_string()
             );
-            let _span_guard = span.enter();
 
             C::compile(
                 self.executor.as_ref(),
@@ -156,6 +155,7 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
                 compiler_version,
                 input,
             )
+            .instrument(span)
             .await?
         };
 

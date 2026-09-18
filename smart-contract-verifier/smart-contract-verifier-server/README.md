@@ -95,8 +95,8 @@ For local development, native execution accepts the same invocation timeout and 
 ```toml
 [compilers.execution]
 type = "native"
-execution_timeout_seconds = 120
-max_output_bytes = 33554432
+execution_timeout_seconds = 600
+max_output_bytes = 268435456
 ```
 
 Both fields retain these defaults when omitted and reject zero. Set them from Kubernetes-style
@@ -126,12 +126,13 @@ runner_image = "ghcr.io/blockscout/smart-contract-verifier-compiler-runner@sha25
 platform = "linux/amd64"
 connect_timeout_seconds = 30
 api_timeout_seconds = 30
-execution_timeout_seconds = 120
+execution_timeout_seconds = 600
 memory_limit_bytes = 1073741824
 nano_cpus = 2000000000
-pids_limit = 64
+# Threads count toward this limit; zksolc starts a thread per host CPU plus a process per contract.
+pids_limit = 1024
 max_upload_bytes = 268435456
-max_output_bytes = 33554432
+max_output_bytes = 268435456
 # Optional: a hardened runtime installed on the external host, such as gVisor.
 # runtime = "runsc"
 ```
@@ -177,7 +178,8 @@ retains them. To avoid cold-start transfers on a WAN link, warm the required com
 the SSH round-trip tests or representative verification requests before directing production traffic
 to a new Docker host.
 
-ZKsync standard JSON verification rejects `settings.LLVMOptions`. Arbitrary LLVM options include
+ZKsync standard JSON verification rejects a non-empty `settings.LLVMOptions` (an empty list is
+accepted and ignored). Arbitrary LLVM options include
 process-execution hooks and are not a safe public compiler interface. Contracts whose bytecode
 depends on custom LLVM options are therefore not supported by this verifier.
 
@@ -197,15 +199,16 @@ containers as well, so jobs are reclaimed even while every verifier pod is down.
 
 Compiler-backed endpoints fail to start when execution remains `disabled`. In Docker mode, static
 configuration errors still fail startup, but the service does not contact the compiler VM until the
-first compiler-readiness probe or compiler request. Transient SSH, Docker daemon, orphan-cleanup, or
-runner-image failures are request/readiness failures and are retried; they do not prevent Sourcify
-and the server from starting. There is no Docker-to-native fallback. `native` remains available for
+first compiler-readiness probe or compiler request. Transient SSH, Docker daemon, or runner-image
+failures are request/readiness failures and are retried; they do not prevent Sourcify and the
+server from starting. Orphan cleanup is best effort: a container that cannot be removed is logged
+and counted, and retried by the periodic sweep. There is no Docker-to-native fallback. `native` remains available for
 tests and local development only.
 
 Use `/health` as the process-liveness probe. Use `/health?service=compiler` as the compiler dependency
 readiness probe; it returns HTTP 503 without exposing connection details until strict SSH validation,
-the Docker daemon, initial orphan cleanup, and the pinned runner image are available. The equivalent
-gRPC health request uses `service = "compiler"`. Readiness is pod-wide in Kubernetes: a mixed pod
+the Docker daemon, and the pinned runner image are available. The equivalent gRPC health request
+uses `service = "compiler"`. Any other service name reports process liveness. Readiness is pod-wide in Kubernetes: a mixed pod
 cannot be removed from compiler traffic while remaining routable for Sourcify. If Sourcify must stay
 available during a compiler-VM outage, keep pod readiness on `/health`, monitor the compiler probe
 separately, or deploy Sourcify and compiler-backed endpoints as separate workloads.

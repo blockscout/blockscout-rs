@@ -69,6 +69,10 @@ impl CompilerExecutor for ConcurrencyLimitedCompilerExecutor {
     ) -> Result<ExecutionOutput, ExecutionError> {
         let queue_cancellation =
             runner_metrics::QueueCancellationObservation::new(runner_metrics::SHARED);
+        if let Err(error) = self.inner.prepare(&invocation).await {
+            queue_cancellation.rejected(&error);
+            return Err(error);
+        }
         let runner_queue = runner_metrics::observe_job_state(runner_metrics::QUEUE);
         let runner_queue_timer = runner_metrics::start_operation(
             runner_metrics::SHARED,
@@ -378,5 +382,73 @@ mod tests {
         inner.cleanup_release.add_permits(1);
         second.await.unwrap().unwrap();
         assert_eq!(inner.started.load(Ordering::SeqCst), 2);
+    }
+
+    struct ColdPrepareExecutor {
+        cold_fill: Semaphore,
+        executed: AtomicUsize,
+    }
+
+    impl Default for ColdPrepareExecutor {
+        fn default() -> Self {
+            Self {
+                cold_fill: Semaphore::new(0),
+                executed: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl CompilerExecutor for ColdPrepareExecutor {
+        async fn prepare(&self, invocation: &CompilerInvocation) -> Result<(), ExecutionError> {
+            if invocation
+                .args
+                .contains(&CommandArgument::literal("--cold"))
+            {
+                self.cold_fill.acquire().await.unwrap().forget();
+            }
+            Ok(())
+        }
+
+        async fn execute(
+            &self,
+            _invocation: CompilerInvocation,
+        ) -> Result<ExecutionOutput, ExecutionError> {
+            self.executed.fetch_add(1, Ordering::SeqCst);
+            Ok(ExecutionOutput {
+                stdout: Bytes::new(),
+                stderr: Bytes::new(),
+                exit_code: 0,
+                oom_killed: false,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn cold_cache_fill_does_not_hold_an_admission_slot() {
+        let inner = Arc::new(ColdPrepareExecutor::default());
+        let executor = Arc::new(ConcurrencyLimitedCompilerExecutor::new(
+            inner.clone(),
+            NonZeroUsize::new(1).unwrap(),
+        ));
+
+        let cold = tokio::spawn({
+            let executor = executor.clone();
+            async move { executor.execute(invocation("--cold")).await }
+        });
+        sleep(Duration::from_millis(20)).await;
+
+        timeout(
+            Duration::from_secs(1),
+            executor.execute(invocation("--warm")),
+        )
+        .await
+        .expect("a warm job must not wait behind another job's cache fill")
+        .unwrap();
+        assert_eq!(inner.executed.load(Ordering::SeqCst), 1);
+
+        inner.cold_fill.add_permits(1);
+        cold.await.unwrap().unwrap();
+        assert_eq!(inner.executed.load(Ordering::SeqCst), 2);
     }
 }

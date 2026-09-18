@@ -60,7 +60,7 @@ max_threads = 8
 [compilers.execution]
 type = "disabled"
 # Native mode also accepts execution_timeout_seconds and max_output_bytes. Both fields default to
-# 120 seconds and 33554432 bytes when omitted.
+# 600 seconds and 268435456 bytes when omitted.
 
 # [extensions.solidity.sig_provider]
 # url = "http://127.0.0.1:8051/"

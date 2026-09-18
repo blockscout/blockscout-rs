@@ -26,28 +26,20 @@ impl HealthService {
         }
     }
 
-    async fn check_service(&self, service: &str) -> Result<HealthCheckResponse, tonic::Status> {
-        if service.is_empty() {
-            return Ok(Self::response(
-                health_check_response::ServingStatus::Serving,
-            ));
-        }
-        if service != COMPILER_HEALTH_SERVICE {
-            return Err(tonic::Status::not_found("unknown health service"));
-        }
-
-        let Some(executor) = &self.compiler_executor else {
-            return Ok(Self::response(
-                health_check_response::ServingStatus::Serving,
-            ));
+    /// Every service name except `compiler` reports process liveness, as before compiler readiness
+    /// existed, so probes configured with other service names keep passing.
+    async fn check_service(&self, service: &str) -> HealthCheckResponse {
+        let executor = match &self.compiler_executor {
+            Some(executor) if service == COMPILER_HEALTH_SERVICE => executor,
+            _ => return Self::response(health_check_response::ServingStatus::Serving),
         };
-        Ok(match executor.health_check().await {
+        match executor.health_check().await {
             Ok(()) => Self::response(health_check_response::ServingStatus::Serving),
             Err(error) => {
                 tracing::warn!(error = ?error, "compiler executor health check failed");
                 Self::response(health_check_response::ServingStatus::NotServing)
             }
-        })
+        }
     }
 }
 
@@ -61,13 +53,7 @@ async fn http_health(
     health: web::Data<HealthService>,
     query: web::Query<HealthQuery>,
 ) -> HttpResponse {
-    let response = match health.check_service(&query.service).await {
-        Ok(response) => response,
-        Err(status) if status.code() == tonic::Code::NotFound => {
-            return HttpResponse::NotFound().finish();
-        }
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let response = health.check_service(&query.service).await;
     let status = if response.status == health_check_response::ServingStatus::Serving as i32 {
         StatusCode::OK
     } else {
@@ -89,7 +75,7 @@ impl Health for HealthService {
         request: tonic::Request<HealthCheckRequest>,
     ) -> Result<tonic::Response<HealthCheckResponse>, tonic::Status> {
         Ok(tonic::Response::new(
-            self.check_service(&request.get_ref().service).await?,
+            self.check_service(&request.get_ref().service).await,
         ))
     }
 }
@@ -186,23 +172,26 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn unknown_health_service_does_not_mask_a_probe_typo() {
-        let health = Arc::new(HealthService::default());
-        let grpc_error = health
+    async fn other_health_service_names_report_liveness() {
+        let health = Arc::new(HealthService::new(Some(Arc::new(UnhealthyExecutor))));
+        let response = health
             .check(tonic::Request::new(HealthCheckRequest {
-                service: "compilers".to_string(),
+                service: "blockscout.smartContractVerifier.v2.SolidityVerifier".to_string(),
             }))
             .await
-            .unwrap_err();
-        assert_eq!(grpc_error.code(), tonic::Code::NotFound);
+            .unwrap();
+        assert_eq!(
+            response.into_inner().status,
+            health_check_response::ServingStatus::Serving as i32
+        );
 
         let app =
             test::init_service(App::new().configure(|config| route_health(config, health.clone())))
                 .await;
         let request = test::TestRequest::get()
-            .uri("/health?service=compilers")
+            .uri("/health?service=blockscout.smartContractVerifier.v2.SolidityVerifier")
             .to_request();
         let response = test::call_service(&app, request).await;
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
