@@ -14,7 +14,7 @@ use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
 use super::{
     metrics,
     types::{ChainIds, Direction, Message, MessageIdentity, NATIVE_SENTINEL},
-    version::DAI,
+    version::legacy_home_ethereum_asset,
 };
 
 impl Consolidate for Message {
@@ -185,7 +185,15 @@ fn resolve_input(message: &Message, key: &Key) -> Result<Option<ResolvedInput>> 
                 recipient: source.event.recipient,
                 src_value: source.event.value,
                 token_src_address: NATIVE_SENTINEL,
-                token_dst_address: source.event.token.unwrap_or(DAI),
+                // Home v6 and below have no `token` field: the legacy
+                // 104-byte `parseMessage` hardcodes the deployment's original
+                // ERC-20, which `chain_ids.foreign` selects. Total by design --
+                // `consolidate` runs inside the maintenance plan, where an
+                // `Err` would abort the whole bridge's cycle.
+                token_dst_address: source
+                    .event
+                    .token
+                    .unwrap_or_else(|| legacy_home_ethereum_asset(chain_ids.foreign)),
             }
         }
         (None, None) => {
@@ -352,6 +360,7 @@ fn amount_to_decimal(amount: U256) -> Result<BigDecimal> {
 
 #[cfg(test)]
 mod tests {
+    use crate::indexer::xdai::version::DAI;
     use alloy::primitives::{Address, B256, U256};
     use chrono::{DateTime, NaiveDateTime};
     use interchain_indexer_entity::sea_orm_active_enums::MessageStatus;
@@ -1078,6 +1087,7 @@ mod tests {
                     block_timestamp: ts(incident["source_timestamp"].as_i64().unwrap()),
                     sender_address: sender,
                     ethereum_asset: crate::indexer::xdai::version::legacy_ethereum_asset(
+                        MAINNET.foreign,
                         direction,
                         source_block,
                     )

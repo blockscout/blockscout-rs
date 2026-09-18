@@ -199,8 +199,9 @@ async fn handle_user_request_for_affirmation(
     // Never from a log (no token field exists) and never from a `latest`
     // RPC call (would relabel history): the version-block-keyed grammar
     // table is the only source that stays correct across the DAI->USDS
-    // flip at Foreign v10.
-    let source_asset = grammar_for(XDaiSide::Foreign, version)?
+    // flip at Foreign v10. `ctx.chain_id` is the Foreign chain here -- the
+    // event only resolves on the Foreign side -- and selects the deployment.
+    let source_asset = grammar_for(ctx.chain_id, XDaiSide::Foreign, version)?
         .source_asset
         .context("xDai Foreign grammar has no source_asset")?;
 
@@ -587,9 +588,18 @@ async fn reconstruct_source(
     let counterpart = ctx
         .counterpart_chain
         .context("missing counterpart xDai chain configuration for legacy source reconstruction")?;
-    let source =
-        fetch_reconstructed_source(counterpart, direction, source_hash, destination_recipient)
-            .await?;
+    // The asset table is keyed on the *Foreign* chain in both directions, so
+    // it cannot come from `counterpart` (which is the source chain, Home for a
+    // Gno->Eth message).
+    let foreign_chain_id = ctx.abi_registry.chain_ids()?.foreign;
+    let source = fetch_reconstructed_source(
+        counterpart,
+        foreign_chain_id,
+        direction,
+        source_hash,
+        destination_recipient,
+    )
+    .await?;
     if direction == Direction::GnoToEth && source.legacy_source_event.is_none() {
         tracing::warn!(
             bridge_id = ctx.bridge_id,
@@ -607,6 +617,7 @@ async fn reconstruct_source(
 
 async fn fetch_reconstructed_source(
     counterpart: &XDaiChainConfig,
+    foreign_chain_id: i64,
     direction: Direction,
     source_hash: B256,
     destination_recipient: Address,
@@ -635,7 +646,7 @@ async fn fetch_reconstructed_source(
         block_number,
         block_timestamp,
         sender_address: receipt.transaction_from,
-        ethereum_asset: legacy_ethereum_asset(direction, block_number)?,
+        ethereum_asset: legacy_ethereum_asset(foreign_chain_id, direction, block_number)?,
         legacy_source_event,
     })
 }
@@ -1159,10 +1170,15 @@ mod tests {
                 abi: None,
             }],
         };
-        let reconstructed =
-            fetch_reconstructed_source(&counterpart, Direction::GnoToEth, source_hash, recipient)
-                .await
-                .unwrap();
+        let reconstructed = fetch_reconstructed_source(
+            &counterpart,
+            1,
+            Direction::GnoToEth,
+            source_hash,
+            recipient,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(reconstructed.transaction_hash, source_hash);
         assert_eq!(reconstructed.block_number, 39_557_691);

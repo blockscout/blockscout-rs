@@ -19,8 +19,12 @@ Out of scope: the AMB/Omnibridge testnet deployment already in
 Kovan ↔ Sokol testnet pair (Sokol is retired; not investigated), and any
 decision to actually enable an xDai testnet bridge.
 
-Status: **investigation only.** `config/full-testnet/bridges.json` has not been
-touched. The config sketch below is a proposal, not an applied change.
+Status: **implemented.** The testnet bridge is configured as `bridge_id` `1003`
+in `config/full-testnet/bridges.json`, and `indexer/xdai/version.rs` now carries
+the Sepolia/Chiado grammar windows beside the mainnet ones. Sections below that
+describe the pre-implementation state are marked *(historical)*; *The
+Code-vs-Config Bottom Line* records what was actually built and why it differs
+from what this note originally proposed.
 
 ## Short Answer
 
@@ -41,8 +45,9 @@ every `topic0` the indexer asserts in `FOREIGN_CANONICAL_TOPICS`,
 on testnet, and the message blob is `Len104` on both verified implementations.
 So `assert_canonical_topics` would pass.
 
-Everything *around* the grammar is mainnet-specific and hardcoded, and all of it
-rejects testnet today:
+Everything *around* the grammar **was** mainnet-specific and hardcoded, and all
+of it rejected testnet at the time of writing *(historical — see *The
+Code-vs-Config Bottom Line*)*:
 
 1. `FOREIGN_EPOCH_FLOOR_BLOCK = 22_273_407` and
    `HOME_EPOCH_FLOOR_BLOCK = 39_569_937` are mainnet block numbers. The testnet
@@ -63,8 +68,8 @@ rejects testnet today:
    *Version numbering* — but it is a real mismatch if the config mirrors the
    chain.)
 
-**Bottom line: configuration alone is enough for the current epoch, once those
-three mainnet constants become config.** No new `XDaiVersion` variant, no new
+**Bottom line: no new protocol grammar is needed for the current epoch — only
+a second set of deployment constants beside the mainnet ones.** No new `XDaiVersion` variant, no new
 `XDaiGrammar`, no new `BlobLayout`, no `IdentityStrategy` arm is required to
 index the testnet bridge from its 2025-05-02 upgrade onward. Indexing the
 *pre-2025-05* testnet history would need new grammar in code, because the v1
@@ -88,9 +93,12 @@ next trap is silent: duplicated messages from the interleaved identity, and a
 permanently-red `source_asset` mismatch metric.
 
 It also matters as a design signal. The existence of a testnet deployment whose
-only obstacle is three mainnet constants is the concrete argument for moving
-`FOREIGN_EPOCH_FLOOR_BLOCK`, `HOME_EPOCH_FLOOR_BLOCK` and the `source_asset`
-table out of `indexer/xdai/version.rs` and into `bridges.json`.
+only obstacle is three mainnet constants is what forced those constants to
+become *per deployment*. They stayed in `indexer/xdai/version.rs` rather than
+moving to `bridges.json`: every block boundary they express is a protocol fact
+about a fixed, already-deployed contract set, and restating it in config would
+create a second source of truth for the same number — the exact divergence
+`assert_epoch_boundaries_agree` had to be written to catch.
 
 ## Source-of-Truth Files
 
@@ -137,13 +145,20 @@ yield leg was observed.
   whose `destination()` is the nonce-vs-hash classifier.
 - `interchain-indexer-logic/src/indexer/xdai/indexer.rs` —
   `check_source_asset_matches_latest`.
-- `config/xdai/bridges.json` — the mainnet config this would be modelled on.
-- `config/full-testnet/bridges.json` — where an xDai section would go.
-  **Untouched by this note.**
+- `config/xdai/bridges.json` — the mainnet config this was modelled on.
+  **Unchanged**: the schema did not move, so it needed no migration.
+- `config/full-testnet/bridges.json` — the applied config, `bridge_id` `1003`.
+- `config/xdai/chains-testnet.json` / `config/xdai/bridges-testnet.json` — the
+  xDai-only testnet pair, following the `config/omnibridge` precedent; the
+  bridge entry is byte-identical to the `config/full-testnet` one.
+- `config/full-testnet/ENVs.md` — the operator-facing form of the same, with
+  the two floors' rationale inline.
+- `.memory-bank/adr/013-xdai-multi-deployment-grammar.md` — the decision to keep
+  these constants in code, keyed by chain id, rather than in `bridges.json`.
 
 ## Key Types / Tables / Contracts
 
-### Version numbering: `version()` is a proxy counter, not a protocol version
+### Version numbering: `version()` is a proxy counter, not a protocol version *(superseded — see *Version numbering — resolved*)*
 
 `bridge_contracts.version` in this repo mirrors `EternalStorageProxy.version()`,
 an upgrade counter that starts at 1 for each deployment. Measured:
@@ -319,7 +334,7 @@ the v10 USDS generation. There is no testnet `ForeignV10` analogue.
 from their `Message.sol`. Home v3 unverified; inferred `Len104` (see above).
 `Len104Or124` is not needed for testnet.
 
-### 4. Epoch floors — and why testnet does not have one
+### 4. Epoch floors — and why testnet does not have one *(the Home half is settled in *Home floor — resolved*)*
 
 The Foreign side does have a clean floor: **Sepolia 8239484**. Before it there
 is no nonce field in the source event at all; from it every
@@ -368,50 +383,220 @@ supply, deployed by the same developer address that deployed the bridge.
 `erc20token()` returns it at Sepolia block 5400000 and at `latest`. **There is
 no testnet DAI→USDS switch, no USDS, and no second window.**
 
-That is precisely what today's model cannot express. `FOREIGN_V9_GRAMMAR`
-hardcodes mainnet DAI and `legacy_ethereum_asset` hardcodes mainnet's
-`9_161_003` / `23_748_179`; on testnet the correct table is a single row with
-no cutover at all.
+That is precisely what the single-deployment model could not express.
+`FOREIGN_V9_GRAMMAR` hardcoded mainnet DAI and `legacy_ethereum_asset`
+hardcoded mainnet's `9_161_003` / `23_748_179`; on testnet the correct table is
+a single row with no cutover at all. Both are now per deployment — the Sepolia
+arm bails below `SEPOLIA_BRIDGE_CREATION_BLOCK` (5339352, the Foreign proxy's
+creation block) and resolves `SEPOLIA_MOCK_DAI` everywhere above it.
+
+`erc20token()` on `0x180F…D0A2` was re-read at `latest` on 2026-09-18 and still
+returns `0x084Ab2ef1cb3A75EB0fDd81636e9A95D15629c37`.
 
 ## The Code-vs-Config Bottom Line
 
-### Config alone suffices, once these three things become config
+**Resolved: code, not config. No schema change.** `bridges.json` is unchanged
+except for the new bridge entry itself.
 
-1. **`FOREIGN_EPOCH_FLOOR_BLOCK` / `HOME_EPOCH_FLOOR_BLOCK`** → per-bridge (or
-   per-chain) fields in `bridges.json`. Mainnet keeps 22273407 / 39569937;
-   testnet uses 8239484 / 20553827. The `ensure!` in `abi.rs` stays, it just
-   compares against a configured floor. This is the single blocking change.
-2. **The `source_asset` table** → a per-Foreign-window `source_asset` field in
-   `bridges.json`, replacing `XDaiGrammar::source_asset`. On testnet every
-   window carries the mock DAI; on mainnet v9 carries DAI and v10 carries USDS,
-   unchanged. `check_source_asset_matches_latest` then compares the *configured*
-   asset against `erc20token()` and stops being permanently red on testnet.
-3. **`legacy_ethereum_asset` / `LEGACY_DAI_EPOCH_START_BLOCK` /
-   `USDS_EPOCH_START_BLOCK`** → the legacy reconstruction path must consult the
-   same configured window table instead of mainnet constants, and
-   `assert_epoch_boundaries_agree` must compare config against config. Without
-   this, the Sepolia window at block 8239484 fails the "no legacy Ethereum
-   asset" bail before anything else runs.
+The three items below were originally proposed as new `bridges.json` fields.
+That was rejected: every one of them is a block boundary that `contracts[]`
+already expresses, or a protocol fact about a fixed contract set, so declaring
+them in config would state the same number twice. The constants instead became
+**per deployment**, selected by chain id, and stayed in
+`indexer/xdai/version.rs` beside the grammar they belong to.
 
-Plus one small, non-blocking decision: how `version` is written for a
-deployment whose proxy counter is 2/3 rather than 9/6/7 (see
-*Version numbering*).
+### What was built
+
+1. **Epoch floors hang off `XDaiGrammar`.** `FOREIGN_EPOCH_FLOOR_BLOCK` /
+   `HOME_EPOCH_FLOOR_BLOCK` became `XDaiGrammar::epoch_floor_block`, so each
+   version window declares the floor of the deployment it belongs to:
+   `ETHEREUM_EPOCH_FLOOR_BLOCK` 22273407, `GNOSIS_EPOCH_FLOOR_BLOCK` 39569937,
+   `SEPOLIA_EPOCH_FLOOR_BLOCK` 8239484, `CHIADO_EPOCH_FLOOR_BLOCK` 20553827.
+   The `ensure!` in `AbiRegistry::from_chains` is unchanged apart from reading
+   the floor off the grammar it just selected.
+
+2. **`source_asset` gained a testnet Foreign window.**
+   `SEPOLIA_FOREIGN_V2_GRAMMAR` carries `SEPOLIA_MOCK_DAI`
+   (`0x084Ab2ef1cb3A75EB0fDd81636e9A95D15629c37`). `DAI`/`USDS` and the mainnet
+   windows are untouched.
+
+3. **`legacy_ethereum_asset` gained a `foreign_chain_id` first parameter** and
+   a Sepolia arm. The mainnet arm is byte-for-byte what it was, including the
+   `bail!` below `LEGACY_DAI_EPOCH_START_BLOCK` (9161003); the Sepolia arm
+   bails below `SEPOLIA_BRIDGE_CREATION_BLOCK` (5339352) and resolves the mock
+   DAI everywhere above it, in both directions. An unregistered Foreign chain
+   id is an error.
+
+   The companion `consolidation.rs` fallback — `source.event.token.unwrap_or(DAI)`,
+   the Home v6 104-byte `parseMessage` default — became
+   `legacy_home_ethereum_asset(chain_ids.foreign)`. It is deliberately **total**
+   rather than fallible: `Consolidate::consolidate` runs inside the maintenance
+   plan, where an `Err` aborts the whole bridge's cycle, so an unrecognised
+   chain id falls back to DAI exactly as the pre-multi-deployment code did
+   unconditionally.
+
+4. **`grammar_for` is keyed on `(chain_id, side, version)`.** See *Version
+   numbering* below, which this supersedes.
+
+5. **`assert_epoch_boundaries_agree` stays**, now comparing config against the
+   *deployment's own* asset table rather than against mainnet's.
+
+6. **`check_source_asset_matches_latest` compares against the configured
+   deployment's newest window**, so it is no longer guaranteed-wrong on
+   testnet. Still non-fatal, for the reason documented at its definition.
+
+### Version numbering — resolved
+
+Write the proxies' **real** `version()` counters in the config: Sepolia Foreign
+`2`, Chiado Home `3`. No contradiction with the chain, and nothing to remember.
+This works because the counters restart per deployment and therefore *do not
+collide* with mainnet's 9/10 and 6/7 — but for the same reason they are not a
+key on their own, so `grammar_for` takes the chain id as well. A mainnet chain
+id with `version: 2` is now a hard startup error that names every registered
+deployment, instead of silently selecting the Sepolia floor (14M blocks too
+low) and a `source_asset` that does not exist on Ethereum.
+
+Re-verified directly on chain on 2026-09-18, not taken from this note:
+`version()` returns `2` on `0x180F…D0A2` and `3` on `0xccA0…06f0`.
+
+### Home floor — resolved at the v3 upgrade, 20553827
+
+The decision *The Home-side identity epoch does not exist on testnet* leaves
+open is settled in favour of the clean window, and verified by exhaustive
+`eth_getLogs` over `AffirmationCompleted` rather than by argument:
+
+- `[20553827, latest]` contains **exactly one** affirmation, at 20706963,
+  `bytes32 = 0x…03` — nonce-keyed.
+- `[20553477, 20553827)` contains **exactly one**, at 20553477,
+  `bytes32 = 0x24a6e680…` — the hash-keyed re-affirmation of that *same*
+  deposit.
+
+So the floor sits strictly between the last hash-keyed affirmation and the only
+later nonce-keyed one, and no deposit can produce two `crosschain_messages`
+rows. The alternative floor at the Home v2 upgrade (15562365) would admit the
+re-affirmations at 16803580, 18042501 and 20553477 and duplicate nonces 0, 1
+and 3.
+
+The cost is deliberate and is **not** papered over: Sepolia deposits with
+nonces 0, 1 and 2 are above the Foreign floor but their affirmations are below
+the Home floor, so they stay permanently `Initiated`. Raising the Foreign floor
+to hide them was considered and rejected — no block between 9311522 and
+10573684 is a protocol boundary, and inventing one to suppress honest
+unfinalized rows is worse than showing them.
+
+### Why the two sides' ranges differ by eleven months, and what blocks closing it
+
+The Foreign side is indexed from 2025-05-02 and the Home side from 2026-04-02.
+That asymmetry is a consequence of the oracle's behaviour, not an oversight,
+and it cannot be closed by moving the floor. The two floors answer different
+questions — Foreign: "from where is the source event *decodable*", Home: "from
+where is the destination identity *unambiguous*" — and there is no reason they
+would coincide.
+
+Every `AffirmationCompleted` in `[15562365, latest]` (the range a Home v2 floor
+would open), with its `bytes32` resolved to its Sepolia transaction and that
+transaction's bridge-proxy log read directly. Blockscout was not used; these are
+`eth_getLogs` / `eth_getTransactionReceipt` results, 2026-09-18:
+
+| Chiado block | `bytes32` | Sepolia tx block | proxy log `topic0` | what it is |
+|---|---|---|---|---|
+| 15612527 | `0x…00` | — | — | nonce 0 |
+| 15612593 | `0x…01` | — | — | nonce 1 |
+| 16803580 | `0x479d74bd…` | 8116793 | **none** — tx sent to the token, only an ERC-20 `Transfer` | plain-transfer deposit |
+| 16803580 | `0xb0ca9731…` | 8261098 | `0xf6968e68…` **modern 3-arg** | duplicate of nonce 1 |
+| 16803580 | `0xd30a84a8…` | 8261069 | `0xf6968e68…` **modern 3-arg** | duplicate of nonce 0 |
+| 16803580 | `0x906b0bef…` | 8116450 | `0x1d491a42…` legacy 2-arg | legacy deposit, below the Sepolia floor |
+| 18042501 | `0xa5559dce…` | 9311522 | `0xf6968e68…` **modern 3-arg** | nonce 2 — no nonce-keyed twin |
+| 20553477 | `0x24a6e680…` | 10573684 | `0xf6968e68…` **modern 3-arg** | duplicate of nonce 3 |
+| 20706963 | `0x…03` | — | — | nonce 3 |
+
+Three findings, in the order they bite:
+
+1. **Four of the six hash-keyed affirmations would hard-error today, not
+   duplicate.** Their source transactions are in the modern epoch and emit
+   `UserRequestForAffirmation(address,uint256,bytes32)`.
+   `decode_legacy_source_event` ends with an `ensure!` that rejects a source
+   receipt carrying modern source-request grammar with no legacy event —
+   "source receipt contains unsupported modern xDai source-request grammar".
+   That error propagates out of `handle_affirmation_completed` into the batch
+   result, so the block lands in the failure ledger and is retried forever.
+   Lowering the floor without further work is therefore *worse* than the
+   duplicate-row problem it was meant to avoid.
+
+   The remaining two are the ones the existing legacy path exists for and must
+   keep working: `0x479d74bd…` emits no bridge event at all (the
+   plain-ERC-20-transfer deposit this note predicted, now confirmed), and
+   `0x906b0bef…` emits the legacy two-argument event below the Sepolia floor.
+   Both yield `Ok(None)` or a decoded legacy event, and neither trips the
+   `ensure!`.
+
+2. **Re-keying to the nonce fixes (1) but then collides with a different
+   invariant.** When the `bytes32` is a source transaction hash *and* that
+   transaction emits a modern nonce-bearing source event, the message's true
+   identity is that nonce, so `fetch_reconstructed_source` — which already has
+   the receipt — could re-derive the key. For nonce 2 that alone would be a
+   clean win: it has no nonce-keyed twin, so it would simply complete.
+
+   For nonces 0, 1 and 3 it would not. Each already has a nonce-keyed
+   `AffirmationCompleted` in a **different transaction**, so re-keying makes two
+   distinct `AnnotatedEvent<CompletionEvent>`s land on one buffer key, and
+   `ensure_completion_compatible`'s "conflicting xDai completion payload"
+   rejects the second. That is the same permanent-retry failure mode as (1),
+   moved one step later.
+
+3. **The underlying fact is not an indexing artifact.** The same deposit really
+   was affirmed and paid out twice. Nonce 0's 0.1 deposit produced
+   `AffirmationCompleted` in Chiado tx `0x50f4ed68…` (block 15612527, `bytes32
+   = 0x…00`) and again in `0x2e50d68b…` (block 16803580, `bytes32 =
+   0xd30a84a8…`), same recipient, same value. The contract's dedup is over
+   `keccak(recipient‖value‖bytes32)`, which differs between the two identity
+   forms, so both executions are valid on chain.
+
+So closing the asymmetry is not a mechanical fix. It requires deciding which of
+two genuine on-chain payouts is *the* completion of a message, and relaxing
+`ensure_completion_compatible` — an invariant shared with mainnet whose job is
+to catch indexing bugs — to accommodate a testnet oracle that double-paid. The
+cost/benefit is poor: the gain is three more completed messages on a bridge with
+four deposits; the risk is a weakened correctness check on the mainnet path.
+
+**Decision: keep the Chiado floor at 20553827.** Revisit only if the same
+double-affirmation pattern is ever observed on mainnet, which would make the
+invariant change necessary on its own merits rather than as testnet
+accommodation.
+
+A useful consequence of this floor: the legacy reconstruction path is **entirely
+dormant** in the shipped testnet config. The only in-range affirmation is
+nonce-keyed, so `reconstruct_source` never runs; and the only `RelayedMessage`
+in the whole Sepolia history is at block 8029906, below the Foreign floor, so
+the Gno→Eth reconstruction added by `e1df12ee` never runs either. The `ensure!`
+hazard in (1) is not live — the floor is what keeps it so.
+
+Mainnet is untouched by all of this: no code path changed, and on mainnet a
+hash-keyed destination event's source transaction is pre-epoch and emits the
+legacy two-argument event, which is exactly the case
+`decode_legacy_source_event` handles.
 
 ### New code is required only if you want pre-2025-05 history
 
-To index the testnet v1 windows you would need genuinely new grammar:
-`UserRequestForAffirmation(address,uint256)` / `UserRequestForSignature(address,uint256)`
-carry **no identity field**, so a new `XDaiVersion`, a new canonical-topic list
-and — crucially — a new `IdentityStrategy` arm that derives identity from the
-source transaction hash rather than the event. That is the same shape of work
-the mainnet note deferred for the pre-2019 Foreign v1/v2 era. **Recommendation:
-do not; floor the testnet config at the 2025-05-02 upgrade, exactly as the
-mainnet config floors at its own epoch.**
+Unchanged from the original conclusion. To index the testnet v1 windows you
+would need genuinely new grammar:
+`UserRequestForAffirmation(address,uint256)` /
+`UserRequestForSignature(address,uint256)` carry **no identity field**, so a new
+`XDaiVersion`, a new canonical-topic list and — crucially — a new
+`IdentityStrategy` arm that derives identity from the source transaction hash
+rather than the event. Deliberately not done.
 
-### Illustrative config (not applied)
+There is also **no Chiado Home v2 grammar window**, for the same reason in
+reverse: Home v2 lives entirely below `CHIADO_EPOCH_FLOOR_BLOCK`, so no config
+can reference it without failing the floor check, and a grammar the config
+cannot select is a claim the code cannot back.
+
+### The applied config
+
+`config/full-testnet/bridges.json`, `bridge_id` `1003` (`1001` is the AMB
+bridge; mainnet xDai is `3`):
 
 ```jsonc
-// config/full-testnet/bridges.json — proposal only
 {
   "bridge_id": 1003,
   "name": "xDai Bridge (testnet)",
@@ -420,22 +605,22 @@ mainnet config floors at its own epoch.**
   "enabled": true,
   "contracts": [
     { "chain_id": 11155111, "address": "0x180Ff98e734415Ecd35faC3d32940e1B45FaD0A2",
-      "version": 9,  // grammar label; proxy version() is 2
-      "started_at_block": 8239484 },
+      "version": 2, "started_at_block": 8239484 },
     { "chain_id": 10200, "address": "0xccA0Dc2A058884e62082312F09541cC7566406f0",
-      "version": 6, "started_at_block": 15562365 },
-    { "chain_id": 10200, "address": "0xccA0Dc2A058884e62082312F09541cC7566406f0",
-      "version": 7, "started_at_block": 20553827 }
+      "version": 3, "started_at_block": 20553827 }
   ]
 }
 ```
 
-ABIs are the mainnet ones verbatim — the `topic0`s are identical, so the exact
-JSON blobs in `config/xdai/bridges.json` can be reused per window.
+ABIs are the mainnet ones verbatim, copied from `config/xdai/bridges.json`: the
+Sepolia Foreign entry reuses the mainnet Foreign ABI and the Chiado entry
+reuses the mainnet Home v7 ABI. The `topic0`s are identical, which
+`assert_canonical_topics` enforces.
 
-Flooring Home at 15562365 (rather than 20553827) is what makes deposits 0 and 1
-resolve, and is the reason to prefer it — at the price of the duplicate rows
-described above. Flooring at 20553827 is clean but yields a nearly empty bridge.
+Both RPC endpoints already in `config/full-testnet/chains.json` were checked
+against the blocks this config needs and serve them: `tenderly` returned the
+nonce-0 deposit's log at Sepolia 8261069, and `gateway_archive` returned the
+`AffirmationCompleted` at Chiado 20706963.
 
 ## Invariants
 
@@ -450,16 +635,33 @@ described above. Flooring at 20553827 is clean but yields a nearly empty bridge.
 
 ## Failure Modes / Observability
 
-If an xDai testnet section is added without the three config changes:
+What the shipped configuration actually produces, and what breaks it.
+
+Expected steady state, not a fault:
 
 | Symptom | Cause |
 |---|---|
-| Bridge refuses to start, error names mainnet block 22273407 / 39569937 | epoch-floor `ensure!` in `abi.rs` |
-| Bridge refuses to start, "has no legacy Ethereum asset" | `assert_epoch_boundaries_agree` → `legacy_ethereum_asset` bail below `LEGACY_DAI_EPOCH_START_BLOCK` |
-| `no xDai grammar registered for side Foreign version 2` | `grammar_for`, if the config mirrors `EternalStorageProxy.version()` |
-| `XDAI_SOURCE_ASSET_MISMATCH{bridge_id} = 1` + `error` log, indexing continues | mock DAI ≠ mainnet DAI in `check_source_asset_matches_latest` |
-| Two messages for one deposit | Home-side nonce/hash re-affirmation (16803580, 20706963) |
-| Messages keyed on `native_id` 30 / 31 | `MessageIdentity::destination` reading the v1-era `0x…1e` / `0x…1f` as nonces |
+| Exactly **one** finalized message on this bridge (Sepolia nonce 3) | the Chiado floor at 20553827 admits one affirmation; see *Home floor — resolved* |
+| Sepolia deposits with nonces 0, 1 and 2 stuck at `Initiated`, forever | their affirmations (15612527, 15612593, 18042501) are below the Home floor. The accepted cost of not duplicating rows |
+| No Gnosis→Ethereum message ever completes | none has been relayed since the v1 era; `CollectedSignatures` → `executeSignatures` is untested end to end on this pair |
+
+Misconfiguration, all of which now fail at startup rather than silently:
+
+| Symptom | Cause |
+|---|---|
+| `no xDai grammar registered for chain 11155111 side Foreign version 9` | a mainnet version number under a testnet chain id (or the reverse). The error lists every registered deployment |
+| `… is below the Foreign epoch floor 8239484` | a Sepolia window below the nonce epoch. The error names *this deployment's* floor, not mainnet's |
+| `… is below the Home epoch floor 20553827` | a Chiado window lowered toward the Home v2 upgrade — the duplicate-row trap. Do not "fix" this by lowering the constant |
+| `xDai chain 11155111 Foreign version … declares source_asset … but the legacy reconstruction path resolves …` | `assert_epoch_boundaries_agree`, e.g. an env override shifting `started_at_block` across an asset boundary |
+| `no xDai legacy asset table for Foreign chain N` | a third deployment configured without adding its constants to `version.rs` |
+
+Runtime, non-fatal:
+
+| Symptom | Cause |
+|---|---|
+| `XDAI_SOURCE_ASSET_MISMATCH{bridge_id} = 1` + `error` log, indexing continues | the Sepolia proxy's `erc20token()` stopped returning `SEPOLIA_MOCK_DAI` — i.e. the testnet bridge was upgraded and `version.rs` was not updated. This is now a real signal on testnet; before this change it was pinned at 1 unconditionally |
+| Two messages for one deposit | only reachable by lowering the Chiado floor below 20553827 |
+| Messages keyed on `native_id` 30 / 31 | `MessageIdentity::destination` reading the v1-era `0x…1e` / `0x…1f` (Chiado 14147474 / 14147476) as nonces. Both are far below the Home floor and therefore unreachable in the shipped config |
 
 ## Edge Cases / Gotchas
 
@@ -484,9 +686,10 @@ If an xDai testnet section is added without the three config changes:
 Update this note when:
 
 - either testnet proxy is upgraded again (watch `Upgraded` on both proxies);
-- the epoch floors or the `source_asset` table move from `version.rs` into
-  `bridges.json` — the *Code-vs-Config* section then becomes historical;
-- an xDai section is actually added to `config/full-testnet/bridges.json`;
+- a third xDai deployment is added — it needs its own grammar windows, floor
+  constants and asset constants in `version.rs`, not a schema change;
+- the Chiado oracle emits another affirmation above 20553827 under the *hash*
+  convention, which would invalidate the floor's no-duplicates guarantee;
 - Chiado Home v3's source is verified, which would settle its blob layout;
 - a Gnosis→Ethereum testnet withdrawal is relayed, which would exercise the
   path this note records as untested.
@@ -511,3 +714,10 @@ Explicitly **not** established:
    of its state matters. Sokol is retired; not investigated.
 6. **Whether the testnet bridge is actively maintained.** The v3 upgrade
    (2026-04-02) suggests yes, but there has been no user traffic since.
+7. **Whether Chiado's `Upgraded` log history really places the v3 upgrade at
+   20553827.** The block is taken from this note's original reading. It was
+   *not* re-derived from `Upgraded` logs during implementation — what was
+   re-verified is the property the floor actually has to have (no hash-keyed
+   affirmation at or above it, one nonce-keyed affirmation above it), which is
+   what the code depends on. If the upgrade block turns out to be slightly
+   different, the floor is still correct for its purpose.

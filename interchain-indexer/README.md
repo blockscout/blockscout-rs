@@ -144,6 +144,12 @@ Since the floor is the *minimum* across versions, adding a later version never r
 
 If `interchain_indexer_amb_logs_dropped_wrong_version_total` is non-zero, a version boundary disagrees with the chain: real events are being discarded. Nothing else reports this — the blocks were scanned, so no failure row exists.
 
+#### xDai: `version` is the proxy's own counter, and `started_at_block` is an epoch floor
+
+For `type: "xdai"`, `version` is the value `EternalStorageProxy.version()` returns on the configured proxy, written exactly as the chain reports it. That counter **restarts at 1 for every deployment**, so it is only meaningful together with the chain id: the Ethereum Foreign proxy reports 9/10 and the Gnosis Home proxy 6/7, while the Sepolia Foreign proxy reports 2 and the Chiado Home proxy 3. `interchain-indexer-logic/src/indexer/xdai/version.rs` therefore keys its grammar table on `(chain_id, side, version)`. A version number written under the wrong chain id is a hard startup error naming every registered deployment, not a silent selection of the other deployment's epoch floor and reserve asset. `getBridgeInterfacesVersion()` cannot be used instead — it returns `6.1.0` on all four proxies.
+
+For the same bridge type, `started_at_block` is also an **identity epoch floor**, and the service refuses to start a window beneath its deployment's floor. Below the floor the same `topic0`s carry a source transaction hash in the `bytes32` field rather than a nonce, with no on-chain signal, so identities would be silently wrong. The floors are per deployment and live in `version.rs` beside the grammar; `.memory-bank/research/xdai-bridge-protocol-and-indexing-fit.md` and `…-testnet-deployment-fit.md` carry the on-chain evidence for each. Raising a window above its floor is legal and simply indexes less history; lowering it below is rejected.
+
 #### Changing `started_at_block` on a live deployment
 
 Both directions are supported; neither deletes anything already indexed.

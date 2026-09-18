@@ -1,6 +1,6 @@
 # ENVs — `config/full-testnet`
 
-AMB/Omnibridge between Sepolia and Chiado. Identical to the testnet pair in `config/omnibridge` (`chains-testnet.json` / `bridges-testnet.json`).
+AMB/Omnibridge and the classic xDai bridge, both between Sepolia and Chiado. The AMB entry is identical to the testnet pair in `config/omnibridge` (`chains-testnet.json` / `bridges-testnet.json`); the xDai entry has no `config/omnibridge` counterpart.
 
 Grammar, merge semantics, field reference and traps: [`config/ENVs.md`](../ENVs.md). Here — only this set's variables, with their actual values, in two interchangeable forms per entity: one JSON variable, or one variable per field.
 
@@ -14,6 +14,7 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 | Bridge | Name | `type` / `indexer_type` | Contracts |
 | --- | --- | --- | --- |
 | `1001` | AMB/Omnibridge | `amb` / `amb` | 4 |
+| `1003` | xDai Bridge (testnet) | `xdai` / `xdai` | 2 |
 
 ## Config files
 
@@ -138,6 +139,73 @@ INTERCHAIN_INDEXER_BRIDGES__1001__CONTRACTS__10200__0x8448E15d0e706C0298dECA99F0
 ```bash
 # chain 10200, version 8, omnibridge_mediator
 INTERCHAIN_INDEXER_BRIDGES__1001__CONTRACTS__10200__0x82f63B9730f419CbfEEF10d58a522203838d74c8__8__ABI='[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"messageId","type":"bytes32"},{"indexed":false,"internalType":"address","name":"token","type":"address"},{"indexed":false,"internalType":"address","name":"recipient","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"FailedMessageFixed","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"nativeToken","type":"address"},{"indexed":true,"internalType":"address","name":"bridgedToken","type":"address"}],"name":"NewTokenRegistered","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"token","type":"address"},{"indexed":true,"internalType":"address","name":"recipient","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"},{"indexed":true,"internalType":"bytes32","name":"messageId","type":"bytes32"}],"name":"TokensBridged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"token","type":"address"},{"indexed":true,"internalType":"address","name":"sender","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"},{"indexed":true,"internalType":"bytes32","name":"messageId","type":"bytes32"}],"name":"TokensBridgingInitiated","type":"event"},{"inputs":[{"internalType":"address","name":"_token","type":"address"},{"internalType":"string","name":"_name","type":"string"},{"internalType":"string","name":"_symbol","type":"string"},{"internalType":"uint8","name":"_decimals","type":"uint8"},{"internalType":"address","name":"_recipient","type":"address"},{"internalType":"uint256","name":"_value","type":"uint256"}],"name":"deployAndHandleBridgedTokens","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_token","type":"address"},{"internalType":"string","name":"_name","type":"string"},{"internalType":"string","name":"_symbol","type":"string"},{"internalType":"uint8","name":"_decimals","type":"uint8"},{"internalType":"address","name":"_recipient","type":"address"},{"internalType":"uint256","name":"_value","type":"uint256"},{"internalType":"bytes","name":"_data","type":"bytes"}],"name":"deployAndHandleBridgedTokensAndCall","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_token","type":"address"},{"internalType":"address","name":"_recipient","type":"address"},{"internalType":"uint256","name":"_value","type":"uint256"}],"name":"handleBridgedTokens","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_token","type":"address"},{"internalType":"address","name":"_recipient","type":"address"},{"internalType":"uint256","name":"_value","type":"uint256"},{"internalType":"bytes","name":"_data","type":"bytes"}],"name":"handleBridgedTokensAndCall","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_token","type":"address"},{"internalType":"address","name":"_recipient","type":"address"},{"internalType":"uint256","name":"_value","type":"uint256"}],"name":"handleNativeTokens","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_token","type":"address"},{"internalType":"address","name":"_recipient","type":"address"},{"internalType":"uint256","name":"_value","type":"uint256"},{"internalType":"bytes","name":"_data","type":"bytes"}],"name":"handleNativeTokensAndCall","outputs":[],"stateMutability":"nonpayable","type":"function"}]'
+```
+
+</details>
+
+### Bridge `1003` — xDai Bridge (testnet)
+
+The classic xDai bridge (`ForeignBridgeErcToNative` / `HomeBridgeErcToNative`) between Sepolia and Chiado — ERC-20 locked on Sepolia, native xDAI minted on Chiado. Two proxies, one version window each.
+
+`version` is the proxy's own `EternalStorageProxy.version()` counter, read from the chain: Sepolia reports `2`, Chiado reports `3`. Those numbers are **not** the mainnet bridge's `9`/`10` and `6`/`7` — the counter restarts per deployment, and `indexer/xdai/version.rs` keys its grammar table on `(chain_id, side, version)` for exactly that reason. Writing a mainnet version number here, or these numbers under a mainnet chain id, is a hard startup error rather than a silent mis-selection.
+
+`started_at_block` is an **epoch floor**, not just a scan start, and neither value is adjustable without re-reading the research note:
+
+- Sepolia `8239484` is the Foreign v1→v2 upgrade, where `UserRequestForAffirmation` gained its `bytes32` nonce. Below it the event is the two-argument form with no identity field at all.
+- Chiado `20553827` is **not** the block the Home event shape last changed. The Chiado oracle alternated between nonce-keyed and transaction-hash-keyed `bytes32` within one implementation window and re-affirmed deposits it had already affirmed under the other identity; this floor is the lowest block that excludes every hash-keyed affirmation, and lowering it produces duplicate `crosschain_messages` rows for one deposit. The accepted cost is that Sepolia deposits with nonces 0, 1 and 2 stay permanently `Initiated`, because their affirmations are below this floor.
+
+Lowering the Chiado floor is **not** a safe way to close that gap: four of the six hash-keyed affirmations below it resolve to Sepolia transactions emitting the modern three-argument source event, which `decode_legacy_source_event` rejects outright, so those blocks would fail and retry forever rather than merely duplicating rows.
+
+See `.memory-bank/research/xdai-bridge-testnet-deployment-fit.md` for the on-chain evidence behind both blocks and the per-affirmation breakdown.
+
+One variable — all 2 contracts included, since `contracts` is replaced wholesale:
+
+<details>
+<summary><code>INTERCHAIN_INDEXER_BRIDGES__1003</code> — 2386 chars (ABIs included)</summary>
+
+```bash
+INTERCHAIN_INDEXER_BRIDGES__1003='{"name":"xDai Bridge (testnet)","type":"xdai","indexer_type":"xdai","enabled":true,"api_url":null,"ui_url":null,"docs_url":"https://docs.gnosischain.com/bridges/About%20Token%20Bridges/xdai-bridge","contracts":[{"chain_id":11155111,"address":"0x180Ff98e734415Ecd35faC3d32940e1B45FaD0A2","version":2,"started_at_block":8239484,"kind":null,"abi":"[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"recipient\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"value\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"nonce\",\"type\":\"bytes32\"}],\"name\":\"UserRequestForAffirmation\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"recipient\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"value\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"transactionHash\",\"type\":\"bytes32\"}],\"name\":\"RelayedMessage\",\"type\":\"event\"}]"},{"chain_id":10200,"address":"0xccA0Dc2A058884e62082312F09541cC7566406f0","version":3,"started_at_block":20553827,"kind":null,"abi":"[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"recipient\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"value\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"nonce\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"token\",\"type\":\"address\"}],\"name\":\"UserRequestForSignature\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"recipient\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"value\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"nonce\",\"type\":\"bytes32\"}],\"name\":\"AffirmationCompleted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"signer\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"nonce\",\"type\":\"bytes32\"}],\"name\":\"SignedForAffirmation\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"signer\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"messageHash\",\"type\":\"bytes32\"}],\"name\":\"SignedForUserRequest\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"authorityResponsibleForRelay\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"messageHash\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"NumberOfCollectedSignatures\",\"type\":\"uint256\"}],\"name\":\"CollectedSignatures\",\"type\":\"event\"}]"}]}'
+```
+
+</details>
+
+Field by field:
+
+```bash
+INTERCHAIN_INDEXER_BRIDGES__1003__NAME='xDai Bridge (testnet)'
+INTERCHAIN_INDEXER_BRIDGES__1003__TYPE=xdai
+INTERCHAIN_INDEXER_BRIDGES__1003__INDEXER_TYPE=xdai
+INTERCHAIN_INDEXER_BRIDGES__1003__ENABLED=true
+INTERCHAIN_INDEXER_BRIDGES__1003__API_URL=null
+INTERCHAIN_INDEXER_BRIDGES__1003__UI_URL=null
+INTERCHAIN_INDEXER_BRIDGES__1003__DOCS_URL='https://docs.gnosischain.com/bridges/About%20Token%20Bridges/xdai-bridge'
+```
+
+#### Contracts of bridge `1003`
+
+```bash
+# chain 11155111, version 2 — Sepolia Foreign proxy
+INTERCHAIN_INDEXER_BRIDGES__1003__CONTRACTS__11155111__0x180Ff98e734415Ecd35faC3d32940e1B45FaD0A2__2__STARTED_AT_BLOCK=8239484
+```
+
+```bash
+# chain 10200, version 3 — Chiado Home proxy
+INTERCHAIN_INDEXER_BRIDGES__1003__CONTRACTS__10200__0xccA0Dc2A058884e62082312F09541cC7566406f0__3__STARTED_AT_BLOCK=20553827
+```
+
+<details>
+<summary>ABIs — 2 variables, inline JSON</summary>
+
+Both are the mainnet xDai ABIs verbatim (`config/xdai/bridges.json`): every `topic0` was verified identical on the testnet proxies, and `assert_canonical_topics` rejects anything else.
+
+```bash
+# chain 11155111, version 2 — Sepolia Foreign proxy
+INTERCHAIN_INDEXER_BRIDGES__1003__CONTRACTS__11155111__0x180Ff98e734415Ecd35faC3d32940e1B45FaD0A2__2__ABI='[{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"UserRequestForAffirmation","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"transactionHash","type":"bytes32"}],"name":"RelayedMessage","type":"event"}]'
+```
+
+```bash
+# chain 10200, version 3 — Chiado Home proxy
+INTERCHAIN_INDEXER_BRIDGES__1003__CONTRACTS__10200__0xccA0Dc2A058884e62082312F09541cC7566406f0__3__ABI='[{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"},{"indexed":false,"name":"token","type":"address"}],"name":"UserRequestForSignature","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"recipient","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"AffirmationCompleted","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"signer","type":"address"},{"indexed":false,"name":"nonce","type":"bytes32"}],"name":"SignedForAffirmation","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"signer","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"}],"name":"SignedForUserRequest","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"authorityResponsibleForRelay","type":"address"},{"indexed":false,"name":"messageHash","type":"bytes32"},{"indexed":false,"name":"NumberOfCollectedSignatures","type":"uint256"}],"name":"CollectedSignatures","type":"event"}]'
 ```
 
 </details>

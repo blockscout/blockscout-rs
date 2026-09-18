@@ -14,8 +14,8 @@ use super::{
     indexer::XDaiChainConfig,
     types::{ChainIds, Direction},
     version::{
-        FOREIGN_EPOCH_FLOOR_BLOCK, FOREIGN_EVENTS, HOME_EPOCH_FLOOR_BLOCK, HOME_EVENTS,
-        USDS_EPOCH_START_BLOCK, XDaiGrammar, XDaiSide, grammar_for, legacy_ethereum_asset,
+        FOREIGN_EVENTS, HOME_EVENTS, USDS_EPOCH_START_BLOCK, XDaiGrammar, XDaiSide, grammar_for,
+        legacy_ethereum_asset,
     },
 };
 
@@ -71,10 +71,18 @@ impl AbiRegistry {
                     ),
                 }
 
-                let grammar = grammar_for(side, contract.version)?;
+                // Keyed on the chain id as well as the side: the proxy version
+                // counters restart per deployment, so `(side, version)` alone
+                // would let one deployment's config select another's floors and
+                // reserve asset. See `version::grammar_for`.
+                let grammar = grammar_for(chain.chain_id, side, contract.version)?;
                 debug_assert_eq!(
                     grammar.side, side,
                     "grammar_for returned a grammar registered under the wrong side"
+                );
+                debug_assert_eq!(
+                    grammar.chain_id, chain.chain_id,
+                    "grammar_for returned a grammar registered under the wrong chain"
                 );
 
                 // The event-name partition is byte-for-byte identical to
@@ -91,11 +99,11 @@ impl AbiRegistry {
 
                 // Below the floor, these same topic0s decoded a *transaction
                 // hash* into the bytes32 field, not a nonce -- silently, with
-                // no on-chain signal. See ADR-006 / the protocol primer.
-                let floor = match side {
-                    XDaiSide::Foreign => FOREIGN_EPOCH_FLOOR_BLOCK,
-                    XDaiSide::Home => HOME_EPOCH_FLOOR_BLOCK,
-                };
+                // no on-chain signal. See ADR-006 / the protocol primer. The
+                // floor is per deployment, so it comes off the grammar the
+                // (chain, side, version) key just selected rather than from a
+                // module-level constant.
+                let floor = grammar.epoch_floor_block;
                 ensure!(
                     contract.started_at_block >= floor,
                     "xDai chain {} contract {} version {} started_at_block {} is below the \
@@ -267,6 +275,10 @@ fn side_for_abi(chain_id: i64, address: Address, abi_value: Option<&Value>) -> R
 /// catches both directions — a v10 window starting before the USDS epoch and
 /// a v9 window starting after it — without adding a third constant to keep in
 /// sync. Home windows carry no `source_asset` and are not affected.
+///
+/// Both tables are now per deployment, so `chain_id` — always the Foreign
+/// chain id here, since only Foreign windows carry a `source_asset` — selects
+/// the deployment on both sides of the comparison.
 fn assert_epoch_boundaries_agree(
     chain_id: i64,
     started_at_block: u64,
@@ -275,8 +287,8 @@ fn assert_epoch_boundaries_agree(
     let Some(grammar_asset) = grammar.source_asset else {
         return Ok(());
     };
-    let legacy_asset =
-        legacy_ethereum_asset(Direction::EthToGno, started_at_block).with_context(|| {
+    let legacy_asset = legacy_ethereum_asset(chain_id, Direction::EthToGno, started_at_block)
+        .with_context(|| {
             format!(
                 "xDai chain {chain_id} version {:?} window starting at block {started_at_block} \
                  has no legacy Ethereum asset",
@@ -290,10 +302,11 @@ fn assert_epoch_boundaries_agree(
          version grammar table declares source_asset {grammar_asset} but the legacy \
          reconstruction path resolves {legacy_asset}: the same Ethereum block would be labelled \
          with two different assets depending on which path indexed it. Either move this \
-         contract's started_at_block in bridges.json back to the side of \
-         USDS_EPOCH_START_BLOCK ({USDS_EPOCH_START_BLOCK}) that matches its grammar, or, if the \
-         DAI->USDS epoch itself moved, update USDS_EPOCH_START_BLOCK in \
-         indexer/xdai/version.rs together with the grammar table",
+         contract's started_at_block in bridges.json back to the side of this deployment's asset \
+         boundary that matches its grammar -- on Ethereum that boundary is \
+         USDS_EPOCH_START_BLOCK ({USDS_EPOCH_START_BLOCK}) -- or, if the epoch itself moved, \
+         update that deployment's constants in indexer/xdai/version.rs together with the grammar \
+         table",
         grammar.version
     );
 
@@ -345,7 +358,13 @@ mod tests {
     use alloy::providers::{Provider, ProviderBuilder};
 
     use super::*;
-    use crate::indexer::xdai::indexer::{XDaiChainConfig, XDaiContractConfig};
+    use crate::indexer::xdai::{
+        indexer::{XDaiChainConfig, XDaiContractConfig},
+        version::{
+            CHIADO_EPOCH_FLOOR_BLOCK, ETHEREUM_EPOCH_FLOOR_BLOCK, GNOSIS_EPOCH_FLOOR_BLOCK,
+            SEPOLIA_EPOCH_FLOOR_BLOCK, SEPOLIA_MOCK_DAI,
+        },
+    };
 
     fn dummy_provider() -> alloy::providers::DynProvider<alloy::network::Ethereum> {
         ProviderBuilder::new()
@@ -433,7 +452,7 @@ mod tests {
                 vec![XDaiContractConfig {
                     address: Address::repeat_byte(0xAA),
                     version: 9,
-                    started_at_block: FOREIGN_EPOCH_FLOOR_BLOCK,
+                    started_at_block: ETHEREUM_EPOCH_FLOOR_BLOCK,
                     abi: Some(amb_foreign_event_abi()),
                 }],
             ),
@@ -442,7 +461,7 @@ mod tests {
                 vec![XDaiContractConfig {
                     address: Address::repeat_byte(0xBB),
                     version: 7,
-                    started_at_block: HOME_EPOCH_FLOOR_BLOCK,
+                    started_at_block: GNOSIS_EPOCH_FLOOR_BLOCK,
                     abi: Some(home_v7_event_abi()),
                 }],
             ),
@@ -463,7 +482,7 @@ mod tests {
                 vec![XDaiContractConfig {
                     address: Address::repeat_byte(0xAA),
                     version: 9,
-                    started_at_block: FOREIGN_EPOCH_FLOOR_BLOCK,
+                    started_at_block: ETHEREUM_EPOCH_FLOOR_BLOCK,
                     abi: Some(foreign_event_abi()),
                 }],
             ),
@@ -472,7 +491,7 @@ mod tests {
                 vec![XDaiContractConfig {
                     address: Address::repeat_byte(0xBB),
                     version: 7,
-                    started_at_block: HOME_EPOCH_FLOOR_BLOCK,
+                    started_at_block: GNOSIS_EPOCH_FLOOR_BLOCK,
                     abi: Some(home_v7_event_abi()),
                 }],
             ),
@@ -490,7 +509,7 @@ mod tests {
             vec![XDaiContractConfig {
                 address: Address::repeat_byte(0xAA),
                 version: 9,
-                started_at_block: FOREIGN_EPOCH_FLOOR_BLOCK - 1,
+                started_at_block: ETHEREUM_EPOCH_FLOOR_BLOCK - 1,
                 abi: Some(foreign_event_abi()),
             }],
         )];
@@ -515,7 +534,7 @@ mod tests {
                 XDaiContractConfig {
                     address,
                     version: 9,
-                    started_at_block: FOREIGN_EPOCH_FLOOR_BLOCK,
+                    started_at_block: ETHEREUM_EPOCH_FLOOR_BLOCK,
                     abi: Some(foreign_event_abi()),
                 },
                 XDaiContractConfig {
@@ -544,13 +563,13 @@ mod tests {
         assert_eq!(before.version, 9);
         assert_eq!(after.version, 10);
         assert_eq!(
-            grammar_for(XDaiSide::Foreign, before.version)
+            grammar_for(1, XDaiSide::Foreign, before.version)
                 .unwrap()
                 .source_asset,
             Some(dai)
         );
         assert_eq!(
-            grammar_for(XDaiSide::Foreign, after.version)
+            grammar_for(1, XDaiSide::Foreign, after.version)
                 .unwrap()
                 .source_asset,
             Some(usds)
@@ -569,7 +588,7 @@ mod tests {
                 XDaiContractConfig {
                     address,
                     version: 6,
-                    started_at_block: HOME_EPOCH_FLOOR_BLOCK,
+                    started_at_block: GNOSIS_EPOCH_FLOOR_BLOCK,
                     abi: Some(home_v6_event_abi()),
                 },
                 XDaiContractConfig {
@@ -594,20 +613,20 @@ mod tests {
         ));
     }
 
-    /// B1: the registry's side map is the only source of xDai chain ids, so a
-    /// non-mainnet Foreign/Home pair resolves to itself rather than to 1/100.
-    #[test]
-    fn chain_ids_resolve_a_non_mainnet_foreign_home_pair() {
-        const SEPOLIA: i64 = 11_155_111;
-        const CHIADO: i64 = 10_200;
+    const SEPOLIA: i64 = 11_155_111;
+    const CHIADO: i64 = 10_200;
 
-        let chains = vec![
+    /// The Sepolia/Chiado deployment exactly as `config/full-testnet` declares
+    /// it: the proxies' own `version()` counters (Foreign 2, Home 3), each
+    /// window starting at its deployment's epoch floor.
+    fn testnet_chains() -> Vec<XDaiChainConfig> {
+        vec![
             chain_config(
                 SEPOLIA,
                 vec![XDaiContractConfig {
                     address: Address::repeat_byte(0xAA),
-                    version: 9,
-                    started_at_block: FOREIGN_EPOCH_FLOOR_BLOCK,
+                    version: 2,
+                    started_at_block: SEPOLIA_EPOCH_FLOOR_BLOCK,
                     abi: Some(foreign_event_abi()),
                 }],
             ),
@@ -615,13 +634,19 @@ mod tests {
                 CHIADO,
                 vec![XDaiContractConfig {
                     address: Address::repeat_byte(0xBB),
-                    version: 7,
-                    started_at_block: HOME_EPOCH_FLOOR_BLOCK,
+                    version: 3,
+                    started_at_block: CHIADO_EPOCH_FLOOR_BLOCK,
                     abi: Some(home_v7_event_abi()),
                 }],
             ),
-        ];
-        let registry = AbiRegistry::from_chains(&chains).expect("registry builds");
+        ]
+    }
+
+    /// B1: the registry's side map is the only source of xDai chain ids, so a
+    /// non-mainnet Foreign/Home pair resolves to itself rather than to 1/100.
+    #[test]
+    fn chain_ids_resolve_a_non_mainnet_foreign_home_pair() {
+        let registry = AbiRegistry::from_chains(&testnet_chains()).expect("registry builds");
 
         assert_eq!(
             registry.chain_id_for_side(XDaiSide::Foreign).unwrap(),
@@ -661,7 +686,7 @@ mod tests {
     /// passing case — the boundary the shipped `bridges.json` actually uses.
     #[test]
     fn from_chains_accepts_foreign_windows_that_agree_with_the_usds_epoch() {
-        AbiRegistry::from_chains(&foreign_chains_with_window(9, FOREIGN_EPOCH_FLOOR_BLOCK))
+        AbiRegistry::from_chains(&foreign_chains_with_window(9, ETHEREUM_EPOCH_FLOOR_BLOCK))
             .expect("a v9 window below the USDS epoch is consistent");
         AbiRegistry::from_chains(&foreign_chains_with_window(10, USDS_EPOCH_START_BLOCK))
             .expect("a v10 window at the USDS epoch is consistent");
@@ -697,6 +722,270 @@ mod tests {
         );
     }
 
+    /// The whole testnet deployment builds: both sides' ABIs are the mainnet
+    /// ones verbatim (identical `topic0`s), the proxy version counters 2/3
+    /// select the Sepolia/Chiado grammars, and both windows sit exactly on
+    /// their epoch floors.
+    #[test]
+    fn from_chains_accepts_the_sepolia_chiado_deployment() {
+        let registry = AbiRegistry::from_chains(&testnet_chains()).expect("testnet config builds");
+
+        assert_eq!(
+            registry.chain_id_for_side(XDaiSide::Foreign).unwrap(),
+            SEPOLIA
+        );
+        assert_eq!(registry.chain_id_for_side(XDaiSide::Home).unwrap(), CHIADO);
+
+        let topic = topic_of(&foreign_event_abi(), "UserRequestForAffirmation");
+        let kind =
+            match registry.resolve_log(SEPOLIA, Address::repeat_byte(0xAA), &topic, 8_261_069) {
+                LogResolution::Matched(_, kind) => kind,
+                other => panic!("expected a match at the first nonce-era deposit, got {other:?}"),
+            };
+        assert_eq!(kind.version, 2);
+        assert_eq!(
+            grammar_for(SEPOLIA, XDaiSide::Foreign, kind.version)
+                .unwrap()
+                .source_asset,
+            Some(SEPOLIA_MOCK_DAI)
+        );
+    }
+
+    /// The Chiado floor is what stops one deposit producing two
+    /// `crosschain_messages` rows: it must sit above the last hash-keyed
+    /// affirmation (20553477) and at or below the only later nonce-keyed one
+    /// (20706963).
+    #[test]
+    fn the_chiado_floor_excludes_every_hash_keyed_affirmation() {
+        let floor = grammar_for(CHIADO, XDaiSide::Home, 3)
+            .expect("the Chiado grammar is registered")
+            .epoch_floor_block;
+        assert!(
+            floor > 20_553_477,
+            "the floor must exclude the last hash-keyed affirmation, which re-affirms a deposit \
+             already affirmed by nonce at 20706963"
+        );
+        assert!(
+            floor <= 20_706_963,
+            "the floor must still admit the one nonce-keyed affirmation, or the bridge indexes \
+             no completed message at all"
+        );
+    }
+
+    /// A testnet `started_at_block` below its own deployment's floor is
+    /// rejected, and the error names the testnet floor rather than mainnet's.
+    #[test]
+    fn from_chains_rejects_a_testnet_start_below_the_testnet_floor() {
+        let chains = vec![chain_config(
+            SEPOLIA,
+            vec![XDaiContractConfig {
+                address: Address::repeat_byte(0xAA),
+                version: 2,
+                started_at_block: SEPOLIA_EPOCH_FLOOR_BLOCK - 1,
+                abi: Some(foreign_event_abi()),
+            }],
+        )];
+
+        let err = AbiRegistry::from_chains(&chains).expect_err("below-floor start must fail");
+        let message = err.to_string();
+        assert!(
+            message.contains("epoch floor"),
+            "unexpected error: {message}"
+        );
+        assert!(
+            message.contains(&SEPOLIA_EPOCH_FLOOR_BLOCK.to_string()),
+            "the error must name this deployment's own floor: {message}"
+        );
+    }
+
+    /// The deployment-isolation guarantee, at the level an operator would hit
+    /// it: a mainnet chain id with a testnet proxy version is a hard startup
+    /// error, not a silent selection of the testnet floor and mock-DAI asset.
+    #[test]
+    fn from_chains_rejects_a_testnet_version_under_a_mainnet_chain_id() {
+        let chains = vec![chain_config(
+            1,
+            vec![XDaiContractConfig {
+                address: Address::repeat_byte(0xAA),
+                version: 2,
+                started_at_block: ETHEREUM_EPOCH_FLOOR_BLOCK,
+                abi: Some(foreign_event_abi()),
+            }],
+        )];
+
+        let err = AbiRegistry::from_chains(&chains)
+            .expect_err("a testnet version on Ethereum must be rejected");
+        assert!(
+            err.to_string().contains("no xDai grammar registered"),
+            "unexpected error: {err}"
+        );
+    }
+
+    // --- the shipped config files, built exactly as the server builds them ---
+
+    /// Reads the one `type == "xdai"` bridge out of a real `bridges.json` and
+    /// turns it into the `XDaiChainConfig`s `build_xdai_chain_configs` would
+    /// produce. Deliberately reads the file rather than a fixture: the point
+    /// is to prove the *shipped* config resolves the values it is supposed to.
+    fn chains_from_shipped_config(relative_path: &str) -> Vec<XDaiChainConfig> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("manifest dir has a parent")
+            .join(relative_path);
+        let raw = std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("reading {}: {err}", path.display()));
+        let bridges: Vec<Value> = serde_json::from_str(&raw).expect("bridges.json parses");
+        let bridge = bridges
+            .iter()
+            .find(|bridge| bridge["type"] == "xdai")
+            .unwrap_or_else(|| panic!("{relative_path} has no xdai bridge"));
+
+        let mut by_chain: std::collections::BTreeMap<i64, Vec<XDaiContractConfig>> =
+            Default::default();
+        for contract in bridge["contracts"].as_array().expect("contracts array") {
+            let chain_id = contract["chain_id"].as_i64().expect("chain_id");
+            let abi: Value = serde_json::from_str(contract["abi"].as_str().expect("abi string"))
+                .expect("abi parses");
+            by_chain
+                .entry(chain_id)
+                .or_default()
+                .push(XDaiContractConfig {
+                    address: contract["address"]
+                        .as_str()
+                        .expect("address")
+                        .parse()
+                        .expect("address parses"),
+                    version: contract["version"].as_i64().expect("version") as i16,
+                    started_at_block: contract["started_at_block"].as_u64().expect("start"),
+                    abi: Some(abi),
+                });
+        }
+
+        by_chain
+            .into_iter()
+            .map(|(chain_id, contracts)| chain_config(chain_id, contracts))
+            .collect()
+    }
+
+    fn source_asset_at(registry: &AbiRegistry, chain_id: i64, block: u64) -> Option<Address> {
+        let topic = topic_of(&foreign_event_abi(), "UserRequestForAffirmation");
+        let address = registry.foreign_proxy_address().expect("foreign address");
+        match registry.resolve_log(chain_id, address, &topic, block) {
+            LogResolution::Matched(_, kind) => {
+                grammar_for(chain_id, XDaiSide::Foreign, kind.version)
+                    .expect("grammar for a registered window")
+                    .source_asset
+            }
+            other => panic!("expected a match at {chain_id}/{block}, got {other:?}"),
+        }
+    }
+
+    /// The regression guard for the whole change: the shipped mainnet config
+    /// must still resolve the exact floors, assets and epoch boundary it did
+    /// before the grammar table became multi-deployment.
+    #[rstest::rstest]
+    #[case("config/xdai/bridges.json")]
+    #[case("config/full-mainnet/bridges.json")]
+    fn the_shipped_mainnet_config_resolves_unchanged_floors_and_assets(#[case] path: &str) {
+        let chains = chains_from_shipped_config(path);
+        let registry = AbiRegistry::from_chains(&chains).expect("the shipped config must build");
+
+        assert_eq!(registry.chain_id_for_side(XDaiSide::Foreign).unwrap(), 1);
+        assert_eq!(registry.chain_id_for_side(XDaiSide::Home).unwrap(), 100);
+
+        // Floors, as the `ensure!` in `from_chains` sees them.
+        for contract in &chains[0].contracts {
+            assert_eq!(
+                grammar_for(1, XDaiSide::Foreign, contract.version)
+                    .unwrap()
+                    .epoch_floor_block,
+                22_273_407
+            );
+        }
+        for contract in &chains[1].contracts {
+            assert_eq!(
+                grammar_for(100, XDaiSide::Home, contract.version)
+                    .unwrap()
+                    .epoch_floor_block,
+                39_569_937
+            );
+        }
+        assert_eq!(
+            chains[0].contracts.iter().map(|c| c.started_at_block).min(),
+            Some(22_273_407)
+        );
+        assert_eq!(
+            chains[1].contracts.iter().map(|c| c.started_at_block).min(),
+            Some(39_569_937)
+        );
+
+        // The DAI -> USDS boundary, from both independent paths.
+        let dai = alloy::primitives::address!("6B175474E89094C44Da98b954EedeAC495271d0F");
+        let usds = alloy::primitives::address!("dC035D45d973E3EC169d2276DDab16f1e407384F");
+        assert_eq!(source_asset_at(&registry, 1, 23_748_178), Some(dai));
+        assert_eq!(source_asset_at(&registry, 1, 23_748_179), Some(usds));
+        assert_eq!(
+            legacy_ethereum_asset(1, Direction::EthToGno, 23_748_178).unwrap(),
+            dai
+        );
+        assert_eq!(
+            legacy_ethereum_asset(1, Direction::EthToGno, 23_748_179).unwrap(),
+            usds
+        );
+        assert!(
+            legacy_ethereum_asset(1, Direction::EthToGno, 9_161_002).is_err(),
+            "the pre-DAI-epoch bail must survive"
+        );
+    }
+
+    /// The counterpart for the testnet sets: the shipped config builds and
+    /// resolves testnet values, not mainnet ones. Both files must stay in
+    /// step -- `config/xdai/bridges-testnet.json` is the xDai-only subset of
+    /// `config/full-testnet/bridges.json`, exactly as `config/omnibridge`'s
+    /// testnet pair is of the AMB one.
+    #[rstest::rstest]
+    #[case("config/full-testnet/bridges.json")]
+    #[case("config/xdai/bridges-testnet.json")]
+    fn the_shipped_testnet_config_resolves_sepolia_and_chiado_values(#[case] path: &str) {
+        let chains = chains_from_shipped_config(path);
+        let registry =
+            AbiRegistry::from_chains(&chains).expect("the shipped testnet config must build");
+
+        assert_eq!(
+            registry.chain_ids().unwrap(),
+            ChainIds {
+                foreign: SEPOLIA,
+                home: CHIADO
+            }
+        );
+
+        let foreign = chains
+            .iter()
+            .find(|chain| chain.chain_id == SEPOLIA)
+            .expect("Sepolia chain");
+        assert_eq!(foreign.contracts.len(), 1);
+        assert_eq!(foreign.contracts[0].version, 2);
+        assert_eq!(foreign.contracts[0].started_at_block, 8_239_484);
+
+        let home = chains
+            .iter()
+            .find(|chain| chain.chain_id == CHIADO)
+            .expect("Chiado chain");
+        assert_eq!(home.contracts.len(), 1);
+        assert_eq!(home.contracts[0].version, 3);
+        assert_eq!(home.contracts[0].started_at_block, 20_553_827);
+
+        // The first real deposit resolves to the mock DAI, not to mainnet DAI.
+        assert_eq!(
+            source_asset_at(&registry, SEPOLIA, 8_261_069),
+            Some(SEPOLIA_MOCK_DAI)
+        );
+        assert_eq!(
+            legacy_ethereum_asset(SEPOLIA, Direction::EthToGno, 23_748_179).unwrap(),
+            SEPOLIA_MOCK_DAI
+        );
+    }
+
     #[test]
     fn foreign_proxy_address_returns_the_configured_address() {
         let address = Address::repeat_byte(0xEE);
@@ -706,7 +995,7 @@ mod tests {
                 XDaiContractConfig {
                     address,
                     version: 9,
-                    started_at_block: FOREIGN_EPOCH_FLOOR_BLOCK,
+                    started_at_block: ETHEREUM_EPOCH_FLOOR_BLOCK,
                     abi: Some(foreign_event_abi()),
                 },
                 XDaiContractConfig {

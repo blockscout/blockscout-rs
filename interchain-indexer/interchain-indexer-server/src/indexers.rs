@@ -865,11 +865,15 @@ mod tests {
     use std::path::PathBuf;
 
     fn omnibridge_config_path() -> PathBuf {
+        repo_config_path("config/omnibridge/bridges.json")
+    }
+
+    fn repo_config_path(relative: &str) -> PathBuf {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         manifest_dir
             .parent()
             .expect("manifest dir has a parent")
-            .join("config/omnibridge/bridges.json")
+            .join(relative)
     }
 
     fn contract(
@@ -960,6 +964,74 @@ mod tests {
             chain_100.start_block, 18588922,
             "must not report the omnibridge_mediator's started_at_block"
         );
+    }
+
+    /// The shipped testnet config, through the same builders `run()` uses:
+    /// the new xDai bridge produces one stream per side at its own epoch
+    /// floor, and the AMB bridge sharing the file is untouched by it.
+    #[test]
+    fn test_full_testnet_config_plans_the_xdai_bridge_without_disturbing_amb() {
+        let bridges =
+            crate::load_bridges_from_file(repo_config_path("config/full-testnet/bridges.json"))
+                .expect("the shipped testnet config must load");
+
+        let targets = enumerate_indexing_targets(&bridges);
+
+        // AMB (bridge 1001) still starts from its amb_proxy floors.
+        let amb: Vec<_> = targets.iter().filter(|t| t.bridge_id == 1001).collect();
+        assert_eq!(amb.len(), 2);
+        assert_eq!(
+            amb.iter()
+                .find(|t| t.chain_id == 11155111)
+                .map(|t| t.start_block),
+            Some(5272294)
+        );
+        assert_eq!(
+            amb.iter()
+                .find(|t| t.chain_id == 10200)
+                .map(|t| t.start_block),
+            Some(8199150)
+        );
+
+        // xDai (bridge 1003) starts at the verified epoch floors: the Sepolia
+        // Foreign v1->v2 upgrade, and the Chiado block that excludes every
+        // hash-keyed affirmation.
+        let xdai_bridge = bridges
+            .iter()
+            .find(|bridge| bridge.bridge_id == 1003)
+            .expect("the testnet xDai bridge must be configured");
+        assert_eq!(xdai_bridge.bridge_type, BridgeType::Xdai);
+        assert_eq!(xdai_bridge.indexer_type, IndexerType::XDai);
+
+        let xdai: Vec<_> = targets.iter().filter(|t| t.bridge_id == 1003).collect();
+        assert_eq!(xdai.len(), 2);
+        assert_eq!(
+            xdai.iter()
+                .find(|t| t.chain_id == 11155111)
+                .map(|t| t.start_block),
+            Some(8239484)
+        );
+        assert_eq!(
+            xdai.iter()
+                .find(|t| t.chain_id == 10200)
+                .map(|t| t.start_block),
+            Some(20553827)
+        );
+
+        let chain_lookup = HashMap::from([
+            (11155111i64, chain_config_fixture(11155111)),
+            (10200i64, chain_config_fixture(10200)),
+        ]);
+        let providers = HashMap::from([
+            (11155111i64, dummy_provider()),
+            (10200i64, dummy_provider()),
+        ]);
+        let configs = build_xdai_chain_configs(xdai_bridge, &chain_lookup, &providers);
+        assert_eq!(configs.len(), 2);
+        for config in &configs {
+            assert_eq!(config.contracts.len(), 1, "one proxy window per side");
+            assert!(config.contracts[0].abi.is_some(), "the ABI must be parsed");
+        }
     }
 
     #[test]

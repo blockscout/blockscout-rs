@@ -2264,7 +2264,7 @@ still need their source event; do not generalize legacy reconstruction to them.
 
 ---
 
-## xDai Chain Ids Come From Config, But Its Epoch Floors And Asset Table Are Still Mainnet-Only
+## xDai Deployments Are Keyed On `(chain_id, side, version)`, And Its `version` Is A Per-Deployment Proxy Counter
 
 xDai no longer hardcodes chain ids 1 and 100. `Direction` maps to a *side*
 (`initiator_side`/`destination_side`), and `abi::AbiRegistry::chain_ids()`
@@ -2286,26 +2286,78 @@ every cycle, permanently, over one buffer entry. The entry stays buffered
 until its hot TTL offloads it; clear those `pending_messages` rows and let the
 blocks be re-indexed.
 
-That alone does **not** make a non-mainnet pair work end to end. Two mainnet
-constants remain in `indexer/xdai/version.rs`:
+The *chain ids* being config-driven is not the same as the *protocol
+constants* being deployment-aware, and the second half is where the trap is.
+Epoch floors and the Foreign reserve-asset table are **still in code**, in
+`indexer/xdai/version.rs` — deliberately, because `bridges.json` would then
+carry the same block numbers twice. They are simply no longer mainnet-only:
+each is declared per deployment and selected by chain id.
 
-- `FOREIGN_EPOCH_FLOOR_BLOCK` / `HOME_EPOCH_FLOOR_BLOCK` are Ethereum and
-  Gnosis *mainnet* block numbers, and `AbiRegistry::from_chains` rejects any
-  `started_at_block` below them. A Sepolia/Chiado config would have to clear
-  mainnet-height floors.
-- The Foreign `source_asset` table (`XDaiGrammar::source_asset`, DAI vs USDS)
-  holds mainnet token addresses, as does `legacy_ethereum_asset`.
+Two registered deployments today:
 
-Supporting another network pair means moving both into `bridges.json`; until
-then only Ethereum/Gnosis mainnet is usable, and `config/full-testnet/`
-deliberately configures no xDai bridge.
+| Deployment | Foreign | Home | Foreign floor | Home floor | Foreign asset(s) |
+| --- | --- | --- | --- | --- | --- |
+| mainnet | Ethereum `1` | Gnosis `100` | 22273407 | 39569937 | DAI below 23748179, USDS from it |
+| testnet | Sepolia `11155111` | Chiado `10200` | 8239484 | 20553827 | one mock DAI, always |
 
-Related: the Foreign version windows in `bridges.json` and
-`USDS_EPOCH_START_BLOCK` are two independent statements of the same DAI→USDS
-boundary. `AbiRegistry::from_chains` now asserts that every Foreign window's
-`source_asset` matches `legacy_ethereum_asset(EthToGno, started_at_block)`, so
-an env override that shifts `started_at_block` fails at startup instead of
-silently labelling a range of transfers with the wrong `token_src_address`.
+**`version` in `bridges.json` is the proxy's own `EternalStorageProxy.version()`
+counter, and it restarts at 1 per deployment.** Ethereum reports 9/10 and
+Gnosis 6/7; Sepolia reports 2 and Chiado 3. The numbers are therefore *not* a
+key on their own, which is why `version::grammar_for` takes
+`(chain_id, side, version)`. Keyed on `(side, version)` alone, a mainnet config
+could select the Sepolia grammar — and with it an epoch floor 14M blocks too
+low and a `source_asset` that does not exist on Ethereum — merely by writing
+`version: 2`. It is now a hard startup error that names every registered
+deployment. `getBridgeInterfacesVersion()` is useless for telling them apart:
+it returns `6.1.0` on all four proxies.
+
+Adding a third deployment means adding its grammar windows, floor constants and
+asset constants to `version.rs` — not a schema change. `bridges.json` is
+unchanged by all of this.
+
+Two things follow that are easy to get wrong:
+
+- **The Chiado floor is not the block its Home event shape changed.** On
+  mainnet the nonce/hash cutover is a genuine epoch with a block boundary. On
+  Chiado it is not: `AffirmationCompleted.bytes32` is whatever the oracle hands
+  `executeAffirmation`, the contract derives nothing, and the testnet oracle
+  alternated between the two conventions *inside one implementation window* and
+  re-affirmed deposits it had already affirmed the other way. `20553827` is the
+  lowest block that excludes every hash-keyed affirmation (the last is at
+  20553477; the only later nonce-keyed one is at 20706963). Lowering it
+  produces **two `crosschain_messages` rows for one deposit**, which nothing
+  detects — the contract's own dedup is over
+  `keccak(recipient‖value‖bytes32)`, which differs between the two forms, so
+  both executions are valid on chain. The accepted cost is that Sepolia
+  deposits with nonces 0, 1 and 2 stay permanently `Initiated`: their
+  affirmations are below this floor, which is why the bridge's two sides are
+  indexed over ranges eleven months apart.
+
+  **Do not "fix" the asymmetry by lowering the floor.** Four of the six
+  hash-keyed affirmations it would admit resolve to Sepolia transactions
+  emitting the *modern* three-argument source event, and
+  `decode_legacy_source_event` ends with an `ensure!` rejecting exactly that
+  ("source receipt contains unsupported modern xDai source-request grammar").
+  Those blocks would not duplicate rows — they would error and retry forever.
+  Re-keying the affirmation to its source nonce fixes that, and then collides
+  with `ensure_completion_compatible` for the three deposits Chiado affirmed
+  *twice*, in two distinct transactions. The full per-affirmation breakdown,
+  and why closing the gap is not worth relaxing a mainnet-shared invariant, is
+  in the research note.
+- **`legacy_home_ethereum_asset` is total on purpose.** It resolves the
+  Home v6 `token_dst_address` fallback (the legacy 104-byte `parseMessage`
+  hardcodes one ERC-20) from `chain_ids.foreign`, and returns DAI for any
+  unrecognised chain id rather than erroring. It is read from
+  `Consolidate::consolidate`, i.e. inside the maintenance plan — see the skip
+  rationale above. Do not "tighten" it into a `Result`.
+
+Related: the Foreign version windows in `bridges.json` and the DAI→USDS
+boundary (`USDS_EPOCH_START_BLOCK`) are two independent statements of the same
+fact. `AbiRegistry::from_chains` asserts that every Foreign window's
+`source_asset` matches `legacy_ethereum_asset(chain_id, EthToGno,
+started_at_block)`, so an env override that shifts `started_at_block` fails at
+startup instead of silently labelling a range of transfers with the wrong
+`token_src_address`. Both sides of that comparison are per deployment.
 
 ---
 

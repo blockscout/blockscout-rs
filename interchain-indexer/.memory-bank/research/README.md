@@ -154,11 +154,13 @@ Small topics may keep some sections brief.
   matches `version.rs`'s grammar table exactly while the v1 windows emit
   identity-less two-argument source events, the mock-DAI single-asset model
   (no USDS flip), the oracle-controlled Home-side `bytes32` that interleaves
-  nonce and transaction-hash identity with no block boundary, and the
-  conclusion that testnet is reachable by configuration alone once the epoch
-  floors and the `source_asset` table move out of Rust constants — no new
-  protocol grammar needed unless pre-2025-05 history is wanted. Companion to
-  `xdai-bridge-protocol-and-indexing-fit.md`
+  nonce and transaction-hash identity with no block boundary. **Implemented**:
+  the bridge is `bridge_id` `1003` in `config/full-testnet`, and the epoch
+  floors and asset tables became per-deployment constants in `version.rs`
+  rather than config (ADR-013). Read it for the evidence behind the two floors
+  — in particular why the Chiado floor is 20553827 and what duplicates appear
+  if it is lowered. No new protocol grammar unless pre-2025-05 history is
+  wanted. Companion to `xdai-bridge-protocol-and-indexing-fit.md`
 - `stats-projection-unbatched-pks-lookup-crash.md` — production incident:
   `project_messages_batch`'s unchunked composite-key `IN` lookup crashes
   buffer maintenance two ways (`stack depth limit exceeded` and `too many

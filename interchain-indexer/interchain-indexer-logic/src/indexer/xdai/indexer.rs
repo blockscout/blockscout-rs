@@ -398,10 +398,10 @@ async fn check_source_asset_matches_latest(
     else {
         return;
     };
-    let expected = match grammar_for(XDaiSide::Foreign, newest.version) {
+    let expected = match grammar_for(chain.chain_id, XDaiSide::Foreign, newest.version) {
         Ok(grammar) => grammar.source_asset,
         Err(err) => {
-            tracing::warn!(err = ?err, version = newest.version, "no xDai grammar for configured Foreign version; skipping source-asset sanity check");
+            tracing::warn!(err = ?err, chain_id = chain.chain_id, version = newest.version, "no xDai grammar for configured Foreign version; skipping source-asset sanity check");
             return;
         }
     };
@@ -672,22 +672,22 @@ mod tests {
             XDaiChainConfig {
                 chain_id: ETH,
                 provider: dummy_provider(),
-                start_block: super::super::version::FOREIGN_EPOCH_FLOOR_BLOCK,
+                start_block: super::super::version::ETHEREUM_EPOCH_FLOOR_BLOCK,
                 contracts: vec![XDaiContractConfig {
                     address: foreign_addr,
                     version: 9,
-                    started_at_block: super::super::version::FOREIGN_EPOCH_FLOOR_BLOCK,
+                    started_at_block: super::super::version::ETHEREUM_EPOCH_FLOOR_BLOCK,
                     abi: Some(serde_json::to_value(foreign_abi()).unwrap()),
                 }],
             },
             XDaiChainConfig {
                 chain_id: GNO,
                 provider: dummy_provider(),
-                start_block: super::super::version::HOME_EPOCH_FLOOR_BLOCK,
+                start_block: super::super::version::GNOSIS_EPOCH_FLOOR_BLOCK,
                 contracts: vec![XDaiContractConfig {
                     address: home_addr,
                     version: 7,
-                    started_at_block: super::super::version::HOME_EPOCH_FLOOR_BLOCK,
+                    started_at_block: super::super::version::GNOSIS_EPOCH_FLOOR_BLOCK,
                     abi: Some(serde_json::to_value(home_abi()).unwrap()),
                 }],
             },
