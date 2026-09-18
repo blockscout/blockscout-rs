@@ -9,14 +9,16 @@ use cron::Schedule;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use smart_contract_verifier::{
-    DockerCompilerExecutorSettings, DEFAULT_ERA_SOLIDITY_COMPILER_LIST,
-    DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
-    DEFAULT_ZKSOLC_COMPILER_LIST,
+    DockerCompilerExecutorSettings, NativeCompilerExecutor,
+    DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS, DEFAULT_COMPILER_MAX_OUTPUT_BYTES,
+    DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
+    DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 use std::{
     num::{NonZeroU32, NonZeroUsize},
     path::PathBuf,
     str::FromStr,
+    time::Duration,
 };
 use url::Url;
 
@@ -235,12 +237,13 @@ impl ConfigSettings for Settings {
             CompilerExecutionSettings::Native {
                 execution_timeout_seconds,
                 max_output_bytes,
-            } if *execution_timeout_seconds == 0 || *max_output_bytes == 0 => {
-                return Err(anyhow!(
-                    "native compiler timeout and output limit must be positive"
-                ));
+            } => {
+                NativeCompilerExecutor::new(
+                    Duration::from_secs(*execution_timeout_seconds),
+                    *max_output_bytes,
+                )?;
             }
-            CompilerExecutionSettings::Disabled | CompilerExecutionSettings::Native { .. } => {}
+            CompilerExecutionSettings::Disabled => {}
         }
 
         Ok(())
@@ -264,11 +267,11 @@ fn schedule_every_hour() -> Schedule {
 }
 
 fn default_compiler_execution_timeout_seconds() -> u64 {
-    600
+    DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS
 }
 
 fn default_compiler_max_output_bytes() -> usize {
-    256 * 1024 * 1024
+    DEFAULT_COMPILER_MAX_OUTPUT_BYTES
 }
 
 #[cfg(test)]

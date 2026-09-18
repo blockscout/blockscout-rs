@@ -15,14 +15,12 @@ use crate::{
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, CompilerExecutor, ConcurrencyLimitedCompilerExecutor, EvmCompilersPool,
-    SolcCompiler, SolcValidator,
+    find_methods, solidity, CompilerExecutor, EvmCompilersPool, SolcCompiler, SolcValidator,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     LookupMethodsRequest, LookupMethodsResponse,
 };
 use std::sync::Arc;
-use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct SolidityVerifierService {
@@ -30,19 +28,9 @@ pub struct SolidityVerifierService {
 }
 
 impl SolidityVerifierService {
-    pub async fn new_with_executor(
-        settings: SoliditySettings,
-        compilers_threads_semaphore: Arc<Semaphore>,
-        executor: Arc<dyn CompilerExecutor>,
-    ) -> anyhow::Result<Self> {
-        let executor = Arc::new(ConcurrencyLimitedCompilerExecutor::with_semaphore(
-            executor,
-            compilers_threads_semaphore,
-        ));
-        Self::new_with_admitted_executor(settings, executor).await
-    }
-
-    pub(crate) async fn new_with_admitted_executor(
+    /// `executor` must already enforce the shared compiler limit, e.g. a
+    /// `ConcurrencyLimitedCompilerExecutor`.
+    pub async fn new_with_admitted_executor(
         settings: SoliditySettings,
         executor: Arc<dyn CompilerExecutor>,
     ) -> anyhow::Result<Self> {

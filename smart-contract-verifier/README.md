@@ -50,7 +50,7 @@ Here, we describe variables specific to this service. Variables common to all se
 | `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__RUNNER_IMAGE`  | docker   | Preloaded runner image pinned by `@sha256:<64 hex characters>`          |                                                                              |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__PLATFORM`      |          | Runner platform; compiler download lists must match                     | `linux/amd64`                                                                |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__CONNECT_TIMEOUT_SECONDS` | docker | Startup SSH host-key preflight timeout in seconds                       | `30`                                                                         |
-| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__API_TIMEOUT_SECONDS` | docker | Docker API request timeout in seconds, raised to at least the execution timeout | `30`                                                                  |
+| `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__API_TIMEOUT_SECONDS` | docker | Docker API request timeout in seconds, raised to at least the execution timeout; readiness checks use it alone | `30`                                                                  |
 | `SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__RUNTIME`       |          | Optional hardened runtime installed on the external Docker host         | Docker default                                                               |
 
 [anchor]: <> (anchors.envs.end)

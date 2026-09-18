@@ -21,9 +21,9 @@ pub use concurrency::ConcurrencyLimitedCompilerExecutor;
 pub use docker::{DockerCompilerExecutor, DockerCompilerExecutorSettings};
 pub use native::NativeCompilerExecutor;
 
-const DEFAULT_EXECUTION_TIMEOUT_SECS: u64 = 600;
+pub const DEFAULT_EXECUTION_TIMEOUT_SECS: u64 = 600;
 const DEFAULT_MAX_UPLOAD_BYTES: u64 = 256 * 1024 * 1024;
-const DEFAULT_MAX_OUTPUT_BYTES: usize = 256 * 1024 * 1024;
+pub const DEFAULT_MAX_OUTPUT_BYTES: usize = 256 * 1024 * 1024;
 
 async fn deliver_stdin<W>(
     writer: &mut W,

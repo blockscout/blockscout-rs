@@ -30,6 +30,7 @@ pub use compiler::{
     ConcurrencyLimitedCompilerExecutor, DetailedVersion, DockerCompilerExecutor,
     DockerCompilerExecutorSettings, ExecutionError, ExecutionOutput, Fetcher, FileValidator,
     JobFile, ListFetcher, NativeCompilerExecutor, S3Fetcher, Version,
+    DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS, DEFAULT_COMPILER_MAX_OUTPUT_BYTES,
 };
 pub use verify::{
     Error, EvmCompilersPool, SolcCompiler, SolcInput, VerificationResult, VerifyingContract,

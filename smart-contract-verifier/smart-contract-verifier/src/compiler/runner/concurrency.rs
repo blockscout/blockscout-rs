@@ -6,10 +6,7 @@ use super::{
 };
 use crate::metrics::{self, GuardedGauge};
 use async_trait::async_trait;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Mutex, PoisonError, Weak},
-};
+use std::{num::NonZeroUsize, sync::Arc};
 use tokio::sync::Semaphore;
 
 #[derive(Clone)]
@@ -28,37 +25,6 @@ impl ConcurrencyLimitedCompilerExecutor {
             _capacity: Arc::new(runner_metrics::observe_capacity(max_concurrent_jobs)),
         }
     }
-
-    /// Compatibility path for callers that already own the shared semaphore.
-    pub fn with_semaphore(inner: Arc<dyn CompilerExecutor>, permits: Arc<Semaphore>) -> Self {
-        Self {
-            inner,
-            _capacity: shared_capacity(&permits),
-            permits,
-        }
-    }
-}
-
-/// Publishes a caller-owned semaphore's capacity once, however many executors wrap it. Such a
-/// semaphore is expected to be idle when first wrapped, so its available permits are its capacity.
-fn shared_capacity(permits: &Arc<Semaphore>) -> Arc<runner_metrics::CapacityGuard> {
-    type Registration = (Weak<Semaphore>, Weak<runner_metrics::CapacityGuard>);
-    static REGISTERED: Mutex<Vec<Registration>> = Mutex::new(Vec::new());
-
-    let mut registered = REGISTERED.lock().unwrap_or_else(PoisonError::into_inner);
-    registered.retain(|(_, capacity)| capacity.strong_count() > 0);
-    let existing = registered
-        .iter()
-        .find(|(semaphore, _)| semaphore.as_ptr() == Arc::as_ptr(permits))
-        .and_then(|(_, capacity)| capacity.upgrade());
-    if let Some(capacity) = existing {
-        return capacity;
-    }
-    let capacity = Arc::new(runner_metrics::observe_capacity(
-        permits.available_permits(),
-    ));
-    registered.push((Arc::downgrade(permits), Arc::downgrade(&capacity)));
-    capacity
 }
 
 #[async_trait]
@@ -67,6 +33,11 @@ impl CompilerExecutor for ConcurrencyLimitedCompilerExecutor {
         &self,
         mut invocation: CompilerInvocation,
     ) -> Result<ExecutionOutput, ExecutionError> {
+        // An outer limiter already prepared and admitted this invocation. Acquiring again could
+        // deadlock on a shared semaphore, so nested limiters pass it through.
+        if invocation.admission_permit().is_some() {
+            return self.inner.execute(invocation).await;
+        }
         let queue_cancellation =
             runner_metrics::QueueCancellationObservation::new(runner_metrics::SHARED);
         if let Err(error) = self.inner.prepare(&invocation).await {
@@ -98,6 +69,11 @@ impl CompilerExecutor for ConcurrencyLimitedCompilerExecutor {
         let _active = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
         let _timer = metrics::COMPILE_TIME.start_timer();
         self.inner.execute(invocation).await
+    }
+
+    /// Lets an outer limiter fill caches before its own admission when it wraps this one.
+    async fn prepare(&self, invocation: &CompilerInvocation) -> Result<(), ExecutionError> {
+        self.inner.prepare(invocation).await
     }
 
     async fn health_check(&self) -> Result<(), ExecutionError> {
@@ -243,20 +219,6 @@ mod tests {
         })
         .await
         .expect("executor invocation should start");
-    }
-
-    #[test]
-    fn caller_owned_semaphore_publishes_its_capacity_once() {
-        let inner: Arc<dyn CompilerExecutor> = Arc::new(BlockingExecutor::default());
-        let shared = Arc::new(Semaphore::new(3));
-        let first =
-            ConcurrencyLimitedCompilerExecutor::with_semaphore(inner.clone(), shared.clone());
-        let second = ConcurrencyLimitedCompilerExecutor::with_semaphore(inner.clone(), shared);
-        let other =
-            ConcurrencyLimitedCompilerExecutor::with_semaphore(inner, Arc::new(Semaphore::new(3)));
-
-        assert!(Arc::ptr_eq(&first._capacity, &second._capacity));
-        assert!(!Arc::ptr_eq(&first._capacity, &other._capacity));
     }
 
     #[tokio::test]
@@ -449,6 +411,40 @@ mod tests {
 
         inner.cold_fill.add_permits(1);
         cold.await.unwrap().unwrap();
+        assert_eq!(inner.executed.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn nested_limiters_admit_once_and_prepare_first() {
+        let inner = Arc::new(ColdPrepareExecutor::default());
+        let limit = NonZeroUsize::new(1).unwrap();
+        let nested = Arc::new(ConcurrencyLimitedCompilerExecutor::new(
+            inner.clone(),
+            limit,
+        ));
+        let executor = Arc::new(ConcurrencyLimitedCompilerExecutor::new(nested, limit));
+
+        let cold = tokio::spawn({
+            let executor = executor.clone();
+            async move { executor.execute(invocation("--cold")).await }
+        });
+        sleep(Duration::from_millis(20)).await;
+
+        timeout(
+            Duration::from_secs(1),
+            executor.execute(invocation("--warm")),
+        )
+        .await
+        .expect("a nested limiter must neither re-acquire the slot nor fill caches inside it")
+        .unwrap();
+        assert_eq!(inner.executed.load(Ordering::SeqCst), 1);
+
+        inner.cold_fill.add_permits(1);
+        timeout(Duration::from_secs(1), cold)
+            .await
+            .expect("the cold job must be admitted once")
+            .unwrap()
+            .unwrap();
         assert_eq!(inner.executed.load(Ordering::SeqCst), 2);
     }
 }

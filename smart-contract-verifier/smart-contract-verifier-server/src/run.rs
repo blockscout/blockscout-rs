@@ -97,9 +97,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             Duration::from_secs(*execution_timeout_seconds),
             *max_output_bytes,
         )?),
-        CompilerExecutionSettings::Docker(docker) => {
-            Arc::new(DockerCompilerExecutor::new(docker.clone())?)
-        }
+        CompilerExecutionSettings::Docker(docker) => Arc::new(
+            DockerCompilerExecutor::new(docker.clone())?
+                .with_unadmitted_fill_limit(settings.compilers.max_threads),
+        ),
     };
     let compiler_executor: Arc<dyn CompilerExecutor> =
         Arc::new(ConcurrencyLimitedCompilerExecutor::new(

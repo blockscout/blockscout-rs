@@ -92,7 +92,7 @@ impl<Ver: Version> DownloadCache<Ver> {
             Some(CachedFile::Unvalidated(file)) => {
                 tracing::info!(target: "compiler_cache", "validating preloaded file version {}", ver);
                 let validation: Result<_, FetchError> = async {
-                    let (path, guard) = stable_preloaded_file(&file).await?;
+                    let (path, guard) = stable_file(&file).await?;
                     fetcher.validate_file(ver, &path).await?;
                     Ok((path, guard))
                 }
@@ -114,25 +114,40 @@ impl<Ver: Version> DownloadCache<Ver> {
                             error = ?error,
                             "preloaded compiler validation failed; downloading a verified copy"
                         );
-                        let file = fetcher.fetch(ver).await?;
+                        let (path, snapshot) = Self::fetch_stable(fetcher, ver).await?;
                         *entry = Some(CachedFile::Validated {
-                            path: file.clone(),
-                            _snapshot: None,
+                            path: path.clone(),
+                            _snapshot: snapshot,
                         });
-                        Ok(file)
+                        Ok(path)
                     }
                 }
             }
             None => {
                 tracing::info!(target: "compiler_cache", "installing file version {}", ver);
-                let file = fetcher.fetch(ver).await?;
+                let (path, snapshot) = Self::fetch_stable(fetcher, ver).await?;
                 *entry = Some(CachedFile::Validated {
-                    path: file.clone(),
-                    _snapshot: None,
+                    path: path.clone(),
+                    _snapshot: snapshot,
                 });
-                Ok(file)
+                Ok(path)
             }
         }
+    }
+
+    /// Downloads a compiler and pins the bytes later jobs use, as for preloaded compilers. A file
+    /// other users could change is snapshotted, and the snapshot is validated again because the
+    /// download may have been replaced between the fetcher's validation and the copy.
+    async fn fetch_stable<D: Fetcher<Version = Ver> + ?Sized>(
+        fetcher: &D,
+        ver: &Ver,
+    ) -> Result<(PathBuf, Option<Arc<tempfile::TempPath>>), FetchError> {
+        let file = fetcher.fetch(ver).await?;
+        let (path, snapshot) = stable_file(&file).await?;
+        if snapshot.is_some() {
+            fetcher.validate_file(ver, &path).await?;
+        }
+        Ok((path, snapshot))
     }
 
     pub async fn load_from_dir(&self, dir: &PathBuf) -> std::io::Result<()> {
@@ -172,9 +187,9 @@ impl<Ver: Version> DownloadCache<Ver> {
     }
 }
 
-/// Returns a path whose bytes cannot change after validation: the preloaded file itself when only
+/// Returns a path whose bytes cannot change after validation: the compiler file itself when only
 /// this user or root can change it, otherwise a private snapshot kept alive by the returned guard.
-async fn stable_preloaded_file(
+async fn stable_file(
     source: &Path,
 ) -> Result<(PathBuf, Option<Arc<tempfile::TempPath>>), FetchError> {
     let source = source.to_path_buf();
@@ -186,8 +201,11 @@ async fn stable_preloaded_file(
                 "preloaded compiler must be a regular file",
             ));
         }
-        if only_this_user_or_root_can_change(&source)? {
-            return Ok((source, None));
+        // Check and return the resolved path: a symlink along the configured path could be
+        // retargeted after validation by whoever controls it.
+        let canonical = std::fs::canonicalize(&source)?;
+        if only_this_user_or_root_can_change(&canonical)? {
+            return Ok((canonical, None));
         }
 
         let mut source = std::fs::File::open(source)?;
@@ -208,14 +226,13 @@ async fn stable_preloaded_file(
 }
 
 /// Whether neither `path` nor any directory leading to it can be changed or replaced by a user
-/// other than this process's user or root.
+/// other than this process's user or root. `path` must be canonical, so no symlink is skipped.
 #[cfg(unix)]
 fn only_this_user_or_root_can_change(path: &Path) -> std::io::Result<bool> {
     use std::os::unix::fs::MetadataExt;
 
     // SAFETY: `geteuid` has no preconditions and always succeeds.
     let euid = unsafe { libc::geteuid() };
-    let path = std::fs::canonicalize(path)?;
     for component in path.ancestors() {
         let metadata = std::fs::metadata(component)?;
         let trusted_owner = metadata.uid() == euid || metadata.uid() == 0;
@@ -268,7 +285,7 @@ fn filter_versions<Ver: Version>(dirs: impl Iterator<Item = PathBuf>) -> HashMap
 mod tests {
     use super::{super::version_detailed as evm_version, *};
     use async_trait::async_trait;
-    use futures::{executor::block_on, join, pin_mut};
+    use futures::{join, pin_mut};
     use pretty_assertions::assert_eq;
     use std::{
         collections::HashSet,
@@ -285,11 +302,18 @@ mod tests {
         })
     }
 
+    /// Writes a downloaded compiler into a private test directory.
+    fn downloaded_file(dir: &Path, ver: &evm_version::DetailedVersion) -> PathBuf {
+        let path = dir.join(ver.to_string());
+        std::fs::write(&path, b"compiler").unwrap();
+        path
+    }
+
     /// Tests, that caching works, meaning that cache downloads each version only once
-    #[test]
-    fn value_is_cached() {
-        #[derive(Default)]
+    #[tokio::test]
+    async fn value_is_cached() {
         struct MockFetcher {
+            dir: tempfile::TempDir,
             counter: parking_lot::Mutex<HashMap<evm_version::DetailedVersion, u32>>,
         }
 
@@ -299,7 +323,7 @@ mod tests {
 
             async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
                 *self.counter.lock().entry(ver.clone()).or_default() += 1;
-                Ok(PathBuf::from(ver.to_string()))
+                Ok(downloaded_file(self.dir.path(), ver))
             }
 
             fn all_versions(&self) -> Vec<Self::Version> {
@@ -307,26 +331,20 @@ mod tests {
             }
         }
 
-        let fetcher = MockFetcher::default();
+        let fetcher = MockFetcher {
+            dir: tempfile::tempdir().unwrap(),
+            counter: Default::default(),
+        };
         let cache = DownloadCache::default();
 
         let vers: Vec<_> = (0..3).map(new_version).collect();
 
-        let get_and_check = |ver: &evm_version::DetailedVersion| {
-            let value = block_on(cache.get(&fetcher, ver)).unwrap();
-            assert_eq!(value, PathBuf::from(ver.to_string()));
-        };
-
-        get_and_check(&vers[0]);
-        get_and_check(&vers[1]);
-        get_and_check(&vers[0]);
-        get_and_check(&vers[0]);
-        get_and_check(&vers[1]);
-        get_and_check(&vers[1]);
-        get_and_check(&vers[2]);
-        get_and_check(&vers[2]);
-        get_and_check(&vers[1]);
-        get_and_check(&vers[0]);
+        for index in [0, 1, 0, 0, 1, 1, 2, 2, 1, 0] {
+            let ver = &vers[index];
+            let value = cache.get(&fetcher, ver).await.unwrap();
+            let expected = std::fs::canonicalize(fetcher.dir.path().join(ver.to_string()));
+            assert_eq!(value, expected.unwrap());
+        }
 
         let counter = fetcher.counter.lock();
         assert_eq!(counter.len(), 3);
@@ -341,6 +359,7 @@ mod tests {
 
         #[derive(Clone)]
         struct MockBlockingFetcher {
+            dir: Arc<tempfile::TempDir>,
             sync: Arc<tokio::sync::Mutex<()>>,
         }
 
@@ -350,7 +369,7 @@ mod tests {
 
             async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
                 let _guard = self.sync.lock().await;
-                Ok(PathBuf::from(ver.to_string()))
+                Ok(downloaded_file(self.dir.path(), ver))
             }
 
             fn all_versions(&self) -> Vec<Self::Version> {
@@ -359,7 +378,10 @@ mod tests {
         }
 
         let sync = Arc::<tokio::sync::Mutex<()>>::default();
-        let fetcher = MockBlockingFetcher { sync: sync.clone() };
+        let fetcher = MockBlockingFetcher {
+            dir: Arc::new(tempfile::tempdir().unwrap()),
+            sync: sync.clone(),
+        };
         let cache = Arc::new(DownloadCache::default());
 
         let vers: Vec<_> = (0..3).map(new_version).collect();
@@ -546,10 +568,66 @@ mod tests {
             .await
             .unwrap();
 
+        let downloaded_path = std::fs::canonicalize(&downloaded_path).unwrap();
         assert_eq!(cache.get(&fetcher, &ver).await.unwrap(), downloaded_path);
         assert_eq!(cache.get(&fetcher, &ver).await.unwrap(), downloaded_path);
         assert_eq!(fetcher.validation_calls.load(Ordering::Relaxed), 1);
         assert_eq!(fetcher.fetch_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn downloaded_compiler_in_a_shared_directory_is_snapshotted_and_revalidated() {
+        use std::os::unix::fs::PermissionsExt;
+
+        struct SharedDirectoryFetcher {
+            dir: PathBuf,
+            validation_calls: AtomicUsize,
+        }
+
+        #[async_trait]
+        impl Fetcher for SharedDirectoryFetcher {
+            type Version = evm_version::DetailedVersion;
+
+            async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
+                let path = self.dir.join(ver.to_string());
+                std::fs::write(&path, b"verified compiler").unwrap();
+                Ok(path)
+            }
+
+            async fn validate_file(
+                &self,
+                _ver: &Self::Version,
+                path: &std::path::Path,
+            ) -> Result<(), FetchError> {
+                self.validation_calls.fetch_add(1, Ordering::Relaxed);
+                assert_eq!(std::fs::read(path).unwrap(), b"verified compiler");
+                Ok(())
+            }
+
+            fn all_versions(&self) -> Vec<Self::Version> {
+                vec![]
+            }
+        }
+
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("shared");
+        std::fs::create_dir(&dir).unwrap();
+        // Another user could replace a download in a world-writable directory.
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+        let fetcher = SharedDirectoryFetcher {
+            dir: dir.clone(),
+            validation_calls: AtomicUsize::new(0),
+        };
+        let ver = new_version(5);
+        let cache = DownloadCache::default();
+
+        let snapshot_path = cache.get(&fetcher, &ver).await.unwrap();
+        assert!(!snapshot_path.starts_with(&dir));
+        assert_eq!(fetcher.validation_calls.load(Ordering::Relaxed), 1);
+
+        std::fs::write(dir.join(ver.to_string()), b"replaced after validation").unwrap();
+        assert_eq!(cache.get(&fetcher, &ver).await.unwrap(), snapshot_path);
+        assert_eq!(std::fs::read(&snapshot_path).unwrap(), b"verified compiler");
     }
 
     #[cfg(unix)]
@@ -614,17 +692,19 @@ mod tests {
         std::fs::create_dir(&version_dir).unwrap();
         let preloaded_path = version_dir.join("solc");
         std::fs::write(&preloaded_path, b"trusted compiler").unwrap();
+        // The configured compilers directory is reached through a symlink.
+        let link_dir = tempfile::tempdir().unwrap();
+        let compilers_dir = link_dir.path().join("compilers");
+        std::os::unix::fs::symlink(dir.path(), &compilers_dir).unwrap();
 
         let cache = DownloadCache::default();
-        cache
-            .load_from_dir(&dir.path().to_path_buf())
-            .await
-            .unwrap();
+        cache.load_from_dir(&compilers_dir).await.unwrap();
 
         assert_eq!(
             cache.get(&InPlaceFetcher, &ver).await.unwrap(),
-            preloaded_path,
-            "a compiler only this user can change needs no snapshot"
+            std::fs::canonicalize(&preloaded_path).unwrap(),
+            "a compiler only this user can change needs no snapshot, and is used by its resolved \
+             path so a symlink along the configured path cannot be retargeted"
         );
     }
 

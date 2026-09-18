@@ -2,8 +2,8 @@
 
 use crate::{
     compiler::{
-        CommandArgument, CompactVersion, CompilerExecutor, CompilerInvocation,
-        ConcurrencyLimitedCompilerExecutor, DetailedVersion, DownloadCache, Fetcher, JobFile,
+        CommandArgument, CompactVersion, CompilerExecutor, CompilerInvocation, DetailedVersion,
+        DownloadCache, Fetcher, JobFile,
     },
     zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract},
     Version,
@@ -24,7 +24,6 @@ use std::{
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::zksync::solidity::verification_success::Language;
 use thiserror::Error;
-use tokio::sync::Semaphore;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, MatchBuilder, RuntimeCodeArtifacts,
     ToCompilationArtifacts, ToCreationCodeArtifacts, ToRuntimeCodeArtifacts,
@@ -407,20 +406,6 @@ pub struct ZkSyncCompilers<ZkC> {
 }
 
 impl<ZkC: ZkSyncCompiler> ZkSyncCompilers<ZkC> {
-    pub fn new_with_executor(
-        evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
-        era_evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
-        zk_fetcher: Arc<dyn Fetcher<Version = CompactVersion>>,
-        threads_semaphore: Arc<Semaphore>,
-        executor: Arc<dyn CompilerExecutor>,
-    ) -> Self {
-        let executor = Arc::new(ConcurrencyLimitedCompilerExecutor::with_semaphore(
-            executor,
-            threads_semaphore,
-        ));
-        Self::new_with_admitted_executor(evm_fetcher, era_evm_fetcher, zk_fetcher, executor)
-    }
-
     pub fn new_with_admitted_executor(
         evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
         era_evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,

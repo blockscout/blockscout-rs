@@ -156,7 +156,7 @@ impl NativeCompilerExecutor {
             self.stage(&invocation, tempdir.path()).await?
         };
 
-        let (mut child, mut child_stdin, child_stdout, child_stderr) = {
+        let (mut child, process_group, mut child_stdin, child_stdout, child_stderr) = {
             let _timer = metrics::start_operation(metrics::NATIVE, metrics::CREATE, "process");
             let program = invocation.program_path_with_overrides(tempdir.path(), &in_place)?;
             let args = invocation.resolved_args_with_overrides(tempdir.path(), &in_place)?;
@@ -176,10 +176,15 @@ impl NativeCompilerExecutor {
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
+            // The compiler leads its own process group, so the helpers it spawns can be killed
+            // with it.
+            #[cfg(unix)]
+            command.process_group(0);
 
             let mut child = command
                 .spawn()
                 .with_context(|| format!("starting compiler {}", program.display()))?;
+            let process_group = child.id();
             let child_stdin = child
                 .stdin
                 .take()
@@ -192,7 +197,13 @@ impl NativeCompilerExecutor {
                 .stderr
                 .take()
                 .context("compiler stderr was not available")?;
-            (child, child_stdin, child_stdout, child_stderr)
+            (
+                child,
+                process_group,
+                child_stdin,
+                child_stdout,
+                child_stderr,
+            )
         };
 
         let _timer = metrics::start_operation(metrics::NATIVE, metrics::EXECUTE, "process");
@@ -238,13 +249,17 @@ impl NativeCompilerExecutor {
                 tokio::try_join!(write_stdin, collect_stdout, collect_stderr, wait)?;
             Ok::<_, ExecutionError>((stdout, stderr, status))
         };
+        tokio::pin!(execution);
+        // Declared after `execution`, so on timeout, error, or cancellation it drops first and
+        // signals the group while the leader still holds it.
+        let process_group = ProcessGroupKiller(process_group);
 
-        let (stdout, stderr, status) =
-            timeout(self.execution_timeout, execution)
-                .await
-                .map_err(|_| ExecutionError::Timeout {
-                    seconds: self.execution_timeout.as_secs(),
-                })??;
+        let (stdout, stderr, status) = timeout(self.execution_timeout, &mut execution)
+            .await
+            .map_err(|_| ExecutionError::Timeout {
+                seconds: self.execution_timeout.as_secs(),
+            })??;
+        process_group.disarm();
 
         Ok(ExecutionOutput {
             stdout,
@@ -281,6 +296,29 @@ async fn in_place_executable(file: &JobFile) -> Result<Option<PathBuf>, Executio
     let source = std::path::absolute(source)
         .with_context(|| format!("resolving compiler artifact {}", source.display()))?;
     Ok(Some(source))
+}
+
+/// Kills a compiler's whole process group unless disarmed. `kill_on_drop` only reaches the direct
+/// child, and zksolc runs a separate process per contract.
+struct ProcessGroupKiller(Option<u32>);
+
+impl ProcessGroupKiller {
+    fn disarm(mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for ProcessGroupKiller {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(group) = self.0.and_then(|pid| libc::pid_t::try_from(pid).ok()) {
+            // SAFETY: `kill` has no memory-safety preconditions. The group was created for this
+            // job by spawning its leader with `process_group(0)`.
+            unsafe {
+                libc::kill(-group, libc::SIGKILL);
+            }
+        }
+    }
 }
 
 struct ObservedTempDir(Option<tempfile::TempDir>);
@@ -472,6 +510,60 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(error, ExecutionError::Timeout { seconds: 1 }));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn timeout_kills_processes_spawned_by_the_compiler() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("compiler");
+        let pid_file = source_dir.path().join("helper.pid");
+        tokio::fs::write(
+            &compiler,
+            b"#!/bin/sh\n/bin/sleep 60 &\necho $! > \"$1\"\nwait\n",
+        )
+        .await
+        .unwrap();
+        let invocation = CompilerInvocation::new(
+            JobFile::executable("compiler", "bin/compiler", compiler).unwrap(),
+            vec![CommandArgument::literal(pid_file.to_str().unwrap())],
+            Bytes::new(),
+        );
+
+        let error = NativeCompilerExecutor::new(Duration::from_secs(1), 1024)
+            .unwrap()
+            .execute(invocation)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ExecutionError::Timeout { seconds: 1 }));
+
+        let helper: libc::pid_t = std::fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let helper_is_dead = || {
+            // SAFETY: signal 0 only checks whether the process exists.
+            if unsafe { libc::kill(helper, 0) } != 0 {
+                return true;
+            }
+            // A killed helper may briefly remain a zombie until its new parent reaps it.
+            std::process::Command::new("ps")
+                .args(["-o", "stat=", "-p", &helper.to_string()])
+                .output()
+                .is_ok_and(|output| String::from_utf8_lossy(&output.stdout).starts_with('Z'))
+        };
+        for _ in 0..50 {
+            if helper_is_dead() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        // SAFETY: cleans up the helper so a failing test does not leak it.
+        unsafe {
+            libc::kill(helper, libc::SIGKILL);
+        }
+        panic!("a process spawned by the compiler outlived the timed-out job");
     }
 
     #[cfg(unix)]

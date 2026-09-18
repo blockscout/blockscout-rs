@@ -2,7 +2,7 @@
 
 use super::{compiler_output::SharedCompilerOutput, Error};
 use crate::{
-    compiler::{CompilerExecutor, ConcurrencyLimitedCompilerExecutor, DownloadCache},
+    compiler::{CompilerExecutor, DownloadCache},
     DetailedVersion, Fetcher, Language,
 };
 use anyhow::Context;
@@ -15,7 +15,6 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tokio::sync::Semaphore;
 use tracing::{instrument, Instrument};
 
 #[async_trait]
@@ -66,18 +65,6 @@ pub struct EvmCompilersPool<C: EvmCompiler> {
 }
 
 impl<C: EvmCompiler> EvmCompilersPool<C> {
-    pub fn new_with_executor(
-        fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
-        threads_semaphore: Arc<Semaphore>,
-        executor: Arc<dyn CompilerExecutor>,
-    ) -> Self {
-        let executor = Arc::new(ConcurrencyLimitedCompilerExecutor::with_semaphore(
-            executor,
-            threads_semaphore,
-        ));
-        Self::new_with_admitted_executor(fetcher, executor)
-    }
-
     pub fn new_with_admitted_executor(
         fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
         executor: Arc<dyn CompilerExecutor>,

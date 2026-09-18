@@ -139,16 +139,22 @@ max_output_bytes = 268435456
 
 `connect_timeout_seconds` independently bounds the lazy SSH host-key preflight. Docker API
 requests use the greater of `api_timeout_seconds` and `execution_timeout_seconds`, so cold-cache
-uploads retain the compiler execution budget. Attach and wait streams remain bounded by
+uploads retain the compiler execution budget. Readiness checks (Docker ping, runner-image
+inspection, and the initial orphan sweep) are bounded by `api_timeout_seconds` alone, so the
+compiler probe fails fast on a stalled link. Attach and wait streams remain bounded by
 `execution_timeout_seconds` after their response headers arrive.
 
 Upload tarballs are assembled in bounded anonymous temporary files and streamed to the Docker
-host. During a cold cache fill, a job spool and one compiler-seed spool can coexist; size pod
-ephemeral storage for up to roughly `2 * max_threads * max_upload_bytes` of concurrent spooling.
+host. During a cold cache fill, an admitted job can hold a job spool and one compiler-seed spool,
+and up to `max_threads` further cache fills may run before admission; size pod ephemeral storage
+for up to roughly `3 * max_threads * max_upload_bytes` of concurrent spooling.
 The verifier does not retain complete tarballs in memory.
 
-Build the minimal runner image with `compiler-runner.Dockerfile`, push it, and preload the selected
-digest on the dedicated VM. Mount the SSH private key and a pinned `known_hosts` file into the
+CI builds the minimal runner image from `compiler-runner.Dockerfile` and publishes it as
+`ghcr.io/blockscout/smart-contract-verifier-compiler-runner` for `linux/amd64` and `linux/arm64`:
+`:main` from the main branch, and `:<version>` (plus `:latest` for non-prerelease versions) from
+`smart-contract-verifier/v*` release tags. Resolve the tag matching the deployed verifier to its
+`@sha256:` digest, configure that digest, and preload it on the dedicated VM. Mount the SSH private key and a pinned `known_hosts` file into the
 service pod. The remote SSH account must be dedicated to this service. The configured compiler list
 must match `platform` (the production defaults download Linux amd64 compiler binaries).
 

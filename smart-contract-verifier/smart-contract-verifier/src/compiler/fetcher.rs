@@ -85,6 +85,45 @@ pub fn validate_checksum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H
     }
 }
 
+/// Identity of a local file. `ctime` changes on every content or metadata change and cannot be set
+/// from user space, so an unchanged fingerprint means unchanged bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FileFingerprint {
+    dev: u64,
+    ino: u64,
+    len: u64,
+    mtime: (i64, i64),
+    ctime: (i64, i64),
+}
+
+impl FileFingerprint {
+    pub(crate) fn new(metadata: &std::fs::Metadata) -> Self {
+        use std::os::unix::fs::MetadataExt;
+        Self {
+            dev: metadata.dev(),
+            ino: metadata.ino(),
+            len: metadata.len(),
+            mtime: (metadata.mtime(), metadata.mtime_nsec()),
+            ctime: (metadata.ctime(), metadata.ctime_nsec()),
+        }
+    }
+}
+
+/// SHA-256 of the file at `path`, which must still be the file `expected` was taken from and must
+/// not change while it is read.
+pub(crate) fn sha256_file(path: &Path, expected: FileFingerprint) -> std::io::Result<H256> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let hashed = std::io::copy(&mut (&mut file).take(expected.len), &mut hasher)?;
+    if hashed != expected.len || FileFingerprint::new(&file.metadata()?) != expected {
+        return Err(std::io::Error::other(format!(
+            "{} changed while it was being hashed",
+            path.display()
+        )));
+    }
+    Ok(H256::from_slice(&hasher.finalize()))
+}
+
 pub(crate) async fn validate_existing_executable<Ver: Version>(
     path: &Path,
     expected: H256,
@@ -101,18 +140,7 @@ pub(crate) async fn validate_existing_executable<Ver: Version>(
                 "preloaded compiler must be a regular file",
             ));
         }
-
-        let mut file = File::open(hash_path)?;
-        let mut hasher = Sha256::new();
-        let mut buffer = [0_u8; 64 * 1024];
-        loop {
-            let bytes_read = file.read(&mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..bytes_read]);
-        }
-        Ok::<_, std::io::Error>(H256::from_slice(&hasher.finalize()))
+        sha256_file(&hash_path, FileFingerprint::new(&metadata))
     })
     .await??;
 

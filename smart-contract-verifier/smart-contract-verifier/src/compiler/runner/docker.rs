@@ -4,6 +4,7 @@ use super::{
     CompilerExecutor, CompilerInvocation, ExecutionError, ExecutionOutput, JobFileContent,
     DEFAULT_EXECUTION_TIMEOUT_SECS, DEFAULT_MAX_OUTPUT_BYTES, DEFAULT_MAX_UPLOAD_BYTES,
 };
+use crate::compiler::fetcher::{sha256_file, FileFingerprint};
 use anyhow::Context;
 use async_trait::async_trait;
 use bollard::{
@@ -28,12 +29,13 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashMap},
     io::{Cursor, Read, Seek, SeekFrom, Write},
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::{
-    sync::{Mutex, OnceCell, OwnedSemaphorePermit},
+    sync::{Mutex, OnceCell, OwnedSemaphorePermit, Semaphore},
     time::{sleep, timeout, Instant},
 };
 use tokio_util::io::ReaderStream;
@@ -63,6 +65,7 @@ const HOME_TMPFS_SIZE_BYTES: i64 = 64 * 1024 * 1024;
 const COMPILER_TMPFS_SIZE_BYTES: i64 = 256 * 1024 * 1024;
 const CLEANUP_GRACE_SECONDS: u64 = 300;
 const JANITOR_INTERVAL_SECONDS: u64 = 30;
+const DEFAULT_UNADMITTED_FILL_LIMIT: usize = 8;
 
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -202,72 +205,49 @@ pub struct DockerCompilerExecutor {
     initialization: Arc<OnceCell<Arc<ContainerJanitor>>>,
 }
 
-#[derive(Default)]
 struct CompilerCacheState {
     ready: Mutex<HashMap<String, String>>,
     locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     local_digests: LocalDigestCache,
+    /// Bounds cold fills that hold no admission slot (those started by `prepare`), so a burst of
+    /// distinct uncached compilers cannot start an unbounded number of seeds and helper containers.
+    unadmitted_fills: Semaphore,
 }
 
-/// Identity of a local compiler file. `ctime` changes on every content or metadata change and
-/// cannot be set from user space, so an unchanged fingerprint keeps a previously computed digest.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct LocalFileFingerprint {
-    dev: u64,
-    ino: u64,
-    len: u64,
-    mtime: (i64, i64),
-    ctime: (i64, i64),
-}
-
-impl LocalFileFingerprint {
-    fn new(metadata: &std::fs::Metadata) -> Self {
-        use std::os::unix::fs::MetadataExt;
+impl CompilerCacheState {
+    fn new(unadmitted_fill_limit: usize) -> Self {
         Self {
-            dev: metadata.dev(),
-            ino: metadata.ino(),
-            len: metadata.len(),
-            mtime: (metadata.mtime(), metadata.mtime_nsec()),
-            ctime: (metadata.ctime(), metadata.ctime_nsec()),
+            ready: Default::default(),
+            locks: Default::default(),
+            local_digests: Default::default(),
+            unadmitted_fills: Semaphore::new(unadmitted_fill_limit),
         }
+    }
+}
+
+impl Default for CompilerCacheState {
+    fn default() -> Self {
+        Self::new(DEFAULT_UNADMITTED_FILL_LIMIT)
     }
 }
 
 /// Avoids rehashing unchanged compiler binaries on every warm-cache job.
 #[derive(Default)]
-struct LocalDigestCache(parking_lot::Mutex<HashMap<PathBuf, (LocalFileFingerprint, String)>>);
+struct LocalDigestCache(parking_lot::Mutex<HashMap<PathBuf, (FileFingerprint, String)>>);
 
 impl LocalDigestCache {
     fn digest(&self, path: &Path, metadata: &std::fs::Metadata) -> Result<String, ExecutionError> {
-        let fingerprint = LocalFileFingerprint::new(metadata);
+        let fingerprint = FileFingerprint::new(metadata);
         if let Some((cached, digest)) = self.0.lock().get(path) {
             if *cached == fingerprint {
                 return Ok(digest.clone());
             }
         }
 
-        let mut source = std::fs::File::open(path)
-            .with_context(|| format!("open compiler executable {}", path.display()))
+        let digest = sha256_file(path, fingerprint)
+            .with_context(|| format!("hash compiler executable {}", path.display()))
             .map_err(ExecutionError::Infrastructure)?;
-        let mut hasher = Sha256::new();
-        std::io::copy(
-            &mut ExactSizeReader::new(&mut source, fingerprint.len),
-            &mut hasher,
-        )
-        .with_context(|| format!("hash compiler executable {}", path.display()))
-        .map_err(ExecutionError::Infrastructure)?;
-        let hashed = source
-            .metadata()
-            .with_context(|| format!("inspect compiler executable {}", path.display()))
-            .map_err(ExecutionError::Infrastructure)?;
-        if LocalFileFingerprint::new(&hashed) != fingerprint {
-            return Err(ExecutionError::Infrastructure(anyhow::anyhow!(
-                "compiler executable {} changed while it was being hashed",
-                path.display()
-            )));
-        }
-
-        let digest = hex::encode(hasher.finalize());
+        let digest = hex::encode(digest);
         self.0
             .lock()
             .insert(path.to_path_buf(), (fingerprint, digest.clone()));
@@ -335,6 +315,13 @@ impl DockerCompilerExecutor {
         })
     }
 
+    /// Limits concurrent cold cache fills that run before admission. Set it to the admission
+    /// limit (`compilers.max_threads`); must be called before the executor is used.
+    pub fn with_unadmitted_fill_limit(mut self, limit: NonZeroUsize) -> Self {
+        self.compiler_cache = Arc::new(CompilerCacheState::new(limit.get()));
+        self
+    }
+
     /// Builds an executor and eagerly verifies the remote host for compatibility with direct users.
     pub async fn connect(settings: DockerCompilerExecutorSettings) -> Result<Self, ExecutionError> {
         let executor = Self::new(settings)?;
@@ -371,45 +358,65 @@ impl DockerCompilerExecutor {
             .context("close Docker SSH host-key verification session")
             .map_err(ExecutionError::Infrastructure)?;
 
-        self.docker
-            .ping()
-            .await
-            .context("ping remote Docker daemon")
-            .map_err(ExecutionError::Infrastructure)?;
+        self.ping_remote().await?;
         // Best effort, as in the periodic janitor: one container that cannot be removed must not
         // keep the executor from becoming ready.
-        if let Err(error) = reap_expired_containers(&self.docker, "initialization").await {
-            tracing::warn!(error = ?error, "failed to reap expired compiler containers");
+        match timeout(
+            self.api_timeout(),
+            reap_expired_containers(&self.docker, "initialization"),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(error = ?error, "failed to reap expired compiler containers")
+            }
+            Err(_) => tracing::warn!("timed out reaping expired compiler containers"),
         }
-        self.docker
-            .inspect_image(&self.settings.runner_image)
+        self.inspect_runner_image().await
+    }
+
+    async fn check_remote_health(&self) -> Result<(), ExecutionError> {
+        self.ping_remote().await?;
+        self.inspect_runner_image().await
+    }
+
+    /// The client's request timeout is raised to the execution timeout so cold uploads can
+    /// finish, so readiness-path control-plane calls are bounded by `api_timeout_seconds` here.
+    fn api_timeout(&self) -> Duration {
+        Duration::from_secs(self.settings.api_timeout_seconds)
+    }
+
+    fn api_timeout_error(&self, operation: &str) -> ExecutionError {
+        ExecutionError::Infrastructure(anyhow::anyhow!(
+            "{operation} timed out after {} seconds",
+            self.settings.api_timeout_seconds
+        ))
+    }
+
+    async fn ping_remote(&self) -> Result<(), ExecutionError> {
+        timeout(self.api_timeout(), self.docker.ping())
             .await
-            .with_context(|| {
-                format!(
-                    "compiler runner image {} is not present on the remote Docker host",
-                    self.settings.runner_image
-                )
-            })
+            .map_err(|_| self.api_timeout_error("ping remote Docker daemon"))?
+            .context("ping remote Docker daemon")
             .map_err(ExecutionError::Infrastructure)?;
         Ok(())
     }
 
-    async fn check_remote_health(&self) -> Result<(), ExecutionError> {
-        self.docker
-            .ping()
-            .await
-            .context("ping remote Docker daemon")
-            .map_err(ExecutionError::Infrastructure)?;
-        self.docker
-            .inspect_image(&self.settings.runner_image)
-            .await
-            .with_context(|| {
-                format!(
-                    "compiler runner image {} is not present on the remote Docker host",
-                    self.settings.runner_image
-                )
-            })
-            .map_err(ExecutionError::Infrastructure)?;
+    async fn inspect_runner_image(&self) -> Result<(), ExecutionError> {
+        timeout(
+            self.api_timeout(),
+            self.docker.inspect_image(&self.settings.runner_image),
+        )
+        .await
+        .map_err(|_| self.api_timeout_error("inspect compiler runner image"))?
+        .with_context(|| {
+            format!(
+                "compiler runner image {} is not present on the remote Docker host",
+                self.settings.runner_image
+            )
+        })
+        .map_err(ExecutionError::Infrastructure)?;
         Ok(())
     }
 
@@ -453,13 +460,6 @@ impl DockerCompilerExecutor {
                 ),
             ),
         ]);
-        let runtime = self
-            .settings
-            .runtime
-            .as_ref()
-            .filter(|runtime| !runtime.is_empty())
-            .cloned();
-
         let mut mounts = vec![Mount {
             target: Some(JOB_ROOT.to_string()),
             typ: Some(MountType::VOLUME),
@@ -489,6 +489,26 @@ impl DockerCompilerExecutor {
         }));
 
         let host_config = HostConfig {
+            tmpfs: Some(tmpfs),
+            ..self.locked_down_host_config(1024, mounts)
+        };
+
+        Ok(self.locked_down_container(
+            JOB_USER,
+            vec![
+                format!("HOME={HOME_DIR}"),
+                format!("TMPDIR={COMPILER_TMP_DIR}"),
+            ],
+            command,
+            JOB_ROOT,
+            labels,
+            host_config,
+        ))
+    }
+
+    /// Resource limits and isolation shared by every container this executor creates.
+    fn locked_down_host_config(&self, nofile: i64, mounts: Vec<Mount>) -> HostConfig {
+        HostConfig {
             memory: Some(self.settings.memory_limit_bytes),
             memory_swap: Some(self.settings.memory_limit_bytes),
             nano_cpus: Some(self.settings.nano_cpus),
@@ -497,8 +517,8 @@ impl DockerCompilerExecutor {
             pids_limit: Some(self.settings.pids_limit),
             ulimits: Some(vec![ResourcesUlimits {
                 name: Some("nofile".to_string()),
-                soft: Some(1024),
-                hard: Some(1024),
+                soft: Some(nofile),
+                hard: Some(nofile),
             }]),
             log_config: Some(HostConfigLogConfig {
                 typ: Some("none".to_string()),
@@ -510,33 +530,45 @@ impl DockerCompilerExecutor {
             privileged: Some(false),
             readonly_rootfs: Some(true),
             security_opt: Some(vec!["no-new-privileges:true".to_string()]),
-            tmpfs: Some(tmpfs),
             mounts: Some(mounts),
-            runtime,
+            runtime: self
+                .settings
+                .runtime
+                .as_ref()
+                .filter(|runtime| !runtime.is_empty())
+                .cloned(),
             ..Default::default()
-        };
+        }
+    }
 
-        Ok(ContainerCreateBody {
-            user: Some(JOB_USER.to_string()),
+    /// A non-interactive, networkless container on the pinned runner image, attached for one run.
+    fn locked_down_container(
+        &self,
+        user: &str,
+        env: Vec<String>,
+        command: Vec<String>,
+        working_dir: &str,
+        labels: HashMap<String, String>,
+        host_config: HostConfig,
+    ) -> ContainerCreateBody {
+        ContainerCreateBody {
+            user: Some(user.to_string()),
             attach_stdin: Some(true),
             attach_stdout: Some(true),
             attach_stderr: Some(true),
             tty: Some(false),
             open_stdin: Some(true),
             stdin_once: Some(true),
-            env: Some(vec![
-                format!("HOME={HOME_DIR}"),
-                format!("TMPDIR={COMPILER_TMP_DIR}"),
-            ]),
+            env: Some(env),
             cmd: Some(command),
             image: Some(self.settings.runner_image.clone()),
-            working_dir: Some(JOB_ROOT.to_string()),
+            working_dir: Some(working_dir.to_string()),
             entrypoint: Some(vec![String::new()]),
             network_disabled: Some(true),
             labels: Some(labels),
             host_config: Some(host_config),
             ..Default::default()
-        })
+        }
     }
 
     fn cache_helper_config(
@@ -582,66 +614,28 @@ impl DockerCompilerExecutor {
             }
             .to_string(),
         ];
-        let env = Some(vec![format!("EXPECTED_DIGEST={digest}")]);
-        let host_config = HostConfig {
-            memory: Some(self.settings.memory_limit_bytes),
-            memory_swap: Some(self.settings.memory_limit_bytes),
-            nano_cpus: Some(self.settings.nano_cpus),
-            oom_kill_disable: Some(false),
-            init: Some(true),
-            pids_limit: Some(self.settings.pids_limit),
-            ulimits: Some(vec![ResourcesUlimits {
-                name: Some("nofile".to_string()),
-                soft: Some(128),
-                hard: Some(128),
-            }]),
-            log_config: Some(HostConfigLogConfig {
-                typ: Some("none".to_string()),
-                config: Some(HashMap::new()),
-            }),
-            network_mode: Some("none".to_string()),
-            auto_remove: Some(false),
-            cap_drop: Some(vec!["ALL".to_string()]),
-            privileged: Some(false),
-            readonly_rootfs: Some(true),
-            security_opt: Some(vec!["no-new-privileges:true".to_string()]),
-            mounts: Some(vec![Mount {
+        let host_config = self.locked_down_host_config(
+            128,
+            vec![Mount {
                 target: Some(COMPILER_CACHE_MOUNT.to_string()),
                 source: Some(compiler_cache_volume_name(digest)),
                 typ: Some(MountType::VOLUME),
                 read_only: Some(!initialize),
                 volume_options: Some(compiler_cache_mount_options(digest)),
                 ..Default::default()
-            }]),
-            runtime: self
-                .settings
-                .runtime
-                .as_ref()
-                .filter(|runtime| !runtime.is_empty())
-                .cloned(),
-            ..Default::default()
-        };
+            }],
+        );
 
-        Ok(ContainerCreateBody {
+        Ok(self.locked_down_container(
             // The initializer only renames a daemon-uploaded, root-owned file in a root-owned
             // volume. It still has no capabilities, network, or writable root filesystem.
-            user: Some(if initialize { "0:0" } else { JOB_USER }.to_string()),
-            attach_stdin: Some(true),
-            attach_stdout: Some(true),
-            attach_stderr: Some(true),
-            tty: Some(false),
-            open_stdin: Some(true),
-            stdin_once: Some(true),
-            env,
-            cmd: Some(command),
-            image: Some(self.settings.runner_image.clone()),
-            working_dir: Some(COMPILER_CACHE_MOUNT.to_string()),
-            entrypoint: Some(vec![String::new()]),
-            network_disabled: Some(true),
-            labels: Some(labels),
-            host_config: Some(host_config),
-            ..Default::default()
-        })
+            if initialize { "0:0" } else { JOB_USER },
+            vec![format!("EXPECTED_DIGEST={digest}")],
+            command,
+            COMPILER_CACHE_MOUNT,
+            labels,
+            host_config,
+        ))
     }
 
     /// One deadline covers the whole phase, including digest-lock waits, so a job container
@@ -676,6 +670,18 @@ impl DockerCompilerExecutor {
         if self.cached_generation_is_ready(digest).await? {
             return Ok(());
         }
+        // Admitted fills are already bounded by their admission slot; the others take a fill
+        // permit. It is acquired before the digest lock and held for one compiler only.
+        let _unadmitted_fill_permit = match &admission_permit {
+            Some(_) => None,
+            None => Some(
+                self.compiler_cache
+                    .unadmitted_fills
+                    .acquire()
+                    .await
+                    .map_err(|error| ExecutionError::Infrastructure(error.into()))?,
+            ),
+        };
         let digest_lock = {
             let mut locks = self.compiler_cache.locks.lock().await;
             locks
@@ -854,8 +860,7 @@ impl DockerCompilerExecutor {
         let max_upload_bytes = self.settings.max_upload_bytes;
         let expected_digest = digest.to_string();
         let archive = tokio::task::spawn_blocking(move || {
-            let bytes = read_compiler_for_seed(&source, &expected_digest, max_upload_bytes)?;
-            build_compiler_seed_archive(bytes, max_upload_bytes)
+            build_compiler_seed_archive(&source, &expected_digest, max_upload_bytes)
         })
         .await
         .context("join compiler cache archive task")
@@ -1160,11 +1165,20 @@ impl CompilerExecutor for DockerCompilerExecutor {
                     max_upload_bytes,
                     &compiler_cache.local_digests,
                 )?;
-                let archive = build_archive(
-                    &prepare_invocation,
-                    max_upload_bytes,
-                    compilers.logical_bytes,
-                )?;
+                // Executables are mounted from cache volumes, so a job without other files needs
+                // no archive at all.
+                let archive = prepare_invocation
+                    .files()
+                    .iter()
+                    .any(|file| !file.is_executable())
+                    .then(|| {
+                        build_archive(
+                            &prepare_invocation,
+                            max_upload_bytes,
+                            compilers.logical_bytes,
+                        )
+                    })
+                    .transpose()?;
                 Ok::<_, ExecutionError>((compilers, archive))
             })
             .await
@@ -1199,7 +1213,6 @@ impl CompilerExecutor for DockerCompilerExecutor {
                 admission_permit.clone(),
             );
 
-            let archive_size = archive.len();
             let execution_result = async {
                 // Creating the job first pins every named cache volume for the duration of cache
                 // validation and execution. A missing volume is atomically recreated with verifier
@@ -1208,9 +1221,8 @@ impl CompilerExecutor for DockerCompilerExecutor {
                 self.ensure_compilers_cached(&compilers, admission_permit.clone())
                     .await?;
 
-                // Executables are mounted from cache volumes, so a job without other files would
-                // only upload an empty tar.
-                if invocation.files().iter().any(|file| !file.is_executable()) {
+                if let Some(archive) = archive {
+                    let archive_size = archive.len();
                     let upload_timer =
                         metrics::start_operation(metrics::DOCKER, metrics::UPLOAD, family.as_str());
                     self.docker
@@ -1268,6 +1280,18 @@ impl CompilerExecutor for DockerCompilerExecutor {
         .await
         .context("join compiler digest task")
         .map_err(ExecutionError::Infrastructure)??;
+        // `execute` re-confirms every digest remotely after pinning its volumes, so compilers this
+        // process already validated need no round-trip here.
+        {
+            let ready = self.compiler_cache.ready.lock().await;
+            if compilers
+                .by_digest
+                .keys()
+                .all(|digest| ready.contains_key(digest))
+            {
+                return Ok(());
+            }
+        }
         self.ensure_initialized().await?;
         self.ensure_compilers_cached(&compilers, None).await
     }
@@ -1802,53 +1826,56 @@ fn map_archive_error(
     }
 }
 
-/// Reads a compiler only on a cache miss and checks it still has the digest its volume is named by.
-fn read_compiler_for_seed(
+/// Hashes everything read through it, so a seed is checked in the same pass that spools it.
+struct HashingReader<R> {
+    inner: R,
+    hasher: Sha256,
+}
+
+impl<R: Read> Read for HashingReader<R> {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(output)?;
+        self.hasher.update(&output[..read]);
+        Ok(read)
+    }
+}
+
+/// Streams a compiler into a seed archive only on a cache miss, and rejects the spool unless the
+/// streamed bytes still have the digest its volume is named by.
+fn build_compiler_seed_archive(
     source: &Path,
     expected_digest: &str,
     max_upload_bytes: usize,
-) -> Result<Bytes, ExecutionError> {
-    let read_limit = u64::try_from(max_upload_bytes)
-        .unwrap_or(u64::MAX)
-        .saturating_add(1);
-    let mut bytes = Vec::new();
-    std::fs::File::open(source)
-        .and_then(|file| file.take(read_limit).read_to_end(&mut bytes))
-        .with_context(|| format!("read compiler executable {}", source.display()))
+) -> Result<SpooledArchive, ExecutionError> {
+    let file = std::fs::File::open(source)
+        .with_context(|| format!("open compiler executable {}", source.display()))
         .map_err(ExecutionError::Infrastructure)?;
-    if bytes.len() > max_upload_bytes {
+    let size = file
+        .metadata()
+        .with_context(|| format!("inspect compiler executable {}", source.display()))
+        .map_err(ExecutionError::Infrastructure)?
+        .len();
+    if size > u64::try_from(max_upload_bytes).unwrap_or(u64::MAX) {
         return Err(ExecutionError::UploadLimitExceeded {
             limit: max_upload_bytes as u64,
         });
     }
-    if hex::encode(Sha256::digest(&bytes)) != expected_digest {
-        return Err(ExecutionError::Infrastructure(anyhow::anyhow!(
-            "compiler executable {} changed after it was hashed",
-            source.display()
-        )));
-    }
-    Ok(Bytes::from(bytes))
-}
 
-fn build_compiler_seed_archive(
-    bytes: Bytes,
-    max_upload_bytes: usize,
-) -> Result<SpooledArchive, ExecutionError> {
     let mut archive = BoundedArchiveWriter::new(max_upload_bytes)?;
     let mut builder = tar::Builder::new(&mut archive);
     let mut header = tar::Header::new_gnu();
-    header.set_size(bytes.len() as u64);
+    header.set_size(size);
     header.set_mode(0o444);
     header.set_uid(0);
     header.set_gid(0);
     header.set_mtime(0);
     header.set_cksum();
+    let mut content = HashingReader {
+        inner: ExactSizeReader::new(file, size),
+        hasher: Sha256::new(),
+    };
     builder
-        .append_data(
-            &mut header,
-            ".incoming",
-            ExactSizeReader::new(Cursor::new(bytes.clone()), bytes.len() as u64),
-        )
+        .append_data(&mut header, ".incoming", &mut content)
         .map_err(|error| {
             map_archive_error(
                 error,
@@ -1864,6 +1891,12 @@ fn build_compiler_seed_archive(
         )
     })?;
     drop(builder);
+    if hex::encode(content.hasher.finalize()) != expected_digest {
+        return Err(ExecutionError::Infrastructure(anyhow::anyhow!(
+            "compiler executable {} changed after it was hashed",
+            source.display()
+        )));
+    }
     archive.into_archive()
 }
 
@@ -2180,6 +2213,32 @@ mod tests {
         let executor = DockerCompilerExecutor::new(settings())
             .expect("a valid but unreachable host must not fail construction");
 
+        assert!(executor.initialization.get().is_none());
+    }
+
+    #[tokio::test]
+    async fn warm_prepare_does_not_contact_remote_host() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("solc");
+        std::fs::write(&compiler, b"abc").unwrap();
+        let digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let executor = DockerCompilerExecutor::new(settings()).unwrap();
+        executor
+            .compiler_cache
+            .ready
+            .lock()
+            .await
+            .insert(digest.to_string(), Uuid::new_v4().to_string());
+
+        let invocation = CompilerInvocation::new(
+            JobFile::executable("solc", "bin/solc", compiler).unwrap(),
+            vec![CommandArgument::literal("--version")],
+            Bytes::new(),
+        );
+        timeout(Duration::from_secs(1), executor.prepare(&invocation))
+            .await
+            .expect("a warm prepare must not wait on the remote host")
+            .unwrap();
         assert!(executor.initialization.get().is_none());
     }
 
@@ -2547,17 +2606,14 @@ mod tests {
         std::fs::write(&compiler, b"abc").unwrap();
         let digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
-        assert_eq!(
-            read_compiler_for_seed(&compiler, digest, 3).unwrap(),
-            Bytes::from_static(b"abc")
-        );
+        build_compiler_seed_archive(&compiler, digest, 2048).unwrap();
         assert!(matches!(
-            read_compiler_for_seed(&compiler, digest, 2),
+            build_compiler_seed_archive(&compiler, digest, 2),
             Err(ExecutionError::UploadLimitExceeded { limit: 2 })
         ));
         std::fs::write(&compiler, b"abd").unwrap();
         assert!(matches!(
-            read_compiler_for_seed(&compiler, digest, 3),
+            build_compiler_seed_archive(&compiler, digest, 2048),
             Err(ExecutionError::Infrastructure(_))
         ));
     }
@@ -2672,7 +2728,11 @@ mod tests {
 
     #[test]
     fn cache_seed_archive_has_a_single_normalized_read_only_file() {
-        let archive = build_compiler_seed_archive(Bytes::from_static(b"compiler"), 2048).unwrap();
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("compiler");
+        std::fs::write(&compiler, b"compiler").unwrap();
+        let digest = hex::encode(Sha256::digest(b"compiler"));
+        let archive = build_compiler_seed_archive(&compiler, &digest, 2048).unwrap();
         assert_eq!(archive.len(), 2048);
         let mut archive = tar::Archive::new(archive.file);
         let entries = archive
@@ -2686,15 +2746,19 @@ mod tests {
         assert_eq!(entries[0].header().uid().unwrap(), 0);
         assert_eq!(entries[0].header().gid().unwrap(), 0);
         assert!(matches!(
-            build_compiler_seed_archive(Bytes::from_static(b"compiler"), 2047),
+            build_compiler_seed_archive(&compiler, &digest, 2047),
             Err(ExecutionError::UploadLimitExceeded { limit: 2047 })
         ));
     }
 
     #[tokio::test]
     async fn spooled_archive_stream_uses_bounded_chunks() {
-        let archive =
-            build_compiler_seed_archive(Bytes::from(vec![0x5a; 128 * 1024]), 256 * 1024).unwrap();
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("compiler");
+        let content = vec![0x5a; 128 * 1024];
+        std::fs::write(&compiler, &content).unwrap();
+        let digest = hex::encode(Sha256::digest(&content));
+        let archive = build_compiler_seed_archive(&compiler, &digest, 256 * 1024).unwrap();
         let expected_len = archive.len();
         let mut stream = archive.into_stream();
         let mut streamed_len = 0;

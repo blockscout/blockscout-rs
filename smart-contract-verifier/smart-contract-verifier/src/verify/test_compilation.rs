@@ -4,9 +4,10 @@ use super::{
     compilation,
     evm_compilers::{EvmCompiler, EvmCompilersPool},
 };
-use crate::{DetailedVersion, ListFetcher};
-use std::sync::Arc;
-use tokio::sync::Semaphore;
+use crate::{
+    ConcurrencyLimitedCompilerExecutor, DetailedVersion, ListFetcher, NativeCompilerExecutor,
+};
+use std::{num::NonZeroUsize, sync::Arc};
 
 async fn compilers<Compiler: EvmCompiler>(list_url: &str) -> EvmCompilersPool<Compiler> {
     let tempdir = tempfile::tempdir().unwrap();
@@ -14,11 +15,12 @@ async fn compilers<Compiler: EvmCompiler>(list_url: &str) -> EvmCompilersPool<Co
     let fetcher = ListFetcher::<DetailedVersion>::new(url, tempdir.into_path(), None, None)
         .await
         .expect("Fetch releases");
-    let threads_semaphore = Arc::new(Semaphore::new(1));
-    EvmCompilersPool::new_with_executor(
+    EvmCompilersPool::new_with_admitted_executor(
         Arc::new(fetcher),
-        threads_semaphore,
-        Arc::new(crate::NativeCompilerExecutor::default()),
+        Arc::new(ConcurrencyLimitedCompilerExecutor::new(
+            Arc::new(NativeCompilerExecutor::default()),
+            NonZeroUsize::new(1).unwrap(),
+        )),
     )
 }
 

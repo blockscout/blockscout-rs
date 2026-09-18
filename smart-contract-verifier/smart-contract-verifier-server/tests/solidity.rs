@@ -22,21 +22,23 @@ use std::{
     str::{from_utf8, FromStr},
     sync::Arc,
 };
-use tokio::sync::{OnceCell, Semaphore};
+use tokio::sync::OnceCell;
 
 async fn global_service() -> &'static Arc<SolidityVerifierService> {
     static SERVICE: OnceCell<Arc<SolidityVerifierService>> = OnceCell::const_new();
     SERVICE
         .get_or_init(|| async {
             let settings = Settings::default();
-            let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = SolidityVerifierService::new_with_executor(
-                settings.solidity,
-                Arc::new(compilers_lock),
-                Arc::new(smart_contract_verifier::NativeCompilerExecutor::default()),
-            )
-            .await
-            .expect("couldn't initialize the service");
+            let executor = Arc::new(
+                smart_contract_verifier::ConcurrencyLimitedCompilerExecutor::new(
+                    Arc::new(smart_contract_verifier::NativeCompilerExecutor::default()),
+                    settings.compilers.max_threads,
+                ),
+            );
+            let service =
+                SolidityVerifierService::new_with_admitted_executor(settings.solidity, executor)
+                    .await
+                    .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
