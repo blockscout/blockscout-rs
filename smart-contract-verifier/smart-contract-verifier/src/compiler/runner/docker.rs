@@ -8,7 +8,8 @@ use async_trait::async_trait;
 use bollard::{
     container::LogOutput,
     models::{
-        ContainerCreateBody, HostConfig, HostConfigLogConfig, Mount, MountType, MountVolumeOptions,
+        ContainerCreateBody, ContainerInspectResponse, ContainerStateStatusEnum, HostConfig,
+        HostConfigLogConfig, Mount, MountType, MountVolumeOptions, MountVolumeOptionsDriverConfig,
         ResourcesUlimits, Volume, VolumeCreateRequest,
     },
     query_parameters::{
@@ -22,7 +23,7 @@ use bytes::Bytes;
 use futures::StreamExt;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     io::{Cursor, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::Arc,
@@ -46,6 +47,8 @@ const COMPILER_CACHE_LABEL: &str = "org.blockscout.smart-contract-verifier.compi
 const COMPILER_CACHE_SCHEMA_LABEL: &str =
     "org.blockscout.smart-contract-verifier.compiler-cache-schema";
 const COMPILER_CACHE_DIGEST_LABEL: &str = "org.blockscout.smart-contract-verifier.compiler-digest";
+const COMPILER_CACHE_GENERATION_LABEL: &str =
+    "org.blockscout.smart-contract-verifier.compiler-cache-generation";
 const JOB_LABEL: &str = "org.blockscout.smart-contract-verifier.compiler-job";
 const JOB_EXPIRY_LABEL: &str = "org.blockscout.smart-contract-verifier.expires-at";
 const CONTAINER_FAMILY_LABEL: &str =
@@ -88,6 +91,20 @@ impl DockerCompilerExecutorSettings {
         self.execution_timeout_seconds
             .saturating_add(self.request_timeout_seconds().saturating_mul(2))
     }
+
+    /// Budget for validating and seeding all compilers of one job, including waits for other
+    /// in-process fills of the same digest.
+    fn cache_phase_timeout_seconds(&self, compiler_count: usize) -> u64 {
+        let compiler_count = u64::try_from(compiler_count).unwrap_or(u64::MAX);
+        self.container_lifecycle_timeout_seconds()
+            .saturating_mul(compiler_count)
+    }
+
+    /// The job container is created before its cache phase and must outlive it plus one run.
+    fn job_container_lifecycle_timeout_seconds(&self, compiler_count: usize) -> u64 {
+        self.cache_phase_timeout_seconds(compiler_count)
+            .saturating_add(self.container_lifecycle_timeout_seconds())
+    }
 }
 
 #[derive(Clone)]
@@ -100,13 +117,81 @@ pub struct DockerCompilerExecutor {
 
 #[derive(Default)]
 struct CompilerCacheState {
-    ready: Mutex<HashSet<String>>,
+    ready: Mutex<HashMap<String, String>>,
     locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    local_digests: LocalDigestCache,
+}
+
+/// Identity of a local compiler file. `ctime` changes on every content or metadata change and
+/// cannot be set from user space, so an unchanged fingerprint keeps a previously computed digest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LocalFileFingerprint {
+    dev: u64,
+    ino: u64,
+    len: u64,
+    mtime: (i64, i64),
+    ctime: (i64, i64),
+}
+
+impl LocalFileFingerprint {
+    fn new(metadata: &std::fs::Metadata) -> Self {
+        use std::os::unix::fs::MetadataExt;
+        Self {
+            dev: metadata.dev(),
+            ino: metadata.ino(),
+            len: metadata.len(),
+            mtime: (metadata.mtime(), metadata.mtime_nsec()),
+            ctime: (metadata.ctime(), metadata.ctime_nsec()),
+        }
+    }
+}
+
+/// Avoids rehashing unchanged compiler binaries on every warm-cache job.
+#[derive(Default)]
+struct LocalDigestCache(parking_lot::Mutex<HashMap<PathBuf, (LocalFileFingerprint, String)>>);
+
+impl LocalDigestCache {
+    fn digest(&self, path: &Path, metadata: &std::fs::Metadata) -> Result<String, ExecutionError> {
+        let fingerprint = LocalFileFingerprint::new(metadata);
+        if let Some((cached, digest)) = self.0.lock().get(path) {
+            if *cached == fingerprint {
+                return Ok(digest.clone());
+            }
+        }
+
+        let mut source = std::fs::File::open(path)
+            .with_context(|| format!("open compiler executable {}", path.display()))
+            .map_err(ExecutionError::Infrastructure)?;
+        let mut hasher = Sha256::new();
+        std::io::copy(
+            &mut ExactSizeReader::new(&mut source, fingerprint.len),
+            &mut hasher,
+        )
+        .with_context(|| format!("hash compiler executable {}", path.display()))
+        .map_err(ExecutionError::Infrastructure)?;
+        let hashed = source
+            .metadata()
+            .with_context(|| format!("inspect compiler executable {}", path.display()))
+            .map_err(ExecutionError::Infrastructure)?;
+        if LocalFileFingerprint::new(&hashed) != fingerprint {
+            return Err(ExecutionError::Infrastructure(anyhow::anyhow!(
+                "compiler executable {} changed while it was being hashed",
+                path.display()
+            )));
+        }
+
+        let digest = hex::encode(hasher.finalize());
+        self.0
+            .lock()
+            .insert(path.to_path_buf(), (fingerprint, digest.clone()));
+        Ok(digest)
+    }
 }
 
 #[derive(Debug)]
 struct PreparedCompilers {
-    by_digest: BTreeMap<String, Bytes>,
+    /// Local source of each distinct compiler; read again only when a cache volume needs seeding.
+    by_digest: BTreeMap<String, PathBuf>,
     path_overrides: HashMap<String, PathBuf>,
     logical_bytes: usize,
 }
@@ -255,7 +340,10 @@ impl DockerCompilerExecutor {
 
         let now = unix_timestamp()?;
         let expiry = now
-            .saturating_add(self.settings.container_lifecycle_timeout_seconds())
+            .saturating_add(
+                self.settings
+                    .job_container_lifecycle_timeout_seconds(compilers.by_digest.len()),
+            )
             .saturating_add(CLEANUP_GRACE_SECONDS);
         let labels = HashMap::from([
             (JOB_LABEL.to_string(), "true".to_string()),
@@ -307,10 +395,7 @@ impl DockerCompilerExecutor {
                 source: Some(compiler_cache_volume_name(digest)),
                 typ: Some(MountType::VOLUME),
                 read_only: Some(true),
-                volume_options: Some(MountVolumeOptions {
-                    no_copy: Some(true),
-                    ..Default::default()
-                }),
+                volume_options: Some(compiler_cache_mount_options(digest)),
                 ..Default::default()
             }
         }));
@@ -437,10 +522,7 @@ impl DockerCompilerExecutor {
                 source: Some(compiler_cache_volume_name(digest)),
                 typ: Some(MountType::VOLUME),
                 read_only: Some(!initialize),
-                volume_options: Some(MountVolumeOptions {
-                    no_copy: Some(true),
-                    ..Default::default()
-                }),
+                volume_options: Some(compiler_cache_mount_options(digest)),
                 ..Default::default()
             }]),
             runtime: self
@@ -477,10 +559,10 @@ impl DockerCompilerExecutor {
     async fn ensure_compiler_cached(
         &self,
         digest: &str,
-        bytes: Bytes,
+        source: &Path,
         admission_permit: Option<Arc<OwnedSemaphorePermit>>,
     ) -> Result<(), ExecutionError> {
-        if self.compiler_cache.ready.lock().await.contains(digest) {
+        if self.cached_generation_is_ready(digest).await? {
             return Ok(());
         }
         let digest_lock = {
@@ -491,7 +573,7 @@ impl DockerCompilerExecutor {
                 .clone()
         };
         let _digest_guard = digest_lock.lock().await;
-        if self.compiler_cache.ready.lock().await.contains(digest) {
+        if self.cached_generation_is_ready(digest).await? {
             return Ok(());
         }
 
@@ -504,7 +586,7 @@ impl DockerCompilerExecutor {
                 });
             }
             if let Some(volume) = self.inspect_cache_volume(digest).await? {
-                validate_cache_volume(&volume, digest)?;
+                let generation = validate_cache_volume(&volume, digest)?;
                 if self
                     .probe_cached_compiler(digest, admission_permit.clone())
                     .await?
@@ -513,16 +595,18 @@ impl DockerCompilerExecutor {
                         .ready
                         .lock()
                         .await
-                        .insert(digest.to_string());
+                        .insert(digest.to_string(), generation);
                     return Ok(());
                 }
+                self.compiler_cache.ready.lock().await.remove(digest);
             } else {
+                self.compiler_cache.ready.lock().await.remove(digest);
                 let volume = self
                     .docker
                     .create_volume(VolumeCreateRequest {
                         name: Some(compiler_cache_volume_name(digest)),
                         driver: Some("local".to_string()),
-                        labels: Some(compiler_cache_labels(digest)),
+                        labels: Some(new_compiler_cache_labels(digest)),
                         ..Default::default()
                     })
                     .await
@@ -532,7 +616,7 @@ impl DockerCompilerExecutor {
             }
 
             match self
-                .try_seed_compiler(digest, bytes.clone(), admission_permit.clone())
+                .try_seed_compiler(digest, source.to_path_buf(), admission_permit.clone())
                 .await?
             {
                 SeedAttempt::Seeded => {}
@@ -542,6 +626,21 @@ impl DockerCompilerExecutor {
                 }
             }
         }
+    }
+
+    async fn cached_generation_is_ready(&self, digest: &str) -> Result<bool, ExecutionError> {
+        let Some(volume) = self.inspect_cache_volume(digest).await? else {
+            self.compiler_cache.ready.lock().await.remove(digest);
+            return Ok(false);
+        };
+        let generation = validate_cache_volume(&volume, digest)?;
+        Ok(self
+            .compiler_cache
+            .ready
+            .lock()
+            .await
+            .get(digest)
+            .is_some_and(|ready_generation| ready_generation == &generation))
     }
 
     async fn inspect_cache_volume(&self, digest: &str) -> Result<Option<Volume>, ExecutionError> {
@@ -598,16 +697,13 @@ impl DockerCompilerExecutor {
             .await
             .context("remove compiler cache probe");
         let output = preserve_primary_result(result, cleanup_result, &created.id, family)?;
-        if output.exit_code != 0 {
-            return Ok(false);
-        }
         Ok(output.exit_code == 0)
     }
 
     async fn try_seed_compiler(
         &self,
         digest: &str,
-        bytes: Bytes,
+        source: PathBuf,
         admission_permit: Option<Arc<OwnedSemaphorePermit>>,
     ) -> Result<SeedAttempt, ExecutionError> {
         let container_name = format!("{COMPILER_CACHE_INIT_PREFIX}{digest}");
@@ -645,7 +741,9 @@ impl DockerCompilerExecutor {
             admission_permit,
         );
         let max_upload_bytes = self.settings.max_upload_bytes;
+        let expected_digest = digest.to_string();
         let archive = tokio::task::spawn_blocking(move || {
+            let bytes = read_compiler_for_seed(&source, &expected_digest, max_upload_bytes)?;
             build_compiler_seed_archive(bytes, max_upload_bytes)
         })
         .await
@@ -715,7 +813,23 @@ impl DockerCompilerExecutor {
                 });
             }
             match self.docker.inspect_container(&name, None).await {
-                Ok(_) => {}
+                Ok(container) => {
+                    if let Some(container_id) = abandoned_initializer_id(
+                        &container,
+                        unix_timestamp()?,
+                        self.settings.request_timeout_seconds(),
+                    ) {
+                        force_remove_container(&self.docker, &container_id)
+                            .await
+                            .context("remove abandoned compiler cache initializer")
+                            .map_err(ExecutionError::Infrastructure)?;
+                        tracing::warn!(
+                            container_id,
+                            "removed abandoned compiler cache initializer"
+                        );
+                        return Ok(());
+                    }
+                }
                 Err(bollard::errors::Error::DockerResponseServerError {
                     status_code: 404, ..
                 }) => return Ok(()),
@@ -915,9 +1029,14 @@ impl CompilerExecutor for DockerCompilerExecutor {
             let admission_permit = invocation.admission_permit();
             let max_upload_bytes = self.settings.max_upload_bytes;
             let prepare_invocation = invocation.clone();
+            let compiler_cache = self.compiler_cache.clone();
             let prepare_timer = metrics::start_operation(metrics::DOCKER, metrics::PREPARE, "job");
             let (compilers, archive) = tokio::task::spawn_blocking(move || {
-                let compilers = prepare_compilers(&prepare_invocation, max_upload_bytes)?;
+                let compilers = prepare_compilers(
+                    &prepare_invocation,
+                    max_upload_bytes,
+                    &compiler_cache.local_digests,
+                )?;
                 let archive = build_archive(
                     &prepare_invocation,
                     max_upload_bytes,
@@ -931,11 +1050,6 @@ impl CompilerExecutor for DockerCompilerExecutor {
             drop(prepare_timer);
 
             self.ensure_initialized().await?;
-
-            for (digest, bytes) in &compilers.by_digest {
-                self.ensure_compiler_cached(digest, bytes.clone(), admission_permit.clone())
-                    .await?;
-            }
 
             let family = ContainerFamily::Job;
             let container_name = format!("sc-verifier-compiler-{}", Uuid::new_v4());
@@ -959,34 +1073,58 @@ impl CompilerExecutor for DockerCompilerExecutor {
                 self.docker.clone(),
                 created.id.clone(),
                 family,
-                admission_permit,
+                admission_permit.clone(),
             );
 
             let archive_size = archive.len();
             let execution_result = async {
-                let upload_timer =
-                    metrics::start_operation(metrics::DOCKER, metrics::UPLOAD, family.as_str());
-                self.docker
-                    .upload_to_container(
-                        &created.id,
-                        Some(
-                            UploadToContainerOptionsBuilder::default()
-                                .path(JOB_ROOT)
-                                .no_overwrite_dir_non_dir("true")
-                                .build(),
-                        ),
-                        bollard::body_try_stream(archive.into_stream()),
-                    )
-                    .await
-                    .context("upload compiler job files")
-                    .map_err(ExecutionError::Infrastructure)?;
-                metrics::add_transfer_bytes(
-                    metrics::DOCKER,
-                    metrics::INPUT,
-                    family.as_str(),
-                    archive_size,
-                );
-                drop(upload_timer);
+                // Creating the job first pins every named cache volume for the duration of cache
+                // validation and execution. A missing volume is atomically recreated with verifier
+                // ownership labels from the mount configuration, then seeded below before start.
+                // One deadline covers the whole phase, including digest-lock waits, so the job
+                // container cannot outlive the expiry label the janitor enforces.
+                let cache_timeout_seconds = self
+                    .settings
+                    .cache_phase_timeout_seconds(compilers.by_digest.len());
+                timeout(Duration::from_secs(cache_timeout_seconds), async {
+                    for (digest, source) in &compilers.by_digest {
+                        self.ensure_compiler_cached(digest, source, admission_permit.clone())
+                            .await?;
+                    }
+                    Ok::<(), ExecutionError>(())
+                })
+                .await
+                .map_err(|_| ExecutionError::Timeout {
+                    seconds: cache_timeout_seconds,
+                })??;
+
+                // Executables are mounted from cache volumes, so a job without other files would
+                // only upload an empty tar.
+                if invocation.files().iter().any(|file| !file.is_executable()) {
+                    let upload_timer =
+                        metrics::start_operation(metrics::DOCKER, metrics::UPLOAD, family.as_str());
+                    self.docker
+                        .upload_to_container(
+                            &created.id,
+                            Some(
+                                UploadToContainerOptionsBuilder::default()
+                                    .path(JOB_ROOT)
+                                    .no_overwrite_dir_non_dir("true")
+                                    .build(),
+                            ),
+                            bollard::body_try_stream(archive.into_stream()),
+                        )
+                        .await
+                        .context("upload compiler job files")
+                        .map_err(ExecutionError::Infrastructure)?;
+                    metrics::add_transfer_bytes(
+                        metrics::DOCKER,
+                        metrics::INPUT,
+                        family.as_str(),
+                        archive_size,
+                    );
+                    drop(upload_timer);
+                }
 
                 self.run_created_container(&created.id, invocation.stdin().clone(), family)
                     .await
@@ -1171,6 +1309,28 @@ fn observed_container_family(labels: Option<&HashMap<String, String>>) -> &'stat
     }
 }
 
+/// Returns the id of an initializer whose owner stopped it but never removed it. The grace period
+/// leaves a live owner time to inspect the exit state before its own cleanup removes the container.
+fn abandoned_initializer_id(
+    container: &ContainerInspectResponse,
+    now: u64,
+    grace_seconds: u64,
+) -> Option<String> {
+    let state = container.state.as_ref()?;
+    if !matches!(
+        state.status,
+        Some(ContainerStateStatusEnum::EXITED | ContainerStateStatusEnum::DEAD)
+    ) {
+        return None;
+    }
+    let finished_at = chrono::DateTime::parse_from_rfc3339(state.finished_at.as_deref()?).ok()?;
+    let finished_at = u64::try_from(finished_at.timestamp()).ok()?;
+    if now.saturating_sub(finished_at) < grace_seconds {
+        return None;
+    }
+    container.id.clone()
+}
+
 async fn force_remove_container(docker: &Docker, container_id: &str) -> anyhow::Result<()> {
     let options = RemoveContainerOptionsBuilder::default()
         .force(true)
@@ -1280,24 +1440,61 @@ fn compiler_cache_labels(digest: &str) -> HashMap<String, String> {
     ])
 }
 
-fn validate_cache_volume(volume: &Volume, digest: &str) -> Result<(), ExecutionError> {
-    let expected_name = compiler_cache_volume_name(digest);
-    let expected_labels = compiler_cache_labels(digest);
-    if volume.name != expected_name
-        || volume.driver != "local"
-        || !volume.options.is_empty()
-        || volume.labels != expected_labels
-    {
-        return Err(ExecutionError::Infrastructure(anyhow::anyhow!(
-            "compiler cache volume {expected_name} has unexpected ownership metadata; expected the local driver, no driver options, and exact verifier cache labels"
-        )));
+fn new_compiler_cache_labels(digest: &str) -> HashMap<String, String> {
+    let mut labels = compiler_cache_labels(digest);
+    labels.insert(
+        COMPILER_CACHE_GENERATION_LABEL.to_string(),
+        Uuid::new_v4().to_string(),
+    );
+    labels
+}
+
+fn compiler_cache_mount_options(digest: &str) -> MountVolumeOptions {
+    MountVolumeOptions {
+        no_copy: Some(true),
+        labels: Some(new_compiler_cache_labels(digest)),
+        driver_config: Some(MountVolumeOptionsDriverConfig {
+            name: Some("local".to_string()),
+            options: None,
+        }),
+        ..Default::default()
     }
-    Ok(())
+}
+
+/// Returns the volume's generation, which identifies one incarnation of the cache volume.
+fn validate_cache_volume(volume: &Volume, digest: &str) -> Result<String, ExecutionError> {
+    let expected_name = compiler_cache_volume_name(digest);
+    let mut expected_labels = compiler_cache_labels(digest);
+    let generation = volume
+        .labels
+        .get(COMPILER_CACHE_GENERATION_LABEL)
+        .filter(|generation| Uuid::parse_str(generation).is_ok())
+        .cloned();
+    if let Some(generation) = generation.as_ref() {
+        expected_labels.insert(
+            COMPILER_CACHE_GENERATION_LABEL.to_string(),
+            generation.clone(),
+        );
+    }
+    match generation {
+        Some(generation)
+            if volume.name == expected_name
+                && volume.driver == "local"
+                && volume.options.is_empty()
+                && volume.labels == expected_labels =>
+        {
+            Ok(generation)
+        }
+        _ => Err(ExecutionError::Infrastructure(anyhow::anyhow!(
+            "compiler cache volume {expected_name} has unexpected ownership metadata; expected the local driver, no driver options, and exact verifier cache labels including a generation. Remove it if an older verifier build created it"
+        ))),
+    }
 }
 
 fn prepare_compilers(
     invocation: &CompilerInvocation,
     max_upload_bytes: usize,
+    local_digests: &LocalDigestCache,
 ) -> Result<PreparedCompilers, ExecutionError> {
     let mut logical_bytes = invocation.stdin().len();
     if logical_bytes > max_upload_bytes {
@@ -1327,33 +1524,16 @@ fn prepare_compilers(
                 path.display()
             )));
         }
-        let remaining = max_upload_bytes.saturating_sub(logical_bytes);
-        let read_limit = u64::try_from(remaining)
-            .unwrap_or(u64::MAX)
-            .saturating_add(1);
-        let source = std::fs::File::open(path)
-            .with_context(|| format!("open compiler executable {}", path.display()))
-            .map_err(ExecutionError::Infrastructure)?;
-        let mut bytes = Vec::with_capacity(
-            usize::try_from(metadata.len())
-                .unwrap_or(remaining)
-                .min(remaining),
-        );
-        source
-            .take(read_limit)
-            .read_to_end(&mut bytes)
-            .with_context(|| format!("read compiler executable {}", path.display()))
-            .map_err(ExecutionError::Infrastructure)?;
-        if bytes.len() > remaining {
+        let size = usize::try_from(metadata.len()).unwrap_or(usize::MAX);
+        if size > max_upload_bytes.saturating_sub(logical_bytes) {
             return Err(ExecutionError::UploadLimitExceeded {
                 limit: max_upload_bytes as u64,
             });
         }
-        logical_bytes = logical_bytes.saturating_add(bytes.len());
-        let bytes = Bytes::from(bytes);
-        let digest = hex::encode(Sha256::digest(&bytes));
+        logical_bytes = logical_bytes.saturating_add(size);
+        let digest = local_digests.digest(path, &metadata)?;
         path_overrides.insert(file.id().to_string(), compiler_cache_mount_path(&digest));
-        by_digest.entry(digest).or_insert(bytes);
+        by_digest.entry(digest).or_insert_with(|| path.clone());
     }
     Ok(PreparedCompilers {
         by_digest,
@@ -1472,6 +1652,34 @@ fn map_archive_error(
     } else {
         ExecutionError::Infrastructure(anyhow::Error::new(error).context(context.into()))
     }
+}
+
+/// Reads a compiler only on a cache miss and checks it still has the digest its volume is named by.
+fn read_compiler_for_seed(
+    source: &Path,
+    expected_digest: &str,
+    max_upload_bytes: usize,
+) -> Result<Bytes, ExecutionError> {
+    let read_limit = u64::try_from(max_upload_bytes)
+        .unwrap_or(u64::MAX)
+        .saturating_add(1);
+    let mut bytes = Vec::new();
+    std::fs::File::open(source)
+        .and_then(|file| file.take(read_limit).read_to_end(&mut bytes))
+        .with_context(|| format!("read compiler executable {}", source.display()))
+        .map_err(ExecutionError::Infrastructure)?;
+    if bytes.len() > max_upload_bytes {
+        return Err(ExecutionError::UploadLimitExceeded {
+            limit: max_upload_bytes as u64,
+        });
+    }
+    if hex::encode(Sha256::digest(&bytes)) != expected_digest {
+        return Err(ExecutionError::Infrastructure(anyhow::anyhow!(
+            "compiler executable {} changed after it was hashed",
+            source.display()
+        )));
+    }
+    Ok(Bytes::from(bytes))
 }
 
 fn build_compiler_seed_archive(
@@ -1671,10 +1879,20 @@ mod tests {
         let mut settings = settings();
         assert_eq!(settings.request_timeout_seconds(), 30);
         assert_eq!(settings.container_lifecycle_timeout_seconds(), 90);
+        assert_eq!(settings.job_container_lifecycle_timeout_seconds(1), 180);
+        assert_eq!(settings.job_container_lifecycle_timeout_seconds(2), 270);
 
         settings.api_timeout_seconds = 45;
         assert_eq!(settings.request_timeout_seconds(), 45);
         assert_eq!(settings.container_lifecycle_timeout_seconds(), 120);
+        assert_eq!(settings.job_container_lifecycle_timeout_seconds(2), 360);
+        // The job container expiry covers the full cache phase plus one container run.
+        assert_eq!(settings.cache_phase_timeout_seconds(2), 240);
+        assert_eq!(
+            settings.job_container_lifecycle_timeout_seconds(2),
+            settings.cache_phase_timeout_seconds(2)
+                + settings.container_lifecycle_timeout_seconds()
+        );
     }
 
     #[tokio::test]
@@ -1832,7 +2050,8 @@ mod tests {
             vec![],
             Bytes::new(),
         );
-        let compilers = prepare_compilers(&invocation, 1024 * 1024).unwrap();
+        let compilers =
+            prepare_compilers(&invocation, 1024 * 1024, &LocalDigestCache::default()).unwrap();
 
         let config = executor.container_config(&invocation, &compilers).unwrap();
         assert_eq!(
@@ -1906,6 +2125,31 @@ mod tests {
         );
         assert_eq!(mounts[1].source, Some(compiler_cache_volume_name(digest)));
         assert_eq!(mounts[1].read_only, Some(true));
+        let cache_labels = mounts[1]
+            .volume_options
+            .as_ref()
+            .and_then(|options| options.labels.as_ref())
+            .unwrap();
+        assert_eq!(
+            cache_labels.get(COMPILER_CACHE_LABEL).map(String::as_str),
+            Some("true")
+        );
+        assert_eq!(
+            cache_labels
+                .get(COMPILER_CACHE_DIGEST_LABEL)
+                .map(String::as_str),
+            Some(format!("sha256:{digest}").as_str())
+        );
+        assert!(cache_labels
+            .get(COMPILER_CACHE_GENERATION_LABEL)
+            .is_some_and(|generation| !generation.is_empty()));
+        let cache_driver = mounts[1]
+            .volume_options
+            .as_ref()
+            .and_then(|options| options.driver_config.as_ref())
+            .unwrap();
+        assert_eq!(cache_driver.name.as_deref(), Some("local"));
+        assert!(cache_driver.options.is_none());
         assert_eq!(
             mounts[1].target,
             Some(
@@ -1956,6 +2200,66 @@ mod tests {
                     .map(String::as_str),
                 Some(expected)
             );
+            let volume_options = config
+                .host_config
+                .as_ref()
+                .and_then(|host| host.mounts.as_ref())
+                .and_then(|mounts| mounts.first())
+                .and_then(|mount| mount.volume_options.as_ref())
+                .unwrap();
+            assert_eq!(volume_options.no_copy, Some(true));
+            assert!(volume_options
+                .labels
+                .as_ref()
+                .and_then(|labels| labels.get(COMPILER_CACHE_GENERATION_LABEL))
+                .is_some_and(|generation| Uuid::parse_str(generation).is_ok()));
+            assert_eq!(
+                volume_options
+                    .driver_config
+                    .as_ref()
+                    .and_then(|driver| driver.name.as_deref()),
+                Some("local")
+            );
+        }
+    }
+
+    #[test]
+    fn only_stopped_initializers_past_grace_are_abandoned() {
+        let finished_at = "2026-01-01T00:00:00.123456789Z";
+        let finished = chrono::DateTime::parse_from_rfc3339(finished_at)
+            .unwrap()
+            .timestamp() as u64;
+        let container = |status| ContainerInspectResponse {
+            id: Some("initializer-id".to_string()),
+            state: Some(bollard::models::ContainerState {
+                status: Some(status),
+                finished_at: Some(finished_at.to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        for status in [
+            ContainerStateStatusEnum::EXITED,
+            ContainerStateStatusEnum::DEAD,
+        ] {
+            assert_eq!(
+                abandoned_initializer_id(&container(status), finished + 30, 30).as_deref(),
+                Some("initializer-id")
+            );
+            assert_eq!(
+                abandoned_initializer_id(&container(status), finished + 29, 30),
+                None
+            );
+        }
+        for status in [
+            ContainerStateStatusEnum::CREATED,
+            ContainerStateStatusEnum::RUNNING,
+        ] {
+            assert_eq!(
+                abandoned_initializer_id(&container(status), finished + 3600, 30),
+                None
+            );
         }
     }
 
@@ -1989,7 +2293,8 @@ mod tests {
         )
         .with_file(JobFile::regular_file("input", "sources/input.sol", source).unwrap());
 
-        let compilers = prepare_compilers(&invocation, 1024 * 1024).unwrap();
+        let compilers =
+            prepare_compilers(&invocation, 1024 * 1024, &LocalDigestCache::default()).unwrap();
         let archive = build_archive(&invocation, 1024 * 1024, compilers.logical_bytes).unwrap();
         let mut archive = tar::Archive::new(archive.file);
         let entries = archive.entries().unwrap();
@@ -2020,10 +2325,13 @@ mod tests {
         )
         .with_file(JobFile::executable("solc", "bin/solc", solc).unwrap());
 
-        let compilers = prepare_compilers(&invocation, 1024).unwrap();
+        let compilers = prepare_compilers(&invocation, 1024, &LocalDigestCache::default()).unwrap();
         let digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
         assert_eq!(compilers.by_digest.len(), 1);
-        assert_eq!(compilers.by_digest.get(digest).unwrap().as_ref(), b"abc");
+        assert_eq!(
+            std::fs::read(compilers.by_digest.get(digest).unwrap()).unwrap(),
+            b"abc"
+        );
         let cached_path = compiler_cache_mount_path(digest);
         assert_eq!(compilers.path_overrides.get("zksolc"), Some(&cached_path));
         assert_eq!(compilers.path_overrides.get("solc"), Some(&cached_path));
@@ -2043,6 +2351,56 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_compiler_reuses_its_digest_without_rehashing() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("compiler");
+        std::fs::write(&compiler, b"abc").unwrap();
+        let invocation = CompilerInvocation::new(
+            JobFile::executable("compiler", "bin/compiler", &compiler).unwrap(),
+            vec![],
+            Bytes::new(),
+        );
+        let local_digests = LocalDigestCache::default();
+        let digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let prepared = prepare_compilers(&invocation, 1024, &local_digests).unwrap();
+        assert!(prepared.by_digest.contains_key(digest));
+
+        // A cache hit must not read the file: a planted digest for the same fingerprint wins.
+        let planted = "f".repeat(64);
+        local_digests.0.lock().get_mut(&compiler).unwrap().1 = planted.clone();
+        let prepared = prepare_compilers(&invocation, 1024, &local_digests).unwrap();
+        assert!(prepared.by_digest.contains_key(&planted));
+
+        std::fs::write(&compiler, b"abcd").unwrap();
+        let prepared = prepare_compilers(&invocation, 1024, &local_digests).unwrap();
+        assert!(prepared
+            .by_digest
+            .contains_key("88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589"));
+    }
+
+    #[test]
+    fn seed_read_rejects_a_compiler_changed_after_hashing() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("compiler");
+        std::fs::write(&compiler, b"abc").unwrap();
+        let digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+        assert_eq!(
+            read_compiler_for_seed(&compiler, digest, 3).unwrap(),
+            Bytes::from_static(b"abc")
+        );
+        assert!(matches!(
+            read_compiler_for_seed(&compiler, digest, 2),
+            Err(ExecutionError::UploadLimitExceeded { limit: 2 })
+        ));
+        std::fs::write(&compiler, b"abd").unwrap();
+        assert!(matches!(
+            read_compiler_for_seed(&compiler, digest, 3),
+            Err(ExecutionError::Infrastructure(_))
+        ));
+    }
+
+    #[test]
     fn executable_bytes_remain_part_of_the_logical_upload_limit() {
         let source_dir = tempfile::tempdir().unwrap();
         let compiler = source_dir.path().join("compiler");
@@ -2054,10 +2412,10 @@ mod tests {
         );
 
         assert!(matches!(
-            prepare_compilers(&invocation, 9),
+            prepare_compilers(&invocation, 9, &LocalDigestCache::default()),
             Err(ExecutionError::UploadLimitExceeded { limit: 9 })
         ));
-        assert!(prepare_compilers(&invocation, 10).is_ok());
+        assert!(prepare_compilers(&invocation, 10, &LocalDigestCache::default()).is_ok());
     }
 
     #[test]
@@ -2074,7 +2432,7 @@ mod tests {
         )
         .with_file(JobFile::executable("solc", "bin/solc", solc).unwrap());
 
-        let compilers = prepare_compilers(&invocation, 1024).unwrap();
+        let compilers = prepare_compilers(&invocation, 1024, &LocalDigestCache::default()).unwrap();
         assert_eq!(compilers.by_digest.len(), 2);
         let zksolc_path = compilers.path_overrides.get("zksolc").unwrap();
         let solc_path = compilers.path_overrides.get("solc").unwrap();
@@ -2096,17 +2454,55 @@ mod tests {
     #[test]
     fn cache_volume_metadata_is_fail_closed() {
         let digest = "0".repeat(64);
-        let valid = Volume {
+        let legacy = Volume {
             name: compiler_cache_volume_name(&digest),
             driver: "local".to_string(),
             labels: compiler_cache_labels(&digest),
             ..Default::default()
         };
-        validate_cache_volume(&valid, &digest).unwrap();
+        assert!(
+            validate_cache_volume(&legacy, &digest).is_err(),
+            "volumes without a generation have no identity to bind warm-cache state to"
+        );
+
+        let generation = Uuid::new_v4().to_string();
+        let valid = Volume {
+            labels: {
+                let mut labels = compiler_cache_labels(&digest);
+                labels.insert(
+                    COMPILER_CACHE_GENERATION_LABEL.to_string(),
+                    generation.clone(),
+                );
+                labels
+            },
+            ..legacy
+        };
+        assert_eq!(validate_cache_volume(&valid, &digest).unwrap(), generation);
 
         let mut wrong_labels = valid.clone();
         wrong_labels.labels.clear();
         assert!(validate_cache_volume(&wrong_labels, &digest).is_err());
+        let mut empty_generation = valid.clone();
+        empty_generation
+            .labels
+            .insert(COMPILER_CACHE_GENERATION_LABEL.to_string(), String::new());
+        assert!(validate_cache_volume(&empty_generation, &digest).is_err());
+        let mut invalid_generation = valid.clone();
+        invalid_generation.labels.insert(
+            COMPILER_CACHE_GENERATION_LABEL.to_string(),
+            "not-a-uuid".to_string(),
+        );
+        assert!(validate_cache_volume(&invalid_generation, &digest).is_err());
+        let mut extra_label = valid.clone();
+        extra_label
+            .labels
+            .insert("unexpected".to_string(), "value".to_string());
+        assert!(validate_cache_volume(&extra_label, &digest).is_err());
+        let mut driver_options = valid.clone();
+        driver_options
+            .options
+            .insert("unexpected".to_string(), "value".to_string());
+        assert!(validate_cache_volume(&driver_options, &digest).is_err());
         let mut wrong_driver = valid;
         wrong_driver.driver = "nfs".to_string();
         assert!(validate_cache_volume(&wrong_driver, &digest).is_err());
@@ -2162,7 +2558,12 @@ mod tests {
             Bytes::new(),
         )
         .with_file(JobFile::regular_file("input", "input.sol", &source).unwrap());
-        let compilers = prepare_compilers(&invocation_without_stdin, 2048).unwrap();
+        let compilers = prepare_compilers(
+            &invocation_without_stdin,
+            2048,
+            &LocalDigestCache::default(),
+        )
+        .unwrap();
         let archive =
             build_archive(&invocation_without_stdin, 2048, compilers.logical_bytes).unwrap();
         assert_eq!(archive.len(), 2048);
@@ -2173,7 +2574,8 @@ mod tests {
             Bytes::from_static(b"x"),
         )
         .with_file(JobFile::regular_file("input", "input.sol", source).unwrap());
-        let compilers = prepare_compilers(&invocation_with_stdin, 2048).unwrap();
+        let compilers =
+            prepare_compilers(&invocation_with_stdin, 2048, &LocalDigestCache::default()).unwrap();
         assert!(matches!(
             build_archive(&invocation_with_stdin, 2048, compilers.logical_bytes),
             Err(ExecutionError::UploadLimitExceeded { limit: 2048 })
@@ -2194,7 +2596,7 @@ mod tests {
             Bytes::new(),
         );
 
-        assert!(prepare_compilers(&invocation, 1024 * 1024).is_err());
+        assert!(prepare_compilers(&invocation, 1024 * 1024, &LocalDigestCache::default()).is_err());
     }
 
     #[tokio::test]
@@ -2218,7 +2620,8 @@ mod tests {
             vec![],
             Bytes::from_static(b"cached compiler input"),
         );
-        let prepared = prepare_compilers(&invocation, 1024 * 1024).unwrap();
+        let prepared =
+            prepare_compilers(&invocation, 1024 * 1024, &LocalDigestCache::default()).unwrap();
         let digest = prepared.by_digest.keys().next().unwrap().clone();
         let volume_name = compiler_cache_volume_name(&digest);
 
@@ -2247,17 +2650,179 @@ mod tests {
             output.ensure_success("test compiler").unwrap();
             assert_eq!(output.stdout, Bytes::from_static(b"cached compiler input"));
         }
-        let warm_output = new_executor().execute(invocation).await.unwrap();
+        let warm = new_executor();
+        let warm_output = warm.execute(invocation.clone()).await.unwrap();
         warm_output.ensure_success("test compiler").unwrap();
         assert_eq!(
             warm_output.stdout,
             Bytes::from_static(b"cached compiler input")
         );
+        let repeated_warm_output = warm.execute(invocation.clone()).await.unwrap();
+        repeated_warm_output
+            .ensure_success("test compiler")
+            .unwrap();
+        assert_eq!(
+            repeated_warm_output.stdout,
+            Bytes::from_static(b"cached compiler input")
+        );
         let volume = docker.inspect_volume(&volume_name).await.unwrap();
-        validate_cache_volume(&volume, &digest).unwrap();
+        let original_generation = validate_cache_volume(&volume, &digest).unwrap();
         docker
             .remove_volume(
                 &volume_name,
+                Some(
+                    bollard::query_parameters::RemoveVolumeOptionsBuilder::default()
+                        .force(true)
+                        .build(),
+                ),
+            )
+            .await
+            .unwrap();
+
+        let recovered_output = warm.execute(invocation.clone()).await.unwrap();
+        recovered_output.ensure_success("test compiler").unwrap();
+        assert_eq!(
+            recovered_output.stdout,
+            Bytes::from_static(b"cached compiler input")
+        );
+        let replacement = docker.inspect_volume(&volume_name).await.unwrap();
+        let replacement_generation = validate_cache_volume(&replacement, &digest).unwrap();
+        assert_ne!(original_generation, replacement_generation);
+
+        let restarted_output = new_executor().execute(invocation.clone()).await.unwrap();
+        restarted_output.ensure_success("test compiler").unwrap();
+        assert_eq!(
+            restarted_output.stdout,
+            Bytes::from_static(b"cached compiler input")
+        );
+        docker
+            .remove_volume(
+                &volume_name,
+                Some(
+                    bollard::query_parameters::RemoveVolumeOptionsBuilder::default()
+                        .force(true)
+                        .build(),
+                ),
+            )
+            .await
+            .unwrap();
+
+        // Unlabeled volumes and volumes without a generation are both rejected, not adopted.
+        for labels in [HashMap::new(), compiler_cache_labels(&digest)] {
+            docker
+                .create_volume(VolumeCreateRequest {
+                    name: Some(volume_name.clone()),
+                    driver: Some("local".to_string()),
+                    labels: Some(labels.clone()),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            let error = new_executor()
+                .execute(invocation.clone())
+                .await
+                .unwrap_err();
+            assert!(matches!(error, ExecutionError::Infrastructure(_)));
+            let foreign_volume = docker.inspect_volume(&volume_name).await.unwrap();
+            assert_eq!(foreign_volume.labels, labels);
+            docker
+                .remove_volume(
+                    &volume_name,
+                    Some(
+                        bollard::query_parameters::RemoveVolumeOptionsBuilder::default()
+                            .force(true)
+                            .build(),
+                    ),
+                )
+                .await
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE"]
+    async fn local_docker_cache_phase_deadline_covers_digest_lock_wait() {
+        let docker = Docker::connect_with_defaults().unwrap();
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("compiler");
+        tokio::fs::write(
+            &compiler,
+            format!("#!/bin/sh\n# {}\n/bin/cat\n", Uuid::new_v4()).as_bytes(),
+        )
+        .await
+        .unwrap();
+        let invocation = CompilerInvocation::new(
+            JobFile::executable("compiler", "bin/compiler", compiler).unwrap(),
+            vec![],
+            Bytes::new(),
+        );
+
+        let mut settings = settings();
+        settings.runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
+        settings.platform =
+            std::env::var("SCV_TEST_DOCKER_PLATFORM").unwrap_or_else(|_| "linux/amd64".to_string());
+        settings.api_timeout_seconds = 2;
+        settings.execution_timeout_seconds = 2;
+        let cache_timeout_seconds = settings.cache_phase_timeout_seconds(1);
+        let executor = DockerCompilerExecutor {
+            docker: docker.clone(),
+            settings: Arc::new(settings),
+            compiler_cache: Arc::new(CompilerCacheState::default()),
+            initialization: Arc::new(OnceCell::new_with(Some(Arc::new(ContainerJanitor::spawn(
+                docker.clone(),
+            ))))),
+        };
+        let digest = prepare_compilers(&invocation, 1024 * 1024, &LocalDigestCache::default())
+            .unwrap()
+            .by_digest
+            .into_keys()
+            .next()
+            .unwrap();
+
+        // Another in-process fill of the same digest that never finishes.
+        let digest_lock = Arc::new(Mutex::new(()));
+        executor
+            .compiler_cache
+            .locks
+            .lock()
+            .await
+            .insert(digest.clone(), digest_lock.clone());
+        let _held = digest_lock.lock().await;
+
+        let error = timeout(
+            Duration::from_secs(cache_timeout_seconds + 30),
+            executor.execute(invocation),
+        )
+        .await
+        .expect("the cache phase must not wait for the digest lock indefinitely")
+        .unwrap_err();
+        assert!(
+            matches!(error, ExecutionError::Timeout { seconds } if seconds == cache_timeout_seconds)
+        );
+
+        let filters = HashMap::from([
+            ("label".to_string(), vec![JOB_LABEL.to_string()]),
+            (
+                "volume".to_string(),
+                vec![compiler_cache_volume_name(&digest)],
+            ),
+        ]);
+        let leftover = docker
+            .list_containers(Some(
+                ListContainersOptionsBuilder::default()
+                    .all(true)
+                    .filters(&filters)
+                    .build(),
+            ))
+            .await
+            .unwrap();
+        assert!(
+            leftover.is_empty(),
+            "timed-out job container must be removed"
+        );
+        docker
+            .remove_volume(
+                &compiler_cache_volume_name(&digest),
                 Some(
                     bollard::query_parameters::RemoveVolumeOptionsBuilder::default()
                         .force(true)

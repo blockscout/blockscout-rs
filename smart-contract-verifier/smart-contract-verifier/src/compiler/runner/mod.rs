@@ -236,10 +236,12 @@ impl CompilerInvocation {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) fn program_path(&self, root: &Path) -> Result<PathBuf, ExecutionError> {
         self.file_path(root, &self.program_id, &HashMap::new())
     }
 
+    #[cfg(test)]
     pub(crate) fn resolved_args(&self, root: &Path) -> Result<Vec<String>, ExecutionError> {
         self.args
             .iter()

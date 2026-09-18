@@ -6,14 +6,17 @@ use super::{
 };
 use crate::metrics::{self, GuardedGauge};
 use async_trait::async_trait;
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{
+    num::NonZeroUsize,
+    sync::{Arc, Mutex, PoisonError, Weak},
+};
 use tokio::sync::Semaphore;
 
 #[derive(Clone)]
 pub struct ConcurrencyLimitedCompilerExecutor {
     inner: Arc<dyn CompilerExecutor>,
     permits: Arc<Semaphore>,
-    _capacity: Option<Arc<runner_metrics::CapacityGuard>>,
+    _capacity: Arc<runner_metrics::CapacityGuard>,
 }
 
 impl ConcurrencyLimitedCompilerExecutor {
@@ -22,9 +25,7 @@ impl ConcurrencyLimitedCompilerExecutor {
         Self {
             inner,
             permits: Arc::new(Semaphore::new(max_concurrent_jobs)),
-            _capacity: Some(Arc::new(runner_metrics::observe_capacity(
-                max_concurrent_jobs,
-            ))),
+            _capacity: Arc::new(runner_metrics::observe_capacity(max_concurrent_jobs)),
         }
     }
 
@@ -32,10 +33,32 @@ impl ConcurrencyLimitedCompilerExecutor {
     pub fn with_semaphore(inner: Arc<dyn CompilerExecutor>, permits: Arc<Semaphore>) -> Self {
         Self {
             inner,
+            _capacity: shared_capacity(&permits),
             permits,
-            _capacity: None,
         }
     }
+}
+
+/// Publishes a caller-owned semaphore's capacity once, however many executors wrap it. Such a
+/// semaphore is expected to be idle when first wrapped, so its available permits are its capacity.
+fn shared_capacity(permits: &Arc<Semaphore>) -> Arc<runner_metrics::CapacityGuard> {
+    type Registration = (Weak<Semaphore>, Weak<runner_metrics::CapacityGuard>);
+    static REGISTERED: Mutex<Vec<Registration>> = Mutex::new(Vec::new());
+
+    let mut registered = REGISTERED.lock().unwrap_or_else(PoisonError::into_inner);
+    registered.retain(|(_, capacity)| capacity.strong_count() > 0);
+    let existing = registered
+        .iter()
+        .find(|(semaphore, _)| semaphore.as_ptr() == Arc::as_ptr(permits))
+        .and_then(|(_, capacity)| capacity.upgrade());
+    if let Some(capacity) = existing {
+        return capacity;
+    }
+    let capacity = Arc::new(runner_metrics::observe_capacity(
+        permits.available_permits(),
+    ));
+    registered.push((Arc::downgrade(permits), Arc::downgrade(&capacity)));
+    capacity
 }
 
 #[async_trait]
@@ -216,6 +239,20 @@ mod tests {
         })
         .await
         .expect("executor invocation should start");
+    }
+
+    #[test]
+    fn caller_owned_semaphore_publishes_its_capacity_once() {
+        let inner: Arc<dyn CompilerExecutor> = Arc::new(BlockingExecutor::default());
+        let shared = Arc::new(Semaphore::new(3));
+        let first =
+            ConcurrencyLimitedCompilerExecutor::with_semaphore(inner.clone(), shared.clone());
+        let second = ConcurrencyLimitedCompilerExecutor::with_semaphore(inner.clone(), shared);
+        let other =
+            ConcurrencyLimitedCompilerExecutor::with_semaphore(inner, Arc::new(Semaphore::new(3)));
+
+        assert!(Arc::ptr_eq(&first._capacity, &second._capacity));
+        assert!(!Arc::ptr_eq(&first._capacity, &other._capacity));
     }
 
     #[tokio::test]

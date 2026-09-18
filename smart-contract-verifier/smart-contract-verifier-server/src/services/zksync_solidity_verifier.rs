@@ -163,7 +163,9 @@ fn process_verification_result(
         },
         Err(ref err) => match err {
             zksync::Error::Compilation(_) => Ok(compilation_failure(err.to_string())),
-            zksync::Error::ZkCompilerNotFound(_) | zksync::Error::EvmCompilerNotFound(_) => {
+            zksync::Error::InvalidInput(_)
+            | zksync::Error::ZkCompilerNotFound(_)
+            | zksync::Error::EvmCompilerNotFound(_) => {
                 Err(Status::invalid_argument(err.to_string()))
             }
             zksync::Error::Internal(_) => Err(Status::internal(err.to_string())),

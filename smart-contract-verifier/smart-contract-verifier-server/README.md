@@ -156,20 +156,35 @@ private, size-bounded executable tmpfs at `/compiler-tmp`; this is required by t
 one-file Vyper release binaries and is removed with the container.
 
 Compiler volumes are named `scv-compiler-v1-sha256-<digest>` and must use the local volume driver
-with exactly these labels: `org.blockscout.smart-contract-verifier.compiler-cache=true`,
+with these ownership labels: `org.blockscout.smart-contract-verifier.compiler-cache=true`,
 `org.blockscout.smart-contract-verifier.compiler-cache-schema=1`, and
-`org.blockscout.smart-contract-verifier.compiler-digest=sha256:<digest>`. The volume root must contain
-the corresponding binary as `/compiler`. On first use after process startup, the service hashes that
-remote file before trusting an existing volume. A missing or invalid compiler is staged through a
-digest-specific initializer container, checked again on the Docker VM, and atomically published
-before any job can mount it. Initializer names also serialize cache fills across multiple verifier
-pods. Job containers mount these volumes read-only; normal job cleanup retains them. To avoid
-cold-start transfers on a WAN link, warm the required compiler versions with the SSH round-trip tests
-or representative verification requests before directing production traffic to a new Docker host.
+`org.blockscout.smart-contract-verifier.compiler-digest=sha256:<digest>`, plus an
+`org.blockscout.smart-contract-verifier.compiler-cache-generation=<uuid>` label that binds the
+in-process warm-cache state to one volume incarnation. No other labels or driver options are
+accepted; any other volume with that name, including one without a generation label, is rejected
+until it is removed. The volume root must contain the corresponding binary as `/compiler`.
 
-Cached compiler volumes are retained indefinitely. Prune labeled `scv-compiler-v1-sha256-*`
-volumes only during drained maintenance, after the corresponding compiler versions have been
-retired; deleting them during traffic can race with job creation.
+The service first creates a stopped job container, which pins its named cache volumes against
+concurrent deletion. It then validates and, when necessary, seeds each volume before starting that
+job. This cache phase, including any wait for another fill of the same compiler in the same process,
+has a single deadline sized per distinct compiler, and the job container's expiry label covers that
+deadline plus one run. Missing volumes are atomically recreated with the ownership and generation
+labels from the mount configuration. The service hashes the remote compiler before trusting a new or changed volume.
+A missing compiler is staged through a digest-specific initializer container, checked again on the
+Docker VM, and atomically published before the job starts. Initializer names also serialize cache
+fills across multiple verifier pods. Job containers mount these volumes read-only; normal job cleanup
+retains them. To avoid cold-start transfers on a WAN link, warm the required compiler versions with
+the SSH round-trip tests or representative verification requests before directing production traffic
+to a new Docker host.
+
+ZKsync standard JSON verification rejects `settings.LLVMOptions`. Arbitrary LLVM options include
+process-execution hooks and are not a safe public compiler interface. Contracts whose bytecode
+depends on custom LLVM options are therefore not supported by this verifier.
+
+Cached compiler volumes are retained indefinitely. Prefer pruning labeled
+`scv-compiler-v1-sha256-*` volumes during drained maintenance, after the corresponding compiler
+versions have been retired. If an unused volume is deleted during traffic, the next stopped job
+recreates, validates, and seeds that cache generation before its compiler starts.
 
 Remote initialization starts with a strict SSH host-key preflight: the target must already exist in
 `known_hosts` and its key must match. Keep that file present and immutable for the pod lifetime.

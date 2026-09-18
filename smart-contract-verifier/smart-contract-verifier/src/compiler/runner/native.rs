@@ -2,14 +2,15 @@
 
 use super::{
     deliver_stdin, metrics, CompilerExecutor, CompilerInvocation, ExecutionError, ExecutionOutput,
-    JobFileContent, DEFAULT_EXECUTION_TIMEOUT_SECS, DEFAULT_MAX_OUTPUT_BYTES,
+    JobFile, JobFileContent, DEFAULT_EXECUTION_TIMEOUT_SECS, DEFAULT_MAX_OUTPUT_BYTES,
     DEFAULT_MAX_UPLOAD_BYTES,
 };
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use std::{
-    path::Path,
+    collections::HashMap,
+    path::{Path, PathBuf},
     process::Stdio,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -57,13 +58,19 @@ impl NativeCompilerExecutor {
         })
     }
 
+    /// Stages job files under `root` and returns the executables that run in place instead.
     async fn stage(
         &self,
         invocation: &CompilerInvocation,
         root: &Path,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<HashMap<String, PathBuf>, ExecutionError> {
         let mut total_size = invocation.stdin().len() as u64;
+        let mut in_place = HashMap::new();
         for file in invocation.files() {
+            if let Some(source) = in_place_executable(file).await? {
+                in_place.insert(file.id().to_string(), source);
+                continue;
+            }
             let destination = root.join(file.path());
             if let Some(parent) = destination.parent() {
                 tokio::fs::create_dir_all(parent)
@@ -130,7 +137,7 @@ impl NativeCompilerExecutor {
                 });
             }
         }
-        Ok(())
+        Ok(in_place)
     }
 
     async fn execute_inner(
@@ -144,15 +151,15 @@ impl NativeCompilerExecutor {
                 tempfile::tempdir().context("creating native compiler job directory")?,
             )
         };
-        {
+        let in_place = {
             let _timer = metrics::start_operation(metrics::NATIVE, metrics::UPLOAD, "process");
-            self.stage(&invocation, tempdir.path()).await?;
-        }
+            self.stage(&invocation, tempdir.path()).await?
+        };
 
         let (mut child, mut child_stdin, child_stdout, child_stderr) = {
             let _timer = metrics::start_operation(metrics::NATIVE, metrics::CREATE, "process");
-            let program = invocation.program_path(tempdir.path())?;
-            let args = invocation.resolved_args(tempdir.path())?;
+            let program = invocation.program_path_with_overrides(tempdir.path(), &in_place)?;
+            let args = invocation.resolved_args_with_overrides(tempdir.path(), &in_place)?;
             let tmp = tempdir.path().join("tmp");
             tokio::fs::create_dir(&tmp)
                 .await
@@ -246,6 +253,34 @@ impl NativeCompilerExecutor {
             oom_killed: false,
         })
     }
+}
+
+/// Downloaded and preloaded compilers are already executable regular files, so they run in place
+/// instead of being copied into every job directory. Other sources are still staged.
+async fn in_place_executable(file: &JobFile) -> Result<Option<PathBuf>, ExecutionError> {
+    let JobFileContent::LocalPath(source) = file.content() else {
+        return Ok(None);
+    };
+    if !file.is_executable() {
+        return Ok(None);
+    }
+    let metadata = tokio::fs::metadata(source)
+        .await
+        .with_context(|| format!("reading compiler artifact {}", source.display()))?;
+    #[cfg(unix)]
+    let executable = {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    };
+    #[cfg(not(unix))]
+    let executable = false;
+    if !metadata.is_file() || !executable {
+        return Ok(None);
+    }
+    // The child runs in the job directory, so a relative program path would be ambiguous.
+    let source = std::path::absolute(source)
+        .with_context(|| format!("resolving compiler artifact {}", source.display()))?;
+    Ok(Some(source))
 }
 
 struct ObservedTempDir(Option<tempfile::TempDir>);
@@ -342,6 +377,40 @@ mod tests {
             .unwrap();
         output.ensure_success("test compiler").unwrap();
         assert_eq!(output.stdout, Bytes::from_static(b"standard-json"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn executable_sources_run_in_place_and_others_are_staged() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("compiler");
+        tokio::fs::write(&compiler, b"#!/bin/sh\nprintf %s \"$0\"\n")
+            .await
+            .unwrap();
+        let run = || async {
+            let invocation = CompilerInvocation::new(
+                JobFile::executable("compiler", "bin/compiler", &compiler).unwrap(),
+                vec![],
+                Bytes::new(),
+            );
+            let output = NativeCompilerExecutor::default()
+                .execute(invocation)
+                .await
+                .unwrap();
+            output.ensure_success("test compiler").unwrap();
+            PathBuf::from(String::from_utf8(output.stdout.to_vec()).unwrap())
+        };
+
+        let staged = run().await;
+        assert_ne!(staged, compiler);
+        assert!(staged.ends_with("bin/compiler"));
+
+        tokio::fs::set_permissions(&compiler, std::fs::Permissions::from_mode(0o555))
+            .await
+            .unwrap();
+        assert_eq!(run().await, compiler);
     }
 
     #[cfg(unix)]
