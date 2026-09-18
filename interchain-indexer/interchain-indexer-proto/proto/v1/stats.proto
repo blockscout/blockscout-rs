@@ -202,7 +202,7 @@ message StatsBridgedTokenItem {
   optional string symbol = 4;
   optional string icon_url = 5;
   optional uint32 decimals = 6;
-  TokenType type = 7;
+  TokenInfo.TokenType type = 7;
 }
 
 message StatsBridgedTokenRow {

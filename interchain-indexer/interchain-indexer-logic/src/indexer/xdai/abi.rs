@@ -12,9 +12,10 @@ use crate::indexer::evm::abi_registry;
 
 use super::{
     indexer::XDaiChainConfig,
+    types::{ChainIds, Direction},
     version::{
         FOREIGN_EPOCH_FLOOR_BLOCK, FOREIGN_EVENTS, HOME_EPOCH_FLOOR_BLOCK, HOME_EVENTS,
-        XDaiGrammar, XDaiSide, grammar_for,
+        USDS_EPOCH_START_BLOCK, XDaiGrammar, XDaiSide, grammar_for, legacy_ethereum_asset,
     },
 };
 
@@ -107,6 +108,8 @@ impl AbiRegistry {
                     contract.started_at_block,
                 );
 
+                assert_epoch_boundaries_agree(chain.chain_id, contract.started_at_block, grammar)?;
+
                 registry.inner.insert_contract(
                     chain.chain_id,
                     contract.address,
@@ -149,6 +152,24 @@ impl AbiRegistry {
             .with_context(|| format!("xDai bridge config missing {side:?} chain"))
     }
 
+    pub(crate) fn counterpart_chain_id(&self, side: XDaiSide) -> Result<i64> {
+        let counterpart = match side {
+            XDaiSide::Foreign => XDaiSide::Home,
+            XDaiSide::Home => XDaiSide::Foreign,
+        };
+        self.chain_id_for_side(counterpart)
+    }
+
+    /// Both configured endpoints as one value, for stamping onto a buffered
+    /// message. Every chain id an xDai message writes — `src_chain_id`,
+    /// `dst_chain_id`, both transfer legs and the first 4 bytes of
+    /// `native_id` — is resolved through this, never from a literal.
+    pub(crate) fn chain_ids(&self) -> Result<ChainIds> {
+        let foreign = self.chain_id_for_side(XDaiSide::Foreign)?;
+        let home = self.counterpart_chain_id(XDaiSide::Foreign)?;
+        Ok(ChainIds { foreign, home })
+    }
+
     /// The Foreign proxy's own address — the `foreignBridgeAddr` component of
     /// `messageHash = keccak256(recipient ‖ value ‖ nonce ‖ foreignBridgeAddr [‖ token])`.
     /// Every configured Foreign version shares one address (a proxy is
@@ -173,10 +194,13 @@ impl AbiRegistry {
         Ok(first)
     }
 
-    // `counterpart_chain_id`, `side_for_chain` and `event_for_log` are not
-    // needed: xDai's "direction is derived, never looked up" design means no
-    // handler in any phase needs to resolve a chain's side or look up a
-    // second event in the same receipt at runtime.
+    // `side_for_chain` and `event_for_log` are not needed. xDai's "direction
+    // is derived, never looked up" design still holds for the *side*: the
+    // event itself says which direction a message travels, so no handler ever
+    // asks which side a chain is on, and no phase looks up a second event in
+    // the same receipt at runtime. It does **not** extend to the chain ids
+    // behind a direction: those are config, and `chain_ids` above is the only
+    // way to obtain them.
 
     pub(crate) fn resolve_log(
         &self,
@@ -224,6 +248,56 @@ fn side_for_abi(chain_id: i64, address: Address, abi_value: Option<&Value>) -> R
             "xDai ABI for chain_id={chain_id} address={address} does not match a Home or Foreign event set"
         ),
     }
+}
+
+/// Asserts that the two independent answers to "which asset did the Ethereum
+/// side hold at block N" agree for every configured Foreign window.
+///
+/// The Ethereum-side asset is resolved two ways, and only one of them is
+/// config-driven: the current-epoch path reads `XDaiGrammar::source_asset`
+/// for the version window `started_at_block` selects, while the legacy
+/// reconstruction path in `version::legacy_ethereum_asset` splits on the
+/// hardcoded [`USDS_EPOCH_START_BLOCK`]. They line up today only because
+/// `bridges.json` happens to start Foreign v10 at exactly that block; an
+/// operator moving `started_at_block` (an env override is enough) would make
+/// the same Ethereum block read DAI on one path and USDS on the other, and
+/// `token_src_address` would be silently wrong over the gap between them.
+///
+/// Checking each window's `started_at_block` against `legacy_ethereum_asset`
+/// catches both directions — a v10 window starting before the USDS epoch and
+/// a v9 window starting after it — without adding a third constant to keep in
+/// sync. Home windows carry no `source_asset` and are not affected.
+fn assert_epoch_boundaries_agree(
+    chain_id: i64,
+    started_at_block: u64,
+    grammar: &XDaiGrammar,
+) -> Result<()> {
+    let Some(grammar_asset) = grammar.source_asset else {
+        return Ok(());
+    };
+    let legacy_asset =
+        legacy_ethereum_asset(Direction::EthToGno, started_at_block).with_context(|| {
+            format!(
+                "xDai chain {chain_id} version {:?} window starting at block {started_at_block} \
+                 has no legacy Ethereum asset",
+                grammar.version
+            )
+        })?;
+
+    ensure!(
+        grammar_asset == legacy_asset,
+        "xDai chain {chain_id} Foreign version {:?} starts at block {started_at_block}, where the \
+         version grammar table declares source_asset {grammar_asset} but the legacy \
+         reconstruction path resolves {legacy_asset}: the same Ethereum block would be labelled \
+         with two different assets depending on which path indexed it. Either move this \
+         contract's started_at_block in bridges.json back to the side of \
+         USDS_EPOCH_START_BLOCK ({USDS_EPOCH_START_BLOCK}) that matches its grammar, or, if the \
+         DAI->USDS epoch itself moved, update USDS_EPOCH_START_BLOCK in \
+         indexer/xdai/version.rs together with the grammar table",
+        grammar.version
+    );
+
+    Ok(())
 }
 
 /// Asserts that every subscribed event's `topic0`, as computed from the
@@ -518,6 +592,109 @@ mod tests {
             registry.resolve_log(100, address, &v7_topic, 43_027_713),
             LogResolution::Matched(_, ContractKind { version: 7, .. })
         ));
+    }
+
+    /// B1: the registry's side map is the only source of xDai chain ids, so a
+    /// non-mainnet Foreign/Home pair resolves to itself rather than to 1/100.
+    #[test]
+    fn chain_ids_resolve_a_non_mainnet_foreign_home_pair() {
+        const SEPOLIA: i64 = 11_155_111;
+        const CHIADO: i64 = 10_200;
+
+        let chains = vec![
+            chain_config(
+                SEPOLIA,
+                vec![XDaiContractConfig {
+                    address: Address::repeat_byte(0xAA),
+                    version: 9,
+                    started_at_block: FOREIGN_EPOCH_FLOOR_BLOCK,
+                    abi: Some(foreign_event_abi()),
+                }],
+            ),
+            chain_config(
+                CHIADO,
+                vec![XDaiContractConfig {
+                    address: Address::repeat_byte(0xBB),
+                    version: 7,
+                    started_at_block: HOME_EPOCH_FLOOR_BLOCK,
+                    abi: Some(home_v7_event_abi()),
+                }],
+            ),
+        ];
+        let registry = AbiRegistry::from_chains(&chains).expect("registry builds");
+
+        assert_eq!(
+            registry.chain_id_for_side(XDaiSide::Foreign).unwrap(),
+            SEPOLIA
+        );
+        assert_eq!(
+            registry.counterpart_chain_id(XDaiSide::Foreign).unwrap(),
+            CHIADO
+        );
+        assert_eq!(
+            registry.counterpart_chain_id(XDaiSide::Home).unwrap(),
+            SEPOLIA
+        );
+        assert_eq!(
+            registry.chain_ids().unwrap(),
+            ChainIds {
+                foreign: SEPOLIA,
+                home: CHIADO
+            }
+        );
+    }
+
+    fn foreign_chains_with_window(version: i16, started_at_block: u64) -> Vec<XDaiChainConfig> {
+        vec![chain_config(
+            1,
+            vec![XDaiContractConfig {
+                address: Address::repeat_byte(0xAA),
+                version,
+                started_at_block,
+                abi: Some(foreign_event_abi()),
+            }],
+        )]
+    }
+
+    /// B2: the config's Foreign v10 boundary and `USDS_EPOCH_START_BLOCK` are
+    /// two independent tables that must name the same block. This is the
+    /// passing case — the boundary the shipped `bridges.json` actually uses.
+    #[test]
+    fn from_chains_accepts_foreign_windows_that_agree_with_the_usds_epoch() {
+        AbiRegistry::from_chains(&foreign_chains_with_window(9, FOREIGN_EPOCH_FLOOR_BLOCK))
+            .expect("a v9 window below the USDS epoch is consistent");
+        AbiRegistry::from_chains(&foreign_chains_with_window(10, USDS_EPOCH_START_BLOCK))
+            .expect("a v10 window at the USDS epoch is consistent");
+    }
+
+    /// A v10 (USDS) window starting before the USDS epoch: the grammar would
+    /// label the gap USDS while legacy reconstruction labels it DAI.
+    #[test]
+    fn from_chains_rejects_a_usds_window_that_starts_before_the_usds_epoch() {
+        let err =
+            AbiRegistry::from_chains(&foreign_chains_with_window(10, USDS_EPOCH_START_BLOCK - 1))
+                .expect_err("a v10 window below the USDS epoch must fail");
+        let message = err.to_string();
+        assert!(
+            message.contains("USDS_EPOCH_START_BLOCK"),
+            "the error must name the constant to change: {message}"
+        );
+        assert!(
+            message.contains("started_at_block"),
+            "the error must name the config field to change: {message}"
+        );
+    }
+
+    /// The opposite direction: a v9 (DAI) window starting at or after the USDS
+    /// epoch, which legacy reconstruction would label USDS.
+    #[test]
+    fn from_chains_rejects_a_dai_window_that_starts_at_or_after_the_usds_epoch() {
+        let err = AbiRegistry::from_chains(&foreign_chains_with_window(9, USDS_EPOCH_START_BLOCK))
+            .expect_err("a v9 window at the USDS epoch must fail");
+        assert!(
+            err.to_string().contains("USDS_EPOCH_START_BLOCK"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

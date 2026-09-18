@@ -2,7 +2,9 @@
 
 use crate::{
     BridgeConfig,
-    proto::{interchain_service_server::*, *},
+    // `TokenType` is nested in `TokenInfo` so its value names do not squat the
+    // proto package namespace — see the comment in v1/interchain_indexer.proto.
+    proto::{interchain_service_server::*, token_info::TokenType, *},
     settings::ApiSettings,
 };
 use anyhow::{Context, anyhow};

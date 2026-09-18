@@ -2264,6 +2264,51 @@ still need their source event; do not generalize legacy reconstruction to them.
 
 ---
 
+## xDai Chain Ids Come From Config, But Its Epoch Floors And Asset Table Are Still Mainnet-Only
+
+xDai no longer hardcodes chain ids 1 and 100. `Direction` maps to a *side*
+(`initiator_side`/`destination_side`), and `abi::AbiRegistry::chain_ids()`
+resolves that side to a configured chain id from `bridges.json`. Every id an
+xDai message writes — `crosschain_messages.src_chain_id`/`dst_chain_id`, both
+`crosschain_transfers` legs, and the leading 4 bytes of the `native_id` blob —
+comes from that pair, which each event handler stamps onto the buffered
+`Message` alongside `direction`.
+
+A message with a direction but no `chain_ids` — a `pending_messages.payload`
+written before the field existed and revived through `#[serde(default)]` —
+never falls back to a literal. It is reported as **not consolidatable**
+(`warn` + `interchain_indexer_xdai_messages_missing_chain_ids_total`), *not*
+as an error: `Consolidate::consolidate` is called from
+`maintenance.rs::classify_item`, which `?`-propagates into `plan_maintenance`
+before the maintenance transaction is opened, so an `Err` there would abort
+the flush, stats projection and cursor persistence for the whole bridge on
+every cycle, permanently, over one buffer entry. The entry stays buffered
+until its hot TTL offloads it; clear those `pending_messages` rows and let the
+blocks be re-indexed.
+
+That alone does **not** make a non-mainnet pair work end to end. Two mainnet
+constants remain in `indexer/xdai/version.rs`:
+
+- `FOREIGN_EPOCH_FLOOR_BLOCK` / `HOME_EPOCH_FLOOR_BLOCK` are Ethereum and
+  Gnosis *mainnet* block numbers, and `AbiRegistry::from_chains` rejects any
+  `started_at_block` below them. A Sepolia/Chiado config would have to clear
+  mainnet-height floors.
+- The Foreign `source_asset` table (`XDaiGrammar::source_asset`, DAI vs USDS)
+  holds mainnet token addresses, as does `legacy_ethereum_asset`.
+
+Supporting another network pair means moving both into `bridges.json`; until
+then only Ethereum/Gnosis mainnet is usable, and `config/full-testnet/`
+deliberately configures no xDai bridge.
+
+Related: the Foreign version windows in `bridges.json` and
+`USDS_EPOCH_START_BLOCK` are two independent statements of the same DAI→USDS
+boundary. `AbiRegistry::from_chains` now asserts that every Foreign window's
+`source_asset` matches `legacy_ethereum_asset(EthToGno, started_at_block)`, so
+an env override that shifts `started_at_block` fails at startup instead of
+silently labelling a range of transfers with the wrong `token_src_address`.
+
+---
+
 ## Retyping A Numeric Proto Field To `string` Silently Turns Any Sort On It Lexicographic
 
 **Symptom:** After `ChainIndexingProgress.chain_id` was retyped from `int64`

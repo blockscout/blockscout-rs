@@ -41,13 +41,6 @@ use super::{
     version::{XDaiSide, grammar_for},
 };
 
-/// Gnosis, the chain the native sentinel's `tokens` row is seeded on. Not
-/// derived from `Direction` here: this seed runs once at startup, before any
-/// message has established a direction, and the value is fixed by the
-/// protocol (xDai's Home chain), not by which message happens to be seen
-/// first.
-const GNOSIS_CHAIN_ID: i64 = 100;
-
 /// One configured deployment of the xDai proxy on one chain, valid from
 /// `started_at_block` until the next version of the same address begins.
 #[derive(Clone, Debug)]
@@ -80,6 +73,11 @@ pub struct XDaiIndexer {
     /// Gno→Eth only: the Foreign proxy's own address, needed to compute
     /// `messageHash`. Resolved once at construction rather than per event.
     foreign_bridge_address: Address,
+    /// The chain the native sentinel's `tokens` row is seeded on: xDai's Home
+    /// side, whichever chain id `bridges.json` puts there. Resolved at
+    /// construction because the seed runs once at startup, before any message
+    /// has established a direction.
+    home_chain_id: i64,
     message_hash_lookup: Arc<DashMap<B256, Key>>,
     pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>>,
     settings: XDaiIndexerSettings,
@@ -124,6 +122,7 @@ impl XDaiIndexer {
 
         let abi_registry = Arc::new(AbiRegistry::from_chains(&chains)?);
         let foreign_bridge_address = abi_registry.foreign_proxy_address()?;
+        let home_chain_id = abi_registry.chain_id_for_side(XDaiSide::Home)?;
         let db = stats.interchain_db_arc();
         let buffer = MessageBuffer::new_with_stats(stats, buffer_settings.clone());
 
@@ -133,6 +132,7 @@ impl XDaiIndexer {
             chains,
             abi_registry,
             foreign_bridge_address,
+            home_chain_id,
             message_hash_lookup: Arc::new(DashMap::new()),
             pending_message_hash_events: Arc::new(DashMap::new()),
             settings: settings.clone(),
@@ -160,7 +160,7 @@ impl XDaiIndexer {
         }
     }
 
-    /// Seeds the `(100, 0x00…00)` sentinel `tokens` row this indexer's own
+    /// Seeds the `(home_chain_id, 0x00…00)` sentinel `tokens` row this indexer's own
     /// transfers use for native metadata and stats decimals. Lives here, not in
     /// `server::run`, which must not know indexer specifics -- mirrors how
     /// `AmbIndexer::new` gets its DB handle from `stats.interchain_db_arc()`.
@@ -173,7 +173,7 @@ impl XDaiIndexer {
     /// (missing display metadata and possible NULL `stats_asset_edges.decimals`).
     /// Native classification does not depend on this seed succeeding.
     async fn seed_native_sentinel_token(&self) {
-        seed_native_sentinel_token_into(&self.db, self.bridge_id).await;
+        seed_native_sentinel_token_into(&self.db, self.bridge_id, self.home_chain_id).await;
     }
 
     async fn run(ctx: RunContext) -> Result<()> {
@@ -332,9 +332,13 @@ alloy::sol! {
 /// is a no-op — needs nothing but a database. Without this split, "startup
 /// actually creates the row" is only ever verified by inference from the
 /// stats test, which inserts the row itself.
-async fn seed_native_sentinel_token_into(db: &InterchainDatabase, bridge_id: i32) {
+async fn seed_native_sentinel_token_into(
+    db: &InterchainDatabase,
+    bridge_id: i32,
+    home_chain_id: i64,
+) {
     let seed = tokens::ActiveModel {
-        chain_id: ActiveValue::Set(GNOSIS_CHAIN_ID),
+        chain_id: ActiveValue::Set(home_chain_id),
         address: ActiveValue::Set(NATIVE_SENTINEL.as_slice().to_vec()),
         r#type: ActiveValue::Set(TokenType::Native),
         symbol: ActiveValue::Set(Some("xDAI".to_string())),
@@ -347,7 +351,7 @@ async fn seed_native_sentinel_token_into(db: &InterchainDatabase, bridge_id: i32
         tracing::warn!(
             err = ?err,
             bridge_id,
-            chain_id = GNOSIS_CHAIN_ID,
+            chain_id = home_chain_id,
             "failed to seed native xDAI metadata; native classification is preserved, \
              but name and decimals will be unavailable until the next successful seed"
         );
@@ -1455,10 +1459,10 @@ mod tests {
         let interchain_db = InterchainDatabase::new(db.client());
         seed_bridge_and_chains(&interchain_db).await;
 
-        seed_native_sentinel_token_into(&interchain_db, BRIDGE_ID).await;
+        seed_native_sentinel_token_into(&interchain_db, BRIDGE_ID, GNO).await;
 
         let row = interchain_db
-            .get_token_info(GNOSIS_CHAIN_ID as u64, NATIVE_SENTINEL.as_slice().to_vec())
+            .get_token_info(GNO as u64, NATIVE_SENTINEL.as_slice().to_vec())
             .await
             .expect("token lookup succeeds")
             .expect("the sentinel row must exist after the seed");
@@ -1469,10 +1473,10 @@ mod tests {
         assert_eq!(row.name.as_deref(), Some("xDai"));
 
         // A restart must not conflict, and must not degrade the row.
-        seed_native_sentinel_token_into(&interchain_db, BRIDGE_ID).await;
+        seed_native_sentinel_token_into(&interchain_db, BRIDGE_ID, GNO).await;
 
         let again = interchain_db
-            .get_token_info(GNOSIS_CHAIN_ID as u64, NATIVE_SENTINEL.as_slice().to_vec())
+            .get_token_info(GNO as u64, NATIVE_SENTINEL.as_slice().to_vec())
             .await
             .expect("token lookup succeeds")
             .expect("the sentinel row must survive a second seed");

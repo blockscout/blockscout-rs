@@ -354,89 +354,121 @@ fn non_empty_opt(s: Option<String>) -> Option<String> {
     s.filter(|t| !t.trim().is_empty())
 }
 
-/// Fill empty `stats_assets` fields from `tokens`. Two independent passes: a
-/// transfer's source token can only ever enrich its `src_asset`, and its
+/// First non-empty `name` / `symbol` / `icon_url` observed for one asset on one
+/// side of the transfers in a batch. Each field is picked independently.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct MetadataPick {
+    name: Option<String>,
+    symbol: Option<String>,
+    icon: Option<String>,
+}
+
+impl MetadataPick {
+    /// First writer wins per field, so callers must absorb token rows in
+    /// transfer-slice order.
+    fn absorb(&mut self, row: &tokens::Model) {
+        if self.name.is_none() {
+            self.name = non_empty_opt(row.name.clone());
+        }
+        if self.symbol.is_none() {
+            self.symbol = non_empty_opt(row.symbol.clone());
+        }
+        if self.icon.is_none() {
+            self.icon = non_empty_opt(row.token_icon.clone());
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.name.is_none() && self.symbol.is_none() && self.icon.is_none()
+    }
+
+    /// Source-side picks win every field they can fill; only the fields the
+    /// source side left empty fall through to `fallback` (the destination
+    /// side). Fields never travel together — a source symbol and a destination
+    /// icon can end up on the same asset.
+    fn or(self, fallback: Self) -> Self {
+        Self {
+            name: self.name.or(fallback.name),
+            symbol: self.symbol.or(fallback.symbol),
+            icon: self.icon.or(fallback.icon),
+        }
+    }
+}
+
+/// Collect the enrichment candidate for every asset id in the batch in a
+/// **single** pass over `transfers`.
+///
+/// A transfer's source token can only ever enrich its `src_asset`, and its
 /// destination token only its `dst_asset` — an asset is one token identity, so
 /// `name`/`symbol`/`icon_url` must not become first-non-blank-wins across two
-/// unrelated tokens on a conversion transfer. For a `mirror` transfer the two
-/// ids are equal, and running the source pass fully before the destination
-/// pass reproduces today's source-first-then-destination behaviour exactly.
+/// unrelated tokens on a `conversion` transfer. The two sides are therefore
+/// accumulated separately and merged with source precedence, which reproduces
+/// the earlier "run the whole source pass, then the destination pass" ordering
+/// without rescanning `transfers` once per unique asset id.
+///
+/// Precedence per asset id and per field: source-side candidates in transfer
+/// order, then destination-side candidates in transfer order.
+fn collect_asset_metadata_candidates(
+    transfers: &[crosschain_transfers::Model],
+    asset_id_pairs: &[(i64, i64)],
+    token_rows: &HashMap<TokenKey, tokens::Model>,
+) -> HashMap<i64, MetadataPick> {
+    let mut src_picks: HashMap<i64, MetadataPick> = HashMap::new();
+    let mut dst_picks: HashMap<i64, MetadataPick> = HashMap::new();
+
+    for (t, pair) in transfers.iter().zip(asset_id_pairs.iter()) {
+        if let Some(addr) = t.token_src_address.as_ref()
+            && let Some(row) = token_rows.get(&(t.token_src_chain_id, addr.clone()))
+        {
+            src_picks.entry(pair.0).or_default().absorb(row);
+        }
+        if let Some(addr) = t.token_dst_address.as_ref()
+            && let Some(row) = token_rows.get(&(t.token_dst_chain_id, addr.clone()))
+        {
+            dst_picks.entry(pair.1).or_default().absorb(row);
+        }
+    }
+
+    let mut merged = src_picks;
+    for (aid, dst) in dst_picks {
+        let entry = merged.entry(aid).or_default();
+        *entry = std::mem::take(entry).or(dst);
+    }
+    merged
+}
+
+/// Fill empty `stats_assets` fields from `tokens`.
+///
+/// Candidates come from one pass over `transfers`
+/// ([`collect_asset_metadata_candidates`]), then each unique asset id is read
+/// and updated at most once — O(transfers + unique_assets) rather than
+/// O(unique_assets x transfers) per side, which matters on the large catch-up
+/// cohorts this module is otherwise careful to bound.
 async fn enrich_stats_assets_for_batch(
     tx: &DatabaseTransaction,
     transfers: &[crosschain_transfers::Model],
     asset_id_pairs: &[(i64, i64)],
     token_rows: &HashMap<TokenKey, tokens::Model>,
 ) -> Result<(), DbErr> {
-    enrich_stats_assets_side(
-        tx,
-        transfers,
-        asset_id_pairs,
-        token_rows,
-        |pair| pair.0,
-        |t| {
-            t.token_src_address
-                .as_ref()
-                .map(|addr| (t.token_src_chain_id, addr.clone()))
-        },
-    )
-    .await?;
-    enrich_stats_assets_side(
-        tx,
-        transfers,
-        asset_id_pairs,
-        token_rows,
-        |pair| pair.1,
-        |t| {
-            t.token_dst_address
-                .as_ref()
-                .map(|addr| (t.token_dst_chain_id, addr.clone()))
-        },
-    )
-    .await
-}
+    let candidates = collect_asset_metadata_candidates(transfers, asset_id_pairs, token_rows);
 
-async fn enrich_stats_assets_side(
-    tx: &DatabaseTransaction,
-    transfers: &[crosschain_transfers::Model],
-    asset_id_pairs: &[(i64, i64)],
-    token_rows: &HashMap<TokenKey, tokens::Model>,
-    side_asset: impl Fn(&(i64, i64)) -> i64,
-    side_key: impl Fn(&crosschain_transfers::Model) -> Option<TokenKey>,
-) -> Result<(), DbErr> {
+    // Source asset ids first, then destination ones, deduplicated globally:
+    // deterministic order, and an id appearing on both sides is read once.
+    let ordered = asset_id_pairs
+        .iter()
+        .map(|pair| pair.0)
+        .chain(asset_id_pairs.iter().map(|pair| pair.1));
+
     let mut seen: HashSet<i64> = HashSet::new();
-    for pair in asset_id_pairs {
-        let aid = side_asset(pair);
+    for aid in ordered {
         if !seen.insert(aid) {
             continue;
         }
 
-        let mut pick_name = None;
-        let mut pick_symbol = None;
-        let mut pick_icon = None;
-
-        for (t, p) in transfers.iter().zip(asset_id_pairs.iter()) {
-            if side_asset(p) != aid {
-                continue;
-            }
-            let Some(key) = side_key(t) else {
-                continue;
-            };
-            if let Some(row) = token_rows.get(&key) {
-                if pick_name.is_none() {
-                    pick_name = non_empty_opt(row.name.clone());
-                }
-                if pick_symbol.is_none() {
-                    pick_symbol = non_empty_opt(row.symbol.clone());
-                }
-                if pick_icon.is_none() {
-                    pick_icon = non_empty_opt(row.token_icon.clone());
-                }
-            }
-        }
-
-        if pick_name.is_none() && pick_symbol.is_none() && pick_icon.is_none() {
+        // No candidate metadata at all: skip the `stats_assets` read entirely.
+        let Some(pick) = candidates.get(&aid).filter(|pick| !pick.is_empty()) else {
             continue;
-        }
+        };
 
         let Some(asset) = stats_assets::Entity::find_by_id(aid).one(tx).await? else {
             continue;
@@ -448,16 +480,16 @@ async fn enrich_stats_assets_side(
         let mut icon = asset.icon_url.clone();
         let mut changed = false;
 
-        if empty(&name) && pick_name.is_some() {
-            name = pick_name.clone();
+        if empty(&name) && pick.name.is_some() {
+            name = pick.name.clone();
             changed = true;
         }
-        if empty(&symbol) && pick_symbol.is_some() {
-            symbol = pick_symbol.clone();
+        if empty(&symbol) && pick.symbol.is_some() {
+            symbol = pick.symbol.clone();
             changed = true;
         }
-        if empty(&icon) && pick_icon.is_some() {
-            icon = pick_icon.clone();
+        if empty(&icon) && pick.icon.is_some() {
+            icon = pick.icon.clone();
             changed = true;
         }
 
@@ -2234,6 +2266,191 @@ mod token_key_tests {
         assert_eq!(keys.len(), 2);
         assert!(keys.contains(&(1, a)));
         assert!(keys.contains(&(100, b)));
+    }
+}
+
+// Isolated coverage for `collect_asset_metadata_candidates`, the pure
+// candidate-selection step behind `enrich_stats_assets_for_batch`. The
+// enrichment loop only ever writes what this function picked, so the
+// source-over-destination precedence is pinned here — no database, no shared
+// process state.
+#[cfg(test)]
+mod asset_metadata_candidate_tests {
+    use std::collections::HashMap;
+
+    use interchain_indexer_entity::{
+        crosschain_transfers, sea_orm_active_enums::TokenType, tokens,
+    };
+    use sea_orm::prelude::BigDecimal;
+
+    use super::{MetadataPick, TokenKey, collect_asset_metadata_candidates};
+
+    fn token(
+        chain_id: i64,
+        address: Vec<u8>,
+        name: Option<&str>,
+        symbol: Option<&str>,
+        icon: Option<&str>,
+    ) -> tokens::Model {
+        tokens::Model {
+            chain_id,
+            address,
+            symbol: symbol.map(str::to_string),
+            name: name.map(str::to_string),
+            token_icon: icon.map(str::to_string),
+            decimals: Some(18),
+            created_at: None,
+            updated_at: None,
+            r#type: TokenType::Erc20,
+        }
+    }
+
+    fn transfer(
+        id: i64,
+        token_src_chain_id: i64,
+        token_src_address: Vec<u8>,
+        token_dst_chain_id: i64,
+        token_dst_address: Vec<u8>,
+    ) -> crosschain_transfers::Model {
+        crosschain_transfers::Model {
+            id,
+            message_id: id,
+            bridge_id: 1,
+            index: 0,
+            token_src_chain_id,
+            token_dst_chain_id,
+            src_amount: Some(BigDecimal::from(1u64)),
+            dst_amount: Some(BigDecimal::from(1u64)),
+            token_src_address: Some(token_src_address),
+            token_dst_address: Some(token_dst_address),
+            sender_address: None,
+            recipient_address: None,
+            token_ids: None,
+            stats_processed: 0,
+            src_stats_asset_id: None,
+            dst_stats_asset_id: None,
+            asset_linkage: None,
+            created_at: None,
+            updated_at: None,
+        }
+    }
+
+    fn rows(models: Vec<tokens::Model>) -> HashMap<TokenKey, tokens::Model> {
+        models
+            .into_iter()
+            .map(|m| ((m.chain_id, m.address.clone()), m))
+            .collect()
+    }
+
+    // A `conversion` transfer resolves its two sides to different assets, so an
+    // asset that is the destination of one transfer and the source of another
+    // must take the source-side metadata even though the destination-side
+    // transfer comes first in the slice.
+    #[test]
+    fn collect_candidates_conversion_prefers_src_side_over_dst_side() {
+        let a = [0xa1u8; 20].to_vec();
+        let b_dst = [0xb2u8; 20].to_vec();
+        let b_src = [0xb1u8; 20].to_vec();
+        let c = [0xc1u8; 20].to_vec();
+
+        // Transfer 1 (assets 10 -> 20) sees asset 20 on its destination side;
+        // transfer 2 (assets 20 -> 30) sees the same asset 20 on its source side.
+        let transfers = vec![
+            transfer(1, 1, a.clone(), 100, b_dst.clone()),
+            transfer(2, 100, b_src.clone(), 250, c.clone()),
+        ];
+        let asset_id_pairs = vec![(10i64, 20i64), (20i64, 30i64)];
+        let token_rows = rows(vec![
+            token(1, a, Some("AName"), Some("ASYM"), Some("a.png")),
+            token(100, b_dst, Some("DstName"), Some("DSTSYM"), Some("dst.png")),
+            token(100, b_src, Some("SrcName"), Some("SRCSYM"), None),
+            token(250, c, Some("CName"), Some("CSYM"), Some("c.png")),
+        ]);
+
+        let candidates =
+            collect_asset_metadata_candidates(&transfers, &asset_id_pairs, &token_rows);
+
+        assert_eq!(
+            candidates.get(&20),
+            Some(&MetadataPick {
+                name: Some("SrcName".to_string()),
+                symbol: Some("SRCSYM".to_string()),
+                // The source-side token has no icon, so the destination side
+                // still fills that one field independently.
+                icon: Some("dst.png".to_string()),
+            }),
+            "source-side candidates must win every field they can fill"
+        );
+        assert_eq!(
+            candidates.get(&10),
+            Some(&MetadataPick {
+                name: Some("AName".to_string()),
+                symbol: Some("ASYM".to_string()),
+                icon: Some("a.png".to_string()),
+            })
+        );
+        assert_eq!(
+            candidates.get(&30),
+            Some(&MetadataPick {
+                name: Some("CName".to_string()),
+                symbol: Some("CSYM".to_string()),
+                icon: Some("c.png".to_string()),
+            })
+        );
+    }
+
+    // A `mirror` transfer resolves both sides to the same asset, so the
+    // destination token must still be able to fill a field its source
+    // counterpart left empty.
+    #[test]
+    fn collect_candidates_mirror_fills_missing_field_from_dst_token() {
+        let src = [0xd1u8; 20].to_vec();
+        let dst = [0xd2u8; 20].to_vec();
+
+        let transfers = vec![transfer(1, 1, src.clone(), 100, dst.clone())];
+        let asset_id_pairs = vec![(7i64, 7i64)];
+        let token_rows = rows(vec![
+            token(1, src, Some("MirrorName"), None, None),
+            token(100, dst, Some("DstName"), Some("DSTSYM"), Some("dst.png")),
+        ]);
+
+        let candidates =
+            collect_asset_metadata_candidates(&transfers, &asset_id_pairs, &token_rows);
+
+        assert_eq!(
+            candidates.get(&7),
+            Some(&MetadataPick {
+                name: Some("MirrorName".to_string()),
+                symbol: Some("DSTSYM".to_string()),
+                icon: Some("dst.png".to_string()),
+            }),
+            "the destination token must still fill fields the source token lacks"
+        );
+    }
+
+    // Blank-but-present metadata is not a candidate, and an asset with no
+    // candidate at all must be absent so the caller can skip its `stats_assets`
+    // read entirely.
+    #[test]
+    fn collect_candidates_skips_blank_metadata() {
+        let src = [0xe1u8; 20].to_vec();
+        let dst = [0xe2u8; 20].to_vec();
+
+        let transfers = vec![transfer(1, 1, src.clone(), 100, dst.clone())];
+        let asset_id_pairs = vec![(8i64, 9i64)];
+        let token_rows = rows(vec![token(1, src, Some("   "), Some(""), None)]);
+
+        let candidates =
+            collect_asset_metadata_candidates(&transfers, &asset_id_pairs, &token_rows);
+
+        assert!(
+            candidates.get(&8).is_none_or(MetadataPick::is_empty),
+            "whitespace-only metadata must not count as a candidate"
+        );
+        assert!(
+            !candidates.contains_key(&9),
+            "an asset with no token row must have no candidate"
+        );
     }
 }
 

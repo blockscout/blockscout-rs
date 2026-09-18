@@ -204,7 +204,8 @@ async fn handle_user_request_for_affirmation(
         .source_asset
         .context("xDai Foreign grammar has no source_asset")?;
 
-    let native_id = identity.native_id(Direction::EthToGno)?;
+    let chain_ids = ctx.abi_registry.chain_ids()?;
+    let native_id = identity.native_id(Direction::EthToGno, chain_ids)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -224,6 +225,7 @@ async fn handle_user_request_for_affirmation(
         .alter(key, ctx.chain_id as u64, block_number, |message| {
             ensure_identity_and_direction(message, identity, Direction::EthToGno)?;
             message.direction = Some(Direction::EthToGno);
+            message.chain_ids = Some(chain_ids);
             message.identity = Some(identity);
             message.source_request = Some(annotated);
             message.sender_address = Some(transaction_from);
@@ -243,7 +245,8 @@ async fn handle_signed_for_affirmation(
     let nonce = expect_nonce(decoded.body.first(), "nonce")?;
     let identity = MessageIdentity::destination(nonce);
 
-    let native_id = identity.native_id(Direction::EthToGno)?;
+    let chain_ids = ctx.abi_registry.chain_ids()?;
+    let native_id = identity.native_id(Direction::EthToGno, chain_ids)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -272,6 +275,7 @@ async fn handle_signed_for_affirmation(
             ensure_identity_and_direction(message, identity, Direction::EthToGno)?;
             message.identity = Some(identity);
             message.direction = Some(Direction::EthToGno);
+            message.chain_ids = Some(chain_ids);
             message.validator_confirmations.insert(signer, confirmation);
             Ok(())
         })
@@ -290,7 +294,8 @@ async fn handle_affirmation_completed(
     let value_or_hash = expect_nonce(decoded.body.get(2), "nonce")?;
     let identity = MessageIdentity::destination(value_or_hash);
 
-    let native_id = identity.native_id(Direction::EthToGno)?;
+    let chain_ids = ctx.abi_registry.chain_ids()?;
+    let native_id = identity.native_id(Direction::EthToGno, chain_ids)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -320,6 +325,7 @@ async fn handle_affirmation_completed(
             )?;
             message.identity = Some(identity);
             message.direction = Some(Direction::EthToGno);
+            message.chain_ids = Some(chain_ids);
             message.destination_execution = Some(completion);
             message.reconstructed_source = reconstructed_source;
             Ok(())
@@ -345,7 +351,8 @@ async fn handle_user_request_for_signature(
         other => bail!("expected optional address token, got {other:?}"),
     };
 
-    let native_id = identity.native_id(Direction::GnoToEth)?;
+    let chain_ids = ctx.abi_registry.chain_ids()?;
+    let native_id = identity.native_id(Direction::GnoToEth, chain_ids)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -366,6 +373,7 @@ async fn handle_user_request_for_signature(
             ensure_identity_and_direction(message, identity, Direction::GnoToEth)?;
             message.identity = Some(identity);
             message.direction = Some(Direction::GnoToEth);
+            message.chain_ids = Some(chain_ids);
             message.signature_request = Some(annotated);
             message.sender_address = Some(transaction_from);
             Ok(())
@@ -488,7 +496,8 @@ async fn handle_relayed_message(
     let value_or_hash = expect_nonce(decoded.body.get(2), "transactionHash")?;
     let identity = MessageIdentity::destination(value_or_hash);
 
-    let native_id = identity.native_id(Direction::GnoToEth)?;
+    let chain_ids = ctx.abi_registry.chain_ids()?;
+    let native_id = identity.native_id(Direction::GnoToEth, chain_ids)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
     let block_number = log.block_number.context("missing block number")?;
 
@@ -518,6 +527,7 @@ async fn handle_relayed_message(
             )?;
             message.identity = Some(identity);
             message.direction = Some(Direction::GnoToEth);
+            message.chain_ids = Some(chain_ids);
             message.destination_execution = Some(completion);
             message.reconstructed_source = reconstructed_source;
             Ok(())

@@ -6,7 +6,9 @@ use super::{
     utils::{build_chain_bridge_filter, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
 };
 use crate::{
-    proto::{interchain_statistics_service_server::*, *},
+    // `TokenType` is nested in `TokenInfo` so its value names do not squat the
+    // proto package namespace — see the comment in v1/interchain_indexer.proto.
+    proto::{interchain_statistics_service_server::*, token_info::TokenType, *},
     settings::ApiSettings,
 };
 use chrono::{DateTime, NaiveDate, Utc};

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use lazy_static::lazy_static;
-use prometheus::{GaugeVec, IntGaugeVec, register_gauge_vec, register_int_gauge_vec};
+use prometheus::{
+    GaugeVec, IntCounterVec, IntGaugeVec, register_gauge_vec, register_int_counter_vec,
+    register_int_gauge_vec,
+};
 
 // xDai-specific metrics. Keep labels low-cardinality: bridge_id.
 lazy_static! {
@@ -49,6 +52,29 @@ lazy_static! {
     pub static ref XDAI_SOURCE_ASSET_MISMATCH: IntGaugeVec = register_int_gauge_vec!(
         "interchain_indexer_xdai_source_asset_mismatch",
         "1 when the xDai Foreign proxy's live erc20token() disagrees with the configured newest source_asset",
+        &["bridge_id"],
+    )
+    .unwrap();
+
+    /// Buffered xDai messages skipped by `consolidation.rs` because they carry
+    /// a `direction` but no resolved `chain_ids`.
+    ///
+    /// Incremented once per consolidation attempt, not once per message, so a
+    /// single stuck entry counts on every maintenance cycle: a flat non-zero
+    /// rate is the signature of a permanently unconsolidatable buffer entry,
+    /// which is exactly what this condition produces.
+    ///
+    /// The reachable cause is a `pending_messages.payload` written before
+    /// `Message.chain_ids` existed, revived by `#[serde(default)]` into
+    /// `chain_ids: None`. Such an entry can never consolidate — the chain ids
+    /// cannot be recovered from the payload — so it sits in the buffer until
+    /// its hot TTL offloads it. That is deliberate: the alternative (erroring)
+    /// aborts `plan_maintenance` for the whole bridge. Alert on any sustained
+    /// increase; the fix is to clear those `pending_messages` rows and let the
+    /// affected blocks be re-indexed.
+    pub static ref XDAI_MESSAGES_MISSING_CHAIN_IDS: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_xdai_messages_missing_chain_ids_total",
+        "xDai consolidation attempts skipped because the buffered message has a direction but no resolved chain ids",
         &["bridge_id"],
     )
     .unwrap();

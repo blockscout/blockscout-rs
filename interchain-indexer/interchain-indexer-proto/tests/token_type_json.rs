@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+// `TokenType` is nested in `TokenInfo` (module `token_info`) so its value names
+// do not squat the proto package namespace. Nesting must not change the emitted
+// JSON — that is exactly what the assertions below pin.
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
-    StatsBridgedTokenItem, TokenInfo, TokenType,
+    StatsBridgedTokenItem, TokenInfo, token_info::TokenType,
 };
 
 #[test]

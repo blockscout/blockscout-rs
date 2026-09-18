@@ -296,15 +296,6 @@ enum MessageStatus {
   MESSAGE_STATUS_READY_TO_CLAIM = 3;
 }
 
-// Classification stored with each token. UNSPECIFIED is the proto3 default.
-enum TokenType {
-  UNSPECIFIED = 0;
-  ERC20 = 1;
-  NATIVE = 2;
-  ERC721 = 3;
-  ERC1155 = 4;
-}
-
 message InterchainMessage {
   BridgeInfo bridge = 1;
   string message_id = 2;
@@ -470,6 +461,16 @@ message GetTransfersByAddressRequest {
 }
 
 message TokenInfo {
+  // Classification stored with each token. UNSPECIFIED is the proto3 default.
+  // Nested on purpose; see `.memory-bank/rules/rust-style.md` before flattening it.
+  enum TokenType {
+    UNSPECIFIED = 0;
+    ERC20 = 1;
+    NATIVE = 2;
+    ERC721 = 3;
+    ERC1155 = 4;
+  }
+
   reserved 1; // chain_id moved to InterchainTransfer
   // Null iff `type == NATIVE`: a native side has no token
   // contract, so it must not carry the zero-address sentinel some indexers

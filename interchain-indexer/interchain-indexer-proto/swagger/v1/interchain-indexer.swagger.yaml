@@ -1363,6 +1363,18 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  TokenInfoTokenType:
+    type: string
+    enum:
+      - UNSPECIFIED
+      - ERC20
+      - NATIVE
+      - ERC721
+      - ERC1155
+    default: UNSPECIFIED
+    description: |-
+      Classification stored with each token. UNSPECIFIED is the proto3 default.
+      Nested on purpose; see `.memory-bank/rules/rust-style.md` before flattening it.
   protobufAny:
     type: object
     properties:
@@ -1826,7 +1838,7 @@ definitions:
         type: integer
         format: int64
       type:
-        $ref: '#/definitions/v1TokenType'
+        $ref: '#/definitions/TokenInfoTokenType'
   v1StatsBridgedTokenRow:
     type: object
     properties:
@@ -1903,17 +1915,7 @@ definitions:
       icon_url:
         type: string
       type:
-        $ref: '#/definitions/v1TokenType'
-  v1TokenType:
-    type: string
-    enum:
-      - UNSPECIFIED
-      - ERC20
-      - NATIVE
-      - ERC721
-      - ERC1155
-    default: UNSPECIFIED
-    description: Classification stored with each token. UNSPECIFIED is the proto3 default.
+        $ref: '#/definitions/TokenInfoTokenType'
 securityDefinitions:
   ApiKeyAuth:
     type: apiKey

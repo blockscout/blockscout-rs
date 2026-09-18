@@ -12,16 +12,17 @@ use sea_orm::{ActiveValue, prelude::BigDecimal};
 use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
 
 use super::{
-    types::{Direction, Message, MessageIdentity, NATIVE_SENTINEL},
+    metrics,
+    types::{ChainIds, Direction, Message, MessageIdentity, NATIVE_SENTINEL},
     version::DAI,
 };
 
 impl Consolidate for Message {
     fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>> {
-        let Some(input) = resolve_input(self)? else {
+        let Some(input) = resolve_input(self, key)? else {
             return Ok(None);
         };
-        let native_id = input.identity.native_id(input.direction)?;
+        let native_id = input.identity.native_id(input.direction, input.chain_ids)?;
         let (status, last_update_timestamp, dst_tx_hash, is_final) =
             status_and_finality(input.direction, self);
         let transfer = build_transfer(key, &input, self)?;
@@ -32,8 +33,8 @@ impl Consolidate for Message {
             status: ActiveValue::Set(status),
             init_timestamp: ActiveValue::Set(input.init_timestamp),
             last_update_timestamp: ActiveValue::Set(last_update_timestamp),
-            src_chain_id: ActiveValue::Set(input.direction.initiator_chain_id()),
-            dst_chain_id: ActiveValue::Set(Some(input.direction.destination_chain_id())),
+            src_chain_id: ActiveValue::Set(input.chain_ids.initiator(input.direction)),
+            dst_chain_id: ActiveValue::Set(Some(input.chain_ids.destination(input.direction))),
             native_id: ActiveValue::Set(Some(native_id.to_vec())),
             src_tx_hash: ActiveValue::Set(Some(input.src_tx_hash.as_slice().to_vec())),
             dst_tx_hash: ActiveValue::Set(dst_tx_hash),
@@ -80,6 +81,10 @@ impl Consolidate for Message {
 
 struct ResolvedInput {
     direction: Direction,
+    /// Stamped onto the buffered message by whichever handler first set its
+    /// direction; every chain id written below is `chain_ids` resolved
+    /// through `direction`, never a literal.
+    chain_ids: ChainIds,
     identity: MessageIdentity,
     src_tx_hash: B256,
     init_timestamp: NaiveDateTime,
@@ -90,9 +95,46 @@ struct ResolvedInput {
     token_dst_address: Address,
 }
 
-fn resolve_input(message: &Message) -> Result<Option<ResolvedInput>> {
+fn resolve_input(message: &Message, key: &Key) -> Result<Option<ResolvedInput>> {
     let Some(identity) = message.identity else {
         return Ok(None);
+    };
+
+    // Invariant from `events.rs`: every handler that sets `direction` also
+    // stamps `chain_ids`. A message with a direction but no chain ids is
+    // therefore anomalous — in practice a `pending_messages.payload` written
+    // before the field existed and revived through `#[serde(default)]`.
+    //
+    // **This is a skip, not an error, and must stay one.** `consolidate` is
+    // called from `message_buffer/maintenance.rs::classify_item`, which
+    // `?`-propagates into `plan_maintenance` — *before* the maintenance
+    // transaction is opened. An `Err` here therefore aborts plan building for
+    // the entire bridge: no flush, no stats projection, no cursor
+    // persistence, on every cycle, and the next cycle rebuilds the same plan
+    // over the same buffer entry and fails identically. Nothing ever clears
+    // it. See `.memory-bank/rules/error-handling.md`, "Expected Skips Inside
+    // a Shared Transaction": warn, count a metric, let everything else
+    // commit. Do not "tighten" this back into an error.
+    let chain_ids = match (message.direction, message.chain_ids) {
+        (_, Some(chain_ids)) => chain_ids,
+        // Ordinary not-yet-ready entry (confirmations only, say): no
+        // direction means no expectation of chain ids, so it is not worth
+        // reporting.
+        (None, None) => return Ok(None),
+        (Some(direction), None) => {
+            metrics::XDAI_MESSAGES_MISSING_CHAIN_IDS
+                .with_label_values(&[&key.bridge_id.to_string()])
+                .inc();
+            tracing::warn!(
+                bridge_id = key.bridge_id,
+                message_id = key.message_id,
+                direction = ?direction,
+                "skipping xDai message with a direction but no resolved chain ids; it cannot \
+                 consolidate and will stay buffered until its hot TTL offloads it — most likely \
+                 a pending_messages payload written before Message.chain_ids existed"
+            );
+            return Ok(None);
+        }
     };
 
     let resolved = match (&message.source_request, &message.signature_request) {
@@ -110,6 +152,7 @@ fn resolve_input(message: &Message) -> Result<Option<ResolvedInput>> {
             };
             ResolvedInput {
                 direction: Direction::EthToGno,
+                chain_ids,
                 identity,
                 src_tx_hash: source.transaction_hash,
                 init_timestamp: source.block_timestamp,
@@ -134,6 +177,7 @@ fn resolve_input(message: &Message) -> Result<Option<ResolvedInput>> {
             };
             ResolvedInput {
                 direction: Direction::GnoToEth,
+                chain_ids,
                 identity,
                 src_tx_hash: source.transaction_hash,
                 init_timestamp: source.block_timestamp,
@@ -185,6 +229,7 @@ fn resolve_input(message: &Message) -> Result<Option<ResolvedInput>> {
             };
             ResolvedInput {
                 direction,
+                chain_ids,
                 identity,
                 src_tx_hash: source_hash,
                 init_timestamp: source.block_timestamp,
@@ -283,8 +328,8 @@ fn build_transfer(
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
         index: ActiveValue::Set(0),
-        token_src_chain_id: ActiveValue::Set(input.direction.initiator_chain_id()),
-        token_dst_chain_id: ActiveValue::Set(input.direction.destination_chain_id()),
+        token_src_chain_id: ActiveValue::Set(input.chain_ids.initiator(input.direction)),
+        token_dst_chain_id: ActiveValue::Set(input.chain_ids.destination(input.direction)),
         src_amount: ActiveValue::Set(Some(src_amount)),
         dst_amount: ActiveValue::Set(Some(dst_amount)),
         token_src_address: ActiveValue::Set(Some(address_bytes(input.token_src_address))),
@@ -328,6 +373,19 @@ mod tests {
         };
     }
 
+    /// Ethereum/Gnosis, the pair every pre-existing expectation below was
+    /// written against.
+    const MAINNET: ChainIds = ChainIds {
+        foreign: 1,
+        home: 100,
+    };
+
+    /// Sepolia/Chiado — deliberately neither 1 nor 100.
+    const TESTNET: ChainIds = ChainIds {
+        foreign: 11_155_111,
+        home: 10_200,
+    };
+
     fn addr(byte: u8) -> Address {
         Address::repeat_byte(byte)
     }
@@ -344,6 +402,7 @@ mod tests {
         Message {
             identity: Some(MessageIdentity::Nonce(U256::from(nonce))),
             direction: Some(Direction::EthToGno),
+            chain_ids: Some(MAINNET),
             source_request: Some(AnnotatedEvent {
                 event: UserRequestForAffirmationEvent {
                     recipient,
@@ -364,6 +423,7 @@ mod tests {
         Message {
             identity: Some(MessageIdentity::Nonce(U256::from(nonce))),
             direction: Some(Direction::GnoToEth),
+            chain_ids: Some(MAINNET),
             signature_request: Some(AnnotatedEvent {
                 event: UserRequestForSignatureEvent {
                     recipient,
@@ -378,6 +438,130 @@ mod tests {
             sender_address: Some(addr(0x77)),
             ..Default::default()
         }
+    }
+
+    /// B1: every chain id a consolidated xDai message writes comes from the
+    /// configured Foreign/Home pair, so a Sepolia/Chiado deployment writes
+    /// 11155111/10200 — in the message, in the transfer, and in `native_id`'s
+    /// leading 4 bytes. With 1/100 hardcoded these were mainnet ids that do
+    /// not exist in a testnet `chains` table.
+    #[test]
+    fn consolidate_uses_the_configured_chain_ids_on_a_non_mainnet_pair() {
+        let nonce = 0x1adf_u64;
+        let mut message = source_request(nonce, addr(2), ts(1_000));
+        message.chain_ids = Some(TESTNET);
+        let key = key_from_native_id(
+            &native_id_blob(TESTNET.foreign, U256::from(nonce)).unwrap(),
+            3,
+        )
+        .unwrap();
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+
+        let m = &consolidated.message;
+        assert_eq!(set_value!(m.src_chain_id), 11_155_111);
+        assert_eq!(set_value!(m.dst_chain_id), Some(10_200));
+        assert_eq!(
+            set_value!(m.native_id),
+            Some(
+                native_id_blob(11_155_111, U256::from(nonce))
+                    .unwrap()
+                    .to_vec()
+            ),
+            "native_id must carry the configured initiator chain id, not 1"
+        );
+
+        let transfer = &consolidated.transfers[0];
+        assert_eq!(set_value!(transfer.token_src_chain_id), 11_155_111);
+        assert_eq!(set_value!(transfer.token_dst_chain_id), 10_200);
+    }
+
+    /// The reverse direction, so neither endpoint can be right by accident.
+    #[test]
+    fn consolidate_gno_to_eth_uses_the_configured_chain_ids_on_a_non_mainnet_pair() {
+        let nonce = 0x140a_u64;
+        let mut message = signature_request(nonce, addr(2), ts(1_000));
+        message.chain_ids = Some(TESTNET);
+        let key = key_from_native_id(&native_id_blob(TESTNET.home, U256::from(nonce)).unwrap(), 3)
+            .unwrap();
+
+        let consolidated = message.consolidate(&key).unwrap().unwrap();
+
+        let m = &consolidated.message;
+        assert_eq!(set_value!(m.src_chain_id), 10_200);
+        assert_eq!(set_value!(m.dst_chain_id), Some(11_155_111));
+        assert_eq!(
+            set_value!(m.native_id),
+            Some(native_id_blob(10_200, U256::from(nonce)).unwrap().to_vec())
+        );
+
+        let transfer = &consolidated.transfers[0];
+        assert_eq!(set_value!(transfer.token_src_chain_id), 10_200);
+        assert_eq!(set_value!(transfer.token_dst_chain_id), 11_155_111);
+    }
+
+    /// A buffered message with a direction but no resolved chain ids (a
+    /// payload persisted before `Message.chain_ids` existed) is **not
+    /// consolidatable**, never an error.
+    ///
+    /// `consolidate`'s `Err` propagates out of `maintenance.rs::classify_item`
+    /// into `plan_maintenance`, which builds the plan *before* the maintenance
+    /// transaction opens — so erroring here would abort the flush, stats
+    /// projection and cursor persistence for the whole bridge on every cycle,
+    /// forever, over a single buffer entry. This test pins that contract; see
+    /// the skip site in `resolve_input`.
+    #[test]
+    fn consolidate_without_resolved_chain_ids_is_not_ready_rather_than_an_error() {
+        let mut message = source_request(0x1adf, addr(2), ts(1_000));
+        message.chain_ids = None;
+        let key =
+            key_from_native_id(&native_id_blob(1, U256::from(0x1adf_u64)).unwrap(), 3).unwrap();
+
+        assert!(
+            message
+                .consolidate(&key)
+                .expect("a missing chain-id pair is a skip, not an error")
+                .is_none(),
+            "the message must be reported as not ready"
+        );
+    }
+
+    /// The neighbouring case, to keep the skip narrow: a message with neither
+    /// a direction nor chain ids is the ordinary not-yet-ready entry and keeps
+    /// its pre-existing behaviour.
+    #[test]
+    fn consolidate_without_direction_or_chain_ids_is_still_plain_not_ready() {
+        let message = Message {
+            identity: Some(MessageIdentity::Nonce(U256::from(0x1adf_u64))),
+            ..Default::default()
+        };
+        let key =
+            key_from_native_id(&native_id_blob(1, U256::from(0x1adf_u64)).unwrap(), 3).unwrap();
+
+        assert!(message.consolidate(&key).unwrap().is_none());
+    }
+
+    /// The skip must not leak into the normal paths: a fully stamped message
+    /// in either direction still consolidates.
+    #[test]
+    fn consolidate_with_resolved_chain_ids_is_unaffected_in_both_directions() {
+        let eth_to_gno = source_request(0x1adf, addr(2), ts(1_000));
+        let key =
+            key_from_native_id(&native_id_blob(1, U256::from(0x1adf_u64)).unwrap(), 3).unwrap();
+        let consolidated = eth_to_gno
+            .consolidate(&key)
+            .unwrap()
+            .expect("a stamped Eth->Gno message consolidates");
+        assert_eq!(set_value!(consolidated.message.src_chain_id), 1);
+
+        let gno_to_eth = signature_request(0x140a, addr(2), ts(1_000));
+        let key =
+            key_from_native_id(&native_id_blob(100, U256::from(0x140a_u64)).unwrap(), 3).unwrap();
+        let consolidated = gno_to_eth
+            .consolidate(&key)
+            .unwrap()
+            .expect("a stamped Gno->Eth message consolidates");
+        assert_eq!(set_value!(consolidated.message.src_chain_id), 100);
     }
 
     #[test]
@@ -689,6 +873,7 @@ mod tests {
         let message = Message {
             identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
             direction: Some(Direction::GnoToEth),
+            chain_ids: Some(MAINNET),
             destination_execution: Some(Completion::Relayed(AnnotatedEvent {
                 event: CompletionEvent {
                     recipient,
@@ -747,6 +932,7 @@ mod tests {
         let message = Message {
             identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
             direction: Some(Direction::EthToGno),
+            chain_ids: Some(MAINNET),
             destination_execution: Some(Completion::Affirmation(AnnotatedEvent {
                 event: CompletionEvent {
                     recipient,
@@ -791,6 +977,7 @@ mod tests {
         let message = Message {
             identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
             direction: Some(Direction::GnoToEth),
+            chain_ids: Some(MAINNET),
             destination_execution: Some(Completion::Relayed(AnnotatedEvent {
                 event: CompletionEvent {
                     recipient: addr(1),
@@ -883,6 +1070,7 @@ mod tests {
             let message = Message {
                 identity: Some(MessageIdentity::SourceTransactionHash(source_hash)),
                 direction: Some(direction),
+                chain_ids: Some(MAINNET),
                 destination_execution: Some(completion),
                 reconstructed_source: Some(ReconstructedSource {
                     transaction_hash: source_hash,

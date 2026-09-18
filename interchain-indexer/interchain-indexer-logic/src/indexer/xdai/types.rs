@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::message_buffer::Key;
 
+use super::version::XDaiSide;
+
 /// Sentinel written for the Gnosis leg of a transfer, which is always native
 /// xDAI and therefore has no token contract to record. A named constant, not
 /// a literal at each call site: if another bridge later writes a native leg
@@ -17,7 +19,7 @@ use crate::message_buffer::Key;
 pub(crate) const NATIVE_SENTINEL: Address = Address::ZERO;
 
 /// The nonce is a **per-contract** monotonic counter, so Eth→Gno and
-/// Gno→Eth have independent, overlapping ranges. `initiator_chain_id` is
+/// Gno→Eth have independent, overlapping ranges. The initiator's chain id is
 /// what makes identity globally unique — never key on the bare nonce.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Direction {
@@ -26,18 +28,55 @@ pub(crate) enum Direction {
 }
 
 impl Direction {
-    pub(crate) fn initiator_chain_id(self) -> i64 {
+    /// A direction names *sides*, never chain ids: `Eth` is whichever chain
+    /// is configured as [`XDaiSide::Foreign`], `Gno` whichever is
+    /// [`XDaiSide::Home`]. The ids themselves come from `bridges.json` via
+    /// [`ChainIds`] — hardcoding 1/100 here made every non-mainnet pair write
+    /// chain ids that do not exist in the `chains` table.
+    pub(crate) fn initiator_side(self) -> XDaiSide {
         match self {
-            Direction::EthToGno => 1,
-            Direction::GnoToEth => 100,
+            Direction::EthToGno => XDaiSide::Foreign,
+            Direction::GnoToEth => XDaiSide::Home,
         }
     }
 
-    pub(crate) fn destination_chain_id(self) -> i64 {
+    pub(crate) fn destination_side(self) -> XDaiSide {
         match self {
-            Direction::EthToGno => 100,
-            Direction::GnoToEth => 1,
+            Direction::EthToGno => XDaiSide::Home,
+            Direction::GnoToEth => XDaiSide::Foreign,
         }
+    }
+}
+
+/// This bridge's two configured endpoints, resolved once from
+/// `abi::AbiRegistry`'s side map (itself built from `bridges.json`).
+///
+/// AMB carries the equivalent per event on `AnnotatedEvent`; xDai carries it
+/// per *message* instead, because a direction — not a single event — is what
+/// picks which end is the initiator, and `Consolidate::consolidate` sees only
+/// the buffered message. Kept side-keyed rather than as a resolved
+/// `(src, dst)` pair so the value stays independent of the direction, which
+/// different handlers may set at different times.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ChainIds {
+    pub(crate) foreign: i64,
+    pub(crate) home: i64,
+}
+
+impl ChainIds {
+    pub(crate) fn for_side(self, side: XDaiSide) -> i64 {
+        match side {
+            XDaiSide::Foreign => self.foreign,
+            XDaiSide::Home => self.home,
+        }
+    }
+
+    pub(crate) fn initiator(self, direction: Direction) -> i64 {
+        self.for_side(direction.initiator_side())
+    }
+
+    pub(crate) fn destination(self, direction: Direction) -> i64 {
+        self.for_side(direction.destination_side())
     }
 }
 
@@ -64,14 +103,14 @@ impl MessageIdentity {
         }
     }
 
-    pub(crate) fn native_id(self, direction: Direction) -> Result<[u8; 32]> {
+    pub(crate) fn native_id(self, direction: Direction, chain_ids: ChainIds) -> Result<[u8; 32]> {
         match self {
             Self::Nonce(nonce) => {
                 ensure!(
                     nonce <= U256::from(u64::MAX),
                     "xDai nonce {nonce} exceeds u64::MAX"
                 );
-                native_id_blob(direction.initiator_chain_id(), nonce)
+                native_id_blob(chain_ids.initiator(direction), nonce)
             }
             Self::SourceTransactionHash(hash) => Ok(hash.0),
         }
@@ -86,16 +125,26 @@ impl MessageIdentity {
 ///
 /// A nonce that does not fit in 28 bytes is an unrepresentable identity
 /// (nowhere near a real deployment's counter) and must fail loudly rather
-/// than silently truncate.
+/// than silently truncate. The same applies to the chain id: the encoding has
+/// exactly 4 bytes for it, which every realistic pair fits (Sepolia's
+/// 11155111 and Chiado's 10200 both sit far below `u32::MAX`), but a chain id
+/// beyond that range would otherwise be truncated into a *different* valid
+/// blob and collide with another chain's identities.
 pub(crate) fn native_id_blob(initiator_chain_id: i64, nonce: U256) -> Result<[u8; 32]> {
     let nonce_bytes = nonce.to_be_bytes::<32>();
     ensure!(
         nonce_bytes[0..4] == [0u8; 4],
         "xDai nonce {nonce} does not fit in the 28-byte native_id encoding"
     );
+    let initiator_chain_id = u32::try_from(initiator_chain_id).with_context(|| {
+        format!(
+            "xDai initiator chain id {initiator_chain_id} does not fit in the 4-byte native_id \
+             encoding"
+        )
+    })?;
 
     let mut blob = [0u8; 32];
-    blob[0..4].copy_from_slice(&(initiator_chain_id as u32).to_be_bytes());
+    blob[0..4].copy_from_slice(&initiator_chain_id.to_be_bytes());
     blob[4..32].copy_from_slice(&nonce_bytes[4..32]);
     Ok(blob)
 }
@@ -218,6 +267,23 @@ pub(crate) struct ReconstructedSource {
 pub(crate) struct Message {
     pub(crate) identity: Option<MessageIdentity>,
     pub(crate) direction: Option<Direction>,
+    /// The configured Foreign/Home chain ids, stamped by every handler that
+    /// sets `direction` — so `chain_ids.is_some()` whenever `direction.is_some()`,
+    /// which is exactly what consolidation needs.
+    ///
+    /// `serde(default)` because the buffer persists this struct as JSON in
+    /// `pending_messages.payload`: a payload written before the field existed
+    /// must still deserialize. Such an entry revives as `direction: Some(..)`
+    /// with `chain_ids: None` and can never consolidate — the ids are not
+    /// recoverable from the payload — so `consolidation.rs` treats it as
+    /// **not consolidatable** (warn + `XDAI_MESSAGES_MISSING_CHAIN_IDS`),
+    /// never as an error. An error there propagates out of
+    /// `maintenance.rs::classify_item` into `plan_maintenance` before the
+    /// maintenance transaction opens and stalls the whole bridge's flush,
+    /// stats projection and cursor persistence permanently; see the comment
+    /// at that skip site.
+    #[serde(default)]
+    pub(crate) chain_ids: Option<ChainIds>,
     // Eth→Gno
     pub(crate) source_request: Option<AnnotatedEvent<UserRequestForAffirmationEvent>>,
     // Gno→Eth
@@ -269,6 +335,19 @@ mod tests {
         bytes.try_into().unwrap()
     }
 
+    /// Ethereum/Gnosis, the pair the verified explorer values below come from.
+    const MAINNET: ChainIds = ChainIds {
+        foreign: 1,
+        home: 100,
+    };
+
+    /// Sepolia/Chiado: a Foreign/Home pair that is neither 1 nor 100, so a
+    /// literal creeping back into the encoding cannot pass.
+    const TESTNET: ChainIds = ChainIds {
+        foreign: 11_155_111,
+        home: 10_200,
+    };
+
     /// Verified against the official bridge explorer's own encoding.
     #[test]
     fn native_id_blob_round_trips_against_the_verified_explorer_values() {
@@ -286,6 +365,40 @@ mod tests {
     fn native_id_blob_rejects_a_nonce_that_does_not_fit_in_28_bytes() {
         let oversized_nonce = U256::from(1u8) << 225;
         assert!(native_id_blob(1, oversized_nonce).is_err());
+    }
+
+    /// B1: `native_id`'s first 4 bytes are the *configured* initiator chain
+    /// id, so a Sepolia/Chiado pair encodes 11155111/10200 — not 1/100.
+    #[test]
+    fn native_id_uses_the_configured_initiator_chain_id_on_a_non_mainnet_pair() {
+        let identity = MessageIdentity::Nonce(U256::from(0x1adf_u64));
+
+        assert_eq!(
+            identity.native_id(Direction::EthToGno, TESTNET).unwrap(),
+            hex_to_blob("00aa36a700000000000000000000000000000000000000000000000000001adf"),
+        );
+        assert_eq!(
+            identity.native_id(Direction::GnoToEth, TESTNET).unwrap(),
+            hex_to_blob("000027d800000000000000000000000000000000000000000000000000001adf"),
+        );
+    }
+
+    #[test]
+    fn chain_ids_resolve_each_direction_to_its_configured_endpoints() {
+        assert_eq!(TESTNET.initiator(Direction::EthToGno), 11_155_111);
+        assert_eq!(TESTNET.destination(Direction::EthToGno), 10_200);
+        assert_eq!(TESTNET.initiator(Direction::GnoToEth), 10_200);
+        assert_eq!(TESTNET.destination(Direction::GnoToEth), 11_155_111);
+    }
+
+    /// Sepolia's 11155111 fits the 4-byte field with room to spare; the guard
+    /// exists for a chain id that does not, which would otherwise be truncated
+    /// into another chain's valid blob.
+    #[test]
+    fn native_id_blob_rejects_a_chain_id_that_does_not_fit_in_four_bytes() {
+        assert!(native_id_blob(11_155_111, U256::from(1u8)).is_ok());
+        assert!(native_id_blob(i64::from(u32::MAX), U256::from(1u8)).is_ok());
+        assert!(native_id_blob(i64::from(u32::MAX) + 1, U256::from(1u8)).is_err());
     }
 
     #[test]
@@ -324,14 +437,17 @@ mod tests {
                 identity,
                 MessageIdentity::SourceTransactionHash(B256::from(bytes))
             );
-            assert_eq!(identity.native_id(Direction::EthToGno).unwrap(), bytes);
+            assert_eq!(
+                identity.native_id(Direction::EthToGno, MAINNET).unwrap(),
+                bytes
+            );
         }
     }
 
     #[test]
     fn manually_constructed_oversized_nonce_is_rejected() {
         let identity = MessageIdentity::Nonce(U256::from(u64::MAX) + U256::from(1u8));
-        assert!(identity.native_id(Direction::EthToGno).is_err());
+        assert!(identity.native_id(Direction::EthToGno, MAINNET).is_err());
     }
 
     #[test]
