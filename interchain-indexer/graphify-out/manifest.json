@@ -685,8 +685,8 @@
     "semantic_hash": "ac039857be0167b23bd3e86996c2f595"
   },
   "interchain-indexer-server/src/indexers.rs": {
-    "mtime": 1789129070.0725403,
-    "ast_hash": "9f2a71eb2c0911a1b68f6458f77cbeed",
+    "mtime": 1789721151.473252,
+    "ast_hash": "92a176e75e95db97a94d68b56b17458c",
     "semantic_hash": ""
   },
   "interchain-indexer-server/src/lib.rs": {
@@ -1035,8 +1035,8 @@
     "semantic_hash": ""
   },
   ".memory-bank/adr/README.md": {
-    "mtime": 1789556861.4762146,
-    "ast_hash": "735ec43af53b638a3fa0b6ef18901c41",
+    "mtime": 1789721500.2007937,
+    "ast_hash": "3ae0b2e6191449920164fe982d236821",
     "semantic_hash": ""
   },
   ".memory-bank/adr/template.md": {
@@ -1065,8 +1065,8 @@
     "semantic_hash": "3444ad3ef07802eac7c1f459868679e1"
   },
   ".memory-bank/gotchas.md": {
-    "mtime": 1789718257.4858608,
-    "ast_hash": "ac5f26bdd63cfcf9347055dd7fd7fd9b",
+    "mtime": 1789723699.7095778,
+    "ast_hash": "9b3f1dcc80e8c95adaf8ff04eac0b75c",
     "semantic_hash": ""
   },
   ".memory-bank/project-context.md": {
@@ -1075,8 +1075,8 @@
     "semantic_hash": ""
   },
   ".memory-bank/research/README.md": {
-    "mtime": 1789718319.2881112,
-    "ast_hash": "fa0d18f9d563768cf10d2e2967295613",
+    "mtime": 1789721515.8076777,
+    "ast_hash": "8fcfe2c9da735ec7fadb07efc2ff8e47",
     "semantic_hash": ""
   },
   ".memory-bank/research/amb-omnibridge-token-reconstruction.md": {
@@ -1215,8 +1215,8 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1789532940.8611264,
-    "ast_hash": "be081956ffa2fabc871865c343b6b781",
+    "mtime": 1789721304.573233,
+    "ast_hash": "dd1bd707f34e71ab718e2f435d70a117",
     "semantic_hash": ""
   },
   "docker/README.md": {
@@ -1240,7 +1240,7 @@
     "semantic_hash": "0c64af676ba7201e1f2d4b5e4704841a"
   },
   "interchain-indexer-proto/swagger/v1/interchain-indexer.swagger.yaml": {
-    "mtime": 1789719409.4711974,
+    "mtime": 1789723806.1321185,
     "ast_hash": "be269f4856512badc5ecc285af6b8075",
     "semantic_hash": ""
   },
@@ -1265,8 +1265,8 @@
     "semantic_hash": ""
   },
   "config/full-testnet/bridges.json": {
-    "mtime": 1788765040.995167,
-    "ast_hash": "0045cb5dee8e29da39cef5a3313ae080",
+    "mtime": 1789721019.061012,
+    "ast_hash": "498f44e68b6704bde14d2d8e6436c264",
     "semantic_hash": ""
   },
   "config/full-testnet/chains.json": {
@@ -1280,8 +1280,8 @@
     "semantic_hash": ""
   },
   "config/ENVs.md": {
-    "mtime": 1788765040.990857,
-    "ast_hash": "516f68d2b5613dae080f8ffc07d6afb1",
+    "mtime": 1789723643.7023003,
+    "ast_hash": "ca3e09f9c0d8f9572afd45b59c49740c",
     "semantic_hash": ""
   },
   "config/avalanche/ENVs.md": {
@@ -1295,8 +1295,8 @@
     "semantic_hash": ""
   },
   "config/full-testnet/ENVs.md": {
-    "mtime": 1788765040.9949446,
-    "ast_hash": "0bdc4b710b5d33385925b5e6589fb706",
+    "mtime": 1789723707.1969788,
+    "ast_hash": "4734ed48b93a3bfc93fd277461a69d13",
     "semantic_hash": ""
   },
   "config/omnibridge/ENVs.md": {
@@ -1380,23 +1380,23 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/xdai/abi.rs": {
-    "mtime": 1789717952.736761,
-    "ast_hash": "0f9960d78a75e2bcd093bf3bd97436dc",
+    "mtime": 1789723561.3045084,
+    "ast_hash": "ced9d821218ea9ed196879aa556661b4",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/xdai/consolidation.rs": {
-    "mtime": 1789718224.6906204,
-    "ast_hash": "15379c44066927cd71da827e26525ee2",
+    "mtime": 1789720788.6577783,
+    "ast_hash": "b5f114409891fefe2aca1d8b8a51ba01",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/xdai/events.rs": {
-    "mtime": 1789717665.9121633,
-    "ast_hash": "b6f68883d54677c225ab1a895883e6c8",
+    "mtime": 1789721168.7951398,
+    "ast_hash": "0d0a9cdae5fc8a9f5e74b6960605cf35",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/xdai/indexer.rs": {
-    "mtime": 1789717728.7116754,
-    "ast_hash": "beaf739db90972a46aceb105df032f04",
+    "mtime": 1789720788.6572819,
+    "ast_hash": "de9f910d9fec9ce0b72c20fc7a7b1603",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/xdai/metrics.rs": {
@@ -1420,8 +1420,8 @@
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/xdai/version.rs": {
-    "mtime": 1789646590.1032188,
-    "ast_hash": "42872f3fd03d40ba282d0632f7844b19",
+    "mtime": 1789721168.8031428,
+    "ast_hash": "bb126cdc6d70df5310fd7fb0f4f4e1dc",
     "semantic_hash": ""
   },
   ".memory-bank/research/xdai-bridge-protocol-and-indexing-fit.md": {
@@ -1430,8 +1430,8 @@
     "semantic_hash": ""
   },
   "config/xdai/ENVs.md": {
-    "mtime": 1789129070.0207176,
-    "ast_hash": "09f6c5dcb1ff0b2dd02004110af08fea",
+    "mtime": 1789723627.8229783,
+    "ast_hash": "749fd2ec3b806fd215ceb72a12ac1f43",
     "semantic_hash": ""
   },
   "interchain-indexer-logic/src/indexer/retry_scheduler.rs": {
@@ -1550,8 +1550,23 @@
     "semantic_hash": ""
   },
   ".memory-bank/research/xdai-bridge-testnet-deployment-fit.md": {
-    "mtime": 1789718311.107961,
-    "ast_hash": "25b5dfc08b7fa8973945e9331aa5b391",
+    "mtime": 1789723682.0087337,
+    "ast_hash": "5a9f20ada08a2741ee927602b862cdc4",
+    "semantic_hash": ""
+  },
+  "config/xdai/bridges-testnet.json": {
+    "mtime": 1789723543.991869,
+    "ast_hash": "701256634c26b52b426c44f7bf428da1",
+    "semantic_hash": ""
+  },
+  "config/xdai/chains-testnet.json": {
+    "mtime": 1789723538.2777152,
+    "ast_hash": "1cb52b80006fc2ededbe3d394d25e616",
+    "semantic_hash": ""
+  },
+  ".memory-bank/adr/013-xdai-multi-deployment-grammar.md": {
+    "mtime": 1789723699.7088377,
+    "ast_hash": "25e3580462f9058dccdab1e9f6dbf26a",
     "semantic_hash": ""
   }
 }
