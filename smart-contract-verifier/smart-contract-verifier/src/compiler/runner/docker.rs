@@ -152,10 +152,19 @@ impl DockerCompilerExecutorSettings {
         self.api_timeout_seconds.max(self.execution_timeout_seconds)
     }
 
-    /// Per-compiler deadline for validating and seeding one cache volume.
+    /// Per-compiler deadline for validating and seeding one cache volume. It includes the wait
+    /// before an orphaned initializer counts as abandoned, so a waiter can reclaim it and seed.
     fn container_lifecycle_timeout_seconds(&self) -> u64 {
         self.execution_timeout_seconds
             .saturating_add(self.request_timeout_seconds().saturating_mul(2))
+            .saturating_add(self.abandoned_initializer_seconds())
+    }
+
+    /// Longest time an initializer may stay unstarted before it counts as abandoned. The grace
+    /// absorbs the local archive build and clock skew.
+    fn abandoned_initializer_seconds(&self) -> u64 {
+        self.initializer_start_timeout_seconds()
+            .saturating_add(CLEANUP_GRACE_SECONDS)
     }
 
     /// Worst case of `run_created_container`: attach, start, the bounded run, and the final inspect.
@@ -670,18 +679,6 @@ impl DockerCompilerExecutor {
         if self.cached_generation_is_ready(digest).await? {
             return Ok(());
         }
-        // Admitted fills are already bounded by their admission slot; the others take a fill
-        // permit. It is acquired before the digest lock and held for one compiler only.
-        let _unadmitted_fill_permit = match &admission_permit {
-            Some(_) => None,
-            None => Some(
-                self.compiler_cache
-                    .unadmitted_fills
-                    .acquire()
-                    .await
-                    .map_err(|error| ExecutionError::Infrastructure(error.into()))?,
-            ),
-        };
         let digest_lock = {
             let mut locks = self.compiler_cache.locks.lock().await;
             locks
@@ -693,6 +690,19 @@ impl DockerCompilerExecutor {
         if self.cached_generation_is_ready(digest).await? {
             return Ok(());
         }
+        // Admitted fills are already bounded by their admission slot; the others take a fill
+        // permit. Only the digest-lock holder takes one, so jobs queued behind one compiler's fill
+        // cannot starve fills of other compilers. It is held for one compiler only.
+        let _unadmitted_fill_permit = match &admission_permit {
+            Some(_) => None,
+            None => Some(
+                self.compiler_cache
+                    .unadmitted_fills
+                    .acquire()
+                    .await
+                    .map_err(|error| ExecutionError::Infrastructure(error.into()))?,
+            ),
+        };
 
         let cache_timeout_seconds = self.settings.container_lifecycle_timeout_seconds();
         let deadline = Instant::now() + Duration::from_secs(cache_timeout_seconds);
@@ -935,11 +945,7 @@ impl DockerCompilerExecutor {
                         unix_timestamp()?,
                         InitializerBudgets {
                             stopped_grace_seconds: self.settings.request_timeout_seconds(),
-                            // The grace absorbs the local archive build and clock skew.
-                            unstarted_seconds: self
-                                .settings
-                                .initializer_start_timeout_seconds()
-                                .saturating_add(CLEANUP_GRACE_SECONDS),
+                            unstarted_seconds: self.settings.abandoned_initializer_seconds(),
                             running_seconds: self
                                 .settings
                                 .execution_timeout_seconds
@@ -995,6 +1001,8 @@ impl DockerCompilerExecutor {
             .await
             .context("attach to compiler container")
             .map_err(ExecutionError::Infrastructure)?;
+        let mut input = DropOffRuntime::new(attached.input);
+        let mut output = DropOffRuntime::new(attached.output);
 
         self.docker
             .start_container(container_id, None)
@@ -1002,8 +1010,6 @@ impl DockerCompilerExecutor {
             .context("start compiler container")
             .map_err(ExecutionError::Infrastructure)?;
 
-        let mut input = attached.input;
-        let mut output = attached.output;
         let docker = self.docker.clone();
         let container_id = container_id.to_string();
         let wait_container_id = container_id.clone();
@@ -1013,7 +1019,7 @@ impl DockerCompilerExecutor {
         let run = async move {
             let write_stdin = async move {
                 let fully_written = deliver_stdin(
-                    &mut input,
+                    &mut *input,
                     &stdin,
                     "write compiler stdin",
                     "close compiler stdin",
@@ -1111,6 +1117,41 @@ impl DockerCompilerExecutor {
             exit_code,
             oom_killed,
         })
+    }
+}
+
+/// Drops its value on the blocking pool. Dropping the last half of an attach connection closes the
+/// SSH session bollard opened for it, and openssh then runs a blocking `ssh -O exit`.
+struct DropOffRuntime<T: Send + 'static>(Option<T>);
+
+impl<T: Send + 'static> DropOffRuntime<T> {
+    fn new(value: T) -> Self {
+        Self(Some(value))
+    }
+}
+
+impl<T: Send + 'static> std::ops::Deref for DropOffRuntime<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.0.as_ref().expect("value is present until drop")
+    }
+}
+
+impl<T: Send + 'static> std::ops::DerefMut for DropOffRuntime<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.0.as_mut().expect("value is present until drop")
+    }
+}
+
+impl<T: Send + 'static> Drop for DropOffRuntime<T> {
+    fn drop(&mut self) {
+        let Some(value) = self.0.take() else {
+            return;
+        };
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn_blocking(move || drop(value));
+        }
     }
 }
 
@@ -1534,14 +1575,18 @@ fn validate_settings(settings: &DockerCompilerExecutorSettings) -> Result<(), Ex
             "compiler Docker address must use ssh://".to_string(),
         ));
     }
+    // bollard hands `user@host:port` to ssh without the `ssh://` prefix, so ssh would resolve
+    // `host:port` as the hostname. A non-default port must come from an ssh_config Host alias.
     if addr.host_str().is_none()
+        || addr.port().is_some()
         || addr.password().is_some()
         || !addr.path().is_empty()
         || addr.query().is_some()
         || addr.fragment().is_some()
     {
         return Err(ExecutionError::InvalidInvocation(
-            "compiler Docker SSH address must contain only user, host, and optional port"
+            "compiler Docker SSH address must contain only user and host; configure a \
+             non-default port through an ssh_config Host alias"
                 .to_string(),
         ));
     }
@@ -2059,24 +2104,31 @@ mod tests {
     fn lifecycle_budget_uses_the_effective_request_timeout() {
         let mut settings = settings();
         assert_eq!(settings.request_timeout_seconds(), 30);
-        assert_eq!(settings.container_lifecycle_timeout_seconds(), 90);
+        assert_eq!(settings.abandoned_initializer_seconds(), 120 + 300);
+        assert_eq!(settings.container_lifecycle_timeout_seconds(), 90 + 420);
         assert_eq!(settings.container_run_timeout_seconds(), 120);
         assert_eq!(settings.cache_helper_lifetime_seconds(), 210);
-        assert_eq!(settings.job_container_lifecycle_timeout_seconds(1), 300);
-        assert_eq!(settings.job_container_lifecycle_timeout_seconds(2), 390);
+        assert_eq!(settings.job_container_lifecycle_timeout_seconds(1), 720);
+        assert_eq!(settings.job_container_lifecycle_timeout_seconds(2), 1230);
 
         settings.api_timeout_seconds = 45;
         assert_eq!(settings.request_timeout_seconds(), 45);
-        assert_eq!(settings.container_lifecycle_timeout_seconds(), 120);
+        assert_eq!(settings.container_lifecycle_timeout_seconds(), 120 + 465);
         assert_eq!(settings.container_run_timeout_seconds(), 165);
         assert_eq!(settings.initializer_start_timeout_seconds(), 165);
         // Create, seed upload, one run, and removal.
         assert_eq!(settings.cache_helper_lifetime_seconds(), 45 + 30 + 165 + 45);
         // Create, the full cache phase, the job upload, one run, and removal.
-        assert_eq!(settings.cache_phase_timeout_seconds(2), 240);
+        assert_eq!(settings.cache_phase_timeout_seconds(2), 1170);
         assert_eq!(
             settings.job_container_lifecycle_timeout_seconds(2),
-            45 + 240 + 45 + 165 + 45
+            45 + 1170 + 45 + 165 + 45
+        );
+
+        // A waiter must outlast an orphaned initializer's abandonment budget.
+        assert!(
+            settings.container_lifecycle_timeout_seconds()
+                > settings.abandoned_initializer_seconds()
         );
     }
 
@@ -2194,6 +2246,10 @@ mod tests {
         invalid.addr = "tcp://docker.example.test:2375".to_string();
         assert!(validate_settings(&invalid).is_err());
         assert!(DockerCompilerExecutor::new(invalid).is_err());
+
+        let mut invalid = settings();
+        invalid.addr = "ssh://docker@example.test:2222".to_string();
+        assert!(validate_settings(&invalid).is_err());
 
         let mut invalid = settings();
         invalid.runner_image = "compiler-runner:latest".to_string();

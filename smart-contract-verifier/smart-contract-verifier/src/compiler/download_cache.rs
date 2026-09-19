@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use super::fetcher::{FetchError, Fetcher, Version};
+use super::{
+    fetcher::{FetchError, Fetcher, Version},
+    ExecutionError,
+};
 use crate::metrics;
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -106,6 +109,8 @@ impl<Ver: Version> DownloadCache<Ver> {
                         metrics::DOWNLOAD_CACHE_HITS.inc();
                         Ok(path)
                     }
+                    // The entry stays unvalidated, so a later request validates again.
+                    Err(error) if is_transient_validation_error(&error) => Err(error),
                     Err(error) => {
                         tracing::warn!(
                             target: "compiler_cache",
@@ -184,6 +189,21 @@ impl<Ver: Version> DownloadCache<Ver> {
                 );
             }
         }
+    }
+}
+
+/// Whether validation failed without saying anything about the file, so downloading another copy
+/// cannot help: the authoritative checksum or the compiler executor was unavailable. A compiler
+/// that ran and failed (`CompilerFailed`) still counts against the file.
+fn is_transient_validation_error(error: &FetchError) -> bool {
+    match error {
+        FetchError::Fetch(_) | FetchError::HashParse(_) | FetchError::Schedule(_) => true,
+        FetchError::Validation(error) => error.chain().any(|source| {
+            source
+                .downcast_ref::<ExecutionError>()
+                .is_some_and(|error| !matches!(error, ExecutionError::CompilerFailed { .. }))
+        }),
+        FetchError::NotFound(_) | FetchError::HashMismatch(_) | FetchError::File(_) => false,
     }
 }
 
@@ -573,6 +593,57 @@ mod tests {
         assert_eq!(cache.get(&fetcher, &ver).await.unwrap(), downloaded_path);
         assert_eq!(fetcher.validation_calls.load(Ordering::Relaxed), 1);
         assert_eq!(fetcher.fetch_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn executor_outage_during_preload_validation_does_not_download() {
+        struct UnavailableExecutorFetcher {
+            validation_calls: AtomicUsize,
+        }
+
+        #[async_trait]
+        impl Fetcher for UnavailableExecutorFetcher {
+            type Version = evm_version::DetailedVersion;
+
+            async fn fetch(&self, _ver: &Self::Version) -> Result<PathBuf, FetchError> {
+                panic!("an executor outage must not trigger a download")
+            }
+
+            async fn validate_file(
+                &self,
+                _ver: &Self::Version,
+                _path: &std::path::Path,
+            ) -> Result<(), FetchError> {
+                self.validation_calls.fetch_add(1, Ordering::Relaxed);
+                let outage = ExecutionError::Infrastructure(anyhow::anyhow!("host unreachable"));
+                Err(FetchError::Validation(
+                    anyhow::Error::new(outage).context("executing solc version probe"),
+                ))
+            }
+
+            fn all_versions(&self) -> Vec<Self::Version> {
+                vec![]
+            }
+        }
+
+        let ver = new_version(10);
+        let dir = tempfile::tempdir().unwrap();
+        let version_dir = dir.path().join(ver.to_string());
+        std::fs::create_dir(&version_dir).unwrap();
+        std::fs::write(version_dir.join("solc"), b"preloaded compiler").unwrap();
+        let fetcher = UnavailableExecutorFetcher {
+            validation_calls: AtomicUsize::new(0),
+        };
+        let cache = DownloadCache::default();
+        cache
+            .load_from_dir(&dir.path().to_path_buf())
+            .await
+            .unwrap();
+
+        assert!(cache.get(&fetcher, &ver).await.is_err());
+        // The compiler stays quarantined, so it is validated again once the executor recovers.
+        assert!(cache.get(&fetcher, &ver).await.is_err());
+        assert_eq!(fetcher.validation_calls.load(Ordering::Relaxed), 2);
     }
 
     #[tokio::test]
