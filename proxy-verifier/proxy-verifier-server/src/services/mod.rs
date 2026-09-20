@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#![allow(clippy::result_large_err)]
+
 mod health;
 mod proxy;
 mod solidity_verifier;
@@ -120,8 +123,6 @@ where
         .collect())
 }
 
-// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
-#[allow(clippy::result_large_err)]
 pub fn contracts_proto_to_inner<'a>(
     blockscout_clients: &'a BTreeMap<String, proxy_verifier_logic::blockscout::Client>,
     proto_contracts: &[proxy_verifier_proto_v1::Contract],

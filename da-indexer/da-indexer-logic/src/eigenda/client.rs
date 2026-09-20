@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+// `tonic::Status` is ~176 bytes, which trips the lint in generated and http-client code.
+#![allow(clippy::result_large_err)]
+
 use std::time::Duration;
 
 use self::disperser::{disperser_client::DisperserClient, RetrieveBlobRequest};

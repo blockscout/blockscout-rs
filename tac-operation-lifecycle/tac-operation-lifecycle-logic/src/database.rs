@@ -616,7 +616,7 @@ impl TacDatabase {
     pub async fn query_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
         let conditions = vec![
             format!("status = '{}'::status_enum", StatusEnum::Failed.to_value()),
-            format!("next_retry IS NOT NULL"),
+            "next_retry IS NOT NULL".to_string(),
             format!(
                 "next_retry < '{}'",
                 timestamp_to_naive(chrono::Utc::now().timestamp())
@@ -784,7 +784,7 @@ impl TacDatabase {
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![
             format!("status = '{}'::status_enum", StatusEnum::Failed.to_value()),
-            format!("next_retry IS NOT NULL"),
+            "next_retry IS NOT NULL".to_string(),
             format!(
                 "next_retry < '{}'",
                 timestamp_to_naive(chrono::Utc::now().timestamp())
