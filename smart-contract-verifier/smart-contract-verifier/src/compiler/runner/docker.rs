@@ -15,9 +15,9 @@ use bollard::{
         ResourcesUlimits, Volume, VolumeCreateRequest,
     },
     query_parameters::{
-        AttachContainerOptionsBuilder, CreateContainerOptionsBuilder, ListContainersOptionsBuilder,
-        RemoveContainerOptionsBuilder, UploadToContainerOptionsBuilder,
-        WaitContainerOptionsBuilder,
+        AttachContainerOptionsBuilder, CreateContainerOptionsBuilder, CreateImageOptions,
+        CreateImageOptionsBuilder, ListContainersOptionsBuilder, RemoveContainerOptionsBuilder,
+        UploadToContainerOptionsBuilder, WaitContainerOptionsBuilder,
     },
     Docker, API_DEFAULT_VERSION,
 };
@@ -103,6 +103,14 @@ pub struct DockerCompilerExecutorSettings {
     pub max_output_bytes: usize,
     #[serde(default)]
     pub runtime: Option<String>,
+    /// Pull the pinned runner image when the remote host does not already have it. Off by default,
+    /// so the set of images the compiler host can run stays fixed at provisioning time.
+    #[serde(default)]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
+    pub pull_runner_image: bool,
+    #[serde(default = "default_pull_timeout_seconds")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
+    pub pull_timeout_seconds: u64,
 }
 
 fn default_platform() -> String {
@@ -141,6 +149,12 @@ fn default_max_upload_bytes() -> usize {
 
 fn default_max_output_bytes() -> usize {
     DEFAULT_MAX_OUTPUT_BYTES
+}
+
+/// Generous enough for a cold pull of the runner image over a slow link, and short enough that a
+/// stalled pull frees the initialization attempt for the next readiness check to retry.
+fn default_pull_timeout_seconds() -> u64 {
+    900
 }
 
 impl DockerCompilerExecutorSettings {
@@ -382,12 +396,16 @@ impl DockerCompilerExecutor {
             }
             Err(_) => tracing::warn!("timed out reaping expired compiler containers"),
         }
-        self.inspect_runner_image().await
+        self.ensure_runner_image().await
     }
 
+    /// Readiness never pulls: initialization already did, and a probe must stay a cheap read.
     async fn check_remote_health(&self) -> Result<(), ExecutionError> {
         self.ping_remote().await?;
-        self.inspect_runner_image().await
+        match self.runner_image_present().await? {
+            true => Ok(()),
+            false => Err(self.missing_runner_image_error()),
+        }
     }
 
     /// The client's request timeout is raised to the execution timeout so cold uploads can
@@ -412,21 +430,82 @@ impl DockerCompilerExecutor {
         Ok(())
     }
 
-    async fn inspect_runner_image(&self) -> Result<(), ExecutionError> {
-        timeout(
+    /// Runs once per initialization, so a pull cannot overlap another pull of the same image.
+    async fn ensure_runner_image(&self) -> Result<(), ExecutionError> {
+        if self.runner_image_present().await? {
+            return Ok(());
+        }
+        if !self.settings.pull_runner_image {
+            return Err(self.missing_runner_image_error());
+        }
+        self.pull_runner_image().await?;
+        match self.runner_image_present().await? {
+            true => Ok(()),
+            false => Err(self.missing_runner_image_error()),
+        }
+    }
+
+    /// `Ok(false)` only when the daemon itself reported the image as absent. Timeouts and transport
+    /// failures stay errors, so a broken connection is never answered with a pull.
+    async fn runner_image_present(&self) -> Result<bool, ExecutionError> {
+        let inspected = timeout(
             self.api_timeout(),
             self.docker.inspect_image(&self.settings.runner_image),
         )
         .await
-        .map_err(|_| self.api_timeout_error("inspect compiler runner image"))?
-        .with_context(|| {
-            format!(
-                "compiler runner image {} is not present on the remote Docker host",
-                self.settings.runner_image
-            )
-        })
-        .map_err(ExecutionError::Infrastructure)?;
-        Ok(())
+        .map_err(|_| self.api_timeout_error("inspect compiler runner image"))?;
+        match inspected {
+            Ok(_) => Ok(true),
+            Err(bollard::errors::Error::DockerResponseServerError {
+                status_code: 404, ..
+            }) => Ok(false),
+            Err(error) => Err(ExecutionError::Infrastructure(
+                anyhow::Error::new(error).context("inspect compiler runner image"),
+            )),
+        }
+    }
+
+    fn missing_runner_image_error(&self) -> ExecutionError {
+        ExecutionError::Infrastructure(anyhow::anyhow!(
+            "compiler runner image {} is not present on the remote Docker host",
+            self.settings.runner_image
+        ))
+    }
+
+    /// Settings validation rejects references that are not pinned by digest, so this can only ever
+    /// fetch the exact image the operator configured, and the pull is bounded by its own budget
+    /// rather than the control-plane timeout.
+    async fn pull_runner_image(&self) -> Result<(), ExecutionError> {
+        tracing::info!(
+            image = %self.settings.runner_image,
+            "pulling compiler runner image onto the remote Docker host"
+        );
+        let pull = async {
+            let mut progress = self.docker.create_image(
+                Some(pull_runner_image_options(&self.settings)),
+                None,
+                None,
+            );
+            // The daemon pulls while it streams progress, so the stream has to be drained for the
+            // pull to finish, and each update carries any failure the daemon hit.
+            while let Some(update) = progress.next().await {
+                update
+                    .context("pull compiler runner image")
+                    .map_err(ExecutionError::Infrastructure)?;
+            }
+            Ok(())
+        };
+        timeout(
+            Duration::from_secs(self.settings.pull_timeout_seconds),
+            pull,
+        )
+        .await
+        .map_err(|_| {
+            ExecutionError::Infrastructure(anyhow::anyhow!(
+                "pulling compiler runner image timed out after {} seconds",
+                self.settings.pull_timeout_seconds
+            ))
+        })?
     }
 
     fn container_config(
@@ -1622,6 +1701,7 @@ fn validate_settings(settings: &DockerCompilerExecutorSettings) -> Result<(), Ex
         || settings.pids_limit <= 0
         || settings.max_upload_bytes == 0
         || settings.max_output_bytes == 0
+        || settings.pull_timeout_seconds == 0
     {
         return Err(ExecutionError::InvalidInvocation(
             "compiler Docker limits and timeouts must be positive".to_string(),
@@ -1634,6 +1714,15 @@ fn validate_settings(settings: &DockerCompilerExecutorSettings) -> Result<(), Ex
 enum SeedAttempt {
     Seeded,
     Busy,
+}
+
+/// The digest-pinned reference goes in `from_image`, which the Docker API pulls by digest and
+/// which makes the `tag` parameter inapplicable.
+fn pull_runner_image_options(settings: &DockerCompilerExecutorSettings) -> CreateImageOptions {
+    CreateImageOptionsBuilder::new()
+        .from_image(&settings.runner_image)
+        .platform(&settings.platform)
+        .build()
 }
 
 fn compiler_cache_volume_name(digest: &str) -> String {
@@ -2097,6 +2186,8 @@ mod tests {
             max_upload_bytes: 64 * 1024 * 1024,
             max_output_bytes: 8 * 1024 * 1024,
             runtime: None,
+            pull_runner_image: false,
+            pull_timeout_seconds: 900,
         }
     }
 
@@ -2262,6 +2353,24 @@ mod tests {
         let mut invalid = settings();
         invalid.api_timeout_seconds = 0;
         assert!(validate_settings(&invalid).is_err());
+
+        let mut invalid = settings();
+        invalid.pull_timeout_seconds = 0;
+        assert!(validate_settings(&invalid).is_err());
+    }
+
+    #[test]
+    fn pull_requests_the_pinned_digest_for_the_configured_platform() {
+        let mut settings = settings();
+        settings.pull_runner_image = true;
+        let options = pull_runner_image_options(&settings);
+
+        // A digest in `from_image` is what makes the daemon pull by digest; a tag alongside it
+        // would be ignored, and an unpinned reference cannot reach here at all.
+        assert_eq!(options.from_image.as_deref(), Some(&*settings.runner_image));
+        assert!(options.tag.is_none());
+        assert_eq!(options.platform, settings.platform);
+        assert!(validate_settings(&settings).is_ok());
     }
 
     #[test]

@@ -28,6 +28,8 @@ const COMPILER_EXECUTION_ENVIRONMENT_KEYS: &[&str] = &[
     "SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__MAX_UPLOAD_BYTES",
     "SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__MAX_OUTPUT_BYTES",
     "SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__RUNTIME",
+    "SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__PULL_RUNNER_IMAGE",
+    "SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__PULL_TIMEOUT_SECONDS",
 ];
 
 struct EnvironmentGuard {
@@ -204,11 +206,21 @@ fn docker_execution_builds_from_string_numeric_environment_values() {
             "SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__MAX_OUTPUT_BYTES",
             "88",
         ),
+        (
+            "SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__PULL_RUNNER_IMAGE",
+            "true",
+        ),
+        (
+            "SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__PULL_TIMEOUT_SECONDS",
+            "99",
+        ),
     ]);
 
     let settings = Settings::build().unwrap();
     let docker = docker(&settings);
 
+    assert!(docker.pull_runner_image);
+    assert_eq!(docker.pull_timeout_seconds, 99);
     assert_eq!(docker.connect_timeout_seconds, 7);
     assert_eq!(docker.api_timeout_seconds, 11);
     assert_eq!(docker.execution_timeout_seconds, 22);
@@ -284,6 +296,9 @@ max_output_bytes = 808
     let settings = Settings::build().unwrap();
     let docker = docker(&settings);
 
+    // Omitted above, so preloading the runner image stays the default.
+    assert!(!docker.pull_runner_image);
+    assert_eq!(docker.pull_timeout_seconds, 900);
     assert_eq!(docker.connect_timeout_seconds, 51);
     assert_eq!(docker.api_timeout_seconds, 101);
     assert_eq!(docker.execution_timeout_seconds, 202);
