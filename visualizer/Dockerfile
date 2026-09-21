@@ -14,7 +14,7 @@ COPY --from=proto . /proto
 COPY . .
 RUN cargo build --release
 
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 WORKDIR /usr/src/
 
 # Keep sol2uml in sync with .github/workflows/visualizer.yml.

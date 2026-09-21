@@ -3,7 +3,7 @@ A service for generating Unified Modeling Language (UML) class diagrams and stor
 [sol2uml](https://github.com/naddison36/sol2uml).
 
 ## Requirements
-- Node.js 20 with a globally installed `sol2uml` binary (see [installation guide](https://github.com/naddison36/sol2uml?tab=readme-ov-file#install))
+- Node.js 22 with a globally installed `sol2uml` binary (see [installation guide](https://github.com/naddison36/sol2uml?tab=readme-ov-file#install))
 
 ## How to enable
 Set the following ENVs on blockscout instance:
