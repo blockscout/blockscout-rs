@@ -3,7 +3,7 @@ A service for generating Unified Modeling Language (UML) class diagrams and stor
 [sol2uml](https://github.com/naddison36/sol2uml).
 
 ## Requirements
-- NodeJs environment with linked `sol2uml` binary (see [installation guide](https://github.com/naddison36/sol2uml?tab=readme-ov-file#install)) 
+- Node.js 22 with a globally installed `sol2uml` binary (see [installation guide](https://github.com/naddison36/sol2uml?tab=readme-ov-file#install))
 
 ## How to enable
 Set the following ENVs on blockscout instance:
@@ -83,8 +83,20 @@ Service response contains JSON with single key `storage`, which value is the byt
 ## Testing
 
 For now it is only possible to test service using `cargo test`. For this you need to install [sol2uml](https://github.com/naddison36/sol2uml)
-globally on your device as mentioned in the repo instructions. Notice that the current version of `sol2uml` supported by the service is 2.1, so tests
-may fail with other versions and service may not work correctly.
+globally on your device:
+
+```
+npm install -g sol2uml@2.5.26
+```
+
+The version is pinned exactly, and must match the one in `Dockerfile` and `.github/workflows/visualizer.yml`. The tests compare
+rendered SVGs byte for byte, so any other version will fail them.
+
+After bumping the pin, regenerate the samples in `visualizer-server/tests/samples` and review the diff:
+
+```
+UPDATE_EXPECTED=1 cargo test --test '*' -- --test-threads=1
+```
 
 For testing on **Windows** you need to rewrite some code due to the way the service is implemented. Change
 [99 line in `src/handlers.rs`](./src/handlers.rs#L99) with:
