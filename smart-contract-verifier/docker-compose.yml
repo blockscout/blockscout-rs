@@ -12,6 +12,10 @@ services:
     environment:
       ## optional: if provided, would be used as a configuration file
       - SMART_CONTRACT_VERIFIER__CONFIG=/app/config.toml
+      ## explicit local-development override; production deployments should use docker
+      - SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__TYPE=native
+      - SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__EXECUTION_TIMEOUT_SECONDS=600
+      - SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__MAX_OUTPUT_BYTES=268435456
     env_file:
       ## optional: if provided, would overwrite values from configuration file
       - ./smart-contract-verifier-server/config/base.env

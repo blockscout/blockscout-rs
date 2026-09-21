@@ -15,13 +15,12 @@ use anyhow::Context;
 use smart_contract_verifier::{
     zksync,
     zksync::{ZkSolcCompiler, ZkSyncCompilers},
-    SolcValidator,
+    CompilerExecutor, SolcValidator,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::zksync::solidity::{
     r#match::MatchType, Match,
 };
 use std::sync::Arc;
-use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 use verification_common::verifier_alliance;
 
@@ -30,11 +29,11 @@ pub struct Service {
 }
 
 impl Service {
-    pub async fn new(
+    pub(crate) async fn new_with_admitted_executor(
         settings: ZksyncSoliditySettings,
-        compilers_threads_semaphore: Arc<Semaphore>,
+        executor: Arc<dyn CompilerExecutor>,
     ) -> anyhow::Result<Self> {
-        let solc_validator = Arc::new(SolcValidator::default());
+        let solc_validator = Arc::new(SolcValidator::new(executor.clone()));
         let evm_fetcher = common::initialize_fetcher(
             settings.evm_fetcher,
             settings.evm_compilers_dir.clone(),
@@ -62,11 +61,11 @@ impl Service {
         .await
         .context("zksync zksolc fetcher initialization")?;
 
-        let compilers = ZkSyncCompilers::new(
+        let compilers = ZkSyncCompilers::new_with_admitted_executor(
             evm_fetcher.clone(),
             era_evm_fetcher.clone(),
             zk_fetcher.clone(),
-            compilers_threads_semaphore,
+            executor,
         );
 
         Ok(Self { compilers })

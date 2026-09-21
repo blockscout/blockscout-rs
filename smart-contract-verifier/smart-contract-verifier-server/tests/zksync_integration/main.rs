@@ -28,6 +28,11 @@ async fn start() -> ServerMetadata {
             tempfile::tempdir().expect("creation temporary directory for evm_compilers");
 
         settings.zksync_solidity.enabled = true;
+        settings.compilers.execution =
+            smart_contract_verifier_server::CompilerExecutionSettings::Native {
+                execution_timeout_seconds: 120,
+                max_output_bytes: 32 * 1024 * 1024,
+            };
         settings.zksync_solidity.zk_compilers_dir = zk_compilers_tempdir.path().to_path_buf();
         settings.zksync_solidity.evm_compilers_dir = evm_compilers_tempdir.path().to_path_buf();
 

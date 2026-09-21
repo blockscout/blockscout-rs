@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use crate::{compiler::{CompactVersion, DetailedVersion, DownloadCache, Fetcher}, Version, zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract}};
+use crate::{
+    compiler::{
+        CommandArgument, CompactVersion, CompilerExecutor, CompilerInvocation, DetailedVersion,
+        DownloadCache, Fetcher, JobFile,
+    },
+    zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract},
+    Version,
+};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -10,19 +17,17 @@ use nonempty::NonEmpty;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Arc,
 };
-use std::collections::HashSet;
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::zksync::solidity::verification_success::Language;
 use thiserror::Error;
-use tokio::sync::Semaphore;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, MatchBuilder, RuntimeCodeArtifacts,
     ToCompilationArtifacts, ToCreationCodeArtifacts, ToRuntimeCodeArtifacts,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::zksync::solidity::verification_success::Language;
 
 #[derive(Clone, Debug)]
 pub struct VerificationRequest {
@@ -382,6 +387,7 @@ pub trait ZkSyncCompiler {
     type CompilerOutput: CompilerOutput + DeserializeOwned;
 
     async fn compile(
+        executor: &dyn CompilerExecutor,
         zk_compiler_path: &Path,
         evm_compiler_path: &Path,
         input: &Self::CompilerInput,
@@ -395,16 +401,16 @@ pub struct ZkSyncCompilers<ZkC> {
     era_evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
     zk_cache: DownloadCache<CompactVersion>,
     zk_fetcher: Arc<dyn Fetcher<Version = CompactVersion>>,
-    threads_semaphore: Arc<Semaphore>,
+    executor: Arc<dyn CompilerExecutor>,
     _phantom_data: PhantomData<ZkC>,
 }
 
 impl<ZkC: ZkSyncCompiler> ZkSyncCompilers<ZkC> {
-    pub fn new(
+    pub fn new_with_admitted_executor(
         evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
         era_evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
         zk_fetcher: Arc<dyn Fetcher<Version = CompactVersion>>,
-        threads_semaphore: Arc<Semaphore>,
+        executor: Arc<dyn CompilerExecutor>,
     ) -> Self {
         Self {
             evm_cache: DownloadCache::default(),
@@ -413,7 +419,7 @@ impl<ZkC: ZkSyncCompiler> ZkSyncCompilers<ZkC> {
             era_evm_fetcher,
             zk_cache: DownloadCache::default(),
             zk_fetcher,
-            threads_semaphore,
+            executor,
             _phantom_data: Default::default(),
         }
     }
@@ -424,15 +430,14 @@ impl<ZkC: ZkSyncCompiler> ZkSyncCompilers<ZkC> {
         evm_compiler_path: &Path,
         input: &ZkC::CompilerInput,
     ) -> Result<(ZkC::CompilerOutput, Value), Error> {
-        let _permit = self
-            .threads_semaphore
-            .acquire()
-            .await
-            .context("acquiring lock")?;
-
-        let raw_compiler_output = ZkC::compile(zk_compiler_path, evm_compiler_path, input)
-            .await
-            .context("compilation")?;
+        let raw_compiler_output = ZkC::compile(
+            self.executor.as_ref(),
+            zk_compiler_path,
+            evm_compiler_path,
+            input,
+        )
+        .await
+        .context("compilation")?;
 
         let compiler_output = ZkC::CompilerOutput::deserialize(&raw_compiler_output)
             .context("deserializing compiler output")?;
@@ -555,22 +560,97 @@ impl ZkSyncCompiler for ZkSolcCompiler {
     type CompilerOutput = output::Output;
 
     async fn compile(
+        executor: &dyn CompilerExecutor,
         zk_compiler_path: &Path,
         evm_compiler_path: &Path,
         input: &Self::CompilerInput,
     ) -> Result<Value, SolcError> {
-        // The default `Solc::new()` tries to obtain a compiler version by running the compiler
-        // with `--version` flag. Zk compiler versions cannot be parsed, though, as they have
-        // different from usual Solidity version format. That is why we have to construct it with
-        // compiler version specified explicitly.
-        // The compiler version is required in case svm-rs will be asked to download
-        // the corresponding compiler. As we don't need that functionality we can use
-        // a dummy value.
-        let mut compiler = foundry_compilers::solc::Solc::new_with_version(
-            zk_compiler_path,
-            semver::Version::new(0, 0, 0),
+        let input = serde_json::to_vec(input)?;
+        let invocation = CompilerInvocation::new(
+            JobFile::executable("zksolc", "bin/zksolc", zk_compiler_path)
+                .map_err(|err| SolcError::Message(err.to_string()))?,
+            vec![
+                CommandArgument::prefixed_file("--solc=", "solc"),
+                CommandArgument::literal("--standard-json"),
+            ],
+            input,
+        )
+        .with_file(
+            JobFile::executable("solc", "bin/solc", evm_compiler_path)
+                .map_err(|err| SolcError::Message(err.to_string()))?,
         );
-        compiler.extra_args = vec![format!("--solc={}", evm_compiler_path.to_string_lossy())];
-        compiler.async_compile_as(input).await
+        let output = executor
+            .execute(invocation)
+            .await
+            .map_err(|err| SolcError::Message(err.to_string()))?;
+        output
+            .ensure_success("zksolc")
+            .map_err(|err| SolcError::Message(err.to_string()))?;
+        serde_json::from_slice(&output.stdout).map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ExecutionError, ExecutionOutput};
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct RecordingExecutor {
+        invocation: Mutex<Option<CompilerInvocation>>,
+    }
+
+    #[async_trait]
+    impl CompilerExecutor for RecordingExecutor {
+        async fn execute(
+            &self,
+            invocation: CompilerInvocation,
+        ) -> Result<ExecutionOutput, ExecutionError> {
+            invocation.validate()?;
+            *self.invocation.lock().unwrap() = Some(invocation);
+            Ok(ExecutionOutput {
+                stdout: Bytes::from_static(b"{}"),
+                stderr: Bytes::new(),
+                exit_code: 0,
+                oom_killed: false,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn zksolc_stages_both_compilers_and_never_forwards_llvm_options() {
+        // Requests are rejected at the API boundary; serialization is the last line of defense.
+        let input: Input = serde_json::from_value(serde_json::json!({
+            "language": "Solidity",
+            "sources": {},
+            "settings": {
+                "optimizer": { "enabled": false },
+                "LLVMOptions": ["--exec-on-ir-change=/bin/true"]
+            }
+        }))
+        .unwrap();
+        let executor = RecordingExecutor::default();
+
+        ZkSolcCompiler::compile(
+            &executor,
+            Path::new("/cache/zksolc"),
+            Path::new("/cache/solc"),
+            &input,
+        )
+        .await
+        .unwrap();
+
+        let invocation = executor.invocation.lock().unwrap().take().unwrap();
+        assert_eq!(
+            invocation.program_path(Path::new("/job")).unwrap(),
+            Path::new("/job/bin/zksolc")
+        );
+        assert_eq!(
+            invocation.resolved_args(Path::new("/job")).unwrap(),
+            ["--solc=/job/bin/solc", "--standard-json"]
+        );
+        assert_eq!(invocation.files().len(), 2);
+        assert!(!String::from_utf8_lossy(invocation.stdin()).contains("LLVMOptions"));
     }
 }

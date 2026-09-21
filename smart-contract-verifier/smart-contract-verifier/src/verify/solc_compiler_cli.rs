@@ -7,32 +7,57 @@
 //! we need convert functions for CompilerInput and CompilerOutput.
 
 use super::solc_compiler::SolcInput;
-use foundry_compilers::{
-    artifacts::solc,
-    error::{SolcError, SolcIoError},
-};
-use std::{collections::BTreeMap, path::Path, process::Stdio};
-use tokio::process::Command;
+use crate::{CommandArgument, CompilerExecutor, CompilerInvocation, JobFile};
+use foundry_compilers::{artifacts::solc, error::SolcError};
+use std::{collections::BTreeMap, path::Path};
 
 pub async fn compile_using_cli(
+    executor: &dyn CompilerExecutor,
     compiler_path: &Path,
     input: &SolcInput,
 ) -> Result<solc::CompilerOutput, SolcError> {
     let input = &input.0;
     let input_args = types::InputArgs::from(input);
     let input_files = types::InputFiles::try_from_compiler_input(input).await?;
-    let output = Command::new(compiler_path)
-        .args(input_args.build())
-        .args(input_files.build()?)
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .output()
+    let mut invocation = CompilerInvocation::new(
+        JobFile::executable("compiler", "bin/solc", compiler_path)
+            .map_err(|err| SolcError::Message(err.to_string()))?,
+        input_args
+            .build()
+            .into_iter()
+            .map(CommandArgument::literal)
+            .collect(),
+        Vec::new(),
+    );
+    for (index, file_path) in input_files.build()?.iter().enumerate() {
+        let relative_path = file_path
+            .strip_prefix(input_files.files_dir.path())
+            .map_err(|_| SolcError::Message("source file has unexpected prefix".into()))?;
+        let file_id = format!("source-{index}");
+        invocation = invocation.with_file(
+            JobFile::regular_file(
+                &file_id,
+                Path::new("sources").join(relative_path),
+                file_path,
+            )
+            .map_err(|err| SolcError::Message(err.to_string()))?,
+        );
+        invocation = invocation.with_argument(CommandArgument::file(file_id));
+    }
+    let output = executor
+        .execute(invocation)
         .await
-        .map_err(|err| SolcError::Io(SolcIoError::new(err, compiler_path)))?;
+        .map_err(|err| SolcError::Message(err.to_string()))?;
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let compiler_output = if output.stderr.is_empty() {
-        let output_json: types::OutputJson = serde_json::from_slice(output.stdout.as_slice())?;
+        if output.exit_code != 0 {
+            return Err(SolcError::Message(format!(
+                "solc exited with code {}",
+                output.exit_code
+            )));
+        }
+        let output_json: types::OutputJson = serde_json::from_slice(output.stdout.as_ref())?;
         solc::CompilerOutput::try_from(types::ConvertibleOutput {
             output_json,
             parent_dir: input_files.files_dir.path(),
@@ -355,7 +380,7 @@ mod serde_helpers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::{DetailedVersion, Fetcher, ListFetcher};
+    use crate::compiler::{DetailedVersion, Fetcher, ListFetcher, NativeCompilerExecutor};
     use foundry_compilers::Artifact;
     use hex::ToHex;
     use pretty_assertions::assert_eq;
@@ -626,12 +651,13 @@ mod tests {
 
     #[tokio::test]
     async fn compile() {
+        let executor = NativeCompilerExecutor::default();
         for ver in &["v0.4.8+commit.60cc1668", "v0.4.10+commit.f0d539ae"] {
             let version = DetailedVersion::from_str(ver).expect("valid version");
             let solc = get_solc(&version).await;
 
             let input: SolcInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
-            let output: solc::CompilerOutput = compile_using_cli(&solc, &input)
+            let output: solc::CompilerOutput = compile_using_cli(&executor, &solc, &input)
                 .await
                 .unwrap_or_else(|_| panic!("failed to compile contracts with {ver}"));
             assert!(
@@ -653,7 +679,7 @@ mod tests {
                     sources: solc::Sources(sources),
                     settings: solc::Settings::default(),
                 });
-                let output: solc::CompilerOutput = compile_using_cli(&solc, &input)
+                let output: solc::CompilerOutput = compile_using_cli(&executor, &solc, &input)
                     .await
                     .expect("shouldn't return Err, but Ok with errors field");
                 assert!(output.has_error());
@@ -664,7 +690,7 @@ mod tests {
                 sources: solc::Sources(BTreeMap::new()),
                 settings: solc::Settings::default(),
             });
-            compile_using_cli(&solc, &input)
+            compile_using_cli(&executor, &solc, &input)
                 .await
                 .expect_err("should not compile empty files");
         }

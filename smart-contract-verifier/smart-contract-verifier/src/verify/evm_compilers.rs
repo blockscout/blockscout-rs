@@ -2,7 +2,8 @@
 
 use super::{compiler_output::SharedCompilerOutput, Error};
 use crate::{
-    compiler::DownloadCache, metrics, metrics::GuardedGauge, DetailedVersion, Fetcher, Language,
+    compiler::{CompilerExecutor, DownloadCache},
+    DetailedVersion, Fetcher, Language,
 };
 use anyhow::Context;
 use async_trait::async_trait;
@@ -14,8 +15,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tokio::sync::Semaphore;
-use tracing::instrument;
+use tracing::{instrument, Instrument};
 
 #[async_trait]
 pub trait EvmCompiler {
@@ -24,6 +24,7 @@ pub trait EvmCompiler {
     // TODO: parameterize version via: `type Version: Version`
 
     async fn compile(
+        executor: &dyn CompilerExecutor,
         compiler_path: &Path,
         compiler_version: &DetailedVersion,
         input: &Self::CompilerInput,
@@ -59,19 +60,19 @@ pub struct CompileResult<CompilerOutput> {
 pub struct EvmCompilersPool<C: EvmCompiler> {
     cache: DownloadCache<DetailedVersion>,
     fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
-    threads_semaphore: Arc<Semaphore>,
+    executor: Arc<dyn CompilerExecutor>,
     _phantom_data: PhantomData<C>,
 }
 
 impl<C: EvmCompiler> EvmCompilersPool<C> {
-    pub fn new(
+    pub fn new_with_admitted_executor(
         fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
-        threads_semaphore: Arc<Semaphore>,
+        executor: Arc<dyn CompilerExecutor>,
     ) -> Self {
         Self {
             cache: Default::default(),
             fetcher,
-            threads_semaphore,
+            executor,
             _phantom_data: Default::default(),
         }
     }
@@ -134,21 +135,15 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
                 "compile contract with foundry-compilers",
                 ver = compiler_version.to_string()
             );
-            let _span_guard = span.enter();
 
-            let _permit = {
-                let _wait_timer_guard = metrics::COMPILATION_QUEUE_TIME.start_timer();
-                let _wait_gauge_guard = metrics::COMPILATIONS_IN_QUEUE.guarded_inc();
-                self.threads_semaphore
-                    .acquire()
-                    .await
-                    .context("acquiring lock")?
-            };
-
-            let _compile_timer_guard = metrics::COMPILE_TIME.start_timer();
-            let _compile_gauge_guard = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
-
-            C::compile(compiler_path, compiler_version, input).await?
+            C::compile(
+                self.executor.as_ref(),
+                compiler_path,
+                compiler_version,
+                input,
+            )
+            .instrument(span)
+            .await?
         };
 
         validate_no_errors::<C::CompilationError>(&raw)?;

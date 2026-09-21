@@ -23,7 +23,7 @@ use std::{
     str::{from_utf8, FromStr},
     sync::Arc,
 };
-use tokio::sync::{OnceCell, Semaphore};
+use tokio::sync::OnceCell;
 use vyper_types::TestCase;
 
 async fn global_service() -> &'static Arc<VyperVerifierService> {
@@ -31,10 +31,16 @@ async fn global_service() -> &'static Arc<VyperVerifierService> {
     SERVICE
         .get_or_init(|| async {
             let settings = Settings::default();
-            let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = VyperVerifierService::new(settings.vyper, Arc::new(compilers_lock))
-                .await
-                .expect("couldn't initialize the service");
+            let executor = Arc::new(
+                smart_contract_verifier::ConcurrencyLimitedCompilerExecutor::new(
+                    Arc::new(smart_contract_verifier::NativeCompilerExecutor::default()),
+                    settings.compilers.max_threads,
+                ),
+            );
+            let service =
+                VyperVerifierService::new_with_admitted_executor(settings.vyper, executor)
+                    .await
+                    .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await

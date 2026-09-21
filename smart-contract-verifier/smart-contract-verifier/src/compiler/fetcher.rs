@@ -9,7 +9,7 @@ use std::{
     fmt::{Debug, Display},
     fs::{File, OpenOptions},
     hash::Hash,
-    io::ErrorKind,
+    io::{ErrorKind, Read},
     os::unix::prelude::OpenOptionsExt,
     path::{Path, PathBuf},
     str::FromStr,
@@ -44,6 +44,11 @@ pub trait FileValidator<Ver>: Send + Sync {
 pub trait Fetcher: Send + Sync {
     type Version;
     async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError>;
+    async fn validate_file(&self, _ver: &Self::Version, _path: &Path) -> Result<(), FetchError> {
+        Err(FetchError::Validation(anyhow::anyhow!(
+            "fetcher does not support validating preloaded compilers"
+        )))
+    }
     fn all_versions(&self) -> Vec<Self::Version>;
 }
 
@@ -65,7 +70,7 @@ fn create_executable(path: &Path) -> Result<File, std::io::Error> {
         .create(true)
         .write(true)
         .truncate(true)
-        .mode(0o777)
+        .mode(0o555)
         .open(path)
 }
 
@@ -78,6 +83,79 @@ pub fn validate_checksum(bytes: &Bytes, expected: H256) -> Result<(), Mismatch<H
     } else {
         Ok(())
     }
+}
+
+/// Identity of a local file. `ctime` changes on every content or metadata change and cannot be set
+/// from user space, so an unchanged fingerprint means unchanged bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FileFingerprint {
+    dev: u64,
+    ino: u64,
+    len: u64,
+    mtime: (i64, i64),
+    ctime: (i64, i64),
+}
+
+impl FileFingerprint {
+    pub(crate) fn new(metadata: &std::fs::Metadata) -> Self {
+        use std::os::unix::fs::MetadataExt;
+        Self {
+            dev: metadata.dev(),
+            ino: metadata.ino(),
+            len: metadata.len(),
+            mtime: (metadata.mtime(), metadata.mtime_nsec()),
+            ctime: (metadata.ctime(), metadata.ctime_nsec()),
+        }
+    }
+}
+
+/// SHA-256 of the file at `path`, which must still be the file `expected` was taken from and must
+/// not change while it is read.
+pub(crate) fn sha256_file(path: &Path, expected: FileFingerprint) -> std::io::Result<H256> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let hashed = std::io::copy(&mut (&mut file).take(expected.len), &mut hasher)?;
+    if hashed != expected.len || FileFingerprint::new(&file.metadata()?) != expected {
+        return Err(std::io::Error::other(format!(
+            "{} changed while it was being hashed",
+            path.display()
+        )));
+    }
+    Ok(H256::from_slice(&hasher.finalize()))
+}
+
+pub(crate) async fn validate_existing_executable<Ver: Version>(
+    path: &Path,
+    expected: H256,
+    ver: &Ver,
+    validator: Option<&dyn FileValidator<Ver>>,
+) -> Result<(), FetchError> {
+    let path = path.to_path_buf();
+    let hash_path = path.clone();
+    let found = tokio::task::spawn_blocking(move || {
+        let metadata = std::fs::symlink_metadata(&hash_path)?;
+        if !metadata.file_type().is_file() {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                "preloaded compiler must be a regular file",
+            ));
+        }
+        sha256_file(&hash_path, FileFingerprint::new(&metadata))
+    })
+    .await??;
+
+    if expected != found {
+        return Err(FetchError::HashMismatch(Mismatch::new(expected, found)));
+    }
+
+    if let Some(validator) = validator {
+        validator
+            .validate(ver, path.as_path())
+            .await
+            .map_err(FetchError::Validation)?;
+    }
+
+    Ok(())
 }
 
 pub async fn write_executable<Ver: Version>(
@@ -137,7 +215,13 @@ pub async fn write_executable<Ver: Version>(
 #[cfg(test)]
 mod tests {
     use super::{super::version_detailed as evm_version, *};
-    use std::str::FromStr;
+    use std::{
+        str::FromStr,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+    };
 
     #[tokio::test]
     async fn write_text_executable() {
@@ -182,5 +266,46 @@ mod tests {
         tmp_file.set_extension("tmp");
         assert!(!file.exists());
         assert!(tmp_file.exists());
+    }
+
+    struct CountingValidator {
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl FileValidator<evm_version::DetailedVersion> for CountingValidator {
+        async fn validate(
+            &self,
+            _ver: &evm_version::DetailedVersion,
+            _path: &Path,
+        ) -> Result<(), anyhow::Error> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn existing_executable_is_checksum_checked_before_validator_runs() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let path = tmp_dir.path().join("solc");
+        let data = b"trusted compiler";
+        std::fs::write(&path, data).unwrap();
+        let version = evm_version::DetailedVersion::from_str("v0.4.10+commit.f0d539ae").unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let validator = CountingValidator {
+            calls: calls.clone(),
+        };
+
+        let error = validate_existing_executable(&path, H256::zero(), &version, Some(&validator))
+            .await
+            .expect_err("incorrect authoritative checksum must fail");
+        assert!(matches!(error, FetchError::HashMismatch(_)));
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+
+        let expected = H256::from_slice(&Sha256::digest(data));
+        validate_existing_executable(&path, expected, &version, Some(&validator))
+            .await
+            .expect("matching compiler must pass checksum and validator");
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
     }
 }

@@ -36,6 +36,7 @@ impl TryFrom<VerifyStandardJsonRequestWrapper> for VerificationRequest {
             .map_err(|err| anyhow!("Invalid solc compiler: {}", err))?;
 
         let content: zksolc_standard_json::input::Input = serde_json::from_str(&request.input)?;
+        content.settings.validate()?;
 
         Ok(Self {
             code,
@@ -44,5 +45,48 @@ impl TryFrom<VerifyStandardJsonRequestWrapper> for VerificationRequest {
             solc_compiler,
             content,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request_with_settings(settings: serde_json::Value) -> VerifyStandardJsonRequestWrapper {
+        VerifyStandardJsonRequest {
+            code: "00".to_string(),
+            constructor_arguments: None,
+            zk_compiler: "v1.4.0".to_string(),
+            solc_compiler: "v0.8.17+commit.8df45f5f".to_string(),
+            input: serde_json::json!({
+                "language": "Solidity",
+                "sources": {},
+                "settings": settings,
+            })
+            .to_string(),
+        }
+        .into()
+    }
+
+    #[test]
+    fn rejects_llvm_options_as_bad_request() {
+        let request = request_with_settings(serde_json::json!({
+            "optimizer": { "enabled": false },
+            "LLVMOptions": ["--exec-on-ir-change=/bin/true"],
+        }));
+
+        let error = VerificationRequest::try_from(request).unwrap_err();
+        assert!(matches!(error, StandardJsonParseError::BadRequest(_)));
+        assert!(error.to_string().contains("LLVMOptions is not supported"));
+    }
+
+    #[test]
+    fn accepts_standard_input_without_llvm_options() {
+        for settings in [
+            serde_json::json!({ "optimizer": { "enabled": false } }),
+            serde_json::json!({ "optimizer": { "enabled": false }, "LLVMOptions": [] }),
+        ] {
+            VerificationRequest::try_from(request_with_settings(settings)).unwrap();
+        }
     }
 }

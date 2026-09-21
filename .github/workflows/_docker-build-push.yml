@@ -16,6 +16,10 @@ on:
       service-name:
         required: true
         type: string
+      release-tag-prefix:
+        description: 'Git tag prefix whose `<prefix>/vX.Y.Z` tags publish versioned images (default: service-name)'
+        required: false
+        type: string
       docker-context-path:
         required: false
         type: string
@@ -54,7 +58,7 @@ jobs:
         with:
           text: ${{ github.ref }}
           # https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
-          regex: '^(refs\/tags\/${{ inputs.service-name }}\/(v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?))|(refs\/heads\/(main))$'
+          regex: '^(refs\/tags\/${{ inputs.release-tag-prefix || inputs.service-name }}\/(v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?))|(refs\/heads\/(main))$'
 
       - name: Extract tag name
         id: tags_extractor

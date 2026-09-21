@@ -52,8 +52,15 @@ enabled = false
 agent_endpoint = "localhost:6831"
 
 [compilers]
-# if omitted, number of CPU cores would be used
+# Maximum concurrent compiler invocations, including downloaded-solc version probes. If omitted,
+# the number of CPU cores is used. In Docker mode this is the remote-job limit.
 max_threads = 8
+
+# Compiler-backed endpoints will fail to start until an execution mode is explicitly configured.
+[compilers.execution]
+type = "disabled"
+# Native mode also accepts execution_timeout_seconds and max_output_bytes. Both fields default to
+# 600 seconds and 268435456 bytes when omitted.
 
 # [extensions.solidity.sig_provider]
 # url = "http://127.0.0.1:8051/"
