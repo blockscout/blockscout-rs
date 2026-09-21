@@ -2317,14 +2317,17 @@ unchanged by all of this.
 
 Two things follow that are easy to get wrong:
 
-- **The Chiado floor is not the block its Home event shape changed.** On
-  mainnet the nonce/hash cutover is a genuine epoch with a block boundary. On
-  Chiado it is not: `AffirmationCompleted.bytes32` is whatever the oracle hands
-  `executeAffirmation`, the contract derives nothing, and the testnet oracle
-  alternated between the two conventions *inside one implementation window* and
-  re-affirmed deposits it had already affirmed the other way. `20553827` is the
-  lowest block that excludes every hash-keyed affirmation (the last is at
-  20553477; the only later nonce-keyed one is at 20706963). Lowering it
+- **The Chiado floor is a source-event boundary, but not a destination-identity
+  boundary.** Block `20553827` installs Home v3 and changes
+  `UserRequestForSignature(address,uint256,bytes32)` to
+  `UserRequestForSignature(address,uint256,bytes32,address)`. The unchanged
+  `AffirmationCompleted.bytes32`, however, is whatever the oracle hands
+  `executeAffirmation`: the contract derives nothing, and the testnet oracle
+  alternated between nonce and transaction-hash conventions inside one
+  implementation window and re-affirmed deposits it had already affirmed the
+  other way. `20553827` also happens to be the lowest implementation boundary
+  that excludes every hash-keyed affirmation (the last is at 20553477; the
+  only later nonce-keyed one is at 20706963). Lowering it
   produces **two `crosschain_messages` rows for one deposit**, which nothing
   detects — the contract's own dedup is over
   `keccak(recipient‖value‖bytes32)`, which differs between the two forms, so
@@ -2343,7 +2346,8 @@ Two things follow that are easy to get wrong:
   with `ensure_completion_compatible` for the three deposits Chiado affirmed
   *twice*, in two distinct transactions. The full per-affirmation breakdown,
   and why closing the gap is not worth relaxing a mainnet-shared invariant, is
-  in the research note.
+  in
+  [the independent upgrade-history research](./research/xdai-bridge-sepolia-chiado-upgrade-history.md).
 - **`legacy_home_ethereum_asset` is total on purpose.** It resolves the
   Home v6 `token_dst_address` fallback (the legacy 104-byte `parseMessage`
   hardcodes one ERC-20) from `chain_ids.foreign`, and returns DAI for any

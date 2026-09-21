@@ -147,6 +147,15 @@ Small topics may keep some sections brief.
   `AmountLimitExceeded` and `outOfLimitAmount()` must not be read as stuck
   funds, the full implementation upgrade history of both proxies, and what would
   have to be new versus reused. Pre-implementation: no xDai indexer exists yet
+- `xdai-bridge-sepolia-chiado-upgrade-history.md` — independent on-chain
+  reconstruction of every Sepolia/Chiado proxy implementation and upgrade,
+  the exact v1→v2 and Chiado-only v2→v3 contract-surface changes, their
+  correspondence to mainnet Foreign v7/v8/v9/v10 and Home v5/v6/v7, and the
+  separate oracle-controlled mixing of nonce and transaction-hash identity.
+  Establishes that the May 2025 pair was coordinated within 44 seconds, while
+  the current asymmetry began with Chiado v3 on 2026-04-02; records that v3 is
+  an unverified, reduced Home-v7-style implementation rather than a full USDS
+  migration
 - `xdai-bridge-testnet-deployment-fit.md` — the Sepolia (11155111) ↔ Chiado
   (10200) classic xDai erc-to-native deployment: it exists
   (`0x180Ff98e…D0A2` / `0xccA0Dc2A…06f0`), its full proxy upgrade history with
@@ -160,7 +169,9 @@ Small topics may keep some sections brief.
   rather than config (ADR-013). Read it for the evidence behind the two floors
   — in particular why the Chiado floor is 20553827 and what duplicates appear
   if it is lowered. No new protocol grammar unless pre-2025-05 history is
-  wanted. Companion to `xdai-bridge-protocol-and-indexing-fit.md`
+  wanted. Companion to `xdai-bridge-protocol-and-indexing-fit.md`. For proxy
+  upgrade history and independently rechecked on-chain evidence, prefer
+  `xdai-bridge-sepolia-chiado-upgrade-history.md`
 - `stats-projection-unbatched-pks-lookup-crash.md` — production incident:
   `project_messages_batch`'s unchunked composite-key `IN` lookup crashes
   buffer maintenance two ways (`stack depth limit exceeded` and `too many
