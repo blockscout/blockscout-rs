@@ -14,11 +14,12 @@ COPY --from=proto . /proto
 COPY . .
 RUN cargo build --release
 
-FROM node:16-bullseye-slim
+FROM node:20-bookworm-slim
 WORKDIR /usr/src/
 
+# Keep sol2uml in sync with .github/workflows/visualizer.yml.
 RUN apt-get update && apt-get install -y chromium \
-    && npm link sol2uml@2.1 --only=production
+    && npm install -g sol2uml@2.5.26
 
 COPY --from=build /app/target/release/visualizer-server ./
 ENTRYPOINT ["./visualizer-server"]
