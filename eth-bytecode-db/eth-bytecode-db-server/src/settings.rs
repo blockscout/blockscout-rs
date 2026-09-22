@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use blockscout_service_launcher::{
-    database::ReplicaDatabaseSettings,
+    database::{
+        DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings,
+        ReplicaDatabaseSettings,
+    },
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -38,16 +41,6 @@ pub struct Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "ETH_BYTECODE_DB";
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct DatabaseSettings {
-    pub url: String,
-    #[serde(default)]
-    pub create_database: bool,
-    #[serde(default)]
-    pub run_migrations: bool,
 }
 
 #[serde_as]
@@ -88,6 +81,8 @@ impl Default for SourcifySettings {
 pub struct VerifierAllianceDatabaseSettings {
     pub enabled: bool,
     pub url: String,
+    #[serde(default)]
+    pub connect_options: DatabaseConnectOptionsSettings,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -104,7 +99,8 @@ impl Settings {
             tracing: Default::default(),
             jaeger: Default::default(),
             database: DatabaseSettings {
-                url: database_url,
+                connect: DatabaseConnectSettings::Url(database_url),
+                connect_options: Default::default(),
                 create_database: false,
                 run_migrations: false,
             },

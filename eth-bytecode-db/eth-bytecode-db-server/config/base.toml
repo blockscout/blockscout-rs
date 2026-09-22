@@ -7,8 +7,10 @@ max_body_size = 2097152
 enabled = false
 addr = "0.0.0.0:8051"
 
-[database]
+[database.connect]
 url = "" # (required) no default value available
+
+[database]
 create_database = false
 run_migrations = false
 
