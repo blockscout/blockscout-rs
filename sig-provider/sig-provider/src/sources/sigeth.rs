@@ -36,6 +36,7 @@ impl Source {
         // TODO: sort using "filtered" field
         sigs.and_then(|mut sigs| {
             sigs.remove(hash)
+                .flatten()
                 .map(|sigs| sigs.into_iter().map(|sig| sig.name).collect())
         })
         .unwrap_or_default()
@@ -102,7 +103,9 @@ mod json {
         pub name: String,
     }
 
-    pub type SigMap = HashMap<String, Vec<Signature>>;
+    // The upstream API returns `null` (rather than an empty list) for a hash
+    // it has no signatures for, so the inner value must be optional.
+    pub type SigMap = HashMap<String, Option<Vec<Signature>>>;
 
     #[derive(Debug, Deserialize)]
     pub struct SigTypes {
@@ -200,5 +203,49 @@ mod tests {
 
         mock.assert();
         assert_eq!(vec!["E(string)".to_string()], result);
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    async fn get_function_signatures_without_match(server: MockServer) {
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/signature-database/v1/lookup")
+                .query_param("function", FUNCTION_HEX)
+                .query_param("filter", "false");
+            then.status(200)
+                .header("Content-type", "application/json")
+                .json_body(serde_json::json!({"ok":true,"result":{"function":{FUNCTION_HEX:null},"event":{}}}));
+        });
+
+        let result = source(&server)
+            .get_function_signatures(FUNCTION_HEX)
+            .await
+            .expect("error while getting function signature");
+
+        mock.assert();
+        assert!(result.is_empty(), "expected no signatures, got {result:?}");
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    async fn get_event_signatures_without_match(server: MockServer) {
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/signature-database/v1/lookup")
+                .query_param("event", EVENT_HEX)
+                .query_param("filter", "false");
+            then.status(200)
+                .header("Content-type", "application/json")
+                .json_body(serde_json::json!({"ok":true,"result":{"function":{},"event":{EVENT_HEX:null}}}));
+        });
+
+        let result = source(&server)
+            .get_event_signatures(EVENT_HEX)
+            .await
+            .expect("error while getting event signature");
+
+        mock.assert();
+        assert!(result.is_empty(), "expected no signatures, got {result:?}");
     }
 }
