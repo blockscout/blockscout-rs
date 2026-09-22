@@ -91,19 +91,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let db_connection = {
-        let database_settings = database::DatabaseSettings {
-            connect: database::DatabaseConnectSettings::Url(settings.database.url),
-            connect_options: database::DatabaseConnectOptionsSettings {
-                sqlx_logging_level: ::tracing::log::LevelFilter::Debug,
-                ..Default::default()
-            },
-            create_database: settings.database.create_database,
-            run_migrations: settings.database.run_migrations,
-        };
-
-        database::initialize_postgres::<Migrator>(&database_settings).await?
-    };
+    let db_connection = database::initialize_postgres::<Migrator>(&settings.database).await?;
 
     let mut client = Client::new(
         db_connection,
@@ -117,10 +105,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             connect: database::DatabaseConnectSettings::Url(
                 settings.verifier_alliance_database.url,
             ),
-            connect_options: database::DatabaseConnectOptionsSettings {
-                sqlx_logging_level: ::tracing::log::LevelFilter::Debug,
-                ..Default::default()
-            },
+            connect_options: settings.verifier_alliance_database.connect_options,
             // Important!!!: never try to create verifier alliance database or run migrations on it,
             // as the database is shared between different explorers and is managed from outside.
             create_database: false,
