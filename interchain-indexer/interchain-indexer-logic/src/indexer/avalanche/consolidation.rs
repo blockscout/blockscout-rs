@@ -251,6 +251,7 @@ impl Consolidate for Message {
         let protocol_metadata = match (destination_chain_id, &self.unresolved_destination) {
             (None, Some(unresolved)) => ProtocolMetadata {
                 unresolved_destination: Some(unresolved.clone()),
+                ..Default::default()
             }
             .to_json_value(),
             _ => None,

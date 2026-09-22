@@ -22,6 +22,7 @@ pub(crate) enum XDaiVersion {
     HomeV6,
     HomeV7,
     SepoliaForeignV2,
+    ChiadoHomeV2,
     ChiadoHomeV3,
 }
 
@@ -103,23 +104,23 @@ pub(crate) const GNOSIS_EPOCH_FLOOR_BLOCK: u64 = 39_569_937;
 /// is the two-argument form, which carries no identity field at all and has a
 /// `topic0` the grammar table deliberately does not contain.
 pub(crate) const SEPOLIA_EPOCH_FLOOR_BLOCK: u64 = 8_239_484;
-/// Chiado block of the Home v2→v3 upgrade (2026-04-02).
+/// First Chiado Home block whose source-event carries a nonce. Below it, the
+/// same `topic0`s decoded a *transaction hash* into the `bytes32` field, not a
+/// nonce — silently, with no on-chain signal — same as every other deployment's
+/// floor (see [`XDaiGrammar::epoch_floor_block`]).
 ///
-/// **Not** the block at which the Home event shape last changed — it is the
-/// lowest block that excludes every hash-keyed `AffirmationCompleted` the
-/// Chiado oracle emitted. Unlike mainnet, the testnet oracle alternated
-/// between nonce- and hash-keyed `bytes32` within one implementation window
-/// (the contract echoes whatever `executeAffirmation` is handed and derives
-/// nothing), and re-affirmed deposits it had already affirmed under the other
-/// identity. The last hash-keyed affirmation is at 20553477 and the only
-/// nonce-keyed one above it is at 20706963, so this floor is what stops one
-/// deposit producing two `crosschain_messages` rows.
-///
-/// The cost is deliberate and documented: Sepolia nonces 0, 1 and 2 are above
-/// the Foreign floor but their affirmations are below this one, so they stay
-/// permanently `Initiated`. See
-/// `.memory-bank/research/xdai-bridge-testnet-deployment-fit.md`.
-pub(crate) const CHIADO_EPOCH_FLOOR_BLOCK: u64 = 20_553_827;
+/// This is the floor for **both** registered Chiado Home windows
+/// (`ChiadoHomeV2` and `ChiadoHomeV3`): the floor is a fact about the
+/// deployment's identity epoch, not about which source-event grammar a
+/// completion happens to resolve. A hash-keyed `AffirmationCompleted` in this
+/// window is not excluded by narrowing the scan — it is resolved by canonical
+/// identity: when its source receipt carries a modern source event, the
+/// canonical key becomes that event's nonce and the raw hash stays only as
+/// observation provenance (see `events.rs::decode_source_evidence` /
+/// `SourceEvidence`). Multiple destination executions that resolve to the same
+/// canonical identity are handled as multiple-execution anomalies, not by
+/// widening or narrowing this floor.
+pub(crate) const CHIADO_EPOCH_FLOOR_BLOCK: u64 = 15_562_365;
 
 /// The legacy 104-byte Gno→Eth message layout has no `token` field and
 /// hardcodes DAI (`parseMessage`); Home v6 predates the `token` param on
@@ -143,9 +144,23 @@ pub(crate) const SEPOLIA_MOCK_DAI: Address = address!("084Ab2ef1cb3A75EB0fDd8163
 pub(crate) const SEPOLIA_BRIDGE_CREATION_BLOCK: u64 = 5_339_352;
 
 /// Which ERC-20 the Foreign bridge of `foreign_chain_id` held at
-/// `source_block`, for the legacy reconstruction path — messages whose source
-/// event is outside the indexed epochs and whose asset therefore cannot come
-/// from a decoded log.
+/// `source_block`.
+///
+/// Two callers, both fallback-only:
+///
+/// - `consolidation.rs`'s legacy reconstruction path, its original and
+///   primary use — messages whose source event is outside the indexed epochs
+///   and whose asset therefore cannot come from a decoded log;
+/// - `events.rs::resolve_modern_source_asset`, added by
+///   `xdai-alias-completion-anomalies`, for a receipt-derived *modern*
+///   `UserRequestForAffirmation` whose source block happens to fall below
+///   every configured Foreign grammar window. That primary path resolves
+///   `source_asset` from the grammar window covering the block (the same
+///   window the live stream would select), exactly to keep receipt-derived
+///   and stream-derived assembly of the same message in agreement; this
+///   function only answers when that window lookup comes back
+///   unconfigured — practically unreachable for a genuinely modern event, but
+///   the branch must be total rather than panic.
 ///
 /// `foreign_chain_id` is the *Foreign* side's chain id in both directions, not
 /// the source chain's: a Gno→Eth message's source block is a Gnosis block and
@@ -325,15 +340,33 @@ static SEPOLIA_FOREIGN_V2_GRAMMAR: XDaiGrammar = XDaiGrammar {
     epoch_floor_block: SEPOLIA_EPOCH_FLOOR_BLOCK,
 };
 
+/// Chiado Home v2, the mainnet Home v6 generation: the three-argument
+/// `UserRequestForSignature(address,uint256,bytes32)`, with the other four
+/// Home `topic0`s unchanged across the whole testnet history. Registered at
+/// `started_at_block = 15562365` in `config/xdai/bridges-testnet.json` — the
+/// window this deployment's identity epoch actually begins in.
+static CHIADO_HOME_V2_GRAMMAR: XDaiGrammar = XDaiGrammar {
+    version: XDaiVersion::ChiadoHomeV2,
+    side: XDaiSide::Home,
+    events: HOME_EVENTS,
+    canonical_topics: HOME_V6_CANONICAL_TOPICS,
+    identity: IdentityStrategy::Nonce,
+    blob_layout: BlobLayout::Len104,
+    source_asset: None,
+    chain_id: CHIADO_CHAIN_ID,
+    epoch_floor_block: CHIADO_EPOCH_FLOOR_BLOCK,
+};
+
 /// Chiado Home v3, the mainnet Home v7 generation: the four-argument
 /// `UserRequestForSignature(address,uint256,bytes32,address)` verified on
 /// chain, with the other four Home `topic0`s unchanged across the whole
 /// testnet history.
 ///
-/// There is deliberately **no** Chiado Home v2 window here. Home v2 lives
-/// entirely below [`CHIADO_EPOCH_FLOOR_BLOCK`], so no config can reference it
-/// without failing the floor check, and a grammar the config cannot select is
-/// a claim the code cannot back.
+/// v3's `started_at_block` (`20553827` in `bridges-testnet.json`) is a
+/// grammar boundary — the block where the Home source-event gained its
+/// `token` argument — not an identity boundary. The identity epoch for this
+/// deployment begins at [`CHIADO_EPOCH_FLOOR_BLOCK`], shared with
+/// `ChiadoHomeV2`; see that constant's doc comment.
 ///
 /// `blob_layout` is the research note's *inference*, not a reading: the v3
 /// implementation's source is unverified, but Sepolia Foreign v2 accepts only
@@ -382,6 +415,7 @@ pub(crate) fn grammar_for(
         (GNOSIS_CHAIN_ID, XDaiSide::Home, 6) => Ok(&HOME_V6_GRAMMAR),
         (GNOSIS_CHAIN_ID, XDaiSide::Home, 7) => Ok(&HOME_V7_GRAMMAR),
         (SEPOLIA_CHAIN_ID, XDaiSide::Foreign, 2) => Ok(&SEPOLIA_FOREIGN_V2_GRAMMAR),
+        (CHIADO_CHAIN_ID, XDaiSide::Home, 2) => Ok(&CHIADO_HOME_V2_GRAMMAR),
         (CHIADO_CHAIN_ID, XDaiSide::Home, 3) => Ok(&CHIADO_HOME_V3_GRAMMAR),
         _ => bail!(
             "no xDai grammar registered for chain {chain_id} side {side:?} version {version}. \
@@ -389,7 +423,7 @@ pub(crate) fn grammar_for(
              which restarts per deployment, so it is only meaningful together with the chain id. \
              Registered: Ethereum ({ETHEREUM_CHAIN_ID}) Foreign 9 and 10, Gnosis \
              ({GNOSIS_CHAIN_ID}) Home 6 and 7, Sepolia ({SEPOLIA_CHAIN_ID}) Foreign 2, Chiado \
-             ({CHIADO_CHAIN_ID}) Home 3"
+             ({CHIADO_CHAIN_ID}) Home 2 and 3"
         ),
     }
 }
@@ -436,14 +470,51 @@ mod tests {
             FOREIGN_V9_GRAMMAR.canonical_topics
         ));
 
+        let home_v2 = grammar_for(10_200, XDaiSide::Home, 2).unwrap();
+        assert_eq!(home_v2.version, XDaiVersion::ChiadoHomeV2);
+        assert_eq!(home_v2.source_asset, None);
+        assert_eq!(home_v2.epoch_floor_block, 15_562_365);
+        assert!(std::ptr::eq(
+            home_v2.canonical_topics,
+            HOME_V6_GRAMMAR.canonical_topics
+        ));
+
         let home = grammar_for(10_200, XDaiSide::Home, 3).unwrap();
         assert_eq!(home.version, XDaiVersion::ChiadoHomeV3);
         assert_eq!(home.source_asset, None);
-        assert_eq!(home.epoch_floor_block, 20_553_827);
+        assert_eq!(home.epoch_floor_block, 15_562_365);
         assert!(std::ptr::eq(
             home.canonical_topics,
             HOME_V7_GRAMMAR.canonical_topics
         ));
+    }
+
+    /// Both Chiado windows declare the same epoch floor: it is a fact about
+    /// the deployment's identity epoch, not about which source-event grammar
+    /// a given window happens to use.
+    #[test]
+    fn chiado_epoch_floor_is_shared_by_both_home_windows() {
+        assert_eq!(CHIADO_EPOCH_FLOOR_BLOCK, 15_562_365);
+        assert_eq!(
+            grammar_for(10_200, XDaiSide::Home, 2)
+                .unwrap()
+                .epoch_floor_block,
+            CHIADO_EPOCH_FLOOR_BLOCK
+        );
+        assert_eq!(
+            grammar_for(10_200, XDaiSide::Home, 3)
+                .unwrap()
+                .epoch_floor_block,
+            CHIADO_EPOCH_FLOOR_BLOCK
+        );
+    }
+
+    /// Mainnet floors are untouched by the Chiado floor change.
+    #[test]
+    fn mainnet_and_sepolia_floors_are_unchanged_by_the_chiado_floor_move() {
+        assert_eq!(ETHEREUM_EPOCH_FLOOR_BLOCK, 22_273_407);
+        assert_eq!(GNOSIS_EPOCH_FLOOR_BLOCK, 39_569_937);
+        assert_eq!(SEPOLIA_EPOCH_FLOOR_BLOCK, 8_239_484);
     }
 
     /// The reason the chain id is part of the grammar key: the proxy version
@@ -454,6 +525,7 @@ mod tests {
     fn grammar_for_will_not_select_another_deployments_window() {
         assert!(grammar_for(1, XDaiSide::Foreign, 2).is_err());
         assert!(grammar_for(100, XDaiSide::Home, 3).is_err());
+        assert!(grammar_for(100, XDaiSide::Home, 2).is_err());
         assert!(grammar_for(11_155_111, XDaiSide::Foreign, 9).is_err());
         assert!(grammar_for(10_200, XDaiSide::Home, 7).is_err());
     }

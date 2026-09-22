@@ -27,6 +27,7 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [011](./011-cross-asset-edges-and-per-transfer-linkage.md) | Cross-Asset Stats Edges And Per-Transfer Asset Linkage | Accepted | 2026-09-15 |
 | [012](./012-chain-local-token-types.md) | Token Type Belongs To The Chain-Local Token | Accepted | 2026-09-16 |
 | [013](./013-xdai-multi-deployment-grammar.md) | xDai Deployment Constants Stay In Code, Keyed By Chain Id | Accepted | 2026-09-18 |
+| [014](./014-first-seen-destination-execution-wins.md) | The First-Seen Destination Execution Is Canonical; Later Ones Are Recorded, Not Merged | Accepted | 2026-09-22 |
 
 ## Creating a New ADR
 

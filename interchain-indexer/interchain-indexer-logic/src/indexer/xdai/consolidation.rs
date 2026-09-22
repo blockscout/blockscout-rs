@@ -9,11 +9,11 @@ use interchain_indexer_entity::{
 };
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 
-use crate::message_buffer::{Consolidate, ConsolidatedMessage, Key};
+use crate::message_buffer::{Consolidate, ConsolidatedMessage, DestinationExecution, Key};
 
 use super::{
     metrics,
-    types::{ChainIds, Direction, Message, MessageIdentity, NATIVE_SENTINEL},
+    types::{ChainIds, Completion, Direction, Message, MessageIdentity, NATIVE_SENTINEL},
     version::legacy_home_ethereum_asset,
 };
 
@@ -76,6 +76,110 @@ impl Consolidate for Message {
             // indexing bug; there is no protocol-level collision to record.
             amb_anomalies: Vec::new(),
         }))
+    }
+
+    /// One row per observed destination-execution -- `destination_execution`
+    /// (the canonical, first-seen one) and each `additional_executions` entry
+    /// -- in first-appearance order. Which of these is actually "the"
+    /// canonical one is not decided here: `consolidate()` has no database
+    /// access, so that decision waits for
+    /// `message_buffer::persistence::reconcile_destination_executions`, which
+    /// reads `crosschain_messages` and filters the row whose `tx_hash`
+    /// matches the canonical one out of the anomaly candidates.
+    ///
+    /// `ConsolidatedMessage::amb_anomalies` is deliberately **not** used for
+    /// this: that field's name and AMB-collision semantics are unchanged
+    /// (Hard Constraint 4), and xDai's anomaly decision cannot be made at
+    /// `consolidate()` time anyway.
+    fn destination_executions(&self, key: &Key) -> Vec<DestinationExecution> {
+        let Some(canonical) = &self.destination_execution else {
+            // Nothing to report; not a skip worth logging.
+            return Vec::new();
+        };
+
+        let (Some(direction), Some(chain_ids)) = (self.direction, self.chain_ids) else {
+            // A lost anomaly, not "nothing to report": warn loudly rather
+            // than silently dropping observed multiple-execution evidence.
+            // Metric-free on purpose -- `XDAI_MESSAGES_MISSING_CHAIN_IDS` in
+            // `resolve_input` already counts this exact condition; a second
+            // increment here would double-count one event.
+            tracing::warn!(
+                bridge_id = key.bridge_id,
+                message_id = key.message_id,
+                tx_hash = %canonical.event().transaction_hash,
+                "xDai destination execution observed but direction/chain_ids are not resolved; \
+                 destination_executions cannot report it for this maintenance cycle"
+            );
+            return Vec::new();
+        };
+
+        let chain_id = chain_ids.destination(direction);
+        let src_chain_id = Some(chain_ids.initiator(direction));
+        let dst_chain_id = Some(chain_id);
+        // Every write path that sets `destination_execution` sets `identity`
+        // in the same `buffer.alter` call, so this is always `Some` here.
+        // `destination_observed_identity` falls back to it only for a
+        // payload written before that field existed (`#[serde(default)]`);
+        // for such a message canonical and observed identity were the same
+        // thing, since the nonce-override this task adds did not exist yet.
+        let canonical_observed_identity = self.destination_observed_identity.unwrap_or_else(|| {
+            self.identity
+                .expect("identity is set alongside destination_execution")
+        });
+
+        let mut observations = Vec::with_capacity(1 + self.additional_executions.len());
+        observations.push(destination_execution_row(
+            *key,
+            canonical_observed_identity,
+            self.destination_log_index,
+            canonical,
+            chain_id,
+            src_chain_id,
+            dst_chain_id,
+        ));
+        for additional in &self.additional_executions {
+            observations.push(destination_execution_row(
+                *key,
+                additional.observed_identity,
+                additional.log_index,
+                &additional.completion,
+                chain_id,
+                src_chain_id,
+                dst_chain_id,
+            ));
+        }
+        observations
+    }
+}
+
+fn destination_execution_row(
+    key: Key,
+    observed_identity: MessageIdentity,
+    log_index: Option<i64>,
+    completion: &Completion,
+    chain_id: i64,
+    src_chain_id: Option<i64>,
+    dst_chain_id: Option<i64>,
+) -> DestinationExecution {
+    let event = completion.event();
+    let kind = match observed_identity {
+        MessageIdentity::Nonce(_) => "nonce",
+        MessageIdentity::SourceTransactionHash(_) => "source_transaction_hash",
+    };
+    DestinationExecution {
+        key,
+        native_id: observed_identity.raw_bytes32().to_vec(),
+        chain_id,
+        tx_hash: event.transaction_hash.as_slice().to_vec(),
+        log_index,
+        block_number: event.block_number,
+        block_timestamp: event.block_timestamp,
+        executor: Some(event.event.recipient.as_slice().to_vec()),
+        src_chain_id,
+        dst_chain_id,
+        detail: format!(
+            "second destination execution of one canonical xDai message (observed identity: {kind})"
+        ),
     }
 }
 
@@ -369,7 +473,7 @@ mod tests {
     use super::*;
     use crate::indexer::xdai::types::{
         AnnotatedEvent, CollectedSignaturesEvent, Completion, CompletionEvent, LegacySourceEvent,
-        MessageIdentity, ReconstructedSource, UserRequestForAffirmationEvent,
+        MessageIdentity, ObservedExecution, ReconstructedSource, UserRequestForAffirmationEvent,
         UserRequestForSignatureEvent, ValidatorConfirmation, key_from_native_id, native_id_blob,
     };
 
@@ -1139,5 +1243,210 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Builds two `Message`s for the *same* underlying source transaction --
+    /// one shaped as `handle_user_request_for_affirmation` (the live stream
+    /// handler) would populate it, one shaped as
+    /// `handle_affirmation_completed`'s `Nonce` arm (the receipt-derived
+    /// path) would -- differing only in `destination_observed_identity` (raw
+    /// hash vs. nonce) and, on the receipt-derived side,
+    /// `reconstructed_source: None`. It asserts `consolidate()` produces
+    /// identical rows from both: neither of those two fields leaks into the
+    /// message/transfer output.
+    ///
+    /// This test does **not** independently establish AC 8's `source_asset`
+    /// parity claim: both `Message`s below deliberately clone one
+    /// `source_request` (including `source_asset`), so a regression that
+    /// made `resolve_modern_source_asset` (events.rs) and `grammar_for`
+    /// disagree on `source_asset` could not be caught here by construction.
+    /// The actual evidence for that claim is `indexer.rs`'s DB-backed
+    /// `hash_alias_after_stream_produces_one_nonce_keyed_message_matching_stream_derived`
+    /// (and its mirror, `hash_alias_before_stream_...`): those dispatch a
+    /// real `UserRequestForAffirmation` through the live stream handler and a
+    /// hash-keyed completion through the receipt-derived handler against the
+    /// same mocked chain state, so `resolve_modern_source_asset` and
+    /// `grammar_for` are both exercised for real, and the final
+    /// `token_src_address == dai_address()` assertion there pins their
+    /// agreement.
+    #[test]
+    fn destination_observed_identity_and_reconstructed_source_do_not_leak_into_consolidated_rows() {
+        let nonce = 0x1ae2_u64;
+        let recipient = addr(0xA5);
+        let sender = addr(0x5A);
+        let source_asset = addr(0xDA);
+        let tx_src = hash(0x11);
+        let tx_dst = hash(0x22);
+
+        let completion = Completion::Affirmation(AnnotatedEvent {
+            event: CompletionEvent {
+                recipient,
+                value: U256::from(1_000u64),
+            },
+            transaction_hash: tx_dst,
+            block_number: 20,
+            block_timestamp: ts(2_000),
+        });
+        let source_request = AnnotatedEvent {
+            event: UserRequestForAffirmationEvent {
+                recipient,
+                value: U256::from(1_000u64),
+                nonce: U256::from(nonce),
+                source_asset,
+            },
+            transaction_hash: tx_src,
+            block_number: 10,
+            block_timestamp: ts(1_000),
+        };
+
+        // Stream-derived: exactly what `handle_user_request_for_affirmation`
+        // builds from the live `UserRequestForAffirmation` event.
+        let stream_derived = Message {
+            identity: Some(MessageIdentity::Nonce(U256::from(nonce))),
+            direction: Some(Direction::EthToGno),
+            chain_ids: Some(MAINNET),
+            source_request: Some(source_request.clone()),
+            sender_address: Some(sender),
+            destination_execution: Some(completion.clone()),
+            destination_observed_identity: Some(MessageIdentity::Nonce(U256::from(nonce))),
+            ..Default::default()
+        };
+
+        // Receipt-derived: the same source transaction, but reconstructed
+        // from the hash-keyed completion's receipt instead of streamed --
+        // `handle_affirmation_completed`'s `Nonce { nonce, event, facts }` arm
+        // fills `source_request`/`sender_address` from `ModernSourceEvent` /
+        // `SourceFacts`, and `reconstructed_source` stays `None`.
+        let receipt_derived = Message {
+            identity: Some(MessageIdentity::Nonce(U256::from(nonce))),
+            direction: Some(Direction::EthToGno),
+            chain_ids: Some(MAINNET),
+            source_request: Some(source_request),
+            sender_address: Some(sender),
+            destination_execution: Some(completion),
+            destination_observed_identity: Some(MessageIdentity::SourceTransactionHash(hash(0x99))),
+            reconstructed_source: None,
+            ..Default::default()
+        };
+
+        let key = key_from_native_id(&native_id_blob(1, U256::from(nonce)).unwrap(), 3).unwrap();
+        let stream_consolidated = stream_derived.consolidate(&key).unwrap().unwrap();
+        let receipt_consolidated = receipt_derived.consolidate(&key).unwrap().unwrap();
+
+        let (sm, rm) = (&stream_consolidated.message, &receipt_consolidated.message);
+        assert_eq!(set_value!(sm.native_id), set_value!(rm.native_id));
+        assert_eq!(set_value!(sm.src_tx_hash), set_value!(rm.src_tx_hash));
+        assert_eq!(set_value!(sm.sender_address), set_value!(rm.sender_address));
+        assert_eq!(
+            set_value!(sm.recipient_address),
+            set_value!(rm.recipient_address)
+        );
+        assert_eq!(set_value!(sm.init_timestamp), set_value!(rm.init_timestamp));
+        assert_eq!(set_value!(sm.dst_tx_hash), set_value!(rm.dst_tx_hash));
+
+        let (st, rt) = (
+            &stream_consolidated.transfers[0],
+            &receipt_consolidated.transfers[0],
+        );
+        assert_eq!(
+            set_value!(st.token_src_address),
+            set_value!(rt.token_src_address)
+        );
+        assert_eq!(
+            set_value!(st.token_dst_address),
+            set_value!(rt.token_dst_address)
+        );
+        assert_eq!(set_value!(st.src_amount), set_value!(rt.src_amount));
+        assert_eq!(set_value!(st.dst_amount), set_value!(rt.dst_amount));
+    }
+
+    // --- `Consolidate::destination_executions` ---
+
+    fn completion_at(
+        recipient: Address,
+        value: u64,
+        tx: B256,
+        block: i64,
+        at: NaiveDateTime,
+    ) -> Completion {
+        Completion::Affirmation(AnnotatedEvent {
+            event: CompletionEvent {
+                recipient,
+                value: U256::from(value),
+            },
+            transaction_hash: tx,
+            block_number: block,
+            block_timestamp: at,
+        })
+    }
+
+    #[test]
+    fn destination_executions_without_destination_execution_returns_empty() {
+        let message = source_request(0x1adf, addr(2), ts(1_000));
+        let key =
+            key_from_native_id(&native_id_blob(1, U256::from(0x1adf_u64)).unwrap(), 3).unwrap();
+        assert!(message.destination_executions(&key).is_empty());
+    }
+
+    /// The loud-skip branch: `destination_execution` is present, but
+    /// `direction`/`chain_ids` are not resolved (a payload written before
+    /// `Message.chain_ids` existed, revived through `#[serde(default)]`).
+    /// This must return empty (there is nothing to report against unresolved
+    /// chain ids), but the branch that gets there must warn -- see the
+    /// implementation's `tracing::warn!` call; verifying the log is emitted
+    /// is left to code review, since this codebase has no tracing-capture
+    /// test harness.
+    #[test]
+    fn destination_executions_missing_chain_ids_warns_and_returns_empty() {
+        let mut message = source_request(0x1adf, addr(2), ts(1_000));
+        message.chain_ids = None;
+        message.destination_execution =
+            Some(completion_at(addr(2), 1_000, hash(0x22), 20, ts(2_000)));
+        let key =
+            key_from_native_id(&native_id_blob(1, U256::from(0x1adf_u64)).unwrap(), 3).unwrap();
+
+        assert!(message.destination_executions(&key).is_empty());
+    }
+
+    /// One entry for the canonical execution plus one per
+    /// `additional_executions`, in first-appearance order, each carrying the
+    /// raw observed alias (not the `chain‖nonce` `native_id` blob) and the
+    /// configured Foreign/Home chain ids.
+    #[test]
+    fn destination_executions_emits_canonical_and_additional_entries_in_order() {
+        let nonce = 0x1adf_u64;
+        let mut message = source_request(nonce, addr(2), ts(1_000));
+        message.identity = Some(MessageIdentity::Nonce(U256::from(nonce)));
+        message.destination_observed_identity = Some(MessageIdentity::Nonce(U256::from(nonce)));
+        message.destination_log_index = Some(4);
+        message.destination_execution =
+            Some(completion_at(addr(2), 1_000, hash(0x22), 20, ts(2_000)));
+        let second_hash = B256::repeat_byte(0x77);
+        message.additional_executions.push(ObservedExecution {
+            observed_identity: MessageIdentity::SourceTransactionHash(second_hash),
+            log_index: Some(9),
+            completion: completion_at(addr(2), 1_000, hash(0x99), 30, ts(3_000)),
+        });
+        let key = key_from_native_id(&native_id_blob(1, U256::from(nonce)).unwrap(), 3).unwrap();
+
+        let observations = message.destination_executions(&key);
+        assert_eq!(observations.len(), 2);
+
+        assert_eq!(observations[0].key, key);
+        assert_eq!(
+            observations[0].native_id,
+            U256::from(nonce).to_be_bytes::<32>().to_vec()
+        );
+        assert_eq!(observations[0].chain_id, 100);
+        assert_eq!(observations[0].src_chain_id, Some(1));
+        assert_eq!(observations[0].dst_chain_id, Some(100));
+        assert_eq!(observations[0].tx_hash, hash(0x22).to_vec());
+        assert_eq!(observations[0].log_index, Some(4));
+        assert!(observations[0].detail.contains("nonce"));
+
+        assert_eq!(observations[1].native_id, second_hash.to_vec());
+        assert_eq!(observations[1].tx_hash, hash(0x99).to_vec());
+        assert_eq!(observations[1].log_index, Some(9));
+        assert!(observations[1].detail.contains("source_transaction_hash"));
     }
 }

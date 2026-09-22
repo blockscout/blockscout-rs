@@ -994,8 +994,9 @@ mod tests {
         );
 
         // xDai (bridge 1003) starts at the verified epoch floors: the Sepolia
-        // Foreign v1->v2 upgrade, and the Chiado block that excludes every
-        // hash-keyed affirmation.
+        // Foreign v1->v2 upgrade, and the Chiado block whose Home source-event
+        // first carries a nonce (shared by both registered Chiado Home
+        // windows, v2 and v3 -- see `indexer/xdai/version.rs::CHIADO_EPOCH_FLOOR_BLOCK`).
         let xdai_bridge = bridges
             .iter()
             .find(|bridge| bridge.bridge_id == 1003)
@@ -1015,7 +1016,7 @@ mod tests {
             xdai.iter()
                 .find(|t| t.chain_id == 10200)
                 .map(|t| t.start_block),
-            Some(20553827)
+            Some(15562365)
         );
 
         let chain_lookup = HashMap::from([
@@ -1029,8 +1030,16 @@ mod tests {
         let configs = build_xdai_chain_configs(xdai_bridge, &chain_lookup, &providers);
         assert_eq!(configs.len(), 2);
         for config in &configs {
-            assert_eq!(config.contracts.len(), 1, "one proxy window per side");
-            assert!(config.contracts[0].abi.is_some(), "the ABI must be parsed");
+            let expected_contracts = if config.chain_id == 10200 { 2 } else { 1 };
+            assert_eq!(
+                config.contracts.len(),
+                expected_contracts,
+                "Chiado now has two Home version windows (v2, v3) on one proxy address; \
+                 Sepolia still has one Foreign window"
+            );
+            for contract in &config.contracts {
+                assert!(contract.abi.is_some(), "the ABI must be parsed");
+            }
         }
     }
 

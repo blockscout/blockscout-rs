@@ -115,6 +115,20 @@ impl MessageIdentity {
             Self::SourceTransactionHash(hash) => Ok(hash.0),
         }
     }
+
+    /// The raw 32-byte alias exactly as observed on chain -- **not**
+    /// `native_id`/`native_id_blob`'s `chain‖nonce` encoding. For a nonce
+    /// observation this is deliberately `0x00…00` for nonce `0`, which can
+    /// legitimately differ from `crosschain_messages.native_id` for the same
+    /// message. Used only for `DestinationExecution::native_id`
+    /// (`indexer/xdai/consolidation.rs`), which records destination-execution
+    /// provenance, never identity derivation.
+    pub(crate) fn raw_bytes32(self) -> [u8; 32] {
+        match self {
+            Self::Nonce(nonce) => nonce.to_be_bytes::<32>(),
+            Self::SourceTransactionHash(hash) => hash.0,
+        }
+    }
 }
 
 /// `initiator_chain_id (4 B, BE) ‖ nonce (28 B, BE)` — the 32-byte blob the
@@ -220,6 +234,24 @@ impl Completion {
     }
 }
 
+/// One observed destination-execution beyond the first, under the same
+/// canonical message identity. Nonce and hash are equally valid observed
+/// identities here: anomalousness comes from execution *multiplicity*, not
+/// from which kind of identity was observed -- a hash-keyed completion is not
+/// itself an anomaly (see the negative control: Chiado nonce 2's single
+/// hash-keyed completion).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ObservedExecution {
+    /// The raw destination identity as observed on this execution, before
+    /// canonicalization into `Message::identity`.
+    pub(crate) observed_identity: MessageIdentity,
+    /// Provenance only: execution identity is the destination transaction,
+    /// not the log within it.
+    #[serde(default)]
+    pub(crate) log_index: Option<i64>,
+    pub(crate) completion: Completion,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct UserRequestForSignatureEvent {
     pub(crate) recipient: Address,
@@ -293,6 +325,12 @@ pub(crate) struct Message {
     // to a message of exactly one direction, so there is no collision risk
     // in one map for both `SignedForAffirmation` and `SignedForUserRequest`.
     pub(crate) validator_confirmations: HashMap<Address, ValidatorConfirmation>,
+    /// The canonical execution: the first destination-completion seen for
+    /// this key, in processing order. Stays `Option<Completion>` -- adding
+    /// multiple-execution support did **not** change this type, so
+    /// `consolidation.rs`'s `status_and_finality` / `build_transfer` need no
+    /// changes at all: `dst_amount` / `dst_tx_hash` are by construction always
+    /// the canonical (first-seen) execution's.
     pub(crate) destination_execution: Option<Completion>,
     pub(crate) reconstructed_source: Option<ReconstructedSource>,
     /// `receipt.from` of the transaction that emitted the source event
@@ -300,6 +338,24 @@ pub(crate) struct Message {
     /// taken from any event field — see the AMB "header sender is not the
     /// source transaction initiator" gotcha, which applies here identically.
     pub(crate) sender_address: Option<Address>,
+    /// The raw destination identity of `destination_execution`, before
+    /// canonicalization. Same reason as `Message::chain_ids` below for
+    /// `#[serde(default)]`: a payload written before this field existed must
+    /// still deserialize.
+    #[serde(default)]
+    pub(crate) destination_observed_identity: Option<MessageIdentity>,
+    /// Provenance only for `destination_execution`; not part of execution
+    /// identity (that is the destination transaction, not the log).
+    #[serde(default)]
+    pub(crate) destination_log_index: Option<i64>,
+    /// Destination transactions beyond the first seen, under the same
+    /// canonical key, in first-appearance order. Consumed by
+    /// `Consolidate::destination_executions` (see `consolidation.rs`) to build
+    /// candidate multiple-execution anomaly rows -- the actual anomaly/
+    /// canonical decision is made later, against the database, in
+    /// `message_buffer::persistence::reconcile_destination_executions`.
+    #[serde(default)]
+    pub(crate) additional_executions: Vec<ObservedExecution>,
 }
 
 /// `messageHash = keccak256(recipient ‖ value ‖ nonce ‖ foreignBridgeAddr [‖ token])`
@@ -496,6 +552,40 @@ mod tests {
         assert_eq!(decoded.identity, message.identity);
         assert_eq!(decoded.direction, message.direction);
         assert_eq!(decoded.reconstructed_source, message.reconstructed_source);
+    }
+
+    /// Hard Constraint 2: a `pending_messages.payload` written by a build
+    /// before `destination_observed_identity`, `destination_log_index` and
+    /// `additional_executions` existed must still deserialize -- otherwise the
+    /// serde error escapes `MessageBuffer::restore` (`buffer.rs:95`) into the
+    /// batch result and the key retries forever instead of reviving. Removes
+    /// the three fields from an otherwise-valid encoded payload to simulate
+    /// exactly that old-form JSON, rather than guessing its shape by hand.
+    #[test]
+    fn message_deserializes_old_form_payload_missing_the_new_execution_fields() {
+        let message = Message {
+            identity: Some(MessageIdentity::Nonce(U256::from(0x1adf_u64))),
+            direction: Some(Direction::EthToGno),
+            chain_ids: Some(MAINNET),
+            ..Default::default()
+        };
+        let mut encoded = serde_json::to_value(&message).unwrap();
+        let object = encoded
+            .as_object_mut()
+            .expect("Message serializes to an object");
+        assert!(
+            object.remove("destination_observed_identity").is_some(),
+            "field must exist on the current shape before removal simulates the old one"
+        );
+        assert!(object.remove("destination_log_index").is_some());
+        assert!(object.remove("additional_executions").is_some());
+
+        let decoded: Message = serde_json::from_value(encoded)
+            .expect("old-form payload without the new fields must still deserialize");
+        assert_eq!(decoded.identity, message.identity);
+        assert_eq!(decoded.destination_observed_identity, None);
+        assert_eq!(decoded.destination_log_index, None);
+        assert!(decoded.additional_executions.is_empty());
     }
 
     /// Pins the preimage's field order and length against `Message.sol`'s

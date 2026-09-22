@@ -65,6 +65,23 @@
   - `interchain-indexer-logic/src/indexer/avalanche/blockchain_id_resolver.rs`
   - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
 
+## If You Need to Understand xDai Indexing
+
+- `interchain-indexer-logic/src/indexer/xdai/indexer.rs`
+  - stream orchestration per chain, counterpart resolution, failure ledger
+- `interchain-indexer-logic/src/indexer/xdai/events.rs`
+  - event handlers, source-receipt reconstruction (`decode_source_evidence`),
+    canonical-vs-observed identity selection for hash-keyed completions
+- `interchain-indexer-logic/src/indexer/xdai/version.rs`
+  - deployment constants, grammar windows, epoch floors (ADR-013)
+- `interchain-indexer-logic/src/indexer/xdai/consolidation.rs`
+  - message assembly, finality, transfer building
+- then continue to:
+  - `interchain-indexer-logic/src/indexer/xdai/abi.rs`
+    (registry, startup floor checks, window resolution by block)
+  - `interchain-indexer-logic/src/message_buffer/persistence.rs`
+    (`reconcile_destination_executions` — multiple-execution handling, ADR-014)
+
 ## If You Need to Understand Incoming ICTT Reconstruction / ICM Payload Decoding
 
 - `interchain-indexer-logic/src/indexer/avalanche/ictt_payload.rs`

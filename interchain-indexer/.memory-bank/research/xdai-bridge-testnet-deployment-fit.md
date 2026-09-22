@@ -19,12 +19,57 @@ Out of scope: the AMB/Omnibridge testnet deployment already in
 Kovan ↔ Sokol testnet pair (Sokol is retired; not investigated), and any
 decision to actually enable an xDai testnet bridge.
 
-Status: **implemented.** The testnet bridge is configured as `bridge_id` `1003`
-in `config/full-testnet/bridges.json`, and `indexer/xdai/version.rs` now carries
-the Sepolia/Chiado grammar windows beside the mainnet ones. Sections below that
-describe the pre-implementation state are marked *(historical)*; *The
-Code-vs-Config Bottom Line* records what was actually built and why it differs
-from what this note originally proposed.
+Status: **implemented, then partially superseded** by
+`xdai-alias-completion-anomalies` (2026-09-22). The testnet bridge is
+configured as `bridge_id` `1003` in `config/full-testnet/bridges.json`, and
+`indexer/xdai/version.rs` now carries the Sepolia/Chiado grammar windows
+beside the mainnet ones. Sections below that describe the pre-implementation
+state are marked *(historical)*; *The Code-vs-Config Bottom Line* records what
+was actually built and why it differs from what this note originally
+proposed.
+
+**Superseded conclusion — read before trusting any "20553827" statement
+below.** Every claim in this note that the Chiado floor must stay at
+`20553827` to avoid duplicate `crosschain_messages` rows (the whole *Home
+floor — resolved* section, *Decision: keep the Chiado floor at 20553827*, and
+the "Sepolia nonces 0–2 stuck at `Initiated` forever" consequence it draws)
+rested on a premise that no longer holds: that a hash-keyed
+`AffirmationCompleted`/`RelayedMessage` can only ever be canonicalized by its
+raw `bytes32`. `xdai-alias-completion-anomalies` removed that premise —
+`events.rs::decode_source_evidence` now reconstructs the source receipt for
+*every* hash-keyed completion and, when it carries a modern (nonce-bearing)
+source event, canonicalizes the message under that **nonce** instead, with the
+raw hash kept only as observation provenance. Two destination executions that
+resolve to the same nonce (exactly the pairs this note found at block
+16803580) are now a **multiple-execution anomaly**
+(`amb_message_anomalies` + `protocol_metadata.multiple_executions`), not a
+duplicate-row hazard the floor has to prevent.
+
+The floor is now `CHIADO_EPOCH_FLOOR_BLOCK = 15_562_365` (the Home v2 upgrade,
+also the first block whose Home source-event carries a nonce at all), shared
+by both registered Chiado Home windows (`ChiadoHomeV2`, `ChiadoHomeV3`). It no
+longer needs to sit above any hash-keyed completion, and Sepolia nonces 0, 1
+and 2 are no longer stuck `Initiated` — nonces 0 and 1 complete via their
+direct nonce-keyed `AffirmationCompleted`, and nonce 2's single hash-keyed
+completion resolves to it too (the fixture this note calls out as "the only
+one admitted by the 20553827 floor" is now simply one of six completed
+messages in the window, and the negative control for "a hash-keyed identity is
+not itself an anomaly"). Nonce 3 gets both a hash-keyed and a direct
+nonce-keyed completion, handled the same way as nonces 0 and 1.
+
+The on-chain facts this note documents (upgrade blocks, event-shape changes,
+which topic0s exist) remain accurate and are not affected. Only the
+*floor-selection reasoning* and its "cannot be closed by moving the floor"
+framing are superseded. The design that replaces it lives in code: canonical
+completion identity is reconstructed by
+`interchain-indexer-logic/src/indexer/xdai/events.rs`'s
+`decode_source_evidence`, and multiple-execution reconciliation is
+`interchain-indexer-logic/src/message_buffer/persistence.rs`'s
+`reconcile_destination_executions` /
+`apply_destination_execution_reconciliation`. See also
+`.memory-bank/gotchas.md`'s "xDai Destination Identity And Anomalousness Are
+Orthogonal" entry for the invariant that replaces this note's floor-based
+reasoning.
 
 ## Short Answer
 
@@ -642,7 +687,7 @@ Expected steady state, not a fault:
 | Symptom | Cause |
 |---|---|
 | Exactly **one** finalized message on this bridge (Sepolia nonce 3) | the Chiado floor at 20553827 admits one affirmation; see *Home floor — resolved* |
-| Sepolia deposits with nonces 0, 1 and 2 stuck at `Initiated`, forever | their affirmations (15612527, 15612593, 18042501) are below the Home floor. The accepted cost of not duplicating rows |
+| Sepolia deposits with nonces 0, 1 and 2 stuck at `Initiated`, forever *(superseded — see the "Superseded conclusion" note above)* | their affirmations (15612527, 15612593, 18042501) are below the Home floor. The accepted cost of not duplicating rows |
 | No Gnosis→Ethereum message ever completes | none has been relayed since the v1 era; `CollectedSignatures` → `executeSignatures` is untested end to end on this pair |
 
 Misconfiguration, all of which now fail at startup rather than silently:

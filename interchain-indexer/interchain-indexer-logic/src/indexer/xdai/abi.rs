@@ -751,25 +751,89 @@ mod tests {
         );
     }
 
-    /// The Chiado floor is what stops one deposit producing two
-    /// `crosschain_messages` rows: it must sit above the last hash-keyed
-    /// affirmation (20553477) and at or below the only later nonce-keyed one
-    /// (20706963).
+    /// The floor no longer works by excluding hash-keyed completions from the
+    /// scan window: a hash-keyed `AffirmationCompleted`/`RelayedMessage`
+    /// inside the window now resolves to its canonical identity from receipt
+    /// evidence (`events.rs::decode_source_evidence`), and multiple
+    /// destination executions under one canonical identity are handled as
+    /// multiple-execution anomalies. The floor's only remaining job is to
+    /// mark where this deployment's nonce identity epoch begins, so it must
+    /// sit at or below every known nonce-keyed completion in the documented
+    /// window and is shared by both registered Chiado Home windows.
     #[test]
-    fn the_chiado_floor_excludes_every_hash_keyed_affirmation() {
-        let floor = grammar_for(CHIADO, XDaiSide::Home, 3)
-            .expect("the Chiado grammar is registered")
+    fn the_chiado_floor_admits_every_known_window_completion() {
+        let floor_v2 = grammar_for(CHIADO, XDaiSide::Home, 2)
+            .expect("the Chiado v2 grammar is registered")
             .epoch_floor_block;
-        assert!(
-            floor > 20_553_477,
-            "the floor must exclude the last hash-keyed affirmation, which re-affirms a deposit \
-             already affirmed by nonce at 20706963"
-        );
-        assert!(
-            floor <= 20_706_963,
-            "the floor must still admit the one nonce-keyed affirmation, or the bridge indexes \
-             no completed message at all"
-        );
+        let floor_v3 = grammar_for(CHIADO, XDaiSide::Home, 3)
+            .expect("the Chiado v3 grammar is registered")
+            .epoch_floor_block;
+        assert_eq!(floor_v2, floor_v3, "both Chiado windows share one floor");
+
+        // Every known `AffirmationCompleted` in the open Chiado window
+        // `[15562365, 20800000]` on proxy `0xccA0Dc2A058884e62082312F09541cC7566406f0`
+        // (`.memory-bank/research/xdai-bridge-sepolia-chiado-upgrade-history.md`):
+        // nonce 0, nonce 1, four completions sharing block 16803580 (two
+        // raw-hash, one nonce-0 alias, one nonce-1 alias), the nonce-2
+        // negative control, and both nonce-3 completions. The literal floor
+        // value itself is pinned elsewhere
+        // (`chiado_epoch_floor_is_shared_by_both_home_windows`,
+        // `testnet_grammar_windows_resolve_sepolia_and_chiado_values`); this
+        // test's job is only to prove the floor does not exclude any of them.
+        const KNOWN_WINDOW_COMPLETION_BLOCKS: [u64; 6] = [
+            15_612_527, // nonce 0
+            15_612_593, // nonce 1
+            16_803_580, // four completions, one block
+            18_042_501, // nonce 2 (single completion, negative control)
+            20_553_477, // nonce 3 (alias)
+            20_706_963, // nonce 3
+        ];
+        for block in KNOWN_WINDOW_COMPLETION_BLOCKS {
+            assert!(
+                floor_v2 <= block,
+                "the floor must admit known window completion at block {block}"
+            );
+        }
+    }
+
+    /// Both Chiado Home windows share one proxy address; `resolve_log` must
+    /// still select the version whose grammar matches the source event's
+    /// actual argument count at that block -- the three-argument
+    /// `UserRequestForSignature` below the v3 boundary, the four-argument one
+    /// at and above it.
+    #[test]
+    fn both_chiado_windows_on_one_address_select_their_own_source_topic_by_block() {
+        const V3_STARTED_AT_BLOCK: u64 = 20_553_827;
+        let address = Address::repeat_byte(0xBB);
+        let chains = vec![chain_config(
+            CHIADO,
+            vec![
+                XDaiContractConfig {
+                    address,
+                    version: 2,
+                    started_at_block: CHIADO_EPOCH_FLOOR_BLOCK,
+                    abi: Some(home_v6_event_abi()),
+                },
+                XDaiContractConfig {
+                    address,
+                    version: 3,
+                    started_at_block: V3_STARTED_AT_BLOCK,
+                    abi: Some(home_v7_event_abi()),
+                },
+            ],
+        )];
+        let registry = AbiRegistry::from_chains(&chains).expect("registry builds");
+        let v6_topic = topic_of(&home_v6_event_abi(), "UserRequestForSignature");
+        let v7_topic = topic_of(&home_v7_event_abi(), "UserRequestForSignature");
+
+        assert!(matches!(
+            registry.resolve_log(CHIADO, address, &v6_topic, V3_STARTED_AT_BLOCK - 1),
+            LogResolution::Matched(_, ContractKind { version: 2, .. })
+        ));
+        assert!(matches!(
+            registry.resolve_log(CHIADO, address, &v7_topic, V3_STARTED_AT_BLOCK),
+            LogResolution::Matched(_, ContractKind { version: 3, .. })
+        ));
     }
 
     /// A testnet `started_at_block` below its own deployment's floor is
@@ -971,9 +1035,24 @@ mod tests {
             .iter()
             .find(|chain| chain.chain_id == CHIADO)
             .expect("Chiado chain");
-        assert_eq!(home.contracts.len(), 1);
-        assert_eq!(home.contracts[0].version, 3);
-        assert_eq!(home.contracts[0].started_at_block, 20_553_827);
+        assert_eq!(
+            home.contracts.len(),
+            2,
+            "Chiado now has two Home windows on one proxy address: v2 (grammar boundary) and \
+             v3 (token argument added)"
+        );
+        let home_v2 = home
+            .contracts
+            .iter()
+            .find(|c| c.version == 2)
+            .expect("Chiado v2 contract");
+        assert_eq!(home_v2.started_at_block, 15_562_365);
+        let home_v3 = home
+            .contracts
+            .iter()
+            .find(|c| c.version == 3)
+            .expect("Chiado v3 contract");
+        assert_eq!(home_v3.started_at_block, 20_553_827);
 
         // The first real deposit resolves to the mock DAI, not to mainnet DAI.
         assert_eq!(

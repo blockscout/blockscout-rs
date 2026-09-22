@@ -234,11 +234,7 @@ impl XDaiIndexer {
         let mut failed_blocks: Vec<u64> = Vec::new();
         let mut last_err: Option<anyhow::Error> = None;
         let mut failed_count = 0usize;
-        let counterpart_chain_id = match chain_id {
-            1 => Some(100),
-            100 => Some(1),
-            _ => None,
-        };
+        let counterpart_chain_id = resolve_counterpart_chain_id(&ctx.abi_registry, chain_id);
         let counterpart_chain = counterpart_chain_id.and_then(|counterpart_chain_id| {
             ctx.chains
                 .iter()
@@ -314,6 +310,20 @@ impl XDaiIndexer {
 
         Ok(())
     }
+}
+
+/// Resolves `chain_id`'s xDai counterpart through the configured Foreign/Home
+/// side map (`AbiRegistry`) rather than a hardcoded `1 <-> 100` pair, so
+/// legacy source reconstruction also works for a non-mainnet deployment (e.g.
+/// Sepolia/Chiado). A resolve failure -- `chain_id` matching neither
+/// configured side, or the other side missing entirely -- is not an error:
+/// `None` degrades to the pre-existing "no counterpart" behaviour rather than
+/// panicking or propagating.
+fn resolve_counterpart_chain_id(abi_registry: &AbiRegistry, chain_id: i64) -> Option<i64> {
+    [XDaiSide::Foreign, XDaiSide::Home]
+        .into_iter()
+        .find(|&side| abi_registry.chain_id_for_side(side).ok() == Some(chain_id))
+        .and_then(|side| abi_registry.counterpart_chain_id(side).ok())
 }
 
 alloy::sol! {
@@ -693,6 +703,78 @@ mod tests {
             },
         ];
         AbiRegistry::from_chains(&chains).expect("test registry builds")
+    }
+
+    const SEPOLIA: i64 = 11_155_111;
+    const CHIADO: i64 = 10_200;
+
+    /// The Sepolia/Chiado testnet pair, ABIs verbatim from `test_registry`'s
+    /// mainnet ones (byte-identical `topic0`s on testnet, per
+    /// `.memory-bank/research/xdai-bridge-sepolia-chiado-upgrade-history.md`),
+    /// only the chain ids and proxy `version`s differ.
+    fn sepolia_chiado_registry(foreign_addr: Address, home_addr: Address) -> AbiRegistry {
+        let chains = vec![
+            XDaiChainConfig {
+                chain_id: SEPOLIA,
+                provider: dummy_provider(),
+                start_block: super::super::version::SEPOLIA_EPOCH_FLOOR_BLOCK,
+                contracts: vec![XDaiContractConfig {
+                    address: foreign_addr,
+                    version: 2,
+                    started_at_block: super::super::version::SEPOLIA_EPOCH_FLOOR_BLOCK,
+                    abi: Some(serde_json::to_value(foreign_abi()).unwrap()),
+                }],
+            },
+            XDaiChainConfig {
+                chain_id: CHIADO,
+                provider: dummy_provider(),
+                start_block: super::super::version::CHIADO_EPOCH_FLOOR_BLOCK,
+                contracts: vec![XDaiContractConfig {
+                    address: home_addr,
+                    version: 3,
+                    started_at_block: super::super::version::CHIADO_EPOCH_FLOOR_BLOCK,
+                    abi: Some(serde_json::to_value(home_abi()).unwrap()),
+                }],
+            },
+        ];
+        AbiRegistry::from_chains(&chains).expect("Sepolia/Chiado test registry builds")
+    }
+
+    /// Acceptance criterion 18: counterpart resolution goes through the
+    /// configured Foreign/Home side map, not a hardcoded `1 <-> 100` pair --
+    /// and therefore resolves correctly for a non-mainnet pair too.
+    #[test]
+    fn resolve_counterpart_chain_id_works_for_mainnet_and_sepolia_chiado() {
+        let mainnet_registry = test_registry(
+            address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016"),
+            address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6"),
+        );
+        assert_eq!(
+            resolve_counterpart_chain_id(&mainnet_registry, ETH),
+            Some(GNO)
+        );
+        assert_eq!(
+            resolve_counterpart_chain_id(&mainnet_registry, GNO),
+            Some(ETH)
+        );
+        assert_eq!(
+            resolve_counterpart_chain_id(&mainnet_registry, 999_999),
+            None,
+            "a chain matching neither configured side must resolve to None, not panic"
+        );
+
+        let testnet_registry =
+            sepolia_chiado_registry(Address::repeat_byte(0xAA), Address::repeat_byte(0xBB));
+        assert_eq!(
+            resolve_counterpart_chain_id(&testnet_registry, SEPOLIA),
+            Some(CHIADO),
+            "Sepolia's counterpart must resolve to Chiado, not mainnet Gnosis (100)"
+        );
+        assert_eq!(
+            resolve_counterpart_chain_id(&testnet_registry, CHIADO),
+            Some(SEPOLIA),
+            "Chiado's counterpart must resolve to Sepolia, not mainnet Ethereum (1)"
+        );
     }
 
     fn word_address(a: Address) -> B256 {
@@ -1741,6 +1823,744 @@ mod tests {
         assert_eq!(
             edge.cumulative_amount,
             sea_orm::prelude::BigDecimal::from(9_000u64)
+        );
+    }
+
+    // --- xDai canonical-identity-from-receipt and multiple-execution
+    // anomalies (xdai-alias-completion-anomalies) ---
+    //
+    // The verified on-chain Chiado/Sepolia fixture (`handoff.md`) records
+    // every relevant value only truncated (addresses, tx hashes), the same
+    // constraint the module doc above notes for the trace-replay tests. These
+    // reuse that same convention: every value the fixture gives in full
+    // (nonce, block numbers, amounts) is exact; addresses and tx hashes are
+    // synthetic placeholders.
+
+    /// Builds a mocked `DynProvider` that answers exactly one
+    /// `eth_getTransactionReceipt` + `eth_getBlockByNumber` round trip for
+    /// `tx_src`, with a receipt containing the modern (nonce-carrying)
+    /// `UserRequestForAffirmation` log. Mirrors
+    /// `events.rs::reconstructed_source_uses_counterpart_provider_receipt_and_block`'s
+    /// fixture shape, reused here to drive the full indexer pipeline instead
+    /// of `fetch_reconstructed_source` directly.
+    #[allow(clippy::too_many_arguments)]
+    fn push_modern_affirmation_receipt(
+        asserter: &alloy::transports::mock::Asserter,
+        foreign_addr: Address,
+        recipient: Address,
+        value: U256,
+        nonce: U256,
+        tx_src: B256,
+        src_block: u64,
+        src_timestamp: u64,
+        sender: Address,
+    ) {
+        let foreign_event = event_of(&foreign_abi(), "UserRequestForAffirmation");
+        let modern_log = user_request_for_affirmation_log(
+            &foreign_event,
+            foreign_addr,
+            recipient,
+            value,
+            nonce,
+            tx_src,
+            src_block,
+        );
+        let receipt: alloy::rpc::types::TransactionReceipt =
+            serde_json::from_value(serde_json::json!({
+                "type": "0x2",
+                "status": "0x1",
+                "cumulativeGasUsed": "0x1",
+                "logsBloom": format!("0x{}", "00".repeat(256)),
+                "logs": [modern_log],
+                "transactionHash": tx_src,
+                "transactionIndex": "0x0",
+                "blockHash": B256::repeat_byte(9),
+                "blockNumber": format!("{src_block:#x}"),
+                "gasUsed": "0x1",
+                "effectiveGasPrice": "0x1",
+                "from": sender,
+                "to": foreign_addr,
+                "contractAddress": null
+            }))
+            .unwrap();
+        asserter.push_success(&Some(receipt));
+
+        let mut block: alloy::rpc::types::Block = Default::default();
+        block.header.inner.number = src_block;
+        block.header.inner.timestamp = src_timestamp;
+        asserter.push_success(&Some(block));
+    }
+
+    fn foreign_chain_config_with_provider(
+        foreign_addr: Address,
+        provider: DynProvider<Ethereum>,
+    ) -> XDaiChainConfig {
+        XDaiChainConfig {
+            chain_id: ETH,
+            provider,
+            start_block: super::super::version::ETHEREUM_EPOCH_FLOOR_BLOCK,
+            contracts: vec![XDaiContractConfig {
+                address: foreign_addr,
+                version: 9,
+                started_at_block: super::super::version::ETHEREUM_EPOCH_FLOOR_BLOCK,
+                abi: None,
+            }],
+        }
+    }
+
+    /// The receipt-derived (hash-alias) and stream-derived (real
+    /// `UserRequestForAffirmation`) builds of the *same* source transaction
+    /// must be indistinguishable: one canonical nonce-keyed message,
+    /// regardless of which side is processed first. This is order (a):
+    /// stream arrives first, then the hash-keyed completion whose receipt
+    /// resolves to the same nonce.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn hash_alias_after_stream_produces_one_nonce_keyed_message_matching_stream_derived() {
+        let db = init_db("xdai_hash_alias_after_stream_nonce_parity").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
+        let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
+        let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
+        let foreign_event = event_of(&foreign_abi(), "UserRequestForAffirmation");
+        let completed_event = event_of(&home_abi(), "AffirmationCompleted");
+
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db.clone(),
+            MessageBufferSettings {
+                hot_ttl: Duration::from_secs(60),
+                maintenance_interval: Duration::from_secs(60),
+            },
+        );
+
+        let nonce = U256::from(0x9911_u64);
+        let value = U256::from(4_500u64);
+        let recipient = Address::repeat_byte(0xC7);
+        let sender = Address::repeat_byte(0x51);
+        const SRC_BLOCK: u64 = 25_852_059;
+        const SRC_TIMESTAMP: u64 = 1_700_000_000;
+        let tx_src = B256::repeat_byte(0x61);
+        let tx_dst = B256::repeat_byte(0x62);
+
+        let asserter = alloy::transports::mock::Asserter::new();
+        let mocked_provider = ProviderBuilder::new()
+            .connect_mocked_client(asserter.clone())
+            .erased();
+        push_modern_affirmation_receipt(
+            &asserter,
+            foreign_addr,
+            recipient,
+            value,
+            nonce,
+            tx_src,
+            SRC_BLOCK,
+            SRC_TIMESTAMP,
+            sender,
+        );
+        let counterpart = foreign_chain_config_with_provider(foreign_addr, mocked_provider);
+
+        // (a) The real stream event arrives first.
+        let source_log = user_request_for_affirmation_log(
+            &foreign_event,
+            foreign_addr,
+            recipient,
+            value,
+            nonce,
+            tx_src,
+            SRC_BLOCK,
+        );
+        let src_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: ETH,
+            block_number: SRC_BLOCK,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
+        };
+        events::dispatch_transaction(
+            &src_ctx,
+            &[source_log],
+            &block_with_timestamp(SRC_TIMESTAMP),
+            sender,
+        )
+        .await
+        .expect("stream source dispatch succeeds");
+
+        // Then the hash-keyed completion whose receipt reconstructs to the
+        // same nonce.
+        let hash_as_u256 = U256::from_be_bytes(tx_src.0);
+        let completed_log = affirmation_completed_log(
+            &completed_event,
+            home_addr,
+            recipient,
+            value,
+            hash_as_u256,
+            tx_dst,
+            47_950_000,
+            0,
+        );
+        let dst_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: GNO,
+            block_number: 47_950_000,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: Some(&counterpart),
+        };
+        events::dispatch_transaction(
+            &dst_ctx,
+            &[completed_log],
+            &block_with_timestamp(1_700_100_000),
+            Address::ZERO,
+        )
+        .await
+        .expect("hash-keyed completion dispatch succeeds");
+
+        assert!(
+            asserter.read_q().is_empty(),
+            "exactly the pushed receipt+block must be consumed"
+        );
+
+        buffer.run().await.expect("maintenance flush succeeds");
+
+        let native_id = native_id_blob(ETH, nonce).unwrap();
+        let key = key_from_native_id(&native_id, BRIDGE_ID).unwrap();
+
+        let message = crosschain_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("exactly one nonce-keyed message row must exist");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(
+            message.native_id,
+            Some(native_id.to_vec()),
+            "canonical identity must be the nonce, not the raw destination hash"
+        );
+        assert_eq!(message.dst_tx_hash, Some(tx_dst.as_slice().to_vec()));
+        assert_eq!(message.src_tx_hash, Some(tx_src.as_slice().to_vec()));
+        assert_eq!(message.sender_address, Some(sender.as_slice().to_vec()));
+        assert_eq!(
+            message.protocol_metadata, None,
+            "a single execution is not an anomaly"
+        );
+
+        let transfer = crosschain_transfers::Entity::find()
+            .filter(crosschain_transfers::Column::MessageId.eq(key.message_id))
+            .filter(crosschain_transfers::Column::BridgeId.eq(BRIDGE_ID))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("exactly one transfer row must exist");
+        assert_eq!(
+            transfer.token_src_address,
+            Some(dai_address().as_slice().to_vec()),
+            "source_asset must resolve through the grammar window, not a guessed fallback"
+        );
+        assert_eq!(
+            transfer.src_amount,
+            Some(sea_orm::prelude::BigDecimal::from(4_500u64))
+        );
+        assert_eq!(
+            transfer.dst_amount,
+            Some(sea_orm::prelude::BigDecimal::from(4_500u64))
+        );
+    }
+
+    /// Order (b): the mirror image of the test above -- the hash-keyed
+    /// completion is processed **first**, before the real stream event for
+    /// the same source transaction has been seen at all. Must reach an
+    /// identical final row: no `ensure_identity_and_direction` conflict, no
+    /// second transfer.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn hash_alias_before_stream_produces_one_nonce_keyed_message_matching_stream_derived() {
+        let db = init_db("xdai_hash_alias_before_stream_nonce_parity").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
+        let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
+        let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
+        let foreign_event = event_of(&foreign_abi(), "UserRequestForAffirmation");
+        let completed_event = event_of(&home_abi(), "AffirmationCompleted");
+
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db.clone(),
+            MessageBufferSettings {
+                hot_ttl: Duration::from_secs(60),
+                maintenance_interval: Duration::from_secs(60),
+            },
+        );
+
+        let nonce = U256::from(0x9922_u64);
+        let value = U256::from(6_600u64);
+        let recipient = Address::repeat_byte(0xC8);
+        let sender = Address::repeat_byte(0x52);
+        const SRC_BLOCK: u64 = 25_852_059;
+        const SRC_TIMESTAMP: u64 = 1_700_000_000;
+        let tx_src = B256::repeat_byte(0x71);
+        let tx_dst = B256::repeat_byte(0x72);
+
+        let asserter = alloy::transports::mock::Asserter::new();
+        let mocked_provider = ProviderBuilder::new()
+            .connect_mocked_client(asserter.clone())
+            .erased();
+        push_modern_affirmation_receipt(
+            &asserter,
+            foreign_addr,
+            recipient,
+            value,
+            nonce,
+            tx_src,
+            SRC_BLOCK,
+            SRC_TIMESTAMP,
+            sender,
+        );
+        let counterpart = foreign_chain_config_with_provider(foreign_addr, mocked_provider);
+
+        // (b) The hash-keyed completion arrives first.
+        let hash_as_u256 = U256::from_be_bytes(tx_src.0);
+        let completed_log = affirmation_completed_log(
+            &completed_event,
+            home_addr,
+            recipient,
+            value,
+            hash_as_u256,
+            tx_dst,
+            47_950_000,
+            0,
+        );
+        let dst_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: GNO,
+            block_number: 47_950_000,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: Some(&counterpart),
+        };
+        events::dispatch_transaction(
+            &dst_ctx,
+            &[completed_log],
+            &block_with_timestamp(1_700_100_000),
+            Address::ZERO,
+        )
+        .await
+        .expect("hash-keyed completion dispatch succeeds");
+
+        // Then the real stream event for the same source transaction.
+        let source_log = user_request_for_affirmation_log(
+            &foreign_event,
+            foreign_addr,
+            recipient,
+            value,
+            nonce,
+            tx_src,
+            SRC_BLOCK,
+        );
+        let src_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: ETH,
+            block_number: SRC_BLOCK,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: None,
+        };
+        events::dispatch_transaction(
+            &src_ctx,
+            &[source_log],
+            &block_with_timestamp(SRC_TIMESTAMP),
+            sender,
+        )
+        .await
+        .expect(
+            "stream source dispatch must not conflict with the already-buffered receipt-derived \
+             identity",
+        );
+
+        assert!(asserter.read_q().is_empty());
+
+        buffer.run().await.expect("maintenance flush succeeds");
+
+        let native_id = native_id_blob(ETH, nonce).unwrap();
+        let key = key_from_native_id(&native_id, BRIDGE_ID).unwrap();
+
+        let message = crosschain_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("exactly one nonce-keyed message row must exist");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(message.native_id, Some(native_id.to_vec()));
+        assert_eq!(message.dst_tx_hash, Some(tx_dst.as_slice().to_vec()));
+        assert_eq!(message.src_tx_hash, Some(tx_src.as_slice().to_vec()));
+        assert_eq!(message.protocol_metadata, None);
+
+        let transfer_count = crosschain_transfers::Entity::find()
+            .filter(crosschain_transfers::Column::MessageId.eq(key.message_id))
+            .filter(crosschain_transfers::Column::BridgeId.eq(BRIDGE_ID))
+            .all(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .len();
+        assert_eq!(
+            transfer_count, 1,
+            "both orders must produce exactly one transfer"
+        );
+    }
+
+    /// Two destination executions that both reconstruct, via receipt, to the
+    /// same canonical nonce (the "double execution" incident this task
+    /// exists for): the first processed becomes canonical, the second
+    /// becomes exactly one `amb_message_anomalies` row and one
+    /// `multiple_executions` entry naming its own transaction -- the
+    /// canonical row's own `dst_tx_hash` is never duplicated into the array.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn two_hash_aliases_of_one_nonce_produce_one_canonical_message_and_one_anomaly() {
+        let db = init_db("xdai_two_hash_aliases_multiple_execution_anomaly").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
+        let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
+        let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
+        let completed_event = event_of(&home_abi(), "AffirmationCompleted");
+
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db.clone(),
+            MessageBufferSettings {
+                hot_ttl: Duration::from_secs(60),
+                maintenance_interval: Duration::from_secs(60),
+            },
+        );
+
+        let nonce = U256::from(0x9933_u64);
+        let value = U256::from(7_700u64);
+        let recipient = Address::repeat_byte(0xC9);
+        let sender = Address::repeat_byte(0x53);
+        const SRC_BLOCK: u64 = 25_852_059;
+        const SRC_TIMESTAMP: u64 = 1_700_000_000;
+        let tx_src = B256::repeat_byte(0x81);
+        // Both destination executions alias the *same* source transaction,
+        // as in the real Chiado incident (block 16803580's two aliases).
+        let tx_dst_first = B256::repeat_byte(0x82);
+        let tx_dst_second = B256::repeat_byte(0x83);
+
+        let asserter = alloy::transports::mock::Asserter::new();
+        let mocked_provider = ProviderBuilder::new()
+            .connect_mocked_client(asserter.clone())
+            .erased();
+        // Two `fetch_reconstructed_source` calls, one per destination
+        // execution -- push the identical receipt/block pair twice.
+        for _ in 0..2 {
+            push_modern_affirmation_receipt(
+                &asserter,
+                foreign_addr,
+                recipient,
+                value,
+                nonce,
+                tx_src,
+                SRC_BLOCK,
+                SRC_TIMESTAMP,
+                sender,
+            );
+        }
+        let counterpart = foreign_chain_config_with_provider(foreign_addr, mocked_provider);
+
+        let hash_as_u256 = U256::from_be_bytes(tx_src.0);
+        let dst_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: GNO,
+            block_number: 47_950_100,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: Some(&counterpart),
+        };
+
+        let first_log = affirmation_completed_log(
+            &completed_event,
+            home_addr,
+            recipient,
+            value,
+            hash_as_u256,
+            tx_dst_first,
+            47_950_100,
+            0,
+        );
+        events::dispatch_transaction(
+            &dst_ctx,
+            &[first_log],
+            &block_with_timestamp(1_700_100_000),
+            Address::ZERO,
+        )
+        .await
+        .expect("first hash-keyed completion dispatch succeeds");
+
+        let second_log = affirmation_completed_log(
+            &completed_event,
+            home_addr,
+            recipient,
+            value,
+            hash_as_u256,
+            tx_dst_second,
+            47_950_200,
+            0,
+        );
+        events::dispatch_transaction(
+            &dst_ctx,
+            &[second_log],
+            &block_with_timestamp(1_700_200_000),
+            Address::ZERO,
+        )
+        .await
+        .expect("second hash-keyed completion dispatch succeeds");
+
+        assert!(asserter.read_q().is_empty());
+
+        buffer.run().await.expect("maintenance flush succeeds");
+
+        let native_id = native_id_blob(ETH, nonce).unwrap();
+        let key = key_from_native_id(&native_id, BRIDGE_ID).unwrap();
+
+        let message = crosschain_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("exactly one canonical nonce-keyed message row must exist");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(
+            message.dst_tx_hash,
+            Some(tx_dst_first.as_slice().to_vec()),
+            "the first-processed execution stays canonical"
+        );
+
+        let anomalies = interchain_indexer_entity::amb_message_anomalies::Entity::find()
+            .filter(
+                interchain_indexer_entity::amb_message_anomalies::Column::BridgeId.eq(BRIDGE_ID),
+            )
+            .filter(
+                interchain_indexer_entity::amb_message_anomalies::Column::BufferKey
+                    .eq(key.message_id),
+            )
+            .all(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(
+            anomalies.len(),
+            1,
+            "exactly one anomaly row for the second execution"
+        );
+        assert_eq!(anomalies[0].tx_hash, tx_dst_second.as_slice().to_vec());
+        assert_eq!(
+            anomalies[0].conflict_tx_hash,
+            Some(tx_dst_first.as_slice().to_vec())
+        );
+
+        let metadata =
+            crate::protocol_metadata::ProtocolMetadata::from_json_value(message.protocol_metadata)
+                .expect("protocol_metadata must be populated")
+                .multiple_executions
+                .expect("multiple_executions namespace must be present");
+        assert_eq!(metadata.additional_executions.len(), 1);
+        assert_eq!(
+            metadata.additional_executions[0].transaction_hash,
+            alloy::hex::encode_prefixed(tx_dst_second.as_slice())
+        );
+    }
+
+    /// Mirror of the test above with the two destination executions
+    /// dispatched in the opposite order. AC 12 requires both orders: catch-up
+    /// scans blocks backward, so the later-block execution can legitimately
+    /// be processed *before* the earlier-block one, and "first" must mean
+    /// "first in processing order," not "earliest on chain."
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn two_hash_aliases_of_one_nonce_in_reverse_processing_order_produce_one_canonical_message_and_one_anomaly()
+     {
+        let db = init_db("xdai_two_hash_aliases_multiple_execution_anomaly_reverse_order").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
+        let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
+        let registry = test_registry(foreign_addr, home_addr);
+        let message_hash_lookup: Arc<DashMap<B256, Key>> = Arc::new(DashMap::new());
+        let pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>> =
+            Arc::new(DashMap::new());
+        let completed_event = event_of(&home_abi(), "AffirmationCompleted");
+
+        let buffer = MessageBuffer::<Message>::new(
+            interchain_db.clone(),
+            MessageBufferSettings {
+                hot_ttl: Duration::from_secs(60),
+                maintenance_interval: Duration::from_secs(60),
+            },
+        );
+
+        let nonce = U256::from(0x9933_u64);
+        let value = U256::from(7_700u64);
+        let recipient = Address::repeat_byte(0xC9);
+        let sender = Address::repeat_byte(0x53);
+        const SRC_BLOCK: u64 = 25_852_059;
+        const SRC_TIMESTAMP: u64 = 1_700_000_000;
+        let tx_src = B256::repeat_byte(0x81);
+        // Same two aliases of the same source transaction as the
+        // forward-order test above, dispatched in the opposite order.
+        let tx_dst_first = B256::repeat_byte(0x82);
+        let tx_dst_second = B256::repeat_byte(0x83);
+
+        let asserter = alloy::transports::mock::Asserter::new();
+        let mocked_provider = ProviderBuilder::new()
+            .connect_mocked_client(asserter.clone())
+            .erased();
+        // Two `fetch_reconstructed_source` calls, one per destination
+        // execution -- push the identical receipt/block pair twice.
+        for _ in 0..2 {
+            push_modern_affirmation_receipt(
+                &asserter,
+                foreign_addr,
+                recipient,
+                value,
+                nonce,
+                tx_src,
+                SRC_BLOCK,
+                SRC_TIMESTAMP,
+                sender,
+            );
+        }
+        let counterpart = foreign_chain_config_with_provider(foreign_addr, mocked_provider);
+
+        let hash_as_u256 = U256::from_be_bytes(tx_src.0);
+        let dst_ctx = EventContext {
+            bridge_id: BRIDGE_ID,
+            chain_id: GNO,
+            block_number: 47_950_100,
+            abi_registry: &registry,
+            buffer: &buffer,
+            foreign_bridge_address: foreign_addr,
+            message_hash_lookup: &message_hash_lookup,
+            pending_message_hash_events: &pending_message_hash_events,
+            counterpart_chain: Some(&counterpart),
+        };
+
+        let second_log = affirmation_completed_log(
+            &completed_event,
+            home_addr,
+            recipient,
+            value,
+            hash_as_u256,
+            tx_dst_second,
+            47_950_200,
+            0,
+        );
+        // Dispatched *first* this time -- it is the later block, exercising
+        // the backward catch-up processing order.
+        events::dispatch_transaction(
+            &dst_ctx,
+            &[second_log],
+            &block_with_timestamp(1_700_200_000),
+            Address::ZERO,
+        )
+        .await
+        .expect("first-processed (later-block) hash-keyed completion dispatch succeeds");
+
+        let first_log = affirmation_completed_log(
+            &completed_event,
+            home_addr,
+            recipient,
+            value,
+            hash_as_u256,
+            tx_dst_first,
+            47_950_100,
+            0,
+        );
+        events::dispatch_transaction(
+            &dst_ctx,
+            &[first_log],
+            &block_with_timestamp(1_700_100_000),
+            Address::ZERO,
+        )
+        .await
+        .expect("second-processed (earlier-block) hash-keyed completion dispatch succeeds");
+
+        assert!(asserter.read_q().is_empty());
+
+        buffer.run().await.expect("maintenance flush succeeds");
+
+        let native_id = native_id_blob(ETH, nonce).unwrap();
+        let key = key_from_native_id(&native_id, BRIDGE_ID).unwrap();
+
+        let message = crosschain_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+            .one(interchain_db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("exactly one canonical nonce-keyed message row must exist");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(
+            message.dst_tx_hash,
+            Some(tx_dst_second.as_slice().to_vec()),
+            "the first-*processed* execution stays canonical, even though it \
+             is the later block"
+        );
+
+        let anomalies = interchain_indexer_entity::amb_message_anomalies::Entity::find()
+            .filter(
+                interchain_indexer_entity::amb_message_anomalies::Column::BridgeId.eq(BRIDGE_ID),
+            )
+            .filter(
+                interchain_indexer_entity::amb_message_anomalies::Column::BufferKey
+                    .eq(key.message_id),
+            )
+            .all(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(
+            anomalies.len(),
+            1,
+            "exactly one anomaly row for the second-processed execution"
+        );
+        assert_eq!(anomalies[0].tx_hash, tx_dst_first.as_slice().to_vec());
+        assert_eq!(
+            anomalies[0].conflict_tx_hash,
+            Some(tx_dst_second.as_slice().to_vec())
+        );
+
+        let metadata =
+            crate::protocol_metadata::ProtocolMetadata::from_json_value(message.protocol_metadata)
+                .expect("protocol_metadata must be populated")
+                .multiple_executions
+                .expect("multiple_executions namespace must be present");
+        assert_eq!(metadata.additional_executions.len(), 1);
+        assert_eq!(
+            metadata.additional_executions[0].transaction_hash,
+            alloy::hex::encode_prefixed(tx_dst_first.as_slice())
         );
     }
 }

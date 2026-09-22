@@ -75,8 +75,25 @@ Determines when a buffered message is ready for database persistence:
 ```rust
 pub trait Consolidate: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de> {
     fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>>;
+
+    /// Observed destination executions, in first-appearance order. Defaulted
+    /// to empty; only xDai implements it.
+    fn destination_executions(&self, _key: &Key) -> Vec<DestinationExecution> {
+        Vec::new()
+    }
 }
 ```
+
+The second method is a **neutral observation channel**, not a second
+consolidation path. `consolidate` cannot see the database, so a protocol that
+must compare an observation against already-stored state reports its
+observations here instead; `plan_maintenance` carries them into the maintenance
+transaction, where `message_buffer::persistence::reconcile_destination_executions`
+reads the stored row and decides. It returns a plain `Vec` because it runs
+**before** the transaction opens — an `Err` there would abort plan building for
+the whole bridge on every cycle. Protocols that do not participate pay nothing:
+the default returns an empty vector and the reconciliation functions return
+before their first query. See ADR-014.
 
 Three outcomes, not two: `Ok(None)` (not yet consolidatable), `Ok(Some(.. is_final:
 false ..))` (partial — flushed but kept in the buffer), `Ok(Some(.. is_final: true

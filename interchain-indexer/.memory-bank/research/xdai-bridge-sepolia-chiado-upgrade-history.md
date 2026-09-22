@@ -24,6 +24,13 @@ Out of scope: assigning an off-chain organizational motive to the one-sided
 2026 upgrade, reconstructing the exact unverified Solidity source of Chiado
 v3, or proposing a change to the current indexer.
 
+**Status note (2026-09-22):** §7 ("Current indexer boundary") described the
+scan/identity boundary chosen *before* `xdai-alias-completion-anomalies`
+implemented receipt-derived canonical identity for hash-keyed completions.
+That section now carries an inline superseded-note; the on-chain facts
+elsewhere in this document (upgrade blocks, event shapes, the §6 nonce/hash
+pairing table) are unaffected and still accurate.
+
 ## Short Answer
 
 The May 2025 testnet upgrade was not temporally asymmetric: Sepolia Foreign
@@ -314,33 +321,47 @@ destination `bytes32`. The v3 boundary happens to exclude all preceding
 hash-keyed completions; it did not create a reliable destination identity
 epoch.
 
-### 7. Current indexer boundary
+### 7. Current indexer boundary *(superseded by `xdai-alias-completion-anomalies`, 2026-09-22)*
 
-`config/xdai/bridges-testnet.json` configures:
+**This section described the boundary chosen before `xdai-alias-completion-anomalies`
+implemented receipt-derived canonical identity. It no longer matches
+`config/xdai/bridges-testnet.json`.** The section is kept for its accurate
+on-chain distinction (below); its "this boundary avoids the mixed-identity
+destination history" framing is what got superseded, not the underlying facts.
+
+`config/xdai/bridges-testnet.json` now configures **two** Chiado Home windows
+on the same proxy address, plus the unchanged Sepolia Foreign one:
 
 | Side | Version | `started_at_block` | Effect |
 | --- | ---: | ---: | --- |
 | Sepolia Foreign | 2 | 8239484 | Starts exactly at the two-argument→three-argument source-event change |
-| Chiado Home | 3 | 20553827 | Starts exactly at the three-argument→four-argument source-event change and after every observed hash-keyed completion |
+| Chiado Home | 2 | 15562365 | Grammar boundary: three-argument `UserRequestForSignature`, the Home v1→v2 upgrade |
+| Chiado Home | 3 | 20553827 | Grammar boundary: three-argument→four-argument source-event change |
 
-This boundary avoids the mixed-identity destination history, but it means the
-Chiado completions for Sepolia nonces 0, 1, and 2 are outside the scan window.
-Those messages can remain `Initiated`. Nonce 3 has a nonce-keyed completion
-above the Chiado floor; its earlier hash-keyed completion remains excluded.
+The scan now starts at `15562365` (the lower of the two `started_at_block`
+values), and `CHIADO_EPOCH_FLOOR_BLOCK` — the *identity* epoch floor checked by
+`abi.rs`'s `ensure!(started_at_block >= floor)` — is also `15562365`, shared by
+both windows. The floor no longer needs to sit after every hash-keyed
+completion: `xdai/events.rs::decode_source_evidence` reconstructs the source
+receipt for a hash-keyed `AffirmationCompleted`/`RelayedMessage` and, when it
+carries a modern (nonce-bearing) source event, canonicalizes the message under
+that nonce, keeping the raw hash only as observation provenance. The four
+completions this note's §6 table records at block 16803580 (two direct
+nonce-keyed, two hash-keyed aliases of the same two nonces) are handled by that
+mechanism, not by excluding them from the scan — Sepolia nonces 0, 1, 2 and 3
+all complete, and the aliased pairs (0, 1, 3) become `multiple_executions`
+anomalies rather than staying `Initiated`.
 
-Two repository comments currently state that `20553827` is *not* the block at
-which the Home event shape changed:
-
-- `interchain-indexer-logic/src/indexer/xdai/version.rs` near
-  `CHIADO_EPOCH_FLOOR_BLOCK`;
-- `config/full-testnet/ENVs.md` in the bridge `1003` description.
-
-That literal statement conflicts with the upgrade log, v2/v3 runtime topics,
-and the first post-upgrade source event. The accurate distinction is:
-
-- `20553827` **is** the last Home source-event-shape change;
-- it is **not** a clean boundary at which the meaning of the unchanged
-  destination `AffirmationCompleted.bytes32` changed.
+The "two repository comments state `20553827` is not the block the Home event
+shape changed" paragraph that used to sit here described a real
+`version.rs`/`ENVs.md` inaccuracy at the time — those comments have since been
+rewritten as part of this same task to state exactly the distinction this note
+already drew: `20553827` is a **grammar** boundary (the source-event shape
+change), and the **identity** epoch floor is the separate, now-shared
+`15562365` constant. Both are accurate today. The general point — a
+`started_at_block`/grammar boundary and an identity-epoch floor are two
+different concepts that do not have to coincide — remains this note's
+contribution and is unaffected by which specific block plays which role.
 
 ## Invariants
 
@@ -364,8 +385,13 @@ and the first post-upgrade source event. The accurate distinction is:
 - Treating all post-v2 Chiado completions as nonce-keyed either loses the
   hash-keyed executions or creates additional message identities for deposits
   that were also completed under a nonce.
-- Lowering the current Chiado floor admits mixed identity history and can
-  surface duplicate logical deposits under different native IDs.
+- *(Historical — see §7's superseded note.)* Before `xdai-alias-completion-anomalies`,
+  lowering the current Chiado floor would have admitted mixed identity history
+  and risked surfacing duplicate logical deposits under different native IDs,
+  because a hash-keyed completion's canonical identity was always the raw
+  hash. That is no longer the mechanism: canonical identity now comes from
+  receipt-derived nonce evidence when available, and mixed-identity aliases of
+  one nonce are handled as multiple-execution anomalies, not duplicate rows.
 - Treating Chiado v3 as full mainnet Home v7 invents a testnet USDS deposit
   route that its runtime does not expose.
 - Treating the four-argument v3 event as proof of 124-byte support can make the
@@ -407,8 +433,10 @@ Update this note when any of the following occurs:
 - a testnet USDS or second-asset route appears;
 - the oracle emits another destination completion whose `bytes32` convention
   changes;
-- the configured scan floors or testnet grammar entries change;
-- the inaccurate `20553827` comments in `version.rs` / `ENVs.md` are corrected.
+- the configured scan floors or testnet grammar entries change again;
+- ~~the inaccurate `20553827` comments in `version.rs` / `ENVs.md` are
+  corrected~~ — done by `xdai-alias-completion-anomalies` (2026-09-22); see
+  §7's superseded note.
 
 ## Open Questions
 

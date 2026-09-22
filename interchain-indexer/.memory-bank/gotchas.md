@@ -2257,6 +2257,21 @@ Consequently an orphan can remain pending indefinitely, and a confirmation
 arriving after a completed message was flushed can form a new pending entry.
 This is an accepted limitation, not a reason to create a phantom message.
 
+**Late source enrichment and xDai amount assumptions.** Once a reconstructed completion and a source handler can
+produce the same canonical key (modern nonce aliases or future hash-keyed
+source handlers), finalization and eviction allow a later source-only entry
+under that key. `xdai/consolidation.rs::build_transfer` fills its
+unobserved destination amount from the source amount, and
+`message_buffer/persistence.rs::crosschain_transfers_on_conflict` prefers the
+incoming non-null amount. The message-level terminal guard does not protect
+the transfer row. If source and payout amounts differ, this changes an observed
+payout to an inferred amount. The requester confirmed equal source and
+destination amounts for the current xDai alias-reconciliation scope; do not
+require unequal-amount guards or fee-specific tests for that work. Revisit this
+merge behavior only if unequal amounts become supported. This does not relax
+the requirement to preserve the first canonical destination transaction when
+a later execution is observed.
+
 See [xDai protocol research](./research/xdai-bridge-protocol-and-indexing-fit.md),
 sections **The epoch boundary is not clean on the destination side** and
 **Plain-transfer deposits**. Ordinary nonce-based destination-only entries
@@ -2595,3 +2610,97 @@ SeaORM-generated entity selects cast enum columns appropriately, but a raw SQL
 `sat.type::text AS token_type` when decoding the raw stats query; see
 `interchain-indexer-logic/src/bridged_tokens_query.rs` and its database-backed
 token-list tests. A successful `cargo check` cannot catch this mismatch.
+
+---
+
+## xDai Destination Identity And Anomalousness Are Orthogonal — A Hash Alone Is Never An Anomaly
+
+**Symptom:** It is tempting to treat any hash-keyed `AffirmationCompleted` /
+`RelayedMessage` (`bytes32 > u64::MAX`) as suspicious, or to gate the
+multiple-execution check on "is this identity a hash". Both are wrong.
+
+**Root cause:** Two independent axes got conflated. The *raw observed
+identity* (`MessageIdentity::Nonce` vs `MessageIdentity::SourceTransactionHash`,
+decided purely by whether the destination event's `bytes32` fits in `u64`) is
+about **how this one execution was encoded on chain**. *Anomalousness* is
+about **execution multiplicity** — whether more than one destination
+transaction resolves to the same *canonical* identity. These are unrelated:
+a hash-keyed completion is completely ordinary (Chiado nonce 2's fixture is
+the deliberate negative control — one hash-keyed completion, zero anomalies),
+and a nonce-keyed completion can just as easily be the *second* execution of
+a canonical key (nonce 0 and 1's direct nonce-keyed completions coexist with a
+later hash-keyed alias of the same nonce in the same Chiado window).
+
+**Fix:** Never branch multiple-execution logic on `MessageIdentity`'s variant.
+The only question `message_buffer::persistence::reconcile_destination_executions`
+asks is "does this observation's destination transaction hash match the
+canonical one for this key" — see `xdai::types::ObservedExecution::observed_identity`'s
+doc for why it stores the raw identity only as **provenance**, not as an input
+to the anomaly decision.
+
+---
+
+## A Fixture Built From The Same `sol!` Declaration It Tests Cannot Catch A Wrong `topic0`
+
+**Symptom:** `interchain-indexer-logic/src/indexer/xdai/events.rs`'s legacy
+two-argument source-event decoder filtered on `topic0` values that no
+deployed xDai contract has ever emitted (`LegacyUserRequestForAffirmation` /
+`LegacyUserRequestForSignature`, invented names to work around `alloy::sol!`
+rejecting two events of the same real name in one macro invocation) for an
+entire prior task's implementation and review cycle, and every test for that
+decoder passed the whole time.
+
+**Root cause:** The old tests built their fixture logs via
+`LegacyUserRequestForAffirmation { .. }.encode_log_data()` — which embeds
+`LegacyUserRequestForAffirmation::SIGNATURE_HASH` as `topics[0]` — and the
+decoder under test filtered on that exact same constant
+(`LegacyUserRequestForAffirmation::SIGNATURE_HASH`). Both sides of the
+assertion computed the identical (wrong) hash from the identical (wrong)
+declaration, so the test could never observe that neither one matches what
+the real two-argument `UserRequestForAffirmation(address,uint256)` /
+`UserRequestForSignature(address,uint256)` events actually hash to on chain
+(`0x1d491a42…` / `0x127650bc…`, verified via `cast keccak`).
+
+**Fix:** A fixture testing topic0 recognition must supply the topic0 as a
+literal hex string transcribed from an independent, verified source (an
+on-chain log, a spec table, `cast keccak` output) — never by reading
+`SomeType::SIGNATURE_HASH` off the same `sol!` block the code under test also
+reads from. See `events.rs::tests::REAL_USER_REQUEST_FOR_AFFIRMATION_TWO_ARG_TOPIC0`
+/ `REAL_USER_REQUEST_FOR_SIGNATURE_TWO_ARG_TOPIC0` and the
+`legacy_two_arg_log` helper built around them for the pattern this now uses.
+This generalizes beyond xDai: any test whose purpose is to pin an external
+protocol constant (a signature hash, a magic byte sequence, an address) is
+worthless if the value under test and the value asserted against trace back
+to the same source.
+
+---
+
+## `flushed_for_stats` / `flushed_for_enrichment` Are Cloned Before Destination-Execution Neutralization
+
+**Symptom (latent, not yet observed):** if stats projection or token
+enrichment ever start reading a destination-owned field
+(`dst_tx_hash`, `dst_amount`, `recipient_address`) off the `ConsolidatedMessage`
+models passed to `apply_stats_for_flushed_batch` /
+`kickoff_token_enrichment_for_flushed`, they will silently see the
+**pre-neutralization** value even when
+`message_buffer::persistence::reconcile_destination_executions` decided the
+stored execution wins and rewrote those fields on the batch that actually
+gets upserted.
+
+**Root cause:** `message_buffer::maintenance.rs::commit_maintenance` clones
+`flushed_for_stats` / `flushed_for_enrichment` from `consolidated_entries`
+**before** entering the transaction closure that neutralizes fields (via
+`reconcile_destination_executions`) and flushes. The clones and the
+neutralized-then-flushed `consolidated_entries` are two different values from
+that point on. This is currently safe only because
+`apply_stats_for_flushed_batch` reads exclusively the primary key off each
+model, and `token_keys_from_flushed_for_enrichment` reads exclusively token
+addresses — neither of which neutralization touches.
+
+**Fix / rule:** if a future change makes either stats or enrichment read
+`dst_tx_hash`, `dst_amount`, `recipient_address`, or `last_update_timestamp`
+off these pre-transaction clones, it must instead read the neutralized,
+post-reconciliation values — either move the clone to after
+`reconcile_destination_executions` runs, or pass the reconciled amounts
+through explicitly. Do not assume today's "clone before the transaction"
+shape stays safe under a change to what these two functions read.
