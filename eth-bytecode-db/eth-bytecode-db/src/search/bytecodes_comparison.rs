@@ -143,14 +143,17 @@ pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<MatchTy
     Ok(MatchType::Partial)
 }
 
+/// Whatever the remote bytecode carries past the local one is taken to be the encoded
+/// constructor arguments. `local_raw_len` is the length of the concatenated local parts,
+/// the same offset [`compare_bytecode_parts`] walks up to.
 #[allow(clippy::result_large_err)]
 pub fn extract_constructor_args(
     remote_raw: &Bytes,
-    local_raw: &Bytes,
+    local_raw_len: usize,
     abi_constructor: Option<&Constructor>,
     is_creation_input: bool,
 ) -> Result<Option<Bytes>, CompareError> {
-    let encoded_constructor_args = remote_raw.slice(local_raw.len()..);
+    let encoded_constructor_args = remote_raw.slice(local_raw_len..);
     let encoded_constructor_args = if encoded_constructor_args.is_empty() {
         None
     } else {

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use super::{types::BytecodeRemote, MatchContract};
+use super::{
+    match_contract::{find_source_details, find_source_files},
+    types::BytecodeRemote,
+    MatchContract,
+};
 use crate::{
     search::bytecodes_comparison::{compare, CompareError, LocalBytecode},
     verification::MatchType,
@@ -33,6 +37,13 @@ impl BytecodeCandidate {
         };
         result
     }
+
+    /// The length of the local bytecode, that is of its parts concatenated in order.
+    /// It is the offset the comparison walks up to, so whatever the remote bytecode
+    /// carries past it is taken to be the encoded constructor arguments.
+    fn local_bytecode_len(&self) -> usize {
+        self.parts.iter().map(|part| part.data.len()).sum()
+    }
 }
 
 pub async fn get_matches_by_candidates<C>(
@@ -51,20 +62,42 @@ where
                 .map(|match_type| (c, match_type))
         })
         .collect();
-    if !filtered_bytecodes.is_empty() {
-        let ids: Vec<i64> = filtered_bytecodes
-            .iter()
-            .map(|(b, _)| b.bytecode.id)
-            .collect();
-        tracing::debug!(ids = ?ids, "found filtered bytecodes");
+    if filtered_bytecodes.is_empty() {
+        return Ok(vec![]);
     }
-    let mut matches = vec![];
-    for (bytecode, match_type) in filtered_bytecodes.iter() {
-        if let Ok(contract_match) =
-            MatchContract::build(db, bytecode.bytecode.source_id, remote, *match_type).await
-        {
-            matches.push(contract_match);
+    tracing::debug!(
+        ids = ?filtered_bytecodes.iter().map(|(b, _)| b.bytecode.id).collect::<Vec<_>>(),
+        "found filtered bytecodes"
+    );
+
+    // `bytecodes` is unique on (source_id, bytecode_type) and the candidate search filters
+    // by a single type, so no two candidates here share a source.
+    let source_ids: Vec<i64> = filtered_bytecodes
+        .iter()
+        .map(|(b, _)| b.bytecode.source_id)
+        .collect();
+    let mut sources = find_source_details(db, &source_ids).await?;
+    let mut source_files = find_source_files(db, &source_ids).await?;
+
+    let mut matches = Vec::with_capacity(filtered_bytecodes.len());
+    for (candidate, match_type) in filtered_bytecodes.iter() {
+        let source_id = candidate.bytecode.source_id;
+        let Some(source) = sources.remove(&source_id) else {
+            tracing::warn!(source_id, "bytecode doesn't have valid source_id");
+            continue;
+        };
+        let source_files = source_files.remove(&source_id).unwrap_or_default();
+        match MatchContract::build(
+            source,
+            source_files,
+            candidate.local_bytecode_len(),
+            remote,
+            *match_type,
+        ) {
+            Ok(contract_match) => matches.push(contract_match),
+            Err(error) => tracing::debug!(source_id, ?error, "skipping the candidate"),
         }
     }
+
     Ok(matches)
 }
