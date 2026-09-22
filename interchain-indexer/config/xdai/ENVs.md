@@ -145,7 +145,7 @@ INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__100__0x7301CFA0e1756B71869E93d4e4Dca5c
 
 | Chain | Name | RPC providers |
 | --- | --- | --- |
-| `11155111` | Sepolia | `tenderly`, `drpc` |
+| `11155111` | Sepolia | `tenderly`, `publicnode` |
 | `10200` | Chiado | `gateway_archive`, `gnosis_official`, `ankr` |
 
 | Bridge | Name | `type` / `indexer_type` | Contracts |
@@ -166,7 +166,7 @@ INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/xdai/bridges-testnet.json
 One variable:
 
 ```bash
-INTERCHAIN_INDEXER_CHAINS__11155111='{"name":"Sepolia","icon":"https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg","explorer":{"url":"https://eth-sepolia.blockscout.com"},"rpcs":[{"tenderly":{"url":"https://sepolia.gateway.tenderly.co"},"drpc":{"url":"https://sepolia.drpc.org"}}]}'
+INTERCHAIN_INDEXER_CHAINS__11155111='{"name":"Sepolia","icon":"https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg","explorer":{"url":"https://eth-sepolia.blockscout.com"},"rpcs":[{"tenderly":{"url":"https://sepolia.gateway.tenderly.co"},"publicnode":{"url":"https://ethereum-sepolia-rpc.publicnode.com"}}]}'
 ```
 
 Field by field:
@@ -177,8 +177,8 @@ INTERCHAIN_INDEXER_CHAINS__11155111__ICON=https://blockscout-icons.s3.us-east-1.
 INTERCHAIN_INDEXER_CHAINS__11155111__EXPLORER__URL=https://eth-sepolia.blockscout.com
 # rpc provider "tenderly"
 INTERCHAIN_INDEXER_CHAINS__11155111__RPCS__TENDERLY__URL=https://sepolia.gateway.tenderly.co
-# rpc provider "drpc"
-INTERCHAIN_INDEXER_CHAINS__11155111__RPCS__DRPC__URL=https://sepolia.drpc.org
+# rpc provider "publicnode"
+INTERCHAIN_INDEXER_CHAINS__11155111__RPCS__PUBLICNODE__URL=https://ethereum-sepolia-rpc.publicnode.com
 ```
 
 #### Chain `10200` — Chiado

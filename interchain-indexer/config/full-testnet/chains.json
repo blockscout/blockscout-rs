@@ -10,6 +10,9 @@
             {
                 "tenderly": {
                     "url": "https://sepolia.gateway.tenderly.co"
+                },
+                "publicnode": {
+                    "url": "https://ethereum-sepolia-rpc.publicnode.com"
                 }
             }
         ]
