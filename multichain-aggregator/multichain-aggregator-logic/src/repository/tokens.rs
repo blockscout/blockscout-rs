@@ -154,6 +154,7 @@ where
             update_if_not_null!(Column::TokenType),
             update_if_not_null!(Column::IconUrl),
             update_if_not_null!(Column::TotalSupply),
+            update_if_not_null!(Column::UiMultiplier),
         ])
         .value(Column::UpdatedAt, Expr::current_timestamp())
         .action_and_where(is_distinct_from!(
@@ -162,7 +163,8 @@ where
             Column::Decimals,
             Column::TokenType,
             Column::IconUrl,
-            Column::TotalSupply
+            Column::TotalSupply,
+            Column::UiMultiplier
         ))
         .to_owned();
     let active_models = updates.into_iter().map(|m| m.into_active_model());

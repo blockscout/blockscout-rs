@@ -200,6 +200,9 @@ message AggregatedTokenInfo {
   optional string exchange_rate = 10;
   // Map of chain id to chain-specific information.
   map<string, ChainInfo> chain_infos = 11;
+  // ERC-8056 display multiplier, a uint256 where 1e18 means 1.0.
+  // Independent of `decimals`. Null for tokens that don't declare one.
+  optional string ui_multiplier = 12;
 }
 
 message GetAddressRequest {

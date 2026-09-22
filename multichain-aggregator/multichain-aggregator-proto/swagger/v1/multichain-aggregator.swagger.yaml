@@ -1513,6 +1513,11 @@ definitions:
         type: string
       total_supply:
         type: string
+      ui_multiplier:
+        type: string
+        description: |-
+          ERC-8056 display multiplier, a uint256 where 1e18 means 1.0.
+          Independent of `decimals`.
   TokenImportPriceData:
     type: object
     properties:
@@ -1614,6 +1619,11 @@ definitions:
         additionalProperties:
           $ref: '#/definitions/v1AggregatedTokenInfoChainInfo'
         description: Map of chain id to chain-specific information.
+      ui_multiplier:
+        type: string
+        description: |-
+          ERC-8056 display multiplier, a uint256 where 1e18 means 1.0.
+          Independent of `decimals`. Null for tokens that don't declare one.
   v1AggregatedTokenInfoChainInfo:
     type: object
     properties:
@@ -2316,6 +2326,7 @@ definitions:
       - TOKEN_TYPE_ZRC_2
       - TOKEN_TYPE_NATIVE
       - TOKEN_TYPE_ERC_7984
+      - TOKEN_TYPE_ERC_8056
     default: TOKEN_TYPE_UNSPECIFIED
   v1WeeklyMetric:
     type: object

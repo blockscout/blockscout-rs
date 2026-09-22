@@ -30,6 +30,8 @@ pub struct Model {
     pub transfers_count: Option<i64>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
+    pub ui_multiplier: Option<BigDecimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
