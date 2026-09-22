@@ -212,8 +212,6 @@ mod tests {
             compilation_artifacts: Some("compilation_artifacts".into()),
             creation_input_artifacts: Some("creation_input_artifacts".into()),
             deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
-            raw_creation_input: vec![0u8, 1u8, 2u8, 3u8, 4u8],
-            raw_deployed_bytecode: vec![5u8, 6u8, 7u8, 8u8],
             is_blueprint: false,
             libraries: BTreeMap::from([("file_name:library".into(), "0x1234".into())]),
         };

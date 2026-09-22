@@ -6,15 +6,15 @@ use super::{
 };
 use crate::{verification, verification::SourceType};
 use anyhow::Context;
-use bytes::Bytes;
-use entity::{files, sources};
+use entity::{files, sea_orm_active_enums, source_files, sources};
 use ethabi::Constructor;
 use sea_orm::{
     prelude::{DateTime, DbErr},
-    ConnectionTrait, EntityTrait,
+    ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, JoinType, QueryFilter, QuerySelect,
+    RelationTrait, Select,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use verification_common::solidity_libraries;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,52 +32,127 @@ pub struct MatchContract {
     pub compilation_artifacts: Option<String>,
     pub creation_input_artifacts: Option<String>,
     pub deployed_bytecode_artifacts: Option<String>,
-    pub raw_creation_input: Vec<u8>,
-    pub raw_deployed_bytecode: Vec<u8>,
     pub is_blueprint: bool,
     pub libraries: BTreeMap<String, String>,
 }
 
-impl MatchContract {
-    pub async fn build<C>(
-        db: &C,
-        source_id: i64,
-        remote: &BytecodeRemote,
-        match_type: verification::MatchType,
-    ) -> Result<Self, anyhow::Error>
-    where
-        C: ConnectionTrait,
-    {
-        let mut result = sources::Entity::find_by_id(source_id)
-            .find_with_related(files::Entity)
-            .all(db)
-            .await?;
+/// The `sources` columns a [`MatchContract`] is built from.
+///
+/// `sources` also stores both raw bytecodes, each a multi-kilobyte `bytea`. Neither is
+/// part of the response, and the only thing the build needs out of them - the offset the
+/// local bytecode ends at - is already known from the candidate's parts, so they are
+/// deliberately left out of the projection.
+#[derive(Clone, Debug, FromQueryResult)]
+pub(super) struct SourceDetails {
+    pub id: i64,
+    pub updated_at: DateTime,
+    pub source_type: sea_orm_active_enums::SourceType,
+    pub compiler_version: String,
+    pub compiler_settings: serde_json::Value,
+    pub file_name: String,
+    pub contract_name: String,
+    pub abi: Option<serde_json::Value>,
+    pub compilation_artifacts: Option<serde_json::Value>,
+    pub creation_input_artifacts: Option<serde_json::Value>,
+    pub deployed_bytecode_artifacts: Option<serde_json::Value>,
+}
 
-        let (source, files) = result
-            .pop()
-            .ok_or_else(|| DbErr::RecordNotFound("bytecode doesn't have valid source_id".into()))?;
+#[derive(Debug, FromQueryResult)]
+struct SourceFile {
+    source_id: i64,
+    name: String,
+    content: String,
+}
 
-        Self::build_from_db_data(source, files, remote, match_type).await
+fn source_details_query(source_ids: &[i64]) -> Select<sources::Entity> {
+    sources::Entity::find()
+        .select_only()
+        .columns([
+            sources::Column::Id,
+            sources::Column::UpdatedAt,
+            sources::Column::SourceType,
+            sources::Column::CompilerVersion,
+            sources::Column::CompilerSettings,
+            sources::Column::FileName,
+            sources::Column::ContractName,
+            sources::Column::Abi,
+            sources::Column::CompilationArtifacts,
+            sources::Column::CreationInputArtifacts,
+            sources::Column::DeployedBytecodeArtifacts,
+        ])
+        .filter(sources::Column::Id.is_in(source_ids.iter().copied()))
+}
+
+fn source_files_query(source_ids: &[i64]) -> Select<source_files::Entity> {
+    source_files::Entity::find()
+        .select_only()
+        .column(source_files::Column::SourceId)
+        .column(files::Column::Name)
+        .column(files::Column::Content)
+        .join(JoinType::InnerJoin, source_files::Relation::Files.def())
+        .filter(source_files::Column::SourceId.is_in(source_ids.iter().copied()))
+}
+
+/// Retrieves the sources behind `source_ids` in a single query, keyed by source id.
+pub(super) async fn find_source_details<C>(
+    db: &C,
+    source_ids: &[i64],
+) -> Result<HashMap<i64, SourceDetails>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let sources = source_details_query(source_ids)
+        .into_model::<SourceDetails>()
+        .all(db)
+        .await?;
+
+    Ok(sources
+        .into_iter()
+        .map(|source| (source.id, source))
+        .collect())
+}
+
+/// Retrieves the source files of `source_ids` in a single query, grouped by source id.
+///
+/// Keeping this apart from [`find_source_details`] is what stops the join from repeating
+/// every source row - abi, compiler settings and all three artifact blobs included - once
+/// per file that source has.
+pub(super) async fn find_source_files<C>(
+    db: &C,
+    source_ids: &[i64],
+) -> Result<HashMap<i64, BTreeMap<String, String>>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let source_files = source_files_query(source_ids)
+        .into_model::<SourceFile>()
+        .all(db)
+        .await?;
+
+    let mut grouped: HashMap<i64, BTreeMap<String, String>> = HashMap::new();
+    for source_file in source_files {
+        grouped
+            .entry(source_file.source_id)
+            .or_default()
+            .insert(source_file.name, source_file.content);
     }
 
-    async fn build_from_db_data(
-        source: sources::Model,
-        source_files: Vec<files::Model>,
+    Ok(grouped)
+}
+
+impl MatchContract {
+    pub(super) fn build(
+        source: SourceDetails,
+        source_files: BTreeMap<String, String>,
+        local_bytecode_len: usize,
         remote: &BytecodeRemote,
         match_type: verification::MatchType,
     ) -> Result<Self, anyhow::Error> {
         let constructor = get_constructor(source.abi.clone()).context("source has invalid abi")?;
         let has_constructor_args = remote.bytecode_type == BytecodeType::CreationCode;
-        let local_raw = match remote.bytecode_type {
-            BytecodeType::CreationCode | BytecodeType::CreationCodeWithoutConstructor => {
-                &source.raw_creation_input
-            }
-            BytecodeType::RuntimeCode => &source.raw_deployed_bytecode,
-        };
-        let local_raw = Bytes::copy_from_slice(local_raw);
         let constructor_args = extract_constructor_args(
             &remote.data,
-            &local_raw,
+            local_bytecode_len,
             constructor.as_ref(),
             has_constructor_args,
         )
@@ -86,10 +161,6 @@ impl MatchContract {
             e
         })
         .context("invalid constructor arguments")?;
-        let source_files: BTreeMap<String, String> = source_files
-            .into_iter()
-            .map(|f| (f.name, f.content))
-            .collect();
         let libraries =
             solidity_libraries::try_parse_compiler_linked_libraries(&source.compiler_settings)
                 .inspect_err(|e| {
@@ -113,8 +184,6 @@ impl MatchContract {
             deployed_bytecode_artifacts: source
                 .deployed_bytecode_artifacts
                 .map(|value| value.to_string()),
-            raw_creation_input: source.raw_creation_input,
-            raw_deployed_bytecode: source.raw_deployed_bytecode,
             is_blueprint: false,
             libraries,
         };
@@ -140,8 +209,8 @@ mod tests {
     use super::*;
     use crate::verification::MatchType;
     use blockscout_display_bytes::Bytes as DisplayBytes;
-    use entity::files;
     use pretty_assertions::assert_eq;
+    use sea_orm::{DbBackend, QueryTrait};
     use std::str::FromStr;
 
     /// Contract code:
@@ -161,10 +230,10 @@ mod tests {
     const NUMBER_META_PART: &str = "a26469706673582212202ec25b2395cacdfaf72db8374301e337eda2a878ca3089a34d47f0cf8d2968fc64736f6c63430008110033";
     const NUMBER_ARGS_PART: &str = "00000000000000000000000000000000000000000000000000000101010101010000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000561626f6261000000000000000000000000000000000000000000000000000000";
 
-    fn source() -> sources::Model {
-        sources::Model {
+    fn source() -> SourceDetails {
+        SourceDetails {
             id: 1,
-            source_type: entity::sea_orm_active_enums::SourceType::Solidity,
+            source_type: sea_orm_active_enums::SourceType::Solidity,
             compiler_version: "v0.8.7".into(),
             compiler_settings: serde_json::json!({"settings": true}),
             file_name: "Number.sol".into(),
@@ -172,29 +241,26 @@ mod tests {
             abi: Some(
                 serde_json::json!([ { "inputs": [ { "internalType": "uint256", "name": "_number", "type": "uint256" } ], "stateMutability": "nonpayable", "type": "constructor" }, { "inputs": [], "name": "number", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function" } ]),
             ),
-            raw_creation_input: hex::decode(format!("{NUMBER_MAIN_PART}{NUMBER_META_PART}"))
-                .unwrap(),
-            raw_deployed_bytecode: hex::decode(format!("{NUMBER_MAIN_PART}{NUMBER_META_PART}"))
-                .unwrap(),
-            created_at: Default::default(),
             updated_at: Default::default(),
-            file_ids_hash: Default::default(),
             compilation_artifacts: Default::default(),
             creation_input_artifacts: Default::default(),
             deployed_bytecode_artifacts: Default::default(),
         }
     }
 
-    #[tokio::test]
-    async fn test_build_match_contract() {
+    /// The length of the local bytecode the candidate's parts add up to, which is where
+    /// the remote bytecode stops being code and starts being constructor arguments.
+    fn local_bytecode_len() -> usize {
+        hex::decode(format!("{NUMBER_MAIN_PART}{NUMBER_META_PART}"))
+            .unwrap()
+            .len()
+    }
+
+    #[test]
+    fn test_build_match_contract() {
         let source = source();
-        let files = vec![files::Model {
-            id: 1,
-            created_at: Default::default(),
-            updated_at: Default::default(),
-            name: "Number.sol".into(),
-            content: "contract Number {}".into(),
-        }];
+        let source_files =
+            BTreeMap::from([("Number.sol".to_string(), "contract Number {}".to_string())]);
 
         let remote = BytecodeRemote {
             bytecode_type: BytecodeType::CreationCode,
@@ -204,13 +270,13 @@ mod tests {
             .unwrap()
             .0,
         };
-        let result = MatchContract::build_from_db_data(
+        let result = MatchContract::build(
             source.clone(),
-            files,
+            source_files,
+            local_bytecode_len(),
             &remote,
             verification::MatchType::Full,
         )
-        .await
         .expect("unexpected error");
 
         assert_eq!(result.file_name, source.file_name);
@@ -228,12 +294,10 @@ mod tests {
             NUMBER_ARGS_PART,
         );
         assert_eq!(result.match_type, MatchType::Full);
-        assert_eq!(result.raw_creation_input, source.raw_creation_input);
-        assert_eq!(result.raw_deployed_bytecode, source.raw_deployed_bytecode);
     }
 
-    #[tokio::test]
-    async fn test_build_match_contract_failed() {
+    #[test]
+    fn test_build_match_contract_failed() {
         let invalid_args = "6080609001fe";
         let source = source();
 
@@ -245,13 +309,48 @@ mod tests {
             .unwrap()
             .0,
         };
-        let _ = MatchContract::build_from_db_data(
+        let _ = MatchContract::build(
             source,
-            vec![],
+            BTreeMap::new(),
+            local_bytecode_len(),
             &remote,
             verification::MatchType::Full,
         )
-        .await
         .expect_err("expected error during decoding constructor arguments");
+    }
+
+    /// `raw_creation_input` and `raw_deployed_bytecode` are multi-kilobyte `bytea`
+    /// columns nothing downstream reads, so selecting them only costs detoasting and
+    /// bandwidth.
+    #[test]
+    fn source_details_query_leaves_the_raw_bytecodes_in_the_database() {
+        assert_eq!(
+            source_details_query(&[1, 2])
+                .build(DbBackend::Postgres)
+                .to_string(),
+            concat!(
+                r#"SELECT "sources"."id", "sources"."updated_at", CAST("sources"."source_type" AS text), "#,
+                r#""sources"."compiler_version", "sources"."compiler_settings", "sources"."file_name", "#,
+                r#""sources"."contract_name", "sources"."abi", "sources"."compilation_artifacts", "#,
+                r#""sources"."creation_input_artifacts", "sources"."deployed_bytecode_artifacts" "#,
+                r#"FROM "sources" WHERE "sources"."id" IN (1, 2)"#,
+            ),
+        );
+    }
+
+    /// Joining the files onto the sources instead would repeat every source row once per
+    /// file it has, which in production averages out at north of eleven copies.
+    #[test]
+    fn source_files_query_does_not_repeat_the_source() {
+        assert_eq!(
+            source_files_query(&[1, 2])
+                .build(DbBackend::Postgres)
+                .to_string(),
+            concat!(
+                r#"SELECT "source_files"."source_id", "files"."name", "files"."content" "#,
+                r#"FROM "source_files" INNER JOIN "files" ON "source_files"."file_id" = "files"."id" "#,
+                r#"WHERE "source_files"."source_id" IN (1, 2)"#,
+            ),
+        );
     }
 }
