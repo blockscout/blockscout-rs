@@ -8,7 +8,7 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 
 | Chain | Name | RPC providers |
 | --- | --- | --- |
-| `11155111` | Sepolia | `tenderly` |
+| `11155111` | Sepolia | `tenderly`, `ethpandaops` |
 | `10200` | Chiado | `gateway_archive`, `gnosis_official`, `ankr` |
 
 | Bridge | Name | `type` / `indexer_type` | Contracts |
@@ -30,7 +30,7 @@ INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-testnet/bridges.json
 One variable:
 
 ```bash
-INTERCHAIN_INDEXER_CHAINS__11155111='{"name":"Sepolia","icon":"https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg","explorer":{"url":"https://eth-sepolia.blockscout.com"},"rpcs":[{"tenderly":{"url":"https://sepolia.gateway.tenderly.co"}}]}'
+INTERCHAIN_INDEXER_CHAINS__11155111='{"name":"Sepolia","icon":"https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg","explorer":{"url":"https://eth-sepolia.blockscout.com"},"rpcs":[{"tenderly":{"url":"https://sepolia.gateway.tenderly.co"},"ethpandaops":{"url":"https://rpc.sepolia.ethpandaops.io"}}]}'
 ```
 
 Field by field:
@@ -41,6 +41,8 @@ INTERCHAIN_INDEXER_CHAINS__11155111__ICON=https://blockscout-icons.s3.us-east-1.
 INTERCHAIN_INDEXER_CHAINS__11155111__EXPLORER__URL=https://eth-sepolia.blockscout.com
 # rpc provider "tenderly"
 INTERCHAIN_INDEXER_CHAINS__11155111__RPCS__TENDERLY__URL=https://sepolia.gateway.tenderly.co
+# rpc provider "ethpandaops"
+INTERCHAIN_INDEXER_CHAINS__11155111__RPCS__ETHPANDAOPS__URL=https://rpc.sepolia.ethpandaops.io
 ```
 
 ### Chain `10200` — Chiado
