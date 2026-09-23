@@ -139,6 +139,11 @@
       "subgraph_path": "../subgraphs/infinityname-subgraph",
       "subgraph_name": "infinityname-soneium-subgraph",
       "network": "soneium-mainnet"
+    },
+    "doti": {
+      "subgraph_path": "../subgraphs/doti-subgraph",
+      "subgraph_name": "doti-subgraph",
+      "network": "arbitrum-one"
     }
   }
 }
