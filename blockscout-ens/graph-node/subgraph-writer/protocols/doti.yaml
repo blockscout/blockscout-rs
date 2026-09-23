@@ -1,5 +1,5 @@
 default_context:
-  project_name: 'DotI Subgraph'
+  project_name: 'DotI Protocol'
   short_name: 'doti'
   network: 'arbitrum-one'
   
