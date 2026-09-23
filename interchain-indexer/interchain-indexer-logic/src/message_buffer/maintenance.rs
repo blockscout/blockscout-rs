@@ -345,7 +345,11 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
         // variable. That is safe today: `apply_stats_for_flushed_batch` only
         // reads each entry's primary key, and
         // `token_keys_from_flushed_for_enrichment` only reads token
-        // addresses -- neither field neutralization touches. If stats ever
+        // addresses -- neither field neutralization touches. (When the stored
+        // execution wins, reconciliation drops the entry's transfers from the
+        // flushed batch; the clones below still carry them, which only means
+        // enrichment may fetch metadata for token addresses that xDai derives
+        // from the shared source side anyway.) If stats ever
         // starts reading destination fields (`dst_tx_hash`, amounts) off
         // these models, this stops being true and becomes a defect.
         let flushed_for_stats = consolidated_entries.clone();
@@ -364,10 +368,11 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
                     // Reads the stored destination state, decides promotion
                     // and retention per key, and neutralizes
                     // `consolidated_entries`' destination-owned fields when
-                    // the stored execution wins -- all **before** the upsert
-                    // below, so a late/non-canonical execution this buffer
-                    // instance saw first cannot clobber `dst_tx_hash` /
-                    // `recipient_address` / `dst_amount`.
+                    // the stored execution wins (dropping that entry's
+                    // transfers) -- all **before** the upsert below, so a
+                    // late/non-canonical execution this buffer instance saw
+                    // first cannot clobber `dst_tx_hash` /
+                    // `recipient_address` or the stored canonical transfer.
                     let reconciliation = persistence::reconcile_destination_executions(
                         tx,
                         &mut consolidated_entries,

@@ -424,23 +424,17 @@ struct StoredDestinationState {
     protocol_metadata: Option<serde_json::Value>,
 }
 
-fn active_value_eq_i16(value: &ActiveValue<i16>, expected: i16) -> bool {
-    match value {
-        ActiveValue::Set(v) | ActiveValue::Unchanged(v) => *v == expected,
-        ActiveValue::NotSet => false,
-    }
-}
-
 /// Reads the stored destination state for every key with at least one
 /// observation, decides -- per key -- whether a canonical row exists or is
 /// about to be written this same transaction (the *promotion gate*), and:
 ///
-/// - neutralizes `consolidated_entries`' destination-owned fields back to the
-///   stored values when the **stored** execution is the one that wins (so the
-///   upsert in `flush_to_final_storage` cannot clobber `dst_tx_hash` /
-///   `recipient_address` / the paired transfer's `dst_amount` with a
-///   different, non-canonical execution this buffer instance happened to see
-///   first);
+/// - when the **stored** execution is the one that wins, restores
+///   `consolidated_entries`' destination-owned message fields to the stored
+///   values and drops that entry's transfers (so the upsert in
+///   `flush_to_final_storage` cannot clobber `dst_tx_hash` /
+///   `recipient_address` / `last_update_timestamp`, or any column of the
+///   already-stored canonical transfer, with a different, non-canonical
+///   execution this buffer instance happened to see first);
 /// - collects anomaly-row candidates and the full replacement
 ///   `multiple_executions` array for keys that gained a new one;
 /// - reports which keys are fully resolved (nothing left to wait for), for
@@ -556,21 +550,38 @@ pub(super) async fn reconcile_destination_executions(
         reconciliation.resolved_keys.push(*key);
 
         if stored_wins && let Some(index) = consolidated_index {
-            // `Set(None)` on `dst_amount` below is safe only because this
-            // branch is reachable exclusively when a stored row already
-            // exists: a plain `INSERT` (no conflict) never takes this path.
+            // The stored row was written together with its canonical
+            // transfer by the flush that first finalized it (xDai, the only
+            // producer of destination executions, always emits its single
+            // `index = 0` transfer alongside the message), so there is
+            // nothing this cycle's (possibly non-canonical) transfer can add
+            // -- only things it can corrupt. Its transfers are therefore
+            // dropped outright rather than neutralized column by column:
+            // `crosschain_transfers_on_conflict` is `COALESCE(EXCLUDED, stored)`
+            // for every value column (and unconditional `EXCLUDED` for the
+            // token chain ids), so *any* completion-derived column left `Set`
+            // would overwrite the canonical value. That is not hypothetical:
+            // for a raw-hash identity whose source receipt carries no
+            // recognized source event, xDai takes both `recipient_address`
+            // and `src_amount` from the completion itself, and a per-column
+            // denylist here would silently rot the next time a column is
+            // derived from the destination side. Stats projection is
+            // unaffected: `apply_stats_for_flushed_batch` re-reads the stored
+            // transfer by message PK, and the upsert never touches
+            // `stats_processed` / `*_stats_asset_id` anyway, so the already
+            // counted row is neither re-counted nor re-linked from late data.
+            //
+            // The message row cannot be dropped the same way -- it is what
+            // this cycle's confirmations and `protocol_metadata` patch attach
+            // to -- so its destination-owned columns are restored to the
+            // stored values instead. Its remaining columns are source-owned
+            // and shared with the canonical execution by construction.
             let stored = stored.expect("stored_wins implies stored is Some");
             let entry = &mut consolidated_entries[index];
             entry.message.dst_tx_hash = ActiveValue::Set(stored.dst_tx_hash.clone());
             entry.message.recipient_address = ActiveValue::Set(stored.recipient_address.clone());
             entry.message.last_update_timestamp = ActiveValue::Set(stored.last_update_timestamp);
-            if let Some(transfer) = entry
-                .transfers
-                .iter_mut()
-                .find(|transfer| active_value_eq_i16(&transfer.index, 0))
-            {
-                transfer.dst_amount = ActiveValue::Set(None);
-            }
+            entry.transfers.clear();
         }
 
         if candidates.is_empty() {
@@ -2040,6 +2051,152 @@ mod tests {
             transfer_row.dst_amount,
             Some(BigDecimal::from(990)),
             "dst_amount must stay the canonical execution's, not the late one's"
+        );
+
+        assert_eq!(count_destination_execution_anomalies(&db).await, 1);
+        assert_eq!(
+            additional_executions_of(&db).await,
+            vec![alloy::hex::encode_prefixed([0xFEu8])]
+        );
+    }
+
+    /// Both sides of a raw-hash xDai message whose source receipt carries no
+    /// recognized source event: `resolve_input`'s `(None, None)` arm takes
+    /// the recipient *and* `src_amount` from the completion itself, so two
+    /// distinct executions of the same canonical key disagree on every
+    /// completion-derived column -- message and transfer alike.
+    fn raw_hash_no_source_event_completed(
+        dst_tx_hash: Vec<u8>,
+        recipient: Vec<u8>,
+        completion_value: u64,
+        completed_at: NaiveDateTime,
+    ) -> ConsolidatedMessage {
+        let mut entry = destination_only_completed();
+        entry.message.src_tx_hash = ActiveValue::Set(Some(vec![0x11]));
+        entry.message.sender_address = ActiveValue::Set(Some(vec![0x5E]));
+        entry.message.dst_tx_hash = ActiveValue::Set(Some(dst_tx_hash));
+        entry.message.recipient_address = ActiveValue::Set(Some(recipient.clone()));
+        entry.message.last_update_timestamp = ActiveValue::Set(Some(completed_at));
+        entry.transfers = vec![transfer(
+            Some(completion_value),
+            Some(completion_value),
+            Some(vec![0xAA]),
+            Some(vec![0xBB]),
+            Some(vec![0x5E]),
+            Some(recipient),
+        )];
+        entry
+    }
+
+    /// A late, distinct execution of an already-finalized (and evicted)
+    /// raw-hash/no-source-event message must not rewrite **any** column of
+    /// the stored canonical transfer. Unlike the destination-only fixture in
+    /// `test_reconcile_late_alias_after_finalization_stored_wins_no_overwrite`,
+    /// the late transfer here carries a different `recipient_address` and
+    /// `src_amount`, which the `COALESCE`-based transfer upsert would
+    /// otherwise take from the late completion. The stored projection state
+    /// must also survive untouched, so the already-counted row is neither
+    /// re-counted nor left disagreeing with the amount it was counted at.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_reconcile_late_raw_hash_execution_stored_wins_keeps_canonical_transfer() {
+        let test_db = init_db("reconcile_late_raw_hash_stored_wins_keeps_transfer").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        // Step 1: the canonical execution (0xDD, recipient 0x2B, 990) is
+        // stored and stats-projected.
+        flush(
+            &db,
+            raw_hash_no_source_event_completed(vec![0xDD], vec![0x2B], 990, ts(2_000)),
+        )
+        .await;
+        let stats_asset_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            ..Default::default()
+        })
+        .exec_with_returning(db.db.as_ref())
+        .await
+        .unwrap()
+        .id;
+        mark_transfer_projected(&db, 1, Some(stats_asset_id)).await;
+        let canonical_transfer = load_transfer(&db).await;
+
+        // Step 2: a fresh buffer instance sees only a later, distinct
+        // execution (0xFE, recipient 0x3C, 995) and consolidates around it.
+        let key = Key::new(MESSAGE_ID, BRIDGE_ID as BridgeId);
+        let mut entries = vec![raw_hash_no_source_event_completed(
+            vec![0xFE],
+            vec![0x3C],
+            995,
+            ts(3_000),
+        )];
+        let observations = vec![(
+            key,
+            vec![destination_execution(
+                vec![0xFE],
+                vec![0x11; 32],
+                Some(3),
+                30,
+                ts(3_000),
+                "late",
+            )],
+        )];
+
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        let reconciliation = reconcile_destination_executions(&tx, &mut entries, &observations)
+            .await
+            .unwrap();
+        assert_eq!(reconciliation.resolved_keys, vec![key]);
+        flush_to_final_storage(&tx, entries).await.unwrap();
+        apply_destination_execution_reconciliation(&tx, &reconciliation)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let row = load(&db).await;
+        assert_eq!(row.status, MessageStatus::Completed);
+        assert_eq!(
+            row.dst_tx_hash,
+            Some(vec![0xDD]),
+            "dst_tx_hash must stay the canonical execution's"
+        );
+        assert_eq!(
+            row.recipient_address,
+            Some(vec![0x2B]),
+            "message recipient_address must stay the canonical execution's"
+        );
+        assert_eq!(
+            row.last_update_timestamp,
+            Some(ts(2_000)),
+            "last_update_timestamp must stay the canonical execution's"
+        );
+
+        let transfer_row = load_transfer(&db).await;
+        assert_eq!(
+            transfer_row.recipient_address,
+            Some(vec![0x2B]),
+            "transfer recipient_address must stay the canonical execution's"
+        );
+        assert_eq!(
+            transfer_row.src_amount,
+            Some(BigDecimal::from(990)),
+            "src_amount must stay the canonical execution's"
+        );
+        assert_eq!(
+            transfer_row.dst_amount,
+            Some(BigDecimal::from(990)),
+            "dst_amount must stay the canonical execution's"
+        );
+        assert_eq!(
+            transfer_row.stats_processed, 1,
+            "the already-counted transfer must not be reset for re-projection"
+        );
+        assert_eq!(transfer_row.src_stats_asset_id, Some(stats_asset_id));
+        assert_eq!(transfer_row.dst_stats_asset_id, Some(stats_asset_id));
+        assert_eq!(
+            transfer_row, canonical_transfer,
+            "no column of the stored canonical transfer may change"
         );
 
         assert_eq!(count_destination_execution_anomalies(&db).await, 1);

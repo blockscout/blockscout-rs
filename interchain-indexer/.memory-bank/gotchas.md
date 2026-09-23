@@ -2697,6 +2697,22 @@ that point on. This is currently safe only because
 model, and `token_keys_from_flushed_for_enrichment` reads exclusively token
 addresses — neither of which neutralization touches.
 
+When the stored execution wins, reconciliation restores the message's
+destination-owned columns and **drops the entry's transfers entirely** rather
+than neutralizing transfer columns one by one. The reason is the conflict
+policy: `crosschain_transfers_on_conflict` is `COALESCE(EXCLUDED.col,
+stored.col)` for every value column (plain `EXCLUDED` for the token chain
+ids), so any completion-derived column left `Set` silently overwrites the
+canonical transfer. For an xDai raw-hash identity whose source receipt has no
+recognized source event, `recipient_address` and `src_amount` both come from
+the completion, so a per-column fix that only nulled `dst_amount` let a late
+execution rewrite them. Dropping is safe because the stored canonical row was
+flushed with its transfer, and stats projection re-reads transfers from the
+database by message PK. The clones still hold the dropped transfer, so
+enrichment may look up its token addresses, which xDai takes from the shared
+source side. Regression:
+`persistence::tests::test_reconcile_late_raw_hash_execution_stored_wins_keeps_canonical_transfer`.
+
 **Fix / rule:** if a future change makes either stats or enrichment read
 `dst_tx_hash`, `dst_amount`, `recipient_address`, or `last_update_timestamp`
 off these pre-transaction clones, it must instead read the neutralized,
