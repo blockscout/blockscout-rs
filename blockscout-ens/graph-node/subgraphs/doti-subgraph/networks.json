@@ -15,5 +15,56 @@
       "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
       "startBlock": 500111797
     }
+  },
+  "optimism": {
+    "Registry": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 156270074
+    },
+    "Resolver": {
+      "startBlock": 156270074
+    },
+    "RegistrarController": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 156270074
+    },
+    "Base": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 156270074
+    }
+  },
+  "mainnet": {
+    "Registry": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 25871672
+    },
+    "Resolver": {
+      "startBlock": 25871672
+    },
+    "RegistrarController": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 25871672
+    },
+    "Base": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 25871672
+    }
+  },
+  "robinhood": {
+    "Registry": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 50449205
+    },
+    "Resolver": {
+      "startBlock": 50449205
+    },
+    "RegistrarController": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 50449205
+    },
+    "Base": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 50449205
+    }
   }
 }
