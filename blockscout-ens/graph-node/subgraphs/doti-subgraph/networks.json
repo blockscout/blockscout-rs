@@ -1,0 +1,19 @@
+{
+  "arbitrum-one": {
+    "Registry": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 500111797
+    },
+    "Resolver": {
+      "startBlock": 500111797
+    },
+    "RegistrarController": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 500111797
+    },
+    "Base": {
+      "address": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+      "startBlock": 500111797
+    }
+  }
+}
