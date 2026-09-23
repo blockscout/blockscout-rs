@@ -4,7 +4,8 @@ database
 CLAUDE.local.md
 tmp
 __pycache__
-/graphify-out/cache/
-/graphify-out/memory/
-/graphify-out/20*/
-/graphify-out/.graphify_python
+# Fully local, regenerable knowledge-graph artifacts (graph.json/graph.html and
+# friends). Committing them produced multi-MB diffs on every code change and
+# near-guaranteed merge conflicts; see .memory-bank/rules/graphify.mdc for the
+# bootstrap/regeneration workflow instead.
+/graphify-out/

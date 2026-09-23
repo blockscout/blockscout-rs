@@ -161,6 +161,18 @@ check-envs:
 generate-envs:
     cargo run --bin check-envs
 
+# graphify-out/ is gitignored (per-clone, local-only). Rebuild it after cloning or
+# whenever graphify-out/graph.json is missing - see .memory-bank/rules/graphify.mdc.
+# --code-only needs no LLM API key; it indexes Rust/code files via AST only.
+graphify-init:
+    graphify extract . --code-only
+
+# Install local git hooks (post-commit/post-checkout) that keep graphify-out/
+# current automatically as code changes and branches switch. `.git/hooks` isn't
+# versioned, so this is a one-time step per clone.
+graphify-hooks:
+    graphify hook install
+
 start-db-migrate-up-generate-entities *args:
     -just stop-postgres
     just start-postgres
