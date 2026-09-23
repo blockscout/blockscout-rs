@@ -238,6 +238,7 @@ pub fn proto_token_type_to_db_token_type(token_type: proto::TokenType) -> Option
         proto::TokenType::Zrc2 => Some(TokenType::Zrc2),
         proto::TokenType::Native => Some(TokenType::Native),
         proto::TokenType::Erc7984 => Some(TokenType::Erc7984),
+        proto::TokenType::Erc8056 => Some(TokenType::Erc8056),
         proto::TokenType::Unspecified => None,
     }
 }
@@ -252,5 +253,6 @@ pub fn db_token_type_to_proto_token_type(token_type: TokenType) -> proto::TokenT
         TokenType::Zrc2 => proto::TokenType::Zrc2,
         TokenType::Native => proto::TokenType::Native,
         TokenType::Erc7984 => proto::TokenType::Erc7984,
+        TokenType::Erc8056 => proto::TokenType::Erc8056,
     }
 }

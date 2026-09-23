@@ -14,7 +14,7 @@ use multichain_aggregator_logic::types::api_keys::ApiKey;
 use pretty_assertions::assert_eq;
 use sea_orm::{
     DatabaseConnection, EntityTrait,
-    prelude::{BigDecimal, Uuid},
+    prelude::{BigDecimal, DateTime, Uuid},
 };
 use serde_json::json;
 use url::Url;
@@ -172,4 +172,102 @@ async fn test_import_token() {
     assert_eq!(token.name, Some("Test Token".to_string()));
     assert_eq!(token.token_type, TokenType::Erc721);
     assert_eq!(token.total_supply, Some(BigDecimal::from(1234)));
+    assert_eq!(token.ui_multiplier, None);
+}
+
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn test_import_erc8056_token() {
+    let db = database!(Migrator);
+    let base = init_server(db.db_url()).await;
+
+    let import = prepare_import_fn(&db, &base).await;
+
+    let token_address_hash = Address::repeat_byte(1);
+
+    let get_token = || async {
+        entity::tokens::Entity::find_by_id((token_address_hash.clone().to_vec(), 1))
+            .one(db.client().as_ref())
+            .await
+            .unwrap()
+    };
+
+    import(json!({
+        "tokens": [
+            {
+                "address_hash": token_address_hash,
+                "metadata": {
+                    "name": "Scaled Token",
+                    "token_type": "ERC-8056",
+                    "decimals": 18,
+                    "ui_multiplier": "2000000000000000000",
+                    "new_ui_multiplier": "3000000000000000000",
+                    // 2026-09-23T10:00:00Z, as epoch seconds (int64 is
+                    // string-encoded in proto JSON)
+                    "ui_multiplier_effective_at": "1790157600",
+                }
+            }
+        ]
+    }))
+    .await;
+
+    let token = get_token().await.unwrap();
+    assert_eq!(token.token_type, TokenType::Erc8056);
+    assert_eq!(
+        token.ui_multiplier,
+        Some(BigDecimal::from(2_000_000_000_000_000_000u64))
+    );
+    assert_eq!(
+        token.new_ui_multiplier,
+        Some(BigDecimal::from(3_000_000_000_000_000_000u64))
+    );
+    assert_eq!(
+        token.ui_multiplier_effective_at,
+        Some("2026-09-23T10:00:00".parse::<DateTime>().unwrap())
+    );
+
+    // Partial import without the multiplier should not reset it
+    import(json!({
+        "tokens": [
+            {
+                "address_hash": token_address_hash,
+                "metadata": {
+                    "total_supply": "1234"
+                }
+            }
+        ]
+    }))
+    .await;
+
+    let token = get_token().await.unwrap();
+    assert_eq!(token.total_supply, Some(BigDecimal::from(1234)));
+    assert_eq!(
+        token.ui_multiplier,
+        Some(BigDecimal::from(2_000_000_000_000_000_000u64))
+    );
+    assert_eq!(
+        token.new_ui_multiplier,
+        Some(BigDecimal::from(3_000_000_000_000_000_000u64))
+    );
+    assert!(token.ui_multiplier_effective_at.is_some());
+
+    // A new multiplier should overwrite the old one
+    import(json!({
+        "tokens": [
+            {
+                "address_hash": token_address_hash,
+                "metadata": {
+                    "token_type": "ERC-8056",
+                    "ui_multiplier": "3000000000000000000",
+                }
+            }
+        ]
+    }))
+    .await;
+
+    let token = get_token().await.unwrap();
+    assert_eq!(
+        token.ui_multiplier,
+        Some(BigDecimal::from(3_000_000_000_000_000_000u64))
+    );
 }

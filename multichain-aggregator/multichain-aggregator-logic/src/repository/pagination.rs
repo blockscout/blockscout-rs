@@ -55,12 +55,9 @@ impl Cursor {
     }
 
     pub fn build_where_expr(&self) -> Option<SimpleExpr> {
-        let page_token = match self.page_token {
-            Some(ref page_token) => page_token.clone(),
-            None => return None,
-        };
+        let page_token = self.page_token.clone()?;
 
-        let vals = page_token.clone().into_iter();
+        let vals = page_token.into_iter();
 
         let mut expr = SimpleExpr::Value(Value::Bool(Some(false)));
 
