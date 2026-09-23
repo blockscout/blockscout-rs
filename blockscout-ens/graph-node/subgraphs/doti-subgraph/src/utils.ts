@@ -3,7 +3,8 @@ import { Account, Domain } from "../generated/schema";
 
 export const BASE_NODE_HASH = "96b16e885d568c078028f8feef27a718c0e2a3cf42145b2100806cb1f07f4bb7";
 export const BASE_NODE = ".i";
-export const COIN_TYPE = 2147525809; // Arbitrum One (0x80000000 | 42161)
+export const COIN_TYPE_BIGINT = BigInt.fromI64(2147525809); // Arbitrum One (0x80000000 | 42161)
+export const COIN_TYPE = 2147525809;
 
 export const ROOT_NODE =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
