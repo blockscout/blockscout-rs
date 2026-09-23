@@ -1,0 +1,26 @@
+default_context:
+  project_name: 'DotI Subgraph'
+  short_name: 'doti'
+  network: 'arbitrum-one'
+  
+  registry: true
+  registry_name: Registry
+  registry_address: '0xf853F8243F10a57CF5e43A49F156F132c05C21a6'
+  registry_start_block: 500111797
+
+  controller: true
+  controller_name: RegistrarController
+  controller_address: '0xf853F8243F10a57CF5e43A49F156F132c05C21a6'
+  controller_start_block: 500111797
+
+  resolver: true
+  resolver_name: Resolver
+  resolver_address: '0xf853F8243F10a57CF5e43A49F156F132c05C21a6'
+  resolver_start_block: 500111797
+
+  base: true
+  base_name: 'Base'
+  base_address: '0xf853F8243F10a57CF5e43A49F156F132c05C21a6'
+  base_start_block: 500111797
+  base_tld: '.i'
+  base_tld_hash: '96b16e885d568c078028f8feef27a718c0e2a3cf42145b2100806cb1f07f4bb7'
