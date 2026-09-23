@@ -85,6 +85,8 @@ pub struct UpdateTokenMetadata {
     pub icon_url: Option<String>,
     pub total_supply: Option<BigDecimal>,
     pub ui_multiplier: Option<BigDecimal>,
+    pub new_ui_multiplier: Option<BigDecimal>,
+    pub ui_multiplier_effective_at: Option<DateTime>,
 }
 
 // Manually implement IntoActiveModel because IntoActiveValue is not implemented
@@ -104,6 +106,8 @@ impl IntoActiveModel<ActiveModel> for UpdateTokenMetadata {
             icon_url: IntoActiveValue::<_>::into_active_value(self.icon_url),
             total_supply: Set(self.total_supply),
             ui_multiplier: Set(self.ui_multiplier),
+            new_ui_multiplier: Set(self.new_ui_multiplier),
+            ui_multiplier_effective_at: Set(self.ui_multiplier_effective_at),
             ..Default::default()
         }
     }
@@ -175,6 +179,8 @@ pub struct AggregatedToken {
     pub holders_count: Option<i64>,
     pub transfers_count: Option<i64>,
     pub ui_multiplier: Option<BigDecimal>,
+    pub new_ui_multiplier: Option<BigDecimal>,
+    pub ui_multiplier_effective_at: Option<DateTime>,
     #[sea_orm(from_expr = r#"token_chain_infos_expr()"#)]
     pub chain_info: ChainInfo,
 }
@@ -213,6 +219,11 @@ impl From<AggregatedToken> for proto::AggregatedTokenInfo {
             holders_count: value.holders_count.map(|h| h.to_string()),
             total_supply: value.total_supply.map(|t| t.to_plain_string()),
             ui_multiplier: value.ui_multiplier.map(|m| m.to_plain_string()),
+            new_ui_multiplier: value.new_ui_multiplier.map(|m| m.to_plain_string()),
+            ui_multiplier_effective_at: value.ui_multiplier_effective_at.map(|t| {
+                t.and_utc()
+                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+            }),
             chain_infos: BTreeMap::from([(
                 value.chain_info.chain_id.to_string(),
                 value.chain_info.into(),

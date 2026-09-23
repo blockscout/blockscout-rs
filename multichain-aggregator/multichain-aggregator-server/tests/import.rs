@@ -14,7 +14,7 @@ use multichain_aggregator_logic::types::api_keys::ApiKey;
 use pretty_assertions::assert_eq;
 use sea_orm::{
     DatabaseConnection, EntityTrait,
-    prelude::{BigDecimal, Uuid},
+    prelude::{BigDecimal, DateTime, Uuid},
 };
 use serde_json::json;
 use url::Url;
@@ -201,6 +201,10 @@ async fn test_import_erc8056_token() {
                     "token_type": "ERC-8056",
                     "decimals": 18,
                     "ui_multiplier": "2000000000000000000",
+                    "new_ui_multiplier": "3000000000000000000",
+                    // 2026-09-23T10:00:00Z, as epoch seconds (int64 is
+                    // string-encoded in proto JSON)
+                    "ui_multiplier_effective_at": "1790157600",
                 }
             }
         ]
@@ -212,6 +216,14 @@ async fn test_import_erc8056_token() {
     assert_eq!(
         token.ui_multiplier,
         Some(BigDecimal::from(2_000_000_000_000_000_000u64))
+    );
+    assert_eq!(
+        token.new_ui_multiplier,
+        Some(BigDecimal::from(3_000_000_000_000_000_000u64))
+    );
+    assert_eq!(
+        token.ui_multiplier_effective_at,
+        Some("2026-09-23T10:00:00".parse::<DateTime>().unwrap())
     );
 
     // Partial import without the multiplier should not reset it
@@ -233,6 +245,11 @@ async fn test_import_erc8056_token() {
         token.ui_multiplier,
         Some(BigDecimal::from(2_000_000_000_000_000_000u64))
     );
+    assert_eq!(
+        token.new_ui_multiplier,
+        Some(BigDecimal::from(3_000_000_000_000_000_000u64))
+    );
+    assert!(token.ui_multiplier_effective_at.is_some());
 
     // A new multiplier should overwrite the old one
     import(json!({

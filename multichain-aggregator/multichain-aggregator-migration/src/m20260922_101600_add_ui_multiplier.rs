@@ -10,6 +10,8 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
             ALTER TABLE tokens ADD COLUMN IF NOT EXISTS ui_multiplier numeric(78, 0);
+            ALTER TABLE tokens ADD COLUMN IF NOT EXISTS new_ui_multiplier numeric(78, 0);
+            ALTER TABLE tokens ADD COLUMN IF NOT EXISTS ui_multiplier_effective_at timestamp;
         "#;
         crate::from_sql(manager, sql).await
     }
@@ -17,6 +19,8 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
             ALTER TABLE tokens DROP COLUMN IF EXISTS ui_multiplier;
+            ALTER TABLE tokens DROP COLUMN IF EXISTS new_ui_multiplier;
+            ALTER TABLE tokens DROP COLUMN IF EXISTS ui_multiplier_effective_at;
         "#;
         crate::from_sql(manager, sql).await
     }

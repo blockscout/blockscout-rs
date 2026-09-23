@@ -1518,6 +1518,15 @@ definitions:
         description: |-
           ERC-8056 display multiplier, a uint256 where 1e18 means 1.0.
           Independent of `decimals`.
+      new_ui_multiplier:
+        type: string
+        description: |-
+          ERC-8056 multiplier scheduled to replace `ui_multiplier`, in the same
+          units. Meaningful together with `ui_multiplier_effective_at`.
+      ui_multiplier_effective_at:
+        type: string
+        format: int64
+        description: Unix timestamp in seconds at which `new_ui_multiplier` takes over.
   TokenImportPriceData:
     type: object
     properties:
@@ -1624,6 +1633,14 @@ definitions:
         description: |-
           ERC-8056 display multiplier, a uint256 where 1e18 means 1.0.
           Independent of `decimals`. Null for tokens that don't declare one.
+      new_ui_multiplier:
+        type: string
+        description: |-
+          ERC-8056 multiplier scheduled to replace `ui_multiplier`, in the same
+          units. Meaningful together with `ui_multiplier_effective_at`.
+      ui_multiplier_effective_at:
+        type: string
+        description: RFC 3339 timestamp at which `new_ui_multiplier` takes over.
   v1AggregatedTokenInfoChainInfo:
     type: object
     properties:

@@ -393,6 +393,11 @@ impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdat
                         icon_url: m.icon_url,
                         total_supply: opt_parse!(m.total_supply),
                         ui_multiplier: opt_parse!(m.ui_multiplier),
+                        new_ui_multiplier: opt_parse!(m.new_ui_multiplier),
+                        ui_multiplier_effective_at: m
+                            .ui_multiplier_effective_at
+                            .map(parse_timestamp_secs)
+                            .transpose()?,
                     })
                 })
                 .transpose()?,

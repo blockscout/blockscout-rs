@@ -220,6 +220,11 @@ message BatchImportRequest {
       // ERC-8056 display multiplier, a uint256 where 1e18 means 1.0.
       // Independent of `decimals`.
       optional string ui_multiplier = 7;
+      // ERC-8056 multiplier scheduled to replace `ui_multiplier`, in the same
+      // units. Meaningful together with `ui_multiplier_effective_at`.
+      optional string new_ui_multiplier = 8;
+      // Unix timestamp in seconds at which `new_ui_multiplier` takes over.
+      optional int64 ui_multiplier_effective_at = 9;
     }
 
     message Counters {

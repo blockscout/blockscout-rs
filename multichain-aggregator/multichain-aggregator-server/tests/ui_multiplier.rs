@@ -17,6 +17,12 @@ use serde_json::json;
 
 // 1e18, i.e. a multiplier of 1.0
 const UI_MULTIPLIER: &str = "1000000000000000000";
+// 1.5e18, the multiplier scheduled to replace it
+const NEW_UI_MULTIPLIER: &str = "1500000000000000000";
+// 2026-09-23T10:00:00Z: epoch seconds on the way in (int64 is string-encoded
+// in proto JSON), RFC 3339 on the way out
+const EFFECTIVE_AT_SECS: &str = "1790157600";
+const EFFECTIVE_AT_RFC3339: &str = "2026-09-23T10:00:00.000Z";
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
@@ -60,6 +66,8 @@ async fn test_ui_multiplier_is_exposed() {
                         "decimals": 18,
                         "token_type": "ERC-8056",
                         "ui_multiplier": UI_MULTIPLIER,
+                        "new_ui_multiplier": NEW_UI_MULTIPLIER,
+                        "ui_multiplier_effective_at": EFFECTIVE_AT_SECS,
                     }
                 },
                 {
@@ -95,22 +103,29 @@ async fn test_ui_multiplier_is_exposed() {
     )
     .await;
 
-    let mut multipliers: Vec<(String, Option<String>)> = response
-        .items
-        .iter()
-        .filter_map(|i| {
-            let token = i.token.as_ref()?;
-            Some((token.symbol.clone()?, token.ui_multiplier.clone()))
-        })
-        .collect();
-    multipliers.sort();
+    let by_symbol = |symbol: &str| -> cluster_proto::AggregatedTokenInfo {
+        response
+            .items
+            .iter()
+            .filter_map(|i| i.token.as_ref())
+            .find(|t| t.symbol.as_deref() == Some(symbol))
+            .unwrap_or_else(|| panic!("{symbol} missing from the response"))
+            .clone()
+    };
+
+    let scaled = by_symbol("SCALED");
+    assert_eq!(scaled.ui_multiplier.as_deref(), Some(UI_MULTIPLIER));
+    assert_eq!(scaled.new_ui_multiplier.as_deref(), Some(NEW_UI_MULTIPLIER));
     assert_eq!(
-        multipliers,
-        vec![
-            ("PLAIN".to_string(), None),
-            ("SCALED".to_string(), Some(UI_MULTIPLIER.to_string())),
-        ]
+        scaled.ui_multiplier_effective_at.as_deref(),
+        Some(EFFECTIVE_AT_RFC3339)
     );
+
+    // A token that declares no multiplier reports all three as null
+    let plain = by_symbol("PLAIN");
+    assert_eq!(plain.ui_multiplier, None);
+    assert_eq!(plain.new_ui_multiplier, None);
+    assert_eq!(plain.ui_multiplier_effective_at, None);
 
     // ERC-8056 is accepted as a token type filter
     let response: cluster_proto::ListAddressTokensResponse = test_server::send_get_request(
@@ -132,6 +147,14 @@ async fn test_ui_multiplier_is_exposed() {
     assert_eq!(tokens[0].symbol.as_deref(), Some("SCALED"));
     assert_eq!(tokens[0].r#type(), TokenType::Erc8056);
     assert_eq!(tokens[0].ui_multiplier.as_deref(), Some(UI_MULTIPLIER));
+    assert_eq!(
+        tokens[0].new_ui_multiplier.as_deref(),
+        Some(NEW_UI_MULTIPLIER)
+    );
+    assert_eq!(
+        tokens[0].ui_multiplier_effective_at.as_deref(),
+        Some(EFFECTIVE_AT_RFC3339)
+    );
 
     // Cluster token list carries it too
     let response: cluster_proto::ListClusterTokensResponse =

@@ -32,6 +32,9 @@ pub struct Model {
     pub updated_at: DateTime,
     #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
     pub ui_multiplier: Option<BigDecimal>,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
+    pub new_ui_multiplier: Option<BigDecimal>,
+    pub ui_multiplier_effective_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
