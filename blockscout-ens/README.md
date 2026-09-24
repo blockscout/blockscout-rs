@@ -14,6 +14,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 |---------------------|-----------|-------|------|
 | ens-subgraph        | Ethereum  | .eth  |      |
 | rns-subgraph        | Rootstock | .rsk  |      |
+| rensa-subgraph      | Robinhood Chain | .rns | Native ERC-721 name ownership |
 | genome-subgraph     | Gnosis    | .gno  | SpaceID contracts |
 | bns-subgraph        | Base      | .base |      |
 | mode-subgraph       | Mode      | .mode | SpaceID contracts |
