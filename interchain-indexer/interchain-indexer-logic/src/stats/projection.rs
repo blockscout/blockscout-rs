@@ -1077,8 +1077,15 @@ async fn merge_assets(
             .unwrap_or(0);
         let target = group.remove(target_idx);
 
-        let mut acc_count = target.transfers_count;
-        let mut acc_amount = target.cumulative_amount.clone();
+        // Only the losers' contribution is accumulated here, and it is added to
+        // the target's *current* column value rather than written as an
+        // absolute total: another bridge's maintenance transaction may be
+        // incrementing the target row concurrently, and the target was read
+        // above without a lock. Under READ COMMITTED `col + delta` re-reads the
+        // committed row after the lock wait; `col = <value read earlier>` would
+        // silently drop that increment.
+        let mut loser_count = 0;
+        let mut loser_amount = BigDecimal::from(0u64);
         let mut acc_decimals = target.decimals;
         let acc_side = target.amount_side.clone();
 
@@ -1134,18 +1141,18 @@ async fn merge_assets(
             if acc_decimals.is_none() {
                 acc_decimals = loser_edge.decimals;
             }
-            acc_count += loser_edge.transfers_count;
-            acc_amount += add_amount;
+            loser_count += loser_edge.transfers_count;
+            loser_amount += add_amount;
         }
 
         let mut ub = stats_asset_edges::Entity::update_many()
             .col_expr(
                 stats_asset_edges::Column::TransfersCount,
-                Expr::value(acc_count),
+                Expr::col(stats_asset_edges::Column::TransfersCount).add(loser_count),
             )
             .col_expr(
                 stats_asset_edges::Column::CumulativeAmount,
-                Expr::value(acc_amount),
+                Expr::col(stats_asset_edges::Column::CumulativeAmount).add(loser_amount),
             )
             .col_expr(
                 stats_asset_edges::Column::UpdatedAt,

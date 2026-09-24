@@ -2720,3 +2720,26 @@ post-reconciliation values — either move the clone to after
 `reconcile_destination_executions` runs, or pass the reconciled amounts
 through explicitly. Do not assume today's "clone before the transaction"
 shape stays safe under a change to what these two functions read.
+
+## `merge_assets` Must Fold Edge Aggregates Relatively — Bridges' Maintenance Transactions Overlap
+
+**Symptom:** none at runtime. A `stats_asset_edges` row ends up with a lower
+`transfers_count` / `cumulative_amount` than the transfers counted into it, with
+no log line and no metric; the lost transfer is already `stats_processed = 1`,
+so nothing ever re-counts it.
+
+**Root cause:** every bridge runs its own `MessageBuffer` maintenance loop, so
+maintenance transactions of different bridges run concurrently under READ
+COMMITTED. `merge_assets`, called from one bridge's projection, rewrites the
+winner/loser edges of **every** bridge, and it reads them without a lock. If the
+fold writes `transfers_count = <total computed from that read>`, an increment
+another bridge commits between the read and the `UPDATE` is overwritten. A
+relative write (`transfers_count = transfers_count + <losers' sum>`) re-reads
+the committed row after the row-lock wait and keeps it.
+
+**Rule:** in `stats/projection.rs`, aggregate columns on rows another bridge may
+touch are updated with `Expr::col(..).add(delta)`, never `Expr::value(total)`.
+`test_merge_fold_keeps_concurrent_increment_on_target_edge` (`database.rs`)
+holds an uncommitted increment on the fold target from a second connection and
+fails on the absolute form. The loser-row read → `DELETE` race predates this and
+is not closed; `SELECT … FOR UPDATE` on the edge load would close both.

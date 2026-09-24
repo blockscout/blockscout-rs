@@ -14837,6 +14837,144 @@ mod tests {
         );
     }
 
+    /// The edge fold must add the losers' contribution to the target row's
+    /// current value, not overwrite it with a total computed from its own
+    /// unlocked read: another bridge's maintenance transaction may increment
+    /// that row concurrently, and its transfer is already `stats_processed`,
+    /// so a dropped increment would never be re-counted.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_merge_fold_keeps_concurrent_increment_on_target_edge() {
+        use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+
+        let _db = init_db("test_merge_fold_keeps_concurrent_increment_on_target_edge").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(601),
+                name: Set("only_src_known".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(602),
+                name: Set("only_dst_known".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        let tok_w = [0x62u8; 20].to_vec();
+        let tok_l = [0x63u8; 20].to_vec();
+        // Same shape as `test_merge_folds_shared_edge_key`: W's edge is
+        // already at the post-merge key and is the fold target.
+        let w_id = seed_singleton_asset_with_edge(
+            db,
+            602,
+            tok_w.clone(),
+            1,
+            601,
+            602,
+            3,
+            BigDecimal::from(1000u64),
+            Some(18),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        let l_id = seed_singleton_asset_with_edge(
+            db,
+            601,
+            tok_l.clone(),
+            1,
+            601,
+            602,
+            2,
+            BigDecimal::from(500u64),
+            Some(18),
+            EdgeAmountSide::Source,
+        )
+        .await;
+        assert!(w_id < l_id, "W must be created first to win the tie");
+
+        insert_already_processed_bridging_transfer(db, 92200, 1, 601, 602, tok_l, tok_w).await;
+
+        // A concurrent maintenance transaction holds an uncommitted increment
+        // on the edge row the merge folds into.
+        let concurrent = db.begin().await.unwrap();
+        concurrent
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "UPDATE stats_asset_edges \
+                 SET transfers_count = transfers_count + 1, \
+                     cumulative_amount = cumulative_amount + 10 \
+                 WHERE src_stats_asset_id = $1 AND dst_stats_asset_id = $1",
+                [w_id.into()],
+            ))
+            .await
+            .unwrap();
+
+        let merge_conn = conn.clone();
+        let merge = tokio::spawn(async move {
+            merge_conn
+                .transaction(|tx| {
+                    Box::pin(async move {
+                        crate::stats::projection::project_transfers_batch(
+                            tx,
+                            &[92200i64],
+                            &IndexedChains::AllIndexed,
+                        )
+                        .await
+                    })
+                })
+                .await
+        });
+
+        // Commit only once the merge has read the edges and is blocked on the
+        // target row, so the increment lands inside its read-to-write window.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let waiting: i64 = db
+                .query_one(Statement::from_string(
+                    DatabaseBackend::Postgres,
+                    "SELECT count(*) AS n FROM pg_stat_activity \
+                     WHERE datname = current_database() AND wait_event_type = 'Lock'",
+                ))
+                .await
+                .unwrap()
+                .unwrap()
+                .try_get("", "n")
+                .unwrap();
+            if waiting > 0 {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the merge never blocked on the target edge row"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        concurrent.commit().await.unwrap();
+        merge.await.unwrap().unwrap();
+
+        let edge = stats_asset_edges::Entity::find_by_id((601i64, 602i64, 1i32, w_id, w_id))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            edge.transfers_count, 6,
+            "3 (target) + 1 (concurrent) + 2 (loser)"
+        );
+        assert_eq!(
+            edge.cumulative_amount,
+            BigDecimal::from(1510u64),
+            "1000 (target) + 10 (concurrent) + 500 (loser)"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn test_merge_mixed_amount_side_keeps_winner_side_and_adds() {
