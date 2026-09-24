@@ -223,8 +223,10 @@ message BatchImportRequest {
       // ERC-8056 multiplier scheduled to replace `ui_multiplier`, in the same
       // units. Meaningful together with `ui_multiplier_effective_at`.
       optional string new_ui_multiplier = 8;
-      // Unix timestamp in seconds at which `new_ui_multiplier` takes over.
-      optional int64 ui_multiplier_effective_at = 9;
+      // RFC 3339 timestamp at which `new_ui_multiplier` takes over, e.g.
+      // "2026-09-01T00:00:00Z". An explicit offset is accepted and normalized
+      // to UTC.
+      optional string ui_multiplier_effective_at = 9;
     }
 
     message Counters {
