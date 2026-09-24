@@ -396,7 +396,8 @@ impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdat
                         new_ui_multiplier: opt_parse!(m.new_ui_multiplier),
                         ui_multiplier_effective_at: m
                             .ui_multiplier_effective_at
-                            .map(parse_timestamp_secs)
+                            .as_deref()
+                            .map(parse_timestamp_rfc3339)
                             .transpose()?,
                     })
                 })
@@ -428,6 +429,14 @@ impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdat
 
         Ok(token_update)
     }
+}
+
+/// Parses an RFC 3339 timestamp, normalizing it to UTC. Both a `Z` suffix and an
+/// explicit offset are accepted; the column stores naive UTC.
+fn parse_timestamp_rfc3339(timestamp: &str) -> Result<NaiveDateTime, ParseError> {
+    chrono::DateTime::parse_from_rfc3339(timestamp)
+        .map(|dt| dt.naive_utc())
+        .map_err(|e| ParseError::Custom(format!("invalid timestamp {timestamp:?}: {e}")))
 }
 
 fn parse_timestamp_secs(timestamp: i64) -> Result<NaiveDateTime, ParseError> {

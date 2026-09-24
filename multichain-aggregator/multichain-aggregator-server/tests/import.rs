@@ -202,9 +202,7 @@ async fn test_import_erc8056_token() {
                     "decimals": 18,
                     "ui_multiplier": "2000000000000000000",
                     "new_ui_multiplier": "3000000000000000000",
-                    // 2026-09-23T10:00:00Z, as epoch seconds (int64 is
-                    // string-encoded in proto JSON)
-                    "ui_multiplier_effective_at": "1790157600",
+                    "ui_multiplier_effective_at": "2026-09-23T10:00:00Z",
                 }
             }
         ]
@@ -269,5 +267,25 @@ async fn test_import_erc8056_token() {
     assert_eq!(
         token.ui_multiplier,
         Some(BigDecimal::from(3_000_000_000_000_000_000u64))
+    );
+
+    // A timestamp with an explicit offset is accepted and normalized to UTC
+    import(json!({
+        "tokens": [
+            {
+                "address_hash": token_address_hash,
+                "metadata": {
+                    "token_type": "ERC-8056",
+                    "ui_multiplier_effective_at": "2026-09-23T12:00:00+02:00",
+                }
+            }
+        ]
+    }))
+    .await;
+
+    let token = get_token().await.unwrap();
+    assert_eq!(
+        token.ui_multiplier_effective_at,
+        Some("2026-09-23T10:00:00".parse::<DateTime>().unwrap())
     );
 }

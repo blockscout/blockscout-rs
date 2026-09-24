@@ -1525,8 +1525,10 @@ definitions:
           units. Meaningful together with `ui_multiplier_effective_at`.
       ui_multiplier_effective_at:
         type: string
-        format: int64
-        description: Unix timestamp in seconds at which `new_ui_multiplier` takes over.
+        description: |-
+          RFC 3339 timestamp at which `new_ui_multiplier` takes over, e.g.
+          "2026-09-01T00:00:00Z". An explicit offset is accepted and normalized
+          to UTC.
   TokenImportPriceData:
     type: object
     properties:

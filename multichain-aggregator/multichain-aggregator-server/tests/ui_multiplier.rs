@@ -19,9 +19,8 @@ use serde_json::json;
 const UI_MULTIPLIER: &str = "1000000000000000000";
 // 1.5e18, the multiplier scheduled to replace it
 const NEW_UI_MULTIPLIER: &str = "1500000000000000000";
-// 2026-09-23T10:00:00Z: epoch seconds on the way in (int64 is string-encoded
-// in proto JSON), RFC 3339 on the way out
-const EFFECTIVE_AT_SECS: &str = "1790157600";
+// RFC 3339 in and out; the response always carries millisecond precision
+const EFFECTIVE_AT_IN: &str = "2026-09-23T10:00:00Z";
 const EFFECTIVE_AT_RFC3339: &str = "2026-09-23T10:00:00.000Z";
 
 #[tokio::test]
@@ -67,7 +66,7 @@ async fn test_ui_multiplier_is_exposed() {
                         "token_type": "ERC-8056",
                         "ui_multiplier": UI_MULTIPLIER,
                         "new_ui_multiplier": NEW_UI_MULTIPLIER,
-                        "ui_multiplier_effective_at": EFFECTIVE_AT_SECS,
+                        "ui_multiplier_effective_at": EFFECTIVE_AT_IN,
                     }
                 },
                 {
