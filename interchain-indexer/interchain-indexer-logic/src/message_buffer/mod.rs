@@ -9,7 +9,7 @@ mod persistence;
 mod types;
 
 pub use buffer::MessageBuffer;
-pub use types::{Consolidate, ConsolidatedMessage, Key};
+pub use types::{Consolidate, ConsolidatedMessage, DestinationExecution, Key};
 
 pub(crate) fn token_keys_from_flushed_for_enrichment(
     flushed: &[ConsolidatedMessage],

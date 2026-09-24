@@ -65,6 +65,23 @@
   - `interchain-indexer-logic/src/indexer/avalanche/blockchain_id_resolver.rs`
   - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
 
+## If You Need to Understand xDai Indexing
+
+- `interchain-indexer-logic/src/indexer/xdai/indexer.rs`
+  - stream orchestration per chain, counterpart resolution, failure ledger
+- `interchain-indexer-logic/src/indexer/xdai/events.rs`
+  - event handlers, source-receipt reconstruction (`decode_source_evidence`),
+    canonical-vs-observed identity selection for hash-keyed completions
+- `interchain-indexer-logic/src/indexer/xdai/version.rs`
+  - deployment constants, grammar windows, epoch floors (ADR-013)
+- `interchain-indexer-logic/src/indexer/xdai/consolidation.rs`
+  - message assembly, finality, transfer building
+- then continue to:
+  - `interchain-indexer-logic/src/indexer/xdai/abi.rs`
+    (registry, startup floor checks, window resolution by block)
+  - `interchain-indexer-logic/src/message_buffer/persistence.rs`
+    (`reconcile_destination_executions` — multiple-execution handling, ADR-014)
+
 ## If You Need to Understand Incoming ICTT Reconstruction / ICM Payload Decoding
 
 - `interchain-indexer-logic/src/indexer/avalanche/ictt_payload.rs`
@@ -179,16 +196,19 @@
   - **start here** — copy-paste-runnable, read-only SQL checklist for
     confirming stats-projection and observability-horizon behavior against a
     live database: canaries to run routinely, diagnostics to reach for once
-    a canary fires, and how to read `stats_asset_id` / `bridge_contracts` /
-    the merge metrics
+    a canary fires, and how to read `src_stats_asset_id` / `dst_stats_asset_id`
+    / `asset_linkage` / `bridge_contracts` / the merge metrics
 - `.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md`
   - the design the runbook's queries verify
+- `.memory-bank/adr/011-cross-asset-edges-and-per-transfer-linkage.md`
+  - the binary-edge / per-transfer-linkage model layered on top of ADR-004
 - then continue to:
   - `.memory-bank/gotchas.md` — "`bridge_contracts` Is Only A Diagnostic
     Proxy For Runtime Membership", "Stats Asset Mapping Conflicts Merge; Only
-    Same-Chain Collisions Skip", "Stats Eligibility Is About Observability,
-    Not Protocol Terminality", "`pending_messages` Retention for
-    Unconfigured Counterparts Is Load-Bearing, Not a Leak"
+    Same-Chain Collisions Skip", "A `conversion` Transfer's Two Endpoints Are
+    Never Merged, Even When They Look Mergeable", "Stats Eligibility Is About
+    Observability, Not Protocol Terminality", "`pending_messages` Retention
+    for Unconfigured Counterparts Is Load-Bearing, Not a Leak"
 
 ## If You Need to Understand Service-Wide Metadata Services
 

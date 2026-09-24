@@ -24,3 +24,6 @@ actix-prost-build = { workspace = true }
 prost-build = { workspace = true }
 prost-wkt-build = { workspace = true }
 tonic-prost-build = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

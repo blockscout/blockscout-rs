@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use std::{collections::HashMap, iter::Sum, ops::Add, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::Sum,
+    ops::Add,
+    time::Instant,
+};
 
 use anyhow::{Context, Result};
 use chrono::{TimeDelta, Utc};
 use sea_orm::{DbErr, TransactionTrait};
 
 use super::{
-    BufferItem, BufferItemVersion, Consolidate, ConsolidatedMessage, Key, MessageBuffer,
-    persistence,
+    BufferItem, BufferItemVersion, Consolidate, ConsolidatedMessage, DestinationExecution, Key,
+    MessageBuffer, persistence,
 };
 use crate::message_buffer::{
     cursor::{BridgeId, CursorBlocksBuilder, Cursors},
@@ -144,6 +149,13 @@ struct MaintenancePlan<T: Consolidate + Default> {
     finalized_keys: Vec<Key>,
     keys_to_mark_flushed: Vec<(Key, BufferItemVersion)>,
     hot_evictions: Vec<(Key, BufferItemVersion, HotEvictionReason)>,
+    /// Observed destination-executions from every dirty entry, keyed with the
+    /// version seen at planning time so a resolved key can be CAS-evicted
+    /// from hot after commit without racing a concurrent mutation. Empty for
+    /// every indexer except xDai today: `Consolidate::destination_executions`
+    /// defaults to an empty `Vec`, so AMB and Avalanche never populate this
+    /// and every operation gated on it is a no-op for them (Hard Constraint 3).
+    destination_executions: Vec<(Key, BufferItemVersion, Vec<DestinationExecution>)>,
     cursor_builder: CursorBlocksBuilder,
     stats: BridgeCounts,
 }
@@ -244,9 +256,10 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
 
         let mut plan = self.plan_maintenance()?;
 
-        self.commit_maintenance(&plan).await?;
+        let resolved_keys = self.commit_maintenance(&plan).await?;
         self.mark_flushed_versions(&plan.keys_to_mark_flushed);
         self.remove_from_hot_if_unchanged(&plan.hot_evictions, &mut plan.stats);
+        self.evict_resolved_destination_executions(&plan, &resolved_keys);
 
         let totals = plan.stats.totals();
         tracing::debug!(
@@ -279,16 +292,41 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
                 .to_std()?;
             let is_stale = age >= self.config.hot_ttl;
             let outcome = classify_item(key, value)?;
+
+            // Same dirty gate as `classify_item`'s own `is_dirty()` check:
+            // `Unchanged` is exactly the outcome for an item that was not
+            // dirty, so anything else implies it was. An already-reconciled,
+            // unchanged entry must not re-feed observations into the plan
+            // every cycle.
+            if !matches!(outcome, ConsolidationOutcome::Unchanged) {
+                let observations = value.inner.destination_executions(key);
+                if !observations.is_empty() {
+                    plan.destination_executions
+                        .push((*key, value.version, observations));
+                }
+            }
+
             plan.collect(*key, value, outcome, is_stale);
         }
         Ok(plan)
     }
 
-    async fn commit_maintenance(&self, plan: &MaintenancePlan<T>) -> Result<()> {
-        let consolidated_entries = plan.consolidated_entries.clone();
+    /// Returns the keys `reconcile_destination_executions` determined have
+    /// nothing left to wait for, so `run()` can evict them from hot after
+    /// commit. Empty whenever `plan.destination_executions` is empty (AMB,
+    /// Avalanche, and any xDai cycle whose dirty entries carry no destination
+    /// executions) -- `reconcile_destination_executions` returns before any
+    /// query in that case (Hard Constraint 3).
+    async fn commit_maintenance(&self, plan: &MaintenancePlan<T>) -> Result<Vec<Key>> {
+        let mut consolidated_entries = plan.consolidated_entries.clone();
         let stale_entries = plan.stale_entries.clone();
         let finalized_keys = plan.finalized_keys.clone();
         let cursor_builder = plan.cursor_builder.clone();
+        let observations: Vec<(Key, Vec<DestinationExecution>)> = plan
+            .destination_executions
+            .iter()
+            .map(|(key, _version, observations)| (*key, observations.clone()))
+            .collect();
 
         // Widened per coding-task-4b item 1: the stats hook and token
         // enrichment now run for **every** flushed entry, final and `Partial`
@@ -299,29 +337,70 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
         // load-bearing everywhere else below: `finalized_keys` (pending
         // cleanup), `hot_evictions` (eviction), and `BridgeCounts` metrics are
         // all computed from `plan` directly and untouched by this change.
+        //
+        // Cloned from `consolidated_entries` **before** the destination-
+        // execution reconciliation below runs, so neither sees the
+        // neutralization `reconcile_destination_executions` may apply to the
+        // (separate, moved-into-the-transaction) `consolidated_entries`
+        // variable. That is safe today: `apply_stats_for_flushed_batch` only
+        // reads each entry's primary key, and
+        // `token_keys_from_flushed_for_enrichment` only reads token
+        // addresses -- neither field neutralization touches. (When the stored
+        // execution wins, reconciliation drops the entry's transfers from the
+        // flushed batch; the clones below still carry them, which only means
+        // enrichment may fetch metadata for token addresses that xDai derives
+        // from the shared source side anyway.) If stats ever
+        // starts reading destination fields (`dst_tx_hash`, amounts) off
+        // these models, this stops being true and becomes a defect.
         let flushed_for_stats = consolidated_entries.clone();
         let flushed_for_enrichment = consolidated_entries.clone();
 
         let stats = self.stats.clone();
-        let new = self
+        let (new, resolved_keys) = self
             .stats
             .interchain_db()
             .db
-            .transaction::<_, Cursors, DbErr>(move |tx| {
+            .transaction::<_, (Cursors, Vec<Key>), DbErr>(move |tx| {
                 let stats = stats.clone();
                 Box::pin(async move {
                     persistence::offload_stale_to_pending(tx, &stale_entries).await?;
+
+                    // Reads the stored destination state, decides promotion
+                    // and retention per key, and neutralizes
+                    // `consolidated_entries`' destination-owned fields when
+                    // the stored execution wins (dropping that entry's
+                    // transfers) -- all **before** the upsert below, so a
+                    // late/non-canonical execution this buffer instance saw
+                    // first cannot clobber `dst_tx_hash` /
+                    // `recipient_address` or the stored canonical transfer.
+                    let reconciliation = persistence::reconcile_destination_executions(
+                        tx,
+                        &mut consolidated_entries,
+                        &observations,
+                    )
+                    .await?;
+
                     persistence::flush_to_final_storage(tx, consolidated_entries).await?;
+
+                    // After the flush, so a row this same transaction just
+                    // wrote already exists for the anomaly rows/metadata
+                    // patch to reference.
+                    persistence::apply_destination_execution_reconciliation(tx, &reconciliation)
+                        .await?;
+
                     stats
                         .apply_stats_for_flushed_batch(tx, &flushed_for_stats)
                         .await?;
+
+                    let mut finalized_keys = finalized_keys;
+                    finalized_keys.extend(reconciliation.resolved_keys.iter().copied());
                     persistence::remove_finalized_from_pending(tx, &finalized_keys).await?;
 
                     let old = persistence::fetch_cursors(&cursor_builder, tx).await?;
                     let new = cursor_builder.calculate_updates(&old);
                     tracing::debug!(new =? new, "cursor maintenance");
                     persistence::upsert_cursors(tx, &new).await?;
-                    Ok(new)
+                    Ok((new, reconciliation.resolved_keys))
                 })
             })
             .await
@@ -342,7 +421,55 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
                 .set(cursor.forward as f64);
         }
 
-        Ok(())
+        Ok(resolved_keys)
+    }
+
+    /// CAS-evicts keys `reconcile_destination_executions` reported as
+    /// resolved (nothing left to wait for), by the version recorded in the
+    /// plan at planning time -- the same optimistic-concurrency mechanism
+    /// `remove_from_hot_if_unchanged` uses, kept separate from it because
+    /// that function's bookkeeping is for the `stale`/`finalized` reasons
+    /// only. A key already evicted via `plan.hot_evictions` (the common case:
+    /// an ordinary, single-execution message is both finalized and
+    /// destination-resolved) is skipped here -- a second `remove_if` on an
+    /// already-removed key returns `None` and would wrongly count as
+    /// `skipped_modified` if routed through that bookkeeping.
+    ///
+    /// A key can also never resolve: a nonce-keyed destination completion
+    /// with no stored canonical row and no source facts anywhere stays
+    /// `NotReady` forever (`xdai::consolidation::resolve_input`'s
+    /// `(None, None)` arm requires `SourceTransactionHash`, which a
+    /// nonce-observed message never has), so it stays dirty and
+    /// `reconcile_destination_executions` re-queries the database for it on
+    /// every cycle until a source eventually arrives. This is expected and
+    /// deliberate -- no counter or retry limit is needed for it, the same way
+    /// none exists for the orphaned hash-keyed `SignedForAffirmation`
+    /// confirmations this mirrors.
+    fn evict_resolved_destination_executions(
+        &self,
+        plan: &MaintenancePlan<T>,
+        resolved_keys: &[Key],
+    ) {
+        if resolved_keys.is_empty() {
+            return;
+        }
+        let already_evicted: HashSet<Key> =
+            plan.hot_evictions.iter().map(|(key, _, _)| *key).collect();
+
+        for key in resolved_keys {
+            if already_evicted.contains(key) {
+                continue;
+            }
+            let Some((_, expected_version, _)) = plan
+                .destination_executions
+                .iter()
+                .find(|(candidate_key, _, _)| candidate_key == key)
+            else {
+                continue;
+            };
+            self.inner
+                .remove_if(key, |_, item| item.version == *expected_version);
+        }
     }
 
     fn mark_flushed_versions(&self, keys_to_mark_flushed: &[(Key, BufferItemVersion)]) {
@@ -382,12 +509,14 @@ mod tests {
     use chrono::Utc;
     use interchain_indexer_entity::{
         bridges, chains, crosschain_messages, crosschain_transfers, pending_messages,
-        sea_orm_active_enums::MessageStatus,
+        sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
     };
     use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter, prelude::BigDecimal};
     use serde::{Deserialize, Serialize};
 
-    use super::{BufferItem, Consolidate, ConsolidatedMessage, Key, MessageBuffer};
+    use super::{
+        BufferItem, Consolidate, ConsolidatedMessage, DestinationExecution, Key, MessageBuffer,
+    };
     use crate::{
         InterchainDatabase, StatsReadSettings, StatsService, settings::MessageBufferSettings,
         stats::IndexedChains, test_utils::init_db,
@@ -432,11 +561,48 @@ mod tests {
                     token_src_address: ActiveValue::Set(Some(vec![0x11u8; 20])),
                     token_dst_address: ActiveValue::Set(Some(vec![0x22u8; 20])),
                     stats_processed: ActiveValue::Set(0),
+                    asset_linkage: ActiveValue::Set(Some(TransferAssetLinkage::Mirror)),
                     ..Default::default()
                 }],
                 amb_confirmations: vec![],
                 amb_anomalies: vec![],
             }))
+        }
+    }
+
+    /// A message that is destination-only (never consolidatable -- there is
+    /// no source side at all) but reports one observed destination-execution,
+    /// used to drive the new `destination_executions` channel end to end
+    /// through `MessageBuffer::run()` without pulling in xDai.
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    struct DestinationOnlyDummyMessage {
+        tx_hash: Vec<u8>,
+    }
+
+    impl Consolidate for DestinationOnlyDummyMessage {
+        fn consolidate(&self, _key: &Key) -> anyhow::Result<Option<ConsolidatedMessage>> {
+            // Permanently `NotReady`: this double mirrors a destination-only
+            // xDai message with no source facts anywhere.
+            Ok(None)
+        }
+
+        fn destination_executions(&self, key: &Key) -> Vec<DestinationExecution> {
+            if self.tx_hash.is_empty() {
+                return Vec::new();
+            }
+            vec![DestinationExecution {
+                key: *key,
+                native_id: vec![0xAA; 32],
+                chain_id: 100,
+                tx_hash: self.tx_hash.clone(),
+                log_index: Some(1),
+                block_number: 20,
+                block_timestamp: Utc::now().naive_utc(),
+                executor: Some(vec![0xEE]),
+                src_chain_id: Some(1),
+                dst_chain_id: Some(100),
+                detail: "test destination execution".to_string(),
+            }]
         }
     }
 
@@ -546,7 +712,8 @@ mod tests {
             t.stats_processed, 1,
             "a Partial entry must still reach the stats hook and count"
         );
-        assert!(t.stats_asset_id.is_some());
+        assert!(t.src_stats_asset_id.is_some());
+        assert!(t.dst_stats_asset_id.is_some());
 
         assert!(
             buffer.inner.get(&key).is_some(),
@@ -582,5 +749,103 @@ mod tests {
             buffer.inner.get(&key).is_none(),
             "the finalized entry must be evicted from the hot tier"
         );
+    }
+
+    /// A destination-only entry never becomes `is_final` through
+    /// `consolidate()` on its own (there is no source side), but once its
+    /// canonical row is already stored -- and this cycle's observation is
+    /// exactly that canonical execution replayed -- `reconcile_destination_executions`
+    /// reports it resolved and `run()` must evict it from hot via the new,
+    /// separate CAS path (`evict_resolved_destination_executions`), not only
+    /// the pre-existing `is_final` one.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_destination_only_entry_is_evicted_once_its_canonical_row_is_already_stored() {
+        let test_db = init_db("maintenance_destination_only_eviction").await;
+        let db = InterchainDatabase::new(test_db.client());
+
+        let key = Key::new(9101, 1);
+
+        db.upsert_bridges(vec![bridges::ActiveModel {
+            id: ActiveValue::Set(key.bridge_id as i32),
+            name: ActiveValue::Set("test_bridge".to_string()),
+            enabled: ActiveValue::Set(true),
+            ..Default::default()
+        }])
+        .await
+        .unwrap();
+        db.upsert_chains(vec![
+            chains::ActiveModel {
+                id: ActiveValue::Set(1),
+                name: ActiveValue::Set("src".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: ActiveValue::Set(100),
+                name: ActiveValue::Set("dst".to_string()),
+                ..Default::default()
+            },
+        ])
+        .await
+        .unwrap();
+
+        // The canonical row already exists, as if an earlier cycle (or a
+        // buffer instance that has since restarted) already flushed and
+        // evicted it.
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: ActiveValue::Set(key.message_id),
+            bridge_id: ActiveValue::Set(key.bridge_id as i32),
+            status: ActiveValue::Set(MessageStatus::Completed),
+            init_timestamp: ActiveValue::Set(Utc::now().naive_utc()),
+            src_chain_id: ActiveValue::Set(1),
+            dst_chain_id: ActiveValue::Set(Some(100)),
+            dst_tx_hash: ActiveValue::Set(Some(vec![0xDD])),
+            stats_processed: ActiveValue::Set(0),
+            ..Default::default()
+        })
+        .exec(db.db.as_ref())
+        .await
+        .unwrap();
+
+        let stats = Arc::new(StatsService::new(
+            Arc::new(db.clone()),
+            None,
+            StatsReadSettings::default(),
+            IndexedChains::from_pairs([(1, 1)]),
+        ));
+        let buffer = MessageBuffer::<DestinationOnlyDummyMessage>::new_with_stats(
+            stats,
+            test_buffer_settings(),
+        );
+
+        buffer
+            .alter(key, 1, 20, |m: &mut DestinationOnlyDummyMessage| {
+                m.tx_hash = vec![0xDD];
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert!(buffer.inner.get(&key).is_some());
+
+        buffer.run().await.unwrap();
+
+        assert!(
+            buffer.inner.get(&key).is_none(),
+            "a destination-only entry resolved against an already-stored canonical row must be \
+             evicted from hot, even though it is never `is_final` on its own"
+        );
+
+        // The exact replay must not have produced an anomaly: the tx_hash
+        // matches the stored canonical one.
+        let anomalies = interchain_indexer_entity::amb_message_anomalies::Entity::find()
+            .filter(interchain_indexer_entity::amb_message_anomalies::Column::BridgeId.eq(1))
+            .filter(
+                interchain_indexer_entity::amb_message_anomalies::Column::BufferKey
+                    .eq(key.message_id),
+            )
+            .all(db.db.as_ref())
+            .await
+            .unwrap();
+        assert!(anomalies.is_empty());
     }
 }

@@ -29,6 +29,12 @@ lazy_static! {
     /// Labelled by `bridge_id` **and** `chain_id`: the offending boundary lives
     /// in one bridge's contract entry, and several bridges can be configured on
     /// the same chain, so `chain_id` alone does not point at the config to fix.
+    ///
+    /// Superseded by the protocol-labelled
+    /// `interchain_indexer_logs_dropped_wrong_version_total` in
+    /// `indexer/metrics.rs`, which this keeps emitting alongside for one
+    /// release so existing operator alerts do not go dark. Slated for removal
+    /// in a follow-up once the new metric is established.
     pub static ref AMB_LOGS_DROPPED_WRONG_VERSION_TOTAL: IntCounterVec = register_int_counter_vec!(
         "interchain_indexer_amb_logs_dropped_wrong_version_total",
         "AMB logs dropped because the version active at their block does not declare their topic0",

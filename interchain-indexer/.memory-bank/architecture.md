@@ -75,8 +75,25 @@ Determines when a buffered message is ready for database persistence:
 ```rust
 pub trait Consolidate: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de> {
     fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>>;
+
+    /// Observed destination executions, in first-appearance order. Defaulted
+    /// to empty; only xDai implements it.
+    fn destination_executions(&self, _key: &Key) -> Vec<DestinationExecution> {
+        Vec::new()
+    }
 }
 ```
+
+The second method is a **neutral observation channel**, not a second
+consolidation path. `consolidate` cannot see the database, so a protocol that
+must compare an observation against already-stored state reports its
+observations here instead; `plan_maintenance` carries them into the maintenance
+transaction, where `message_buffer::persistence::reconcile_destination_executions`
+reads the stored row and decides. It returns a plain `Vec` because it runs
+**before** the transaction opens — an `Err` there would abort plan building for
+the whole bridge on every cycle. Protocols that do not participate pay nothing:
+the default returns an empty vector and the reconciliation functions return
+before their first query. See ADR-014.
 
 Three outcomes, not two: `Ok(None)` (not yet consolidatable), `Ok(Some(.. is_final:
 false ..))` (partial — flushed but kept in the buffer), `Ok(Some(.. is_final: true
@@ -136,7 +153,7 @@ tokens (cached token metadata)
 stats_messages (bridge_id, src_chain_id, dst_chain_id, messages_count)
 stats_messages_days (date, bridge_id, src_chain_id, dst_chain_id, messages_count)
 stats_assets / stats_asset_tokens (logical bridged-token asset ↔ chain-local tokens, union-find merged)
-stats_asset_edges (stats_asset_id, bridge_id, src_chain_id, dst_chain_id, cumulative_amount)
+stats_asset_edges (src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id, dst_chain_id, cumulative_amount) — binary since ADR-011: equal for a mirror edge, independent for a conversion one
 stats_chains (chain_id, unique_transfer_users_count, unique_message_users_count — periodic snapshot, global exact)
 stats_chains_by_bridge (bridge_id, chain_id, unique_transfer_users_count, unique_message_users_count — same worker, same transaction, per-bridge; backs GetChainsStats' bridge_ids filter, ADR-009)
 ```

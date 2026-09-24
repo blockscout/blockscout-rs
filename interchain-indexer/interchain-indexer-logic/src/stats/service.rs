@@ -125,15 +125,18 @@ impl StatsService {
         // a flushed key must still reach `project_transfers_batch`, which
         // itself decides identity-maintenance-only (repair) vs. counting.
         //
-        // Chunked at two bind params per key: `flushed` is the whole
-        // consolidatable cohort of one maintenance cycle, which during catch-up
-        // can exceed the PostgreSQL bind-param limit on its own. Read loops that
-        // accumulate results chunk by hand rather than through
+        // This is a row-valued `IN`, so it is chunked at `bulk::ROW_IN_KEY_CHUNK`,
+        // not by bind-count arithmetic: `flushed` is the whole consolidatable
+        // cohort of one maintenance cycle, which during catch-up can exceed not
+        // just the PostgreSQL bind-param limit but also the planner's stack
+        // depth for a row-valued `IN`'s `OR`-tree — see
+        // `.memory-bank/rules/database.md` §Batching and
+        // `.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md`.
+        // Read loops that accumulate results chunk by hand rather than through
         // `bulk::run_in_batches`, whose closure cannot lend out a mutable
         // accumulator — see `projection.rs`'s `load_*_map` helpers.
-        let batch_size = (crate::bulk::PG_BIND_PARAM_LIMIT / 2).max(1);
         let mut transfer_ids: Vec<i64> = Vec::with_capacity(msg_pks.len());
-        for batch in msg_pks.chunks(batch_size) {
+        for batch in msg_pks.chunks(crate::bulk::ROW_IN_KEY_CHUNK) {
             let found = crosschain_transfers::Entity::find()
                 .filter(
                     Expr::tuple([

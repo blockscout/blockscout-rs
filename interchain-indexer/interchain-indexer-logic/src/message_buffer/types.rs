@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use anyhow::Result;
+use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
     amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
 };
@@ -47,6 +48,36 @@ pub struct ConsolidatedMessage {
     pub amb_anomalies: Vec<amb_message_anomalies::ActiveModel>,
 }
 
+/// One observed destination-execution, in a form suitable for writing as an
+/// anomaly row. Deliberately neutral: both a nonce and a hash observation can
+/// turn out to be canonical or late depending on processing order, so this is
+/// **not** "hash anomalies" -- see `xdai::consolidation::Message::destination_executions`
+/// for the concrete producer and `message_buffer::persistence::reconcile_destination_executions`
+/// for the promotion decision (made against the database, never here).
+#[derive(Clone, Debug)]
+pub struct DestinationExecution {
+    pub key: Key,
+    /// The raw destination alias exactly as observed, 32 bytes. May differ
+    /// from `crosschain_messages.native_id` for the same message: the latter
+    /// is a chain‖nonce blob when identity is nonce-keyed, while this is
+    /// always the raw observed bytes32.
+    pub native_id: Vec<u8>,
+    /// The destination chain.
+    pub chain_id: i64,
+    pub tx_hash: Vec<u8>,
+    /// Provenance only; never part of execution identity (that is the
+    /// destination transaction, not the log).
+    pub log_index: Option<i64>,
+    pub block_number: i64,
+    pub block_timestamp: NaiveDateTime,
+    /// The payout recipient.
+    pub executor: Option<Vec<u8>>,
+    pub src_chain_id: Option<i64>,
+    pub dst_chain_id: Option<i64>,
+    /// Stable reason plus the kind of identity observed.
+    pub detail: String,
+}
+
 /// Converts an in-flight entry into a consolidated database payload.
 ///
 /// Returning:
@@ -60,4 +91,17 @@ pub trait Consolidate:
     Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>
 {
     fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>>;
+
+    /// Observed destination-executions, in first-appearance order.
+    ///
+    /// Defaulted to empty: AMB and Avalanche do not participate, and an empty
+    /// channel must cost zero additional queries -- this method is called
+    /// from `plan_maintenance`, **before** the maintenance transaction opens,
+    /// so it returns a plain `Vec` rather than a `Result`. An `Err` there
+    /// would abort plan building for the entire bridge on every cycle; see the
+    /// skip site documented in `xdai::consolidation::resolve_input`
+    /// (`consolidation.rs`) for the same trap applied to a different method.
+    fn destination_executions(&self, _key: &Key) -> Vec<DestinationExecution> {
+        Vec::new()
+    }
 }

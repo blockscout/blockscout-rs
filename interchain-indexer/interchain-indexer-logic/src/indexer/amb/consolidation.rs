@@ -3,7 +3,8 @@ use std::{str::FromStr, time::Duration};
 use anyhow::{Context, Result};
 use interchain_indexer_entity::{
     amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{MessageStatus, TransferType},
+    new_transfer,
+    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
 };
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 
@@ -347,7 +348,6 @@ fn build_transfer(
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
         index: ActiveValue::Set(0),
-        r#type: ActiveValue::Set(Some(TransferType::Erc20)),
         token_src_chain_id: ActiveValue::Set(token_src_chain_id),
         token_dst_chain_id: ActiveValue::Set(token_dst_chain_id),
         src_amount: ActiveValue::Set(src_amount),
@@ -361,11 +361,7 @@ fn build_transfer(
             destination_transfer.map(|t| t.recipient.as_slice().to_vec()),
         ),
         token_ids: ActiveValue::Set(None),
-        stats_processed: ActiveValue::Set(0),
-        stats_asset_id: ActiveValue::Set(None),
-        created_at: ActiveValue::NotSet,
-        updated_at: ActiveValue::NotSet,
-        id: ActiveValue::NotSet,
+        ..new_transfer(TransferAssetLinkage::Mirror)
     })
 }
 
@@ -382,7 +378,6 @@ fn build_destination_only_transfer(
         message_id: ActiveValue::Set(key.message_id),
         bridge_id: ActiveValue::Set(key.bridge_id as i32),
         index: ActiveValue::Set(0),
-        r#type: ActiveValue::Set(Some(TransferType::Erc20)),
         token_src_chain_id: ActiveValue::Set(destination.source_chain_id),
         token_dst_chain_id: ActiveValue::Set(destination.destination_chain_id),
         src_amount: ActiveValue::Set(None),
@@ -392,11 +387,7 @@ fn build_destination_only_transfer(
         sender_address: ActiveValue::Set(None),
         recipient_address: ActiveValue::Set(Some(transfer.recipient.as_slice().to_vec())),
         token_ids: ActiveValue::Set(None),
-        stats_processed: ActiveValue::Set(0),
-        stats_asset_id: ActiveValue::Set(None),
-        created_at: ActiveValue::NotSet,
-        updated_at: ActiveValue::NotSet,
-        id: ActiveValue::NotSet,
+        ..new_transfer(TransferAssetLinkage::Mirror)
     })
 }
 

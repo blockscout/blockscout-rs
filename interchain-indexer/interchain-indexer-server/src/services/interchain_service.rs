@@ -2,14 +2,17 @@
 
 use crate::{
     BridgeConfig,
-    proto::{interchain_service_server::*, *},
+    // `TokenType` is nested in `TokenInfo` so its value names do not squat the
+    // proto package namespace — see `.memory-bank/rules/rust-style.md`.
+    proto::{interchain_service_server::*, token_info::TokenType, *},
     settings::ApiSettings,
 };
 use anyhow::{Context, anyhow};
 use interchain_indexer_entity::{
     crosschain_messages::Model as CrosschainMessageModel,
     crosschain_transfers::Model as CrosschainTransferModel,
-    sea_orm_active_enums::MessageStatus as DbMessageStatus, tokens::Model as TokenInfoModel,
+    sea_orm_active_enums::{MessageStatus as DbMessageStatus, TokenType as DbTokenType},
+    tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
     ChainInfoService, CrosschainMessageLookup, IndexedChains, InterchainDatabase, JoinedTransfer,
@@ -394,6 +397,7 @@ impl InterchainServiceImpl {
 
     async fn get_token_info(&self, chain_id: i64, address: Vec<u8>) -> Option<TokenInfo> {
         let address_hex = to_hex_prefixed(address.as_slice());
+        let fallback_type = token_type_to_proto(&DbTokenType::from_address(&address));
         self.token_info_service
             .clone()
             .get_token_info(chain_id, address)
@@ -402,13 +406,17 @@ impl InterchainServiceImpl {
             .ok()
             .map(token_info_logic_to_proto)
             .unwrap_or_else(|| {
-                // void TokenInfo (at least store address and chain id)
+                // void TokenInfo (at least store address and chain id) --
+                // still omitting address_hash for a native side, so a lookup
+                // failure never leaks the sentinel to the API.
                 TokenInfo {
-                    address_hash: address_hex.clone(),
+                    address_hash: (fallback_type != TokenType::Native)
+                        .then(|| address_hex.clone()),
                     name: None,
                     symbol: None,
                     decimals: None,
                     icon_url: None,
+                    r#type: fallback_type as i32,
                 }
             })
             .into()
@@ -824,12 +832,60 @@ fn message_status_to_proto(status: &DbMessageStatus) -> MessageStatus {
     }
 }
 
+pub(super) fn token_type_to_proto(token_type: &DbTokenType) -> TokenType {
+    match token_type {
+        DbTokenType::Erc20 => TokenType::Erc20,
+        DbTokenType::Native => TokenType::Native,
+        DbTokenType::Erc721 => TokenType::Erc721,
+        DbTokenType::Erc1155 => TokenType::Erc1155,
+    }
+}
+
 fn token_info_logic_to_proto(model: TokenInfoModel) -> TokenInfo {
+    let token_type = token_type_to_proto(&model.r#type);
     TokenInfo {
-        address_hash: to_hex_prefixed(model.address.as_slice()),
+        // Omitted exactly for a native side: the frontend must not render
+        // the internal zero-address sentinel as if it were a real contract.
+        address_hash: (token_type != TokenType::Native)
+            .then(|| to_hex_prefixed(model.address.as_slice())),
         name: model.name,
         symbol: model.symbol,
         decimals: model.decimals.map(|d| d.to_string()),
         icon_url: model.token_icon,
+        r#type: token_type as i32,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn token_model(address: &[u8], token_type: DbTokenType) -> TokenInfoModel {
+        TokenInfoModel {
+            chain_id: 100,
+            address: address.to_vec(),
+            r#type: token_type,
+            symbol: Some("xDAI".to_string()),
+            name: Some("xDai".to_string()),
+            token_icon: None,
+            decimals: Some(18),
+            created_at: None,
+            updated_at: None,
+        }
+    }
+
+    #[test]
+    fn token_info_logic_to_proto_omits_address_hash_exactly_for_native() {
+        let native = token_info_logic_to_proto(token_model(&[0u8; 20], DbTokenType::Native));
+        assert_eq!(native.address_hash, None);
+        // The frontend still needs these to render an amount for a native side.
+        assert_eq!(native.name, Some("xDai".to_string()));
+        assert_eq!(native.symbol, Some("xDAI".to_string()));
+        assert_eq!(native.decimals, Some("18".to_string()));
+        assert_eq!(native.r#type, TokenType::Native as i32);
+
+        let erc20 = token_info_logic_to_proto(token_model(&[1u8; 20], DbTokenType::Erc20));
+        assert!(erc20.address_hash.is_some());
+        assert_eq!(erc20.r#type, TokenType::Erc20 as i32);
     }
 }

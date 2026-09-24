@@ -330,6 +330,44 @@ longer silently drops failed-AMB aggregates.
 
 **Fix:** Use `batched_upsert()` or `run_in_batches()` from `bulk.rs`. Calculate batch size as `65535 / columns_per_row`.
 
+**This does not cover row-valued `IN` — see the next gotcha.** The fix above
+only bounds *bind count*; a row-valued `IN` has a second, lower, and less
+predictable ceiling that bind arithmetic cannot express.
+
+---
+
+## Row-Valued `IN` Has A Second, Lower Ceiling: Planner Stack Depth, Not Bind Count
+
+**Symptom:** `stack depth limit exceeded`, appearing on the *same* query shape
+that elsewhere fails with `too many arguments for query: N` depending on
+cohort size — both are the same underlying bug (see
+`.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md`).
+
+**Root cause:** A composite/row-valued `IN` — `(a, b) IN ((...),(...))`, e.g.
+SeaORM's `Expr::tuple([...]).in_tuples(...)` — is expanded by PostgreSQL into
+an `OR`-tree of row comparisons, and the parser/planner recurses over that
+tree. The ceiling this hits is `max_stack_depth`, not the 65535 bind-parameter
+count above — and it is **lower and reached first**: 32 767 tuples in a
+2-column row-`IN` (exactly `PG_BIND_PARAM_LIMIT / 2`, i.e. the "correctly
+chunked" size by the bind-count rule) is precisely the shape that overflowed a
+production planner stack while using barely half the bind budget. Applying the
+"PostgreSQL Bind Parameter Limit" fix above (`PG_BIND_PARAM_LIMIT / width`) to
+a row-valued `IN` is **bind-safe but not stack-safe** and was the mistake that
+let this bug propagate to multiple sites in `stats/projection.rs` and
+`stats/service.rs` before it was caught.
+
+**Fix:** Use `bulk::ROW_IN_KEY_CHUNK` (a fixed, margin-justified-not-derived
+constant) and `bulk::run_in_chunks()` for the write side; a hand-rolled
+`for batch in keys.chunks(chunk) { ...; results.extend(...) }`
+read-accumulator loop for the read side. Applies to `SELECT`, `UPDATE`, and
+`DELETE` alike. When the query result feeds a cross-row aggregation (union-find
+merges, additive counters, contradiction de-dup sets), chunk only the **load**
+— chunking the aggregation itself is a silent correctness regression, not a
+performance tweak; see `stats/projection.rs`'s `project_transfers_batch` for
+why. See `.memory-bank/rules/database.md` §Batching for the full rule and
+`.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md` for the
+incident this was found in.
+
 ---
 
 ## Indexer Cleanup Guard Runs on Panic
@@ -470,67 +508,213 @@ float-to-integer cast also handles infinite growth. The regression test
 
 ## Stats Asset Mapping Conflicts Merge; Only Same-Chain Collisions Skip
 
-**Symptom:** A transfer whose two endpoints already map to two different
-`stats_assets` no longer stalls as a fragmented pair — the components are
-merged automatically, visible as `interchain_indexer_stats_asset_merges_total{outcome="merged"}`
-increasing. The skip that remains is rarer: a warning like `stats projection:
-stats asset already has a different token on the destination chain; skipping
-transfer` (or `...two different tokens on one chain; skipping`), paired with
-`interchain_indexer_stats_asset_merges_total{outcome="refused_chain_collision"}`.
-Separately, `stats projection: skipping transfer due to stats_asset_edges
-decimals mismatch` paired with `interchain_indexer_stats_edge_decimals_conflict_total`
-is a different, non-corrupting skip — see below.
+*(Rewritten 2026-09-15 for [ADR-011](adr/011-cross-asset-edges-and-per-transfer-linkage.md)'s
+two-column `src_stats_asset_id` / `dst_stats_asset_id` and per-transfer
+`asset_linkage`. Everything below about `merge_assets` and the refusal paths
+applies to `mirror` transfers only — a `conversion` transfer never merges its
+two endpoints; see "A `conversion` Transfer's Two Endpoints Are Never Merged,
+Even When They Look Mergeable" below.)*
+
+**Symptom:** A `mirror` transfer whose two endpoints already map to two
+different `stats_assets` no longer stalls as a fragmented pair — the
+components are merged automatically, visible as
+`interchain_indexer_stats_asset_merges_total{outcome="merged"}` increasing.
+The skip that remains is rarer: a warning like `stats projection: stats asset
+already has a different token on the destination chain; skipping transfer`
+(or `...two different tokens on one chain; skipping`), paired with
+`interchain_indexer_stats_asset_merges_total{outcome="refused_chain_collision"}`
+(a merge that would place two different tokens of one chain into one asset)
+or `{outcome="refused_token_on_chain"}` (the counterpart-side lookup found the
+asset already holding a different token on that chain, refused before a merge
+was even attempted — added in ADR-011 so this path is observable too, not
+just logged). Separately, `stats projection: skipping transfer due to
+stats_asset_edges decimals mismatch` paired with
+`interchain_indexer_stats_edge_decimals_conflict_total` is a different,
+non-corrupting skip — see below.
 
 **Root cause:** Asset identity is an incrementally discovered connected-component
-problem — two complete transfers on fully indexed chains can legitimately form
-disjoint components (`{A,B}` and `{C,D}`) that a later `B→C` transfer must join.
-`ensure_asset_for_transfer` resolves this via `merge_assets`: a transactional,
-validate-then-mutate union (weighted — the component with more linked tokens
-wins, ties go to the lower id) that repoints the loser's `stats_asset_tokens`,
-`stats_asset_edges` (folding amounts, rescaling for a decimals difference), and
-`crosschain_transfers.stats_asset_id`, then deletes the loser `stats_assets`
-row, all inside the same transaction as the triggering transfer. The only
-genuine refusal left is a merge that would place two different tokens of one
-chain into one `stats_asset` (a `stats_asset` can hold at most one token per
-chain) — that case cannot be resolved automatically and cannot be forced
-without corrupting the chain-uniqueness invariant.
+problem — two complete `mirror` transfers on fully indexed chains can
+legitimately form disjoint components (`{A,B}` and `{C,D}`) that a later
+`B→C` transfer must join. `ensure_asset_for_transfer`'s `mirror` branch
+resolves this via `merge_assets`: a transactional, validate-then-mutate union
+(weighted — the component with more linked tokens wins, ties go to the lower
+id) that repoints the loser's `stats_asset_tokens`, `stats_asset_edges`
+(folding amounts on both the `src_stats_asset_id` and `dst_stats_asset_id`
+columns now, rescaling for a decimals difference), and
+`crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id` (via a single
+`CASE WHEN … THEN winner ELSE …` update per column, so a row with the loser on
+both sides is fixed in one pass), then deletes the loser `stats_assets` row,
+all inside the same transaction as the triggering transfer. The only genuine
+refusal left is a merge that would place two different tokens of one chain
+into one `stats_asset` (a `stats_asset` can hold at most one token per chain)
+— that case cannot be resolved automatically and cannot be forced without
+corrupting the chain-uniqueness invariant.
 
 A decimals conflict is a separate, unrelated skip on the *counting* path:
 by the time it fires, this transfer's asset identity is already resolved
 unambiguously (directly or via a merge) — the conflict is only about whether
 this transfer's amount can be safely folded into the edge aggregate. It never
 aborts the batch (task Decision 7) and, since identity succeeded here, the
-transfer still links its resolved `stats_asset_id`.
+transfer still links its resolved asset pair.
 
 **Impact:** Canonical `crosschain_messages` / `crosschain_transfers` rows are
 never at risk in any of these paths. For a successful merge, the database
 changes: the winner asset absorbs the loser's tokens, edges, and transfers,
 and the loser row is gone — by design, not a side effect to repair. For a
-refused chain-collision merge, the transaction leaves the database
+refused-merge (either outcome label), the transaction leaves the database
 byte-identical: nothing is mutated beyond marking the triggering transfer
-`stats_processed += 1` with `stats_asset_id` left `NULL`. For a decimals
-conflict, `stats_processed += 1` and `stats_asset_id` is set to the resolved
-asset, with no `stats_asset_edges` contribution.
+`stats_processed += 1` with both `src_stats_asset_id` and
+`dst_stats_asset_id` left `NULL`. For a decimals conflict,
+`stats_processed += 1` and both columns are set to the resolved pair
+(`src == dst` for a mirror transfer), with no `stats_asset_edges`
+contribution.
 
-Read `crosschain_transfers.stats_asset_id` accordingly: `NULL` means identity
-is genuinely unknown or ambiguous (the chain-collision refusal is the only
-remaining case); a set `stats_asset_id` with `stats_processed > 0` and no
-corresponding edge contribution means identity is known but this transfer's
-amount was not counted (the decimals-conflict case). Either way the skipped
-row is marked processed so it does not re-warn every maintenance cycle;
-ongoing warnings usually mean new transfers keep hitting the same bad token
-data or a backfill is processing historical rows.
+Read `crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id`
+accordingly: both `NULL` means identity is genuinely unknown or ambiguous (a
+refused-merge mirror transfer, or a linkage the indexer has not stated yet —
+see the `asset_linkage IS NULL` deferral, a different, non-processed state);
+both set with `stats_processed > 0` and no corresponding edge contribution
+means identity is known but this transfer's amount was not counted (the
+decimals-conflict case). Either way the skipped row is marked processed so it
+does not re-warn every maintenance cycle; ongoing warnings usually mean new
+transfers keep hitting the same bad token data or a backfill is processing
+historical rows.
 
 **Fix:** A successful merge needs no manual repair — it already is the repair.
-A chain-collision refusal is a genuine data problem: verify the token address
-recorded per chain for both components (a token's address was likely
-misattributed to the wrong chain), fix the source data, then reset the
-affected transfers' `stats_processed` for re-projection. For local
-development, a fresh reindex may be simpler.
+A refused merge is a genuine data problem: verify the token address recorded
+per chain for both components (a token's address was likely misattributed to
+the wrong chain, **or** a converting route was declared `mirror` by mistake —
+check `asset_linkage` on the transfers involved first, since that is now a
+possible cause the warning message itself calls out), fix the source data,
+then reset the affected transfers' `stats_processed` for re-projection. For
+local development, a fresh reindex may be simpler.
 
 To confirm this at runtime against a live database, see
 `.memory-bank/runbooks/runtime-verification.md` queries A (split-asset
-detector) and B (refusal legitimacy check).
+detector, now qualified to `mirror` rows only) and B (refusal legitimacy
+check).
+
+---
+
+## A `conversion` Transfer's Two Endpoints Are Never Merged, Even When They Look Mergeable
+
+**Symptom:** A converting bridge's two assets (e.g. Ethereum DAI and Gnosis
+native xDAI) stay as two separate `stats_assets` rows joined by one
+cross-asset `stats_asset_edges` row, even though a naive read might expect
+"this is clearly the same economic movement, why doesn't it merge like the
+mirror case does?"
+
+**Root cause:** This is the entire point of [ADR-011](adr/011-cross-asset-edges-and-per-transfer-linkage.md)
+and is not a bug. `ensure_asset_for_transfer`'s `conversion` branch resolves
+each endpoint independently via `lookup_token_asset` / `insert_stats_asset`,
+and never calls `merge_assets`. Two contradiction guards exist specifically to
+flag it when a `mirror` declaration or bad token data has caused the two
+sides to *end up* being the same asset anyway
+(`STATS_ASSET_LINKAGE_CONTRADICTION_TOTAL{kind="conversion_self_asset"}`), or
+when a later mirror merge folds a pre-existing cross-asset edge into a
+self-edge (`{kind="cross_asset_edge_collapsed"}`) — both are warn-and-continue
+diagnostics, not corrections.
+
+**Fix:** Do not "fix" two assets for one converting route as if it were
+fragmentation. If the two sides genuinely should be one asset (i.e. the
+bridge is not actually converting), the fix is on the indexer side: the
+transfer constructor is declaring the wrong linkage.
+
+---
+
+## The `..Default::default()` Omission Silently Defers Every Transfer From An Indexer
+
+**Symptom:** Every transfer from one specific bridge/indexer sits at
+`stats_processed = 0` forever, both `src_stats_asset_id` and
+`dst_stats_asset_id` stay `NULL`, and
+`STATS_TRANSFERS_DEFERRED_TOTAL{reason="linkage_unknown"}` climbs steadily —
+with no other symptom. The code that builds the transfer looks completely
+ordinary.
+
+**Root cause:** `crosschain_transfers::ActiveModel`'s `Default` impl leaves
+every field `ActiveValue::NotSet`, including `asset_linkage`. A `NotSet`
+column is *omitted from the INSERT column list*, so on first insert the
+column takes the database's default — SQL `NULL` — even though nothing looks
+wrong in the constructor. Avalanche's three transfer constructors originally
+built with `..Default::default()` and did not set `asset_linkage`,
+`stats_processed`, or an asset link at all, so there was no local cue a stats
+column was missing.
+
+**Fix:** Every transfer constructor must start from
+`interchain_indexer_entity::new_transfer(linkage)`
+(`interchain-indexer-entity/src/manual/`), which sets `asset_linkage`,
+`stats_processed = 0`, and both asset columns to `NotSet`/`None` correctly,
+then `..` the rest in from there — never from `Default::default()` directly.
+This is a correct-default-path fix, not enforcement: `ActiveModel` is a
+public struct with public fields, so a seventh site can still write
+`ActiveModel { .., ..Default::default() }` and compile. The actual guard is
+at the single write chokepoint, `message_buffer::persistence::flush_to_final_storage`:
+it `debug_assert!`s that `asset_linkage` was `Set` (so this fires loudly in
+the first test that flushes such a transfer, since tests build in debug) and
+in release warns + increments
+`STATS_TRANSFER_ASSET_LINKAGE_UNSET_TOTAL` + leaves the value unset, so the
+row defers rather than being silently stamped with a guessed `mirror`. If you
+add a new indexer, use `new_transfer` and expect a debug-build panic
+immediately if you forget — that is the intended, loud failure mode.
+
+---
+
+## `stats_asset_edges`'s Regenerated Primary-Key Tuple Order Is Table-Column Order, Not PK-Declaration Order
+
+**Symptom:** After regenerating entities
+(`interchain-indexer-entity/src/codegen/stats_asset_edges.rs`), the
+`Model`'s `#[sea_orm(primary_key)]` field order does not match the `PRIMARY
+KEY (...)` clause in the migration SQL, and a `find_by_id((...))` call
+written to match the SQL's column order fails to compile or resolves to the
+wrong row.
+
+**Root cause:** `sea-orm-cli generate entity` emits primary-key fields in
+**table column order** (the order `\d stats_asset_edges` would print them),
+not in the order they appear inside `PRIMARY KEY (...)`. Since
+`bridge_id` was appended to the table by an earlier migration
+(`m20260720_120000_add_read_filters_and_bridge_stats`) and
+`src_stats_asset_id` / `dst_stats_asset_id` were appended after that by a
+later one, the generated tuple is
+`(src_chain_id, dst_chain_id, bridge_id, src_stats_asset_id, dst_stats_asset_id)`
+— not the SQL declaration's
+`(src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id, dst_chain_id)`
+and not the historical `(stats_asset_id, src_chain_id, dst_chain_id,
+bridge_id)` order either.
+
+**Fix:** After any migration that changes `stats_asset_edges`'s columns,
+regenerate entities and **read the generated `Model` struct** to derive the
+`find_by_id` tuple order — never assume it matches the migration SQL or patch
+an old tuple by inserting an extra element. `database.rs`'s
+`create_or_update_stats_asset_edge` and any test calling `find_by_id` on this
+entity must be re-derived this way every time the column set changes.
+
+---
+
+## AMB `replace_existing` Does Not Roll Back The Asset Graph, So Write-Once Does Not Protect A Replacement Row
+
+**Symptom:** (Not yet reachable — AMB only ever declares `mirror` — but a
+real hazard for any future bridge that emits `conversion` *and* has a
+message-replacement path like AMB's collision handling.) A replaced
+`crosschain_transfers` row's `asset_linkage` is not what an earlier flush for
+the *displaced* body had declared, even though `asset_linkage` is supposed to
+be write-once.
+
+**Root cause:** the AMB `messageId`-collision path
+(`message_buffer/persistence.rs`'s `replace_existing` filter and
+`delete_replaced_messages`) deletes the parent `crosschain_messages` row
+first; `ON DELETE CASCADE` removes its `crosschain_transfers` row with it, and
+the replacement body is inserted as a **fresh row** with
+`stats_processed = 0` and no asset link. Write-once protects a value already
+stored *on a row*, not the identity of "this canonical key" across a
+replacement — the asset graph built from the displaced body's tokens is not
+rolled back either, because `stats_asset_tokens` is keyed by token, not by
+transfer.
+
+**Fix:** Not applicable today (no reachable case). If a future bridge
+combines `conversion` transfers with a collision-replacement path, the
+replacement row must re-declare `asset_linkage` from scratch exactly like any
+new row — do not assume a prior flush's declaration survives a
+`replace_existing` cycle.
 
 ---
 
@@ -869,6 +1053,35 @@ per endpoint disagreeing) correctly does not flag it, because it is not a
 split. If a genuine split is suspected, verify via the split detector
 described in `gotchas.md`, "Stats Asset Mapping Conflicts Merge; Only
 Same-Chain Collisions Skip," rather than by eyeballing address equality.
+
+---
+
+## ICTT Can Register Multiple Remote Contracts On One Remote Chain
+
+**Symptom:** A second legitimate ICTT Remote on an already represented chain
+hits the stats asset's one-token-per-chain guard, even though both transfers
+are lock/mint transfers of the same home asset.
+
+**Root cause:** ICTT does not enforce one Remote per blockchain. The Home's
+registration and collateral accounting are keyed by `(remoteBlockchainID,
+remoteTokenTransferrerAddress)`. Its registration guard rejects a duplicate
+pair, and rejects a Remote on the Home's own chain; it does not reject a second
+Remote address on another chain. Standard `ERC20TokenRemote` is itself an
+ERC20 contract, so two deployments have two token addresses while representing
+the same home asset. This does not require changing the backing token of an
+existing Home, or replacing code at an existing Remote address.
+
+**Implication:** Under the current transferrer-address identity convention,
+`Home@A → Remote1@B` followed by `Home@A → Remote2@B` reaches the same-chain
+mapping refusal in `stats/projection.rs`. Calling the second transfer a
+conversion merely to avoid the constraint is not justified by standard ICTT
+semantics. Supporting this topology needs an explicit asset-model decision.
+
+Verified against Avalanche documentation and Ava Labs source on 2026-09-15:
+
+- [ICTT design](https://docs.avax.network/academy/avalanche-l1/erc20-bridge/02-avalanche-interchain-token-transfer/02-bridge-design).
+- [Home registration checks](https://github.com/ava-labs/icm-services/blob/b952c604bdf403b847ae88bb2e2e31f13627572e/icm-contracts/avalanche/ictt/TokenHome/TokenHome.sol#L158-L209).
+- [ERC20 Remote implementation](https://github.com/ava-labs/icm-services/blob/b952c604bdf403b847ae88bb2e2e31f13627572e/icm-contracts/avalanche/ictt/TokenRemote/ERC20TokenRemoteUpgradeable.sol#L72-L89).
 
 ---
 
@@ -1705,12 +1918,13 @@ tokens from error text would destroy the diagnostics the ledger exists for.
 
 ## `.env` Is Loaded By `just run-dev` Only — Never Add `set dotenv-load`
 
-`justfile` deliberately does **not** set `dotenv-load`. The one recipe that runs
-the service with `.env` is the pre-existing `run-dev`:
+`justfile` deliberately does **not** set `dotenv-load`. The recipes that run
+the service with a dotenv file are `run-dev` (`.env`) and `run-dev-testnet`
+(`.env-testnet`):
 
 ```just
 run-dev:
-    dotenv -f .env run just run
+    dotenv -e .env -- just run
 ```
 
 `set dotenv-load := true` is a **global** setting — just has no per-recipe scope
@@ -1901,6 +2115,269 @@ bug. Fix the specific `tokens` row and any `stats_asset_edges` rows derived
 from it directly via SQL — `propagate_token_info_to_stats_tables` only fills
 edge `decimals` when `NULL`, so correcting `tokens` alone does not
 retroactively fix an already-populated (wrong) edge value.
+
+---
+
+## Native Token Identity Must Survive Missing Seed Metadata
+
+**Symptom:** A native token appears as a zero-address contract in an API
+response, its metadata lookup tries ERC-20 calls, or its statistics edge has
+`decimals = NULL` after an unsuccessful metadata seed.
+
+**Root cause:** The Gnosis leg of every xDai transfer is native xDAI, which
+has no token contract and therefore no address to record. Leaving that side
+`NULL` is not an option: `stats/indexed_chains.rs::transfer_identity_ready_condition`
+only accepts a `NULL` token endpoint when its chain is *unindexed* for the
+bridge — Gnosis is very much indexed here, so every xDai transfer would
+defer forever with `stats_processed = 0`, invisible in bridged-token stats.
+
+The internal storage key is the twenty-byte zero-address sentinel:
+`interchain-indexer-logic/src/indexer/xdai/types.rs::NATIVE_SENTINEL`
+(`0x0000000000000000000000000000000000000000` on chain `100`), written to
+`crosschain_transfers.token_dst_address` (Eth→Gno) or `token_src_address`
+(Gno→Eth). This makes the Gnosis leg a
+real, non-NULL endpoint, so `ensure_asset_for_transfer`'s `conversion` branch
+(ADR-011) can resolve it to its own `stats_assets` row rather than deferring
+with `identity_incomplete`.
+
+**Post-ADR-011 correction:** the sentinel and the Ethereum-side ERC-20 land in
+**two separate** `stats_assets` rows joined by one `stats_asset_edges` row
+(`src_stats_asset_id` = the Ethereum DAI/USDS asset, `dst_stats_asset_id` = the
+Gnosis native-xDAI asset, for an Eth→Gno transfer), never merged into one
+shared row — merging them was the exact bug ADR-011 exists to fix. Do not
+"fix" a test or a live observation showing two assets for a DAI↔xDAI pair as
+if it were the fragmentation problem ADR-004's union-find addresses; that
+union-find still applies to `mirror` transfers only.
+
+**Type belongs to the token, independently of transfers.** Under
+[ADR-012](./adr/012-chain-local-token-types.md), `tokens.type` is authoritative
+and `stats_asset_tokens.type` carries its statistics projection. Both are
+non-null. `crosschain_transfers.type` and the mixed transfer enum variants are
+removed. `asset_linkage` still independently declares `mirror` or `conversion`.
+
+Before registry metadata exists, the shared `TokenType::from_address`
+fallback in `interchain-indexer-entity/src/manual/mod.rs` recognizes exactly
+twenty zero bytes as native. An empty address or another zero-byte length is
+not that sentinel. Other keys fall back to ERC-20 because all currently
+indexed contract tokens are ERC-20; an explicit registry kind takes precedence
+over the fallback. NFT ingestion is not supported.
+
+Both transfer and statistics APIs return `type = NATIVE` and a null address
+for native tokens. `TokenInfoService` skips contract fetching for the native
+storage key in both request-time lookup and stats enrichment, even when the
+metadata seed is missing. Do not remove these guards on the assumption that
+startup always manages to seed metadata.
+
+**Seed metadata separately:** `XDaiIndexer::start()` writes exactly one row —
+`chain_id = 100, address = 0x00…00, type = native, symbol = "xDAI", name =
+"xDai", decimals = 18` — through idempotent `upsert_token_info`. This remains
+indexer-specific work rather than a `server::run` responsibility. A failure
+logs a warning and does not stop ingestion; the seed retries on the next
+restart. Missing metadata can still leave edge decimals null: projection
+reads decimals from the endpoint selected by the sticky `amount_side`, so
+Gno→Eth edges need the Gnosis sentinel's metadata. Missing metadata must not
+change native identity, leak the sentinel, or cause a contract-fetch loop.
+
+**The sentinel constant is shared, not xDai-private.** If another bridge
+later writes a native leg on chain `100`, it must reuse
+`xdai::types::NATIVE_SENTINEL` rather than its own zero-address literal, or
+the two bridges' native xDAI legs form two disjoint `stats_assets` rows for
+the same coin instead of sharing one. This still holds under ADR-011's
+per-endpoint `conversion` resolution: `(100, NATIVE_SENTINEL)` is looked up
+per side regardless of linkage, so reusing the constant is what makes a
+second bridge's native leg land in the *same* Gnosis-native asset as xDai's,
+even though it no longer also merges with whatever asset sits on the other
+end of either bridge's edge.
+
+---
+
+## xDai Destination Events Can Carry Legacy Source Hashes Above The Epoch Floor
+
+The 2025-04-15 floors (Ethereum `22273407`, Gnosis `39569937`) constrain
+which logs are scanned, not the identity of messages completing there.
+The research note's **The epoch boundary is not clean on the destination
+side** documents 348 orphaned hash-based affirmations, three delayed Gno→Eth
+claims and one affirmed Ethereum plain-transfer deposit. A maintenance pause
+did not eliminate this population. Identity cannot be inferred solely from
+the destination contract version.
+
+Destination `bytes32` values are now classified per event: values through
+`u64::MAX` are nonces, while larger values are raw 32-byte source transaction
+hashes. The eight-byte threshold is about the numeric value (24 leading zero
+bytes for a nonce), not about four or eight leading zero bytes. Source events
+remain nonce-only and reject values above `u64::MAX`.
+
+Hash completions fetch the counterpart receipt and block before mutating the
+buffer. Their `native_id` and `src_tx_hash` are the raw source hash; sender and
+initial timestamp come from that receipt/block. A matching legacy two-argument
+source event supplies the observed source amount and recipient, while the
+destination completion independently supplies the destination amount. When the
+source event is not recognized, completion.value supplies both amounts, including
+late Gno→Eth claims. That source amount is inferred, not independently observed;
+Gno→Eth reconstruction emits a WARN with source hash/block and destination context.
+Sender and source timestamp still come from the fetched receipt/block. Full API
+fields do not imply full source verification: fallback cannot independently
+validate source recipient or preserve a source/payout amount difference. The API
+has no provenance marker for inferred src_amount; the WARN is the only indication.
+This is an accepted limitation, not a request to add historical grammar support.
+
+A hash-based `SignedForAffirmation` alone must not manufacture a transfer or
+be attached to the genuine nonce-based message for the same source transaction:
+those are distinct on-chain signing buckets. A successful legacy completion
+is stronger evidence: its bytes32 identifies the source transaction on the
+opposite chain, enabling a targeted source lookup even below the scan floor.
+For an Ethereum plain ERC-20 transfer, no bridge source event exists at all;
+only later affirmation makes it an observable cross-chain transfer.
+
+Two reconstruction traps matter when implementing this support:
+
+- A source block number belongs to the **source chain**. For a Gno→Eth
+  claim, Gnosis block `39557691` must never be compared with Ethereum's
+  USDS cutover `23748179`. The legacy 104-byte message format selects DAI
+  through `Message.parseMessage`; only Eth→Gno uses Ethereum source-block
+  asset thresholds. An asset resolver should require direction explicitly.
+- The fetched source receipt can contain the legacy two-argument
+  `UserRequestForSignature(address,uint256)` or
+  `UserRequestForAffirmation(address,uint256)`. Decode the correct proxy's
+  event to preserve its observed source amount and validate recipient;
+  do not replace that amount with completion.value. A missing bridge source
+  event is expected for an Ethereum plain token transfer. A Gnosis native send
+  emits UserRequestForSignature, but an older event topic can be unrecognized
+  by the decoder. Missing recognition must not prevent a successful legacy
+  completion from being indexed. Malformed recognized events and recipient
+  conflicts still fail rather than being silently replaced by the fallback.
+- Solidity event names are part of topic0. A sol! declaration named
+  `LegacyUserRequestForSignature` hashes that literal name, not the historical
+  `UserRequestForSignature` name. Tests that encode with the same declaration
+  cannot detect this mismatch; use the actual on-chain signature in fixtures.
+  Full historical grammar support remains outside the current fallback fix.
+
+Standalone hash confirmations use the ordinary buffer/pending path and emit a
+WARN; they do not perform source RPC and do not bypass the confirmations FK.
+Consequently an orphan can remain pending indefinitely, and a confirmation
+arriving after a completed message was flushed can form a new pending entry.
+This is an accepted limitation, not a reason to create a phantom message.
+
+**Late source enrichment and xDai amount assumptions.** Once a reconstructed completion and a source handler can
+produce the same canonical key (modern nonce aliases or future hash-keyed
+source handlers), finalization and eviction allow a later source-only entry
+under that key. `xdai/consolidation.rs::build_transfer` fills its
+unobserved destination amount from the source amount, and
+`message_buffer/persistence.rs::crosschain_transfers_on_conflict` prefers the
+incoming non-null amount. The message-level terminal guard does not protect
+the transfer row. If source and payout amounts differ, this changes an observed
+payout to an inferred amount. The requester confirmed equal source and
+destination amounts for the current xDai alias-reconciliation scope; do not
+require unequal-amount guards or fee-specific tests for that work. Revisit this
+merge behavior only if unequal amounts become supported. This does not relax
+the requirement to preserve the first canonical destination transaction when
+a later execution is observed.
+
+See [xDai protocol research](./research/xdai-bridge-protocol-and-indexing-fit.md),
+sections **The epoch boundary is not clean on the destination side** and
+**Plain-transfer deposits**. Ordinary nonce-based destination-only entries
+still need their source event; do not generalize legacy reconstruction to them.
+
+---
+
+## xDai Deployments Are Keyed On `(chain_id, side, version)`, And Its `version` Is A Per-Deployment Proxy Counter
+
+xDai no longer hardcodes chain ids 1 and 100. `Direction` maps to a *side*
+(`initiator_side`/`destination_side`), and `abi::AbiRegistry::chain_ids()`
+resolves that side to a configured chain id from `bridges.json`. Every id an
+xDai message writes — `crosschain_messages.src_chain_id`/`dst_chain_id`, both
+`crosschain_transfers` legs, and the leading 4 bytes of the `native_id` blob —
+comes from that pair, which each event handler stamps onto the buffered
+`Message` alongside `direction`.
+
+A message with a direction but no `chain_ids` — a `pending_messages.payload`
+written before the field existed and revived through `#[serde(default)]` —
+never falls back to a literal. It is reported as **not consolidatable**
+(`warn` + `interchain_indexer_xdai_messages_missing_chain_ids_total`), *not*
+as an error: `Consolidate::consolidate` is called from
+`maintenance.rs::classify_item`, which `?`-propagates into `plan_maintenance`
+before the maintenance transaction is opened, so an `Err` there would abort
+the flush, stats projection and cursor persistence for the whole bridge on
+every cycle, permanently, over one buffer entry. The entry stays buffered
+until its hot TTL offloads it; clear those `pending_messages` rows and let the
+blocks be re-indexed.
+
+The *chain ids* being config-driven is not the same as the *protocol
+constants* being deployment-aware, and the second half is where the trap is.
+Epoch floors and the Foreign reserve-asset table are **still in code**, in
+`indexer/xdai/version.rs` — deliberately, because `bridges.json` would then
+carry the same block numbers twice. They are simply no longer mainnet-only:
+each is declared per deployment and selected by chain id.
+
+Two registered deployments today:
+
+| Deployment | Foreign | Home | Foreign floor | Home floor | Foreign asset(s) |
+| --- | --- | --- | --- | --- | --- |
+| mainnet | Ethereum `1` | Gnosis `100` | 22273407 | 39569937 | DAI below 23748179, USDS from it |
+| testnet | Sepolia `11155111` | Chiado `10200` | 8239484 | 20553827 | one mock DAI, always |
+
+**`version` in `bridges.json` is the proxy's own `EternalStorageProxy.version()`
+counter, and it restarts at 1 per deployment.** Ethereum reports 9/10 and
+Gnosis 6/7; Sepolia reports 2 and Chiado 3. The numbers are therefore *not* a
+key on their own, which is why `version::grammar_for` takes
+`(chain_id, side, version)`. Keyed on `(side, version)` alone, a mainnet config
+could select the Sepolia grammar — and with it an epoch floor 14M blocks too
+low and a `source_asset` that does not exist on Ethereum — merely by writing
+`version: 2`. It is now a hard startup error that names every registered
+deployment. `getBridgeInterfacesVersion()` is useless for telling them apart:
+it returns `6.1.0` on all four proxies.
+
+Adding a third deployment means adding its grammar windows, floor constants and
+asset constants to `version.rs` — not a schema change. `bridges.json` is
+unchanged by all of this.
+
+Two things follow that are easy to get wrong:
+
+- **The Chiado floor is a source-event boundary, but not a destination-identity
+  boundary.** Block `20553827` installs Home v3 and changes
+  `UserRequestForSignature(address,uint256,bytes32)` to
+  `UserRequestForSignature(address,uint256,bytes32,address)`. The unchanged
+  `AffirmationCompleted.bytes32`, however, is whatever the oracle hands
+  `executeAffirmation`: the contract derives nothing, and the testnet oracle
+  alternated between nonce and transaction-hash conventions inside one
+  implementation window and re-affirmed deposits it had already affirmed the
+  other way. `20553827` also happens to be the lowest implementation boundary
+  that excludes every hash-keyed affirmation (the last is at 20553477; the
+  only later nonce-keyed one is at 20706963). Lowering it
+  produces **two `crosschain_messages` rows for one deposit**, which nothing
+  detects — the contract's own dedup is over
+  `keccak(recipient‖value‖bytes32)`, which differs between the two forms, so
+  both executions are valid on chain. The accepted cost is that Sepolia
+  deposits with nonces 0, 1 and 2 stay permanently `Initiated`: their
+  affirmations are below this floor, which is why the bridge's two sides are
+  indexed over ranges eleven months apart.
+
+  **Do not "fix" the asymmetry by lowering the floor.** Four of the six
+  hash-keyed affirmations it would admit resolve to Sepolia transactions
+  emitting the *modern* three-argument source event, and
+  `decode_legacy_source_event` ends with an `ensure!` rejecting exactly that
+  ("source receipt contains unsupported modern xDai source-request grammar").
+  Those blocks would not duplicate rows — they would error and retry forever.
+  Re-keying the affirmation to its source nonce fixes that, and then collides
+  with `ensure_completion_compatible` for the three deposits Chiado affirmed
+  *twice*, in two distinct transactions. The full per-affirmation breakdown,
+  and why closing the gap is not worth relaxing a mainnet-shared invariant, is
+  in
+  [the independent upgrade-history research](./research/xdai-bridge-sepolia-chiado-upgrade-history.md).
+- **`legacy_home_ethereum_asset` is total on purpose.** It resolves the
+  Home v6 `token_dst_address` fallback (the legacy 104-byte `parseMessage`
+  hardcodes one ERC-20) from `chain_ids.foreign`, and returns DAI for any
+  unrecognised chain id rather than erroring. It is read from
+  `Consolidate::consolidate`, i.e. inside the maintenance plan — see the skip
+  rationale above. Do not "tighten" it into a `Result`.
+
+Related: the Foreign version windows in `bridges.json` and the DAI→USDS
+boundary (`USDS_EPOCH_START_BLOCK`) are two independent statements of the same
+fact. `AbiRegistry::from_chains` asserts that every Foreign window's
+`source_asset` matches `legacy_ethereum_asset(chain_id, EthToGno,
+started_at_block)`, so an env override that shifts `started_at_block` fails at
+startup instead of silently labelling a range of transfers with the wrong
+`token_src_address`. Both sides of that comparison are per deployment.
 
 ---
 
@@ -2123,3 +2600,147 @@ what they are. Assert on parsed values (`body["extra"]["ns"]["field"]`), never
 on key order or on a serialized string. If a field ever genuinely needs a
 stable key order, it cannot be a `Struct` — it has to be a declared proto
 message or a `map<string, string>`, both of which `btree_map` does cover.
+
+
+## Raw SQL Must Cast PostgreSQL Enums For SeaORM ActiveEnum Decoding
+
+SeaORM-generated entity selects cast enum columns appropriately, but a raw SQL
+`QueryResult::try_get::<TokenType>` expects the enum's Rust representation
+(`String` / SQL `TEXT`). Selecting `sat.type` directly fails at runtime with
+"SQL type TEXT is not compatible with SQL type token_type". Select
+`sat.type::text AS token_type` when decoding the raw stats query; see
+`interchain-indexer-logic/src/bridged_tokens_query.rs` and its database-backed
+token-list tests. A successful `cargo check` cannot catch this mismatch.
+
+---
+
+## xDai Destination Identity And Anomalousness Are Orthogonal — A Hash Alone Is Never An Anomaly
+
+**Symptom:** It is tempting to treat any hash-keyed `AffirmationCompleted` /
+`RelayedMessage` (`bytes32 > u64::MAX`) as suspicious, or to gate the
+multiple-execution check on "is this identity a hash". Both are wrong.
+
+**Root cause:** Two independent axes got conflated. The *raw observed
+identity* (`MessageIdentity::Nonce` vs `MessageIdentity::SourceTransactionHash`,
+decided purely by whether the destination event's `bytes32` fits in `u64`) is
+about **how this one execution was encoded on chain**. *Anomalousness* is
+about **execution multiplicity** — whether more than one destination
+transaction resolves to the same *canonical* identity. These are unrelated:
+a hash-keyed completion is completely ordinary (Chiado nonce 2's fixture is
+the deliberate negative control — one hash-keyed completion, zero anomalies),
+and a nonce-keyed completion can just as easily be the *second* execution of
+a canonical key (nonce 0 and 1's direct nonce-keyed completions coexist with a
+later hash-keyed alias of the same nonce in the same Chiado window).
+
+**Fix:** Never branch multiple-execution logic on `MessageIdentity`'s variant.
+The only question `message_buffer::persistence::reconcile_destination_executions`
+asks is "does this observation's destination transaction hash match the
+canonical one for this key" — see `xdai::types::ObservedExecution::observed_identity`'s
+doc for why it stores the raw identity only as **provenance**, not as an input
+to the anomaly decision.
+
+---
+
+## A Fixture Built From The Same `sol!` Declaration It Tests Cannot Catch A Wrong `topic0`
+
+**Symptom:** `interchain-indexer-logic/src/indexer/xdai/events.rs`'s legacy
+two-argument source-event decoder filtered on `topic0` values that no
+deployed xDai contract has ever emitted (`LegacyUserRequestForAffirmation` /
+`LegacyUserRequestForSignature`, invented names to work around `alloy::sol!`
+rejecting two events of the same real name in one macro invocation) for an
+entire prior task's implementation and review cycle, and every test for that
+decoder passed the whole time.
+
+**Root cause:** The old tests built their fixture logs via
+`LegacyUserRequestForAffirmation { .. }.encode_log_data()` — which embeds
+`LegacyUserRequestForAffirmation::SIGNATURE_HASH` as `topics[0]` — and the
+decoder under test filtered on that exact same constant
+(`LegacyUserRequestForAffirmation::SIGNATURE_HASH`). Both sides of the
+assertion computed the identical (wrong) hash from the identical (wrong)
+declaration, so the test could never observe that neither one matches what
+the real two-argument `UserRequestForAffirmation(address,uint256)` /
+`UserRequestForSignature(address,uint256)` events actually hash to on chain
+(`0x1d491a42…` / `0x127650bc…`, verified via `cast keccak`).
+
+**Fix:** A fixture testing topic0 recognition must supply the topic0 as a
+literal hex string transcribed from an independent, verified source (an
+on-chain log, a spec table, `cast keccak` output) — never by reading
+`SomeType::SIGNATURE_HASH` off the same `sol!` block the code under test also
+reads from. See `events.rs::tests::REAL_USER_REQUEST_FOR_AFFIRMATION_TWO_ARG_TOPIC0`
+/ `REAL_USER_REQUEST_FOR_SIGNATURE_TWO_ARG_TOPIC0` and the
+`legacy_two_arg_log` helper built around them for the pattern this now uses.
+This generalizes beyond xDai: any test whose purpose is to pin an external
+protocol constant (a signature hash, a magic byte sequence, an address) is
+worthless if the value under test and the value asserted against trace back
+to the same source.
+
+---
+
+## `flushed_for_stats` / `flushed_for_enrichment` Are Cloned Before Destination-Execution Neutralization
+
+**Symptom (latent, not yet observed):** if stats projection or token
+enrichment ever start reading a destination-owned field
+(`dst_tx_hash`, `dst_amount`, `recipient_address`) off the `ConsolidatedMessage`
+models passed to `apply_stats_for_flushed_batch` /
+`kickoff_token_enrichment_for_flushed`, they will silently see the
+**pre-neutralization** value even when
+`message_buffer::persistence::reconcile_destination_executions` decided the
+stored execution wins and rewrote those fields on the batch that actually
+gets upserted.
+
+**Root cause:** `message_buffer::maintenance.rs::commit_maintenance` clones
+`flushed_for_stats` / `flushed_for_enrichment` from `consolidated_entries`
+**before** entering the transaction closure that neutralizes fields (via
+`reconcile_destination_executions`) and flushes. The clones and the
+neutralized-then-flushed `consolidated_entries` are two different values from
+that point on. This is currently safe only because
+`apply_stats_for_flushed_batch` reads exclusively the primary key off each
+model, and `token_keys_from_flushed_for_enrichment` reads exclusively token
+addresses — neither of which neutralization touches.
+
+When the stored execution wins, reconciliation restores the message's
+destination-owned columns and **drops the entry's transfers entirely** rather
+than neutralizing transfer columns one by one. The reason is the conflict
+policy: `crosschain_transfers_on_conflict` is `COALESCE(EXCLUDED.col,
+stored.col)` for every value column (plain `EXCLUDED` for the token chain
+ids), so any completion-derived column left `Set` silently overwrites the
+canonical transfer. For an xDai raw-hash identity whose source receipt has no
+recognized source event, `recipient_address` and `src_amount` both come from
+the completion, so a per-column fix that only nulled `dst_amount` let a late
+execution rewrite them. Dropping is safe because the stored canonical row was
+flushed with its transfer, and stats projection re-reads transfers from the
+database by message PK. The clones still hold the dropped transfer, so
+enrichment may look up its token addresses, which xDai takes from the shared
+source side. Regression:
+`persistence::tests::test_reconcile_late_raw_hash_execution_stored_wins_keeps_canonical_transfer`.
+
+**Fix / rule:** if a future change makes either stats or enrichment read
+`dst_tx_hash`, `dst_amount`, `recipient_address`, or `last_update_timestamp`
+off these pre-transaction clones, it must instead read the neutralized,
+post-reconciliation values — either move the clone to after
+`reconcile_destination_executions` runs, or pass the reconciled amounts
+through explicitly. Do not assume today's "clone before the transaction"
+shape stays safe under a change to what these two functions read.
+
+## `merge_assets` Must Fold Edge Aggregates Relatively — Bridges' Maintenance Transactions Overlap
+
+**Symptom:** none at runtime. A `stats_asset_edges` row ends up with a lower
+`transfers_count` / `cumulative_amount` than the transfers counted into it, with
+no log line and no metric; the lost transfer is already `stats_processed = 1`,
+so nothing ever re-counts it.
+
+**Root cause:** every bridge runs its own `MessageBuffer` maintenance loop, so
+maintenance transactions of different bridges run concurrently under READ
+COMMITTED. `merge_assets`, called from one bridge's projection, rewrites the
+winner/loser edges of **every** bridge, and it reads them without a lock. If the
+fold writes `transfers_count = <total computed from that read>`, an increment
+another bridge commits between the read and the `UPDATE` is overwritten. A
+relative write (`transfers_count = transfers_count + <losers' sum>`) re-reads
+the committed row after the row-lock wait and keeps it.
+
+**Rule:** in `stats/projection.rs`, aggregate columns on rows another bridge may
+touch are updated with `Expr::col(..).add(delta)`, never `Expr::value(total)`.
+`test_merge_fold_keeps_concurrent_increment_on_target_edge` (`database.rs`)
+holds an uncommitted increment on the fold target from a second connection and
+fails on the absolute form. The loser-row read → `DELETE` race predates this and
+is not closed; `SELECT … FOR UPDATE` on the edge load would close both.

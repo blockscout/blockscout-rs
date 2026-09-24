@@ -1,0 +1,48 @@
+[
+    {
+        "chain_id": 1,
+        "name": "Ethereum",
+        "icon": "https://blockscout-icons.s3.us-east-1.amazonaws.com/ethereum.svg",
+        "explorer": {
+            "url": "https://eth.blockscout.com",
+            "custom_tx_route": "/tx/{hash}",
+            "custom_address_route": "/address/{hash}",
+            "custom_token_route": "/token/{hash}"
+        },
+        "rpcs": [
+            {
+                "gateway": {
+                    "url": "https://rpc.eth.gateway.fm"
+                },
+                "drpc": {
+                    "url": "https://eth.drpc.org"
+                },
+                "1rpc": {
+                    "url": "https://1rpc.io/eth"
+                }
+            }
+        ]
+    },
+    {
+        "chain_id": 100,
+        "name": "Gnosis",
+        "icon": "https://blockscout-icons.s3.us-east-1.amazonaws.com/gnosis.svg",
+        "explorer": {
+            "url": "https://gnosis.blockscout.com",
+            "custom_tx_route": "/tx/{hash}",
+            "custom_address_route": "/address/{hash}",
+            "custom_token_route": "/token/{hash}"
+        },
+        "rpcs": [
+            {
+                "gateway": {
+                    "url": "https://rpc.gnosis.gateway.fm"
+                },
+                "gnosis_official": {
+                    "url": "https://rpc.gnosischain.com",
+                    "max_rps": 2
+                }
+            }
+        ]
+    }
+]

@@ -95,15 +95,17 @@ tool-specific integrations (Cursor `.cursor/skills/`, Claude Code `.claude/skill
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships. **graphify-out/ is gitignored** — it is a per-clone, local-only cache that is never committed (it used to be, and every code change produced a multi-MB diff plus near-guaranteed merge conflicts on graph.json/graph.html).
 
 When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
 Rules:
+- **Bootstrap before anything else if missing:** if `graphify-out/graph.json` does not exist (fresh clone, or the directory was deleted), run `just graphify-init` first (no API key needed). Do not treat a missing graph as a reason to fall back to raw grep/read for the rest of the session — build it, then use it.
+- Run `just graphify-hooks` once per clone to install local post-commit/post-checkout git hooks that keep the graph auto-refreshed as code changes and branches switch.
 - For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
 - This applies to every spawned subagent that explores code, not just to you. Include the appropriate graphify command in the subagent prompt, before it reads source.
 - Never run `graphify save-result` or persist user prompts, assistant answers, or other chat content under `graphify-out/memory/` unless the user explicitly asks for that specific content to become repository knowledge. Query/path/explain/update remain read-only with respect to conversation content; skip the graphify skill's feedback-loop persistence step by default.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- Local graphify-out/ files changing (or being newly created) between commands is expected and not something to `git add` — the whole directory is gitignored.
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- After modifying code, run `graphify update .` to keep the local graph current (AST-only, no API cost).
