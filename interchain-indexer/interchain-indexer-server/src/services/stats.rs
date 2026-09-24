@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     // `TokenType` is nested in `TokenInfo` so its value names do not squat the
-    // proto package namespace — see the comment in v1/interchain_indexer.proto.
+    // proto package namespace — see `.memory-bank/rules/rust-style.md`.
     proto::{interchain_statistics_service_server::*, token_info::TokenType, *},
     settings::ApiSettings,
 };

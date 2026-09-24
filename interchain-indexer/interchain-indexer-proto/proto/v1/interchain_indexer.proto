@@ -461,8 +461,7 @@ message GetTransfersByAddressRequest {
 }
 
 message TokenInfo {
-  // Classification stored with each token. UNSPECIFIED is the proto3 default.
-  // Nested on purpose; see `.memory-bank/rules/rust-style.md` before flattening it.
+  // Token kind. UNSPECIFIED is the proto3 default and is never returned.
   enum TokenType {
     UNSPECIFIED = 0;
     ERC20 = 1;
@@ -472,9 +471,7 @@ message TokenInfo {
   }
 
   reserved 1; // chain_id moved to InterchainTransfer
-  // Null iff `type == NATIVE`: a native side has no token
-  // contract, so it must not carry the zero-address sentinel some indexers
-  // (xDai) write internally for it.
+  // Null for a native token (`type == NATIVE`), which has no contract address.
   optional string address_hash = 2;
   optional string name = 3;
   optional string symbol = 4;

@@ -1918,12 +1918,13 @@ tokens from error text would destroy the diagnostics the ledger exists for.
 
 ## `.env` Is Loaded By `just run-dev` Only — Never Add `set dotenv-load`
 
-`justfile` deliberately does **not** set `dotenv-load`. The one recipe that runs
-the service with `.env` is the pre-existing `run-dev`:
+`justfile` deliberately does **not** set `dotenv-load`. The recipes that run
+the service with a dotenv file are `run-dev` (`.env`) and `run-dev-testnet`
+(`.env-testnet`):
 
 ```just
 run-dev:
-    dotenv -f .env run just run
+    dotenv -e .env -- just run
 ```
 
 `set dotenv-load := true` is a **global** setting — just has no per-recipe scope

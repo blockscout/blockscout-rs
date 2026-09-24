@@ -1372,9 +1372,7 @@ definitions:
       - ERC721
       - ERC1155
     default: UNSPECIFIED
-    description: |-
-      Classification stored with each token. UNSPECIFIED is the proto3 default.
-      Nested on purpose; see `.memory-bank/rules/rust-style.md` before flattening it.
+    description: Token kind. UNSPECIFIED is the proto3 default and is never returned.
   protobufAny:
     type: object
     properties:
@@ -1902,10 +1900,7 @@ definitions:
     properties:
       address_hash:
         type: string
-        description: |-
-          Null iff `type == NATIVE`: a native side has no token
-          contract, so it must not carry the zero-address sentinel some indexers
-          (xDai) write internally for it.
+        description: Null for a native token (`type == NATIVE`), which has no contract address.
       name:
         type: string
       symbol:
