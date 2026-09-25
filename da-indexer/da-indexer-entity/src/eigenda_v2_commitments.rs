@@ -3,20 +3,19 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "eigenda_blobs")]
+#[sea_orm(table_name = "eigenda_v2_commitments")]
 pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
         column_type = "VarBinary(StringLen::None)"
     )]
-    pub id: Vec<u8>,
+    pub commitment_hash: Vec<u8>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub batch_header_hash: Vec<u8>,
-    pub blob_index: i32,
+    pub commitment_data: Vec<u8>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
-    pub data: Option<Vec<u8>>,
-    pub data_s3_object_key: Option<String>,
+    pub blob_data: Option<Vec<u8>>,
+    pub blob_data_s3_object_key: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
