@@ -214,6 +214,20 @@ impl<'a> DomainNameOnProtocol<'a> {
     }
 }
 
+/// Checks that `name` is already normalized according to ENSIP-15.
+///
+/// Reverse records are user-controlled, so an unnormalized name
+/// (e.g. `Metamask.eth`) must not be exposed as a primary name:
+/// normalizing it for display would make it look like a canonical
+/// name that may belong to a different address.
+pub fn is_ens_normalized(name: &str) -> bool {
+    !name.is_empty()
+        && ENS_NORMALIZER
+            .normalize(name)
+            .map(|normalized| normalized == name)
+            .unwrap_or(false)
+}
+
 fn ens_normalize(name: &str) -> Result<String, ProtocolError> {
     let trimmed = name.trim().trim_matches(SEPARATOR);
     let normalized = ENS_NORMALIZER
@@ -359,6 +373,27 @@ mod tests {
             domain_name.label_name(),
             "43c960fa130e3eb58e7aaf65f46f76b5c607c3a9"
         )
+    }
+
+    #[test]
+    fn is_ens_normalized_works() {
+        for (name, expected) in [
+            ("vitalik.eth", true),
+            ("metamask.eth", true),
+            // unnormalized names with uppercase letters must be rejected,
+            // not lowercased into a valid-looking canonical name
+            ("Metamask.eth", false),
+            ("VitaLiK.eth", false),
+            ("LEVVV.ETH", false),
+            ("wa🇬🇲i.eth", true),
+            ("levvv.gno", true),
+            // whitespace and separators are not trimmed here
+            (" vitalik.eth", false),
+            ("vitalik.eth.", false),
+            ("", false),
+        ] {
+            assert_eq!(is_ens_normalized(name), expected, "failed for {name:?}");
+        }
     }
 
     #[test]
