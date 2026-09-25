@@ -23,6 +23,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 | story-subgraph      | Story     | .ip   | SpaceID contracts |
 | gravity-subgraph    | Gravity   | .g    | SpaceID contracts |
 | zeta-subgraph       | Zeta      | .zeta | SpaceID contracts |
+| gwei-subgraph       | Ethereum  | .gwei | Gwei Name Service |
 
 ## Envs
 
