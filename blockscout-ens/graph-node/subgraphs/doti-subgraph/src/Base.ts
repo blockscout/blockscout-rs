@@ -43,7 +43,13 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
   let domain = Domain.load(domainId);
 
   if (domain == null) {
-    return;
+    domain = new Domain(domainId);
+    domain.createdAt = event.block.timestamp;
+    domain.subdomainCount = 0;
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
+    domain.owner = account.id;
+    domain.isMigrated = true;
   }
 
   registration.domain = domain.id;
@@ -52,7 +58,7 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
   registration.registrant = account.id;
 
   domain.registrant = account.id;
-  domain.expiryDate = event.params.expires.plus(GRACE_PERIOD_SECONDS);
+  domain.expiryDate = event.params.expires;
 
   let labelName = ens.nameByHash(label.toHexString());
   if (labelName != null) {
