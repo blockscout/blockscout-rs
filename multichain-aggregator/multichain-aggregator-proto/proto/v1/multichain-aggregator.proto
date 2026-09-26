@@ -50,6 +50,7 @@ enum TokenType {
   TOKEN_TYPE_ZRC_2 = 6;
   TOKEN_TYPE_NATIVE = 7;
   TOKEN_TYPE_ERC_7984 = 8;
+  TOKEN_TYPE_ERC_8056 = 9;
 }
 
 enum HashType {
@@ -216,6 +217,16 @@ message BatchImportRequest {
       TokenType token_type = 4;
       optional string icon_url = 5;
       optional string total_supply = 6;
+      // ERC-8056 display multiplier, a uint256 where 1e18 means 1.0.
+      // Independent of `decimals`.
+      optional string ui_multiplier = 7;
+      // ERC-8056 multiplier scheduled to replace `ui_multiplier`, in the same
+      // units. Meaningful together with `ui_multiplier_effective_at`.
+      optional string new_ui_multiplier = 8;
+      // RFC 3339 timestamp at which `new_ui_multiplier` takes over, e.g.
+      // "2026-09-01T00:00:00Z". An explicit offset is accepted and normalized
+      // to UTC.
+      optional string ui_multiplier_effective_at = 9;
     }
 
     message Counters {
