@@ -43,10 +43,10 @@ export function handleNameRegisteredByController(
     domain.subdomainCount = 0;
     domain.storedOffchain = false;
     domain.resolvedWithWildcard = false;
-    domain.owner = account.id;
-    domain.registrant = account.id;
     domain.isMigrated = true;
   }
+  domain.owner = account.id;
+  domain.registrant = account.id;
 
   if (checkValidLabel(event.params.name)) {
     domain.labelName = event.params.name;
@@ -59,9 +59,9 @@ export function handleNameRegisteredByController(
   if (registration == null) {
     registration = new Registration(event.params.label.toHex());
     registration.domain = domain.id;
-    registration.registrationDate = event.block.timestamp;
-    registration.registrant = account.id;
   }
+  registration.registrant = account.id;
+  registration.registrationDate = event.block.timestamp;
   if (checkValidLabel(event.params.name)) {
     registration.labelName = event.params.name;
   }
