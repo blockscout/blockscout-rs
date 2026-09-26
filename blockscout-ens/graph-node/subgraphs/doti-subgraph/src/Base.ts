@@ -32,6 +32,10 @@ const GRACE_PERIOD_SECONDS = BigInt.fromI32(7776000); // 90 days
 
 var rootNode: ByteArray = byteArrayFromHex(BASE_NODE_HASH);
 
+/**
+ * Handles NameRegistered registrar events to index domain registrations.
+ * @param event The NameRegistered blockchain event.
+ */
 export function handleNameRegistered(event: NameRegisteredEvent): void {
   let account = new Account(event.params.owner.toHex());
   account.save();
@@ -77,6 +81,10 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
   registrationEvent.save();
 }
 
+/**
+ * Handles NameRenewed registrar events to extend registration expiry.
+ * @param event The NameRenewed blockchain event.
+ */
 export function handleNameRenewed(event: NameRenewedEvent): void {
   let label = uint256ToByteArray(event.params.id);
   let registration = Registration.load(label.toHex());
@@ -90,7 +98,7 @@ export function handleNameRenewed(event: NameRenewedEvent): void {
   }
 
   if (domain != null) {
-    domain.expiryDate = event.params.expires.plus(GRACE_PERIOD_SECONDS);
+    domain.expiryDate = event.params.expires;
     domain.save();
   }
 
@@ -102,6 +110,10 @@ export function handleNameRenewed(event: NameRenewedEvent): void {
   registrationEvent.save();
 }
 
+/**
+ * Handles Transfer registrar events for token ownership changes.
+ * @param event The Transfer blockchain event.
+ */
 export function handleNameTransferred(event: TransferEvent): void {
   let account = new Account(event.params.to.toHex());
   account.save();

@@ -11,6 +11,12 @@ import { EMPTY_ADDRESS, EMPTY_ADDRESS_BYTEARRAY, ROOT_NODE, concat, createEventI
 
 const BIG_INT_ZERO = BigInt.fromI32(0);
 
+/**
+ * Creates a default root domain or basic domain entity.
+ * @param node Node identifier hash.
+ * @param timestamp Block timestamp.
+ * @returns Initialized Domain entity.
+ */
 function createDomain(node: string, timestamp: BigInt): Domain {
   let domain = new Domain(node);
   if (node == ROOT_NODE) {
@@ -25,6 +31,12 @@ function createDomain(node: string, timestamp: BigInt): Domain {
   return domain;
 }
 
+/**
+ * Retrieves an existing Domain entity or initializes root node if not found.
+ * @param node Node hash string.
+ * @param timestamp Optional timestamp for root creation.
+ * @returns Domain entity or null.
+ */
 function getDomain(
   node: string,
   timestamp: BigInt = BIG_INT_ZERO
@@ -37,12 +49,22 @@ function getDomain(
   }
 }
 
+/**
+ * Computes subnode hash from parent node and label.
+ * @param event The NewOwner blockchain event.
+ * @returns Computed subnode hex string.
+ */
 function makeSubnode(event: NewOwnerEvent): string {
   return crypto
     .keccak256(concat(event.params.node, event.params.label))
     .toHexString();
 }
 
+/**
+ * Recursively deletes empty parent domain records if no longer owned or resolved.
+ * @param domain Target Domain entity.
+ * @returns Domain ID or null.
+ */
 function recurseDomainDelete(domain: Domain): string | null {
   if (
     (domain.resolver == null ||
@@ -63,12 +85,20 @@ function recurseDomainDelete(domain: Domain): string | null {
   return domain.id;
 }
 
+/**
+ * Saves domain entity after running deletion check.
+ * @param domain Domain entity to persist.
+ */
 function saveDomain(domain: Domain): void {
   recurseDomainDelete(domain);
   domain.save();
 }
 
-// Handler for NewOwner events
+/**
+ * Internal handler for NewOwner registry events.
+ * @param event The NewOwner blockchain event.
+ * @param isMigrated Migration flag.
+ */
 function _handleNewOwner(event: NewOwnerEvent, isMigrated: boolean): void {
   let account = new Account(event.params.owner.toHexString());
   account.save();
@@ -129,7 +159,10 @@ function _handleNewOwner(event: NewOwnerEvent, isMigrated: boolean): void {
   domainEvent.save();
 }
 
-// Handler for Transfer events
+/**
+ * Handles Transfer events on the registry.
+ * @param event The Transfer blockchain event.
+ */
 export function handleTransfer(event: TransferEvent): void {
   let node = event.params.node.toHexString();
 
@@ -150,7 +183,10 @@ export function handleTransfer(event: TransferEvent): void {
   domainEvent.save();
 }
 
-// Handler for NewResolver events
+/**
+ * Handles NewResolver events on the registry to associate a resolver with a node.
+ * @param event The NewResolver blockchain event.
+ */
 export function handleNewResolver(event: NewResolverEvent): void {
   let id: string | null;
 
@@ -192,7 +228,10 @@ export function handleNewResolver(event: NewResolverEvent): void {
   domainEvent.save();
 }
 
-// Handler for NewTTL events
+/**
+ * Handles NewTTL events to update time-to-live values on domain records.
+ * @param event The NewTTL blockchain event.
+ */
 export function handleNewTTL(event: NewTTLEvent): void {
   let node = event.params.node.toHexString();
   let domain = getDomain(node);
@@ -209,6 +248,10 @@ export function handleNewTTL(event: NewTTLEvent): void {
   domainEvent.save();
 }
 
+/**
+ * Handles NewOwner events on the registry.
+ * @param event The NewOwner blockchain event.
+ */
 export function handleNewOwner(event: NewOwnerEvent): void {
   _handleNewOwner(event, true);
 }

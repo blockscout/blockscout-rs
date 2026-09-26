@@ -34,6 +34,10 @@ import {
   safeAddress,
 } from "./utils";
 
+/**
+ * Handles legacy AddrChanged events to update the resolved Ethereum address.
+ * @param event The AddrChanged blockchain event.
+ */
 export function handleAddrChanged(event: AddrChangedEvent): void {
   let account = new Account(event.params.a.toHexString());
   account.save();
@@ -60,6 +64,10 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
   resolverEvent.save();
 }
 
+/**
+ * Handles multicoin AddressChanged events (EIP-2304) for EVM and multichain addresses.
+ * @param event The AddressChanged blockchain event.
+ */
 export function handleMulticoinAddrChanged(event: AddressChangedEvent): void {
   let coinType = event.params.coinType;
   if (isNetworkCoinType(coinType)) {
@@ -91,6 +99,10 @@ export function handleMulticoinAddrChanged(event: AddressChangedEvent): void {
   }
 }
 
+/**
+ * Internal helper to record secondary non-native multicoin address changes.
+ * @param event The AddressChanged blockchain event.
+ */
 function _handleMulticoinAddrChanged(event: AddressChangedEvent): void {
   let resolver = getOrCreateResolver(event.params.node, event.address);
   let coinType = event.params.coinType;
@@ -116,8 +128,14 @@ function _handleMulticoinAddrChanged(event: AddressChangedEvent): void {
   resolverEvent.save();
 }
 
+/**
+ * Handles NameChanged reverse resolution and forward name mapping events.
+ * @param event The NameChanged blockchain event.
+ */
 export function handleNameChanged(event: NameChangedEvent): void {
-  maybeSaveDomainName(event.params.name);
+  const name = event.params.name;
+  if (name.indexOf("\u0000") != -1) return;
+  maybeSaveDomainName(name);
 
   let resolverEvent = new NameChanged(createEventID(event));
   resolverEvent.resolver = createResolverID(event.params.node, event.address);
@@ -127,6 +145,10 @@ export function handleNameChanged(event: NameChangedEvent): void {
   resolverEvent.save();
 }
 
+/**
+ * Handles ABIChanged resolver events.
+ * @param event The ABIChanged blockchain event.
+ */
 export function handleABIChanged(event: ABIChangedEvent): void {
   let resolverEvent = new AbiChanged(createEventID(event));
   resolverEvent.resolver = createResolverID(event.params.node, event.address);
@@ -136,6 +158,10 @@ export function handleABIChanged(event: ABIChangedEvent): void {
   resolverEvent.save();
 }
 
+/**
+ * Handles PubkeyChanged resolver events.
+ * @param event The PubkeyChanged blockchain event.
+ */
 export function handlePubkeyChanged(event: PubkeyChangedEvent): void {
   let resolverEvent = new PubkeyChanged(createEventID(event));
   resolverEvent.resolver = createResolverID(event.params.node, event.address);
@@ -146,6 +172,10 @@ export function handlePubkeyChanged(event: PubkeyChangedEvent): void {
   resolverEvent.save();
 }
 
+/**
+ * Handles TextChanged metadata record events (e.g. avatar, twitter, github).
+ * @param event The TextChanged blockchain event.
+ */
 export function handleTextChanged(event: TextChangedEvent): void {
   let resolver = getOrCreateResolver(event.params.node, event.address);
   let key = event.params.key;
@@ -171,6 +201,10 @@ export function handleTextChanged(event: TextChangedEvent): void {
   resolverEvent.save();
 }
 
+/**
+ * Handles ContenthashChanged decentralized website and content hash events.
+ * @param event The ContenthashChanged blockchain event.
+ */
 export function handleContentHashChanged(event: ContenthashChangedEvent): void {
   let resolver = getOrCreateResolver(event.params.node, event.address);
   resolver.contentHash = event.params.hash;
@@ -184,6 +218,10 @@ export function handleContentHashChanged(event: ContenthashChangedEvent): void {
   resolverEvent.save();
 }
 
+/**
+ * Handles InterfaceChanged EIP-1820 interface support events.
+ * @param event The InterfaceChanged blockchain event.
+ */
 export function handleInterfaceChanged(event: InterfaceChangedEvent): void {
   let resolverEvent = new InterfaceChanged(createEventID(event));
   resolverEvent.resolver = createResolverID(event.params.node, event.address);
@@ -194,6 +232,12 @@ export function handleInterfaceChanged(event: InterfaceChangedEvent): void {
   resolverEvent.save();
 }
 
+/**
+ * Retrieves an existing Resolver entity or creates a new instance.
+ * @param node The node hash identifier bytes.
+ * @param address The resolver contract address.
+ * @returns The Resolver entity.
+ */
 function getOrCreateResolver(node: Bytes, address: Address): Resolver {
   let id = createResolverID(node, address);
   let resolver = Resolver.load(id);
@@ -206,6 +250,12 @@ function getOrCreateResolver(node: Bytes, address: Address): Resolver {
   return resolver;
 }
 
+/**
+ * Formats a composite Resolver entity ID string.
+ * @param node Node identifier bytes.
+ * @param resolver Contract address.
+ * @returns Composite ID string formatted as 'address-node'.
+ */
 function createResolverID(node: Bytes, resolver: Address): string {
   return resolver
     .toHexString()

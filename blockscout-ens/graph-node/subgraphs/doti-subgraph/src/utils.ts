@@ -10,6 +10,11 @@ export const COIN_TYPE_ARBITRUM_BIGINT = BigInt.fromI64(2147525809);
 export const COIN_TYPE_BIGINT = BigInt.fromI64(2147525809); // Arbitrum One (0x80000000 | 42161)
 export const COIN_TYPE = 2147525809;
 
+/**
+ * Checks if the coin type matches either Ethereum Mainnet (60) or Arbitrum One (2147525809).
+ * @param coinType The coin type as a BigInt.
+ * @returns True if the coin type matches supported network address types.
+ */
 export function isNetworkCoinType(coinType: BigInt): boolean {
   return (
     coinType.equals(COIN_TYPE_ETH_BIGINT) ||
@@ -19,6 +24,11 @@ export function isNetworkCoinType(coinType: BigInt): boolean {
   );
 }
 
+/**
+ * Validates and converts an address byte array into a hex string.
+ * @param address The raw address bytes.
+ * @returns A formatted 20-byte hex string or the empty address placeholder.
+ */
 export function safeAddress(address: Bytes): string {
   if (address.length === 20) {
     return address.toHexString();
@@ -32,6 +42,11 @@ export const ROOT_NODE =
 export const EMPTY_ADDRESS = "0x0000000000000000000000000000000000000000";
 export const EMPTY_ADDRESS_BYTEARRAY = new ByteArray(20);
 
+/**
+ * Generates a unique event identifier based on block, transaction, and log indexes.
+ * @param event The blockchain event.
+ * @returns A formatted event ID string.
+ */
 export function createEventID(event: ethereum.Event): string {
   return event.block.number
     .toString()
@@ -43,7 +58,12 @@ export function createEventID(event: ethereum.Event): string {
     .concat(event.transactionLogIndex.toString());
 }
 
-// Helper for concatenating two byte arrays
+/**
+ * Concatenates two byte arrays into a single byte array.
+ * @param a The first byte array.
+ * @param b The second byte array.
+ * @returns The combined ByteArray.
+ */
 export function concat(a: ByteArray, b: ByteArray): ByteArray {
   let out = new Uint8Array(a.length + b.length);
   for (let i = 0; i < a.length; i++) {
@@ -56,6 +76,11 @@ export function concat(a: ByteArray, b: ByteArray): ByteArray {
   return changetype<ByteArray>(out);
 }
 
+/**
+ * Parses a hex string into a ByteArray representation.
+ * @param s Hex string with an even number of characters.
+ * @returns Parsed ByteArray.
+ */
 export function byteArrayFromHex(s: string): ByteArray {
   if (s.length % 2 !== 0) {
     throw new TypeError("Hex string must have an even number of characters");
@@ -67,6 +92,11 @@ export function byteArrayFromHex(s: string): ByteArray {
   return changetype<ByteArray>(out);
 }
 
+/**
+ * Converts a 256-bit unsigned integer to a 32-byte ByteArray.
+ * @param i BigInt integer.
+ * @returns 32-byte padded ByteArray.
+ */
 export function uint256ToByteArray(i: BigInt): ByteArray {
   let hex = i
     .toHex()
@@ -75,6 +105,11 @@ export function uint256ToByteArray(i: BigInt): ByteArray {
   return byteArrayFromHex(hex);
 }
 
+/**
+ * Loads an existing Account entity or creates and saves a new one.
+ * @param address The hex string account address.
+ * @returns The Account entity.
+ */
 export function createOrLoadAccount(address: string): Account {
   let account = Account.load(address);
   if (account == null) {
@@ -85,6 +120,11 @@ export function createOrLoadAccount(address: string): Account {
   return account;
 }
 
+/**
+ * Loads an existing Domain entity or creates and saves a default one.
+ * @param node The node hash identifier.
+ * @returns The Domain entity.
+ */
 export function createOrLoadDomain(node: string): Domain {
   let domain = Domain.load(node);
   if (domain == null) {
@@ -97,6 +137,11 @@ export function createOrLoadDomain(node: string): Domain {
   return domain;
 }
 
+/**
+ * Validates that a domain label does not contain null bytes or separator characters.
+ * @param name The label string to validate.
+ * @returns True if valid, false otherwise.
+ */
 export function checkValidLabel(name: string): boolean {
   for (let i = 0; i < name.length; i++) {
     let c = name.charCodeAt(i);
@@ -115,6 +160,10 @@ export function checkValidLabel(name: string): boolean {
   return true;
 }
 
+/**
+ * Updates domain label and name records for an existing loaded domain.
+ * @param name The domain full name.
+ */
 export function maybeSaveDomainName(name: string): void {
   const nodehash = hashByName(name);
   const domain = Domain.load(nodehash.toHex());
@@ -127,6 +176,11 @@ export function maybeSaveDomainName(name: string): void {
   }
 }
 
+/**
+ * Computes the recursive namehash for a given domain string according to EIP-137.
+ * @param name The full domain name.
+ * @returns The computed ByteArray namehash.
+ */
 export function hashByName(name: string): ByteArray {
   if (name === BASE_NODE.slice(1)) {
     return byteArrayFromHex(BASE_NODE_HASH);
@@ -146,21 +200,36 @@ export function hashByName(name: string): ByteArray {
   }
 }
 
+/**
+ * Splits a string into two parts at the first occurrence of the separator.
+ * @param input The string to partition.
+ * @param separator The character separator.
+ * @returns An array containing [head, tail].
+ */
 function splitStringOnce(input: string, separator: string): string[] {
-  const splitArray = input.split(separator, 2);
-
-  if (splitArray.length === 2) {
-    return [splitArray[0], splitArray[1]];
+  let index = input.indexOf(separator);
+  if (index >= 0) {
+    return [input.slice(0, index), input.slice(index + 1)];
   } else {
     return [input, ''];
   }
 }
 
+/**
+ * Extracts the primary leftmost label from a domain name.
+ * @param name Full domain name.
+ * @returns First label component.
+ */
 function labelFromName(name: string): string {
   const labels = splitStringOnce(name, '.');
   return labels[0];
 }
 
+/**
+ * Computes the Keccak-256 hash of a UTF-8 string.
+ * @param s Input string.
+ * @returns Keccak-256 digest ByteArray.
+ */
 function keccakFromStr(s: string): ByteArray {
   return crypto.keccak256(Bytes.fromUTF8(s));
 }

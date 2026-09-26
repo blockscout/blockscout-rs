@@ -25,6 +25,10 @@ import {
 
 var rootNode: ByteArray = byteArrayFromHex(BASE_NODE_HASH);
 
+/**
+ * Handles NameRegistered controller events to index domain names, labels, and base registration costs.
+ * @param event The NameRegistered controller blockchain event.
+ */
 export function handleNameRegisteredByController(
   event: ControllerNameRegisteredEvent
 ): void {
@@ -66,12 +70,22 @@ export function handleNameRegisteredByController(
   registration.save();
 }
 
+/**
+ * Handles NameRenewed controller events to update name records and renewal cost.
+ * @param event The NameRenewed controller blockchain event.
+ */
 export function handleNameRenewedByController(
   event: ControllerNameRenewedEvent
 ): void {
   setNamePreimage(event.params.name, event.params.label, event.params.cost);
 }
 
+/**
+ * Helper to update domain label name and registration cost pre-image.
+ * @param name The plaintext domain label.
+ * @param label The Keccak-256 label hash.
+ * @param cost The cost in wei.
+ */
 function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
   if (!checkValidLabel(name)) {
     return;
