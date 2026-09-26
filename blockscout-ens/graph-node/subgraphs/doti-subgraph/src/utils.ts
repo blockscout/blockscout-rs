@@ -3,15 +3,15 @@ import { Account, Domain } from "../generated/schema";
 
 export const BASE_NODE_HASH = "96b16e885d568c078028f8feef27a718c0e2a3cf42145b2100806cb1f07f4bb7";
 export const BASE_NODE = ".i";
-export const COIN_TYPE_ETH = 60;
 export const COIN_TYPE_ETH_BIGINT = BigInt.fromI32(60);
-export const COIN_TYPE_ARBITRUM = 2147525809;
-export const COIN_TYPE_ARBITRUM_BIGINT = BigInt.fromI64(2147525809);
-export const COIN_TYPE_BIGINT = BigInt.fromI64(2147525809); // Arbitrum One (0x80000000 | 42161)
+export const COIN_TYPE_ARBITRUM_BIGINT = BigInt.fromI64(2147525809); // Arbitrum One (0x80000000 | 42161)
+export const COIN_TYPE_OP_BIGINT = BigInt.fromI64(2147483658); // OP Mainnet (0x80000000 | 10)
+export const COIN_TYPE_BIGINT = BigInt.fromI64(2147525809); // Arbitrum One
 export const COIN_TYPE = 2147525809;
 
 /**
- * Checks if the coin type matches either Ethereum Mainnet (60) or Arbitrum One (2147525809).
+ * Checks if the coin type matches supported network address coin types (Ethereum 60, Arbitrum One, or Optimism).
+ * Safely compares BigInt values without conversion to avoid integer overflow assertion errors.
  * @param coinType The coin type as a BigInt.
  * @returns True if the coin type matches supported network address types.
  */
@@ -19,8 +19,7 @@ export function isNetworkCoinType(coinType: BigInt): boolean {
   return (
     coinType.equals(COIN_TYPE_ETH_BIGINT) ||
     coinType.equals(COIN_TYPE_ARBITRUM_BIGINT) ||
-    coinType.toI64() == COIN_TYPE_ETH ||
-    coinType.toI64() == COIN_TYPE_ARBITRUM
+    coinType.equals(COIN_TYPE_OP_BIGINT)
   );
 }
 
