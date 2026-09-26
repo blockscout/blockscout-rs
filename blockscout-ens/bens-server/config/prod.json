@@ -6,14 +6,14 @@
         "blockscout": {
           "url": "https://eth.blockscout.com"
         },
-        "use_protocols": ["ens"],
+        "use_protocols": ["ens", "doti"],
         "rpc_url": "http://91.210.101.45:8545"
       },
       "10": {
         "blockscout": {
           "url": "https://optimism.blockscout.com/"
         },
-        "use_protocols": ["ens"]
+        "use_protocols": ["ens", "doti"]
       },
       "30": {
         "blockscout": {
@@ -279,8 +279,18 @@
           "url": "https://arbitrum.blockscout.com/"
         },
         "use_protocols": [
-          "arb"
+          "arb",
+          "doti"
         ]
+      },
+      "4663": {
+        "blockscout": {
+          "url": "https://robin.etherscan.io/"
+        },
+        "use_protocols": [
+          "doti"
+        ],
+        "rpc_url": "https://rpc.mainnet.chain.robinhood.com"
       },
       "695569": {
         "blockscout": {
@@ -807,6 +817,26 @@
           "description": "InfinityName is a decentralized naming service giving users permanent ownership of their domain names",
           "icon_url": "https://infinityname.com/img/InfinityName-logo.png",
           "docs_url": "https://infinityname.com/documentation"
+        }
+      },
+      "doti": {
+        "tld_list": [
+          "i"
+        ],
+        "network_id": 42161,
+        "subgraph_name": "doti-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xf853F8243F10a57CF5e43A49F156F132c05C21a6",
+          "empty_label_hash": "0x96b16e885d568c078028f8feef27a718c0e2a3cf42145b2100806cb1f07f4bb7"
+        },
+        "meta": {
+          "short_name": "DotI",
+          "title": "DotI Name Service",
+          "description": "DotI (.i) is a decentralized identity and multichain Web3 domain naming service on Arbitrum.",
+          "icon_url": "https://doti.my/logo.png",
+          "docs_url": "https://doti.my/"
         }
       }
     }
