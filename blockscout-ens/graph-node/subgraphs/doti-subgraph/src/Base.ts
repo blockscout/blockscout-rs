@@ -1,5 +1,5 @@
 // Import types and APIs from graph-ts
-import { BigInt, ByteArray, crypto, ens } from "@graphprotocol/graph-ts";
+import { BigInt, ByteArray, Bytes, crypto, ens } from "@graphprotocol/graph-ts";
 
 import {
   byteArrayFromHex,
