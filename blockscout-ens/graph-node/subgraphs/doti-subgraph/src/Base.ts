@@ -41,8 +41,6 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
   account.save();
 
   let label = uint256ToByteArray(event.params.id);
-  let registration = new Registration(label.toHex());
-
   let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
   let domain = Domain.load(domainId);
 
@@ -53,16 +51,24 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
     domain.storedOffchain = false;
     domain.resolvedWithWildcard = false;
     domain.owner = account.id;
+    domain.labelhash = Bytes.fromByteArray(label);
     domain.isMigrated = true;
   }
 
-  registration.domain = domain.id;
+  let registration = Registration.load(label.toHex());
+  if (registration == null) {
+    registration = new Registration(label.toHex());
+    registration.domain = domain.id;
+  }
   registration.registrationDate = event.block.timestamp;
   registration.expiryDate = event.params.expires;
   registration.registrant = account.id;
 
   domain.registrant = account.id;
   domain.expiryDate = event.params.expires;
+  if (domain.labelhash == null) {
+    domain.labelhash = Bytes.fromByteArray(label);
+  }
 
   let labelName = ens.nameByHash(label.toHexString());
   if (labelName != null) {
