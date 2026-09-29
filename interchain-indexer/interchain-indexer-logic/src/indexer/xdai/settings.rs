@@ -36,7 +36,7 @@ fn default_pull_interval() -> Duration {
 }
 
 fn default_batch_size() -> u64 {
-    1000
+    500
 }
 
 fn default_receipt_concurrency() -> u64 {
