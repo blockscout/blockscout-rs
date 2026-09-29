@@ -80,7 +80,13 @@
   - `interchain-indexer-logic/src/indexer/xdai/abi.rs`
     (registry, startup floor checks, window resolution by block)
   - `interchain-indexer-logic/src/message_buffer/persistence.rs`
-    (`reconcile_destination_executions` — multiple-execution handling, ADR-014)
+    (`reconcile_destination_executions` — multiple-execution handling, ADR-014;
+    `attach_detached_confirmations` — late confirmations of stored messages,
+    ADR-015)
+  - `interchain-indexer-logic/src/indexer/xdai/events.rs`
+    (`pair_colocated_hash_signatures` — a hash-keyed signature sharing its
+    transaction with a hash-keyed completion follows the completion's canonical
+    key, ADR-015)
 
 ## If You Need to Understand Incoming ICTT Reconstruction / ICM Payload Decoding
 

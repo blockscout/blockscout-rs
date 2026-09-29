@@ -9,7 +9,9 @@ use interchain_indexer_entity::{
 };
 use sea_orm::{ActiveValue, prelude::BigDecimal};
 
-use crate::message_buffer::{Consolidate, ConsolidatedMessage, DestinationExecution, Key};
+use crate::message_buffer::{
+    Consolidate, ConsolidatedMessage, DestinationExecution, DetachedConfirmations, Key,
+};
 
 use super::{
     metrics,
@@ -47,24 +49,7 @@ impl Consolidate for Message {
             updated_at: ActiveValue::NotSet,
         };
 
-        let amb_confirmations = self
-            .validator_confirmations
-            .values()
-            .map(|confirmation| amb_messages_confirmations::ActiveModel {
-                message_id: ActiveValue::Set(key.message_id),
-                bridge_id: ActiveValue::Set(key.bridge_id as i32),
-                validator_address: ActiveValue::Set(
-                    confirmation.validator_address.as_slice().to_vec(),
-                ),
-                tx_hash: ActiveValue::Set(confirmation.tx_hash.as_slice().to_vec()),
-                block_number: ActiveValue::Set(
-                    i64::try_from(confirmation.block_number).unwrap_or(i64::MAX),
-                ),
-                block_timestamp: ActiveValue::Set(confirmation.block_timestamp),
-                created_at: ActiveValue::NotSet,
-                updated_at: ActiveValue::NotSet,
-            })
-            .collect();
+        let amb_confirmations = confirmation_models(self, key);
 
         Ok(Some(ConsolidatedMessage {
             is_final,
@@ -150,6 +135,82 @@ impl Consolidate for Message {
         }
         observations
     }
+
+    /// See `Consolidate::detached_confirmations`. Reads no identity, direction
+    /// or chain ids: a Gno->Eth confirmation drained through
+    /// `apply_validator_confirmation` carries none of them.
+    fn detached_confirmations(&self, key: &Key) -> Option<DetachedConfirmations> {
+        if self.validator_confirmations.is_empty() {
+            return None;
+        }
+        Some(DetachedConfirmations {
+            confirmations: confirmation_models(self, key),
+            confirmation_only: holds_only_confirmations(self),
+        })
+    }
+}
+
+/// The confirmation rows of `message` under `key`. Shared by `consolidate` and
+/// `detached_confirmations`, so the attached rows are identical to the ones a
+/// consolidation would have written.
+fn confirmation_models(
+    message: &Message,
+    key: &Key,
+) -> Vec<amb_messages_confirmations::ActiveModel> {
+    message
+        .validator_confirmations
+        .values()
+        .map(|confirmation| amb_messages_confirmations::ActiveModel {
+            message_id: ActiveValue::Set(key.message_id),
+            bridge_id: ActiveValue::Set(key.bridge_id as i32),
+            validator_address: ActiveValue::Set(confirmation.validator_address.as_slice().to_vec()),
+            tx_hash: ActiveValue::Set(confirmation.tx_hash.as_slice().to_vec()),
+            block_number: ActiveValue::Set(
+                i64::try_from(confirmation.block_number).unwrap_or(i64::MAX),
+            ),
+            block_timestamp: ActiveValue::Set(confirmation.block_timestamp),
+            created_at: ActiveValue::NotSet,
+            updated_at: ActiveValue::NotSet,
+        })
+        .collect()
+}
+
+/// Whether `message` holds nothing but validator confirmations (plus identity
+/// metadata), i.e. attaching them to a stored row leaves nothing to wait for.
+///
+/// Exhaustive destructuring with no `..`: a new `Message` field fails to
+/// compile here until someone classifies it as payload, metadata or evidence.
+fn holds_only_confirmations(message: &Message) -> bool {
+    let Message {
+        // Identity metadata: set on every Eth->Gno signature entry by
+        // `handle_signed_for_affirmation`, absent on a drained Gno->Eth one; the
+        // buffer key already encodes it.
+        identity: _,
+        direction: _,
+        chain_ids: _,
+        // The payload being attached.
+        validator_confirmations: _,
+        // Evidence: any of these means the entry is waiting for something else.
+        source_request,
+        signature_request,
+        signatures_collected,
+        destination_execution,
+        additional_executions,
+        reconstructed_source,
+        // Evidence (defensive): only ever set together with one of the above.
+        sender_address,
+        destination_observed_identity,
+        destination_log_index,
+    } = message;
+    source_request.is_none()
+        && signature_request.is_none()
+        && signatures_collected.is_none()
+        && destination_execution.is_none()
+        && additional_executions.is_empty()
+        && reconstructed_source.is_none()
+        && sender_address.is_none()
+        && destination_observed_identity.is_none()
+        && destination_log_index.is_none()
 }
 
 fn destination_execution_row(
@@ -1448,5 +1509,185 @@ mod tests {
         assert_eq!(observations[1].tx_hash, hash(0x99).to_vec());
         assert_eq!(observations[1].log_index, Some(9));
         assert!(observations[1].detail.contains("source_transaction_hash"));
+    }
+
+    // --- `Consolidate::detached_confirmations` ---
+
+    fn confirmation(validator: u8, tx: u8, block: u64) -> ValidatorConfirmation {
+        ValidatorConfirmation {
+            validator_address: addr(validator),
+            tx_hash: hash(tx),
+            block_number: block,
+            block_timestamp: ts(block as i64 * 100),
+        }
+    }
+
+    /// An Eth->Gno entry holding only a signature: what a confirmation
+    /// arriving after its message was finalized and evicted looks like.
+    fn confirmation_only_entry() -> Message {
+        Message {
+            identity: Some(MessageIdentity::Nonce(U256::from(0x1adf_u64))),
+            direction: Some(Direction::EthToGno),
+            chain_ids: Some(MAINNET),
+            validator_confirmations: std::collections::HashMap::from([(
+                addr(9),
+                confirmation(9, 0x33, 15),
+            )]),
+            ..Default::default()
+        }
+    }
+
+    fn eth_to_gno_key() -> Key {
+        key_from_native_id(&native_id_blob(1, U256::from(0x1adf_u64)).unwrap(), 3).unwrap()
+    }
+
+    #[test]
+    fn detached_confirmations_models_match_consolidate() {
+        let mut message = source_request(0x1adf, addr(2), ts(1_000));
+        message
+            .validator_confirmations
+            .insert(addr(9), confirmation(9, 0x33, 15));
+        message
+            .validator_confirmations
+            .insert(addr(8), confirmation(8, 0x34, 16));
+        message.destination_execution =
+            Some(completion_at(addr(2), 1_000, hash(0x22), 20, ts(2_000)));
+        let key = eth_to_gno_key();
+
+        let mut from_consolidate = message
+            .consolidate(&key)
+            .unwrap()
+            .unwrap()
+            .amb_confirmations;
+        let mut from_hook = message.detached_confirmations(&key).unwrap().confirmations;
+        from_consolidate.sort_by_key(|model| set_value!(model.validator_address));
+        from_hook.sort_by_key(|model| set_value!(model.validator_address));
+
+        assert_eq!(from_hook.len(), 2);
+        assert_eq!(from_hook, from_consolidate);
+    }
+
+    #[test]
+    fn detached_confirmations_is_confirmation_only_iff_no_evidence() {
+        let key = eth_to_gno_key();
+        let base = confirmation_only_entry();
+        assert!(
+            base.detached_confirmations(&key)
+                .expect("an entry with confirmations reports them")
+                .confirmation_only,
+            "identity metadata plus confirmations alone is confirmation-only"
+        );
+
+        // One case per evidence field of `Message`, each set on its own.
+        type SetEvidence = fn(&mut Message);
+        let cases: [(&str, SetEvidence); 9] = [
+            ("source_request", |message| {
+                message.source_request = source_request(0x1adf, addr(2), ts(1_000)).source_request;
+            }),
+            ("signature_request", |message| {
+                message.signature_request =
+                    signature_request(0x1adf, addr(2), ts(1_000)).signature_request;
+            }),
+            ("signatures_collected", |message| {
+                message.signatures_collected = Some(AnnotatedEvent {
+                    event: CollectedSignaturesEvent {
+                        authority_responsible_for_relay: addr(4),
+                        message_hash: hash(0x88),
+                        count: U256::from(4u64),
+                    },
+                    transaction_hash: hash(0x99),
+                    block_number: 40,
+                    block_timestamp: ts(3_500),
+                });
+            }),
+            ("destination_execution", |message| {
+                message.destination_execution =
+                    Some(completion_at(addr(2), 1_000, hash(0x22), 20, ts(2_000)));
+            }),
+            ("additional_executions", |message| {
+                message.additional_executions.push(ObservedExecution {
+                    observed_identity: MessageIdentity::SourceTransactionHash(hash(0x77)),
+                    log_index: Some(9),
+                    completion: completion_at(addr(2), 1_000, hash(0x99), 30, ts(3_000)),
+                });
+            }),
+            ("reconstructed_source", |message| {
+                message.reconstructed_source = Some(ReconstructedSource {
+                    transaction_hash: hash(0x35),
+                    block_number: 1,
+                    block_timestamp: ts(1),
+                    sender_address: addr(3),
+                    ethereum_asset: DAI,
+                    legacy_source_event: None,
+                });
+            }),
+            ("sender_address", |message| {
+                message.sender_address = Some(addr(0x55));
+            }),
+            ("destination_observed_identity", |message| {
+                message.destination_observed_identity =
+                    Some(MessageIdentity::SourceTransactionHash(hash(0x35)));
+            }),
+            ("destination_log_index", |message| {
+                message.destination_log_index = Some(4);
+            }),
+        ];
+
+        for (field, set_evidence) in cases {
+            let mut message = base.clone();
+            set_evidence(&mut message);
+            let detached = message
+                .detached_confirmations(&key)
+                .unwrap_or_else(|| panic!("{field}: confirmations must still be reported"));
+            assert!(
+                !detached.confirmation_only,
+                "{field} is evidence: the entry must not be confirmation-only"
+            );
+            assert_eq!(
+                detached.confirmations.len(),
+                1,
+                "{field}: the confirmation is still attached"
+            );
+        }
+    }
+
+    /// A Gno->Eth confirmation drained through `apply_validator_confirmation`
+    /// carries no identity, direction or chain ids -- only the confirmation.
+    #[test]
+    fn detached_confirmations_without_identity_direction_or_chain_ids() {
+        let message = Message {
+            validator_confirmations: std::collections::HashMap::from([(
+                addr(9),
+                confirmation(9, 0x33, 15),
+            )]),
+            ..Default::default()
+        };
+        let key =
+            key_from_native_id(&native_id_blob(100, U256::from(0x140a_u64)).unwrap(), 3).unwrap();
+
+        let detached = message
+            .detached_confirmations(&key)
+            .expect("a drained confirmation is reported");
+
+        assert!(detached.confirmation_only);
+        assert_eq!(detached.confirmations.len(), 1);
+        assert_eq!(
+            set_value!(detached.confirmations[0].message_id),
+            key.message_id
+        );
+        assert_eq!(set_value!(detached.confirmations[0].bridge_id), 3);
+    }
+
+    #[test]
+    fn detached_confirmations_without_confirmations_is_none() {
+        let key = eth_to_gno_key();
+
+        assert!(Message::default().detached_confirmations(&key).is_none());
+        assert!(
+            source_request(0x1adf, addr(2), ts(1_000))
+                .detached_confirmations(&key)
+                .is_none(),
+            "a source without confirmations has nothing to attach"
+        );
     }
 }

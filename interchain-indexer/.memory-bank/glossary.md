@@ -155,6 +155,17 @@ database, so the comparison cannot live there. Returns a plain `Vec` because it
 runs before the transaction opens. AMB and Avalanche inherit the empty default
 and pay nothing for it.
 
+## Detached Confirmation Channel
+
+The defaulted `Consolidate::detached_confirmations` method: an entry that cannot
+consolidate on its own (typically a late validator signature for an already
+finalized message) reports its confirmations, and the maintenance transaction
+attaches them to the stored `crosschain_messages` row with the same key
+(`persistence::attach_detached_confirmations`). Only an entry that held nothing
+but confirmations is resolved and evicted. Returns `Option`, not `Result`,
+because it runs before the transaction opens. AMB and Avalanche inherit the
+`None` default. See ADR-015.
+
 ## Teleporter / ICM
 
 Avalanche native interchain messaging protocol. In this repo, Teleporter / ICM

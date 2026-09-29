@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use alloy::{
     dyn_abi::{DynSolValue, EventExt},
@@ -116,6 +119,12 @@ pub(super) async fn dispatch_transaction(
         .map(|dt| dt.naive_utc())
         .context("invalid block timestamp")?;
 
+    let colocated = pair_colocated_hash_signatures(collect_affirmation_log_facts(
+        ctx,
+        receipt_logs,
+        block_timestamp,
+    ));
+
     let mut last_err: Option<anyhow::Error> = None;
     let mut failed_events = 0usize;
 
@@ -168,10 +177,10 @@ pub(super) async fn dispatch_transaction(
                 .await
             }
             "SignedForAffirmation" => {
-                handle_signed_for_affirmation(ctx, event, log, block_timestamp).await
+                handle_signed_for_affirmation(ctx, event, log, block_timestamp, &colocated).await
             }
             "AffirmationCompleted" => {
-                handle_affirmation_completed(ctx, event, log, block_timestamp).await
+                handle_affirmation_completed(ctx, event, log, block_timestamp, &colocated).await
             }
             "UserRequestForSignature" => {
                 handle_user_request_for_signature(
@@ -215,6 +224,164 @@ pub(super) async fn dispatch_transaction(
     }
 
     Ok(())
+}
+
+/// `SignedForAffirmation(address indexed signer, bytes32 nonceOrHash)`:
+/// returns the raw `bytes32` (as `U256`) and the confirmation.
+///
+/// Shared by the handler and by the pairing pre-pass, so the two can never
+/// disagree about what a log means.
+fn decode_signed_for_affirmation(
+    event: &alloy::json_abi::Event,
+    log: &Log,
+    block_timestamp: chrono::NaiveDateTime,
+) -> Result<(U256, ValidatorConfirmation)> {
+    let decoded = event.decode_log(log.data())?;
+    let signer = expect_address(decoded.indexed.first(), "signer")?;
+    let nonce = expect_nonce(decoded.body.first(), "nonce")?;
+    let block_number = log.block_number.context("missing block number")?;
+    let confirmation = ValidatorConfirmation {
+        validator_address: signer,
+        tx_hash: log.transaction_hash.context("missing tx hash")?,
+        block_number,
+        block_timestamp,
+    };
+    Ok((nonce, confirmation))
+}
+
+/// `AffirmationCompleted(address recipient, uint256 value, bytes32 nonceOrHash)`:
+/// returns `(recipient, value, raw bytes32 as U256)`.
+///
+/// Shared by the handler and by the pairing pre-pass, like
+/// [`decode_signed_for_affirmation`].
+fn decode_affirmation_completed(
+    event: &alloy::json_abi::Event,
+    log: &Log,
+) -> Result<(Address, U256, U256)> {
+    let decoded = event.decode_log(log.data())?;
+    let recipient = expect_address(decoded.body.first(), "recipient")?;
+    let value = expect_uint(decoded.body.get(1), "value")?;
+    let value_or_hash = expect_nonce(decoded.body.get(2), "nonce")?;
+    Ok((recipient, value, value_or_hash))
+}
+
+/// One relevant log of a transaction, reduced to what pairing needs.
+enum AffirmationLogFact {
+    Signed {
+        bytes32: U256,
+        confirmation: ValidatorConfirmation,
+    },
+    Completed {
+        bytes32: U256,
+    },
+}
+
+/// Hash-keyed signatures that provably belong to a hash-keyed execution in
+/// the same transaction: `executeAffirmation` emits `SignedForAffirmation`
+/// and, on reaching the threshold, `AffirmationCompleted` with the same
+/// `bytes32` in one transaction.
+#[derive(Debug, Default, PartialEq)]
+struct ColocatedHashSignatures {
+    /// Hash-valued `bytes32` of every `AffirmationCompleted` in the transaction.
+    completed_hashes: HashSet<B256>,
+    /// Hash-keyed `SignedForAffirmation` confirmations whose `bytes32` is in
+    /// `completed_hashes`, grouped by it and keyed by signer.
+    confirmations: HashMap<B256, HashMap<Address, ValidatorConfirmation>>,
+}
+
+impl ColocatedHashSignatures {
+    /// A hash-keyed signature with this `bytes32` belongs to a completion in
+    /// this transaction and must not be applied under the raw-hash key.
+    fn owns(&self, hash: &B256) -> bool {
+        self.completed_hashes.contains(hash)
+    }
+
+    fn confirmations_for(&self, hash: &B256) -> Option<&HashMap<Address, ValidatorConfirmation>> {
+        self.confirmations.get(hash)
+    }
+}
+
+/// The `bytes32` as a source transaction hash, when it is hash-valued.
+/// Delegates to [`MessageIdentity::destination`] so the nonce/hash threshold
+/// lives in one place.
+fn hash_valued(bytes32: U256) -> Option<B256> {
+    match MessageIdentity::destination(bytes32) {
+        MessageIdentity::SourceTransactionHash(hash) => Some(hash),
+        MessageIdentity::Nonce(_) => None,
+    }
+}
+
+/// Pure: no context, no I/O, result independent of fact order.
+fn pair_colocated_hash_signatures(
+    facts: impl IntoIterator<Item = AffirmationLogFact>,
+) -> ColocatedHashSignatures {
+    let facts: Vec<AffirmationLogFact> = facts.into_iter().collect();
+
+    let completed_hashes: HashSet<B256> = facts
+        .iter()
+        .filter_map(|fact| match fact {
+            AffirmationLogFact::Completed { bytes32 } => hash_valued(*bytes32),
+            AffirmationLogFact::Signed { .. } => None,
+        })
+        .collect();
+
+    let mut confirmations: HashMap<B256, HashMap<Address, ValidatorConfirmation>> = HashMap::new();
+    for fact in &facts {
+        if let AffirmationLogFact::Signed {
+            bytes32,
+            confirmation,
+        } = fact
+            && let Some(hash) = hash_valued(*bytes32)
+            && completed_hashes.contains(&hash)
+        {
+            confirmations
+                .entry(hash)
+                .or_default()
+                .insert(confirmation.validator_address, confirmation.clone());
+        }
+    }
+
+    ColocatedHashSignatures {
+        completed_hashes,
+        confirmations,
+    }
+}
+
+/// Resolves and decodes only `SignedForAffirmation` / `AffirmationCompleted`
+/// logs of this transaction for pairing. Silent by design: every log it skips
+/// (unresolvable, wrong version, undecodable) is reported exactly once by the
+/// main dispatch loop, so logging or counting here would double-report.
+fn collect_affirmation_log_facts(
+    ctx: &EventContext<'_>,
+    receipt_logs: &[Log],
+    block_timestamp: chrono::NaiveDateTime,
+) -> Vec<AffirmationLogFact> {
+    receipt_logs
+        .iter()
+        .filter_map(|log| {
+            let topic = log.topic0()?;
+            let LogResolution::Matched(event, _) =
+                ctx.abi_registry
+                    .resolve_log(ctx.chain_id, log.address(), topic, ctx.block_number)
+            else {
+                return None;
+            };
+            match event.name.as_str() {
+                "SignedForAffirmation" => {
+                    decode_signed_for_affirmation(event, log, block_timestamp)
+                        .ok()
+                        .map(|(bytes32, confirmation)| AffirmationLogFact::Signed {
+                            bytes32,
+                            confirmation,
+                        })
+                }
+                "AffirmationCompleted" => decode_affirmation_completed(event, log)
+                    .ok()
+                    .map(|(_, _, bytes32)| AffirmationLogFact::Completed { bytes32 }),
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 async fn handle_user_request_for_affirmation(
@@ -275,23 +442,32 @@ async fn handle_signed_for_affirmation(
     event: &alloy::json_abi::Event,
     log: &Log,
     block_timestamp: chrono::NaiveDateTime,
+    colocated: &ColocatedHashSignatures,
 ) -> Result<()> {
-    let decoded = event.decode_log(log.data())?;
-    let signer = expect_address(decoded.indexed.first(), "signer")?;
-    let nonce = expect_nonce(decoded.body.first(), "nonce")?;
+    let (nonce, confirmation) = decode_signed_for_affirmation(event, log, block_timestamp)?;
+    let signer = confirmation.validator_address;
+    let block_number = confirmation.block_number;
     let identity = MessageIdentity::destination(nonce);
+
+    if let MessageIdentity::SourceTransactionHash(source_hash) = identity
+        && colocated.owns(&source_hash)
+    {
+        tracing::debug!(
+            bridge_id = ctx.bridge_id,
+            chain_id = ctx.chain_id,
+            block_number,
+            tx_hash = ?log.transaction_hash,
+            log_index = ?log.log_index,
+            validator_address = %confirmation.validator_address,
+            source_tx_hash = %source_hash,
+            "xDai hash-keyed confirmation deferred to its co-located completion"
+        );
+        return Ok(());
+    }
 
     let chain_ids = ctx.abi_registry.chain_ids()?;
     let native_id = identity.native_id(Direction::EthToGno, chain_ids)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
-    let block_number = log.block_number.context("missing block number")?;
-
-    let confirmation = ValidatorConfirmation {
-        validator_address: signer,
-        tx_hash: log.transaction_hash.context("missing tx hash")?,
-        block_number,
-        block_timestamp,
-    };
 
     if let MessageIdentity::SourceTransactionHash(source_hash) = identity {
         tracing::warn!(
@@ -323,12 +499,21 @@ async fn handle_affirmation_completed(
     event: &alloy::json_abi::Event,
     log: &Log,
     block_timestamp: chrono::NaiveDateTime,
+    colocated: &ColocatedHashSignatures,
 ) -> Result<()> {
-    let decoded = event.decode_log(log.data())?;
-    let recipient = expect_address(decoded.body.first(), "recipient")?;
-    let value = expect_uint(decoded.body.get(1), "value")?;
-    let value_or_hash = expect_nonce(decoded.body.get(2), "nonce")?;
+    let (recipient, value, value_or_hash) = decode_affirmation_completed(event, log)?;
     let observed_identity = MessageIdentity::destination(value_or_hash);
+
+    // Signatures emitted by the same `executeAffirmation` call under this
+    // completion's raw hash. Cloned before any `.await`; applied only as the
+    // last mutation of the `alter` closure below, under the canonical key.
+    let paired: HashMap<Address, ValidatorConfirmation> = match observed_identity {
+        MessageIdentity::SourceTransactionHash(hash) => colocated
+            .confirmations_for(&hash)
+            .cloned()
+            .unwrap_or_default(),
+        MessageIdentity::Nonce(_) => HashMap::new(),
+    };
     let log_index = log.log_index.map(|index| index as i64);
     let block_number = log.block_number.context("missing block number")?;
 
@@ -363,6 +548,7 @@ async fn handle_affirmation_completed(
     };
     let native_id = canonical_identity.native_id(Direction::EthToGno, chain_ids)?;
     let key = key_from_native_id(&native_id, ctx.bridge_id)?;
+    let paired_confirmations = paired.len();
 
     ctx.buffer
         .alter(key, ctx.chain_id as u64, block_number, |message| {
@@ -403,9 +589,26 @@ async fn handle_affirmation_completed(
                 });
                 message.sender_address = Some(facts.sender_address);
             }
+            // Deliberately the last mutation: `alter` does not roll back a
+            // mutator that fails partway, so nothing above may fail after the
+            // paired signatures are applied.
+            message.validator_confirmations.extend(paired);
             Ok(())
         })
-        .await
+        .await?;
+
+    if paired_confirmations > 0 {
+        tracing::debug!(
+            bridge_id = ctx.bridge_id,
+            chain_id = ctx.chain_id,
+            message_id = key.message_id,
+            paired_confirmations,
+            tx_hash = ?log.transaction_hash,
+            "applied co-located hash-keyed confirmations under the canonical key"
+        );
+    }
+
+    Ok(())
 }
 
 async fn handle_user_request_for_signature(
@@ -1825,5 +2028,187 @@ mod tests {
             })
         );
         assert!(asserter.read_q().is_empty());
+    }
+
+    // --- Same-transaction pairing of hash-keyed signatures and completions ---
+
+    fn fact_timestamp() -> chrono::NaiveDateTime {
+        chrono::DateTime::from_timestamp(1_700_000_000, 0)
+            .expect("valid timestamp")
+            .naive_utc()
+    }
+
+    fn fact_confirmation(validator_byte: u8) -> ValidatorConfirmation {
+        ValidatorConfirmation {
+            validator_address: Address::repeat_byte(validator_byte),
+            tx_hash: B256::repeat_byte(0xD0),
+            block_number: 47_950_000,
+            block_timestamp: fact_timestamp(),
+        }
+    }
+
+    /// A hash-valued `bytes32` (far above `u64::MAX`).
+    fn hash_word(byte: u8) -> U256 {
+        U256::from_be_bytes(B256::repeat_byte(byte).0)
+    }
+
+    fn signed_fact(bytes32: U256, validator_byte: u8) -> AffirmationLogFact {
+        AffirmationLogFact::Signed {
+            bytes32,
+            confirmation: fact_confirmation(validator_byte),
+        }
+    }
+
+    fn completed_fact(bytes32: U256) -> AffirmationLogFact {
+        AffirmationLogFact::Completed { bytes32 }
+    }
+
+    /// Every permutation of `0..n`, by recursive insertion.
+    fn permutations(n: usize) -> Vec<Vec<usize>> {
+        if n == 0 {
+            return vec![Vec::new()];
+        }
+        let mut all = Vec::new();
+        for shorter in permutations(n - 1) {
+            for position in 0..=shorter.len() {
+                let mut permutation = shorter.clone();
+                permutation.insert(position, n - 1);
+                all.push(permutation);
+            }
+        }
+        all
+    }
+
+    #[test]
+    fn pairing_includes_a_hash_signature_whose_completion_shares_its_bytes32() {
+        let bytes32 = hash_word(0x61);
+        let hash = B256::repeat_byte(0x61);
+
+        let paired =
+            pair_colocated_hash_signatures([signed_fact(bytes32, 0xA1), completed_fact(bytes32)]);
+
+        assert!(paired.owns(&hash));
+        assert_eq!(paired.completed_hashes, HashSet::from([hash]));
+        assert_eq!(
+            paired.confirmations_for(&hash),
+            Some(&HashMap::from([(
+                Address::repeat_byte(0xA1),
+                fact_confirmation(0xA1)
+            )]))
+        );
+    }
+
+    #[test]
+    fn pairing_is_independent_of_log_order() {
+        let hash_a = hash_word(0x61);
+        let hash_b = hash_word(0x62);
+        let nonce = U256::from(7u64);
+        // Two signatures and the completion of hash A, a standalone signature
+        // of hash B, and a nonce-keyed signature.
+        let make = |index: usize| match index {
+            0 => signed_fact(hash_a, 0xA1),
+            1 => signed_fact(hash_a, 0xA2),
+            2 => completed_fact(hash_a),
+            3 => signed_fact(hash_b, 0xA3),
+            4 => signed_fact(nonce, 0xA4),
+            _ => unreachable!("five facts"),
+        };
+
+        let expected = ColocatedHashSignatures {
+            completed_hashes: HashSet::from([B256::repeat_byte(0x61)]),
+            confirmations: HashMap::from([(
+                B256::repeat_byte(0x61),
+                HashMap::from([
+                    (Address::repeat_byte(0xA1), fact_confirmation(0xA1)),
+                    (Address::repeat_byte(0xA2), fact_confirmation(0xA2)),
+                ]),
+            )]),
+        };
+
+        let orders = permutations(5);
+        assert_eq!(orders.len(), 120);
+        for order in orders {
+            let paired = pair_colocated_hash_signatures(order.iter().map(|&i| make(i)));
+            assert_eq!(paired, expected, "fact order {order:?} changed the pairing");
+        }
+    }
+
+    #[test]
+    fn pairing_never_includes_a_nonce_keyed_pair() {
+        let nonce = U256::from(7u64);
+
+        let paired = pair_colocated_hash_signatures([
+            signed_fact(nonce, 0xA1),
+            completed_fact(nonce),
+            signed_fact(U256::from(u64::MAX), 0xA2),
+            completed_fact(U256::from(u64::MAX)),
+        ]);
+
+        assert!(paired.completed_hashes.is_empty());
+        assert!(paired.confirmations.is_empty());
+        assert_eq!(paired, ColocatedHashSignatures::default());
+    }
+
+    #[test]
+    fn pairing_excludes_a_hash_signature_whose_bytes32_differs_from_every_completion() {
+        let signed_hash = hash_word(0x61);
+        let completed_hash = hash_word(0x62);
+
+        let paired = pair_colocated_hash_signatures([
+            signed_fact(signed_hash, 0xA1),
+            completed_fact(completed_hash),
+        ]);
+
+        assert!(!paired.owns(&B256::repeat_byte(0x61)));
+        assert!(paired.owns(&B256::repeat_byte(0x62)));
+        assert_eq!(paired.confirmations_for(&B256::repeat_byte(0x61)), None);
+        assert_eq!(paired.confirmations_for(&B256::repeat_byte(0x62)), None);
+        assert!(paired.confirmations.is_empty());
+    }
+
+    #[test]
+    fn pairing_groups_two_hash_completions_separately() {
+        let hash_a = hash_word(0x61);
+        let hash_b = hash_word(0x62);
+
+        let paired = pair_colocated_hash_signatures([
+            signed_fact(hash_a, 0xA1),
+            signed_fact(hash_b, 0xB1),
+            signed_fact(hash_b, 0xB2),
+            completed_fact(hash_a),
+            completed_fact(hash_b),
+        ]);
+
+        assert_eq!(
+            paired.completed_hashes,
+            HashSet::from([B256::repeat_byte(0x61), B256::repeat_byte(0x62)])
+        );
+        assert_eq!(
+            paired.confirmations_for(&B256::repeat_byte(0x61)),
+            Some(&HashMap::from([(
+                Address::repeat_byte(0xA1),
+                fact_confirmation(0xA1)
+            )]))
+        );
+        assert_eq!(
+            paired.confirmations_for(&B256::repeat_byte(0x62)),
+            Some(&HashMap::from([
+                (Address::repeat_byte(0xB1), fact_confirmation(0xB1)),
+                (Address::repeat_byte(0xB2), fact_confirmation(0xB2)),
+            ]))
+        );
+    }
+
+    #[test]
+    fn pairing_without_any_completion_is_empty() {
+        let paired = pair_colocated_hash_signatures([
+            signed_fact(hash_word(0x61), 0xA1),
+            signed_fact(hash_word(0x62), 0xA2),
+            signed_fact(U256::from(7u64), 0xA3),
+        ]);
+        assert_eq!(paired, ColocatedHashSignatures::default());
+
+        let none = pair_colocated_hash_signatures(std::iter::empty());
+        assert_eq!(none, ColocatedHashSignatures::default());
     }
 }

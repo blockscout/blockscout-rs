@@ -141,6 +141,10 @@ not identity kind — is the anomaly predicate.
   the raw-hash key and are never consolidated — four such rows on the testnet.
   Correlating them would need a source receipt per confirmation, and
   confirmations outnumber completions by the validator count.
+  *Amended 2026-09-29 by ADR-015:* a signature that shares its transaction with
+  the hash-keyed completion is now paired with it and lands on the canonical
+  key without any extra RPC. Residual: non-co-located hash-keyed signatures of
+  an executed bucket when `requiredSignatures > 1` (no known instances).
 - The anomaly dedupe key leads with `(bridge_id, buffer_key)` while the table's
   only index is `(bridge_id, native_id)`, so the dedupe read does not use it.
   Accepted at the current table size.

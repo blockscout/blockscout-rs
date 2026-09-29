@@ -565,6 +565,48 @@ GROUP BY 1, 2 ORDER BY unclassified DESC;
 
 ---
 
+### I. Confirmations orphaned next to a stored message (confirmation-loss canary)
+
+**What it checks:** `pending_messages` rows that share their key with a stored
+`crosschain_messages` row while holding nothing but validator confirmations.
+Such a row is a signature that arrived after its message was finalized and
+evicted (backward catch-up delivers older signatures in a later batch; a
+failure-ledger retry replays an old range) and never reached
+`amb_messages_confirmations`.
+
+**Why it matters:** the message looks healthy (`completed`) but under-reports
+its confirmations, with no WARN and no failure-ledger entry. xDai attaches such
+rows inside the maintenance transaction (ADR-015); AMB does not yet (see
+`.memory-bank/gotchas.md`, "Backward Catchup Orphans Confirmations Of Messages
+Finalized In A Later Batch").
+
+```sql
+SELECT count(*) AS orphan_rows,
+       coalesce(sum((SELECT count(*) FROM jsonb_object_keys(p.payload->'inner'->'validator_confirmations'))), 0)
+         AS orphan_confirmations
+FROM pending_messages p
+JOIN crosschain_messages m ON m.id = p.message_id AND m.bridge_id = p.bridge_id
+WHERE p.bridge_id = __BRIDGE_ID__
+  AND p.payload->'inner'->'validator_confirmations' <> '{}'::jsonb
+  AND coalesce(jsonb_typeof(p.payload->'inner'->'source_request'), 'null') = 'null'
+  AND coalesce(jsonb_typeof(p.payload->'inner'->'signature_request'), 'null') = 'null'
+  AND coalesce(jsonb_typeof(p.payload->'inner'->'destination_execution'), 'null') = 'null';
+```
+
+`signature_request` exists only in xDai payloads; for AMB the condition is
+trivially true.
+
+**Expected result:** `0, 0` for xDai. A non-zero AMB result is the known,
+unfixed shape.
+
+**If it deviates (xDai):** the attach step did not run or did not resolve the
+entry. Check that the entry really holds only confirmations
+(`xdai::consolidation::holds_only_confirmations`), then the maintenance debug
+line `attached detached confirmations to stored messages`. To confirm the
+mechanism, compare stored and orphaned signatures per message: they should sum
+to the bridge threshold with distinct validators, and every orphan should be
+older than every stored signature.
+
 ## Quick reference
 
 | Query | Kind | Expected result | If it deviates |
@@ -577,3 +619,4 @@ GROUP BY 1, 2 ORDER BY unclassified DESC;
 | F — incoming ICTT reconstruction | diagnostic | rows present where reachable, but only if `process_unknown_chains: true` and `home_chain_id` admits it | check `process_unknown_chains`/`home_chain_id` first, then the scenario/kill switch, before worrying |
 | G — pending_messages trend | diagnostic | `oldest` stops receding indefinitely | still climbing at the old rate → leak persists |
 | H — unclassified transfers (`asset_linkage IS NULL`) | canary | zero rows | fix the offending indexer's transfer constructor, then `BACKFILL_ON_START=true` — no marker reset, no rebuild |
+| I — orphaned confirmations of stored messages | canary | `0, 0` for xDai | check the entry is confirmation-only and the attach debug line; AMB non-zero is the known unfixed shape |

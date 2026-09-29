@@ -78,6 +78,21 @@ pub struct DestinationExecution {
     pub detail: String,
 }
 
+/// Validator confirmations held by an entry that cannot consolidate on its
+/// own, reported so maintenance can attach them to an already-stored
+/// `crosschain_messages` row with the same key. Deliberately neutral, like
+/// `DestinationExecution`: the attach decision is made against the database in
+/// `message_buffer::persistence::attach_detached_confirmations`, never here.
+#[derive(Clone, Debug)]
+pub struct DetachedConfirmations {
+    /// Models identical to those `consolidate` would emit for this entry.
+    pub confirmations: Vec<amb_messages_confirmations::ActiveModel>,
+    /// The entry holds nothing but these confirmations (plus identity
+    /// metadata): once they are attached there is nothing left to wait for, so
+    /// the key may be cleared from `pending_messages` and evicted from hot.
+    pub confirmation_only: bool,
+}
+
 /// Converts an in-flight entry into a consolidated database payload.
 ///
 /// Returning:
@@ -103,5 +118,17 @@ pub trait Consolidate:
     /// (`consolidation.rs`) for the same trap applied to a different method.
     fn destination_executions(&self, _key: &Key) -> Vec<DestinationExecution> {
         Vec::new()
+    }
+
+    /// Confirmations of an entry whose `consolidate` returned `Ok(None)`.
+    /// Called only for dirty `NotReady` entries, from `plan_maintenance`.
+    ///
+    /// Defaulted to `None`: AMB and Avalanche do not participate, and an empty
+    /// channel costs zero statements (`attach_detached_confirmations` returns
+    /// before its first query). Plain `Option`, not `Result`, for the same reason
+    /// as `destination_executions`: it runs before the maintenance transaction
+    /// opens, where an `Err` would abort plan building for the whole bridge.
+    fn detached_confirmations(&self, _key: &Key) -> Option<DetachedConfirmations> {
+        None
     }
 }

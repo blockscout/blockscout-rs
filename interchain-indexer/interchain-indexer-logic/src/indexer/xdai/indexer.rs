@@ -626,11 +626,15 @@ mod tests {
         providers::{Provider, ProviderBuilder},
         rpc::types::Log,
     };
+    use blockscout_service_launcher::test_database::TestDbGuard;
     use interchain_indexer_entity::{
-        amb_messages_confirmations, bridges, chains, crosschain_messages, crosschain_transfers,
+        amb_message_anomalies, amb_messages_confirmations, bridges, chains, crosschain_messages,
+        crosschain_transfers, indexer_checkpoints, pending_messages,
         sea_orm_active_enums::MessageStatus,
     };
-    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, TransactionTrait,
+    };
 
     use super::*;
     use crate::{
@@ -2562,5 +2566,929 @@ mod tests {
             metadata.additional_executions[0].transaction_hash,
             alloy::hex::encode_prefixed(tx_dst_first.as_slice())
         );
+    }
+
+    // --- Same-transaction pairing of hash-keyed signatures and completions
+    // (xdai-lost-confirmations, work item 1) ---
+
+    /// The synthetic source-transaction shape shared by the confirmation
+    /// tests below: every value here is a placeholder (see the module doc),
+    /// only the *shape* -- which logs share a transaction, which `bytes32`
+    /// each carries -- is under test.
+    const CONFIRMATION_SRC_BLOCK: u64 = 25_852_059;
+    const CONFIRMATION_SRC_TIMESTAMP: u64 = 1_700_000_000;
+    const CONFIRMATION_DST_TIMESTAMP: u64 = 1_700_100_000;
+
+    /// One mainnet registry, one buffer, one mocked counterpart (Foreign)
+    /// provider and the ABI events -- everything a replay of a Gnosis
+    /// transaction needs, so each test states only its scenario.
+    struct ConfirmationFixture {
+        _db: TestDbGuard,
+        interchain_db: InterchainDatabase,
+        registry: AbiRegistry,
+        buffer: Arc<MessageBuffer<Message>>,
+        message_hash_lookup: Arc<DashMap<B256, Key>>,
+        pending_message_hash_events: Arc<DashMap<B256, PendingMessageHashEvents>>,
+        asserter: alloy::transports::mock::Asserter,
+        counterpart: XDaiChainConfig,
+        foreign_addr: Address,
+        home_addr: Address,
+        foreign_event: Event,
+        signed_event: Event,
+        completed_event: Event,
+        recipient: Address,
+        value: U256,
+        sender: Address,
+    }
+
+    impl ConfirmationFixture {
+        async fn new(db_name: &str, hot_ttl: Duration) -> Self {
+            let db = init_db(db_name).await;
+            let interchain_db = InterchainDatabase::new(db.client());
+            seed_bridge_and_chains(&interchain_db).await;
+
+            let foreign_addr = address!("4aa42145Aa6Ebf72e164C9bBC74fbD3788045016");
+            let home_addr = address!("7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6");
+            let registry = test_registry(foreign_addr, home_addr);
+            let buffer = MessageBuffer::<Message>::new(
+                interchain_db.clone(),
+                MessageBufferSettings {
+                    hot_ttl,
+                    maintenance_interval: Duration::from_secs(60),
+                },
+            );
+            let asserter = alloy::transports::mock::Asserter::new();
+            let provider = ProviderBuilder::new()
+                .connect_mocked_client(asserter.clone())
+                .erased();
+            let counterpart = foreign_chain_config_with_provider(foreign_addr, provider);
+
+            Self {
+                _db: db,
+                interchain_db,
+                registry,
+                buffer,
+                message_hash_lookup: Arc::new(DashMap::new()),
+                pending_message_hash_events: Arc::new(DashMap::new()),
+                asserter,
+                counterpart,
+                foreign_addr,
+                home_addr,
+                foreign_event: event_of(&foreign_abi(), "UserRequestForAffirmation"),
+                signed_event: event_of(&home_abi(), "SignedForAffirmation"),
+                completed_event: event_of(&home_abi(), "AffirmationCompleted"),
+                recipient: Address::repeat_byte(0xC7),
+                value: U256::from(4_500u64),
+                sender: Address::repeat_byte(0x51),
+            }
+        }
+
+        fn context(&self, chain_id: i64, block_number: u64) -> EventContext<'_> {
+            EventContext {
+                bridge_id: BRIDGE_ID,
+                chain_id,
+                block_number,
+                abi_registry: &self.registry,
+                buffer: &self.buffer,
+                foreign_bridge_address: self.foreign_addr,
+                message_hash_lookup: &self.message_hash_lookup,
+                pending_message_hash_events: &self.pending_message_hash_events,
+                counterpart_chain: (chain_id == GNO).then_some(&self.counterpart),
+            }
+        }
+
+        /// The Ethereum `UserRequestForAffirmation` for `nonce` in `tx_src`.
+        async fn dispatch_source(&self, nonce: U256, tx_src: B256) -> Result<()> {
+            let log = user_request_for_affirmation_log(
+                &self.foreign_event,
+                self.foreign_addr,
+                self.recipient,
+                self.value,
+                nonce,
+                tx_src,
+                CONFIRMATION_SRC_BLOCK,
+            );
+            events::dispatch_transaction(
+                &self.context(ETH, CONFIRMATION_SRC_BLOCK),
+                &[log],
+                &block_with_timestamp(CONFIRMATION_SRC_TIMESTAMP),
+                self.sender,
+            )
+            .await
+        }
+
+        /// One Gnosis transaction: `logs` are its full receipt.
+        async fn dispatch_gno(&self, block_number: u64, logs: &[Log]) -> Result<()> {
+            events::dispatch_transaction(
+                &self.context(GNO, block_number),
+                logs,
+                &block_with_timestamp(CONFIRMATION_DST_TIMESTAMP + block_number),
+                Address::ZERO,
+            )
+            .await
+        }
+
+        fn signed_log(
+            &self,
+            signer: Address,
+            nonce_or_hash: U256,
+            tx_hash: B256,
+            block_number: u64,
+            log_index: u64,
+        ) -> Log {
+            signed_for_affirmation_log(
+                &self.signed_event,
+                self.home_addr,
+                signer,
+                nonce_or_hash,
+                tx_hash,
+                block_number,
+                log_index,
+            )
+        }
+
+        fn completed_log(
+            &self,
+            nonce_or_hash: U256,
+            tx_hash: B256,
+            block_number: u64,
+            log_index: u64,
+        ) -> Log {
+            affirmation_completed_log(
+                &self.completed_event,
+                self.home_addr,
+                self.recipient,
+                self.value,
+                nonce_or_hash,
+                tx_hash,
+                block_number,
+                log_index,
+            )
+        }
+
+        /// Queues the receipt+block pair one hash-keyed completion consumes;
+        /// the receipt carries the modern source event for `nonce`.
+        fn push_receipt(&self, nonce: U256, tx_src: B256) {
+            push_modern_affirmation_receipt(
+                &self.asserter,
+                self.foreign_addr,
+                self.recipient,
+                self.value,
+                nonce,
+                tx_src,
+                CONFIRMATION_SRC_BLOCK,
+                CONFIRMATION_SRC_TIMESTAMP,
+                self.sender,
+            );
+        }
+
+        fn key_n(nonce: U256) -> Key {
+            let native_id = native_id_blob(ETH, nonce).unwrap();
+            key_from_native_id(&native_id, BRIDGE_ID).unwrap()
+        }
+
+        fn key_h(tx_src: B256) -> Key {
+            key_from_native_id(&tx_src.0, BRIDGE_ID).unwrap()
+        }
+
+        async fn run(&self) {
+            self.buffer.run().await.expect("maintenance run succeeds");
+        }
+
+        async fn message(&self, key: Key) -> Option<crosschain_messages::Model> {
+            crosschain_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+                .one(self.interchain_db.db.as_ref())
+                .await
+                .unwrap()
+        }
+
+        /// Confirmation rows of `key`, ordered by validator address.
+        async fn confirmations(&self, key: Key) -> Vec<amb_messages_confirmations::Model> {
+            amb_messages_confirmations::Entity::find()
+                .filter(amb_messages_confirmations::Column::MessageId.eq(key.message_id))
+                .filter(amb_messages_confirmations::Column::BridgeId.eq(BRIDGE_ID))
+                .order_by_asc(amb_messages_confirmations::Column::ValidatorAddress)
+                .all(self.interchain_db.db.as_ref())
+                .await
+                .unwrap()
+        }
+
+        async fn pending(&self, key: Key) -> Option<pending_messages::Model> {
+            pending_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+                .one(self.interchain_db.db.as_ref())
+                .await
+                .unwrap()
+        }
+
+        async fn anomalies(&self, key: Key) -> Vec<amb_message_anomalies::Model> {
+            amb_message_anomalies::Entity::find()
+                .filter(amb_message_anomalies::Column::BridgeId.eq(BRIDGE_ID))
+                .filter(amb_message_anomalies::Column::BufferKey.eq(key.message_id))
+                .all(self.interchain_db.db.as_ref())
+                .await
+                .unwrap()
+        }
+    }
+
+    /// Transaction hashes named by the message's `multiple_executions`
+    /// metadata, `0x`-prefixed.
+    fn additional_execution_hashes(message: crosschain_messages::Model) -> Vec<String> {
+        crate::protocol_metadata::ProtocolMetadata::from_json_value(message.protocol_metadata)
+            .expect("protocol_metadata must be populated")
+            .multiple_executions
+            .expect("multiple_executions namespace must be present")
+            .additional_executions
+            .into_iter()
+            .map(|execution| execution.transaction_hash)
+            .collect()
+    }
+
+    fn hex_of(hash: B256) -> String {
+        alloy::hex::encode_prefixed(hash.as_slice())
+    }
+
+    /// Chiado nonce 2's shape: one Gnosis transaction holds
+    /// `SignedForAffirmation(V, H)` and `AffirmationCompleted(.., H)` where `H`
+    /// is a raw source transaction hash. The signature must follow the
+    /// completion to the canonical nonce key instead of landing under `H`.
+    async fn colocated_hash_signature_follows_its_completion(
+        db_name: &str,
+        reverse_log_order: bool,
+    ) {
+        let fx = ConfirmationFixture::new(db_name, Duration::from_secs(60)).await;
+        let nonce = U256::from(2u64);
+        let tx_src = B256::repeat_byte(0x91);
+        let tx_dst = B256::repeat_byte(0x92);
+        let validator = Address::repeat_byte(0xA1);
+        const DST_BLOCK: u64 = 47_950_000;
+        let hash = U256::from_be_bytes(tx_src.0);
+        let key_n = ConfirmationFixture::key_n(nonce);
+        let key_h = ConfirmationFixture::key_h(tx_src);
+        fx.push_receipt(nonce, tx_src);
+
+        let signed = fx.signed_log(validator, hash, tx_dst, DST_BLOCK, 0);
+        let completed = fx.completed_log(hash, tx_dst, DST_BLOCK, 1);
+        let logs = if reverse_log_order {
+            vec![completed, signed]
+        } else {
+            vec![signed, completed]
+        };
+        fx.dispatch_gno(DST_BLOCK, &logs)
+            .await
+            .expect("co-located transaction dispatch succeeds");
+
+        assert!(
+            !fx.buffer.contains_hot(&key_h),
+            "the paired signature must not create a raw-hash entry"
+        );
+        assert!(fx.buffer.contains_hot(&key_n));
+
+        fx.run().await;
+
+        let message = fx
+            .message(key_n)
+            .await
+            .expect("the canonical nonce-keyed message must exist");
+        assert_eq!(message.status, MessageStatus::Completed);
+        let confirmations = fx.confirmations(key_n).await;
+        assert_eq!(confirmations.len(), 1, "exactly one row, for the signer");
+        assert_eq!(
+            confirmations[0].validator_address,
+            validator.as_slice().to_vec()
+        );
+        assert_eq!(confirmations[0].tx_hash, tx_dst.as_slice().to_vec());
+        assert_eq!(confirmations[0].block_number, DST_BLOCK as i64);
+
+        assert!(fx.message(key_h).await.is_none());
+        assert!(fx.confirmations(key_h).await.is_empty());
+        assert!(fx.pending(key_h).await.is_none());
+        assert!(!fx.buffer.contains_hot(&key_h));
+        assert!(
+            fx.asserter.read_q().is_empty(),
+            "only the completion's single receipt+block pair may be consumed"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn colocated_hash_signature_follows_its_completion_to_the_nonce_key() {
+        colocated_hash_signature_follows_its_completion("xdai_colocated_hash_signature", false)
+            .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn colocated_hash_signature_follows_its_completion_to_the_nonce_key_in_reverse_log_order()
+    {
+        colocated_hash_signature_follows_its_completion(
+            "xdai_colocated_hash_signature_reverse_log_order",
+            true,
+        )
+        .await;
+    }
+
+    /// The completion's own source-receipt fetch fails: nothing may be
+    /// applied under either key (the paired signature is applied only inside
+    /// the completion's mutation), so the failure ledger's retry of the
+    /// identical transaction reaches the same end state as a clean run.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn failed_hash_completion_does_not_orphan_its_colocated_signature() {
+        let fx =
+            ConfirmationFixture::new("xdai_failed_hash_completion", Duration::from_secs(60)).await;
+        let nonce = U256::from(2u64);
+        let tx_src = B256::repeat_byte(0x93);
+        let tx_dst = B256::repeat_byte(0x94);
+        let validator = Address::repeat_byte(0xA1);
+        const DST_BLOCK: u64 = 47_950_000;
+        let hash = U256::from_be_bytes(tx_src.0);
+        let key_n = ConfirmationFixture::key_n(nonce);
+        let key_h = ConfirmationFixture::key_h(tx_src);
+        let logs = vec![
+            fx.signed_log(validator, hash, tx_dst, DST_BLOCK, 0),
+            fx.completed_log(hash, tx_dst, DST_BLOCK, 1),
+        ];
+
+        // The completion handler's reconstruction RPC is the only call made,
+        // and it fails.
+        fx.asserter
+            .push_failure_msg("injected source receipt failure");
+        let first = fx.dispatch_gno(DST_BLOCK, &logs).await;
+        assert!(first.is_err(), "a failed reconstruction must be reported");
+        assert!(!fx.buffer.contains_hot(&key_h));
+        assert!(!fx.buffer.contains_hot(&key_n));
+
+        // The retry of the identical logs, this time with a healthy provider.
+        fx.push_receipt(nonce, tx_src);
+        fx.dispatch_gno(DST_BLOCK, &logs)
+            .await
+            .expect("the retried dispatch succeeds");
+        fx.run().await;
+
+        let message = fx.message(key_n).await.expect("nonce-keyed message");
+        assert_eq!(message.status, MessageStatus::Completed);
+        let confirmations = fx.confirmations(key_n).await;
+        assert_eq!(confirmations.len(), 1);
+        assert_eq!(
+            confirmations[0].validator_address,
+            validator.as_slice().to_vec()
+        );
+        assert_eq!(confirmations[0].tx_hash, tx_dst.as_slice().to_vec());
+        assert_eq!(confirmations[0].block_number, DST_BLOCK as i64);
+        assert!(fx.message(key_h).await.is_none());
+        assert!(fx.confirmations(key_h).await.is_empty());
+        assert!(fx.pending(key_h).await.is_none());
+        assert!(!fx.buffer.contains_hot(&key_h));
+        assert!(fx.asserter.read_q().is_empty());
+    }
+
+    /// A hash-keyed signature with no completion in its transaction has no
+    /// provable owner, so it keeps today's path: it lands under the raw-hash
+    /// key and is offloaded, and it is never attached to the nonce key.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn standalone_hash_signature_is_not_attached_to_either_key() {
+        let fx = ConfirmationFixture::new("xdai_standalone_hash_signature", Duration::ZERO).await;
+        let nonce = U256::from(0x9944_u64);
+        let tx_src = B256::repeat_byte(0x95);
+        let tx_dst = B256::repeat_byte(0x96);
+        let tx_standalone = B256::repeat_byte(0x97);
+        let validator_1 = Address::repeat_byte(0xA1);
+        let validator_2 = Address::repeat_byte(0xA2);
+        const DST_BLOCK: u64 = 47_950_000;
+        const STANDALONE_BLOCK: u64 = 47_950_300;
+        let hash = U256::from_be_bytes(tx_src.0);
+        let key_n = ConfirmationFixture::key_n(nonce);
+        let key_h = ConfirmationFixture::key_h(tx_src);
+
+        fx.dispatch_source(nonce, tx_src)
+            .await
+            .expect("source dispatch succeeds");
+        fx.dispatch_gno(
+            DST_BLOCK,
+            &[
+                fx.signed_log(validator_1, nonce, tx_dst, DST_BLOCK, 0),
+                fx.completed_log(nonce, tx_dst, DST_BLOCK, 1),
+            ],
+        )
+        .await
+        .expect("nonce-keyed transaction dispatch succeeds");
+        fx.run().await;
+
+        let message = fx.message(key_n).await.expect("nonce-keyed message");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(fx.confirmations(key_n).await.len(), 1);
+
+        fx.dispatch_gno(
+            STANDALONE_BLOCK,
+            &[fx.signed_log(validator_2, hash, tx_standalone, STANDALONE_BLOCK, 0)],
+        )
+        .await
+        .expect("standalone hash-keyed signature dispatch succeeds");
+        fx.run().await;
+
+        let confirmations = fx.confirmations(key_n).await;
+        assert_eq!(confirmations.len(), 1, "V2 must not be attached to N");
+        assert_eq!(
+            confirmations[0].validator_address,
+            validator_1.as_slice().to_vec()
+        );
+        assert!(fx.message(key_h).await.is_none());
+        assert!(fx.confirmations(key_h).await.is_empty());
+        assert!(
+            fx.pending(key_h).await.is_some(),
+            "unchanged behaviour: the raw-hash entry is offloaded to pending"
+        );
+    }
+
+    /// P1 for a second execution whose completion is hash-keyed: the first
+    /// processed execution stays canonical, the second one is an anomaly, and
+    /// the confirmations are the distinct validators across both executions.
+    async fn second_execution_nonce_first_then_hash(db_name: &str, same_validator: bool) {
+        let fx = ConfirmationFixture::new(db_name, Duration::from_secs(60)).await;
+        let nonce = U256::from(0x9955_u64);
+        let tx_src = B256::repeat_byte(0x98);
+        let tx_nonce_exec = B256::repeat_byte(0x99);
+        let tx_hash_exec = B256::repeat_byte(0x9A);
+        let validator_a = Address::repeat_byte(0xA1);
+        let validator_b = if same_validator {
+            validator_a
+        } else {
+            Address::repeat_byte(0xA2)
+        };
+        const NONCE_EXEC_BLOCK: u64 = 47_950_100;
+        const HASH_EXEC_BLOCK: u64 = 47_950_200;
+        let hash = U256::from_be_bytes(tx_src.0);
+        let key_n = ConfirmationFixture::key_n(nonce);
+        let key_h = ConfirmationFixture::key_h(tx_src);
+        // The ETH source is never dispatched: the hash completion's receipt
+        // provides it.
+        fx.push_receipt(nonce, tx_src);
+
+        fx.dispatch_gno(
+            NONCE_EXEC_BLOCK,
+            &[
+                fx.signed_log(validator_a, nonce, tx_nonce_exec, NONCE_EXEC_BLOCK, 0),
+                fx.completed_log(nonce, tx_nonce_exec, NONCE_EXEC_BLOCK, 1),
+            ],
+        )
+        .await
+        .expect("nonce-keyed execution dispatch succeeds");
+        fx.run().await;
+
+        fx.dispatch_gno(
+            HASH_EXEC_BLOCK,
+            &[
+                fx.signed_log(validator_b, hash, tx_hash_exec, HASH_EXEC_BLOCK, 0),
+                fx.completed_log(hash, tx_hash_exec, HASH_EXEC_BLOCK, 1),
+            ],
+        )
+        .await
+        .expect("hash-keyed execution dispatch succeeds");
+        fx.run().await;
+
+        let message = fx.message(key_n).await.expect("canonical message");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(
+            message.dst_tx_hash,
+            Some(tx_nonce_exec.as_slice().to_vec()),
+            "the first-processed execution stays canonical"
+        );
+        let anomalies = fx.anomalies(key_n).await;
+        assert_eq!(anomalies.len(), 1);
+        assert_eq!(anomalies[0].tx_hash, tx_hash_exec.as_slice().to_vec());
+        assert_eq!(
+            anomalies[0].conflict_tx_hash,
+            Some(tx_nonce_exec.as_slice().to_vec())
+        );
+        assert_eq!(
+            additional_execution_hashes(message),
+            vec![hex_of(tx_hash_exec)]
+        );
+
+        // Which transaction the single row names for a repeated validator is
+        // order-dependent by accepted design, so only the count is pinned.
+        let confirmations = fx.confirmations(key_n).await;
+        assert_eq!(confirmations.len(), if same_validator { 1 } else { 2 });
+        if !same_validator {
+            let rows: Vec<_> = confirmations
+                .iter()
+                .map(|row| (row.validator_address.clone(), row.tx_hash.clone()))
+                .collect();
+            assert_eq!(
+                rows,
+                vec![
+                    (
+                        validator_a.as_slice().to_vec(),
+                        tx_nonce_exec.as_slice().to_vec()
+                    ),
+                    (
+                        validator_b.as_slice().to_vec(),
+                        tx_hash_exec.as_slice().to_vec()
+                    ),
+                ]
+            );
+        }
+        assert!(fx.pending(key_n).await.is_none());
+        // The hash-keyed signature is paired with its completion, never parked
+        // under the raw-hash key -- this is what pins the fix when the count
+        // alone cannot (same validator on both executions).
+        assert!(!fx.buffer.contains_hot(&key_h));
+        assert!(fx.pending(key_h).await.is_none());
+        assert!(fx.asserter.read_q().is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn second_execution_nonce_first_then_hash_with_distinct_validators() {
+        second_execution_nonce_first_then_hash("xdai_second_exec_nonce_first_distinct", false)
+            .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn second_execution_nonce_first_then_hash_with_the_same_validator() {
+        second_execution_nonce_first_then_hash("xdai_second_exec_nonce_first_same", true).await;
+    }
+
+    // --- Late confirmations attached to an already-stored message
+    // (xdai-lost-confirmations, work item 2) ---
+
+    /// `(validator address, tx hash, block number)` per confirmation row, in
+    /// validator order.
+    fn confirmation_provenance(
+        rows: &[amb_messages_confirmations::Model],
+    ) -> Vec<(Vec<u8>, Vec<u8>, i64)> {
+        rows.iter()
+            .map(|row| {
+                (
+                    row.validator_address.clone(),
+                    row.tx_hash.clone(),
+                    row.block_number,
+                )
+            })
+            .collect()
+    }
+
+    /// Backward catch-up: the message is finalized by the batch holding the
+    /// fourth signature and the completion, and maintenance flushes, clears
+    /// and evicts it. The three older signatures arrive afterwards, each in
+    /// its own transaction, and must be attached to the stored message.
+    async fn eth_to_gno_late_confirmations_attach_to_the_stored_message(
+        db_name: &str,
+        hot_ttl: Duration,
+    ) {
+        let fx = ConfirmationFixture::new(db_name, hot_ttl).await;
+        let nonce = U256::from(0x1ae0_u64);
+        let tx_src = B256::repeat_byte(0x01);
+        let tx_conf1 = B256::repeat_byte(0x02);
+        let tx_conf2 = B256::repeat_byte(0x03);
+        let tx_conf3 = B256::repeat_byte(0x04);
+        let tx_conf4_complete = B256::repeat_byte(0x05);
+        let validators = [
+            Address::repeat_byte(0xA1),
+            Address::repeat_byte(0xA2),
+            Address::repeat_byte(0xA3),
+            Address::repeat_byte(0xA4),
+        ];
+        const CONF1_BLOCK: u64 = 47_953_922;
+        const CONF2_BLOCK: u64 = 47_954_052;
+        const CONF3_BLOCK: u64 = 47_954_055;
+        const CONF4_COMPLETE_BLOCK: u64 = 47_954_060;
+        let key = ConfirmationFixture::key_n(nonce);
+
+        fx.dispatch_source(nonce, tx_src)
+            .await
+            .expect("source dispatch succeeds");
+        fx.dispatch_gno(
+            CONF4_COMPLETE_BLOCK,
+            &[
+                fx.signed_log(
+                    validators[3],
+                    nonce,
+                    tx_conf4_complete,
+                    CONF4_COMPLETE_BLOCK,
+                    18,
+                ),
+                fx.completed_log(nonce, tx_conf4_complete, CONF4_COMPLETE_BLOCK, 20),
+            ],
+        )
+        .await
+        .expect("conf4 + completion dispatch succeeds");
+        fx.run().await;
+
+        let message = fx.message(key).await.expect("the message is stored");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(fx.confirmations(key).await.len(), 1);
+        assert!(!fx.buffer.contains_hot(&key), "finalized and evicted");
+        assert!(fx.pending(key).await.is_none());
+
+        for (validator, tx_hash, block_number) in [
+            (validators[2], tx_conf3, CONF3_BLOCK),
+            (validators[1], tx_conf2, CONF2_BLOCK),
+            (validators[0], tx_conf1, CONF1_BLOCK),
+        ] {
+            fx.dispatch_gno(
+                block_number,
+                &[fx.signed_log(validator, nonce, tx_hash, block_number, 0)],
+            )
+            .await
+            .expect("late confirmation dispatch succeeds");
+        }
+        fx.run().await;
+
+        let confirmations = fx.confirmations(key).await;
+        assert_eq!(
+            confirmation_provenance(&confirmations),
+            vec![
+                (
+                    validators[0].as_slice().to_vec(),
+                    tx_conf1.as_slice().to_vec(),
+                    CONF1_BLOCK as i64
+                ),
+                (
+                    validators[1].as_slice().to_vec(),
+                    tx_conf2.as_slice().to_vec(),
+                    CONF2_BLOCK as i64
+                ),
+                (
+                    validators[2].as_slice().to_vec(),
+                    tx_conf3.as_slice().to_vec(),
+                    CONF3_BLOCK as i64
+                ),
+                (
+                    validators[3].as_slice().to_vec(),
+                    tx_conf4_complete.as_slice().to_vec(),
+                    CONF4_COMPLETE_BLOCK as i64
+                ),
+            ],
+            "each validator keeps its own signature's transaction and block"
+        );
+        assert!(
+            fx.pending(key).await.is_none(),
+            "the detached entry is resolved, not left in pending_messages"
+        );
+        assert!(!fx.buffer.contains_hot(&key));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn eth_to_gno_late_confirmations_attach_to_the_stored_message_with_hot_ttl() {
+        eth_to_gno_late_confirmations_attach_to_the_stored_message(
+            "xdai_late_confirmations_hot_ttl",
+            Duration::from_secs(60),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn eth_to_gno_late_confirmations_attach_to_the_stored_message_with_zero_hot_ttl() {
+        eth_to_gno_late_confirmations_attach_to_the_stored_message(
+            "xdai_late_confirmations_zero_ttl",
+            Duration::ZERO,
+        )
+        .await;
+    }
+
+    /// A signature for a nonce whose message is not stored anywhere yet must
+    /// not be written (there is nothing to attach it to, and the FK would
+    /// reject it): it is offloaded to `pending_messages`, and the rest of the
+    /// maintenance transaction commits.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn confirmation_only_entry_without_stored_message_is_offloaded_not_written() {
+        let fx = ConfirmationFixture::new("xdai_confirmation_only_without_message", Duration::ZERO)
+            .await;
+        let nonce_1 = U256::from(0x1ae1_u64);
+        let nonce_2 = U256::from(0x1ae2_u64);
+        let tx_src = B256::repeat_byte(0x11);
+        let tx_complete = B256::repeat_byte(0x12);
+        let tx_lone = B256::repeat_byte(0x13);
+        let validator = Address::repeat_byte(0xA1);
+        let lone_validator = Address::repeat_byte(0xA2);
+        const COMPLETE_BLOCK: u64 = 47_954_060;
+        const LONE_BLOCK: u64 = 47_954_070;
+        let key_1 = ConfirmationFixture::key_n(nonce_1);
+        let key_2 = ConfirmationFixture::key_n(nonce_2);
+
+        fx.dispatch_source(nonce_1, tx_src)
+            .await
+            .expect("source dispatch succeeds");
+        fx.dispatch_gno(
+            COMPLETE_BLOCK,
+            &[
+                fx.signed_log(validator, nonce_1, tx_complete, COMPLETE_BLOCK, 0),
+                fx.completed_log(nonce_1, tx_complete, COMPLETE_BLOCK, 1),
+            ],
+        )
+        .await
+        .expect("complete trace dispatch succeeds");
+        fx.dispatch_gno(
+            LONE_BLOCK,
+            &[fx.signed_log(lone_validator, nonce_2, tx_lone, LONE_BLOCK, 0)],
+        )
+        .await
+        .expect("lone signature dispatch succeeds");
+
+        fx.buffer
+            .run()
+            .await
+            .expect("the maintenance run must commit");
+
+        let message = fx.message(key_1).await.expect("N1 is stored");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(fx.confirmations(key_1).await.len(), 1);
+        assert!(
+            !indexer_checkpoints::Entity::find()
+                .filter(indexer_checkpoints::Column::BridgeId.eq(BRIDGE_ID))
+                .all(fx.interchain_db.db.as_ref())
+                .await
+                .unwrap()
+                .is_empty(),
+            "cursors are written in the same transaction"
+        );
+        assert!(fx.message(key_2).await.is_none());
+        assert!(fx.confirmations(key_2).await.is_empty());
+        assert!(
+            fx.pending(key_2).await.is_some(),
+            "the signature waits in pending_messages for its message"
+        );
+    }
+
+    /// P1: a second execution recorded as an anomaly still confirms the
+    /// canonical message. Here the canonical execution is hash-keyed (it
+    /// resolves to nonce N through its receipt) and the second one is a later
+    /// nonce-keyed transaction, processed after the message was flushed and
+    /// evicted, so its signature is a detached one.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn late_nonce_keyed_second_execution_attaches_its_signature_to_the_canonical_message() {
+        let fx = ConfirmationFixture::new(
+            "xdai_late_nonce_keyed_second_execution",
+            Duration::from_secs(60),
+        )
+        .await;
+        let nonce = U256::from(0x9966_u64);
+        let tx_src = B256::repeat_byte(0x21);
+        let tx_first = B256::repeat_byte(0x22);
+        let tx_second = B256::repeat_byte(0x23);
+        let validator_1 = Address::repeat_byte(0xA1);
+        let validator_2 = Address::repeat_byte(0xA2);
+        const FIRST_BLOCK: u64 = 47_950_100;
+        const SECOND_BLOCK: u64 = 47_950_200;
+        let hash = U256::from_be_bytes(tx_src.0);
+        let key_n = ConfirmationFixture::key_n(nonce);
+        fx.push_receipt(nonce, tx_src);
+
+        fx.dispatch_gno(
+            FIRST_BLOCK,
+            &[
+                fx.signed_log(validator_1, hash, tx_first, FIRST_BLOCK, 0),
+                fx.completed_log(hash, tx_first, FIRST_BLOCK, 1),
+            ],
+        )
+        .await
+        .expect("hash-keyed execution dispatch succeeds");
+        fx.run().await;
+        assert_eq!(fx.confirmations(key_n).await.len(), 1);
+        assert!(!fx.buffer.contains_hot(&key_n));
+
+        fx.dispatch_gno(
+            SECOND_BLOCK,
+            &[
+                fx.signed_log(validator_2, nonce, tx_second, SECOND_BLOCK, 0),
+                fx.completed_log(nonce, tx_second, SECOND_BLOCK, 1),
+            ],
+        )
+        .await
+        .expect("nonce-keyed second execution dispatch succeeds");
+        fx.run().await;
+
+        let message = fx.message(key_n).await.expect("canonical message");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(
+            message.dst_tx_hash,
+            Some(tx_first.as_slice().to_vec()),
+            "the first-processed execution stays canonical"
+        );
+        let anomalies = fx.anomalies(key_n).await;
+        assert_eq!(anomalies.len(), 1);
+        assert_eq!(anomalies[0].tx_hash, tx_second.as_slice().to_vec());
+        assert_eq!(
+            anomalies[0].conflict_tx_hash,
+            Some(tx_first.as_slice().to_vec())
+        );
+        assert_eq!(
+            additional_execution_hashes(message),
+            vec![hex_of(tx_second)]
+        );
+
+        let confirmations = fx.confirmations(key_n).await;
+        assert_eq!(
+            confirmation_provenance(&confirmations),
+            vec![
+                (
+                    validator_1.as_slice().to_vec(),
+                    tx_first.as_slice().to_vec(),
+                    FIRST_BLOCK as i64
+                ),
+                (
+                    validator_2.as_slice().to_vec(),
+                    tx_second.as_slice().to_vec(),
+                    SECOND_BLOCK as i64
+                ),
+            ]
+        );
+        assert!(fx.pending(key_n).await.is_none());
+        assert!(!fx.buffer.contains_hot(&key_n));
+        assert!(fx.asserter.read_q().is_empty());
+    }
+
+    /// The mirror image of `second_execution_nonce_first_then_hash`: the
+    /// hash-keyed execution is processed first and stays canonical, the
+    /// nonce-keyed one comes second.
+    async fn second_execution_hash_first_then_nonce(db_name: &str, same_validator: bool) {
+        let fx = ConfirmationFixture::new(db_name, Duration::from_secs(60)).await;
+        let nonce = U256::from(0x9977_u64);
+        let tx_src = B256::repeat_byte(0x31);
+        let tx_hash_exec = B256::repeat_byte(0x32);
+        let tx_nonce_exec = B256::repeat_byte(0x33);
+        let validator_a = Address::repeat_byte(0xA1);
+        let validator_b = if same_validator {
+            validator_a
+        } else {
+            Address::repeat_byte(0xA2)
+        };
+        const HASH_EXEC_BLOCK: u64 = 47_950_100;
+        const NONCE_EXEC_BLOCK: u64 = 47_950_200;
+        let hash = U256::from_be_bytes(tx_src.0);
+        let key_n = ConfirmationFixture::key_n(nonce);
+        let key_h = ConfirmationFixture::key_h(tx_src);
+        fx.push_receipt(nonce, tx_src);
+
+        fx.dispatch_gno(
+            HASH_EXEC_BLOCK,
+            &[
+                fx.signed_log(validator_a, hash, tx_hash_exec, HASH_EXEC_BLOCK, 0),
+                fx.completed_log(hash, tx_hash_exec, HASH_EXEC_BLOCK, 1),
+            ],
+        )
+        .await
+        .expect("hash-keyed execution dispatch succeeds");
+        fx.run().await;
+
+        fx.dispatch_gno(
+            NONCE_EXEC_BLOCK,
+            &[
+                fx.signed_log(validator_b, nonce, tx_nonce_exec, NONCE_EXEC_BLOCK, 0),
+                fx.completed_log(nonce, tx_nonce_exec, NONCE_EXEC_BLOCK, 1),
+            ],
+        )
+        .await
+        .expect("nonce-keyed execution dispatch succeeds");
+        fx.run().await;
+
+        let message = fx.message(key_n).await.expect("canonical message");
+        assert_eq!(message.status, MessageStatus::Completed);
+        assert_eq!(
+            message.dst_tx_hash,
+            Some(tx_hash_exec.as_slice().to_vec()),
+            "the first-processed execution stays canonical"
+        );
+        let anomalies = fx.anomalies(key_n).await;
+        assert_eq!(anomalies.len(), 1);
+        assert_eq!(anomalies[0].tx_hash, tx_nonce_exec.as_slice().to_vec());
+        assert_eq!(
+            anomalies[0].conflict_tx_hash,
+            Some(tx_hash_exec.as_slice().to_vec())
+        );
+        assert_eq!(
+            additional_execution_hashes(message),
+            vec![hex_of(tx_nonce_exec)]
+        );
+
+        // Which transaction the single row names for a repeated validator is
+        // order-dependent by accepted design, so only the count is pinned.
+        let confirmations = fx.confirmations(key_n).await;
+        assert_eq!(confirmations.len(), if same_validator { 1 } else { 2 });
+        assert!(fx.pending(key_n).await.is_none());
+        assert!(!fx.buffer.contains_hot(&key_n));
+        // Pins the pairing when the count alone cannot (same validator).
+        assert!(!fx.buffer.contains_hot(&key_h));
+        assert!(fx.pending(key_h).await.is_none());
+        assert!(fx.asserter.read_q().is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn second_execution_hash_first_then_nonce_with_distinct_validators() {
+        second_execution_hash_first_then_nonce("xdai_second_exec_hash_first_distinct", false).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn second_execution_hash_first_then_nonce_with_the_same_validator() {
+        second_execution_hash_first_then_nonce("xdai_second_exec_hash_first_same", true).await;
     }
 }

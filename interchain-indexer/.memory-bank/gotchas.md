@@ -2252,11 +2252,27 @@ Two reconstruction traps matter when implementing this support:
   cannot detect this mismatch; use the actual on-chain signature in fixtures.
   Full historical grammar support remains outside the current fallback fix.
 
-Standalone hash confirmations use the ordinary buffer/pending path and emit a
-WARN; they do not perform source RPC and do not bypass the confirmations FK.
-Consequently an orphan can remain pending indefinitely, and a confirmation
-arriving after a completed message was flushed can form a new pending entry.
-This is an accepted limitation, not a reason to create a phantom message.
+Standalone hash confirmations — a hash-keyed `SignedForAffirmation` with no
+hash-keyed `AffirmationCompleted` of the same `bytes32` in its transaction —
+use the ordinary buffer/pending path and emit a WARN; they do not perform source
+RPC and do not bypass the confirmations FK. On mainnet they sign a disjoint
+on-chain `hashMsg` bucket that never executes, so they remain pending
+indefinitely by design: they are not confirmations of any execution, and this
+is not a reason to create a phantom message.
+
+A hash-keyed signature that **does** share its transaction with a hash-keyed
+completion is part of that execution (`executeAffirmation` emits both with one
+`bytes32`). `xdai::events::dispatch_transaction` pairs them in a pre-pass
+(`pair_colocated_hash_signatures`): the signature handler skips it and
+`handle_affirmation_completed` inserts it, as the last mutation of its `alter`,
+under the canonical key it resolved (ADR-015). Before this, the signature was
+keyed on the raw hash and orphaned — Chiado nonce 2 was `completed` with zero
+confirmations. Residual: when `requiredSignatures > 1`, the other hash-keyed
+signatures of an executed hash bucket sit in *other* transactions and still
+stay pending; no instance is known. A late confirmation for an already stored
+key is attached by the detached-confirmation channel (see *Backward Catchup
+Orphans Confirmations…*), so "a confirmation arriving after a completed message
+was flushed can form a new pending entry" no longer holds for xDai.
 
 **Late source enrichment and xDai amount assumptions.** Once a reconstructed completion and a source handler can
 produce the same canonical key (modern nonce aliases or future hash-keyed
@@ -2744,3 +2760,179 @@ touch are updated with `Expr::col(..).add(delta)`, never `Expr::value(total)`.
 holds an uncommitted increment on the fold target from a second connection and
 fails on the absolute form. The loser-row read → `DELETE` race predates this and
 is not closed; `SELECT … FOR UPDATE` on the edge load would close both.
+
+## Backward Catchup Orphans Confirmations Of Messages Finalized In A Later Batch
+
+**Status: fixed for xDai (2026-09-29, ADR-015); still present for AMB.** xDai
+implements `Consolidate::detached_confirmations`, and
+`persistence::attach_detached_confirmations` attaches such an entry's
+confirmations to the stored row inside the maintenance transaction and resolves
+the key. AMB keeps the `None` default, so the shape below still forms there.
+
+**Symptom:** a `completed` message has fewer `amb_messages_confirmations` rows
+than the bridge threshold, with no WARN and no failure-ledger entry. A
+`pending_messages` row with the **same** `message_id` holds the missing
+confirmations and nothing else (no source, no execution, `last_flushed_version
+= 0`), and is never flushed.
+
+**Root cause:** `LogStream` catchup scans *downward* in `batch_size` windows.
+A message whose source is already buffered finalizes as soon as the batch with
+its execution (and last signature) is processed; maintenance flushes it,
+deletes its pending row and evicts it from hot. The next, older batch then
+delivers the earlier signatures: `restore` misses (the pending row is gone),
+`alter` creates a fresh default entry under the same key, and `consolidate`
+returns `None` forever because it has no source. Realtime scans forward, so
+signatures always precede the execution there — which is why "no new orphans
+in the last N days" is not evidence the bug is inactive.
+
+**Evidence (xDai mainnet, 2026-09-29, `batch_size = 500`):** 297 Eth→Gno
+messages (plus one legacy hash-keyed one) had 1–3 of 4 confirmations; for every
+one, stored + orphaned signatures sum to exactly 4 distinct validators, every
+orphaned signature is strictly older than every stored one, and the split
+between them falls on a batch boundary with one common residue mod 500 across
+all 297. Gno→Eth is immune by construction: its source is the *oldest* Gnosis
+event, so backward catchup delivers it last and the message cannot finalize
+before its signatures arrive.
+
+**Rule:** never delete `pending_messages` rows merely because a finalized
+`crosschain_messages` row with the same key exists — such a row may be the only
+copy of late evidence — unless the same transaction has just attached its
+entire content (the xDai confirmation-only case). Any late arrival after
+finalization (backward catchup, a failure-ledger retry of an old range,
+arbitrary in-batch dispatch order racing a maintenance cycle) hits the same
+path.
+
+**Reproducing it on a stand:** a restricted recent range with a small
+`INTERCHAIN_INDEXER__XDAI_INDEXER__BATCH_SIZE` multiplies batch boundaries; the
+orphan check is "a `pending_messages` row that joins a `crosschain_messages` row
+on `(message_id, bridge_id)` and whose payload holds only
+`validator_confirmations`". Before the fix a 3-day mainnet range at
+`batch_size = 20` left 2 such rows; after it, none. At the production-like
+`batch_size = 500`, messages initiated 2026-04-15 – 2026-09-28 compared across two
+full catch-ups: 280 of 1917 Eth→Gno messages under-counted (575 orphaned
+signatures) before, all 1917 at 4 confirmations after, with 544 late signatures
+attached and identical message counts.
+
+**Also confirmed on AMB production (`bridge_id = 1`, 2026-09-29):** 1221
+confirmation-only rows with the same three invariants (totals of exactly 4, no
+duplicate validators, orphans strictly older). AMB adds a benign sibling shape:
+because an execution alone finalizes an AMB message (`build_destination_only`),
+a source processed *after* that creates a `pending_messages` row with source +
+confirmations that is flushed as `Partial` (its confirmations *are* stored) and
+then lingers forever — that is most of the ~31k leftover rows for completed
+messages.
+
+## AMB: ~7.7k Zero-Confirmation Messages With A Stored Source — Cause Not Yet Identified
+
+**Status: open (2026-09-29).** Not explained by the backward-catchup orphaning
+above (no `pending_messages` row holds their confirmations) and **not by a
+restart** — the service ran without one from its first deploy. Nearly all were
+processed in the first ~3 h after that deploy (initial catchup).
+
+**Shapes on AMB production (`bridge_id = 1`):**
+
+- 6579 Eth→Gno: `completed`, `src_tx_hash` set, zero confirmations, no pending
+  row. On-chain the 4th `SignedForAffirmation` shares the execution's
+  transaction (verified for recent executions and for 2025-02-19), so the
+  signatures exist and are in scan range.
+- 1088 Gno→Eth: `completed`, and a pending row with source only — no
+  confirmations and no `CollectedSignatures`.
+- Losses cluster by chain day (e.g. 2025-02-19: 214 of 277 Eth→Gno executions).
+
+**Ruled out so far:** restart; configured ABI/version windows (one window per
+contract, all `SignedFor*` events declared); lookup removal outside the
+`messageId`-collision paths (both collision paths WARN, and a collision rewrites
+the row as destination-only, which these rows are not); a `messageHash`
+mismatch — for 60 sampled 2025-02-19 Eth→Gno executions the `SignedForAffirmation`
+hash equals `keccak256(encodedData)` of the Foreign `UserRequestForAffirmation`.
+
+**Code facts found on the way (verified, impact on this population unproven):**
+
+- `amb::consolidation::build_destination_only` always returns empty
+  `amb_confirmations`, ignoring `message.validator_confirmations`, and the
+  collision branch sets `replace_existing`, whose delete cascades to stored
+  confirmations.
+- `message_hash_lookup` / `pending_message_hash_events` are process-local
+  `DashMap`s, never persisted or rebuilt. A restart *would* lose them, and
+  cursors do not protect queued events or cold-tier sources (`hot_ttl` default
+  10 s). This is a latent risk, not the cause of the numbers above.
+- `evm::group_logs_by_transaction` returns a `HashMap`, so transactions inside
+  one batch are dispatched in arbitrary order, not block order.
+
+## Resolved-Key Hot Eviction Must Happen At Most Once Per Key Per Cycle
+
+**Symptom:** none visible — evidence that was never persisted silently
+disappears from the hot tier.
+
+**Root cause:** `evict_resolved_keys` removes an entry with
+`remove_if(key, |item| item.version == planned_version)`. That CAS guards one
+entry *instance* against modification, not against re-creation. After a
+successful first removal (the Stale/Finalized path or the other resolution
+channel), a concurrent `alter` can re-create the key from a cold miss; a fresh
+default restarts at version 0 and reaches 1 after one mutation, which can equal
+a late entry's planning-time version. A second `remove_if` in the same cycle
+would then evict it.
+
+**Rule:** `maintenance::resolved_hot_evictions` selects each resolved key at
+most once and never a key already in `plan.hot_evictions`. The unit test
+`resolved_hot_evictions_skips_already_evicted_and_dedupes` fails if that guard
+is removed. Do not route resolved keys through `remove_from_hot_if_unchanged`
+either: its `Counts` bookkeeping is for the Stale/Finalized reasons only.
+
+## xDai `holds_only_confirmations` Must Classify Every `Message` Field
+
+**Symptom:** a new field added to `xdai::types::Message` does not compile in
+`xdai/consolidation.rs`.
+
+**Why that is intended:** `holds_only_confirmations` destructures `Message`
+exhaustively, without `..`. It decides whether the detached-confirmation channel
+may resolve and **evict** an entry after attaching its confirmations, so a field
+that carries evidence but is not checked would let real evidence be dropped.
+Classify the new field explicitly: identity metadata (`identity`, `direction`,
+`chain_ids` — ignored), the payload (`validator_confirmations`), or evidence
+that must be empty. Add a case to
+`detached_confirmations_is_confirmation_only_iff_no_evidence`.
+
+## xDai Gno→Eth `messageHash` Correlation State Is Process-Local
+
+`xdai::indexer` keeps `message_hash_lookup` (filled when
+`UserRequestForSignature` is processed) and `pending_message_hash_events`
+(`SignedForUserRequest` / `CollectedSignatures` that arrived before their
+source) only in memory; they are never persisted or rebuilt. A restart loses
+both. Cursors do not protect them: queued events are not buffer entries, and a
+source entry stops holding the cursor once offloaded to the cold tier
+(`hot_ttl` defaults to 10 s). So a restart between a Gno→Eth source and its
+signatures can lose those signatures and the `ReadyToClaim` transition;
+`Completed` still arrives through `RelayedMessage`. No such loss has been
+observed on xDai: a crash-and-restart in the middle of a stand catch-up and a
+restart-free full mainnet run both kept every Gno→Eth message at 4
+confirmations. Kept out of ADR-015 deliberately (no evidence); the likely fix,
+if it is ever needed, is rebuilding the lookup from `pending_messages`
+source payloads at startup.
+
+## Autoscout L1 Stats and Frontend Must Use the Same Interchain Slice
+
+For a shared Avalanche indexer, each L1's `stats` in interchain mode applies
+`STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`, `COUNTERPARTY_CHAIN_IDS` and
+`BRIDGE_IDS` when materializing charts into its own DB; it cannot change that
+slice at read time. The frontend queries the shared indexer directly for
+messages and transfers, so it must pass the same home chain, permitted
+counterparties, bridge IDs, and `include_unindexed_chains` setting. On the
+frontend main commit `dec85c8`, API resource declarations omit
+`counterparty_chain_ids`, and the scope resolver omits `bridge_ids` when a focal
+`home_chain_id` is present. Until the frontend covers the full slice, it can
+show routes outside the paid/plugin scope while stats shows only the L1's
+configured charts. The old compose's `STATS__INTERCHAIN_PRIMARY_ID` is also
+deprecated. Check the deployed image capabilities, not just the presence of
+env names in `docker/docker-compose.yml`. See
+`docs/autoscout-interchain-integration.md`, `stats/stats-server/src/settings.rs`
+in the monorepo, and the frontend `src/api/utils/scope-filters.ts` and
+`src/api/resources/services/interchain-indexer.ts`.
+
+## Chain Icon Is Optional Even Though Runtime `ChainConfig` Uses `String`
+
+`ChainConfig.icon` accepts an absent or JSON `null` value and normalizes it to
+an empty string. Its conversion to the `chains` active model stores that empty
+string as SQL `NULL`. An Autoscout L1 onboarding therefore does not need an
+icon URL or `INTERCHAIN_INDEXER_CHAINS__<ID>__ICON`; passing an explicit URL
+remains supported. See `interchain-indexer-server/src/config.rs`.

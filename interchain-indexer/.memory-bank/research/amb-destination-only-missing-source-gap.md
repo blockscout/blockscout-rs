@@ -397,6 +397,23 @@ Update this note if:
   should not be conflated with, or used as evidence for, the two findings
   above.
 
+  **Caveat (2026-09-29, from the xDai mainnet investigation):** the "cleanup
+  failed historically" explanation above is unverified, and a mechanism that
+  produces exactly this shape is now confirmed for xDai — backward catchup
+  delivers a finalized message's older confirmations in a later batch, which
+  re-creates a `pending_messages` row under the same key (see gotchas.md,
+  *Backward Catchup Orphans Confirmations Of Messages Finalized In A Later
+  Batch*). It also explains why no *recent* orphans appear: realtime scans
+  forward. Inspect the payloads of these AMB rows (confirmation-only?) before
+  running the `DELETE` suggested above — if they match, they are the only copy
+  of the lost confirmations.
+  **Confirmed on production (2026-09-29):** 1221 rows are confirmation-only
+  orphans (backfilled by SQL); the ~31k source+confirmations rows are benign —
+  their confirmations were stored when they flushed as `Partial`. A larger loss
+  (~7.7k zero-confirmation messages) is unrelated to leftover rows and its
+  cause is still open: see gotchas.md, *AMB: ~7.7k Zero-Confirmation Messages
+  With A Stored Source*.
+
 ## Production Evidence
 
 Both tables below are keyed by `native_id` (`0x` + hex, matching the

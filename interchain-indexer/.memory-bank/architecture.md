@@ -81,6 +81,12 @@ pub trait Consolidate: Clone + Send + Sync + 'static + Serialize + for<'de> Dese
     fn destination_executions(&self, _key: &Key) -> Vec<DestinationExecution> {
         Vec::new()
     }
+
+    /// Confirmations held by a dirty entry whose `consolidate` returned
+    /// `Ok(None)`. Defaulted to `None`; only xDai implements it.
+    fn detached_confirmations(&self, _key: &Key) -> Option<DetachedConfirmations> {
+        None
+    }
 }
 ```
 
@@ -94,6 +100,21 @@ reads the stored row and decides. It returns a plain `Vec` because it runs
 the whole bridge on every cycle. Protocols that do not participate pay nothing:
 the default returns an empty vector and the reconciliation functions return
 before their first query. See ADR-014.
+
+The third method is a second channel of the same kind. A validator signature can
+arrive after its message was finalized and evicted (backward catch-up delivers
+older signatures in a later batch; a failure-ledger retry can replay an old
+range). It then lands in a fresh entry under the same key that never
+consolidates. `plan_maintenance` asks every dirty `NotReady` entry for its
+confirmations, and `persistence::attach_detached_confirmations` — after the
+flush, before pending cleanup, inside the same transaction — checks with a
+`SELECT` which keys already have a `crosschain_messages` row, inserts their
+confirmations `ON CONFLICT DO NOTHING`, and resolves (clears from
+`pending_messages`, CAS-evicts once) only entries that held nothing but
+confirmations. Keys without a stored row stay buffered, so it never creates a
+phantom message. Confirmation semantics are message-level: a row is a validator
+whose signature belongs to an executed signing bucket that resolved to that
+message, canonical or second execution, one row per validator. See ADR-015.
 
 Three outcomes, not two: `Ok(None)` (not yet consolidatable), `Ok(Some(.. is_final:
 false ..))` (partial — flushed but kept in the buffer), `Ok(Some(.. is_final: true

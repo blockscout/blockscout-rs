@@ -9,12 +9,14 @@ use interchain_indexer_entity::{
 };
 use itertools::Itertools;
 use sea_orm::{
-    ActiveValue, ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter,
+    ActiveValue, ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, QuerySelect,
     sea_query::{Expr, OnConflict},
 };
 use std::collections::HashSet;
 
-use super::{BufferItem, Consolidate, ConsolidatedMessage, DestinationExecution, Key};
+use super::{
+    BufferItem, Consolidate, ConsolidatedMessage, DestinationExecution, DetachedConfirmations, Key,
+};
 use crate::{
     bulk::{self, batched_upsert, run_in_chunks},
     message_buffer::cursor::{BridgeId, Cursor, CursorBlocksBuilder, Cursors},
@@ -813,6 +815,96 @@ pub(super) fn token_keys_from_flushed_for_enrichment(
     out.into_iter().collect()
 }
 
+/// Attaches confirmations of entries that cannot consolidate on their own to
+/// already-stored `crosschain_messages` rows with the same key, and returns the
+/// keys whose entries held nothing else (`confirmation_only`): safe to clear
+/// from `pending_messages` and evict from hot once this transaction commits.
+///
+/// Existence is checked with a `SELECT` in this same transaction -- never by
+/// letting the confirmations FK reject an insert, which would poison the whole
+/// maintenance transaction. A key without a stored row is an expected skip, not
+/// an error: its entry stays buffered. The decision does not look at the stored
+/// row's status: the entry's entire content becomes durable here, and later
+/// evidence under the same key unions with it through `DO NOTHING`.
+///
+/// Returns immediately, with zero statements, when `detached` is empty --
+/// Hard Constraint 3 (AMB/Avalanche's path must stay bit-for-bit unchanged).
+pub(super) async fn attach_detached_confirmations(
+    tx: &DatabaseTransaction,
+    detached: &[(Key, DetachedConfirmations)],
+) -> Result<Vec<Key>, DbErr> {
+    if detached.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut pks: Vec<(i64, i32)> = detached
+        .iter()
+        .map(|(key, _)| (key.message_id, key.bridge_id as i32))
+        .collect();
+    pks.sort_unstable();
+    pks.dedup();
+
+    // Row-valued `IN`: chunk by `ROW_IN_KEY_CHUNK`, not by bind width, and
+    // hand-roll the accumulator loop -- `run_in_batches`'s closure cannot lend
+    // out a mutable accumulator (`.memory-bank/rules/database.md`).
+    let mut stored: HashSet<(i64, i32)> = HashSet::new();
+    for batch in pks.chunks(bulk::ROW_IN_KEY_CHUNK) {
+        let rows = crosschain_messages::Entity::find()
+            .select_only()
+            .column(crosschain_messages::Column::Id)
+            .column(crosschain_messages::Column::BridgeId)
+            .filter(
+                Expr::tuple([
+                    Expr::col(crosschain_messages::Column::Id).into(),
+                    Expr::col(crosschain_messages::Column::BridgeId).into(),
+                ])
+                .in_tuples(batch.iter().copied()),
+            )
+            .into_tuple::<(i64, i32)>()
+            .all(tx)
+            .await?;
+        stored.extend(rows);
+    }
+
+    let mut rows: Vec<amb_messages_confirmations::ActiveModel> = Vec::new();
+    let mut resolved: Vec<Key> = Vec::new();
+    for (key, entry) in detached {
+        let pk = (key.message_id, key.bridge_id as i32);
+        if !stored.contains(&pk) {
+            continue;
+        }
+        debug_assert!(
+            entry.confirmations.iter().all(|model| matches!(
+                (&model.message_id, &model.bridge_id),
+                (ActiveValue::Set(message_id), ActiveValue::Set(bridge_id))
+                    if (*message_id, *bridge_id) == pk
+            )),
+            "detached confirmations must carry the key of the entry that reported them"
+        );
+        rows.extend(entry.confirmations.iter().cloned());
+        if entry.confirmation_only {
+            resolved.push(*key);
+        }
+    }
+
+    batched_upsert(tx, &rows, amb_messages_confirmations_on_conflict()).await?;
+
+    // Only when something was attached: during catch-up most cycles carry
+    // candidates whose message is not stored yet, which is not news.
+    if !rows.is_empty() {
+        tracing::debug!(
+            bridge_id = detached[0].0.bridge_id,
+            candidate_keys = detached.len(),
+            stored_keys = stored.len(),
+            attached_confirmations = rows.len(),
+            resolved_keys = resolved.len(),
+            "attached detached confirmations to stored messages"
+        );
+    }
+
+    Ok(resolved)
+}
+
 pub(super) async fn remove_finalized_from_pending(
     tx: &DatabaseTransaction,
     keys_to_remove_from_pending: &[Key],
@@ -944,20 +1036,21 @@ pub(super) async fn upsert_cursors(
 mod tests {
     use chrono::{DateTime, NaiveDateTime};
     use interchain_indexer_entity::{
-        amb_message_anomalies, bridges, chains, crosschain_messages, crosschain_transfers,
-        indexer_checkpoints, pending_messages,
+        amb_message_anomalies, amb_messages_confirmations, bridges, chains, crosschain_messages,
+        crosschain_transfers, indexer_checkpoints, pending_messages,
         sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
         stats_assets,
     };
     use sea_orm::{
-        ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait,
-        prelude::BigDecimal,
+        ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
+        QueryOrder, TransactionTrait, prelude::BigDecimal,
     };
 
     use super::{
-        BridgeId, ConsolidatedMessage, DestinationExecution, Key,
-        apply_destination_execution_reconciliation, delete_replaced_messages,
-        flush_to_final_storage, reconcile_destination_executions, remove_finalized_from_pending,
+        BridgeId, ConsolidatedMessage, DestinationExecution, DetachedConfirmations, Key,
+        apply_destination_execution_reconciliation, attach_detached_confirmations,
+        delete_replaced_messages, flush_to_final_storage, reconcile_destination_executions,
+        remove_finalized_from_pending,
     };
     use crate::{InterchainDatabase, test_utils::init_db};
 
@@ -2569,5 +2662,281 @@ mod tests {
                 .is_some(),
             "pending_messages must not be cleared for a key that was not resolved"
         );
+    }
+
+    // --- `attach_detached_confirmations` (xdai-lost-confirmations) ---
+
+    /// A confirmation row for `(message_id, BRIDGE_ID)` by validator
+    /// `[validator; 20]`, naming transaction `[tx_byte; 32]`.
+    fn confirmation_model(
+        message_id: i64,
+        validator: u8,
+        tx_byte: u8,
+    ) -> amb_messages_confirmations::ActiveModel {
+        amb_messages_confirmations::ActiveModel {
+            message_id: ActiveValue::Set(message_id),
+            bridge_id: ActiveValue::Set(BRIDGE_ID),
+            validator_address: ActiveValue::Set(vec![validator; 20]),
+            tx_hash: ActiveValue::Set(vec![tx_byte; 32]),
+            block_number: ActiveValue::Set(100),
+            block_timestamp: ActiveValue::Set(ts(3_000)),
+            created_at: ActiveValue::NotSet,
+            updated_at: ActiveValue::NotSet,
+        }
+    }
+
+    fn detached_for(
+        message_id: i64,
+        validators: &[u8],
+        confirmation_only: bool,
+    ) -> (Key, DetachedConfirmations) {
+        (
+            Key::new(message_id, BRIDGE_ID as BridgeId),
+            DetachedConfirmations {
+                confirmations: validators
+                    .iter()
+                    .map(|validator| confirmation_model(message_id, *validator, 0xC0))
+                    .collect(),
+                confirmation_only,
+            },
+        )
+    }
+
+    /// Confirmation rows of `message_id`, ordered by validator address.
+    async fn load_confirmations(
+        db: &InterchainDatabase,
+        message_id: i64,
+    ) -> Vec<amb_messages_confirmations::Model> {
+        amb_messages_confirmations::Entity::find()
+            .filter(amb_messages_confirmations::Column::MessageId.eq(message_id))
+            .filter(amb_messages_confirmations::Column::BridgeId.eq(BRIDGE_ID))
+            .order_by_asc(amb_messages_confirmations::Column::ValidatorAddress)
+            .all(db.db.as_ref())
+            .await
+            .unwrap()
+    }
+
+    async fn count_all_confirmations(db: &InterchainDatabase) -> usize {
+        amb_messages_confirmations::Entity::find()
+            .all(db.db.as_ref())
+            .await
+            .unwrap()
+            .len()
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_attach_detached_confirmations_writes_rows_and_resolves_confirmation_only_key() {
+        let test_db = init_db("attach_writes_and_resolves").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+        flush(&db, destination_only_completed()).await;
+
+        let detached = vec![detached_for(MESSAGE_ID, &[1, 2], true)];
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        let resolved = attach_detached_confirmations(&tx, &detached).await.unwrap();
+        tx.commit().await.unwrap();
+
+        assert_eq!(resolved, vec![Key::new(MESSAGE_ID, BRIDGE_ID as BridgeId)]);
+        let rows = load_confirmations(&db, MESSAGE_ID).await;
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.validator_address.clone())
+                .collect::<Vec<_>>(),
+            vec![vec![1u8; 20], vec![2u8; 20]]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_attach_detached_confirmations_with_other_evidence_writes_rows_but_does_not_resolve()
+     {
+        let test_db = init_db("attach_other_evidence_not_resolved").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+        flush(&db, destination_only_completed()).await;
+
+        let detached = vec![detached_for(MESSAGE_ID, &[1, 2], false)];
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        let resolved = attach_detached_confirmations(&tx, &detached).await.unwrap();
+        tx.commit().await.unwrap();
+
+        assert!(
+            resolved.is_empty(),
+            "an entry with other evidence is still waiting for something else"
+        );
+        assert_eq!(load_confirmations(&db, MESSAGE_ID).await.len(), 2);
+    }
+
+    /// No stored `crosschain_messages` row: an expected skip, not an error --
+    /// the confirmations FK must never be the thing that says no, because a
+    /// failed statement would poison the whole maintenance transaction.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_attach_detached_confirmations_for_unstored_key_writes_nothing_and_keeps_tx_usable()
+     {
+        let test_db = init_db("attach_unstored_key_keeps_tx_usable").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        let detached = vec![detached_for(MESSAGE_ID, &[1, 2], true)];
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        let resolved = attach_detached_confirmations(&tx, &detached).await.unwrap();
+        assert_eq!(resolved, Vec::<Key>::new());
+
+        // A poisoned transaction (SQLSTATE 25P02) would fail this.
+        let rows = crosschain_messages::Entity::find().all(&tx).await.unwrap();
+        assert!(rows.is_empty());
+        tx.commit().await.unwrap();
+
+        assert_eq!(count_all_confirmations(&db).await, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_attach_detached_confirmations_keeps_first_stored_row_for_same_validator() {
+        let test_db = init_db("attach_keeps_first_stored_row").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+        flush(&db, destination_only_completed()).await;
+
+        // Validator 1 is already stored, naming transaction A (0xA0).
+        amb_messages_confirmations::Entity::insert(confirmation_model(MESSAGE_ID, 1, 0xA0))
+            .exec(db.db.as_ref())
+            .await
+            .unwrap();
+
+        // The same validator arrives again naming transaction B (0xB0).
+        let detached = vec![(
+            Key::new(MESSAGE_ID, BRIDGE_ID as BridgeId),
+            DetachedConfirmations {
+                confirmations: vec![confirmation_model(MESSAGE_ID, 1, 0xB0)],
+                confirmation_only: true,
+            },
+        )];
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        attach_detached_confirmations(&tx, &detached).await.unwrap();
+        tx.commit().await.unwrap();
+
+        let rows = load_confirmations(&db, MESSAGE_ID).await;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].tx_hash,
+            vec![0xA0u8; 32],
+            "DO NOTHING keeps the first stored row"
+        );
+    }
+
+    /// The attach and the pending cleanup that consumes its result are one
+    /// unit: a rollback undoes both.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_attach_and_pending_cleanup_roll_back_together() {
+        let test_db = init_db("attach_and_pending_cleanup_roll_back").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+        flush(&db, destination_only_completed()).await;
+        db.upsert_pending_message(pending_messages::ActiveModel {
+            message_id: ActiveValue::Set(MESSAGE_ID),
+            bridge_id: ActiveValue::Set(BRIDGE_ID),
+            payload: ActiveValue::Set(serde_json::json!({})),
+            created_at: ActiveValue::NotSet,
+        })
+        .await
+        .unwrap();
+
+        let detached = vec![detached_for(MESSAGE_ID, &[1, 2], true)];
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        let resolved = attach_detached_confirmations(&tx, &detached).await.unwrap();
+        assert_eq!(resolved.len(), 1);
+        remove_finalized_from_pending(&tx, &resolved).await.unwrap();
+        tx.rollback().await.unwrap();
+
+        assert_eq!(count_all_confirmations(&db).await, 0);
+        assert!(
+            db.get_pending_message(MESSAGE_ID, BRIDGE_ID)
+                .await
+                .unwrap()
+                .is_some(),
+            "the rolled-back cleanup must leave the pending row in place"
+        );
+    }
+
+    /// Over `ROW_IN_KEY_CHUNK` stored keys among a cohort that overflows the
+    /// planner stack as a single row-valued `IN`: the read is chunked and its
+    /// result accumulated across chunks.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_attach_detached_confirmations_cohort_over_stack_depth() {
+        let test_db = init_db("attach_cohort_over_stack_depth").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        let stored_count = (crate::bulk::ROW_IN_KEY_CHUNK + 1) as i64;
+        let seeded: Vec<ConsolidatedMessage> = (1..=stored_count)
+            .map(|id| {
+                let mut entry = destination_only_completed();
+                entry.message.id = ActiveValue::Set(id);
+                entry
+            })
+            .collect();
+        let conn = db.db.as_ref();
+        let seed_tx = conn.begin().await.unwrap();
+        flush_to_final_storage(&seed_tx, seeded).await.unwrap();
+        seed_tx.commit().await.unwrap();
+
+        let detached: Vec<(Key, DetachedConfirmations)> = (1..=OVER_STACK_DEPTH_COHORT)
+            .map(|id| detached_for(id, &[1], true))
+            .collect();
+        let tx = conn.begin().await.unwrap();
+        let mut resolved = attach_detached_confirmations(&tx, &detached).await.unwrap();
+        tx.commit().await.unwrap();
+
+        resolved.sort_by_key(|key| key.message_id);
+        let expected: Vec<Key> = (1..=stored_count)
+            .map(|id| Key::new(id, BRIDGE_ID as BridgeId))
+            .collect();
+        assert_eq!(
+            resolved, expected,
+            "exactly the stored keys resolve, across the chunk boundary"
+        );
+        assert_eq!(
+            count_all_confirmations(&db).await,
+            stored_count as usize,
+            "one confirmation row per stored key, none for the unstored ones"
+        );
+    }
+
+    /// Hard Constraint 3: an empty channel costs zero statements. Proven with
+    /// an aborted transaction, in which any further statement fails.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_attach_detached_confirmations_empty_input_issues_no_statement() {
+        let test_db = init_db("attach_empty_input_no_statement").await;
+        let db = InterchainDatabase::new(test_db.client());
+
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        assert!(
+            tx.execute_unprepared("SELECT 1/0").await.is_err(),
+            "the probe statement must abort the transaction"
+        );
+
+        assert_eq!(
+            attach_detached_confirmations(&tx, &[]).await.unwrap(),
+            Vec::<Key>::new(),
+            "empty input must return before its first statement"
+        );
+
+        // Probe sanity check: non-empty input does issue a statement, and so
+        // fails in the aborted transaction.
+        let one = vec![detached_for(MESSAGE_ID, &[1], true)];
+        assert!(attach_detached_confirmations(&tx, &one).await.is_err());
+        tx.rollback().await.unwrap();
     }
 }

@@ -75,7 +75,9 @@ reasoning.
 
 **A classic xDai erc-to-native bridge does exist on Sepolia ↔ Chiado.** It is a
 real, low-traffic deployment: 4 nonce-era Ethereum→Gnosis deposits and ~25
-legacy-era ones, a single validator, and a mock 18-decimal `DAI` token minted
+legacy-era ones, a threshold of one signature (`requiredSignatures() = 1`) with a
+validator set that rotated over time — at least three distinct signers
+(`0x725b…`, `0xb156…`, `0xc0a3…`) across nonces 0–3 — and a mock 18-decimal `DAI` token minted
 for the purpose. Both sides are `EternalStorageProxy` and both implementations
 are the upstream `tokenbridge-contracts` sources.
 

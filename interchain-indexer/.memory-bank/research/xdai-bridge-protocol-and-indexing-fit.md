@@ -752,9 +752,13 @@ The gap here is unbounded: this one was 44 days.
 buffer entry, but a confirmation alone cannot create a published Initiated
 message or transfer: consolidation returns None until sufficient evidence
 arrives. Hash-based confirmations emit WARN and use normal pending offload/restore.
-There is no separate orphan-confirmation insert or new queue. An orphan may
-remain pending indefinitely; late confirmations need not reach the technical
-confirmations table. This limitation is accepted, with manual reindexing available.
+There is no separate orphan-confirmation insert or new queue. A *standalone*
+hash-keyed confirmation (no hash-keyed completion of the same `bytes32` in its
+transaction — the never-executed bucket) may remain pending indefinitely; that
+is accepted. Since ADR-015 a hash-keyed confirmation that shares its transaction
+with a hash-keyed completion follows the completion's canonical key, and a
+confirmation arriving after its message was stored is attached to that row by
+the maintenance transaction, so neither is orphaned any more.
 
 Legacy completions reconstruct from the referenced source receipt/block even
 below scan floors. A non-recognized old source-event topic does not block a
