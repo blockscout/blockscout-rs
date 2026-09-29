@@ -63,3 +63,4 @@ blockscout-service-launcher = { workspace = true, features = [
 interchain-indexer-migration = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
+sea-orm-migration = { workspace = true }

@@ -315,7 +315,6 @@ async fn test_icm_and_ictt_are_indexed() -> Result<()> {
     let transfer = &transfers[0];
     assert_eq!(transfer.message_id, message.id);
     assert_eq!(transfer.bridge_id, bridge_id as i32);
-    // assert_eq!(transfer.r#type, Some(TransferType::Erc20));
     assert_eq!(transfer.token_src_chain_id, chain_id_src as i64);
     assert_eq!(transfer.token_dst_chain_id, chain_id_dest as i64);
 

@@ -1,5 +1,5 @@
-chains_config = "config/avalanche/chains.json"
-bridges_config = "config/avalanche/bridges.json"
+chains_config = "config/full-mainnet/chains.json"
+bridges_config = "config/full-mainnet/bridges.json"
 
 [token_info]
 onchain_retry_interval = 10

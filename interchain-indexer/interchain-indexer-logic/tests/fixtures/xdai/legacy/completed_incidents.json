@@ -1,0 +1,78 @@
+{
+  "provenance": {
+    "retrieved_at": "2026-09-17",
+    "ethereum_rpc": "https://ethereum-rpc.publicnode.com",
+    "gnosis_rpc": "https://rpc.gnosischain.com",
+    "method": "eth_getTransactionReceipt + eth_getBlockByNumber",
+    "note": "Only fields needed by deterministic tests are retained. Hashes, blocks, timestamps, senders, recipients, values, proxy addresses, topics and log indexes are verbatim RPC results."
+  },
+  "incidents": [
+    {
+      "direction": "gno_to_eth",
+      "source_hash": "0x35323f04dc3141d74974922e41a30050322438deb16afdf1ae6abe200ca7cede",
+      "source_block": 39557691,
+      "source_block_hash": "0xfcf8a73bcddd3811b39aeb97bf60e3f0fb36dcebfef0db3565b6a05521b72fb0",
+      "source_timestamp": 1744646380,
+      "sender": "0x35f1bae79c4e74ee25354d326b42f809744f7e18",
+      "source_proxy": "0x7301cfa0e1756b71869e93d4e4dca5c7d0eb0aa6",
+      "source_topic": "0x127650bcfb0ba017401abe4931453a405140a8fd36fece67bae2db174d3fdd63",
+      "source_log_index": 79,
+      "recipient": "0x35f1bae79c4e74ee25354d326b42f809744f7e18",
+      "source_value": "49240000000000000000",
+      "destination_hash": "0xa19fd5f4a65b88842de3155eacceb0527b3fbf8da95bebd921f2b2ee605ce0a4",
+      "destination_block": 22275062,
+      "destination_timestamp": 1744728311,
+      "destination_value": "49240000000000000000"
+    },
+    {
+      "direction": "gno_to_eth",
+      "source_hash": "0x856080e1c5d746721d684e44d6efbc700dbd199153e7e7f6d700ebeb0834c9e2",
+      "source_block": 39479046,
+      "source_block_hash": "0xb8d92cda5d98cfb0b8f17768349cb792cc5488a75215b98a6f5eff0f4050d9f4",
+      "source_timestamp": 1744246095,
+      "sender": "0x0b44a4af57697ca3c9ea2ce35658c6216a51ec2d",
+      "source_proxy": "0x7301cfa0e1756b71869e93d4e4dca5c7d0eb0aa6",
+      "source_topic": "0x127650bcfb0ba017401abe4931453a405140a8fd36fece67bae2db174d3fdd63",
+      "source_log_index": 39,
+      "recipient": "0x0b44a4af57697ca3c9ea2ce35658c6216a51ec2d",
+      "source_value": "29000000000000000000",
+      "destination_hash": "0x95ad778c38a8cbe72d7e7b7fcbc0b1ef9da2a50d28a9514c23830116aa25ae70",
+      "destination_block": 22310932,
+      "destination_timestamp": 1745160767,
+      "destination_value": "29000000000000000000"
+    },
+    {
+      "direction": "gno_to_eth",
+      "source_hash": "0xcb5e01ab3c1362ed19ef0a6e830f164de67f3faccd65940fee0740a94559a71d",
+      "source_block": 33842158,
+      "source_block_hash": "0x8c8faac19d083ee528db7332315fd9b34edc30d35e9ec448d807516a4698a693",
+      "source_timestamp": 1715182545,
+      "sender": "0x1b7140e2b48f4f4ade6e11d60d48781116f13e18",
+      "source_proxy": "0x7301cfa0e1756b71869e93d4e4dca5c7d0eb0aa6",
+      "source_topic": "0x127650bcfb0ba017401abe4931453a405140a8fd36fece67bae2db174d3fdd63",
+      "source_log_index": 1020,
+      "recipient": "0x1b7140e2b48f4f4ade6e11d60d48781116f13e18",
+      "source_value": "29550000000000000000",
+      "destination_hash": "0xd60e1dabc383f582fa2073286d683d88bd6993719bf59bebe5ffb965d3c02f6b",
+      "destination_block": 22339403,
+      "destination_timestamp": 1745504183,
+      "destination_value": "29550000000000000000"
+    },
+    {
+      "direction": "eth_to_gno_plain",
+      "source_hash": "0x37b3752adf6aaeac9e4126418c2b8e5fb1100b0a374c1691c6c657c4a02275d3",
+      "source_block": 22027902,
+      "source_block_hash": "0x9533602bcf1db1af649d103be563a6e4deba5d8b54fe113db5e4af005cd3cb55",
+      "source_timestamp": 1741747715,
+      "sender": "0x2f137840ff9cd1608a69ed83b7c1aa013f39a02a",
+      "source_proxy": "0x4aa42145aa6ebf72e164c9bbc74fbd3788045016",
+      "source_bridge_event": null,
+      "dai_transfer_value": "1460000000000000010190",
+      "recipient": "0x2f137840ff9cd1608a69ed83b7c1aa013f39a02a",
+      "destination_hash": "0x66f605d4f48050bd2817cb342bca205279005a87e034abbbf73f2e1fce8afca8",
+      "destination_block": 39738154,
+      "destination_timestamp": 1745567120,
+      "destination_value": "1460000000000000010190"
+    }
+  ]
+}

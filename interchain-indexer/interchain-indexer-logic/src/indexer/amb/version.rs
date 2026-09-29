@@ -30,6 +30,14 @@ pub(crate) struct AmbGrammar {
     pub(crate) header_layout: HeaderLayout,
     pub(crate) foreign_events: &'static [&'static str],
     pub(crate) home_events: &'static [&'static str],
+    /// `(event name, canonical Solidity signature)` for the Foreign side.
+    /// The expected `topic0` is `keccak256(signature)` — see
+    /// `abi::assert_canonical_topics`. xDai's proxy events share these exact
+    /// names, so name-set inference alone cannot tell the two protocols
+    /// apart; this is what does.
+    pub(crate) foreign_canonical_topics: &'static [(&'static str, &'static str)],
+    /// Home-side counterpart of [`Self::foreign_canonical_topics`].
+    pub(crate) home_canonical_topics: &'static [(&'static str, &'static str)],
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -37,6 +45,40 @@ pub(crate) struct MediatorGrammar {
     pub(crate) version: MediatorVersion,
     pub(crate) events: &'static [&'static str],
 }
+
+static AMB_V6_FOREIGN_CANONICAL_TOPICS: &[(&str, &str)] = &[
+    (
+        "UserRequestForAffirmation",
+        "UserRequestForAffirmation(bytes32,bytes)",
+    ),
+    (
+        "RelayedMessage",
+        "RelayedMessage(address,address,bytes32,bool)",
+    ),
+];
+
+static AMB_V6_HOME_CANONICAL_TOPICS: &[(&str, &str)] = &[
+    (
+        "UserRequestForSignature",
+        "UserRequestForSignature(bytes32,bytes)",
+    ),
+    (
+        "AffirmationCompleted",
+        "AffirmationCompleted(address,address,bytes32,bool)",
+    ),
+    (
+        "SignedForAffirmation",
+        "SignedForAffirmation(address,bytes32)",
+    ),
+    (
+        "SignedForUserRequest",
+        "SignedForUserRequest(address,bytes32)",
+    ),
+    (
+        "CollectedSignatures",
+        "CollectedSignatures(address,bytes32,uint256)",
+    ),
+];
 
 static AMB_V6_GRAMMAR: AmbGrammar = AmbGrammar {
     version: AmbVersion::V6,
@@ -49,6 +91,8 @@ static AMB_V6_GRAMMAR: AmbGrammar = AmbGrammar {
         "SignedForUserRequest",
         "CollectedSignatures",
     ],
+    foreign_canonical_topics: AMB_V6_FOREIGN_CANONICAL_TOPICS,
+    home_canonical_topics: AMB_V6_HOME_CANONICAL_TOPICS,
 };
 
 static MEDIATOR_V6_GRAMMAR: MediatorGrammar = MediatorGrammar {

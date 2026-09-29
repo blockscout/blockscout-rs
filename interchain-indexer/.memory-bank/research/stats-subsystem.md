@@ -168,7 +168,13 @@ Operationally, this affects:
 
 - `crosschain_messages.stats_processed`
 - `crosschain_transfers.stats_processed`
-- `crosschain_transfers.stats_asset_id`
+- `crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id` (split from
+  a single `stats_asset_id` column by
+  [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md); equal
+  for a `mirror` transfer, independent for a `conversion` one)
+- `crosschain_transfers.asset_linkage` (`mirror` / `conversion`, nullable,
+  write-once; `NULL` defers the transfer from projection unconditionally —
+  ADR-011)
 
 ## Subsystem Boundary
 
@@ -369,14 +375,19 @@ existing edge already recorded. This transfer's amount is skipped from
 
 - the transaction still commits — a decimals conflict is not an abort
 - `stats_processed` still increments for the transfer
-- `stats_asset_id` is still **set** to the resolved asset (not left `NULL`)
+- both `src_stats_asset_id` / `dst_stats_asset_id` are still **set** to the
+  resolved pair (not left `NULL`)
 
-Read `crosschain_transfers.stats_asset_id` accordingly: `NULL` means identity
-is genuinely unknown or ambiguous (the chain-collision merge refusal is the
-only remaining case); a set `stats_asset_id` with no corresponding edge
+Read `crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id`
+accordingly (post-[ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md),
+which split the single `stats_asset_id` column into these two): both `NULL`
+means identity is genuinely unknown or ambiguous (a refused merge is the only
+remaining case for a `mirror` transfer); both set with no corresponding edge
 contribution means identity is known but this transfer's amount specifically
-was not counted (the decimals-conflict case). See `gotchas.md` for the full
-read.
+was not counted (the decimals-conflict case, or a `conversion` transfer's
+`amount_side_missing` deferral, which additionally leaves `stats_processed`
+at `0`). Both set but *unequal* is the expected shape for a `conversion`
+transfer, not a conflict. See `gotchas.md` for the full read.
 
 ## Endpoint Matrix
 
@@ -589,22 +600,32 @@ Projection eligibility (`transfer_identity_ready_condition` for identity;
 separate concerns" above):
 
 - identity maintenance runs whenever both known token endpoints are ready
-  (address known, or its chain is unindexed for this bridge) and at least one
-  endpoint is known — regardless of `stats_processed`
+  (address known, or its chain is unindexed for this bridge), at least one
+  endpoint is known, and `asset_linkage IS NOT NULL`
+  ([ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md)) —
+  regardless of `stats_processed`
 - counting (edge accumulation + `stats_processed` increment) additionally
   requires `stats_processed = 0` and the parent message to satisfy
   `message_countable_condition`
 
-Projection behavior:
+Projection behavior, branching on `asset_linkage`:
 
-- resolve or create a logical `stats_asset`, merging two existing components
-  if the transfer bridges them (union-find; see above)
-- link src/dst tokens into `stats_asset_tokens`
-- increment one `stats_asset_edges` row per
-  `(stats_asset_id, bridge_id, src_chain_id, dst_chain_id)`, unless a decimals
-  conflict skips the edge contribution specifically (see above)
-- set `stats_asset_id` on transfers (survives even a decimals-conflict skip)
-- increment `crosschain_transfers.stats_processed`
+- `mirror` — resolve or create one logical `stats_asset` for both endpoints,
+  merging two existing components if the transfer bridges them (union-find;
+  see above); `src_stats_asset_id = dst_stats_asset_id` always.
+- `conversion` — resolve (or create) each endpoint's `stats_asset`
+  **independently**, never merged; a transfer with only one endpoint known
+  defers (`conversion_endpoint_unresolved`) rather than guessing the other
+  side.
+- either way: link src/dst tokens into `stats_asset_tokens`; increment one
+  `stats_asset_edges` row per
+  `(src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id,
+  dst_chain_id)`, unless a decimals conflict (or, for `conversion`, an
+  `amount_side_missing` deferral) skips the edge contribution specifically
+  (see above); set both `src_stats_asset_id` / `dst_stats_asset_id` on the
+  transfer (survives even a decimals-conflict skip; not touched by an
+  `amount_side_missing` deferral); increment
+  `crosschain_transfers.stats_processed` (not for a deferral).
 
 Amount semantics:
 
@@ -916,7 +937,10 @@ Useful operational signals:
   Decision 5); only a bridge *present* with zero contracts is restrictive
 - a decimals conflict on the counting path is not the same failure as a
   union-find merge refusal — see "Decimals conflict on the counting path"
-  above for how to read `stats_asset_id` in each case
+  above for how to read `src_stats_asset_id` / `dst_stats_asset_id` in each
+  case
+- a `conversion` transfer's two asset columns are expected to differ — see
+  [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md)
 
 ## Read-Time Filterability Constraints (verified 2026-07-20; extended by ADR-004)
 

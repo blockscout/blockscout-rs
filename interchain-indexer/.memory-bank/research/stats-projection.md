@@ -133,9 +133,13 @@ Related tables (all three additive aggregates are bridge-qualified since
 
 - `stats_messages_days` — keyed by `(date, bridge_id, src_chain_id,
   dst_chain_id)`, the same directional count split by day
-- `stats_asset_edges` — keyed by `(stats_asset_id, bridge_id, src_chain_id,
-  dst_chain_id)`; `stats_assets` / `stats_asset_tokens` stay global (only the
-  movement/count edges gain the bridge dimension)
+- `stats_asset_edges` — keyed by `(src_stats_asset_id, dst_stats_asset_id,
+  bridge_id, src_chain_id, dst_chain_id)` since
+  [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md) split
+  the single `stats_asset_id` column into a binary pair (equal for a
+  `mirror` edge, independent for a `conversion` one); `stats_assets` /
+  `stats_asset_tokens` stay global (only the movement/count edges gain the
+  bridge dimension)
 
 The schema is introduced in:
 
@@ -326,6 +330,16 @@ Primary places to inspect:
   authoritative production semantics for message counts are in
   `interchain-indexer-logic/src/stats/projection.rs` and
   `interchain-indexer-logic/src/stats/indexed_chains.rs`
+- `project_messages_batch`'s initial canonical-row reload used to issue an
+  unchunked composite-key `IN` (`Expr::tuple(...).in_tuples(pks)`) over the
+  full flushed cohort, crashing maintenance with `stack depth limit exceeded`
+  or `too many arguments for query` during large catch-up bursts. Fixed: every
+  row-valued `IN` in this module now chunks its **load** at
+  `bulk::ROW_IN_KEY_CHUNK`, leaving the aggregation bodies whole — note that
+  `project_transfers_batch` aggregates across the entire cohort and must never
+  be chunked at the function or caller level. See
+  `stats-projection-unbatched-pks-lookup-crash.md` for the incident writeup
+  and `.memory-bank/rules/database.md` §Batching for the sizing rule
 
 ## Change Triggers
 

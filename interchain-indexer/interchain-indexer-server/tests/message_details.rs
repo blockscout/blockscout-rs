@@ -9,8 +9,7 @@ mod helpers;
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use chrono::Utc;
 use interchain_indexer_entity::{
-    bridges, crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{MessageStatus, TransferType},
+    bridges, crosschain_messages, crosschain_transfers, sea_orm_active_enums::MessageStatus,
 };
 use pretty_assertions::assert_eq;
 use reqwest::StatusCode;
@@ -82,7 +81,6 @@ async fn seed_bridge_collision(db: &TestDbGuard) {
             message_id: Set(COLLIDING_MESSAGE_ID),
             bridge_id: Set(1),
             index: Set(0),
-            r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
             src_amount: Set(Some(BigDecimal::from(111u32))),
@@ -95,7 +93,6 @@ async fn seed_bridge_collision(db: &TestDbGuard) {
             message_id: Set(COLLIDING_MESSAGE_ID),
             bridge_id: Set(2),
             index: Set(0),
-            r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
             src_amount: Set(Some(BigDecimal::from(222u32))),

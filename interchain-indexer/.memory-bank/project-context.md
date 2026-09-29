@@ -170,6 +170,13 @@ Common commands from `justfile`:
   - `cargo check` + strict clippy
 - `just format`
   - `cargo sort` when available + `cargo fmt`
+- `just graphify-init`
+  - rebuild the local graphify knowledge graph (`graphify-out/`, gitignored — see
+    `.memory-bank/rules/graphify.mdc`); run once after cloning or whenever
+    `graphify-out/graph.json` is missing
+- `just graphify-hooks`
+  - install local git hooks that keep `graphify-out/` refreshed automatically on
+    commit/checkout; one-time per clone
 
 ## Testing Flow
 

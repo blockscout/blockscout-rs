@@ -123,6 +123,49 @@ same asset. See `merge_assets` / `ensure_asset_for_transfer` in
 `stats/projection.rs` and `gotchas.md`, "Stats Asset Mapping Conflicts Merge;
 Only Same-Chain Collisions Skip."
 
+## Canonical Identity / Observed Identity (xDai)
+
+Two different answers to "which message is this?" for one xDai destination
+event. The **observed identity** is the raw `bytes32` exactly as the log
+carried it, classified by magnitude into `MessageIdentity::Nonce` or
+`MessageIdentity::SourceTransactionHash`. The **canonical identity** is the one
+the message is keyed and stored under: for a hash-keyed completion whose source
+receipt holds a modern nonce-bearing event, it is that nonce, and the raw hash
+survives only as provenance. They differ only on that path; everywhere else the
+two coincide. Identity kind says nothing about correctness — see
+*Multiple Execution* and ADR-014.
+
+## Multiple Execution (xDai)
+
+More than one distinct destination transaction resolving to the same canonical
+identity, i.e. the same transfer paid out twice. The first one **in indexer
+processing order** stays canonical in `crosschain_messages` /
+`crosschain_transfers`; every later one becomes a row in
+`amb_message_anomalies` (`event_kind = 'destination_execution'`) and an entry in
+the public `protocol_metadata.multiple_executions` namespace. A hash-keyed
+completion is never anomalous by itself — multiplicity is the predicate, not
+identity kind (ADR-014).
+
+## Destination Execution Channel
+
+The defaulted `Consolidate::destination_executions` method: a protocol's way of
+reporting observed destination executions to the maintenance transaction, where
+they can be compared against the stored row. `consolidate` cannot read the
+database, so the comparison cannot live there. Returns a plain `Vec` because it
+runs before the transaction opens. AMB and Avalanche inherit the empty default
+and pay nothing for it.
+
+## Detached Confirmation Channel
+
+The defaulted `Consolidate::detached_confirmations` method: an entry that cannot
+consolidate on its own (typically a late validator signature for an already
+finalized message) reports its confirmations, and the maintenance transaction
+attaches them to the stored `crosschain_messages` row with the same key
+(`persistence::attach_detached_confirmations`). Only an entry that held nothing
+but confirmations is resolved and evicted. Returns `Option`, not `Result`,
+because it runs before the transaction opens. AMB and Avalanche inherit the
+`None` default. See ADR-015.
+
 ## Teleporter / ICM
 
 Avalanche native interchain messaging protocol. In this repo, Teleporter / ICM

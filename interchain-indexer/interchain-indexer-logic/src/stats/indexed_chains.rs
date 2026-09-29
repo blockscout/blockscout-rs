@@ -381,7 +381,10 @@ pub(crate) fn message_countable_condition(indexed: &IndexedChains) -> Condition 
 }
 
 /// Transfer side: every unknown token endpoint sits on a chain this bridge
-/// does not index, and at least one endpoint is known.
+/// does not index, at least one endpoint is known, and the indexer has stated
+/// the transfer's `asset_linkage`. An unstated (`NULL`) linkage defers
+/// unconditionally -- it says nothing about identity, so no endpoint arriving
+/// can make it ready.
 pub(crate) fn transfer_identity_ready_condition(indexed: &IndexedChains) -> Condition {
     let bridge_col = (
         crosschain_transfers::Entity,
@@ -424,6 +427,13 @@ pub(crate) fn transfer_identity_ready_condition(indexed: &IndexedChains) -> Cond
         .add(src_ready)
         .add(dst_ready)
         .add(at_least_one_known)
+        .add(
+            Expr::col((
+                crosschain_transfers::Entity,
+                crosschain_transfers::Column::AssetLinkage,
+            ))
+            .is_not_null(),
+        )
 }
 
 #[cfg(test)]

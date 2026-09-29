@@ -122,6 +122,15 @@ pub(super) async fn dispatch_transaction(
                     metrics::AMB_LOGS_DROPPED_WRONG_VERSION_TOTAL
                         .with_label_values(&[&ctx.bridge_id.to_string(), &ctx.chain_id.to_string()])
                         .inc();
+                    // Protocol-labelled successor metric; see its doc in
+                    // `indexer/metrics.rs` for why both are emitted.
+                    crate::indexer::metrics::LOGS_DROPPED_WRONG_VERSION_TOTAL
+                        .with_label_values(&[
+                            "amb",
+                            &ctx.bridge_id.to_string(),
+                            &ctx.chain_id.to_string(),
+                        ])
+                        .inc();
                     tracing::warn!(
                         bridge_id = ctx.bridge_id,
                         chain_id = ctx.chain_id,

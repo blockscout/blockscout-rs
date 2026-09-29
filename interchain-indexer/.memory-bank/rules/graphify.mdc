@@ -3,7 +3,24 @@ description: graphify knowledge graph context
 alwaysApply: true
 ---
 
-This project has a graphify knowledge graph at graphify-out/.
+This project has a graphify knowledge graph at graphify-out/. **`graphify-out/` is
+gitignored — it is a per-clone, local-only cache, never committed.** It must be
+bootstrapped once after cloning/pulling and kept fresh while you work; it is not
+something you can rely on already existing.
+
+**Bootstrap first (only when missing):** if `graphify-out/graph.json` does not
+exist yet — fresh clone, or `graphify-out/` was deleted — run `just graphify-init`
+(wraps `graphify extract . --code-only`, no API key needed) before doing anything
+else. Do this once, up front; do not start exploring with raw Read/Grep/Glob
+instead just because the graph is momentarily missing. If `just` is unavailable,
+run the underlying `graphify extract . --code-only` directly, or invoke the full
+`/graphify` skill for a richer build that also covers docs.
+
+Once a graph exists, run `just graphify-hooks` (wraps `graphify hook install`) if
+you have not already — it installs local post-commit/post-checkout git hooks
+(`.git/hooks`, not versioned, so this is per-clone) that keep the graph
+auto-refreshed as code changes and branches switch, on top of the manual
+`graphify update .` step below.
 
 **MANDATORY: Before using Read, Grep, Glob, or Bash to explore the codebase, you MUST run graphify first:**
 - `graphify query "<question>"` — scoped subgraph for any codebase or architecture question
@@ -14,7 +31,7 @@ This applies to YOU and to every subagent you spawn. Include this rule explicitl
 
 Only use Read/Grep/Glob directly when:
 1. graphify has already oriented you and you need to modify or debug specific lines
-2. `graphify-out/graph.json` does not exist yet
+2. bootstrapping the graph itself is not possible in the current environment (no `graphify` binary, no network) — state that explicitly rather than silently skipping it
 
 - If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
 - Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review when query/path/explain do not surface enough context

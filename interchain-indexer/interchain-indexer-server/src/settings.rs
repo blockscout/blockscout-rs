@@ -10,7 +10,7 @@ use blockscout_service_launcher::{
 use interchain_indexer_logic::{
     ChainInfoServiceSettings, TokenInfoServiceSettings, amb::settings::AmbIndexerSettings,
     avalanche::settings::AvalancheIndexerSettings, example::settings::ExampleIndexerSettings,
-    settings::MessageBufferSettings,
+    settings::MessageBufferSettings, xdai::settings::XDaiIndexerSettings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +37,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub amb_indexer: AmbIndexerSettings,
+
+    #[serde(default)]
+    pub xdai_indexer: XDaiIndexerSettings,
 
     #[serde(default)]
     pub server: ServerSettings,
@@ -128,6 +131,7 @@ impl Settings {
             example_indexer: Default::default(),
             avalanche_indexer: Default::default(),
             amb_indexer: Default::default(),
+            xdai_indexer: Default::default(),
             server: Default::default(),
             metrics: Default::default(),
             tracing: Default::default(),

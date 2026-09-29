@@ -7,9 +7,10 @@ This file doubles as the shared reference for the whole `config/` tree: grammar,
 | Set | Contents | Document |
 | --- | --- | --- |
 | `config/full-mainnet` | AMB/Omnibridge + Avalanche ICTT on C-Chain, mainnet (subnets added per deployment) | [ENVs.md](full-mainnet/ENVs.md) |
-| `config/full-testnet` | AMB/Omnibridge, testnet | [ENVs.md](full-testnet/ENVs.md) |
+| `config/full-testnet` | AMB/Omnibridge + xDai bridge, testnet | [ENVs.md](full-testnet/ENVs.md) |
 | `config/omnibridge` | AMB/Omnibridge only, mainnet + testnet | [ENVs.md](omnibridge/ENVs.md) |
 | `config/avalanche` | Avalanche ICM/ICTT only: C-Chain, NUMINE, Henesys | [ENVs.md](avalanche/ENVs.md) |
+| `config/xdai` | xDai bridge only, mainnet + testnet | [ENVs.md](xdai/ENVs.md) |
 
 ## Prefixes and grammar
 
@@ -188,8 +189,8 @@ chains present in `contracts` — validated at startup.
 | --- | --- | --- | --- |
 | `chain_id` | *(taken from the path)* | yes | — |
 | `address` | *(taken from the path)* | yes | matched case-insensitively |
-| `version` | *(taken from the path)* | yes | — |
-| `started_at_block` | `__STARTED_AT_BLOCK` | yes | must be ≥ `1`; `0` fails startup |
+| `version` | *(taken from the path)* | yes | for `xdai`, the proxy's own `EternalStorageProxy.version()` counter, which restarts per deployment — see the README |
+| `started_at_block` | `__STARTED_AT_BLOCK` | yes | must be ≥ `1`; `0` fails startup. For `xdai` it is also an identity epoch floor: a value below the deployment's floor fails startup |
 | `kind` | `__KIND` | no | `amb_proxy`, `omnibridge_mediator`, … |
 | `abi` | `__ABI` | no | inline JSON array, or a JSON-quoted string |
 

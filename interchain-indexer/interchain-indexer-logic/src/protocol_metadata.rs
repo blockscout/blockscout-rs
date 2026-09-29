@@ -13,10 +13,27 @@
 
 use std::str::FromStr;
 
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::avalanche_data_api::AvalancheDataApiNetwork;
+
+/// RFC 3339, millisecond precision, `Z` suffix -- the one timestamp format
+/// every consumer of a stored/served xDai timestamp must agree on.
+///
+/// Lives here (not in `interchain-indexer-server`) because the
+/// `multiple_executions` namespace's `additional_executions[].timestamp`
+/// values are assembled in this crate, in
+/// `message_buffer::persistence::apply_destination_execution_reconciliation`,
+/// while `interchain-indexer-server/src/services/utils.rs::db_datetime_to_string`
+/// formats the same kind of value for the rest of the Read API. Two
+/// independent copies of `to_rfc3339_opts(...)` would drift silently the first
+/// time either one changed; the server function now delegates here instead.
+pub fn rfc3339_millis_z(ts: NaiveDateTime) -> String {
+    ts.and_utc()
+        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
 
 /// `AvalancheDataApiNetwork` derives `Serialize`/`Deserialize` without
 /// `rename_all` because it also backs `AvalancheDataApiClientSettings`, a
@@ -53,6 +70,59 @@ mod network_as_lowercase_str {
 pub struct ProtocolMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unresolved_destination: Option<UnresolvedDestination>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiple_executions: Option<MultipleExecutions>,
+}
+
+/// Namespace for a canonical message that has been executed on its
+/// destination chain more than once. The array holds only the **later**
+/// executions -- the canonical one stays exactly where it always was,
+/// `InterchainMessage.dst_tx_hash`, and is never duplicated here.
+///
+/// Shape mirrors [`UnresolvedDestination`]: a universal core
+/// (`additional_executions`) plus a flattened protocol discriminant, in the
+/// same flat JSON object.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MultipleExecutions {
+    pub additional_executions: Vec<AdditionalExecution>,
+    #[serde(flatten)]
+    pub protocol: MultipleExecutionsProtocol,
+}
+
+/// Internally tagged, matching [`UnresolvedDestinationProtocol`]'s shape.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "protocol", rename_all = "snake_case")]
+pub enum MultipleExecutionsProtocol {
+    /// Renamed explicitly: `rename_all = "snake_case"` would spell this
+    /// variant `x_dai`, and the public JSON of this namespace is `xdai`
+    /// (`PublicMetadata::extra_value` below, and the task contract it
+    /// implements). Without the rename the same discriminant is spelled two
+    /// ways -- `x_dai` in `crosschain_messages.protocol_metadata` and `xdai`
+    /// in the API -- which is confusing on its own and is a live trap for any
+    /// future change that renders the namespace by reusing `Serialize`
+    /// instead of the explicit builder.
+    #[serde(rename = "xdai")]
+    XDai(XDaiMultipleExecutions),
+}
+
+/// No fields of its own today -- xDai has nothing beyond the universal
+/// `additional_executions` array. Kept as a struct (not a unit variant) so a
+/// future xDai-specific field has somewhere to go without changing the enum
+/// shape or the public JSON's `protocol` tag.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct XDaiMultipleExecutions {}
+
+/// One later destination execution. Exactly two fields, by design: no block
+/// number (nothing for a client to do with it), no chain id (already on
+/// `InterchainMessage.dst_chain_id`), no indication of which raw identity kind
+/// was observed (an internal `amb_message_anomalies` concern).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdditionalExecution {
+    /// 0x-hex, lower case.
+    pub transaction_hash: String,
+    /// RFC 3339, milliseconds, `Z` -- the same rendering as `send_timestamp`
+    /// (and every other served timestamp); see [`rfc3339_millis_z`].
+    pub timestamp: String,
 }
 
 /// Universal core of the "destination did not resolve" concept. Identical
@@ -168,6 +238,37 @@ impl PublicMetadata for UnresolvedDestination {
     }
 }
 
+impl PublicMetadata for MultipleExecutions {
+    const EXTRA_KEY: &'static str = "multiple_executions";
+
+    fn extra_value(&self) -> Value {
+        let mut out = Map::new();
+        match &self.protocol {
+            MultipleExecutionsProtocol::XDai(XDaiMultipleExecutions {}) => {
+                out.insert("protocol".to_string(), "xdai".into());
+            }
+        }
+        out.insert(
+            "additional_executions".to_string(),
+            Value::Array(
+                self.additional_executions
+                    .iter()
+                    .map(|execution| {
+                        let mut entry = Map::new();
+                        entry.insert(
+                            "transaction_hash".to_string(),
+                            execution.transaction_hash.clone().into(),
+                        );
+                        entry.insert("timestamp".to_string(), execution.timestamp.clone().into());
+                        Value::Object(entry)
+                    })
+                    .collect(),
+            ),
+        );
+        Value::Object(out)
+    }
+}
+
 impl ProtocolMetadata {
     /// `None` when the container is empty — the column must stay SQL NULL.
     /// An empty `{}` object must never reach the database.
@@ -203,6 +304,12 @@ impl ProtocolMetadata {
                 unresolved_destination.extra_value(),
             );
         }
+        if let Some(multiple_executions) = &self.multiple_executions {
+            out.insert(
+                MultipleExecutions::EXTRA_KEY.to_string(),
+                multiple_executions.extra_value(),
+            );
+        }
         out
     }
 }
@@ -226,6 +333,7 @@ mod tests {
                     network: AvalancheDataApiNetwork::Mainnet,
                 }),
             }),
+            ..Default::default()
         }
     }
 
@@ -338,5 +446,88 @@ mod tests {
             }
         });
         assert_eq!(ProtocolMetadata::from_json_value(Some(value)), None);
+    }
+
+    // --- `multiple_executions` namespace ---
+
+    fn multiple_executions_sample() -> ProtocolMetadata {
+        ProtocolMetadata {
+            multiple_executions: Some(MultipleExecutions {
+                additional_executions: vec![AdditionalExecution {
+                    transaction_hash:
+                        "0x2e50d68b6d0bc152a0503e6782adcfead09fe9de98eabd852d4055d15efe2512"
+                            .to_string(),
+                    timestamp: "2025-07-17T20:52:50.000Z".to_string(),
+                }],
+                protocol: MultipleExecutionsProtocol::XDai(XDaiMultipleExecutions {}),
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// Written first, per the task's instruction: if `#[serde(flatten)]` over
+    /// an internally tagged enum with an empty payload struct does not
+    /// round-trip, the fallback is a unit variant `XDai` instead of
+    /// `XDai(XDaiMultipleExecutions)` -- the public JSON is identical either
+    /// way, only the Rust shape changes.
+    #[test]
+    fn multiple_executions_round_trips() {
+        let metadata = multiple_executions_sample();
+        let value = metadata.to_json_value().expect("non-empty metadata");
+        let round_tripped = ProtocolMetadata::from_json_value(Some(value)).expect("decodes");
+        assert_eq!(round_tripped, metadata);
+    }
+
+    /// The exact documented JSON shape: two fields per entry, `protocol` at
+    /// the top of the namespace object, no block number, no chain id, no
+    /// alias-kind indicator.
+    #[test]
+    fn render_extra_renders_the_documented_multiple_executions_json() {
+        let extra = Value::Object(multiple_executions_sample().render_extra());
+        let expected = serde_json::json!({
+            "multiple_executions": {
+                "protocol": "xdai",
+                "additional_executions": [
+                    {
+                        "transaction_hash": "0x2e50d68b6d0bc152a0503e6782adcfead09fe9de98eabd852d4055d15efe2512",
+                        "timestamp": "2025-07-17T20:52:50.000Z"
+                    }
+                ]
+            }
+        });
+        assert_eq!(extra, expected);
+    }
+
+    /// The stored discriminant and the rendered one must be the same string.
+    /// They are produced by two independent code paths -- `Serialize` for the
+    /// JSONB column, an explicit `Map` builder for the API -- so nothing but a
+    /// test keeps them from drifting apart.
+    #[test]
+    fn stored_and_rendered_protocol_discriminants_agree() {
+        let metadata = multiple_executions_sample();
+        let stored = metadata.to_json_value().expect("non-empty metadata");
+        let stored_tag = stored
+            .pointer("/multiple_executions/protocol")
+            .expect("stored namespace carries the discriminant");
+        let rendered = Value::Object(metadata.render_extra());
+        let rendered_tag = rendered
+            .pointer("/multiple_executions/protocol")
+            .expect("rendered namespace carries the discriminant");
+        assert_eq!(stored_tag, "xdai");
+        assert_eq!(stored_tag, rendered_tag);
+    }
+
+    #[test]
+    fn multiple_executions_absent_from_default_metadata() {
+        assert_eq!(ProtocolMetadata::default().to_json_value(), None);
+        assert!(ProtocolMetadata::default().render_extra().is_empty());
+    }
+
+    #[test]
+    fn rfc3339_millis_z_matches_the_documented_format() {
+        let ts = chrono::DateTime::from_timestamp(1_752_785_570, 0)
+            .unwrap()
+            .naive_utc();
+        assert_eq!(rfc3339_millis_z(ts), "2025-07-17T20:52:50.000Z");
     }
 }

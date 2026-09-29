@@ -8,7 +8,10 @@ use std::{
 use crate::{InterchainDatabase, TokenInfoServiceSettings};
 use alloy::{network::Ethereum, providers::DynProvider};
 use chrono::{DateTime, Utc};
-use interchain_indexer_entity::tokens::{self, Model as TokenInfoModel};
+use interchain_indexer_entity::{
+    sea_orm_active_enums::TokenType,
+    tokens::{self, Model as TokenInfoModel},
+};
 use parking_lot::RwLock;
 use sea_orm::ActiveValue::Set;
 use tokio::sync::Mutex;
@@ -127,6 +130,12 @@ impl TokenInfoService {
                 return Ok(model);
             }
 
+            // The native storage key is complete identity even if its metadata
+            // seed failed. Never try ERC-20 calls against the sentinel.
+            if TokenType::from_address(&address) == TokenType::Native {
+                return Ok(bare_token_info(chain_id, address.clone()));
+            }
+
             // Not in DB: spawn background fetch and return bare model immediately.
             // Use in_flight_fetches to prevent duplicate spawns (we can't reuse per_key_locks:
             // MutexGuard borrows from the Mutex, so we cannot move it into a spawned task).
@@ -153,16 +162,7 @@ impl TokenInfoService {
             }
 
             // Return bare model immediately without waiting
-            Ok(TokenInfoModel {
-                chain_id,
-                address: key.1.clone(),
-                name: None,
-                symbol: None,
-                token_icon: None,
-                decimals: None,
-                created_at: None,
-                updated_at: None,
-            })
+            Ok(bare_token_info(chain_id, key.1.clone()))
         }
         .await;
 
@@ -208,6 +208,7 @@ impl TokenInfoService {
                 let model = TokenInfoModel {
                     chain_id,
                     address,
+                    r#type: TokenType::Erc20,
                     name: Some(token_info.name),
                     symbol: Some(token_info.symbol),
                     token_icon: icon_url,
@@ -219,6 +220,7 @@ impl TokenInfoService {
                 let active_model = tokens::ActiveModel {
                     chain_id: Set(chain_id),
                     address: Set(model.address.clone()),
+                    r#type: Set(model.r#type.clone()),
                     symbol: Set(model.symbol.clone()),
                     name: Set(model.name.clone()),
                     token_icon: Set(model.token_icon.clone()),
@@ -279,7 +281,9 @@ impl TokenInfoService {
         tokio::spawn(async move {
             let uniq: HashSet<TokenKey> = keys.into_iter().collect();
             for (chain_id, address) in uniq {
-                if !svc.providers.contains_key(&chain_id) {
+                if TokenType::from_address(&address) == TokenType::Native
+                    || !svc.providers.contains_key(&chain_id)
+                {
                     continue;
                 }
                 let need = match svc
@@ -289,9 +293,10 @@ impl TokenInfoService {
                 {
                     Ok(None) => true,
                     Ok(Some(m)) => {
-                        m.decimals.is_none()
-                            || (m.name.as_ref().is_none_or(|s| s.is_empty())
-                                && m.symbol.as_ref().is_none_or(|s| s.is_empty()))
+                        m.r#type == TokenType::Erc20
+                            && (m.decimals.is_none()
+                                || (m.name.as_ref().is_none_or(|s| s.is_empty())
+                                    && m.symbol.as_ref().is_none_or(|s| s.is_empty())))
                     }
                     Err(_) => false,
                 };
@@ -317,6 +322,10 @@ impl TokenInfoService {
     /// Checks if an existing token (from cache or DB) needs an icon update.
     /// Returns the model with the icon if successfully fetched, otherwise returns the original model.
     async fn fetch_icon_if_needed(&self, mut model: TokenInfoModel) -> TokenInfoModel {
+        // Native metadata comes from the chain/indexer seed, never a contract API.
+        if model.r#type == TokenType::Native {
+            return model;
+        }
         // Only process tokens without icons
         if model.token_icon.as_ref().is_some_and(|s| !s.is_empty()) {
             return model;
@@ -451,5 +460,40 @@ impl TokenInfoService {
             .get_token_icon(chain_id, &address)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to fetch token icon: {}", e))
+    }
+}
+
+fn bare_token_info(chain_id: i64, address: Vec<u8>) -> TokenInfoModel {
+    TokenInfoModel {
+        r#type: TokenType::from_address(&address),
+        chain_id,
+        address,
+        name: None,
+        symbol: None,
+        token_icon: None,
+        decimals: None,
+        created_at: None,
+        updated_at: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::init_db;
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn native_without_seed_or_provider_returns_typed_metadata() {
+        let db = init_db("native_without_seed").await;
+        let service = Arc::new(TokenInfoService::new(
+            Arc::new(InterchainDatabase::new(db.client().clone())),
+            HashMap::new(),
+            TokenInfoServiceSettings::default(),
+        ));
+        let model = service.get_token_info(100, vec![0; 20]).await.unwrap();
+        assert_eq!(model.r#type, TokenType::Native);
+        assert_eq!(model.address, vec![0; 20]);
+        assert_eq!(model.decimals, None);
     }
 }

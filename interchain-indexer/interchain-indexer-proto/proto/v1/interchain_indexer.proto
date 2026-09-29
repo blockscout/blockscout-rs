@@ -461,12 +461,23 @@ message GetTransfersByAddressRequest {
 }
 
 message TokenInfo {
+  // Token kind. UNSPECIFIED is the proto3 default and is never returned.
+  enum TokenType {
+    UNSPECIFIED = 0;
+    ERC20 = 1;
+    NATIVE = 2;
+    ERC721 = 3;
+    ERC1155 = 4;
+  }
+
   reserved 1; // chain_id moved to InterchainTransfer
-  string address_hash = 2;
+  // Null for a native token (`type == NATIVE`), which has no contract address.
+  optional string address_hash = 2;
   optional string name = 3;
   optional string symbol = 4;
   optional string decimals = 5;
   optional string icon_url = 6;
+  TokenType type = 7;
 }
 
 message InterchainTransfer {

@@ -2,6 +2,7 @@
 
 //! Aggregated bridged-token stats per `stats_asset` for a chain (`/stats/bridged-tokens`).
 
+use interchain_indexer_entity::sea_orm_active_enums::TokenType;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DbErr, FromQueryResult, Statement, Value};
 
 use crate::{
@@ -57,6 +58,7 @@ impl BridgedTokenAggDbRow {
 pub struct BridgedTokenLinkEnriched {
     pub chain_id: i64,
     pub token_address: Vec<u8>,
+    pub token_type: TokenType,
     pub name: Option<String>,
     pub symbol: Option<String>,
     pub icon_url: Option<String>,
@@ -444,12 +446,23 @@ FROM (
            (CASE WHEN s.name IS NULL OR btrim(s.name) = '' THEN 1 ELSE 0 END)::int AS name_blank,
            COALESCE(s.name, '') AS name_sort
     FROM (
-        SELECT stats_asset_id,
-               COALESCE(SUM(CASE WHEN dst_chain_id = $1 THEN transfers_count ELSE 0 END), 0)::bigint AS input_transfers_count,
-               COALESCE(SUM(CASE WHEN src_chain_id = $1 THEN transfers_count ELSE 0 END), 0)::bigint AS output_transfers_count
-        FROM stats_asset_edges
-        WHERE {edges_where}
-        GROUP BY stats_asset_id
+        -- The alias is load-bearing: the middle layer selects `agg.stats_asset_id`
+        -- and joins `stats_assets s ON s.id = agg.stats_asset_id`, the outer layer
+        -- selects `a.stats_asset_id`, and `BridgedTokenAggDbRow` reads the column by
+        -- name. Returning `asset_id` here fails every bridged-tokens request.
+        SELECT asset_id AS stats_asset_id,
+               COALESCE(SUM(input), 0)::bigint  AS input_transfers_count,
+               COALESCE(SUM(output), 0)::bigint AS output_transfers_count
+        FROM (
+            SELECT dst_stats_asset_id AS asset_id, transfers_count AS input, 0::bigint AS output
+            FROM stats_asset_edges
+            WHERE ({edges_where}) AND dst_chain_id = $1
+            UNION ALL
+            SELECT src_stats_asset_id AS asset_id, 0::bigint AS input, transfers_count AS output
+            FROM stats_asset_edges
+            WHERE ({edges_where}) AND src_chain_id = $1
+        ) u
+        GROUP BY asset_id
     ) agg
     INNER JOIN stats_assets s ON s.id = agg.stats_asset_id
 ) a
@@ -531,6 +544,7 @@ pub async fn fetch_bridged_token_items_for_assets(
 SELECT sat.stats_asset_id,
        sat.chain_id,
        sat.token_address,
+       sat.type::text AS token_type,
        t.name AS token_name,
        t.symbol AS token_symbol,
        t.token_icon AS token_icon,
@@ -551,6 +565,7 @@ ORDER BY sat.stats_asset_id, sat.chain_id, sat.token_address
         let aid: i64 = r.try_get("", "stats_asset_id")?;
         let chain_id: i64 = r.try_get("", "chain_id")?;
         let token_address: Vec<u8> = r.try_get("", "token_address")?;
+        let token_type: TokenType = r.try_get("", "token_type")?;
         let name: Option<String> = r.try_get("", "token_name").ok();
         let symbol: Option<String> = r.try_get("", "token_symbol").ok();
         let icon: Option<String> = r.try_get("", "token_icon").ok();
@@ -558,6 +573,7 @@ ORDER BY sat.stats_asset_id, sat.chain_id, sat.token_address
         map.entry(aid).or_default().push(BridgedTokenLinkEnriched {
             chain_id,
             token_address,
+            token_type,
             name,
             symbol,
             icon_url: icon,
@@ -632,6 +648,37 @@ mod tests {
         id
     }
 
+    /// Adds one **cross-asset** edge: `src_asset` on `src_chain` moving to a
+    /// *different* `dst_asset` on `dst_chain`. Every other helper here seeds
+    /// `src = dst`, which is the mirror shape; this is the converting-bridge
+    /// shape the binary edge key exists for.
+    #[allow(clippy::too_many_arguments)]
+    async fn add_cross_asset_edge(
+        db: &DatabaseConnection,
+        src_asset: i64,
+        dst_asset: i64,
+        bridge_id: i32,
+        src_chain: i64,
+        dst_chain: i64,
+        count: i64,
+    ) {
+        seed_bridge(db, bridge_id).await;
+        stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
+            src_stats_asset_id: Set(src_asset),
+            dst_stats_asset_id: Set(dst_asset),
+            bridge_id: Set(bridge_id),
+            src_chain_id: Set(src_chain),
+            dst_chain_id: Set(dst_chain),
+            transfers_count: Set(count),
+            cumulative_amount: Set(BigDecimal::from(0u64)),
+            amount_side: Set(EdgeAmountSide::Source),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
     /// Adds edges on `bridge_id` to an existing stats asset.
     async fn add_asset_edges_on_bridge(
         db: &DatabaseConnection,
@@ -642,7 +689,8 @@ mod tests {
         seed_bridge(db, bridge_id).await;
         for (src, dst, cnt) in edges {
             stats_asset_edges::Entity::insert(stats_asset_edges::ActiveModel {
-                stats_asset_id: Set(stats_asset_id),
+                src_stats_asset_id: Set(stats_asset_id),
+                dst_stats_asset_id: Set(stats_asset_id),
                 bridge_id: Set(bridge_id),
                 src_chain_id: Set(src),
                 dst_chain_id: Set(dst),
@@ -935,8 +983,32 @@ mod tests {
         assert_eq!(enriched.symbol.as_deref(), Some("TS"));
         assert_eq!(enriched.icon_url.as_deref(), Some("http://i"));
         assert_eq!(enriched.decimals, Some(8));
+        assert_eq!(enriched.token_type, TokenType::Erc20);
         let bare = list.iter().find(|t| t.chain_id == 2).unwrap();
         assert!(bare.name.is_none());
+        assert_eq!(bare.token_type, TokenType::Erc20);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_native_type_survives_missing_metadata() {
+        let g = init_db("bridged_tokens_native_type").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1]).await;
+        let database = crate::InterchainDatabase::new(db.clone());
+        let asset = database.create_stats_asset(None, None, None).await.unwrap();
+        database
+            .link_token_to_stats_asset(asset.id, 1, vec![0; 20])
+            .await
+            .unwrap();
+
+        let rows = fetch_bridged_token_items_for_assets(db.as_ref(), &[asset.id], None)
+            .await
+            .unwrap();
+        let token = &rows[&asset.id][0];
+        assert_eq!(token.token_type, TokenType::Native);
+        assert_eq!(token.token_address, vec![0; 20]);
+        assert!(token.name.is_none());
     }
 
     #[tokio::test]
@@ -1395,6 +1467,84 @@ mod tests {
         let both = query(Some(&[1, 2])).await;
         assert_eq!(both.len(), 1);
         assert_eq!(both[0].output_transfers_count, 8);
+    }
+
+    /// The xDai shape, at the read boundary: three assets joined by four
+    /// cross-asset routes. Every other read-path test seeds `src = dst`, so
+    /// without this one the capability the binary edge key was introduced for
+    /// is never exercised through the query at all.
+    ///
+    /// Focal chain `1` must yield the two Ethereum assets separately -- that
+    /// separation is the whole point of the task. Focal chain `100` must yield
+    /// one `xDAI` row aggregating both incoming routes, because on Gnosis they
+    /// really are one coin.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_cross_asset_edges_split_by_focal_chain() {
+        let g = init_db("bridged_tokens_cross_asset_focal").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 100]).await;
+        seed_bridge(db.as_ref(), 3).await;
+
+        let dai = seed_asset_edges_on_bridge(db.as_ref(), Some("DAI".into()), 3, vec![]).await;
+        let usds = seed_asset_edges_on_bridge(db.as_ref(), Some("USDS".into()), 3, vec![]).await;
+        let xdai = seed_asset_edges_on_bridge(db.as_ref(), Some("xDAI".into()), 3, vec![]).await;
+
+        // Eth -> Gno: both Ethereum assets converge on the one Gnosis asset.
+        add_cross_asset_edge(db.as_ref(), dai, xdai, 3, 1, 100, 7).await;
+        add_cross_asset_edge(db.as_ref(), usds, xdai, 3, 1, 100, 5).await;
+        // Gno -> Eth: the user picks which Ethereum asset to receive.
+        add_cross_asset_edge(db.as_ref(), xdai, dai, 3, 100, 1, 2).await;
+        add_cross_asset_edge(db.as_ref(), xdai, usds, 3, 100, 1, 3).await;
+
+        let query = |focal: i64| {
+            let db = db.clone();
+            async move {
+                list_bridged_token_stats_for_chain(
+                    db.as_ref(),
+                    focal,
+                    None,
+                    None,
+                    None,
+                    StatsListQuery {
+                        sort: BridgedTokensSortField::Name,
+                        order: StatsSortOrder::Asc,
+                        page_size: 50,
+                        last_page: false,
+                        input_pagination: None,
+                        q: None,
+                    },
+                )
+                .await
+                .unwrap()
+                .0
+            }
+        };
+
+        let eth = query(1).await;
+        assert_eq!(
+            eth.iter().map(|r| r.name.clone()).collect::<Vec<_>>(),
+            vec![Some("DAI".to_string()), Some("USDS".to_string())],
+            "focal chain 1 must list the two Ethereum assets separately, and must not \
+             list xDAI, which has no token there"
+        );
+        // DAI: 7 out to Gnosis, 2 back in. USDS: 5 out, 3 in.
+        assert_eq!(eth[0].output_transfers_count, 7);
+        assert_eq!(eth[0].input_transfers_count, 2);
+        assert_eq!(eth[0].total_transfers_count, 9);
+        assert_eq!(eth[1].output_transfers_count, 5);
+        assert_eq!(eth[1].input_transfers_count, 3);
+        assert_eq!(eth[1].total_transfers_count, 8);
+
+        let gno = query(100).await;
+        assert_eq!(
+            gno.iter().map(|r| r.name.clone()).collect::<Vec<_>>(),
+            vec![Some("xDAI".to_string())],
+            "focal chain 100 must collapse both incoming routes into the single Gnosis asset"
+        );
+        assert_eq!(gno[0].input_transfers_count, 12, "7 from DAI + 5 from USDS");
+        assert_eq!(gno[0].output_transfers_count, 5, "2 to DAI + 3 to USDS");
+        assert_eq!(gno[0].total_transfers_count, 17);
     }
 
     #[tokio::test]

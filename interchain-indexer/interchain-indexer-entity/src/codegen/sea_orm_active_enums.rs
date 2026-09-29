@@ -11,6 +11,8 @@ pub enum BridgeType {
     AvalancheNative,
     #[sea_orm(string_value = "amb")]
     Amb,
+    #[sea_orm(string_value = "xdai")]
+    Xdai,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "edge_amount_side")]
@@ -33,14 +35,26 @@ pub enum MessageStatus {
     ReadyToClaim,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "transfer_type")]
-pub enum TransferType {
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "token_type")]
+pub enum TokenType {
     #[sea_orm(string_value = "erc20")]
     Erc20,
-    #[sea_orm(string_value = "erc721")]
-    Erc721,
     #[sea_orm(string_value = "native")]
     Native,
+    #[sea_orm(string_value = "erc721")]
+    Erc721,
     #[sea_orm(string_value = "erc1155")]
     Erc1155,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(
+    rs_type = "String",
+    db_type = "Enum",
+    enum_name = "transfer_asset_linkage"
+)]
+pub enum TransferAssetLinkage {
+    #[sea_orm(string_value = "mirror")]
+    Mirror,
+    #[sea_orm(string_value = "conversion")]
+    Conversion,
 }

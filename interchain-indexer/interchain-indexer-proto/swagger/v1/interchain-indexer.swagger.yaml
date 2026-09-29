@@ -1363,6 +1363,16 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  TokenInfoTokenType:
+    type: string
+    enum:
+      - UNSPECIFIED
+      - ERC20
+      - NATIVE
+      - ERC721
+      - ERC1155
+    default: UNSPECIFIED
+    description: Token kind. UNSPECIFIED is the proto3 default and is never returned.
   protobufAny:
     type: object
     properties:
@@ -1815,6 +1825,7 @@ definitions:
         type: string
       token_address:
         type: string
+        description: Null for a native token, which has no contract address.
       name:
         type: string
       symbol:
@@ -1824,6 +1835,8 @@ definitions:
       decimals:
         type: integer
         format: int64
+      type:
+        $ref: '#/definitions/TokenInfoTokenType'
   v1StatsBridgedTokenRow:
     type: object
     properties:
@@ -1887,6 +1900,7 @@ definitions:
     properties:
       address_hash:
         type: string
+        description: Null for a native token (`type == NATIVE`), which has no contract address.
       name:
         type: string
       symbol:
@@ -1895,6 +1909,8 @@ definitions:
         type: string
       icon_url:
         type: string
+      type:
+        $ref: '#/definitions/TokenInfoTokenType'
 securityDefinitions:
   ApiKeyAuth:
     type: apiKey
