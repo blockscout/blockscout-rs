@@ -14,7 +14,7 @@ blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = ["launcher", "tracing"] }
 eth-bytecode-db = { workspace = true }
 eth-bytecode-db-proto = { workspace = true }
-ethers = { workspace = true, features = ["solc"] }
+ethers-core = { workspace = true }
 futures = { workspace = true }
 migration = { workspace = true }
 sea-orm = { workspace = true }
@@ -39,7 +39,6 @@ pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
 rstest = { workspace = true }
 smart-contract-verifier-proto = { workspace = true, features = ["mock"] }
-test-log = { workspace = true }
 verifier-alliance-entity = { workspace = true }
 verifier-alliance-database-tests = { workspace = true }
 verifier-alliance-migration = { workspace = true }

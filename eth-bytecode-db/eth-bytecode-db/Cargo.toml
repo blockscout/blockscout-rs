@@ -17,11 +17,9 @@ ethabi = { workspace = true }
 ethers-core = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
-keccak-hash = { workspace = true }
 lazy_static = { workspace = true }
 mismatch = { workspace = true }
 prometheus = { workspace = true }
-reqwest = { workspace = true }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",

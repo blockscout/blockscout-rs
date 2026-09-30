@@ -19,7 +19,7 @@ use eth_bytecode_db::{
     verification,
     verification::sourcify_from_etherscan,
 };
-use ethers::types::H256;
+use ethers_core::types::H256;
 use std::{str::FromStr, sync::Arc};
 use tracing::instrument;
 

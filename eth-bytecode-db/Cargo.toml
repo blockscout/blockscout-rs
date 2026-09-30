@@ -30,13 +30,11 @@ actix-web = { version = "4" }
 alloy-json-abi = { version = "0.8.10" }
 amplify = { version = "4.7.0" }
 anyhow = { version = "1" }
-async-std = { version = "^1" }
 async-trait = { version = "0.1" }
 blockscout-display-bytes = { version = "1.1.0" }
 blockscout-service-launcher = { version = "0.21.0", default-features = false, features = ["database-1"] }
 bytes = { version = "1.2" }
 ethabi = { version = "18.0" }
-ethers = { version = "2.0.0" }
 ethers-core = { version = "2.0.0" }
 foundry-compilers = { version = "0.11.6" }
 futures = { version = "0.3" }
@@ -65,7 +63,6 @@ sha3 = { version = "0.10.8" }
 smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "232bee4" }
 sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "0e6bab8" }
 strum = { version = "0.27", default-features = false, features = ["derive"] }
-test-log = { version = "0.2.16" }
 thiserror = { version = "1" }
 tokio = { version = "1" }
 tokio-stream = { version = "0.1" }

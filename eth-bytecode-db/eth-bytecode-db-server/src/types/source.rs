@@ -7,6 +7,8 @@ use crate::{
 use amplify::{From, Wrapper};
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use eth_bytecode_db::{search, verification};
+use serde::Deserialize;
+use std::collections::BTreeMap;
 
 #[derive(Wrapper, From, Clone, Debug, PartialEq)]
 pub struct SourceWrapper(proto::Source);
@@ -59,13 +61,42 @@ impl From<search::MatchContract> for SourceWrapper {
     }
 }
 
+/// The subset of Solidity metadata read from Sourcify responses.
+#[derive(Deserialize)]
+struct Metadata {
+    compiler: MetadataCompiler,
+    settings: MetadataSettings,
+    // Not read, but required: the conversion below expects `output.abi` to exist.
+    #[serde(rename = "output")]
+    _output: MetadataOutput,
+}
+
+#[derive(Deserialize)]
+struct MetadataCompiler {
+    version: String,
+}
+
+#[derive(Deserialize)]
+struct MetadataSettings {
+    #[serde(default, rename = "compilationTarget")]
+    compilation_target: BTreeMap<String, String>,
+    #[serde(default)]
+    libraries: BTreeMap<String, String>,
+}
+
+#[derive(Deserialize)]
+struct MetadataOutput {
+    #[serde(rename = "abi")]
+    _abi: Vec<serde_json::Value>,
+}
+
 impl TryFrom<sourcify::VerifiedContract> for SourceWrapper {
     type Error = tonic::Status;
 
     fn try_from(value: sourcify::VerifiedContract) -> Result<Self, Self::Error> {
         let match_type = MatchTypeWrapper::from(value.match_type).into_inner();
 
-        let metadata: ethers::solc::artifacts::Metadata =
+        let metadata: Metadata =
             serde_json::from_value(value.metadata.clone()).map_err(|err| {
                 tracing::error!(target: "sourcify", "returned metadata cannot be parsed: {err}");
                 tonic::Status::internal("error occurred when parsing sourcify response")
