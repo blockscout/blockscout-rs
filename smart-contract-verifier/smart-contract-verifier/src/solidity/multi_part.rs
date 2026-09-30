@@ -4,7 +4,7 @@ use crate::{
     compiler::DetailedVersion, verify, Error, EvmCompilersPool, OnChainContract, SolcCompiler,
     SolcInput, VerificationResult,
 };
-use foundry_compilers::artifacts;
+use foundry_compilers_artifacts as artifacts;
 use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,10 +107,7 @@ pub async fn batch_verify(
 
 mod helpers {
     use crate::DetailedVersion;
-    use foundry_compilers::{
-        artifacts,
-        artifacts::{BytecodeHash, SettingsMetadata},
-    };
+    use foundry_compilers_artifacts::{self as artifacts, BytecodeHash, SettingsMetadata};
     use semver::VersionReq;
     use std::{collections::BTreeMap, ffi::OsStr};
 
@@ -173,7 +170,7 @@ mod helpers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use foundry_compilers::artifacts::EvmVersion;
+    use foundry_compilers_artifacts::EvmVersion;
     use pretty_assertions::assert_eq;
     use std::{collections::BTreeMap, path::PathBuf};
 

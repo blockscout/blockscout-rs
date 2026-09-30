@@ -45,9 +45,8 @@ pub trait CompilerInput: Serialize {
     fn sources(&self) -> BTreeMap<String, String>;
 }
 
-pub trait CompilationError:
-    foundry_compilers::CompilationError + for<'de> Deserialize<'de>
-{
+pub trait CompilationError: for<'de> Deserialize<'de> {
+    fn is_error(&self) -> bool;
     fn formatted_message(&self) -> String;
 }
 

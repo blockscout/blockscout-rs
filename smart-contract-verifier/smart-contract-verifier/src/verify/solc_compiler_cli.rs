@@ -8,7 +8,8 @@
 
 use super::solc_compiler::SolcInput;
 use crate::{CommandArgument, CompilerExecutor, CompilerInvocation, JobFile};
-use foundry_compilers::{artifacts::solc, error::SolcError};
+use foundry_compilers_artifacts::solc;
+use foundry_compilers_core::error::SolcError;
 use std::{collections::BTreeMap, path::Path};
 
 pub async fn compile_using_cli(
@@ -88,7 +89,8 @@ fn compiler_error(message: String) -> solc::error::Error {
 
 mod types {
     use super::serde_helpers;
-    use foundry_compilers::{artifacts::solc, error::SolcError};
+    use foundry_compilers_artifacts::solc;
+    use foundry_compilers_core::error::SolcError;
     use serde::{Deserialize, Serialize};
     use std::{
         collections::{BTreeMap, HashMap},

@@ -11,7 +11,7 @@ use crate::{
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
-use foundry_compilers::error::SolcError;
+use foundry_compilers_core::error::SolcError;
 use futures::TryFutureExt;
 use nonempty::NonEmpty;
 use serde::{de::DeserializeOwned, Deserialize};

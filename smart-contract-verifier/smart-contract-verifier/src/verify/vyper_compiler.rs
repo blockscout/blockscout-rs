@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::Context;
 use async_trait::async_trait;
-use foundry_compilers::artifacts;
+use foundry_compilers_artifacts as artifacts;
 use serde_json::Value;
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 
@@ -98,6 +98,10 @@ impl evm_compilers::CompilerInput for VyperInput {
 }
 
 impl evm_compilers::CompilationError for artifacts::vyper::VyperCompilationError {
+    fn is_error(&self) -> bool {
+        self.severity.is_error()
+    }
+
     fn formatted_message(&self) -> String {
         self.formatted_message
             .clone()
@@ -138,7 +142,7 @@ impl evm_compilers::EvmCompiler for VyperCompiler {
 mod tests {
     use super::*;
     use crate::verify::{evm_compilers::CompilerInput, vyper_compiler_input};
-    use foundry_compilers::artifacts::{Source, Sources};
+    use foundry_compilers_artifacts::{Source, Sources};
     use std::path::PathBuf;
 
     fn build_input(sources: &[&str], search_paths: &[&str]) -> VyperInput {

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use foundry_compilers::artifacts::{
+use foundry_compilers_artifacts::{
     output_selection::{FileOutputSelection, OutputSelection},
     serde_helpers, EvmVersion, Source, Sources,
 };

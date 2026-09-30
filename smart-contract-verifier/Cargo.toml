@@ -33,6 +33,8 @@ chrono = { version = "0.4" }
 cron = { version = "0.11" }
 era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-common", rev = "9969de1" }
 foundry-compilers = { version = "0.19" }
+foundry-compilers-artifacts = { version = "0.19" }
+foundry-compilers-core = { version = "0.19" }
 futures = { version = "0.3" }
 hex = { version = "0.4" }
 libc = { version = "0.2" }
