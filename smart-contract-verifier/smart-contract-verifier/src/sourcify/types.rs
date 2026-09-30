@@ -32,7 +32,7 @@ impl Success {
         constructor_arguments: Option<Bytes>,
         match_type: sourcify::MatchType,
     ) -> Result<Self, Error> {
-        let metadata: foundry_compilers::artifacts::Metadata =
+        let metadata: foundry_compilers_artifacts::Metadata =
             serde_json::from_value(raw_metadata.clone()).map_err(|err| {
                 tracing::error!(target: "sourcify", "returned metadata cannot be parsed: {err}");
                 Error::Internal(anyhow::anyhow!(

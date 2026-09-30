@@ -4,7 +4,7 @@ use crate::proto;
 use alloy_json_abi::JsonAbi;
 use amplify::{From, Wrapper};
 use blockscout_display_bytes::Bytes as DisplayBytes;
-use foundry_compilers::artifacts::sourcemap;
+use foundry_compilers_artifacts::sourcemap;
 use smart_contract_verifier::{LookupMethodsRequest, LookupMethodsResponse};
 use std::{collections::BTreeMap, str::FromStr};
 

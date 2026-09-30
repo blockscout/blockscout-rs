@@ -7,8 +7,8 @@ use crate::{
 };
 use anyhow::Context;
 use async_trait::async_trait;
-use foundry_compilers::{
-    artifacts, artifacts::output_selection::OutputSelection, solc::SolcLanguage,
+use foundry_compilers_artifacts::{
+    self as artifacts, output_selection::OutputSelection, SolcLanguage,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -59,6 +59,10 @@ impl evm_compilers::CompilerInput for SolcInput {
 }
 
 impl evm_compilers::CompilationError for artifacts::solc::Error {
+    fn is_error(&self) -> bool {
+        self.severity.is_error()
+    }
+
     fn formatted_message(&self) -> String {
         self.formatted_message
             .clone()
