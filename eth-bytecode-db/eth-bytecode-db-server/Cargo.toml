@@ -7,6 +7,7 @@ license = "LicenseRef-Blockscout"
 
 [dependencies]
 actix-web = { workspace = true }
+alloy-primitives = { workspace = true }
 amplify = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -14,7 +15,6 @@ blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = ["launcher", "tracing"] }
 eth-bytecode-db = { workspace = true }
 eth-bytecode-db-proto = { workspace = true }
-ethers-core = { workspace = true }
 futures = { workspace = true }
 migration = { workspace = true }
 sea-orm = { workspace = true }

@@ -6,15 +6,15 @@ edition = "2021"
 license = "LicenseRef-Blockscout"
 
 [dependencies]
+alloy-dyn-abi = { workspace = true }
 alloy-json-abi = { workspace = true, features = ["serde_json"] }
+alloy-primitives = { workspace = true }
 anyhow = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true }
 bytes = { workspace = true }
 entity = { workspace = true }
 eth-bytecode-db-proto = { workspace = true }
-ethabi = { workspace = true }
-ethers-core = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }

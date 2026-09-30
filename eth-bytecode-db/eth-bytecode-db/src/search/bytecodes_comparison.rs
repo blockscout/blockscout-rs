@@ -3,10 +3,11 @@
 // TODO: try move to common crate since code is copipasted from smart-contract-verifier
 
 use crate::verification::MatchType;
+use alloy_dyn_abi::{DynSolValue, JsonAbiExt};
+use alloy_json_abi::Constructor;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use bytes::Bytes;
 use entity::{parts, sea_orm_active_enums::PartType};
-use ethabi::{Constructor, Token};
 use mismatch::Mismatch;
 use thiserror::Error;
 use verification_common::code_metadata::CodeMetadata;
@@ -270,15 +271,10 @@ fn compare_bytecode_parts(
 fn parse_constructor_args(
     encoded_args: Bytes,
     abi_constructor: &Constructor,
-) -> Result<Vec<Token>, CompareError> {
-    let param_types = |inputs: &Vec<ethabi::Param>| -> Vec<ethabi::ParamType> {
-        inputs.iter().map(|p| p.kind.clone()).collect()
-    };
-    let param_types = param_types(&abi_constructor.inputs);
-    let tokens = ethabi::decode(&param_types, encoded_args.as_ref())
-        .map_err(|_err| CompareError::InvalidConstructorArguments(encoded_args.into()))?;
-
-    Ok(tokens)
+) -> Result<Vec<DynSolValue>, CompareError> {
+    abi_constructor
+        .abi_decode_input(encoded_args.as_ref(), true)
+        .map_err(|_err| CompareError::InvalidConstructorArguments(encoded_args.into()))
 }
 
 #[cfg(test)]
