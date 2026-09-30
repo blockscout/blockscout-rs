@@ -1,0 +1,29 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    
+    - selector: blockscout.zetachainCctx.v1.CctxInfo.GetCctxInfo
+      get: /api/v1/CctxInfo:get
+    
+    - selector: blockscout.zetachainCctx.v1.CctxInfo.ListCctxs
+      get: /api/v1/CctxInfo:list
+    
+    #################### Health ####################
+
+    - selector: blockscout.zetachainCctx.v1.Health.Check
+      get: /health
+
+    #################### Stats ####################
+
+    - selector: blockscout.zetachainCctx.v1.Stats.GetSyncProgress
+      get: /api/v1/Stats:getSyncProgress  
+
+    #################### Token Info ####################
+
+    - selector: blockscout.zetachainCctx.v1.TokenInfo.GetTokenInfo
+      get: /api/v1/TokenInfo:get
+
+    - selector: blockscout.zetachainCctx.v1.TokenInfo.ListTokens
+      get: /api/v1/TokenInfo:list
