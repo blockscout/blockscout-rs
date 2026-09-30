@@ -13,12 +13,14 @@ test-utils = [
     "dep:wiremock",
     "dep:hex-literal",
     "dep:serde_json",
+    "dep:interchain-indexer-migration",
+    "dep:multichain-aggregator-migration",
+    "dep:zetachain-cctx-migration",
 ]
 
 [dependencies]
-anyhow = "1"
 async-trait = "0.1"
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "e1596fd" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "2de05e3" }
 blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "cab0e70" }
 blockscout-service-launcher = { workspace = true, features = [
     "database-1",
@@ -31,12 +33,12 @@ hex = { workspace = true }
 hex-literal = { version = "0.4.1", optional = true }
 interchain-indexer-entity = { workspace = true }
 interchain-indexer-filters = { workspace = true }
-interchain-indexer-migration = { workspace = true }
+interchain-indexer-migration = { workspace = true, optional = true }
 itertools = "0.13.0"
 lazy_static = "1.4"
 migration = { path = "./migration" }
 multichain-aggregator-entity = { workspace = true }
-multichain-aggregator-migration = { workspace = true }
+multichain-aggregator-migration = { workspace = true, optional = true }
 num-traits = { workspace = true }
 paste = "1.0"
 portrait = "0.3.0"
@@ -50,7 +52,6 @@ sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ] }
-sea-orm-migration = { workspace = true }
 sea-query = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { workspace = true, optional = true }
@@ -63,10 +64,9 @@ tracing-subscriber = { version = "0.3", features = [
 ], optional = true }
 trait-variant = { workspace = true }
 tynm = "0.1.10"
-url = "2.3"
 wiremock = { workspace = true, optional = true }
 zetachain-cctx-entity = { workspace = true }
-zetachain-cctx-migration = { workspace = true }
+zetachain-cctx-migration = { workspace = true, optional = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [
@@ -77,6 +77,8 @@ blockscout-service-launcher = { workspace = true, features = [
 # the coverage guard converts config keys exactly as the server does
 convert_case = "0.6.0"
 hex-literal = "0.4.1"
+interchain-indexer-migration = { workspace = true }
+multichain-aggregator-migration = { workspace = true }
 
 # test-utils
 pretty_assertions = "1.2"
@@ -91,3 +93,4 @@ sea-orm = { workspace = true, features = [
 serde_json = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 wiremock = { workspace = true }
+zetachain-cctx-migration = { workspace = true }
