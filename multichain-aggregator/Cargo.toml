@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "env-docs-generation",
     "multichain-aggregator-entity",
     "multichain-aggregator-logic",
     "multichain-aggregator-migration",
@@ -13,6 +14,7 @@ multichain-aggregator-entity = { path = "./multichain-aggregator-entity" }
 multichain-aggregator-logic = { path = "./multichain-aggregator-logic" }
 multichain-aggregator-migration = { path = "./multichain-aggregator-migration" }
 multichain-aggregator-proto = { path = "./multichain-aggregator-proto" }
+multichain-aggregator-server = { path = "./multichain-aggregator-server" }
 bens-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "30ce71a" }
 
 # web
@@ -50,14 +52,12 @@ serde_with = { version = "3.9.0", features = ["macros", "json"] }
 
 # tracing
 tracing = "0.1"
-tracing-subscriber = "0.3.18"
 
 # misc
 alloy-primitives = "1.4"
 amplify = { version = "4", features = ["derive"], default-features = false }
 anyhow = "1.0"
 api-client-framework = { git = "https://github.com/blockscout/blockscout-rs", rev = "d60c1d8" }
-async-std = { version = "1", features = ["attributes", "tokio1"] }
 async-trait = "0.1"
 base64 = "0.22"
 base32ct = "0.3"
