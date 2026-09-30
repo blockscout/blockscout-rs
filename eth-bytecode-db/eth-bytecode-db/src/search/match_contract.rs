@@ -5,9 +5,9 @@ use super::{
     types::{BytecodeRemote, BytecodeType},
 };
 use crate::{verification, verification::SourceType};
+use alloy_json_abi::{Constructor, JsonAbi};
 use anyhow::Context;
 use entity::{files, sea_orm_active_enums, source_files, sources};
-use ethabi::Constructor;
 use sea_orm::{
     prelude::{DateTime, DbErr},
     ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, JoinType, QueryFilter, QuerySelect,
@@ -197,7 +197,7 @@ fn get_constructor(
 ) -> Result<Option<Constructor>, serde_json::Error> {
     match abi {
         Some(abi) => {
-            let abi: ethers_core::abi::Abi = serde_json::from_value(abi)?;
+            let abi: JsonAbi = serde_json::from_value(abi)?;
             Ok(abi.constructor)
         }
         None => Ok(None),
