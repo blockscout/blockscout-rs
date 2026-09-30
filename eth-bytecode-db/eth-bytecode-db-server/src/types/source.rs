@@ -96,11 +96,10 @@ impl TryFrom<sourcify::VerifiedContract> for SourceWrapper {
     fn try_from(value: sourcify::VerifiedContract) -> Result<Self, Self::Error> {
         let match_type = MatchTypeWrapper::from(value.match_type).into_inner();
 
-        let metadata: Metadata =
-            serde_json::from_value(value.metadata.clone()).map_err(|err| {
-                tracing::error!(target: "sourcify", "returned metadata cannot be parsed: {err}");
-                tonic::Status::internal("error occurred when parsing sourcify response")
-            })?;
+        let metadata: Metadata = serde_json::from_value(value.metadata.clone()).map_err(|err| {
+            tracing::error!(target: "sourcify", "returned metadata cannot be parsed: {err}");
+            tonic::Status::internal("error occurred when parsing sourcify response")
+        })?;
 
         // Compiler settings inside metadata contains a "compilationTarget"
         // which does not exist in compiler input. We should remove the key
