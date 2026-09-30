@@ -139,6 +139,26 @@
       "subgraph_path": "../subgraphs/infinityname-subgraph",
       "subgraph_name": "infinityname-soneium-subgraph",
       "network": "soneium-mainnet"
+    },
+    "doti": {
+      "subgraph_path": "../subgraphs/doti-subgraph",
+      "subgraph_name": "doti-subgraph",
+      "network": "arb-mainnet"
+    },
+    "doti-optimism": {
+      "subgraph_path": "../subgraphs/doti-subgraph",
+      "subgraph_name": "doti-optimism-subgraph",
+      "network": "optimism"
+    },
+    "doti-ethereum": {
+      "subgraph_path": "../subgraphs/doti-subgraph",
+      "subgraph_name": "doti-ethereum-subgraph",
+      "network": "mainnet"
+    },
+    "doti-robinhood": {
+      "subgraph_path": "../subgraphs/doti-subgraph",
+      "subgraph_name": "doti-robinhood-subgraph",
+      "network": "robinhood"
     }
   }
 }
