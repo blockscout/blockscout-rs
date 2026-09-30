@@ -13,7 +13,7 @@ FROM chef AS build
 COPY . .
 COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
-RUN cargo build --release
+RUN cargo build --release --bin user-ops-indexer-server
 
 FROM ubuntu:24.04 as run
 RUN apt-get update && apt-get install -y libssl3 libssl-dev ca-certificates

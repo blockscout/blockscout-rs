@@ -9,9 +9,8 @@ license = "LicenseRef-Blockscout"
 [dependencies]
 user-ops-indexer-entity = { path = "../user-ops-indexer-entity" }
 user-ops-indexer-proto = { path = "../user-ops-indexer-proto" }
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "e860a53" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "2de05e3" }
 
-atoi = "2.0.0"
 anyhow = "1.0"
 sea-orm = { version = "1.0.1", features = [
     "sqlx-postgres",
