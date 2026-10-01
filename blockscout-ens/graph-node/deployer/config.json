@@ -30,6 +30,11 @@
       "subgraph_name": "rns-subgraph",
       "network": "rootstock"
     },
+    "rensa": {
+      "subgraph_path": "../subgraphs/rensa-subgraph",
+      "subgraph_name": "rensa-subgraph",
+      "network": "robinhood"
+    },
     "rns-testnet": {
         "subgraph_path": "../subgraphs/rns-subgraph",
         "subgraph_name": "rns-testnet-subgraph",

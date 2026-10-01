@@ -68,6 +68,13 @@ pub struct ProtocolInfo {
     pub tld_list: NonEmpty<Tld>,
     pub subgraph_name: String,
     pub address_resolve_technique: AddressResolveTechnique,
+    /// Additional seconds for active domain/forward lookups; does not extend
+    /// primary-name reverse lookup validity or the displayed expiry date.
+    #[serde(default)]
+    pub forward_resolution_grace_period_seconds: u64,
+    /// Validate primary records against current ownership and normal expiry.
+    #[serde(default)]
+    pub primary_name_record_requires_active_owner: bool,
     pub meta: ProtocolMeta,
     pub protocol_specific: ProtocolSpecific,
 }
