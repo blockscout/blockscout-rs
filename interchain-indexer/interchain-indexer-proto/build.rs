@@ -124,6 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "proto/v1/stats.proto",
             "proto/v1/status.proto",
             "proto/v1/health.proto",
+            "proto/v1/admin.proto",
         ],
         &["proto", "../../proto"],
         gens,

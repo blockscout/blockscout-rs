@@ -269,3 +269,4 @@ written off.
 - `.memory-bank/research/message-lifecycle.md` §2 — cursor semantics
 - ADR-001 — message buffer tiered storage (the cursor derivation this leaves
   untouched)
+- ADR-016 — operator write API (an external writer of indexer_failures)

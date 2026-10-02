@@ -1,0 +1,148 @@
+# Write API
+
+Read this when you operate the operator write API: issuing and rotating keys,
+calling a method, reading its errors, rolling a change back, and finding the
+audit trail. The design and its trade-offs are in
+[ADR-016](../adr/016-operator-write-api-v1.md).
+
+Every method requires the `x-api-key` header and a JSON body sent with
+`Content-Type: application/json`. int64 fields are JSON strings (`"42"`, not
+`42`). A request without the content type, with a number for an int64, or
+without a required field is rejected with 400 before the key is checked, and is
+not logged.
+
+Paths below assume no `server.http.base_path`. If the deployment sets one, the
+admin paths carry the prefix.
+
+## Keys
+
+- **Generate** a key and its digest. Use `printf %s`, not `echo`: `echo` appends
+  a newline, and the digest would not match the key you send.
+
+  ```sh
+  KEY=$(openssl rand -hex 32)
+  printf %s "$KEY" | sha256sum | cut -d' ' -f1   # the digest to configure
+  ```
+
+  The key can be any string; the digest is what the service stores.
+- **Configure** the digest, never the key, as one variable per key:
+
+  ```sh
+  INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__OPS_ALICE=<64-hex digest>
+  ```
+
+  The name after `KEYS_SHA256__` (lowercased by the env loader: `ops_alice`) is
+  the **actor** written to the audit log. Do not put `__` inside a name: it
+  becomes a nested key and the settings fail to deserialize.
+- **Never set the map variable itself**
+  (`INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256=<value>`). The settings error that
+  follows prints the value, and the value may be a key.
+- **Startup validation.** The service refuses to start on an empty name, a value
+  that is not 64 hex characters (upper or lower case), or one digest under two
+  names. The message names the key and never repeats the value.
+- **Rotate** by adding a new name, deploying, moving callers to the new key, then
+  removing the old name and deploying again. Keys are read at startup, so a
+  change needs a restart.
+- **Fail-closed.** With no keys configured the service starts, logs
+  `write api has no keys configured; every write method will reject requests`,
+  and answers every write request with 401.
+
+## Calling the API
+
+Set `BASE` to the service URL and `KEY` to the key (not the digest).
+
+```sh
+curl -sS -X POST "$BASE/api/v1/admin/stats/assets:setIcon" \
+  -H 'content-type: application/json' -H "x-api-key: $KEY" \
+  -d '{"stats_asset_id":"42","icon_url":"https://example.com/usdc.png","reason":"TICKET-123"}'
+
+curl -sS -X POST "$BASE/api/v1/admin/stats/assets:setIcon" \
+  -H 'content-type: application/json' -H "x-api-key: $KEY" \
+  -d '{"stats_asset_id":"42","clear":true,"reason":"TICKET-123 revert"}'
+```
+
+The same methods are available on gRPC (`InterchainAdminService`) when the gRPC
+listener is enabled; it is disabled by default.
+
+Send exactly one of `icon_url` and `clear`. `reason` is required (1 to 1000
+characters after trimming), for example a ticket link. `icon_url` must be an
+`https` URL without credentials, at most 2048 bytes; it is stored in its
+normalized form and is never fetched by the service.
+
+## Responses And Errors
+
+The error body is JSON: `{"code": <gRPC code>, "message": "..."}`.
+
+| HTTP | Meaning |
+|---|---|
+| 200 | Applied. The body carries `audit_id` and the before/after values. |
+| 401 | Missing, empty, unknown key, or no keys configured. One message for all of them. |
+| 400 | Validation failed, or the body is not decodable. |
+| 404 | No such asset. |
+| 409 | Stats maintenance holds the row. Retry. |
+| 500 | Internal error. The client sees no details; the server log has them. |
+
+## Asset Icon (`SetStatsAssetIcon`)
+
+Sets or clears `icon_url` of one `stats_assets` row: the `icon_url` of a row of
+`GET /api/v1/stats/chain/{chain_id}/bridged-tokens`. Take `stats_asset_id` from
+that response. The method does not touch `tokens`: token icons are separate.
+
+- **Roll back** by repeating the call with `icon_url_before` from the response
+  (or from the audit row, `result->'icon_url_before'`), or with `clear` when it
+  was `null`.
+- **Permanence.** The writers that derive an asset icon (stats projection, asset
+  merge, token-info propagation) only fill an empty icon, so a manual value
+  stays. Two exceptions:
+  - **A lost merge.** When two assets merge, the one with more tokens wins. If
+    the winner already has an icon, the loser's icon, including a manual one, is
+    gone.
+  - **A one-round-trip race.** Those writers read the whole row and write it
+    back without locking. An operator write inside that window is reverted.
+    Repeat the call if the response is not reflected in the list.
+- **Re-apply after a merge.** This read-only query finds audited asset changes
+  whose asset no longer exists, with the member tokens it had:
+
+  ```sql
+  SELECT a.id, a.occurred_at, a.request->>'stats_asset_id' AS old_asset_id,
+         a.result->'icon_url_after' AS icon, a.result->'member_tokens' AS members
+  FROM write_api_audit_log a
+  WHERE a.method = 'SetStatsAssetIcon'
+    AND NOT EXISTS (SELECT 1 FROM stats_assets s
+                    WHERE s.id = (a.request->>'stats_asset_id')::bigint)
+  ORDER BY a.occurred_at;
+  ```
+
+  Find the current asset of a member token. Pass `$2` exactly as the audit row
+  shows `token_address`, with its `0x` prefix. The audit shows a native member as
+  `null`; it is stored as 20 zero bytes, so pass
+  `0x0000000000000000000000000000000000000000`:
+
+  ```sql
+  SELECT stats_asset_id FROM stats_asset_tokens
+  WHERE chain_id = $1 AND token_address = decode(substr($2, 3), 'hex');
+  ```
+
+  Then apply the icon to that asset through the API.
+- **A migration that clears `stats_assets`** loses manual icons the same way and
+  needs the same re-application.
+
+## Audit Queries
+
+Every applied change is one row of `write_api_audit_log`, written in the same
+transaction as the change. Rejected requests are not stored; they are in the
+service log (`write api authentication failed`, `write api request rejected`,
+`write api request failed`).
+
+Recent changes by actor and method:
+
+```sql
+SELECT id, occurred_at, actor, method, reason, request, result
+FROM write_api_audit_log
+WHERE actor = 'ops_alice' AND method = 'SetStatsAssetIcon'
+ORDER BY occurred_at DESC
+LIMIT 50;
+```
+
+The `audit_id` of a response is the row `id`, and the `write api change applied`
+log event carries the same `audit_id` next to the `request_id` of the HTTP log.

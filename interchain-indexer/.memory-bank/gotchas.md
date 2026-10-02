@@ -2986,3 +2986,62 @@ an empty string. Its conversion to the `chains` active model stores that empty
 string as SQL `NULL`. An Autoscout L1 onboarding therefore does not need an
 icon URL or `INTERCHAIN_INDEXER_CHAINS__<ID>__ICON`; passing an explicit URL
 remains supported. See `interchain-indexer-server/src/config.rs`.
+
+## Manual `stats_assets.icon_url` Is Permanent Except For Merge Loss And A One-Round-Trip Fill Race
+
+Three production writers derive `stats_assets.icon_url`, and all of them are
+fill-if-empty: `enrich_stats_assets_for_batch` and the metadata step of
+`merge_assets` (`interchain-indexer-logic/src/stats/projection.rs`), and
+`propagate_token_info_to_stats_tables`
+(`interchain-indexer-logic/src/database.rs`). An icon set through
+`SetStatsAssetIcon` therefore stays: no derivation replaces a non-empty value.
+There are two exceptions.
+
+1. **A lost merge.** `merge_assets` picks the winner by token count (ties go to
+   the lower id). The winner takes the loser's icon only when its own is empty,
+   and the loser row is deleted. A manual icon on a loser whose winner already
+   has an icon is gone, and the old `stats_asset_id` answers `NOT_FOUND`
+   afterwards. The audit row keeps `member_tokens`, which finds the successor
+   (`runbooks/write-api.md`).
+2. **A one-round-trip fill race.** Each writer reads the whole row and writes
+   name, symbol and icon back with no lock. An operator write that commits
+   between that read and that write is overwritten with the value the writer
+   read. The window is one round trip. Locking in the method cannot close it,
+   because the writers do not lock. Accepted in ADR-016.
+
+The method takes `FOR NO KEY UPDATE`, not `FOR UPDATE`. Stats maintenance
+checks its foreign keys (`stats_asset_tokens`, `stats_asset_edges`,
+`crosschain_transfers`) with `FOR KEY SHARE` on the asset row. That is
+compatible with `FOR NO KEY UPDATE` and conflicts with `FOR UPDATE`, which would
+wait for a long maintenance transaction and block its inserts meanwhile.
+`lock_timeout` (`SET LOCAL`, 5 s in the handler) bounds the wait for a
+concurrent writer, and its expiry (SQLSTATE `55P03`) becomes `ABORTED`.
+
+Do not lock `stats_asset_tokens` in the method: merge locks those rows while it
+already holds asset rows, so locking them in the other order builds a deadlock
+cycle. Source: `interchain-indexer-logic/src/write_api.rs`
+(`set_stats_asset_icon_tx`); the `write_api_db_*` tests pin the precedence,
+the lock compatibility and the timeout.
+
+## Admin JSON Bodies: int64 Are Strings, Non-Optional Proto Fields Are Required, `Content-Type` Is Mandatory, `oneof` Hides Conflicts; Pre-Handler Rejects Are Not Traced
+
+actix-prost deserializes the HTTP body into a generated JSON struct before the
+handler runs:
+
+- `int64` / `uint64` fields go through `DisplayFromStr`, so they are JSON
+  **strings** only: `"stats_asset_id": "42"` works and `42` is a 400.
+- Non-optional scalar, string and `repeated` fields are **required**: a missing
+  `reason` is a 400. An `optional` field is an `Option`, and absence is `None`.
+- A body without `Content-Type: application/json` is a 400 even when it is
+  valid.
+- A proto `oneof` is rendered with serde `flatten`, and a body that sets two
+  variants silently picks one. That is why the admin selectors are `optional`
+  fields and "both given" is checked explicitly (`resolve_icon_change`).
+
+All of these rejections happen before the handler. The `x-api-key` header is not
+checked and no trace event is emitted: an accepted deviation recorded in
+ADR-016, because logging them would mean overriding the launcher's app-wide
+`JsonConfig`. Do not expect the `write api …` trace events for such requests.
+`write_api_http_smoke` pins the number-instead-of-string and the
+missing-`Content-Type` cases. Sources: `interchain-indexer-proto/proto/v1/admin.proto`,
+`interchain-indexer-proto/tests/admin_json.rs`.

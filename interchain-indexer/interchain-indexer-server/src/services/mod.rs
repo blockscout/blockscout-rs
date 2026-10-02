@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+mod admin;
 mod bridge_proto;
 mod chain_info_proto;
 mod health;
@@ -8,6 +9,7 @@ mod stats;
 mod status;
 mod utils;
 
+pub(crate) use admin::InterchainAdminServiceImpl;
 pub use health::HealthService;
 pub use interchain_service::InterchainServiceImpl;
 pub use stats::InterchainStatisticsServiceImpl;

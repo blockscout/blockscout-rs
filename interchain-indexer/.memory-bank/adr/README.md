@@ -29,6 +29,7 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [013](./013-xdai-multi-deployment-grammar.md) | xDai Deployment Constants Stay In Code, Keyed By Chain Id | Accepted | 2026-09-18 |
 | [014](./014-first-seen-destination-execution-wins.md) | The First-Seen Destination Execution Is Canonical; Later Ones Are Recorded, Not Merged | Accepted | 2026-09-22 |
 | [015](./015-message-level-confirmations-attach-to-stored-row.md) | Validator Confirmations Are Message-Level; Late Ones Attach To The Stored Row | Accepted | 2026-09-29 |
+| [016](./016-operator-write-api-v1.md) | Operator Write API v1 | Accepted | 2026-10-02 |
 
 ## Creating a New ADR
 

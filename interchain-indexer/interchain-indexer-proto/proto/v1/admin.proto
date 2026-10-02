@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package blockscout.interchainIndexer.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+// Operator write API. Every method requires the `x-api-key` header. Send a JSON
+// body with `Content-Type: application/json`; int64 fields are JSON strings.
+service InterchainAdminService {
+  // Sets or clears the row icon of one bridged-token asset (the `icon_url` of a
+  // `GET /api/v1/stats/chain/{chain_id}/bridged-tokens` row). Does not change
+  // token icons. A manual asset icon is not replaced by derivation, but it is
+  // lost if the asset later loses a merge, and a concurrent fill of an empty
+  // name/symbol/icon can revert it.
+  rpc SetStatsAssetIcon(SetStatsAssetIconRequest) returns (SetStatsAssetIconResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Admin"
+    };
+  }
+}
+
+message SetStatsAssetIconRequest {
+  // `stats_asset_id` from the bridged-tokens response (a JSON string).
+  int64 stats_asset_id = 1;
+  // New icon URL (https, at most 2048 bytes). Exactly one of `icon_url`, `clear`.
+  optional string icon_url = 2;
+  // `true` clears the icon. Exactly one of `icon_url`, `clear`.
+  optional bool clear = 3;
+  // Why the change is made (1..1000 characters), e.g. a ticket link.
+  string reason = 4;
+}
+
+message SetStatsAssetIconResponse {
+  // Id of the audit-log row that recorded the change.
+  int64 audit_id = 1;
+  // `null` when the asset had no icon.
+  optional string icon_url_before = 2;
+  // `null` after `clear`.
+  optional string icon_url_after = 3;
+}

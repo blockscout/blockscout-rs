@@ -11,6 +11,7 @@ tags:
   - name: InterchainStatisticsService
   - name: StatusService
   - name: Health
+  - name: InterchainAdminService
 host: interchain-indexer.services.blockscout.com
 schemes:
   - https
@@ -19,6 +20,34 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/admin/stats/assets:setIcon:
+    post:
+      summary: |-
+        Sets or clears the row icon of one bridged-token asset (the `icon_url` of a
+        `GET /api/v1/stats/chain/{chain_id}/bridged-tokens` row). Does not change
+        token icons. A manual asset icon is not replaced by derivation, but it is
+        lost if the asset later loses a merge, and a concurrent fill of an empty
+        name/symbol/icon can revert it.
+      operationId: InterchainAdminService_SetStatsAssetIcon
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SetStatsAssetIconResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SetStatsAssetIconRequest'
+      tags:
+        - Admin
+      security:
+        - ApiKeyAuth: []
   /api/v1/interchain/bridges:
     get:
       operationId: InterchainService_GetBridges
@@ -1811,6 +1840,35 @@ definitions:
       scope). The cursor does not encode these filters and is not re-validated
       against them, so changing any filter mid-pagination is unsupported and
       yields undefined results; callers must restart pagination when filters change.
+  v1SetStatsAssetIconRequest:
+    type: object
+    properties:
+      stats_asset_id:
+        type: string
+        format: int64
+        description: '`stats_asset_id` from the bridged-tokens response (a JSON string).'
+      icon_url:
+        type: string
+        description: New icon URL (https, at most 2048 bytes). Exactly one of `icon_url`, `clear`.
+      clear:
+        type: boolean
+        description: '`true` clears the icon. Exactly one of `icon_url`, `clear`.'
+      reason:
+        type: string
+        description: Why the change is made (1..1000 characters), e.g. a ticket link.
+  v1SetStatsAssetIconResponse:
+    type: object
+    properties:
+      audit_id:
+        type: string
+        format: int64
+        description: Id of the audit-log row that recorded the change.
+      icon_url_before:
+        type: string
+        description: '`null` when the asset had no icon.'
+      icon_url_after:
+        type: string
+        description: '`null` after `clear`.'
   v1SortOrder:
     type: string
     enum:
