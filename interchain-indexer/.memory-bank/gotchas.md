@@ -1346,6 +1346,56 @@ Sources: `interchain-indexer-logic/src/indexer/range_driver.rs`
 `interchain-indexer-logic/src/indexer/failure_ledger/policy.rs`, and
 `interchain-indexer-logic/src/database.rs::record_indexer_failures`.
 
+## External indexer_failures Writers: Ledger Cache And Scheduler Width (Fixed)
+
+**Symptom (before the fix):**
+
+- A failure row inserted by someone other than this process's
+  `FailureLedger::record` (a rescan, manual SQL, another process) was replayed
+  forever: the retry tick reported its chunk as resolved, yet the row stayed
+  because `resolve` short-circuited with no SQL on a pair absent from
+  `pairs_with_holes`.
+- A fresh row inserted over just-resolved coverage inherited the old session's
+  tiny width. Resolving a singleton `[100,100]` (width 1), then inserting
+  `[100,1000099]` before the next snapshot, made the whole range replay one
+  block per chunk: about 87 days for 1M blocks at eight chunks per minute.
+
+**Root cause:**
+
+- The in-memory "pairs with holes" cache is only updated by this process's own
+  `record`, so a row written elsewhere is invisible to `resolve`.
+- `RetryScheduler::reconcile` matches new rows against the previous tick's
+  in-memory `coverage`, including coverage already removed by successful
+  `resolve` calls, and inherits the parent's width. `finish_sweep` resets
+  failure count and backoff on progress but never restores width.
+
+**Fix:**
+
+- `RangeDriver::run_retry_tick_at` calls `FailureLedger::note_open` for every
+  pair of a successfully read snapshot, before any `resolve` of that tick.
+  `note_open` is a `bump_epoch`, so it also stops an in-flight `resolve` from
+  clearing the pair.
+- `RetryScheduler` records chunks resolved through `report_outcome` in
+  `resolved_since_snapshot`; `reconcile` takes that list and ignores a parent
+  whose overlap with the row is entirely covered by those chunks, so the row
+  starts a fresh session. A genuine remainder keeps the inherited adaptive state.
+
+**Residual limitation:** blocks resolved by the forward path (not via
+`report_outcome`) are not in the list. External writers should stay below the
+realtime cursor and out of unscanned catch-up.
+
+**Do not:**
+
+- remove the `note_open` call or move it after the chunk loop's `resolve` calls;
+- "simplify" the parent filter back to plain `overlaps`;
+- clear `resolved_since_snapshot` anywhere but `reconcile` (a failed `open`
+  never reaches `begin_tick` and must leave the list intact).
+
+Sources: `interchain-indexer-logic/src/indexer/failure_ledger/mod.rs`
+(`note_open`), `interchain-indexer-logic/src/indexer/range_driver.rs`
+(`run_retry_tick_at`), `interchain-indexer-logic/src/indexer/retry_scheduler.rs`
+(`report_outcome`, `reconcile`, `has_unresolved_overlap`).
+
 ---
 
 ## The AMB Scan Floor Is The `amb_proxy` Contract's `started_at_block`

@@ -253,6 +253,15 @@ written off.
   already implicit in checkpointing; it now has a second consumer.
 - No retroactive coverage: the ledger says nothing about ranges scanned before it
   existed.
+- Rows in `indexer_failures` may also come from an external writer (a rescan,
+  manual SQL, another process), not only from this ledger's own `record`.
+  Correctness for such rows rests on two retry-tick rules:
+  `FailureLedger::note_open` marks every pair of a successful `open()` snapshot
+  before any `resolve`, and `RetryScheduler::reconcile` does not inherit width
+  from coverage fully resolved since the last snapshot
+  (`resolved_since_snapshot`). See `range_driver.rs::run_retry_tick_at`,
+  `retry_scheduler.rs`, and the gotcha "External indexer_failures Writers:
+  Ledger Cache And Scheduler Width (Fixed)" in `.memory-bank/gotchas.md`.
 
 ## References
 
