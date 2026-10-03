@@ -99,7 +99,7 @@ UPDATE_EXPECTED=1 cargo test --test '*' -- --test-threads=1
 ```
 
 For testing on **Windows** you need to rewrite some code due to the way the service is implemented. Change
-[99 line in `src/handlers.rs`](./src/handlers.rs#L99) with:
+[99 line in `src/handlers.rs`](https://github.com/blockscout/blockscout-rs/blob/main/libs/recache/src/handler.rs) with:
 
 ```let output = Command::new("cmd").arg("/C").arg("sol2uml").args(args).output().await?;```
 
