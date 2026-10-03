@@ -4,7 +4,7 @@ mod domain_name;
 pub mod hash_name;
 mod protocoler;
 
-pub use domain_name::{CleanName, DomainName, DomainNameOnProtocol};
+pub use domain_name::{is_ens_normalized, CleanName, DomainName, DomainNameOnProtocol};
 pub use hash_name::{hash_ens_domain_name, hash_infinity_domain_name};
 pub use protocoler::*;
 
