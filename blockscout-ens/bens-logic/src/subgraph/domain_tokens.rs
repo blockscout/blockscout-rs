@@ -44,12 +44,20 @@ fn extract_tokens_for_ens_like(
 ) -> Result<Vec<DomainToken>, anyhow::Error> {
     let mut tokens = vec![];
     if let Some(contract) = ens_like.native_token_contract {
-        let is_second_level_domain = name.inner.level() == 2;
         let is_native_domain = name.tld_is_native();
 
-        // native NFT exists only if domain is second level (like abc.eth and not abc.abc.eth)
-        // and if tld is native (like .eth and not .xyz)
-        if is_second_level_domain && is_native_domain {
+        if ens_like.native_token_id_is_namehash && name.inner.level() >= 2 && is_native_domain {
+            let id = token_id(&domain.id)?;
+            tokens.push(DomainToken {
+                id,
+                contract,
+                _type: DomainTokenType::Native,
+            });
+        } else if !ens_like.native_token_id_is_namehash
+            && name.inner.level() == 2
+            && is_native_domain
+        {
+            // Standard ENS registrar NFTs use the second-level labelhash.
             let labelhash = domain
                 .labelhash
                 .as_ref()
@@ -250,6 +258,50 @@ mod tests {
                 .expect("failed to extract tokens from domain");
 
             assert_eq!(tokens, expected_tokens, "failed for domain: {}", name.inner.name());
+        }
+    }
+
+    #[test]
+    fn extracts_namehash_native_tokens_at_every_registered_level() {
+        let native_contract = "0x1234567890123456789012345678901234567890";
+        let owner = "0x1111111111111111111111111111111111111111";
+        let mut protocol = Protocol::default();
+        protocol.info.tld_list = nonempty![Tld::new("gwei")];
+        protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
+            native_token_contract: addr(native_contract),
+            native_token_id_is_namehash: true,
+            ..Default::default()
+        });
+        let network = Network {
+            network_id: 1,
+            blockscout_client: Arc::new(BlockscoutClient::new(
+                "http://localhost:8545".parse().unwrap(),
+                1,
+                1,
+            )),
+            rpc_url: None,
+            use_protocols: vec![],
+        };
+        let deployed_protocol = DeployedProtocol {
+            protocol: &protocol,
+            deployment_network: &network,
+        };
+
+        for (domain_name, namehash, expected_id) in [
+            ("alice.gwei", "0x0100", "256"),
+            ("pay.alice.gwei", "0x0200", "512"),
+        ] {
+            let domain = domain(domain_name, namehash, "0x0300", owner, None);
+            let name = DomainNameOnProtocol::from_str(domain_name, deployed_protocol).unwrap();
+            let tokens = extract_tokens_from_domain(&domain, &name).unwrap();
+            assert_eq!(
+                tokens,
+                vec![DomainToken {
+                    id: expected_id.to_string(),
+                    contract: Address::from_str(native_contract).unwrap(),
+                    _type: DomainTokenType::Native,
+                }]
+            );
         }
     }
 }
