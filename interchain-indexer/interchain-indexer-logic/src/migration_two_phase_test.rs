@@ -16,6 +16,10 @@ mod tests {
     use sea_orm::ConnectionTrait;
     use sea_orm_migration::{DbErr, MigrationTrait};
 
+    /// The migration under test. Located by name, not by position, so that
+    /// migrations added after it do not change what this test exercises.
+    const XDAI_MIGRATION: &str = "m20260915_120000_add_xdai_and_cross_asset_stats";
+
     /// Let the test apply the real migrations in separate committed runs.
     struct EmptyMigrator;
 
@@ -26,13 +30,19 @@ mod tests {
         }
     }
 
+    /// Applies exactly the migrations that precede [`XDAI_MIGRATION`], each in
+    /// its own committed run, and checks that it is the next one pending.
     async fn seed_pre_xdai_schema(db: &sea_orm::DatabaseConnection) -> Result<(), DbErr> {
-        Migrator::up(db, Some(6)).await?;
+        let position = Migrator::migrations()
+            .iter()
+            .position(|migration| migration.name() == XDAI_MIGRATION)
+            .unwrap_or_else(|| panic!("{XDAI_MIGRATION} is not in the migrations list"));
+        Migrator::up(db, Some(position as u32)).await?;
+        let pending = Migrator::get_pending_migrations(db).await?;
         assert_eq!(
-            Migrator::get_pending_migrations(db).await?.len(),
-            1,
-            "expected only the merged xdai migration after phase 1; update the step count \
-             if the migrations list changes"
+            pending.first().map(|migration| migration.name()),
+            Some(XDAI_MIGRATION),
+            "phase 1 must leave the merged xdai migration as the next one to apply"
         );
         db.execute_unprepared(
             r#"
@@ -110,13 +120,16 @@ mod tests {
         let db = db_guard.client();
         seed_pre_xdai_schema(db.as_ref()).await?;
 
-        Migrator::up(db.as_ref(), None).await.expect(
+        // Phase 2: exactly the merged migration, whatever follows it.
+        Migrator::up(db.as_ref(), Some(1)).await.expect(
             "the merged migration must not reference its new bridge enum value before commit",
         );
         assert_migrated_tokens(db.as_ref()).await?;
 
         // The destructive rollback preserves homogeneous endpoint kinds, and
         // restores constraint names so a subsequent upgrade works as well.
+        // Right after phase 2 the merged migration is the latest applied one, so
+        // rolling back one step reverts exactly it.
         Migrator::down(db.as_ref(), Some(1)).await?;
         db.execute_unprepared(
             r#"
@@ -130,8 +143,11 @@ mod tests {
             "#,
         )
         .await?;
-        Migrator::up(db.as_ref(), None).await?;
+        Migrator::up(db.as_ref(), Some(1)).await?;
         assert_migrated_tokens(db.as_ref()).await?;
+
+        // The migrations after it still apply on top.
+        Migrator::up(db.as_ref(), None).await?;
         Ok(())
     }
 }
