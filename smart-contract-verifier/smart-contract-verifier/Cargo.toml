@@ -18,7 +18,8 @@ openssh = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 cron = { workspace = true }
-foundry-compilers = { workspace = true, features = ["async"] }
+foundry-compilers-artifacts = { workspace = true }
+foundry-compilers-core = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 libc = { workspace = true }
@@ -29,8 +30,6 @@ parking_lot = { workspace = true }
 primitive-types = { workspace = true, features = ["impl-serde"] }
 prometheus = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
-reqwest-middleware = { workspace = true }
-reqwest-retry = { workspace = true }
 rust-s3 = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -57,6 +56,7 @@ era-compiler-common = { workspace = true }
 
 [dev-dependencies]
 bollard = { workspace = true, features = ["pipe"] }
+foundry-compilers = { workspace = true, features = ["async"] }
 pretty_assertions = { workspace = true }
 quick-xml = { workspace = true, features = ["serialize"] }
 rand = { workspace = true }

@@ -33,7 +33,7 @@ mod solidity {
         },
         DEFAULT_SOLIDITY_COMPILER_LIST,
     };
-    use foundry_compilers::artifacts;
+    use foundry_compilers_artifacts as artifacts;
     use std::str::FromStr;
 
     async fn compilers() -> EvmCompilersPool<SolcCompiler> {
@@ -144,7 +144,7 @@ mod vyper {
         verify::vyper_compiler::{VyperCompiler, VyperInput},
         DetailedVersion, FullyQualifiedName, DEFAULT_VYPER_COMPILER_LIST,
     };
-    use foundry_compilers::artifacts::Source;
+    use foundry_compilers_artifacts::Source;
     use std::{
         collections::{BTreeMap, HashSet},
         path::PathBuf,
