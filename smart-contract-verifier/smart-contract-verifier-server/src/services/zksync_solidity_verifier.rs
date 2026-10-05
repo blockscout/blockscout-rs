@@ -9,7 +9,10 @@ use crate::{
     },
     services::common,
     settings::ZksyncSoliditySettings,
-    types::{zksolc_standard_json::VerifyStandardJsonRequestWrapper, StandardJsonParseError},
+    types::{
+        internal_error_status, zksolc_standard_json::VerifyStandardJsonRequestWrapper,
+        StandardJsonParseError,
+    },
 };
 use anyhow::Context;
 use smart_contract_verifier::{
@@ -166,7 +169,7 @@ fn process_verification_result(
             zksync::Error::ZkCompilerNotFound(_) | zksync::Error::EvmCompilerNotFound(_) => {
                 Err(Status::invalid_argument(err.to_string()))
             }
-            zksync::Error::Internal(_) => Err(Status::internal(err.to_string())),
+            zksync::Error::Internal(_) => Err(internal_error_status(err)),
         },
     }
 }

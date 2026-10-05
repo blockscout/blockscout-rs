@@ -2,10 +2,10 @@
 
 use super::{ExecutionError, ExecutionOutput};
 use crate::metrics::{
-    COMPILER_RUNNER_ACTIVE_CONTAINERS, COMPILER_RUNNER_JOBS_CURRENT, COMPILER_RUNNER_JOBS_TOTAL,
-    COMPILER_RUNNER_MAX_CONCURRENT_JOBS, COMPILER_RUNNER_OPERATION_DURATION,
-    COMPILER_RUNNER_ORPHAN_CLEANUP_CONTAINERS_TOTAL, COMPILER_RUNNER_ORPHAN_CLEANUP_SWEEPS_TOTAL,
-    COMPILER_RUNNER_TRANSFER_BYTES,
+    COMPILER_RUNNER_ACTIVE_CONTAINERS, COMPILER_RUNNER_DOCKER_CONNECT_FAILURES_TOTAL,
+    COMPILER_RUNNER_JOBS_CURRENT, COMPILER_RUNNER_JOBS_TOTAL, COMPILER_RUNNER_MAX_CONCURRENT_JOBS,
+    COMPILER_RUNNER_OPERATION_DURATION, COMPILER_RUNNER_ORPHAN_CLEANUP_CONTAINERS_TOTAL,
+    COMPILER_RUNNER_ORPHAN_CLEANUP_SWEEPS_TOTAL, COMPILER_RUNNER_TRANSFER_BYTES,
 };
 use prometheus::{HistogramTimer, IntGauge};
 
@@ -213,6 +213,12 @@ fn classify_error(error: &ExecutionError) -> &'static str {
 pub(super) fn count_orphan_sweep(trigger: &'static str, succeeded: bool) {
     COMPILER_RUNNER_ORPHAN_CLEANUP_SWEEPS_TOTAL
         .with_label_values(&[trigger, if succeeded { "success" } else { "error" }])
+        .inc();
+}
+
+pub(super) fn count_connect_failure(outcome: &'static str) {
+    COMPILER_RUNNER_DOCKER_CONNECT_FAILURES_TOTAL
+        .with_label_values(&[outcome])
         .inc();
 }
 

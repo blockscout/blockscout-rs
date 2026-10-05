@@ -207,7 +207,14 @@ Compiler-backed endpoints fail to start when execution remains `disabled`. In Do
 configuration errors still fail startup, but the service does not contact the compiler VM until the
 first compiler-readiness probe or compiler request. Transient SSH, Docker daemon, or runner-image
 failures are request/readiness failures and are retried; they do not prevent Sourcify and the
-server from starting. Orphan cleanup is best effort: a container that cannot be removed is logged
+server from starting. Every Docker request travels over an SSH session of its own unless an idle one
+can be reused, and sshd sheds sessions while too many handshakes overlap (`MaxStartups`). A request
+whose session could not be established never reached the daemon, so it is repeated up to three
+times with jittered backoff inside the same request timeout. If
+`smart_contract_verifier_compiler_runner_docker_connect_failures_total` keeps growing, raise
+`MaxStartups` on the compiler VM rather than relying on the retries. Internal failures are logged
+in full and answered with a fixed `internal error` message, so the compiler host's address never
+reaches API clients. Orphan cleanup is best effort: a container that cannot be removed is logged
 and counted, and retried by the periodic sweep. There is no Docker-to-native fallback. `native` remains available for
 tests and local development only.
 
@@ -231,7 +238,10 @@ When the metrics endpoint is enabled, the compiler runner exports:
   `smart_contract_verifier_compiler_runner_max_concurrent_jobs{executor}` for runner queue and slot
   utilization;
 - `smart_contract_verifier_compiler_runner_active_containers{family}` for container lifecycles
-  currently managed by the process; and
+  currently managed by the process;
+- `smart_contract_verifier_compiler_runner_docker_connect_failures_total{outcome}` for Docker
+  requests whose SSH session could not be established: `retried` for each repeated attempt and
+  `exhausted` when the last attempt failed as well; and
 - `smart_contract_verifier_compiler_runner_orphan_cleanup_sweeps_total{trigger,outcome}` plus
   `smart_contract_verifier_compiler_runner_orphan_cleanup_containers_total{family,outcome}` for
   lazy initialization and periodic recovery.

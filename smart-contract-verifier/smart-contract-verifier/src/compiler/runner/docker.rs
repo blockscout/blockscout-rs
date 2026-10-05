@@ -28,6 +28,7 @@ use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashMap},
+    future::Future,
     io::{Cursor, Read, Seek, SeekFrom, Write},
     num::NonZeroUsize,
     path::{Path, PathBuf},
@@ -66,6 +67,9 @@ const COMPILER_TMPFS_SIZE_BYTES: i64 = 256 * 1024 * 1024;
 const CLEANUP_GRACE_SECONDS: u64 = 300;
 const JANITOR_INTERVAL_SECONDS: u64 = 30;
 const DEFAULT_UNADMITTED_FILL_LIMIT: usize = 8;
+/// Attempts per Docker API call while its SSH session cannot be established.
+const CONNECT_ATTEMPTS: u32 = 4;
+const CONNECT_RETRY_BASE_DELAY: Duration = Duration::from_millis(250);
 
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -296,8 +300,15 @@ impl SpooledArchive {
         self.len
     }
 
-    fn into_stream(self) -> ReaderStream<tokio::fs::File> {
-        ReaderStream::with_capacity(tokio::fs::File::from_std(self.file), 64 * 1024)
+    /// Streams the whole archive from its start. Every stream shares the spool's file offset, so
+    /// only the most recent one may be read; an upload repeats it after a failed connection.
+    fn stream(&self) -> std::io::Result<ReaderStream<tokio::fs::File>> {
+        let mut file = self.file.try_clone()?;
+        file.seek(SeekFrom::Start(0))?;
+        Ok(ReaderStream::with_capacity(
+            tokio::fs::File::from_std(file),
+            64 * 1024,
+        ))
     }
 }
 
@@ -422,11 +433,14 @@ impl DockerCompilerExecutor {
     }
 
     async fn ping_remote(&self) -> Result<(), ExecutionError> {
-        timeout(self.api_timeout(), self.docker.ping())
-            .await
-            .map_err(|_| self.api_timeout_error("ping remote Docker daemon"))?
-            .context("ping remote Docker daemon")
-            .map_err(ExecutionError::Infrastructure)?;
+        timeout(
+            self.api_timeout(),
+            retry_connect(&self.docker, || self.docker.ping()),
+        )
+        .await
+        .map_err(|_| self.api_timeout_error("ping remote Docker daemon"))?
+        .context("ping remote Docker daemon")
+        .map_err(ExecutionError::Infrastructure)?;
         Ok(())
     }
 
@@ -450,7 +464,9 @@ impl DockerCompilerExecutor {
     async fn runner_image_present(&self) -> Result<bool, ExecutionError> {
         let inspected = timeout(
             self.api_timeout(),
-            self.docker.inspect_image(&self.settings.runner_image),
+            retry_connect(&self.docker, || {
+                self.docker.inspect_image(&self.settings.runner_image)
+            }),
         )
         .await
         .map_err(|_| self.api_timeout_error("inspect compiler runner image"))?;
@@ -807,17 +823,17 @@ impl DockerCompilerExecutor {
                 self.compiler_cache.ready.lock().await.remove(digest);
             } else {
                 self.compiler_cache.ready.lock().await.remove(digest);
-                let volume = self
-                    .docker
-                    .create_volume(VolumeCreateRequest {
-                        name: Some(compiler_cache_volume_name(digest)),
-                        driver: Some("local".to_string()),
-                        labels: Some(new_compiler_cache_labels(digest)),
-                        ..Default::default()
-                    })
-                    .await
-                    .context("create compiler cache volume")
-                    .map_err(ExecutionError::Infrastructure)?;
+                let request = VolumeCreateRequest {
+                    name: Some(compiler_cache_volume_name(digest)),
+                    driver: Some("local".to_string()),
+                    labels: Some(new_compiler_cache_labels(digest)),
+                    ..Default::default()
+                };
+                let volume =
+                    retry_connect(&self.docker, || self.docker.create_volume(request.clone()))
+                        .await
+                        .context("create compiler cache volume")
+                        .map_err(ExecutionError::Infrastructure)?;
                 validate_cache_volume(&volume, digest)?;
             }
 
@@ -850,11 +866,8 @@ impl DockerCompilerExecutor {
     }
 
     async fn inspect_cache_volume(&self, digest: &str) -> Result<Option<Volume>, ExecutionError> {
-        match self
-            .docker
-            .inspect_volume(&compiler_cache_volume_name(digest))
-            .await
-        {
+        let name = compiler_cache_volume_name(digest);
+        match retry_connect(&self.docker, || self.docker.inspect_volume(&name)).await {
             Ok(volume) => Ok(Some(volume)),
             Err(bollard::errors::Error::DockerResponseServerError {
                 status_code: 404, ..
@@ -875,19 +888,21 @@ impl DockerCompilerExecutor {
         let created = {
             let _timer =
                 metrics::start_operation(metrics::DOCKER, metrics::CREATE, family.as_str());
-            self.docker
-                .create_container(
+            let config = self.cache_helper_config(digest, false)?;
+            retry_connect(&self.docker, || {
+                self.docker.create_container(
                     Some(
                         CreateContainerOptionsBuilder::default()
                             .name(&container_name)
                             .platform(&self.settings.platform)
                             .build(),
                     ),
-                    self.cache_helper_config(digest, false)?,
+                    config.clone(),
                 )
-                .await
-                .context("create compiler cache probe")
-                .map_err(ExecutionError::Infrastructure)?
+            })
+            .await
+            .context("create compiler cache probe")
+            .map_err(ExecutionError::Infrastructure)?
         };
         let mut cleanup = ContainerCleanup::new(
             self.docker.clone(),
@@ -917,17 +932,19 @@ impl DockerCompilerExecutor {
         let create_result = {
             let _timer =
                 metrics::start_operation(metrics::DOCKER, metrics::CREATE, family.as_str());
-            self.docker
-                .create_container(
+            let config = self.cache_helper_config(digest, true)?;
+            retry_connect(&self.docker, || {
+                self.docker.create_container(
                     Some(
                         CreateContainerOptionsBuilder::default()
                             .name(&container_name)
                             .platform(&self.settings.platform)
                             .build(),
                     ),
-                    self.cache_helper_config(digest, true)?,
+                    config.clone(),
                 )
-                .await
+            })
+            .await
         };
         let created = match create_result {
             Ok(created) => created,
@@ -960,16 +977,20 @@ impl DockerCompilerExecutor {
                 metrics::start_operation(metrics::DOCKER, metrics::UPLOAD, family.as_str());
             timeout(
                 Duration::from_secs(self.settings.execution_timeout_seconds),
-                self.docker.upload_to_container(
-                    &created.id,
-                    Some(
-                        UploadToContainerOptionsBuilder::default()
-                            .path(COMPILER_CACHE_MOUNT)
-                            .no_overwrite_dir_non_dir("true")
-                            .build(),
-                    ),
-                    bollard::body_try_stream(archive.into_stream()),
-                ),
+                retry_connect(&self.docker, || async {
+                    self.docker
+                        .upload_to_container(
+                            &created.id,
+                            Some(
+                                UploadToContainerOptionsBuilder::default()
+                                    .path(COMPILER_CACHE_MOUNT)
+                                    .no_overwrite_dir_non_dir("true")
+                                    .build(),
+                            ),
+                            bollard::body_try_stream(archive.stream()?),
+                        )
+                        .await
+                }),
             )
             .await
             .map_err(|_| ExecutionError::Timeout {
@@ -1017,7 +1038,7 @@ impl DockerCompilerExecutor {
                     seconds: cache_timeout_seconds,
                 });
             }
-            match self.docker.inspect_container(&name, None).await {
+            match retry_connect(&self.docker, || self.docker.inspect_container(&name, None)).await {
                 Ok(container) => {
                     if let Some(container_id) = abandoned_initializer_id(
                         &container,
@@ -1063,9 +1084,8 @@ impl DockerCompilerExecutor {
         family: ContainerFamily,
     ) -> Result<ExecutionOutput, ExecutionError> {
         let _timer = metrics::start_operation(metrics::DOCKER, metrics::EXECUTE, family.as_str());
-        let attached = self
-            .docker
-            .attach_container(
+        let attached = retry_connect(&self.docker, || {
+            self.docker.attach_container(
                 container_id,
                 Some(
                     AttachContainerOptionsBuilder::default()
@@ -1077,17 +1097,19 @@ impl DockerCompilerExecutor {
                         .build(),
                 ),
             )
-            .await
-            .context("attach to compiler container")
-            .map_err(ExecutionError::Infrastructure)?;
+        })
+        .await
+        .context("attach to compiler container")
+        .map_err(ExecutionError::Infrastructure)?;
         let mut input = DropOffRuntime::new(attached.input);
         let mut output = DropOffRuntime::new(attached.output);
 
-        self.docker
-            .start_container(container_id, None)
-            .await
-            .context("start compiler container")
-            .map_err(ExecutionError::Infrastructure)?;
+        retry_connect(&self.docker, || {
+            self.docker.start_container(container_id, None)
+        })
+        .await
+        .context("start compiler container")
+        .map_err(ExecutionError::Infrastructure)?;
 
         let docker = self.docker.clone();
         let container_id = container_id.to_string();
@@ -1149,17 +1171,24 @@ impl DockerCompilerExecutor {
             };
 
             let wait = async move {
-                let mut stream = docker.wait_container(
-                    &wait_container_id,
-                    Some(WaitContainerOptionsBuilder::default().build()),
-                );
-                let response = stream
-                    .next()
-                    .await
-                    .context("Docker wait stream ended without a response")
-                    .map_err(ExecutionError::Infrastructure)?;
+                // The daemon answers a wait on an already stopped container at once, so a repeated
+                // wait cannot miss the exit.
+                let response = retry_connect(&docker, || async {
+                    docker
+                        .wait_container(
+                            &wait_container_id,
+                            Some(WaitContainerOptionsBuilder::default().build()),
+                        )
+                        .next()
+                        .await
+                        .transpose()
+                })
+                .await;
                 match response {
-                    Ok(response) => Ok(response.status_code),
+                    Ok(Some(response)) => Ok(response.status_code),
+                    Ok(None) => Err(ExecutionError::Infrastructure(anyhow::anyhow!(
+                        "Docker wait stream ended without a response"
+                    ))),
                     Err(bollard::errors::Error::DockerContainerWaitError { code, .. }) => Ok(code),
                     Err(error) => Err(ExecutionError::Infrastructure(
                         anyhow::Error::new(error).context("wait for compiler container"),
@@ -1179,12 +1208,12 @@ impl DockerCompilerExecutor {
             seconds: self.settings.execution_timeout_seconds,
         })??;
 
-        let inspected = self
-            .docker
-            .inspect_container(&container_id, None)
-            .await
-            .context("inspect completed compiler container")
-            .map_err(ExecutionError::Infrastructure)?;
+        let inspected = retry_connect(&self.docker, || {
+            self.docker.inspect_container(&container_id, None)
+        })
+        .await
+        .context("inspect completed compiler container")
+        .map_err(ExecutionError::Infrastructure)?;
         let oom_killed = inspected
             .state
             .and_then(|state| state.oom_killed)
@@ -1310,21 +1339,24 @@ impl CompilerExecutor for DockerCompilerExecutor {
 
             let family = ContainerFamily::Job;
             let container_name = format!("sc-verifier-compiler-{}", Uuid::new_v4());
-            let create_options = CreateContainerOptionsBuilder::default()
-                .name(&container_name)
-                .platform(&self.settings.platform)
-                .build();
             let created = {
                 let _timer =
                     metrics::start_operation(metrics::DOCKER, metrics::CREATE, family.as_str());
-                self.docker
-                    .create_container(
-                        Some(create_options),
-                        self.container_config(&invocation, &compilers)?,
+                let config = self.container_config(&invocation, &compilers)?;
+                retry_connect(&self.docker, || {
+                    self.docker.create_container(
+                        Some(
+                            CreateContainerOptionsBuilder::default()
+                                .name(&container_name)
+                                .platform(&self.settings.platform)
+                                .build(),
+                        ),
+                        config.clone(),
                     )
-                    .await
-                    .context("create compiler container")
-                    .map_err(ExecutionError::Infrastructure)?
+                })
+                .await
+                .context("create compiler container")
+                .map_err(ExecutionError::Infrastructure)?
             };
             let mut cleanup = ContainerCleanup::new(
                 self.docker.clone(),
@@ -1345,20 +1377,23 @@ impl CompilerExecutor for DockerCompilerExecutor {
                     let archive_size = archive.len();
                     let upload_timer =
                         metrics::start_operation(metrics::DOCKER, metrics::UPLOAD, family.as_str());
-                    self.docker
-                        .upload_to_container(
-                            &created.id,
-                            Some(
-                                UploadToContainerOptionsBuilder::default()
-                                    .path(JOB_ROOT)
-                                    .no_overwrite_dir_non_dir("true")
-                                    .build(),
-                            ),
-                            bollard::body_try_stream(archive.into_stream()),
-                        )
-                        .await
-                        .context("upload compiler job files")
-                        .map_err(ExecutionError::Infrastructure)?;
+                    retry_connect(&self.docker, || async {
+                        self.docker
+                            .upload_to_container(
+                                &created.id,
+                                Some(
+                                    UploadToContainerOptionsBuilder::default()
+                                        .path(JOB_ROOT)
+                                        .no_overwrite_dir_non_dir("true")
+                                        .build(),
+                                ),
+                                bollard::body_try_stream(archive.stream()?),
+                            )
+                            .await
+                    })
+                    .await
+                    .context("upload compiler job files")
+                    .map_err(ExecutionError::Infrastructure)?;
                     metrics::add_transfer_bytes(
                         metrics::DOCKER,
                         metrics::INPUT,
@@ -1538,7 +1573,9 @@ async fn reap_expired_containers_inner(docker: &Docker) -> anyhow::Result<()> {
         .build();
     let now = unix_timestamp()?;
     let mut first_error = None;
-    for container in docker.list_containers(Some(options)).await? {
+    let containers =
+        retry_connect(docker, || docker.list_containers(Some(options.clone()))).await?;
+    for container in containers {
         let family = observed_container_family(container.labels.as_ref());
         let expiry = container
             .labels
@@ -1628,13 +1665,81 @@ async fn force_remove_container(docker: &Docker, container_id: &str) -> anyhow::
         .force(true)
         .v(true)
         .build();
-    match docker.remove_container(container_id, Some(options)).await {
+    let removed = retry_connect(docker, || {
+        docker.remove_container(container_id, Some(options.clone()))
+    })
+    .await;
+    match removed {
         Ok(())
         | Err(bollard::errors::Error::DockerResponseServerError {
             status_code: 404, ..
         }) => Ok(()),
         Err(error) => Err(error.into()),
     }
+}
+
+/// Repeats a Docker API call whose SSH session could not be established.
+///
+/// bollard opens a new SSH session for every connection it cannot reuse, and sshd sheds sessions
+/// while too many handshakes overlap (`MaxStartups`). Such a call never reached the daemon, so
+/// repeating it is safe for requests that are not idempotent as well. All attempts share the
+/// client's request timeout, which the container expiry labels are sized by.
+async fn retry_connect<T, Fut>(
+    docker: &Docker,
+    call: impl FnMut() -> Fut,
+) -> Result<T, bollard::errors::Error>
+where
+    Fut: Future<Output = Result<T, bollard::errors::Error>>,
+{
+    retry_connect_within(docker.timeout(), CONNECT_RETRY_BASE_DELAY, call).await
+}
+
+async fn retry_connect_within<T, Fut>(
+    budget: Duration,
+    base_delay: Duration,
+    mut call: impl FnMut() -> Fut,
+) -> Result<T, bollard::errors::Error>
+where
+    Fut: Future<Output = Result<T, bollard::errors::Error>>,
+{
+    let attempts = async {
+        let mut attempt = 1;
+        loop {
+            match call().await {
+                Err(error) if is_connect_failure(&error) && attempt < CONNECT_ATTEMPTS => {
+                    metrics::count_connect_failure("retried");
+                    tracing::warn!(
+                        attempt,
+                        error = %error,
+                        "retrying Docker request after an SSH connect failure"
+                    );
+                    sleep(connect_retry_delay(base_delay, attempt)).await;
+                    attempt += 1;
+                }
+                result => {
+                    if result.as_ref().is_err_and(is_connect_failure) {
+                        metrics::count_connect_failure("exhausted");
+                    }
+                    return result;
+                }
+            }
+        }
+    };
+    timeout(budget, attempts)
+        .await
+        .unwrap_or(Err(bollard::errors::Error::RequestTimeoutError))
+}
+
+fn is_connect_failure(error: &bollard::errors::Error) -> bool {
+    matches!(error, bollard::errors::Error::HyperLegacyError { err } if err.is_connect())
+}
+
+/// Exponential backoff with up to as much jitter again, so jobs shed by one burst do not all
+/// reconnect in step.
+fn connect_retry_delay(base_delay: Duration, attempt: u32) -> Duration {
+    let backoff = base_delay.saturating_mul(1 << (attempt - 1));
+    let jitter_nanos = Uuid::new_v4().as_u128() % backoff.as_nanos().max(1);
+    backoff.saturating_add(Duration::from_nanos(jitter_nanos as u64))
 }
 
 fn unix_timestamp() -> Result<u64, ExecutionError> {
@@ -2925,7 +3030,7 @@ mod tests {
         let digest = hex::encode(Sha256::digest(&content));
         let archive = build_compiler_seed_archive(&compiler, &digest, 256 * 1024).unwrap();
         let expected_len = archive.len();
-        let mut stream = archive.into_stream();
+        let mut stream = archive.stream().unwrap();
         let mut streamed_len = 0;
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.unwrap();
@@ -2933,6 +3038,121 @@ mod tests {
             streamed_len += chunk.len();
         }
         assert_eq!(streamed_len, expected_len);
+    }
+
+    #[tokio::test]
+    async fn spooled_archive_stream_restarts_after_a_partial_read() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let compiler = source_dir.path().join("compiler");
+        let content = vec![0x5a; 128 * 1024];
+        std::fs::write(&compiler, &content).unwrap();
+        let digest = hex::encode(Sha256::digest(&content));
+        let archive = build_compiler_seed_archive(&compiler, &digest, 256 * 1024).unwrap();
+
+        let mut abandoned = archive.stream().unwrap();
+        abandoned.next().await.unwrap().unwrap();
+        drop(abandoned);
+
+        let mut stream = archive.stream().unwrap();
+        let mut streamed_len = 0;
+        while let Some(chunk) = stream.next().await {
+            streamed_len += chunk.unwrap().len();
+        }
+        assert_eq!(streamed_len, archive.len());
+    }
+
+    /// A client whose every request fails while connecting, as a shed SSH session does.
+    fn unreachable_docker() -> (tempfile::TempDir, Docker) {
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("docker.sock");
+        // bollard requires the path to exist; a socket nobody listens on refuses connections.
+        drop(std::os::unix::net::UnixListener::bind(&socket).unwrap());
+        let docker =
+            Docker::connect_with_unix(socket.to_str().unwrap(), 10, API_DEFAULT_VERSION).unwrap();
+        (dir, docker)
+    }
+
+    const TEST_RETRY_BUDGET: Duration = Duration::from_secs(10);
+    const TEST_RETRY_DELAY: Duration = Duration::from_millis(1);
+
+    #[tokio::test]
+    async fn connect_failure_is_retried_until_the_call_succeeds() {
+        let (_dir, docker) = unreachable_docker();
+        let mut calls = 0;
+        let result = retry_connect_within(TEST_RETRY_BUDGET, TEST_RETRY_DELAY, || {
+            calls += 1;
+            let reachable = calls == 3;
+            let docker = docker.clone();
+            async move {
+                match reachable {
+                    true => Ok("pong".to_string()),
+                    false => docker.ping().await,
+                }
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), "pong");
+        assert_eq!(calls, 3);
+    }
+
+    #[tokio::test]
+    async fn connect_retries_are_bounded() {
+        let (_dir, docker) = unreachable_docker();
+        let mut calls = 0;
+        let error = retry_connect_within(TEST_RETRY_BUDGET, TEST_RETRY_DELAY, || {
+            calls += 1;
+            docker.ping()
+        })
+        .await
+        .unwrap_err();
+        assert!(is_connect_failure(&error), "unexpected error: {error:?}");
+        assert_eq!(calls, CONNECT_ATTEMPTS);
+    }
+
+    #[tokio::test]
+    async fn daemon_errors_are_not_retried() {
+        let mut calls = 0;
+        let error = retry_connect_within(TEST_RETRY_BUDGET, TEST_RETRY_DELAY, || {
+            calls += 1;
+            async {
+                Err::<(), _>(bollard::errors::Error::DockerResponseServerError {
+                    status_code: 409,
+                    message: "name is already in use".to_string(),
+                })
+            }
+        })
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            bollard::errors::Error::DockerResponseServerError {
+                status_code: 409,
+                ..
+            }
+        ));
+        assert_eq!(calls, 1);
+    }
+
+    #[tokio::test]
+    async fn connect_retries_stop_at_the_request_budget() {
+        let (_dir, docker) = unreachable_docker();
+        let error =
+            retry_connect_within(Duration::from_millis(50), Duration::from_secs(60), || {
+                docker.ping()
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(error, bollard::errors::Error::RequestTimeoutError));
+    }
+
+    #[test]
+    fn connect_retry_delay_backs_off_with_bounded_jitter() {
+        let base = Duration::from_millis(250);
+        for (attempt, backoff) in [(1, 250), (2, 500), (3, 1000)] {
+            let delay = connect_retry_delay(base, attempt);
+            assert!(delay >= Duration::from_millis(backoff));
+            assert!(delay < Duration::from_millis(backoff * 2));
+        }
     }
 
     #[test]
