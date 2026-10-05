@@ -78,7 +78,7 @@ The error body is JSON: `{"code": <gRPC code>, "message": "..."}`.
 | 200 | Applied. The body carries `audit_id` and the before/after values. |
 | 401 | Missing, empty, unknown key, or no keys configured. One message for all of them. |
 | 400 | Validation failed, or the body is not decodable. |
-| 404 | No such asset. |
+| 404 | No such asset, or no `tokens` row for the token. |
 | 409 | Stats maintenance holds the row. Retry. |
 | 500 | Internal error. The client sees no details; the server log has them. |
 
@@ -126,6 +126,63 @@ that response. The method does not touch `tokens`: token icons are separate.
   Then apply the icon to that asset through the API.
 - **A migration that clears `stats_assets`** loses manual icons the same way and
   needs the same re-application.
+
+## Token Icon (`SetTokenIcon`)
+
+Sets or clears `tokens.token_icon` of one chain-local token that already has a
+`tokens` row. This is the icon `/api/v1/interchain/transfers` and `/messages`
+show for the token (`icon_url`), and the `tokens[].icon_url` nested in the
+bridged-tokens list.
+
+```sh
+# the native token of a chain (shown with a null address in the API)
+curl -sS -X POST "$BASE/api/v1/admin/tokens:setIcon" \
+  -H 'content-type: application/json' -H "x-api-key: $KEY" \
+  -d '{"chain_id":"100","native":true,"icon_url":"https://example.com/xdai.png","reason":"TICKET-1"}'
+
+# an ERC-20 token by its address
+curl -sS -X POST "$BASE/api/v1/admin/tokens:setIcon" \
+  -H 'content-type: application/json' -H "x-api-key: $KEY" \
+  -d '{"chain_id":"1","address":"0x6b175474e89094c44da98b954eedeac495271d0f","icon_url":"https://example.com/dai.png","reason":"TICKET-2"}'
+```
+
+Send exactly one of `address` and `native` (the zero address is rejected: use
+`native`), and exactly one of `icon_url` and `clear`. `chain_id` is a JSON
+string.
+
+- **Semantics.** The token-info source (Blockscout) is the source of truth.
+  - An icon Blockscout later provides **replaces** the value set here.
+  - A Blockscout miss or error does **not** erase it.
+  - The xDai native seed that runs at every start does not erase it.
+  - The method does not change `stats_assets`. The existing fill-if-empty
+    derivation may later copy the token icon into an **empty** asset icon.
+- **404** when the token has no `tokens` row. A row appears only after the
+  token's metadata has been fetched successfully (after the token showed up in a
+  transfer), or, for the xDai native token, when the indexer seeds it at start. A
+  token whose metadata fetch keeps failing has no row. The method never inserts
+  one.
+- **Latency.** A call can take up to about 15 s when it waits behind a
+  request-time Blockscout lookup for the same token. If the client times out or
+  the connection drops, check `write_api_audit_log` for the call and re-issue it:
+  the call is idempotent (it records another audit row and drops the process's
+  cached entry again).
+- **Roll back** by repeating the call with `icon_url_before` from the response
+  (or from the audit row, `result->'icon_url_before'`), or with `clear` when it
+  was `null`. After `clear`, Blockscout can fill the icon again.
+- **Visibility.** In the process that handled the call, the next request after
+  the call returns reads the new value, in `/transfers`, `/messages` and the
+  bridged-tokens list, without a restart.
+- **The cache reset is local to the process.** If several processes serve the API
+  from one database, the others keep showing the old icon until they restart:
+  restart them.
+- **After a code rollback** the old rule comes back: the next xDai start erases
+  the manual icon of the native token, and Blockscout misses erase ERC-20 icons.
+  Re-apply the icons from the audit log; the last row per token wins:
+
+  ```sql
+  SELECT request, result, occurred_at FROM write_api_audit_log
+  WHERE method = 'SetTokenIcon' ORDER BY occurred_at;
+  ```
 
 ## Audit Queries
 

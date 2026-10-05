@@ -6,7 +6,7 @@
 //! commits: the caller decides when the change and its audit row become
 //! visible together.
 
-use interchain_indexer_entity::{stats_asset_tokens, stats_assets, write_api_audit_log};
+use interchain_indexer_entity::{stats_asset_tokens, stats_assets, tokens, write_api_audit_log};
 use sea_orm::{
     ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
     QueryFilter, QueryOrder, QuerySelect, RuntimeErr, sea_query::LockType, sqlx,
@@ -113,6 +113,55 @@ pub async fn set_stats_asset_icon_tx(
         before,
         after,
         member_tokens,
+    }))
+}
+
+/// State of a `tokens` row around an icon change.
+pub struct TokenIconChange {
+    pub before: Option<String>,
+    pub after: tokens::Model,
+}
+
+/// Sets or clears (`icon_url = None`) `tokens.token_icon` of an EXISTING row.
+///
+/// Returns `Ok(None)` if the row does not exist. It never inserts: a placeholder
+/// row would make the request-time metadata fetch think the token is already
+/// known. It never touches the stats tables and never calls
+/// `propagate_token_info_to_stats_tables`: an asset icon changes only through
+/// its own method.
+///
+/// The row is locked `FOR UPDATE` until the caller commits. The caller must not
+/// take the `TokenInfoService` per-key mutex while this transaction is open
+/// (see `TokenInfoService::invalidate_cached`).
+pub async fn set_token_icon_tx(
+    tx: &DatabaseTransaction,
+    chain_id: i64,
+    address: &[u8],
+    icon_url: Option<&str>,
+) -> Result<Option<TokenIconChange>, DbErr> {
+    let Some(row) = tokens::Entity::find()
+        .filter(tokens::Column::ChainId.eq(chain_id))
+        .filter(tokens::Column::Address.eq(address.to_vec()))
+        .lock_exclusive()
+        .one(tx)
+        .await?
+    else {
+        return Ok(None);
+    };
+
+    let after = tokens::Entity::update(tokens::ActiveModel {
+        chain_id: ActiveValue::Unchanged(chain_id),
+        address: ActiveValue::Unchanged(address.to_vec()),
+        token_icon: ActiveValue::Set(icon_url.map(str::to_owned)),
+        updated_at: ActiveValue::Set(Some(chrono::Utc::now().naive_utc())),
+        ..Default::default()
+    })
+    .exec(tx)
+    .await?;
+
+    Ok(Some(TokenIconChange {
+        before: row.token_icon,
+        after,
     }))
 }
 
@@ -669,5 +718,125 @@ mod tests {
         holder.rollback().await.unwrap();
 
         assert_eq!(asset(db, id).await.icon_url.as_deref(), Some(OLD_ICON));
+    }
+
+    /// Runs `set_token_icon_tx` in its own transaction and commits it.
+    async fn set_token_icon_committed(
+        db: &DatabaseConnection,
+        chain_id: i64,
+        address: &[u8],
+        icon_url: Option<&str>,
+    ) -> Option<TokenIconChange> {
+        let tx = db.begin().await.unwrap();
+        let change = set_token_icon_tx(&tx, chain_id, address, icon_url)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        change
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn token_icon_db_set_changes_only_tokens() {
+        let guard = init_db("token_icon_db_set_changes_only_tokens").await;
+        let conn = guard.client();
+        let db = conn.as_ref();
+        seed_chains_and_bridge(db, &[1, 100]).await;
+
+        // The token is a member of an asset with an icon of its own.
+        let address = vec![0xd1u8; 20];
+        let other_address = vec![0xd2u8; 20];
+        let asset_id = seed_asset(db, Some("USDC"), Some("USDC"), Some(OLD_ICON)).await;
+        link_token(db, asset_id, 1, address.clone(), TokenType::Erc20).await;
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: ActiveValue::Set(1),
+            address: ActiveValue::Set(address.clone()),
+            name: ActiveValue::Set(Some("USDC".to_string())),
+            symbol: ActiveValue::Set(Some("USDC".to_string())),
+            decimals: ActiveValue::Set(Some(6)),
+            token_icon: ActiveValue::Set(Some(TOKEN_ICON.to_string())),
+            created_at: ActiveValue::Set(Some(old_timestamp())),
+            updated_at: ActiveValue::Set(Some(old_timestamp())),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        let other_before =
+            seed_token_row(db, 1, other_address.clone(), Some("Other"), Some(OLD_ICON)).await;
+        let assets_before = stats_assets::Entity::find().all(db).await.unwrap();
+        let links_before = stats_asset_tokens::Entity::find().all(db).await.unwrap();
+
+        let change = set_token_icon_committed(db, 1, &address, Some(NEW_ICON))
+            .await
+            .expect("the token row exists");
+
+        assert_eq!(change.before.as_deref(), Some(TOKEN_ICON));
+        assert_eq!(change.after.token_icon.as_deref(), Some(NEW_ICON));
+        let stored = tokens::Entity::find_by_id((1i64, address.clone()))
+            .one(db)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored, change.after, "RETURNING matches the stored row");
+        assert_eq!(stored.name.as_deref(), Some("USDC"));
+        assert_eq!(stored.symbol.as_deref(), Some("USDC"));
+        assert_eq!(stored.decimals, Some(6));
+        assert_eq!(stored.r#type, TokenType::Erc20);
+        assert_eq!(stored.created_at, Some(old_timestamp()));
+        assert!(stored.updated_at > Some(old_timestamp()));
+
+        assert_eq!(
+            stats_assets::Entity::find().all(db).await.unwrap(),
+            assets_before,
+            "the asset icon is a separate method's business"
+        );
+        assert_eq!(
+            stats_asset_tokens::Entity::find().all(db).await.unwrap(),
+            links_before
+        );
+        assert_eq!(
+            tokens::Entity::find_by_id((1i64, other_address))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap(),
+            other_before,
+            "another token is not touched"
+        );
+
+        // Clearing stores NULL and reports what was there.
+        let cleared = set_token_icon_committed(db, 1, &address, None)
+            .await
+            .expect("the token row exists");
+        assert_eq!(cleared.before.as_deref(), Some(NEW_ICON));
+        assert_eq!(cleared.after.token_icon, None);
+        assert_eq!(
+            asset(db, asset_id).await.icon_url.as_deref(),
+            Some(OLD_ICON)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn token_icon_db_missing_row_returns_none_and_inserts_nothing() {
+        let guard = init_db("token_icon_db_missing_row").await;
+        let conn = guard.client();
+        let db = conn.as_ref();
+        seed_chains_and_bridge(db, &[1, 100]).await;
+        let existing = vec![0xe1u8; 20];
+        seed_token_row(db, 1, existing.clone(), Some("Exists"), Some(OLD_ICON)).await;
+
+        // Same address on another chain, and another address on the same chain.
+        let missing = [(100i64, existing.clone()), (1, vec![0xe2u8; 20])];
+        for (chain_id, address) in missing {
+            // Committed on purpose: nothing may have been written to commit.
+            let change = set_token_icon_committed(db, chain_id, &address, Some(NEW_ICON)).await;
+            assert!(change.is_none(), "chain {chain_id}");
+        }
+
+        let rows = tokens::Entity::find().all(db).await.unwrap();
+        assert_eq!(rows.len(), 1, "no placeholder row may be inserted");
+        assert_eq!(rows[0].token_icon.as_deref(), Some(OLD_ICON));
     }
 }

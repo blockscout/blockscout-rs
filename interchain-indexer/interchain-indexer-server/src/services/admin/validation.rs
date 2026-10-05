@@ -8,6 +8,9 @@ use url::Url;
 
 pub(crate) const MAX_REASON_CHARS: usize = 1000;
 pub(crate) const MAX_ICON_URL_BYTES: usize = 2048;
+/// Length of an EVM address in bytes. The native token is stored under this many
+/// zero bytes.
+const EVM_ADDRESS_BYTES: usize = 20;
 
 fn ensure_arg(condition: bool, message: impl FnOnce() -> String) -> Result<(), AdminError> {
     match condition {
@@ -78,6 +81,45 @@ pub(crate) fn resolve_icon_change(
         (None, None) => Err(AdminError::InvalidArgument(
             "set exactly one of icon_url and clear".to_string(),
         )),
+    }
+}
+
+/// Resolves the `address` / `native` pair of a token request into the storage
+/// address: 20 bytes, with the native token stored as 20 zero bytes. Exactly one
+/// of the two must be given; the zero address is rejected so that one token has
+/// one spelling.
+pub(crate) fn parse_token_selector(
+    address: Option<&str>,
+    native: Option<bool>,
+) -> Result<Vec<u8>, AdminError> {
+    match (address, native) {
+        (Some(_), Some(_)) => Err(AdminError::InvalidArgument(
+            "set exactly one of address and native, not both".to_string(),
+        )),
+        (None, None) => Err(AdminError::InvalidArgument(
+            "set exactly one of address and native".to_string(),
+        )),
+        (None, Some(false)) => Err(AdminError::InvalidArgument(
+            "native must be true when set; omit it and give address to select a token".to_string(),
+        )),
+        (None, Some(true)) => Ok(vec![0u8; EVM_ADDRESS_BYTES]),
+        (Some(address), None) => {
+            let hex_digits = address
+                .strip_prefix("0x")
+                .or_else(|| address.strip_prefix("0X"))
+                .filter(|digits| digits.len() == EVM_ADDRESS_BYTES * 2)
+                .ok_or_else(|| {
+                    AdminError::InvalidArgument(
+                        "address must be a 0x-prefixed 20-byte hex string".to_string(),
+                    )
+                })?;
+            let bytes = hex::decode(hex_digits)
+                .map_err(|_| AdminError::InvalidArgument("address is not valid hex".to_string()))?;
+            ensure_arg(bytes.iter().any(|byte| *byte != 0), || {
+                "use native=true for the native token".to_string()
+            })?;
+            Ok(bytes)
+        }
     }
 }
 
@@ -205,5 +247,71 @@ mod tests {
             is_invalid_argument(resolve_icon_change(Some("http://example.com/i.png"), None)),
             "the URL is validated when it is the chosen field"
         );
+    }
+
+    #[test]
+    fn admin_validation_token_selector_rules() {
+        let address = "0x6b175474e89094c44da98b954eedeac495271d0f";
+        let expected = hex::decode(&address[2..]).unwrap();
+
+        // An address, in either case and with either prefix spelling.
+        assert_eq!(parse_token_selector(Some(address), None).unwrap(), expected);
+        assert_eq!(
+            parse_token_selector(Some(&address.to_uppercase().replacen("0X", "0x", 1)), None)
+                .unwrap(),
+            expected
+        );
+        assert_eq!(
+            parse_token_selector(Some(&format!("0X{}", &address[2..])), None).unwrap(),
+            expected
+        );
+
+        // The native token is 20 zero bytes.
+        assert_eq!(
+            parse_token_selector(None, Some(true)).unwrap(),
+            vec![0u8; 20]
+        );
+
+        // The zero address has one spelling: `native = true`.
+        let zero = format!("0x{}", "00".repeat(20));
+        match parse_token_selector(Some(&zero), None) {
+            Err(AdminError::InvalidArgument(message)) => {
+                assert_eq!(message, "use native=true for the native token")
+            }
+            other => panic!("the zero address must be rejected, got {other:?}"),
+        }
+
+        // Exactly one selector.
+        assert!(is_invalid_argument(parse_token_selector(
+            Some(address),
+            Some(true)
+        )));
+        assert!(
+            is_invalid_argument(parse_token_selector(Some(address), Some(false))),
+            "a second selector is an error whatever its value"
+        );
+        assert!(is_invalid_argument(parse_token_selector(None, None)));
+        assert!(is_invalid_argument(parse_token_selector(None, Some(false))));
+
+        // Malformed addresses.
+        let bad_addresses = [
+            "",
+            "0x",
+            &address[2..],
+            &format!("1x{}", &address[2..]),
+            &address[..address.len() - 2],
+            &format!("{address}00"),
+            &format!("0x{}", "zz".repeat(20)),
+            &format!("0x {}", &address[3..]),
+            &format!(" {address}"),
+            &format!("{address} "),
+            &format!("0x{}", "ы".repeat(20)),
+        ];
+        for bad in bad_addresses {
+            assert!(
+                is_invalid_argument(parse_token_selector(Some(bad), None)),
+                "{bad:?}"
+            );
+        }
     }
 }

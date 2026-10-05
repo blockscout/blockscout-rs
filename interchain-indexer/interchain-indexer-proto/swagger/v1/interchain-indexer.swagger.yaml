@@ -48,6 +48,33 @@ paths:
         - Admin
       security:
         - ApiKeyAuth: []
+  /api/v1/admin/tokens:setIcon:
+    post:
+      summary: |-
+        Sets or clears the icon of one token that already has a `tokens` row. The
+        token-info source (Blockscout) remains the source of truth: an icon it
+        later provides replaces the value set here; its absence never erases it.
+        Does not change bridged-token asset icons.
+      operationId: InterchainAdminService_SetTokenIcon
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SetTokenIconResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SetTokenIconRequest'
+      tags:
+        - Admin
+      security:
+        - ApiKeyAuth: []
   /api/v1/interchain/bridges:
     get:
       operationId: InterchainService_GetBridges
@@ -1866,6 +1893,41 @@ definitions:
       icon_url_before:
         type: string
         description: '`null` when the asset had no icon.'
+      icon_url_after:
+        type: string
+        description: '`null` after `clear`.'
+  v1SetTokenIconRequest:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+        description: Chain id (a JSON string).
+      address:
+        type: string
+        description: 0x-prefixed 20-byte token address. Exactly one of `address`, `native`.
+      native:
+        type: boolean
+        description: '`true` selects the chain''s native token (shown with a null address in the API).'
+      icon_url:
+        type: string
+        description: New icon URL (https, at most 2048 bytes). Exactly one of `icon_url`, `clear`.
+      clear:
+        type: boolean
+        description: '`true` clears the icon. Exactly one of `icon_url`, `clear`.'
+      reason:
+        type: string
+        description: Why the change is made (1..1000 characters), e.g. a ticket link.
+  v1SetTokenIconResponse:
+    type: object
+    properties:
+      audit_id:
+        type: string
+        format: int64
+        description: Id of the audit-log row that recorded the change.
+      icon_url_before:
+        type: string
+        description: '`null` when the token had no icon.'
       icon_url_after:
         type: string
         description: '`null` after `clear`.'

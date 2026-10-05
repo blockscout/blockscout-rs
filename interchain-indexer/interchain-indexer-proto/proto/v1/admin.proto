@@ -22,6 +22,19 @@ service InterchainAdminService {
       tags: "Admin"
     };
   }
+
+  // Sets or clears the icon of one token that already has a `tokens` row. The
+  // token-info source (Blockscout) remains the source of truth: an icon it
+  // later provides replaces the value set here; its absence never erases it.
+  // Does not change bridged-token asset icons.
+  rpc SetTokenIcon(SetTokenIconRequest) returns (SetTokenIconResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Admin"
+    };
+  }
 }
 
 message SetStatsAssetIconRequest {
@@ -39,6 +52,30 @@ message SetStatsAssetIconResponse {
   // Id of the audit-log row that recorded the change.
   int64 audit_id = 1;
   // `null` when the asset had no icon.
+  optional string icon_url_before = 2;
+  // `null` after `clear`.
+  optional string icon_url_after = 3;
+}
+
+message SetTokenIconRequest {
+  // Chain id (a JSON string).
+  int64 chain_id = 1;
+  // 0x-prefixed 20-byte token address. Exactly one of `address`, `native`.
+  optional string address = 2;
+  // `true` selects the chain's native token (shown with a null address in the API).
+  optional bool native = 3;
+  // New icon URL (https, at most 2048 bytes). Exactly one of `icon_url`, `clear`.
+  optional string icon_url = 4;
+  // `true` clears the icon. Exactly one of `icon_url`, `clear`.
+  optional bool clear = 5;
+  // Why the change is made (1..1000 characters), e.g. a ticket link.
+  string reason = 6;
+}
+
+message SetTokenIconResponse {
+  // Id of the audit-log row that recorded the change.
+  int64 audit_id = 1;
+  // `null` when the token had no icon.
   optional string icon_url_before = 2;
   // `null` after `clear`.
   optional string icon_url_after = 3;

@@ -518,7 +518,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         db.clone(),
         targets.clone(),
     ));
-    let admin_service = Arc::new(InterchainAdminServiceImpl::new(write_api_auth, db.clone()));
+    let admin_service = Arc::new(InterchainAdminServiceImpl::new(
+        write_api_auth,
+        db.clone(),
+        token_info_service.clone(),
+    ));
     let router = Router {
         health,
         interchain_service,

@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 const ROUTE: &str = "/api/v1/admin/stats/assets:setIcon";
+const TOKEN_ROUTE: &str = "/api/v1/admin/tokens:setIcon";
 const KEY: &str = "test-key";
 
 #[tokio::test]
@@ -78,6 +79,29 @@ async fn write_api_http_smoke() {
     // A valid key reaches the handler (so the header got into the request
     // metadata), which reports the unknown asset.
     let (status, body) = post(Some(KEY), json_type, unknown_asset).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(body["code"], json!(5), "{body}");
+
+    // The token method is routed the same way: a valid key reaches its handler,
+    // which reports a token that has no row (and inserts none).
+    let response = client
+        .post(base.join(TOKEN_ROUTE).unwrap())
+        .header("x-api-key", KEY)
+        .header("content-type", "application/json")
+        .body(
+            json!({
+                "chain_id": "1",
+                "address": "0x00000000000000000000000000000000000000aa",
+                "icon_url": "https://example.com/i.png",
+                "reason": "smoke",
+            })
+            .to_string(),
+        )
+        .send()
+        .await
+        .expect("request failed");
+    let status = response.status();
+    let body: Value = response.json().await.expect("body is not JSON");
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
     assert_eq!(body["code"], json!(5), "{body}");
 

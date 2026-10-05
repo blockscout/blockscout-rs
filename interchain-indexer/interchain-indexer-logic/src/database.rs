@@ -3366,10 +3366,18 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
+    /// Inserts or updates one `tokens` row and returns the stored row.
+    ///
+    /// `token_icon` is a patch, not an overwrite: an incoming `NULL` (`Set(None)`
+    /// or `NotSet`) keeps the stored icon and an incoming value replaces it. The
+    /// xDai native seed (icon `NotSet`) must not wipe an icon on every start, the
+    /// token-info source (Blockscout) stays the source of truth over a manual
+    /// icon, and a Blockscout miss or error must not erase one. Do not turn this
+    /// back into `update_columns([.., TokenIcon])`.
     pub async fn upsert_token_info(
         &self,
         mut token_info: tokens::ActiveModel,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<tokens::Model> {
         let explicit_type = !token_info.r#type.is_not_set();
         if !explicit_type
             && let ActiveValue::Set(address) | ActiveValue::Unchanged(address) = &token_info.address
@@ -3385,20 +3393,23 @@ impl InterchainDatabase {
                 tokens::Column::Name,
                 tokens::Column::Symbol,
                 tokens::Column::Decimals,
-                tokens::Column::TokenIcon,
             ])
+            .value(
+                tokens::Column::TokenIcon,
+                Expr::cust(r#"COALESCE("excluded"."token_icon", "tokens"."token_icon")"#),
+            )
             .value(tokens::Column::UpdatedAt, Expr::current_timestamp());
         // A metadata-only refresh must not replace an explicit registry kind
         // with the default used for a newly discovered contract token.
         if explicit_type {
             on_conflict.update_column(tokens::Column::Type);
         }
-        tokens::Entity::insert(token_info)
+        let stored = tokens::Entity::insert(token_info)
             .on_conflict(on_conflict.to_owned())
-            .exec(self.db.as_ref())
+            .exec_with_returning(self.db.as_ref())
             .await?;
 
-        Ok(())
+        Ok(stored)
     }
 
     /// Push token metadata/decimals into `stats_assets` / `stats_asset_edges` for rows linked via
@@ -16581,5 +16592,138 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(edge2.transfers_count, 1);
+    }
+
+    // --- upsert_token_info: token_icon is a patch (COALESCE), not an overwrite ---
+
+    const TOKEN_ICON_X: &str = "https://icons.example/x.png";
+    const TOKEN_ICON_Y: &str = "https://icons.example/y.png";
+
+    fn token_upsert(address: &[u8], name: &str, icon: Option<Option<&str>>) -> tokens::ActiveModel {
+        tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(address.to_vec()),
+            name: Set(Some(name.to_string())),
+            symbol: Set(Some("TOK".to_string())),
+            decimals: Set(Some(18)),
+            token_icon: match icon {
+                Some(icon) => Set(icon.map(str::to_string)),
+                None => sea_orm::ActiveValue::NotSet,
+            },
+            ..Default::default()
+        }
+    }
+
+    async fn stored_token(db: &sea_orm::DatabaseConnection, address: &[u8]) -> tokens::Model {
+        tokens::Entity::find_by_id((1i64, address.to_vec()))
+            .one(db)
+            .await
+            .unwrap()
+            .expect("token row exists")
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn token_upsert_db_keeps_icon_when_incoming_icon_is_null() {
+        let guard = init_db("token_upsert_db_keeps_icon").await;
+        let conn = guard.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let ic = InterchainDatabase::new(conn.clone());
+        let address = [0x71u8; 20];
+
+        ic.upsert_token_info(token_upsert(&address, "First", Some(Some(TOKEN_ICON_X))))
+            .await
+            .unwrap();
+
+        // `Set(None)`: a metadata refresh that found no icon.
+        let after_none = ic
+            .upsert_token_info(token_upsert(&address, "Second", Some(None)))
+            .await
+            .unwrap();
+        assert_eq!(after_none.token_icon.as_deref(), Some(TOKEN_ICON_X));
+        assert_eq!(
+            after_none.name.as_deref(),
+            Some("Second"),
+            "the other columns are still refreshed"
+        );
+
+        // `NotSet`: the shape of the xDai native seed.
+        let after_not_set = ic
+            .upsert_token_info(token_upsert(&address, "Third", None))
+            .await
+            .unwrap();
+        assert_eq!(after_not_set.token_icon.as_deref(), Some(TOKEN_ICON_X));
+        assert_eq!(after_not_set.name.as_deref(), Some("Third"));
+
+        let stored = stored_token(db, &address).await;
+        assert_eq!(stored.token_icon.as_deref(), Some(TOKEN_ICON_X));
+        assert_eq!(stored.name.as_deref(), Some("Third"));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn token_upsert_db_replaces_icon_when_incoming_icon_is_set() {
+        let guard = init_db("token_upsert_db_replaces_icon").await;
+        let conn = guard.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let ic = InterchainDatabase::new(conn.clone());
+        let with_icon = [0x72u8; 20];
+        let without_icon = [0x73u8; 20];
+
+        ic.upsert_token_info(token_upsert(&with_icon, "A", Some(Some(TOKEN_ICON_X))))
+            .await
+            .unwrap();
+        let replaced = ic
+            .upsert_token_info(token_upsert(&with_icon, "A", Some(Some(TOKEN_ICON_Y))))
+            .await
+            .unwrap();
+        assert_eq!(replaced.token_icon.as_deref(), Some(TOKEN_ICON_Y));
+        assert_eq!(
+            stored_token(db, &with_icon).await.token_icon.as_deref(),
+            Some(TOKEN_ICON_Y)
+        );
+
+        // A token that had no icon gets one.
+        ic.upsert_token_info(token_upsert(&without_icon, "B", Some(None)))
+            .await
+            .unwrap();
+        let filled = ic
+            .upsert_token_info(token_upsert(&without_icon, "B", Some(Some(TOKEN_ICON_X))))
+            .await
+            .unwrap();
+        assert_eq!(filled.token_icon.as_deref(), Some(TOKEN_ICON_X));
+        assert_eq!(
+            stored_token(db, &without_icon).await.token_icon.as_deref(),
+            Some(TOKEN_ICON_X)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn token_upsert_db_returns_the_persisted_row() {
+        let guard = init_db("token_upsert_db_returns_row").await;
+        let conn = guard.client();
+        let db = conn.as_ref();
+        seed_minimal_bridge(db).await;
+        let ic = InterchainDatabase::new(conn.clone());
+        let address = [0x74u8; 20];
+
+        // The insert path.
+        let inserted = ic
+            .upsert_token_info(token_upsert(&address, "First", Some(Some(TOKEN_ICON_X))))
+            .await
+            .unwrap();
+        assert_eq!(inserted, stored_token(db, &address).await);
+
+        // The conflict path, where the icon is kept: the returned row is the
+        // merged one, not the incoming values.
+        let updated = ic
+            .upsert_token_info(token_upsert(&address, "Second", Some(None)))
+            .await
+            .unwrap();
+        assert_eq!(updated.token_icon.as_deref(), Some(TOKEN_ICON_X));
+        assert_eq!(updated, stored_token(db, &address).await);
     }
 }

@@ -1396,6 +1396,56 @@ Sources: `interchain-indexer-logic/src/indexer/failure_ledger/mod.rs`
 (`run_retry_tick_at`), `interchain-indexer-logic/src/indexer/retry_scheduler.rs`
 (`report_outcome`, `reconcile`, `has_unresolved_overlap`).
 
+## Token Cache Writers W1, W3 And Admin Invalidation Share The Per-Key Mutex
+
+Three paths write the `TokenInfoService` cache of a token, and the cache has no
+TTL for positive entries: W1 (background metadata upsert,
+`persist_fetched_token`), W3 (request-time icon refill, `update_token_icon`:
+DB write, DB read, stats propagation, then a cache patch with its own argument)
+and the admin `invalidate_cached`. Invalidation alone does not fence W3: if W3
+has written U to the DB and the admin commits A and invalidates, a read can
+refill the cache with A before W3 resumes, and W3 then patches that entry back
+to U while the DB keeps A. The divergence lasts until a restart. So all three
+paths take the same per-key mutex (`get_lock_for_key`):
+
+- The fast path of `get_token_info` returns a cached model directly only for a
+  native token or a non-empty icon. Everything else (an ERC-20 without an icon)
+  takes the mutex, so W3 runs under it.
+- W1 publishes the `RETURNING` row of its upsert under the same mutex and runs
+  `propagate_token_info_to_stats_tables` after releasing it.
+- `invalidate_cached` removes the entry under the mutex, strictly **after** the
+  admin transaction has committed.
+
+**Do not:**
+
+- take the mutex inside `update_token_icon` or `fetch_icon_if_needed`: their
+  only caller, the slow path, already holds it, and the tokio `Mutex` is not
+  reentrant (a self-deadlock);
+- take the per-key mutex, or call `get_token_info`, while a DB transaction that
+  holds a `tokens` row lock is open. W1 and W3 hold the mutex while they wait on
+  that row, so the transaction would wait for the mutex and the mutex holder for
+  the row: an application-level deadlock PostgreSQL cannot see;
+- hold a `parking_lot` guard across an `.await`;
+- "simplify" the handler's spawned invalidation into an inline `.await`: the
+  invalidation can wait for a request-time Blockscout lookup (up to ~15 s), and a
+  handler future dropped meanwhile (client reset, gRPC deadline) would skip it,
+  leaving a committed change invisible in this process's cache. Dropping the
+  `JoinHandle` of a spawned task does not cancel the task.
+
+**Guarantee boundary:** a request that starts after a successful admin call sees
+the database value. A request concurrent with the call may see either value. The
+guarantee is per process: another process serving the API on the same database
+keeps its cache until it restarts.
+
+Test: `token_cache_db_delayed_icon_refill_cannot_overwrite_an_admin_write` in
+`interchain-indexer-logic/src/token_info/service.rs` stops W3 after its DB write
+(a second connection holds the linked `stats_assets` row) and asserts that the
+invalidation waits for it. Restoring the old fast path makes it fail.
+Sources: `interchain-indexer-logic/src/token_info/service.rs`
+(`get_token_info`, `persist_fetched_token`, `invalidate_cached`,
+`fetch_icon_if_needed`, `update_token_icon`),
+`interchain-indexer-server/src/services/admin/mod.rs` (`apply_token_icon`).
+
 ---
 
 ## The AMB Scan Floor Is The `amb_proxy` Contract's `started_at_block`
@@ -3045,3 +3095,31 @@ ADR-016, because logging them would mean overriding the launcher's app-wide
 `write_api_http_smoke` pins the number-instead-of-string and the
 missing-`Content-Type` cases. Sources: `interchain-indexer-proto/proto/v1/admin.proto`,
 `interchain-indexer-proto/tests/admin_json.rs`.
+
+## Write API Token Icon Is A Patch; TokenInfo (Blockscout) Is The Source Of Truth
+
+`upsert_token_info` (`interchain-indexer-logic/src/database.rs`) writes
+`token_icon` as `COALESCE("excluded"."token_icon", "tokens"."token_icon")`, not
+as a plain `EXCLUDED` column. Consequences, all intended:
+
+- The xDai native seed leaves the icon `NotSet`, so a re-seed on every start no
+  longer wipes an icon (it used to write `NULL`).
+- An icon from the token-info service (Blockscout) **replaces** a manual one:
+  Blockscout is the source of truth, and `SetTokenIcon` only patches a value
+  until it provides its own.
+- A Blockscout miss or error (`token_icon = None`) never erases an icon.
+
+This is what keeps a manual icon from `SetTokenIcon` alive across restarts and
+background refreshes. Do not "simplify" it back to
+`update_columns([.., TokenIcon])`. The `token_upsert_db_*` tests and
+`token_icon_db_xdai_reseed_keeps_an_existing_native_icon` pin it.
+
+`SetTokenIcon` updates only `tokens.token_icon` of an existing row and never
+touches `stats_assets` or `stats_asset_tokens`; an empty asset icon can still be
+filled later from the token by the existing fill-if-empty derivation.
+
+After a code rollback to the old rule, the next xDai start erases the native
+icon and Blockscout misses erase ERC-20 icons: re-apply manual icons from
+`write_api_audit_log` (`runbooks/write-api.md`). The cache protocol that makes
+the new value visible without a restart is described in "Token Cache Writers W1,
+W3 And Admin Invalidation Share The Per-Key Mutex".
