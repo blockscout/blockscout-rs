@@ -356,6 +356,8 @@ impl CompilerExecutor for NativeCompilerExecutor {
     }
 }
 
+// Rust 1.99 renamed `fetch_update` to `try_update`; the old name still builds on older toolchains.
+#[allow(deprecated)]
 async fn collect_output<R>(
     mut output: R,
     total_size: Arc<AtomicUsize>,

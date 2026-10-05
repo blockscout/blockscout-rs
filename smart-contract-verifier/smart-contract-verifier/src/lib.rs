@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+// `#[async_trait]` marks its boxed futures `#[must_use]`, which clippy 1.99 reports as redundant.
+#![allow(clippy::double_must_use)]
+
 pub mod solidity;
 pub mod sourcify;
 pub mod vyper;
