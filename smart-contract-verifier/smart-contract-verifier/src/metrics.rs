@@ -85,6 +85,13 @@ lazy_static! {
         &["executor", "state"],
     )
     .unwrap();
+    pub static ref COMPILER_RUNNER_DOCKER_CONNECT_FAILURES_TOTAL: IntCounterVec =
+        register_int_counter_vec!(
+            "smart_contract_verifier_compiler_runner_docker_connect_failures_total",
+            "Docker requests whose SSH session could not be established, by outcome",
+            &["outcome"],
+        )
+        .unwrap();
     pub static ref COMPILER_RUNNER_ORPHAN_CLEANUP_SWEEPS_TOTAL: IntCounterVec =
         register_int_counter_vec!(
             "smart_contract_verifier_compiler_runner_orphan_cleanup_sweeps_total",

@@ -11,7 +11,7 @@ pub mod batch_verification;
 pub mod verification_result;
 pub mod zksolc_standard_json;
 
-pub use errors::StandardJsonParseError;
+pub use errors::{internal_error_status, StandardJsonParseError};
 pub use lookup_methods::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper};
 pub use sourcify::VerifySourcifyRequestWrapper;
 pub use sourcify_from_etherscan::VerifyFromEtherscanSourcifyRequestWrapper;

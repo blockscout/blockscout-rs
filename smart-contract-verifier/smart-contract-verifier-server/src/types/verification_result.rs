@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+use super::internal_error_status;
 use blockscout_display_bytes::ToHex;
 use serde_json::Value;
 use smart_contract_verifier::{Error, Language, VerificationResult, VerifyingContract};
@@ -17,11 +18,7 @@ use verification_common::{
 pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
     match error {
         err @ Error::CompilerNotFound(_) => Err(Status::invalid_argument(err.to_string())),
-        err @ Error::Internal(_) => {
-            let formatted_error = format!("{err:#?}");
-            tracing::error!(err = formatted_error, "internal error");
-            Err(Status::internal(formatted_error))
-        }
+        err @ Error::Internal(_) => Err(internal_error_status(&err)),
         err @ Error::NotConsistentBlueprintOnChainCode { .. } => {
             Err(Status::invalid_argument(err.to_string()))
         }
@@ -238,5 +235,20 @@ fn parse_match_type(
         Err(Status::internal(
             "verifying contract doesn't have neither creation nor runtime matches",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal_error_cause_is_not_returned_to_the_client() {
+        let error = Error::Internal(anyhow::anyhow!(
+            "failed to connect to the remote host: Connection closed by 203.0.113.7 port 22"
+        ));
+        let status = process_error(error).unwrap_err();
+        assert_eq!(status.code(), tonic::Code::Internal);
+        assert_eq!(status.message(), "internal error");
     }
 }

@@ -378,7 +378,7 @@ where
         }
         metrics::add_transfer_bytes(metrics::NATIVE, metrics::OUTPUT, "process", size);
         if total_size
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 current
                     .checked_add(size)
                     .filter(|new_size| *new_size <= limit)

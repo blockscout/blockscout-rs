@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+use super::internal_error_status;
 use blockscout_display_bytes::ToHex;
 use serde_json::Value;
 use smart_contract_verifier::{Error, Language, VerificationResult};
@@ -26,11 +27,7 @@ pub fn compilation_error(message: impl Into<String>) -> BatchVerifyResponse {
 pub fn process_error(error: Error) -> Result<BatchVerifyResponse, Status> {
     match error {
         err @ Error::CompilerNotFound(_) => Err(Status::invalid_argument(err.to_string())),
-        err @ Error::Internal(_) => {
-            let formatted_error = format!("{err:#?}");
-            tracing::error!(err = formatted_error, "internal error");
-            Err(Status::internal(formatted_error))
-        }
+        err @ Error::Internal(_) => Err(internal_error_status(&err)),
         err @ Error::NotConsistentBlueprintOnChainCode { .. } => {
             Err(Status::invalid_argument(err.to_string()))
         }
