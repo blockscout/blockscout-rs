@@ -11,9 +11,9 @@ use interchain_indexer_entity::{
 use parking_lot::RwLock;
 use sea_orm::{
     ActiveValue, ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
-    DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, RelationTrait, Statement, TransactionTrait, Value, entity::prelude::*,
-    prelude::Expr, sea_query::OnConflict,
+    DatabaseTransaction, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Statement, TransactionTrait, Value,
+    entity::prelude::*, prelude::Expr, sea_query::OnConflict,
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -747,6 +747,79 @@ ORDER BY messages_count DESC, src_chain_id ASC, dst_chain_id ASC
 /// `merge_bounds`) has a single implementation shared with [`pre_union`].
 fn pre_union_with_reason(ranges: Vec<(BlockRange, String)>) -> Vec<(BlockRange, String)> {
     fold_adjacent(ranges)
+}
+
+/// The UNION step shared by [`InterchainDatabase::record_indexer_failures`] and
+/// [`InterchainDatabase::record_indexer_failures_tx`]: for each already-folded
+/// `(from, to, reason)`, replaces the overlapping or adjacent rows of the pair
+/// with one merged row. The caller owns the transaction.
+async fn record_folded_failures(
+    tx: &DatabaseTransaction,
+    bridge_id: i32,
+    chain_id: i64,
+    merged: Vec<(i64, i64, String)>,
+) -> Result<(), DbErr> {
+    for (from_i64, to_i64, reason) in merged {
+        let candidates = indexer_failures::Entity::find()
+            .filter(indexer_failures::Column::BridgeId.eq(bridge_id))
+            .filter(indexer_failures::Column::ChainId.eq(chain_id))
+            .filter(indexer_failures::Column::FromBlock.lte(to_i64.saturating_add(1)))
+            .filter(indexer_failures::Column::ToBlock.gte(from_i64.saturating_sub(1)))
+            .lock_exclusive()
+            .all(tx)
+            .await?;
+
+        let now = chrono::Utc::now().naive_utc();
+
+        let merged_from = candidates
+            .iter()
+            .map(|c| c.from_block)
+            .fold(from_i64, i64::min);
+        let merged_to = candidates.iter().map(|c| c.to_block).fold(to_i64, i64::max);
+        let attempts = candidates
+            .iter()
+            .map(|c| c.attempts)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
+        // `min(candidate created_at values, now())`: candidate
+        // rows always predate `now`, so taking the plain min
+        // of the non-null candidate values (defaulting to
+        // `now` when there are none) is equivalent.
+        let created_at = candidates
+            .iter()
+            .filter_map(|c| c.created_at)
+            .min()
+            .unwrap_or(now);
+
+        if !candidates.is_empty() {
+            let ids: Vec<i64> = candidates.iter().map(|c| c.id).collect();
+            indexer_failures::Entity::delete_many()
+                .filter(indexer_failures::Column::Id.is_in(ids))
+                .exec(tx)
+                .await?;
+        }
+
+        indexer_failures::Entity::insert(indexer_failures::ActiveModel {
+            id: ActiveValue::NotSet,
+            bridge_id: ActiveValue::Set(bridge_id),
+            chain_id: ActiveValue::Set(chain_id),
+            from_block: ActiveValue::Set(merged_from),
+            to_block: ActiveValue::Set(merged_to),
+            attempts: ActiveValue::Set(attempts),
+            reason: ActiveValue::Set(Some(reason)),
+            // Explicitly `Set`, never `NotSet`: the column
+            // `DEFAULT`s to `now()`, so leaving it `NotSet`
+            // would silently reset a merged hole's age and
+            // disable `oldest_open_hole_age_seconds`.
+            created_at: ActiveValue::Set(Some(created_at)),
+            updated_at: ActiveValue::Set(Some(now)),
+        })
+        .exec(tx)
+        .await?;
+    }
+
+    Ok(())
 }
 
 impl InterchainDatabase {
@@ -2923,11 +2996,12 @@ impl InterchainDatabase {
     // INDEXER TABLE: indexer_failures
     //
     // `indexer_failures` stores a disjoint, non-adjacent set of failed block
-    // intervals per `(bridge_id, chain_id)`. `record_indexer_failures` and
+    // intervals per `(bridge_id, chain_id)`. `record_indexer_failures` (and its
+    // in-caller-transaction twin `record_indexer_failures_tx`) and
     // `resolve_indexer_failures` are the only writers (union / difference,
     // respectively); `open_indexer_failures` and `indexer_failure_totals` are
     // pure reads. Domain types (`BlockRange`, `u64`) are used end to end by
-    // callers; the `u64` <-> `i64` conversion happens only inside these four
+    // callers; the `u64` <-> `i64` conversion happens only inside these
     // functions, at the storage boundary.
 
     /// UNION: merge `ranges` into the failed-interval set for
@@ -2959,74 +3033,9 @@ impl InterchainDatabase {
         self.db
             .as_ref()
             .transaction(|tx| {
-                Box::pin(async move {
-                    for (from_i64, to_i64, reason) in merged {
-                        let candidates = indexer_failures::Entity::find()
-                            .filter(indexer_failures::Column::BridgeId.eq(bridge_id))
-                            .filter(indexer_failures::Column::ChainId.eq(chain_id))
-                            .filter(
-                                indexer_failures::Column::FromBlock.lte(to_i64.saturating_add(1)),
-                            )
-                            .filter(
-                                indexer_failures::Column::ToBlock.gte(from_i64.saturating_sub(1)),
-                            )
-                            .lock_exclusive()
-                            .all(tx)
-                            .await?;
-
-                        let now = chrono::Utc::now().naive_utc();
-
-                        let merged_from = candidates
-                            .iter()
-                            .map(|c| c.from_block)
-                            .fold(from_i64, i64::min);
-                        let merged_to =
-                            candidates.iter().map(|c| c.to_block).fold(to_i64, i64::max);
-                        let attempts = candidates
-                            .iter()
-                            .map(|c| c.attempts)
-                            .max()
-                            .unwrap_or(0)
-                            .saturating_add(1);
-                        // `min(candidate created_at values, now())`: candidate
-                        // rows always predate `now`, so taking the plain min
-                        // of the non-null candidate values (defaulting to
-                        // `now` when there are none) is equivalent.
-                        let created_at = candidates
-                            .iter()
-                            .filter_map(|c| c.created_at)
-                            .min()
-                            .unwrap_or(now);
-
-                        if !candidates.is_empty() {
-                            let ids: Vec<i64> = candidates.iter().map(|c| c.id).collect();
-                            indexer_failures::Entity::delete_many()
-                                .filter(indexer_failures::Column::Id.is_in(ids))
-                                .exec(tx)
-                                .await?;
-                        }
-
-                        indexer_failures::Entity::insert(indexer_failures::ActiveModel {
-                            id: ActiveValue::NotSet,
-                            bridge_id: ActiveValue::Set(bridge_id),
-                            chain_id: ActiveValue::Set(chain_id),
-                            from_block: ActiveValue::Set(merged_from),
-                            to_block: ActiveValue::Set(merged_to),
-                            attempts: ActiveValue::Set(attempts),
-                            reason: ActiveValue::Set(Some(reason)),
-                            // Explicitly `Set`, never `NotSet`: the column
-                            // `DEFAULT`s to `now()`, so leaving it `NotSet`
-                            // would silently reset a merged hole's age and
-                            // disable `oldest_open_hole_age_seconds`.
-                            created_at: ActiveValue::Set(Some(created_at)),
-                            updated_at: ActiveValue::Set(Some(now)),
-                        })
-                        .exec(tx)
-                        .await?;
-                    }
-
-                    Ok::<(), DbErr>(())
-                })
+                Box::pin(
+                    async move { record_folded_failures(tx, bridge_id, chain_id, merged).await },
+                )
             })
             .await
             .map_err(|e| {
@@ -3035,6 +3044,34 @@ impl InterchainDatabase {
             })?;
 
         Ok(())
+    }
+
+    /// Same UNION as [`Self::record_indexer_failures`], inside the caller's
+    /// transaction (the caller commits). Precondition: every bound fits in
+    /// `i64` (the API validates it); a violation is unreachable and surfaces
+    /// as `DbErr::Custom`.
+    pub async fn record_indexer_failures_tx(
+        tx: &DatabaseTransaction,
+        bridge_id: i32,
+        chain_id: i64,
+        ranges: &[(BlockRange, String)],
+    ) -> Result<(), DbErr> {
+        if ranges.is_empty() {
+            return Ok(());
+        }
+
+        let merged = pre_union_with_reason(ranges.to_vec())
+            .into_iter()
+            .map(|(range, reason)| {
+                let from = i64::try_from(range.from)
+                    .map_err(|_| DbErr::Custom("block number exceeds i64::MAX".into()))?;
+                let to = i64::try_from(range.to)
+                    .map_err(|_| DbErr::Custom("block number exceeds i64::MAX".into()))?;
+                Ok::<_, DbErr>((from, to, reason))
+            })
+            .collect::<Result<Vec<_>, DbErr>>()?;
+
+        record_folded_failures(tx, bridge_id, chain_id, merged).await
     }
 
     /// DIFFERENCE: remove `ranges` from the failed-interval set for
@@ -5214,6 +5251,149 @@ mod tests {
                 to: 2000
             }
         );
+    }
+
+    fn failed_range(from: u64, to: u64, reason: &str) -> (BlockRange, String) {
+        (BlockRange { from, to }, reason.to_string())
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn record_tx_db_commits_all_pairs_with_the_callers_transaction() {
+        let db = init_db("record_tx_db_commits_all_pairs").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        let tx = interchain_db.db.begin().await.unwrap();
+        InterchainDatabase::record_indexer_failures_tx(
+            &tx,
+            1,
+            1,
+            &[failed_range(1000, 2000, "pair one")],
+        )
+        .await
+        .unwrap();
+        InterchainDatabase::record_indexer_failures_tx(
+            &tx,
+            1,
+            100,
+            &[failed_range(5000, 5999, "pair two")],
+        )
+        .await
+        .unwrap();
+        assert!(
+            indexer_failures_rows_for(&interchain_db, 1, 1)
+                .await
+                .is_empty(),
+            "nothing is visible to other connections before the caller commits"
+        );
+        tx.commit().await.unwrap();
+
+        let first = indexer_failures_rows_for(&interchain_db, 1, 1).await;
+        assert_eq!(first.len(), 1, "{first:?}");
+        assert_eq!((first[0].from_block, first[0].to_block), (1000, 2000));
+        assert_eq!(first[0].reason.as_deref(), Some("pair one"));
+        let second = indexer_failures_rows_for(&interchain_db, 1, 100).await;
+        assert_eq!(second.len(), 1, "{second:?}");
+        assert_eq!((second[0].from_block, second[0].to_block), (5000, 5999));
+        assert_eq!(second[0].reason.as_deref(), Some("pair two"));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn record_tx_db_failure_on_second_pair_rolls_back_the_first() {
+        let db = init_db("record_tx_db_failure_rolls_back_first").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        let tx = interchain_db.db.begin().await.unwrap();
+        InterchainDatabase::record_indexer_failures_tx(
+            &tx,
+            1,
+            1,
+            &[failed_range(1000, 2000, "pair one")],
+        )
+        .await
+        .unwrap();
+        let inside_tx = indexer_failures::Entity::find().all(&tx).await.unwrap();
+        assert_eq!(
+            inside_tx.len(),
+            1,
+            "the first pair is written inside the transaction: {inside_tx:?}"
+        );
+
+        // Bridge 999 does not exist: the insert violates the bridge foreign key.
+        InterchainDatabase::record_indexer_failures_tx(
+            &tx,
+            999,
+            1,
+            &[failed_range(1000, 2000, "pair two")],
+        )
+        .await
+        .expect_err("a nonexistent bridge must fail the write");
+        drop(tx);
+
+        assert!(
+            indexer_failures_rows_for(&interchain_db, 1, 1)
+                .await
+                .is_empty(),
+            "dropping the transaction must leave nothing of the first pair"
+        );
+        let all_rows = indexer_failures::Entity::find()
+            .all(interchain_db.db.as_ref())
+            .await
+            .unwrap();
+        assert!(all_rows.is_empty(), "{all_rows:?}");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn record_tx_db_merges_like_the_non_tx_variant() {
+        let db = init_db("record_tx_db_merges_like_non_tx").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        // The same sequence on two pairs: an existing row, then two inputs that
+        // are adjacent to each other and to the existing row.
+        let existing = [failed_range(1000, 2000, "boom")];
+        let adjacent_inputs = [
+            failed_range(2001, 2500, "first"),
+            failed_range(2501, 3000, "second"),
+        ];
+
+        interchain_db
+            .record_indexer_failures(1, 1, &existing)
+            .await
+            .unwrap();
+        interchain_db
+            .record_indexer_failures(1, 1, &adjacent_inputs)
+            .await
+            .unwrap();
+
+        interchain_db
+            .record_indexer_failures(1, 100, &existing)
+            .await
+            .unwrap();
+        let tx = interchain_db.db.begin().await.unwrap();
+        InterchainDatabase::record_indexer_failures_tx(&tx, 1, 100, &adjacent_inputs)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        // `(from, to, attempts, reason)`: everything the union decides.
+        let summary = |rows: Vec<indexer_failures::Model>| {
+            rows.into_iter()
+                .map(|row| (row.from_block, row.to_block, row.attempts, row.reason))
+                .collect::<Vec<_>>()
+        };
+        let via_non_tx = summary(indexer_failures_rows_for(&interchain_db, 1, 1).await);
+        let via_tx = summary(indexer_failures_rows_for(&interchain_db, 1, 100).await);
+        assert_eq!(
+            via_tx,
+            vec![(1000, 3000, 2, Some("second".to_string()))],
+            "one merged row, later reason wins, attempts = max + 1"
+        );
+        assert_eq!(via_tx, via_non_tx);
     }
 
     #[tokio::test]

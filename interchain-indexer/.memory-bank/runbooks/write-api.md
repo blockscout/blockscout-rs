@@ -75,9 +75,9 @@ The error body is JSON: `{"code": <gRPC code>, "message": "..."}`.
 
 | HTTP | Meaning |
 |---|---|
-| 200 | Applied. The body carries `audit_id` and the before/after values. |
+| 200 | Applied. The icon methods return `audit_id` and the before/after values. `RescanBlockRanges` returns `audit_id`, the scheduled ranges and the estimates; its dry run also returns 200, with `audit_id: null` (nothing is written and no audit row exists). |
 | 401 | Missing, empty, unknown key, or no keys configured. One message for all of them. |
-| 400 | Validation failed, or the body is not decodable. |
+| 400 | Validation failed (code 3), a state precondition refused a well-formed request (code 9, `RescanBlockRanges`), or the body is not decodable. |
 | 404 | No such asset, or no `tokens` row for the token. |
 | 409 | Stats maintenance holds the row. Retry. |
 | 500 | Internal error. The client sees no details; the server log has them. |
@@ -183,6 +183,14 @@ string.
   SELECT request, result, occurred_at FROM write_api_audit_log
   WHERE method = 'SetTokenIcon' ORDER BY occurred_at;
   ```
+
+## Block Range Rescan (`RescanBlockRanges`)
+
+Queues block ranges of `(bridge_id, chain_id)` pairs for the running indexer to
+scan again (`POST /api/v1/admin/indexing:rescanBlockRanges`, dry run supported).
+It rescans; it does not repair stored data. What it can fix, what must be true
+before the call and how to watch it drain are in
+[block-range-rescan.md](block-range-rescan.md).
 
 ## Audit Queries
 

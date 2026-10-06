@@ -35,6 +35,21 @@ service InterchainAdminService {
       tags: "Admin"
     };
   }
+
+  // Queues block ranges for re-scanning by the running indexer's failed-range
+  // replay. This RESCANS; it does not repair already-stored data (no deletes, no
+  // NULL-ing, no stats recount). Requests may not touch open failed ranges, the
+  // unscanned catch-up interval, or blocks at/after the realtime cursor. Use
+  // `dry_run` first. The estimate is approximate: the replay budget is shared
+  // with real failed ranges of the bridge.
+  rpc RescanBlockRanges(RescanBlockRangesRequest) returns (RescanBlockRangesResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Admin"
+    };
+  }
 }
 
 message SetStatsAssetIconRequest {
@@ -79,4 +94,41 @@ message SetTokenIconResponse {
   optional string icon_url_before = 2;
   // `null` after `clear`.
   optional string icon_url_after = 3;
+}
+
+message RescanBlockRange {
+  int32 bridge_id = 1;
+  // Chain id (a JSON string).
+  int64 chain_id = 2;
+  // First block, inclusive (a JSON string).
+  uint64 from_block = 3;
+  // Last block, inclusive (a JSON string).
+  uint64 to_block = 4;
+}
+
+message RescanBlockRangesRequest {
+  // At most 100 ranges, at most 2,000,000 blocks in total after merging.
+  repeated RescanBlockRange ranges = 1;
+  // Why the rescan is requested (1..1000 characters), e.g. a ticket link.
+  string reason = 2;
+  // `true` validates and estimates without writing anything.
+  optional bool dry_run = 3;
+}
+
+message RescanBridgeEstimate {
+  int32 bridge_id = 1;
+  // Approximate time to replay this request's ranges, in seconds.
+  uint64 estimated_drain_seconds = 2;
+}
+
+message RescanBlockRangesResponse {
+  // Audit-log row id; `null` for a dry run.
+  optional int64 audit_id = 1;
+  // Accepted ranges of THIS request after normalization (merged per pair, sorted by
+  // bridge, chain, block). Not a snapshot of stored ledger rows: a stored row may be
+  // wider if an adjacent failure is merged concurrently.
+  repeated RescanBlockRange scheduled_ranges = 2;
+  // Total blocks in `scheduled_ranges`.
+  uint64 requested_blocks = 3;
+  repeated RescanBridgeEstimate estimates = 4;
 }

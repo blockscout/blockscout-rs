@@ -20,6 +20,35 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/admin/indexing:rescanBlockRanges:
+    post:
+      summary: |-
+        Queues block ranges for re-scanning by the running indexer's failed-range
+        replay. This RESCANS; it does not repair already-stored data (no deletes, no
+        NULL-ing, no stats recount). Requests may not touch open failed ranges, the
+        unscanned catch-up interval, or blocks at/after the realtime cursor. Use
+        `dry_run` first. The estimate is approximate: the replay budget is shared
+        with real failed ranges of the bridge.
+      operationId: InterchainAdminService_RescanBlockRanges
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1RescanBlockRangesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1RescanBlockRangesRequest'
+      tags:
+        - Admin
+      security:
+        - ApiKeyAuth: []
   /api/v1/admin/stats/assets:setIcon:
     post:
       summary: |-
@@ -1867,6 +1896,74 @@ definitions:
       scope). The cursor does not encode these filters and is not re-validated
       against them, so changing any filter mid-pagination is unsupported and
       yields undefined results; callers must restart pagination when filters change.
+  v1RescanBlockRange:
+    type: object
+    properties:
+      bridge_id:
+        type: integer
+        format: int32
+      chain_id:
+        type: string
+        format: int64
+        description: Chain id (a JSON string).
+      from_block:
+        type: string
+        format: uint64
+        description: First block, inclusive (a JSON string).
+      to_block:
+        type: string
+        format: uint64
+        description: Last block, inclusive (a JSON string).
+  v1RescanBlockRangesRequest:
+    type: object
+    properties:
+      ranges:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RescanBlockRange'
+        description: At most 100 ranges, at most 2,000,000 blocks in total after merging.
+      reason:
+        type: string
+        description: Why the rescan is requested (1..1000 characters), e.g. a ticket link.
+      dry_run:
+        type: boolean
+        description: '`true` validates and estimates without writing anything.'
+  v1RescanBlockRangesResponse:
+    type: object
+    properties:
+      audit_id:
+        type: string
+        format: int64
+        description: Audit-log row id; `null` for a dry run.
+      scheduled_ranges:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RescanBlockRange'
+        description: |-
+          Accepted ranges of THIS request after normalization (merged per pair, sorted by
+          bridge, chain, block). Not a snapshot of stored ledger rows: a stored row may be
+          wider if an adjacent failure is merged concurrently.
+      requested_blocks:
+        type: string
+        format: uint64
+        description: Total blocks in `scheduled_ranges`.
+      estimates:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RescanBridgeEstimate'
+  v1RescanBridgeEstimate:
+    type: object
+    properties:
+      bridge_id:
+        type: integer
+        format: int32
+      estimated_drain_seconds:
+        type: string
+        format: uint64
+        description: Approximate time to replay this request's ranges, in seconds.
   v1SetStatsAssetIconRequest:
     type: object
     properties:

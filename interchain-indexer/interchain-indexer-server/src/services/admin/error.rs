@@ -8,6 +8,9 @@ pub(crate) enum AdminError {
     InvalidArgument(String),
     #[error("{0}")]
     NotFound(String),
+    /// The request is well formed but the current state refuses it.
+    #[error("{0}")]
+    FailedPrecondition(String),
     #[error("{0}")]
     Aborted(String),
     #[error("internal error")]
@@ -19,6 +22,7 @@ impl From<AdminError> for tonic::Status {
         match err {
             AdminError::InvalidArgument(message) => Self::invalid_argument(message),
             AdminError::NotFound(message) => Self::not_found(message),
+            AdminError::FailedPrecondition(message) => Self::failed_precondition(message),
             AdminError::Aborted(message) => Self::aborted(message),
             // Never expose database or provider text; the full error is logged
             // where the request is finished.
@@ -44,6 +48,11 @@ mod tests {
                 AdminError::NotFound("no such asset".into()),
                 Code::NotFound,
                 "no such asset",
+            ),
+            (
+                AdminError::FailedPrecondition("no checkpoint yet".into()),
+                Code::FailedPrecondition,
+                "no checkpoint yet",
             ),
             (AdminError::Aborted("retry".into()), Code::Aborted, "retry"),
             (

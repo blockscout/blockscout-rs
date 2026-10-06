@@ -3,6 +3,7 @@
 // Pins the JSON shape of the admin messages. The HTTP route (de)serializes them
 // through serde, so these tests describe what a client must send and receive.
 use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
+    RescanBlockRange, RescanBlockRangesRequest, RescanBlockRangesResponse, RescanBridgeEstimate,
     SetStatsAssetIconRequest, SetStatsAssetIconResponse, SetTokenIconRequest, SetTokenIconResponse,
 };
 use serde_json::json;
@@ -148,4 +149,134 @@ fn admin_json_set_token_icon_null_before_is_serialized_as_null() {
             "`{field}` must be present and null, not omitted"
         );
     }
+}
+
+#[test]
+fn admin_json_rescan_block_numbers_are_strings() {
+    let request: RescanBlockRangesRequest = serde_json::from_value(json!({
+        "ranges": [
+            {
+                "bridge_id": 1,
+                "chain_id": "100",
+                "from_block": "39000000",
+                "to_block": "39005000",
+            },
+            {
+                "bridge_id": 2,
+                "chain_id": "1",
+                "from_block": "21000000",
+                "to_block": "21001000",
+            },
+        ],
+        "reason": "TICKET-9",
+    }))
+    .expect("int64 and uint64 sent as JSON strings are accepted");
+    assert_eq!(
+        request.ranges,
+        vec![
+            RescanBlockRange {
+                bridge_id: 1,
+                chain_id: 100,
+                from_block: 39_000_000,
+                to_block: 39_005_000,
+            },
+            RescanBlockRange {
+                bridge_id: 2,
+                chain_id: 1,
+                from_block: 21_000_000,
+                to_block: 21_001_000,
+            },
+        ]
+    );
+
+    for field in ["chain_id", "from_block", "to_block"] {
+        let mut range = json!({
+            "bridge_id": 1,
+            "chain_id": "100",
+            "from_block": "39000000",
+            "to_block": "39005000",
+        });
+        range[field] = json!(42);
+        serde_json::from_value::<RescanBlockRangesRequest>(json!({
+            "ranges": [range],
+            "reason": "TICKET-9",
+        }))
+        .expect_err(&format!("`{field}` sent as a JSON number is rejected"));
+    }
+}
+
+#[test]
+fn admin_json_rescan_absent_dry_run_is_none() {
+    let request: RescanBlockRangesRequest = serde_json::from_value(json!({
+        "ranges": [{
+            "bridge_id": 1,
+            "chain_id": "1",
+            "from_block": "10",
+            "to_block": "20",
+        }],
+        "reason": "TICKET-9",
+    }))
+    .unwrap();
+    assert_eq!(request.dry_run, None);
+
+    let request: RescanBlockRangesRequest = serde_json::from_value(json!({
+        "ranges": [],
+        "reason": "TICKET-9",
+        "dry_run": true,
+    }))
+    .unwrap();
+    assert_eq!(request.dry_run, Some(true));
+
+    serde_json::from_value::<RescanBlockRangesRequest>(json!({
+        "ranges": [],
+        "dry_run": true,
+    }))
+    .expect_err("`reason` is a non-optional field, so it is required");
+}
+
+#[test]
+fn admin_json_rescan_dry_run_response_has_null_audit_id() {
+    let scheduled_range = RescanBlockRange {
+        bridge_id: 1,
+        chain_id: 100,
+        from_block: 39_000_000,
+        to_block: 39_005_000,
+    };
+    let estimate = RescanBridgeEstimate {
+        bridge_id: 1,
+        estimated_drain_seconds: 15_030,
+    };
+
+    let dry_run = RescanBlockRangesResponse {
+        audit_id: None,
+        scheduled_ranges: vec![scheduled_range],
+        requested_blocks: 5_001,
+        estimates: vec![estimate],
+    };
+    let json = serde_json::to_value(&dry_run).unwrap();
+    assert_eq!(
+        json.get("audit_id"),
+        Some(&serde_json::Value::Null),
+        "a dry run has no audit row: `audit_id` must be present and null, not omitted"
+    );
+    assert_eq!(
+        json["scheduled_ranges"],
+        json!([{
+            "bridge_id": 1,
+            "chain_id": "100",
+            "from_block": "39000000",
+            "to_block": "39005000",
+        }])
+    );
+    assert_eq!(json["requested_blocks"], "5001");
+    assert_eq!(
+        json["estimates"],
+        json!([{"bridge_id": 1, "estimated_drain_seconds": "15030"}])
+    );
+
+    let applied = RescanBlockRangesResponse {
+        audit_id: Some(7),
+        ..dry_run
+    };
+    assert_eq!(serde_json::to_value(&applied).unwrap()["audit_id"], "7");
 }

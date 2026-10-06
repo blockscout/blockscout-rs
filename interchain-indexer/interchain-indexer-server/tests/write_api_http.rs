@@ -17,6 +17,7 @@ use sha2::{Digest, Sha256};
 
 const ROUTE: &str = "/api/v1/admin/stats/assets:setIcon";
 const TOKEN_ROUTE: &str = "/api/v1/admin/tokens:setIcon";
+const RESCAN_ROUTE: &str = "/api/v1/admin/indexing:rescanBlockRanges";
 const KEY: &str = "test-key";
 
 #[tokio::test]
@@ -104,6 +105,51 @@ async fn write_api_http_smoke() {
     let body: Value = response.json().await.expect("body is not JSON");
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
     assert_eq!(body["code"], json!(5), "{body}");
+
+    // The rescan method is routed and authenticated the same way, a dry run
+    // included. The block range lies below the pair's scan floor, so a valid
+    // key reaches the handler and is rejected there. A successful rescan needs
+    // a checkpoint, which this offline service never writes; it is verified
+    // below the HTTP layer.
+    let rescan = |key: Option<&str>| {
+        let mut request = client
+            .post(base.join(RESCAN_ROUTE).unwrap())
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "ranges": [{
+                        "bridge_id": 1,
+                        "chain_id": "1",
+                        "from_block": "10",
+                        "to_block": "20",
+                    }],
+                    "reason": "smoke",
+                    "dry_run": true,
+                })
+                .to_string(),
+            );
+        if let Some(key) = key {
+            request = request.header("x-api-key", key);
+        }
+        async move {
+            let response = request.send().await.expect("request failed");
+            let status = response.status();
+            let body: Value = response.json().await.expect("body is not JSON");
+            (status, body)
+        }
+    };
+    let (status, body) = rescan(None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    assert_eq!(body["code"], json!(16), "{body}");
+    let (status, body) = rescan(Some(KEY)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["code"], json!(3), "{body}");
+    assert!(
+        body["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("below the scan floor")),
+        "{body}"
+    );
 
     // int64 as a JSON number is rejected before the handler.
     let (status, body) = post(

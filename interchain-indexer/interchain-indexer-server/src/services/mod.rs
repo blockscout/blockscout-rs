@@ -9,7 +9,7 @@ mod stats;
 mod status;
 mod utils;
 
-pub(crate) use admin::InterchainAdminServiceImpl;
+pub(crate) use admin::{InterchainAdminServiceImpl, build_replay_profiles};
 pub use health::HealthService;
 pub use interchain_service::InterchainServiceImpl;
 pub use stats::InterchainStatisticsServiceImpl;

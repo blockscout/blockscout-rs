@@ -16,7 +16,8 @@ use crate::{
     },
     services::{
         HealthService, InterchainAdminServiceImpl, InterchainServiceImpl,
-        InterchainStatisticsServiceImpl, StatusServiceImpl, collect_indexing_progress,
+        InterchainStatisticsServiceImpl, StatusServiceImpl, build_replay_profiles,
+        collect_indexing_progress,
     },
     settings::Settings,
     spawn_configured_indexers,
@@ -435,6 +436,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     // indexing-progress RPC handler and its periodic metrics worker so the
     // two can never disagree.
     let targets = Arc::new(enumerate_indexing_targets(&bridges));
+    // Also from the config only, for the same reason: what the rescan method
+    // may expect each bridge's indexer to replay with.
+    let replay_profiles = Arc::new(build_replay_profiles(&bridges, &settings));
 
     // Order-independent by construction: the reconciliation compares the
     // configured scan floor against `indexer_checkpoints.catchup_min_cursor`
@@ -522,6 +526,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         write_api_auth,
         db.clone(),
         token_info_service.clone(),
+        targets.clone(),
+        replay_profiles,
     ));
     let router = Router {
         health,

@@ -5,13 +5,17 @@
 
 mod audit;
 mod error;
+mod rescan;
 mod validation;
 
 use crate::{
     auth::{Actor, WriteApiAuth},
+    indexers::IndexingTarget,
     proto::{
-        SetStatsAssetIconRequest, SetStatsAssetIconResponse, SetTokenIconRequest,
-        SetTokenIconResponse, interchain_admin_service_server::InterchainAdminService,
+        RescanBlockRange, RescanBlockRangesRequest, RescanBlockRangesResponse,
+        RescanBridgeEstimate, SetStatsAssetIconRequest, SetStatsAssetIconResponse,
+        SetTokenIconRequest, SetTokenIconResponse,
+        interchain_admin_service_server::InterchainAdminService,
     },
 };
 use anyhow::Context;
@@ -20,12 +24,20 @@ use error::AdminError;
 use interchain_indexer_entity::sea_orm_active_enums::TokenType;
 use interchain_indexer_logic::{
     InterchainDatabase, TokenInfoService,
+    indexer::failure_ledger::BlockRange,
     write_api::{self, StatsAssetIconChange},
 };
+use rescan::{RescanContext, RescanPlan, ledger_reason, plan_rescan, validate_rescan_input};
 use sea_orm::ActiveEnum;
 use serde_json::json;
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 use validation::{parse_token_selector, resolve_icon_change, validate_reason};
+
+pub(crate) use rescan::{ReplayProfile, build_replay_profiles};
 
 /// How long an asset-icon change waits for a concurrent writer of the same
 /// `stats_assets` row before it gives up with `ABORTED`.
@@ -33,6 +45,7 @@ pub(crate) const ASSET_ICON_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 
 const SET_STATS_ASSET_ICON: &str = "SetStatsAssetIcon";
 const SET_TOKEN_ICON: &str = "SetTokenIcon";
+const RESCAN_BLOCK_RANGES: &str = "RescanBlockRanges";
 
 pub(crate) struct InterchainAdminServiceImpl {
     auth: Arc<WriteApiAuth>,
@@ -40,6 +53,11 @@ pub(crate) struct InterchainAdminServiceImpl {
     /// Owns the token cache that serves `/transfers` and `/messages`; it is told
     /// to drop an entry after a token icon changes.
     token_info: Arc<TokenInfoService>,
+    /// Every configured, enabled `(bridge, chain)` with its scan floor: what a
+    /// rescan request may name.
+    targets: Arc<Vec<IndexingTarget>>,
+    /// How each bridge's indexer replays failed ranges, from the configuration.
+    replay_profiles: Arc<BTreeMap<i32, ReplayProfile>>,
 }
 
 impl InterchainAdminServiceImpl {
@@ -47,11 +65,15 @@ impl InterchainAdminServiceImpl {
         auth: Arc<WriteApiAuth>,
         db: Arc<InterchainDatabase>,
         token_info: Arc<TokenInfoService>,
+        targets: Arc<Vec<IndexingTarget>>,
+        replay_profiles: Arc<BTreeMap<i32, ReplayProfile>>,
     ) -> Self {
         Self {
             auth,
             db,
             token_info,
+            targets,
+            replay_profiles,
         }
     }
 
@@ -228,6 +250,183 @@ impl InterchainAdminServiceImpl {
             icon_url_after,
         })
     }
+
+    async fn apply_rescan_block_ranges(
+        &self,
+        actor: &Actor,
+        request: RescanBlockRangesRequest,
+    ) -> Result<RescanBlockRangesResponse, AdminError> {
+        let reason = validate_reason(&request.reason)?;
+        let ctx = RescanContext {
+            targets: &self.targets,
+            profiles: &self.replay_profiles,
+        };
+        let folded = validate_rescan_input(&request.ranges, &ctx)?;
+
+        // A read-only snapshot, taken outside any transaction. Checkpoint
+        // cursors only move forward and `resolve` only narrows rows, so a stale
+        // snapshot makes the checks stricter than needed, never looser. A failed
+        // range the indexer records after it merges into the queued rows with
+        // the ledger's own union, and no block is lost.
+        let pairs: Vec<(i32, i64)> = folded
+            .iter()
+            .map(|(bridge_id, chain_id, _)| (*bridge_id, *chain_id))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let checkpoints: HashMap<_, _> = self
+            .db
+            .list_indexer_checkpoints(None, None)
+            .await
+            .context("failed to read the indexer checkpoints")?
+            .into_iter()
+            .filter(|checkpoint| pairs.contains(&(checkpoint.bridge_id, checkpoint.chain_id)))
+            .map(|checkpoint| ((checkpoint.bridge_id, checkpoint.chain_id), checkpoint))
+            .collect();
+        let open = self
+            .db
+            .open_indexer_failures(&pairs)
+            .await
+            .context("failed to read the open failed ranges")?;
+
+        let plan = plan_rescan(&folded, &ctx, &checkpoints, &open)?;
+
+        if request.dry_run == Some(true) {
+            tracing::info!(
+                method = RESCAN_BLOCK_RANGES,
+                actor = %actor,
+                dry_run = true,
+                ranges = plan.scheduled.len(),
+                blocks = plan.requested_blocks,
+                "write api dry run evaluated"
+            );
+            return Ok(rescan_response(None, &plan));
+        }
+
+        // What was asked, sorted: not the folded form, which `result` records.
+        let mut asked: Vec<&RescanBlockRange> = request.ranges.iter().collect();
+        asked.sort_by_key(|range| {
+            (
+                range.bridge_id,
+                range.chain_id,
+                range.from_block,
+                range.to_block,
+            )
+        });
+        let asked_json: Vec<_> = asked
+            .into_iter()
+            .map(|range| {
+                range_json(
+                    range.bridge_id,
+                    range.chain_id,
+                    range.from_block,
+                    range.to_block,
+                )
+            })
+            .collect();
+        let request_json = json!({ "ranges": asked_json });
+        let audited = AuditedTx::begin(
+            &self.db,
+            actor,
+            RESCAN_BLOCK_RANGES,
+            reason.clone(),
+            request_json,
+        )
+        .await
+        .context("failed to begin the rescan transaction")?;
+
+        // Every pair goes through the ledger's own union, in the plan's order,
+        // inside the audit transaction: all of them, or none.
+        let queued_reason = ledger_reason(actor, &reason);
+        for &(bridge_id, chain_id, range) in &plan.scheduled {
+            InterchainDatabase::record_indexer_failures_tx(
+                audited.tx(),
+                bridge_id,
+                chain_id,
+                &[(range, queued_reason.clone())],
+            )
+            .await
+            .map_err(|err| {
+                anyhow::Error::new(err).context(format!(
+                    "failed to queue blocks {}..{} of bridge {bridge_id}, chain {chain_id}",
+                    range.from, range.to
+                ))
+            })?;
+        }
+
+        let audit_id = audited
+            .commit(rescan_result_json(&plan))
+            .await
+            .context("failed to commit the rescan")?;
+
+        tracing::info!(
+            method = RESCAN_BLOCK_RANGES,
+            actor = %actor,
+            audit_id,
+            ranges = plan.scheduled.len(),
+            blocks = plan.requested_blocks,
+            "write api change applied"
+        );
+        Ok(rescan_response(Some(audit_id), &plan))
+    }
+}
+
+fn range_json(bridge_id: i32, chain_id: i64, from_block: u64, to_block: u64) -> serde_json::Value {
+    json!({
+        "bridge_id": bridge_id,
+        "chain_id": chain_id,
+        "from_block": from_block,
+        "to_block": to_block,
+    })
+}
+
+/// The audit `result` of a rescan. `scheduled_ranges` are the request's
+/// normalized ranges, not a snapshot of the ledger rows they were merged into.
+fn rescan_result_json(plan: &RescanPlan) -> serde_json::Value {
+    let scheduled_ranges: Vec<_> = plan
+        .scheduled
+        .iter()
+        .map(|(bridge_id, chain_id, range)| range_json(*bridge_id, *chain_id, range.from, range.to))
+        .collect();
+    let estimates: Vec<_> = plan
+        .estimates
+        .iter()
+        .map(|(bridge_id, seconds)| {
+            json!({"bridge_id": bridge_id, "estimated_drain_seconds": seconds})
+        })
+        .collect();
+    json!({
+        "scheduled_ranges": scheduled_ranges,
+        "requested_blocks": plan.requested_blocks,
+        "estimates": estimates,
+    })
+}
+
+fn rescan_response(audit_id: Option<i64>, plan: &RescanPlan) -> RescanBlockRangesResponse {
+    RescanBlockRangesResponse {
+        audit_id,
+        scheduled_ranges: plan
+            .scheduled
+            .iter()
+            .map(
+                |(bridge_id, chain_id, BlockRange { from, to })| RescanBlockRange {
+                    bridge_id: *bridge_id,
+                    chain_id: *chain_id,
+                    from_block: *from,
+                    to_block: *to,
+                },
+            )
+            .collect(),
+        requested_blocks: plan.requested_blocks,
+        estimates: plan
+            .estimates
+            .iter()
+            .map(|(bridge_id, seconds)| RescanBridgeEstimate {
+                bridge_id: *bridge_id,
+                estimated_drain_seconds: *seconds,
+            })
+            .collect(),
+    }
 }
 
 /// The audit `result`: enough to roll back (`icon_url_before`) and, after the
@@ -293,6 +492,19 @@ impl InterchainAdminService for InterchainAdminServiceImpl {
         let result = self.apply_token_icon(&actor, request.into_inner()).await;
         finish(SET_TOKEN_ICON, &actor, result).map(tonic::Response::new)
     }
+
+    async fn rescan_block_ranges(
+        &self,
+        request: tonic::Request<RescanBlockRangesRequest>,
+    ) -> Result<tonic::Response<RescanBlockRangesResponse>, tonic::Status> {
+        // Authenticated before anything else, a dry run included: it reads the
+        // ledger and the checkpoints.
+        let actor = self.auth.authenticate(RESCAN_BLOCK_RANGES, &request)?;
+        let result = self
+            .apply_rescan_block_ranges(&actor, request.into_inner())
+            .await;
+        finish(RESCAN_BLOCK_RANGES, &actor, result).map(tonic::Response::new)
+    }
 }
 
 #[cfg(test)]
@@ -301,11 +513,16 @@ mod tests {
     use crate::auth::test_support::{auth_with_key, request_with_key};
     use blockscout_service_launcher::test_database::TestDbGuard;
     use interchain_indexer_entity::{
-        chains, stats_asset_tokens, stats_assets, tokens, write_api_audit_log,
+        bridges, chains, indexer_failures, stats_asset_tokens, stats_assets, tokens,
+        write_api_audit_log,
     };
-    use interchain_indexer_logic::TokenInfoServiceSettings;
+    use interchain_indexer_logic::{
+        TokenInfoServiceSettings, indexer::failure_ledger::FailureRetrySettings,
+    };
     use pretty_assertions::assert_eq;
-    use sea_orm::{ActiveValue::Set, EntityTrait, QueryOrder, QuerySelect, TransactionTrait};
+    use sea_orm::{
+        ActiveValue::Set, ConnectionTrait, EntityTrait, QueryOrder, QuerySelect, TransactionTrait,
+    };
     use std::collections::HashMap;
     use tonic::{Code, metadata::AsciiMetadataValue};
 
@@ -313,6 +530,21 @@ mod tests {
     const OLD_ICON: &str = "https://old.example/i.png";
     const GOOD_URL: &str = "https://example.com/i.png";
     const TOKEN_ICON: &str = "https://token.example/t.png";
+
+    /// The service with no rescan targets: the icon methods do not use them.
+    fn icon_service(
+        auth: WriteApiAuth,
+        db: Arc<InterchainDatabase>,
+        token_info: Arc<TokenInfoService>,
+    ) -> InterchainAdminServiceImpl {
+        InterchainAdminServiceImpl::new(
+            Arc::new(auth),
+            db,
+            token_info,
+            Arc::new(Vec::new()),
+            Arc::new(BTreeMap::new()),
+        )
+    }
 
     /// The token cache as the server wires it: no providers, no Blockscout URL.
     fn token_info_service(db: &Arc<InterchainDatabase>) -> Arc<TokenInfoService> {
@@ -398,11 +630,7 @@ mod tests {
 
         let token_info = token_info_service(&db);
         Fixture {
-            service: InterchainAdminServiceImpl::new(
-                Arc::new(auth_with_key("ops_alice", KEY)),
-                db,
-                token_info.clone(),
-            ),
+            service: icon_service(auth_with_key("ops_alice", KEY), db, token_info.clone()),
             guard,
             token_info,
             asset_id,
@@ -472,8 +700,8 @@ mod tests {
             "x-api-key",
             AsciiMetadataValue::try_from(&[0xff_u8, b'k'][..]).unwrap(),
         );
-        let empty_catalogue = InterchainAdminServiceImpl::new(
-            Arc::new(WriteApiAuth::from_settings(&Default::default()).unwrap()),
+        let empty_catalogue = icon_service(
+            WriteApiAuth::from_settings(&Default::default()).unwrap(),
             Arc::new(InterchainDatabase::new(fx.guard.client())),
             fx.token_info.clone(),
         );
@@ -526,8 +754,8 @@ mod tests {
         let db = Arc::new(InterchainDatabase::new(Arc::new(
             sea_orm::DatabaseConnection::Disconnected,
         )));
-        let service = InterchainAdminServiceImpl::new(
-            Arc::new(auth_with_key("ops_alice", KEY)),
+        let service = icon_service(
+            auth_with_key("ops_alice", KEY),
             db.clone(),
             token_info_service(&db),
         );
@@ -800,8 +1028,8 @@ mod tests {
             "x-api-key",
             AsciiMetadataValue::try_from(&[0xff_u8, b'k'][..]).unwrap(),
         );
-        let empty_catalogue = InterchainAdminServiceImpl::new(
-            Arc::new(WriteApiAuth::from_settings(&Default::default()).unwrap()),
+        let empty_catalogue = icon_service(
+            WriteApiAuth::from_settings(&Default::default()).unwrap(),
             Arc::new(InterchainDatabase::new(fx.guard.client())),
             fx.token_info.clone(),
         );
@@ -850,8 +1078,8 @@ mod tests {
         let db = Arc::new(InterchainDatabase::new(Arc::new(
             sea_orm::DatabaseConnection::Disconnected,
         )));
-        let service = InterchainAdminServiceImpl::new(
-            Arc::new(auth_with_key("ops_alice", KEY)),
+        let service = icon_service(
+            auth_with_key("ops_alice", KEY),
             db.clone(),
             token_info_service(&db),
         );
@@ -1156,5 +1384,409 @@ mod tests {
 
         assert_eq!(fx.audit_log().await.len(), 0);
         assert_eq!(fx.token_rows().await, tokens_before);
+    }
+
+    const RESCAN_FLOOR: u64 = 1000;
+
+    /// Bridge 1 on chain 1: scanned (catch-up done) up to block 99 999, scan
+    /// floor 1000, replay enabled with explicit timings.
+    struct RescanFixture {
+        guard: TestDbGuard,
+        db: Arc<InterchainDatabase>,
+        service: InterchainAdminServiceImpl,
+        targets: Arc<Vec<IndexingTarget>>,
+        profiles: Arc<BTreeMap<i32, ReplayProfile>>,
+    }
+
+    async fn rescan_fixture(name: &str) -> RescanFixture {
+        let guard = TestDbGuard::new::<migration::Migrator>(name).await;
+        let db = Arc::new(InterchainDatabase::new(guard.client()));
+        db.upsert_bridges(vec![bridges::ActiveModel {
+            id: Set(1),
+            name: Set("bridge-1".to_string()),
+            enabled: Set(true),
+            ..Default::default()
+        }])
+        .await
+        .unwrap();
+        db.upsert_chains(vec![chains::ActiveModel {
+            id: Set(1),
+            name: Set("chain-1".to_string()),
+            ..Default::default()
+        }])
+        .await
+        .unwrap();
+        db.seed_catchup_floor(1, 1, RESCAN_FLOOR, RESCAN_FLOOR - 1, 100_000)
+            .await
+            .unwrap();
+
+        let targets = Arc::new(vec![IndexingTarget {
+            bridge_id: 1,
+            chain_id: 1,
+            start_block: RESCAN_FLOOR,
+        }]);
+        let profiles = Arc::new(BTreeMap::from([(
+            1,
+            ReplayProfile {
+                batch_size: 1000,
+                failure_retry: FailureRetrySettings {
+                    scan_interval: Duration::from_secs(60),
+                    backoff_base: Duration::from_secs(30),
+                    max_chunks_per_pass: 8,
+                    ..Default::default()
+                },
+            },
+        )]));
+        let service = rescan_service(auth_with_key("tester", KEY), &db, &targets, &profiles);
+        RescanFixture {
+            guard,
+            db,
+            service,
+            targets,
+            profiles,
+        }
+    }
+
+    fn rescan_service(
+        auth: WriteApiAuth,
+        db: &Arc<InterchainDatabase>,
+        targets: &Arc<Vec<IndexingTarget>>,
+        profiles: &Arc<BTreeMap<i32, ReplayProfile>>,
+    ) -> InterchainAdminServiceImpl {
+        InterchainAdminServiceImpl::new(
+            Arc::new(auth),
+            db.clone(),
+            token_info_service(db),
+            targets.clone(),
+            profiles.clone(),
+        )
+    }
+
+    fn rescan_range(from_block: u64, to_block: u64) -> RescanBlockRange {
+        RescanBlockRange {
+            bridge_id: 1,
+            chain_id: 1,
+            from_block,
+            to_block,
+        }
+    }
+
+    fn rescan_request(
+        ranges: Vec<RescanBlockRange>,
+        dry_run: Option<bool>,
+    ) -> RescanBlockRangesRequest {
+        RescanBlockRangesRequest {
+            ranges,
+            reason: "  TICKET-9  ".to_string(),
+            dry_run,
+        }
+    }
+
+    impl RescanFixture {
+        async fn failure_rows(&self) -> Vec<indexer_failures::Model> {
+            indexer_failures::Entity::find()
+                .order_by_asc(indexer_failures::Column::FromBlock)
+                .all(self.guard.client().as_ref())
+                .await
+                .unwrap()
+        }
+
+        /// The stored `(from_block, to_block)` pairs.
+        async fn failure_bounds(&self) -> Vec<(i64, i64)> {
+            self.failure_rows()
+                .await
+                .into_iter()
+                .map(|row| (row.from_block, row.to_block))
+                .collect()
+        }
+
+        async fn audit_log(&self) -> Vec<write_api_audit_log::Model> {
+            write_api_audit_log::Entity::find()
+                .order_by_asc(write_api_audit_log::Column::Id)
+                .all(self.guard.client().as_ref())
+                .await
+                .unwrap()
+        }
+
+        /// Calls the method as `KEY`.
+        async fn rescan(
+            &self,
+            request: RescanBlockRangesRequest,
+        ) -> Result<RescanBlockRangesResponse, tonic::Status> {
+            self.service
+                .rescan_block_ranges(request_with_key(request, KEY))
+                .await
+                .map(tonic::Response::into_inner)
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn admin_handler_rescan_rejects_bad_auth_including_dry_run() {
+        let fx = rescan_fixture("admin_handler_rescan_bad_auth").await;
+        let empty_catalogue = rescan_service(
+            WriteApiAuth::from_settings(&Default::default()).unwrap(),
+            &fx.db,
+            &fx.targets,
+            &fx.profiles,
+        );
+
+        for dry_run in [None, Some(true)] {
+            let body = || rescan_request(vec![rescan_range(2000, 2100)], dry_run);
+            let mut non_ascii = tonic::Request::new(body());
+            non_ascii.metadata_mut().insert(
+                "x-api-key",
+                AsciiMetadataValue::try_from(&[0xff_u8, b'k'][..]).unwrap(),
+            );
+            // `(label, response)`
+            let outcomes = [
+                (
+                    "no key",
+                    fx.service
+                        .rescan_block_ranges(tonic::Request::new(body()))
+                        .await,
+                ),
+                (
+                    "wrong key",
+                    fx.service
+                        .rescan_block_ranges(request_with_key(body(), "wrong-key"))
+                        .await,
+                ),
+                (
+                    "empty key",
+                    fx.service
+                        .rescan_block_ranges(request_with_key(body(), ""))
+                        .await,
+                ),
+                (
+                    "non-ASCII key",
+                    fx.service.rescan_block_ranges(non_ascii).await,
+                ),
+                (
+                    "empty catalogue",
+                    empty_catalogue
+                        .rescan_block_ranges(request_with_key(body(), KEY))
+                        .await,
+                ),
+            ];
+            for (label, outcome) in outcomes {
+                let status = outcome.expect_err(label);
+                assert_eq!(
+                    status.code(),
+                    Code::Unauthenticated,
+                    "{label} (dry_run = {dry_run:?})"
+                );
+            }
+        }
+
+        assert_eq!(fx.failure_rows().await, vec![]);
+        assert_eq!(fx.audit_log().await.len(), 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn admin_handler_rescan_dry_run_writes_nothing() {
+        let fx = rescan_fixture("admin_handler_rescan_dry_run").await;
+
+        let response = fx
+            .rescan(rescan_request(
+                vec![
+                    rescan_range(3000, 3100),
+                    rescan_range(2000, 2100),
+                    rescan_range(2101, 2200),
+                ],
+                Some(true),
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.audit_id, None);
+        assert_eq!(
+            response.scheduled_ranges,
+            vec![rescan_range(2000, 2200), rescan_range(3000, 3100)]
+        );
+        assert_eq!(response.requested_blocks, 201 + 101);
+        // Two chunks of at most 1000 blocks fit one pass: 30 s + 1 * 60 s.
+        assert_eq!(
+            response.estimates,
+            vec![RescanBridgeEstimate {
+                bridge_id: 1,
+                estimated_drain_seconds: 90,
+            }]
+        );
+        assert_eq!(fx.failure_rows().await, vec![]);
+        assert_eq!(fx.audit_log().await.len(), 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn admin_handler_rescan_apply_records_rows_and_one_audit_row() {
+        let fx = rescan_fixture("admin_handler_rescan_apply").await;
+
+        let response = fx
+            .rescan(rescan_request(
+                vec![
+                    rescan_range(3000, 3100),
+                    rescan_range(2000, 2100),
+                    rescan_range(2101, 2200),
+                ],
+                None,
+            ))
+            .await
+            .unwrap();
+
+        // The normalized ranges of the request: the contract of the response.
+        let scheduled = vec![rescan_range(2000, 2200), rescan_range(3000, 3100)];
+        assert_eq!(response.scheduled_ranges, scheduled);
+        assert_eq!(response.requested_blocks, 201 + 101);
+        let audit_id = response
+            .audit_id
+            .expect("an applied change has an audit row");
+
+        // No concurrent writer here, so the stored rows are exactly them.
+        assert_eq!(fx.failure_bounds().await, vec![(2000, 2200), (3000, 3100)]);
+        for row in fx.failure_rows().await {
+            assert_eq!((row.bridge_id, row.chain_id), (1, 1));
+            let reason = row.reason.expect("a queued row carries its origin");
+            assert!(
+                reason.starts_with("write-api: tester: TICKET-9"),
+                "{reason}"
+            );
+        }
+        // The same view the running indexer's retry tick reads.
+        let open = fx.db.open_indexer_failures(&[(1, 1)]).await.unwrap();
+        assert_eq!(open.len(), 2);
+
+        let log = fx.audit_log().await;
+        assert_eq!(log.len(), 1, "exactly one audit row per applied request");
+        let row = &log[0];
+        assert_eq!(row.id, audit_id);
+        assert_eq!(row.actor, "tester");
+        assert_eq!(row.method, "RescanBlockRanges");
+        assert_eq!(row.reason, "TICKET-9");
+        let range_json = |from: u64, to: u64| json!({"bridge_id": 1, "chain_id": 1, "from_block": from, "to_block": to});
+        assert_eq!(
+            row.request,
+            json!({"ranges": [range_json(2000, 2100), range_json(2101, 2200), range_json(3000, 3100)]}),
+            "what was asked, sorted"
+        );
+        assert_eq!(
+            row.result,
+            json!({
+                "scheduled_ranges": [range_json(2000, 2200), range_json(3000, 3100)],
+                "requested_blocks": 302,
+                "estimates": [{"bridge_id": 1, "estimated_drain_seconds": 90}],
+            })
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn admin_handler_rescan_state_violation_is_failed_precondition_without_writes() {
+        let fx = rescan_fixture("admin_handler_rescan_state_violation").await;
+
+        // R = 100 000 is the next block to scan: not yet scanned.
+        let status = fx
+            .rescan(rescan_request(vec![rescan_range(99_000, 100_000)], None))
+            .await
+            .expect_err("above the last scanned block");
+        assert_eq!(status.code(), Code::FailedPrecondition);
+        assert!(
+            status
+                .message()
+                .contains("above the last scanned block 99999"),
+            "{}",
+            status.message()
+        );
+        assert_eq!(fx.failure_rows().await, vec![]);
+        assert_eq!(fx.audit_log().await.len(), 0);
+
+        // A static violation is an invalid argument, with the same effect.
+        let status = fx
+            .rescan(rescan_request(
+                vec![rescan_range(RESCAN_FLOOR - 1, 2000)],
+                None,
+            ))
+            .await
+            .expect_err("below the scan floor");
+        assert_eq!(status.code(), Code::InvalidArgument);
+        assert_eq!(fx.failure_rows().await, vec![]);
+        assert_eq!(fx.audit_log().await.len(), 0);
+
+        // Queued rows are open failed ranges now: asking again, or for the
+        // neighbouring blocks, is refused until they are replayed.
+        fx.rescan(rescan_request(vec![rescan_range(2000, 2100)], None))
+            .await
+            .unwrap();
+        for (from, to) in [(2000, 2100), (2101, 2200), (1900, 1999)] {
+            let status = fx
+                .rescan(rescan_request(vec![rescan_range(from, to)], None))
+                .await
+                .expect_err("conflicts with the queued row");
+            assert_eq!(status.code(), Code::FailedPrecondition, "{from}..{to}");
+            assert!(
+                status.message().contains("chain 1 2000..2100"),
+                "{}",
+                status.message()
+            );
+        }
+        assert_eq!(fx.failure_bounds().await, vec![(2000, 2100)]);
+        assert_eq!(fx.audit_log().await.len(), 1, "only the first request");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn admin_handler_rescan_failure_on_a_later_range_rolls_back_everything() {
+        let fx = rescan_fixture("admin_handler_rescan_later_range_fails").await;
+        // Makes the write of the second range fail on its own, after the first
+        // one has already been written.
+        fx.guard
+            .client()
+            .execute_unprepared(
+                "ALTER TABLE indexer_failures ADD CONSTRAINT test_reject_range \
+                 CHECK (from_block <> 3000)",
+            )
+            .await
+            .unwrap();
+
+        let status = fx
+            .rescan(rescan_request(
+                vec![rescan_range(2000, 2100), rescan_range(3000, 3100)],
+                None,
+            ))
+            .await
+            .expect_err("the second range violates the CHECK");
+
+        assert_eq!(status.code(), Code::Internal);
+        assert_eq!(status.message(), "internal server error");
+        assert_eq!(fx.failure_rows().await, vec![]);
+        assert_eq!(fx.audit_log().await.len(), 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn admin_handler_rescan_failed_audit_insert_rolls_back_the_queued_rows() {
+        let fx = rescan_fixture("admin_handler_rescan_audit_fails").await;
+        fx.guard
+            .client()
+            .execute_unprepared(
+                "ALTER TABLE write_api_audit_log ADD CONSTRAINT test_reject_rescan_audit \
+                 CHECK (method <> 'RescanBlockRanges')",
+            )
+            .await
+            .unwrap();
+
+        let status = fx
+            .rescan(rescan_request(vec![rescan_range(2000, 2100)], None))
+            .await
+            .expect_err("the audit insert violates the CHECK");
+
+        assert_eq!(status.code(), Code::Internal);
+        assert_eq!(
+            fx.failure_rows().await,
+            vec![],
+            "the rows and the audit row share one transaction"
+        );
+        assert_eq!(fx.audit_log().await.len(), 0);
     }
 }
