@@ -356,8 +356,6 @@ impl CompilerExecutor for NativeCompilerExecutor {
     }
 }
 
-// Rust 1.99 renamed `fetch_update` to `try_update`; the old name still builds on older toolchains.
-#[allow(deprecated)]
 async fn collect_output<R>(
     mut output: R,
     total_size: Arc<AtomicUsize>,
@@ -380,7 +378,7 @@ where
         }
         metrics::add_transfer_bytes(metrics::NATIVE, metrics::OUTPUT, "process", size);
         if total_size
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 current
                     .checked_add(size)
                     .filter(|new_size| *new_size <= limit)
