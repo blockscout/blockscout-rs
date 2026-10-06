@@ -4,8 +4,6 @@
 #![allow(clippy::large_enum_variant)]
 // `tonic::Status` is ~176 bytes, which trips the lint in generated and http-client code.
 #![allow(clippy::result_large_err)]
-// `#[async_trait]` marks its boxed futures `#[must_use]`, which clippy 1.99 reports as redundant.
-#![allow(clippy::double_must_use)]
 
 pub use tonic;
 
