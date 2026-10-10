@@ -22,3 +22,4 @@ pub mod stats_chains_by_bridge;
 pub mod stats_messages;
 pub mod stats_messages_days;
 pub mod tokens;
+pub mod write_api_audit_log;

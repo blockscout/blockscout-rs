@@ -237,6 +237,12 @@
   - interchain message/transfer queries
 - `interchain-indexer-server/src/services/stats.rs`
   - statistics endpoints
+- `interchain-indexer-server/src/services/admin/`, `interchain-indexer-server/src/auth.rs`
+  and `interchain-indexer-logic/src/write_api.rs`
+  - Write API (admin service): key authentication (`WriteApiAuth` → `Actor`),
+    validation, the audited transaction (`AuditedTx`) and the database
+    operations behind each method; decisions in ADR-016, operation in
+    `runbooks/write-api.md`
 - `interchain-indexer-server/src/services/status.rs`
   - indexer status reporting, and historical catch-up progress per
     `(bridge, chain)` (`GET /api/v1/status/indexing`)

@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use crate::{
+    auth::WriteApiAuth,
     create_provider_pools_from_chains,
     indexers::{IndexingTarget, enumerate_indexing_targets, reconcile_catchup_floors},
     load_bridges_from_file, load_chains_from_file, logging,
     proto::{
         health_actix::route_health, health_server::HealthServer,
+        interchain_admin_service_actix::route_interchain_admin_service,
+        interchain_admin_service_server::InterchainAdminServiceServer,
         interchain_service_actix::route_interchain_service,
         interchain_service_server::InterchainServiceServer,
         interchain_statistics_service_server::InterchainStatisticsServiceServer,
         status_service_server::StatusServiceServer,
     },
     services::{
-        HealthService, InterchainServiceImpl, InterchainStatisticsServiceImpl, StatusServiceImpl,
+        HealthService, InterchainAdminServiceImpl, InterchainServiceImpl,
+        InterchainStatisticsServiceImpl, StatusServiceImpl, build_replay_profiles,
         collect_indexing_progress,
     },
     settings::Settings,
@@ -263,6 +267,7 @@ struct Router {
     interchain_service: Arc<InterchainServiceImpl>,
     stats_service: Arc<InterchainStatisticsServiceImpl>,
     status_service: Arc<StatusServiceImpl>,
+    admin_service: Arc<InterchainAdminServiceImpl>,
     swagger_path: PathBuf,
 }
 
@@ -277,6 +282,9 @@ impl Router {
                 self.stats_service.clone(),
             ))
             .add_service(StatusServiceServer::from_arc(self.status_service.clone()))
+            .add_service(InterchainAdminServiceServer::from_arc(
+                self.admin_service.clone(),
+            ))
     }
 }
 
@@ -290,6 +298,8 @@ impl launcher::HttpRouter for Router {
         });
         service_config
             .configure(|config| route_status_service(config, self.status_service.clone()));
+        service_config
+            .configure(|config| route_interchain_admin_service(config, self.admin_service.clone()));
         service_config.configure(|config| {
             route_swagger(
                 config,
@@ -302,6 +312,9 @@ impl launcher::HttpRouter for Router {
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     logging::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+
+    // Before any heavy initialization, so a malformed key catalogue fails fast.
+    let write_api_auth = Arc::new(WriteApiAuth::from_settings(&settings.write_api)?);
 
     let health = Arc::new(HealthService::default());
 
@@ -423,6 +436,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     // indexing-progress RPC handler and its periodic metrics worker so the
     // two can never disagree.
     let targets = Arc::new(enumerate_indexing_targets(&bridges));
+    // Also from the config only, for the same reason: what the rescan method
+    // may expect each bridge's indexer to replay with.
+    let replay_profiles = Arc::new(build_replay_profiles(&bridges, &settings));
 
     // Order-independent by construction: the reconciliation compares the
     // configured scan floor against `indexer_checkpoints.catchup_min_cursor`
@@ -506,11 +522,19 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         db.clone(),
         targets.clone(),
     ));
+    let admin_service = Arc::new(InterchainAdminServiceImpl::new(
+        write_api_auth,
+        db.clone(),
+        token_info_service.clone(),
+        targets.clone(),
+        replay_profiles,
+    ));
     let router = Router {
         health,
         interchain_service,
         stats_service,
         status_service,
+        admin_service,
         swagger_path: settings.swagger_path,
     };
 

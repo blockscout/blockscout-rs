@@ -11,6 +11,7 @@ tags:
   - name: InterchainStatisticsService
   - name: StatusService
   - name: Health
+  - name: InterchainAdminService
 host: interchain-indexer.services.blockscout.com
 schemes:
   - https
@@ -19,6 +20,90 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/admin/indexing:rescanBlockRanges:
+    post:
+      summary: |-
+        Queues block ranges for re-scanning by the running indexer's failed-range
+        replay. This RESCANS; it does not repair already-stored data (no deletes, no
+        NULL-ing, no stats recount). Requests may not touch open failed ranges, the
+        unscanned catch-up interval, or blocks at/after the realtime cursor. Use
+        `dry_run` first. The estimate is approximate: the replay budget is shared
+        with real failed ranges of the bridge.
+      operationId: InterchainAdminService_RescanBlockRanges
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1RescanBlockRangesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1RescanBlockRangesRequest'
+      tags:
+        - Admin
+      security:
+        - ApiKeyAuth: []
+  /api/v1/admin/stats/assets:setIcon:
+    post:
+      summary: |-
+        Sets or clears the row icon of one bridged-token asset (the `icon_url` of a
+        `GET /api/v1/stats/chain/{chain_id}/bridged-tokens` row). Does not change
+        token icons. A manual asset icon is not replaced by derivation, but it is
+        lost if the asset later loses a merge, and a concurrent fill of an empty
+        name/symbol/icon can revert it.
+      operationId: InterchainAdminService_SetStatsAssetIcon
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SetStatsAssetIconResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SetStatsAssetIconRequest'
+      tags:
+        - Admin
+      security:
+        - ApiKeyAuth: []
+  /api/v1/admin/tokens:setIcon:
+    post:
+      summary: |-
+        Sets or clears the icon of one token that already has a `tokens` row. The
+        token-info source (Blockscout) remains the source of truth: an icon it
+        later provides replaces the value set here; its absence never erases it.
+        Does not change bridged-token asset icons.
+      operationId: InterchainAdminService_SetTokenIcon
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SetTokenIconResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SetTokenIconRequest'
+      tags:
+        - Admin
+      security:
+        - ApiKeyAuth: []
   /api/v1/interchain/bridges:
     get:
       operationId: InterchainService_GetBridges
@@ -1811,6 +1896,138 @@ definitions:
       scope). The cursor does not encode these filters and is not re-validated
       against them, so changing any filter mid-pagination is unsupported and
       yields undefined results; callers must restart pagination when filters change.
+  v1RescanBlockRange:
+    type: object
+    properties:
+      bridge_id:
+        type: integer
+        format: int32
+      chain_id:
+        type: string
+        format: int64
+        description: Chain id (a JSON string).
+      from_block:
+        type: string
+        format: uint64
+        description: First block, inclusive (a JSON string).
+      to_block:
+        type: string
+        format: uint64
+        description: Last block, inclusive (a JSON string).
+  v1RescanBlockRangesRequest:
+    type: object
+    properties:
+      ranges:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RescanBlockRange'
+        description: At most 100 ranges, at most 2,000,000 blocks in total after merging.
+      reason:
+        type: string
+        description: Why the rescan is requested (1..1000 characters), e.g. a ticket link.
+      dry_run:
+        type: boolean
+        description: '`true` validates and estimates without writing anything.'
+  v1RescanBlockRangesResponse:
+    type: object
+    properties:
+      audit_id:
+        type: string
+        format: int64
+        description: Audit-log row id; `null` for a dry run.
+      scheduled_ranges:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RescanBlockRange'
+        description: |-
+          Accepted ranges of THIS request after normalization (merged per pair, sorted by
+          bridge, chain, block). Not a snapshot of stored ledger rows: a stored row may be
+          wider if an adjacent failure is merged concurrently.
+      requested_blocks:
+        type: string
+        format: uint64
+        description: Total blocks in `scheduled_ranges`.
+      estimates:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RescanBridgeEstimate'
+  v1RescanBridgeEstimate:
+    type: object
+    properties:
+      bridge_id:
+        type: integer
+        format: int32
+      estimated_drain_seconds:
+        type: string
+        format: uint64
+        description: Approximate time to replay this request's ranges, in seconds.
+  v1SetStatsAssetIconRequest:
+    type: object
+    properties:
+      stats_asset_id:
+        type: string
+        format: int64
+        description: '`stats_asset_id` from the bridged-tokens response (a JSON string).'
+      icon_url:
+        type: string
+        description: New icon URL (https, at most 2048 bytes). Exactly one of `icon_url`, `clear`.
+      clear:
+        type: boolean
+        description: '`true` clears the icon. Exactly one of `icon_url`, `clear`.'
+      reason:
+        type: string
+        description: Why the change is made (1..1000 characters), e.g. a ticket link.
+  v1SetStatsAssetIconResponse:
+    type: object
+    properties:
+      audit_id:
+        type: string
+        format: int64
+        description: Id of the audit-log row that recorded the change.
+      icon_url_before:
+        type: string
+        description: '`null` when the asset had no icon.'
+      icon_url_after:
+        type: string
+        description: '`null` after `clear`.'
+  v1SetTokenIconRequest:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+        description: Chain id (a JSON string).
+      address:
+        type: string
+        description: 0x-prefixed 20-byte token address. Exactly one of `address`, `native`.
+      native:
+        type: boolean
+        description: '`true` selects the chain''s native token (shown with a null address in the API).'
+      icon_url:
+        type: string
+        description: New icon URL (https, at most 2048 bytes). Exactly one of `icon_url`, `clear`.
+      clear:
+        type: boolean
+        description: '`true` clears the icon. Exactly one of `icon_url`, `clear`.'
+      reason:
+        type: string
+        description: Why the change is made (1..1000 characters), e.g. a ticket link.
+  v1SetTokenIconResponse:
+    type: object
+    properties:
+      audit_id:
+        type: string
+        format: int64
+        description: Id of the audit-log row that recorded the change.
+      icon_url_before:
+        type: string
+        description: '`null` when the token had no icon.'
+      icon_url_after:
+        type: string
+        description: '`null` after `clear`.'
   v1SortOrder:
     type: string
     enum:

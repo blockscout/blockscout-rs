@@ -20,9 +20,11 @@ use crate::InterchainDatabase;
 /// replica indexes a given `(bridge_id, chain_id)` pair — the same assumption
 /// checkpointing already depends on implicitly. The cache may be stale-`true`
 /// (one redundant `SELECT`, harmless) but must never be stale-`false`: if a
-/// second writer could record a failure this process does not know about,
-/// `resolve` would skip the database entirely and silently leave that failure
-/// unresolved forever.
+/// second writer could record a failure this process does not know about, a
+/// forward-path `resolve` would skip the database entirely and leave that
+/// failure unresolved. The retry tick closes this for the rows it reads:
+/// `note_open` re-marks every pair of a successful `open()` snapshot before any
+/// `resolve` of that tick.
 pub struct FailureLedger {
     db: Arc<InterchainDatabase>,
     /// Pairs known to have open holes, each mapped to a monotone *record
@@ -112,10 +114,22 @@ impl FailureLedger {
         Ok(())
     }
 
-    /// Marks that a `record` touched `pair`, re-creating the entry if a
-    /// concurrent `resolve` removed it.
+    /// Marks that a `record` (or `note_open`) touched `pair`, re-creating the
+    /// entry if a concurrent `resolve` removed it.
     fn bump_epoch(&self, pair: (i32, i64)) {
         *self.pairs_with_holes.write().entry(pair).or_insert(0) += 1;
+    }
+
+    /// Marks every pair present in a durable `open()` snapshot as possibly
+    /// holding holes, so a later `resolve` issues a real DB statement.
+    /// Equivalent to `record`'s leading bump without a write: it only moves the
+    /// cache toward stale-`true` (harmless) and makes any in-flight `resolve`
+    /// refuse to clear the pair. Needed because rows can be written by someone
+    /// other than this ledger's own `record` (an external writer).
+    pub fn note_open(&self, pairs: &[(i32, i64)]) {
+        for pair in pairs {
+            self.bump_epoch(*pair);
+        }
     }
 
     /// DIFFERENCE. No-op (no DB statement) when the pair is absent from the
@@ -234,6 +248,56 @@ mod tests {
              ({in_flight:?} -> {after_write:?}); with only a leading bump a \
              concurrent resolve's snapshot already contains the sole bump and \
              it will clear the pair, leaving the cache stale-false"
+        );
+    }
+
+    /// A ledger over a `Disconnected` connection: `note_open` and the cache
+    /// helpers never execute SQL, so these tests need no database.
+    fn disconnected_ledger() -> FailureLedger {
+        FailureLedger::new(Arc::new(InterchainDatabase::new(Arc::new(
+            sea_orm::DatabaseConnection::default(),
+        ))))
+    }
+
+    #[test]
+    fn note_open_inserts_an_absent_pair_and_bumps_a_present_one() {
+        let ledger = disconnected_ledger();
+        let pair = (1, 1);
+        assert_eq!(ledger.pairs_with_holes.read().get(&pair), None);
+
+        ledger.note_open(&[pair]);
+        let inserted = ledger.pairs_with_holes.read().get(&pair).copied();
+        assert!(
+            inserted.is_some(),
+            "an absent pair must be inserted so resolve issues a real DB statement"
+        );
+
+        ledger.note_open(&[pair]);
+        let bumped = ledger.pairs_with_holes.read().get(&pair).copied();
+        assert!(
+            bumped > inserted,
+            "a present pair must have its epoch bumped ({inserted:?} -> {bumped:?})"
+        );
+    }
+
+    #[test]
+    fn note_open_invalidates_an_epoch_snapshot_taken_before_it() {
+        let ledger = disconnected_ledger();
+        let pair = (1, 1);
+        ledger.note_open(&[pair]);
+        let snapshot = ledger
+            .pairs_with_holes
+            .read()
+            .get(&pair)
+            .copied()
+            .expect("note_open must insert the pair");
+
+        ledger.note_open(&[pair]);
+        let current = ledger.pairs_with_holes.read().get(&pair).copied();
+
+        assert!(
+            !may_clear_pair(current, snapshot),
+            "a resolve that snapshotted the epoch before note_open must not clear the pair"
         );
     }
 

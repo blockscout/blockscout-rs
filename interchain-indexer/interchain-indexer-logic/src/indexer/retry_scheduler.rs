@@ -11,7 +11,9 @@ use std::{collections::HashSet, time::Duration};
 use chrono::NaiveDateTime;
 
 use super::failure_ledger::{
-    BlockRange, FailedInterval, interval::overlaps, policy::next_attempt_at,
+    BlockRange, FailedInterval,
+    interval::{overlaps, subtract},
+    policy::next_attempt_at,
 };
 
 pub(crate) struct RetryScheduler {
@@ -23,6 +25,21 @@ pub(crate) struct RetryScheduler {
     backoff_base: Duration,
     backoff_cap: Duration,
     finished_this_tick: HashSet<u64>,
+    /// `(chain_id, chunk)` pairs resolved through `report_outcome` since the
+    /// last successfully read snapshot.
+    ///
+    /// A resolved chunk disappears from the database but a session still
+    /// covers it until the next `reconcile`. Without this list, a fresh row
+    /// inserted over that coverage before the next snapshot would match the
+    /// session as a parent and inherit its narrowed width (possibly 1 block per
+    /// chunk). `reconcile` consumes the list and ignores a parent whose overlap
+    /// with the row is entirely made of these chunks.
+    ///
+    /// Bounded by `max_chunks_per_pass` per tick. A snapshot that failed to
+    /// read never reaches `begin_tick`, so the list is not cleared then. Blocks
+    /// resolved by the forward path (not via `report_outcome`) are not
+    /// recorded here.
+    resolved_since_snapshot: Vec<(i64, BlockRange)>,
 }
 
 #[derive(Clone)]
@@ -91,6 +108,7 @@ impl RetryScheduler {
             backoff_base,
             backoff_cap,
             finished_this_tick: HashSet::new(),
+            resolved_since_snapshot: vec![],
         }
     }
 
@@ -171,6 +189,8 @@ impl RetryScheduler {
         if outcome == RetryChunkOutcome::Resolved {
             active.resolved_any = true;
             session.width = session.width.min(chunk.range.width());
+            self.resolved_since_snapshot
+                .push((chunk.chain_id, chunk.range));
         }
         if chunk.range.to < active.fixed_end {
             active.next_block = chunk.range.to.saturating_add(1);
@@ -197,6 +217,7 @@ impl RetryScheduler {
     fn reconcile(&mut self, rows: &[(i64, FailedInterval)], decision_time: NaiveDateTime) {
         let mut rows = rows.to_vec();
         rows.sort_by_key(|(chain_id, interval)| (*chain_id, interval.range.from));
+        let resolved = std::mem::take(&mut self.resolved_since_snapshot);
         let mut old = std::mem::take(&mut self.sessions);
         old.sort_by_key(|session| (session.chain_id, session.coverage.from));
         let mut first_candidate = 0;
@@ -217,7 +238,7 @@ impl RetryScheduler {
                 && old[cursor].chain_id == chain_id
                 && old[cursor].coverage.from <= row.range.to
             {
-                if overlaps(old[cursor].coverage, row.range) {
+                if has_unresolved_overlap(old[cursor].coverage, row.range, chain_id, &resolved) {
                     parents.push(&old[cursor]);
                 }
                 cursor += 1;
@@ -364,6 +385,33 @@ impl RetryScheduler {
             narrowing_started: session.narrowing_started,
             next_due_at: session.next_due_at,
         })
+    }
+}
+
+/// Whether an old session's `coverage` is a genuine parent of `row`: the two
+/// overlap, and some part of the overlap was NOT resolved by this process since
+/// the last snapshot. An overlap made entirely of resolved chunks of the same
+/// chain is a stale remnant of the session, not a hole the session has been
+/// working on, so the row must start fresh instead of inheriting its width.
+fn has_unresolved_overlap(
+    coverage: BlockRange,
+    row: BlockRange,
+    chain_id: i64,
+    resolved: &[(i64, BlockRange)],
+) -> bool {
+    overlaps(coverage, row) && {
+        let intersection = BlockRange {
+            from: coverage.from.max(row.from),
+            to: coverage.to.min(row.to),
+        };
+        let mut remaining = vec![intersection];
+        for (_, completed) in resolved.iter().filter(|(chain, _)| *chain == chain_id) {
+            remaining = remaining
+                .into_iter()
+                .flat_map(|piece| subtract(piece, *completed))
+                .collect();
+        }
+        !remaining.is_empty()
     }
 }
 
@@ -883,6 +931,154 @@ mod tests {
         assert_eq!(
             scheduler.next_chunk(now).unwrap().range,
             BlockRange { from: 0, to: 0 }
+        );
+    }
+
+    /// Resolves the single-block row `[100, 100]` through the scheduler and
+    /// returns the resolved session's id. Shared by the
+    /// `resolved_since_snapshot` regression tests.
+    fn resolve_singleton_session(scheduler: &mut RetryScheduler, now: NaiveDateTime) -> u64 {
+        scheduler.begin_tick(&[row(100, 100, 1)], now);
+        let chunk = scheduler.next_chunk(now).unwrap();
+        assert_eq!(chunk.range, BlockRange { from: 100, to: 100 });
+        scheduler.report_outcome(chunk, RetryChunkOutcome::Resolved, now);
+        chunk.session_id
+    }
+
+    #[test]
+    fn scheduler_resolved_singleton_does_not_shrink_a_fresh_range() {
+        let mut scheduler = scheduler(1000);
+        let now = time() + ChronoDuration::seconds(1);
+        let old_session_id = resolve_singleton_session(&mut scheduler, now);
+
+        // An external writer inserts a wide row over the coverage that was
+        // just resolved, before the next snapshot would have dropped it.
+        scheduler.begin_tick(&[row(100, 1_000_099, 1)], now);
+
+        assert_eq!(scheduler.sessions.len(), 1);
+        let session = &scheduler.sessions[0];
+        assert_eq!(
+            session.width, 1000,
+            "a fresh row must not inherit the resolved session's width of 1"
+        );
+        assert_ne!(session.id, old_session_id);
+    }
+
+    #[test]
+    fn scheduler_partially_resolved_coverage_keeps_the_real_remainder_state() {
+        let mut scheduler = scheduler(8);
+        let t0 = time() + ChronoDuration::seconds(2);
+        // `attempts == split_after_attempts`: narrowing is already enabled.
+        scheduler.begin_tick(&[row(0, 99, 3)], t0);
+        let old_session_id = scheduler.sessions[0].id;
+        assert_eq!(scheduler.sessions[0].width, 8);
+
+        let completion = fail_sweep(&mut scheduler, t0);
+        assert_eq!(completion.new_width, 4);
+        assert_eq!(completion.failed_sweeps, 4);
+
+        // A new tick is required: `finish_sweep` parked the session in
+        // `finished_this_tick`, which only `begin_tick` clears.
+        let t1 = scheduler.sessions[0].next_due_at.unwrap();
+        scheduler.begin_tick(&[row(0, 99, 3)], t1);
+        for expected in [BlockRange { from: 0, to: 3 }, BlockRange { from: 4, to: 7 }] {
+            let chunk = scheduler.next_chunk(t1).unwrap();
+            assert_eq!(chunk.range, expected);
+            assert_eq!(chunk.session_id, old_session_id);
+            assert!(
+                scheduler
+                    .report_outcome(chunk, RetryChunkOutcome::Resolved, t1)
+                    .is_none(),
+                "the sweep must still be active"
+            );
+        }
+
+        // `[8, 99]` is the genuine remainder (the database `resolve` resets
+        // its attempts to 1). `[0, 6]` lies wholly inside the resolved chunks
+        // and is not adjacent to the remainder.
+        scheduler.begin_tick(&[row(0, 6, 1), row(8, 99, 1)], t1);
+
+        assert_eq!(scheduler.sessions.len(), 2);
+        let fresh = &scheduler.sessions[0];
+        assert_eq!(fresh.coverage, BlockRange { from: 0, to: 6 });
+        assert_ne!(fresh.id, old_session_id);
+        assert_eq!(
+            fresh.width, 7,
+            "fresh coverage starts at min(batch_size, row width), not the inherited 4"
+        );
+        assert_eq!(fresh.failed_sweeps, 1);
+        assert!(!fresh.narrowing_started);
+
+        let remainder = &scheduler.sessions[1];
+        assert_eq!(remainder.coverage, BlockRange { from: 8, to: 99 });
+        assert_eq!(remainder.id, old_session_id);
+        assert_eq!(remainder.width, 4);
+        assert_eq!(remainder.failed_sweeps, 4);
+        assert!(remainder.narrowing_started);
+    }
+
+    #[test]
+    fn scheduler_resolved_list_survives_a_tick_without_snapshot() {
+        let mut scheduler = scheduler(1000);
+        let now = time() + ChronoDuration::seconds(1);
+        let old_session_id = resolve_singleton_session(&mut scheduler, now);
+
+        // A tick whose `open()` failed never reaches `begin_tick`, so it must
+        // leave the resolved list intact; nothing is called here.
+        assert_eq!(
+            scheduler.resolved_since_snapshot,
+            vec![(1, BlockRange { from: 100, to: 100 })]
+        );
+
+        scheduler.begin_tick(&[row(100, 1_000_099, 1)], now);
+
+        assert_eq!(scheduler.sessions.len(), 1);
+        let session = &scheduler.sessions[0];
+        assert_eq!(session.width, 1000);
+        assert_ne!(session.id, old_session_id);
+        assert!(
+            scheduler.resolved_since_snapshot.is_empty(),
+            "a successful snapshot consumes the resolved list"
+        );
+    }
+
+    #[test]
+    fn scheduler_resolved_chunk_on_another_chain_does_not_drop_a_parent() {
+        let mut scheduler = scheduler(8);
+        let t0 = time() + ChronoDuration::seconds(2);
+        // Chain 1 is a genuinely narrowed session: `attempts == 3` enables
+        // narrowing, and one wholly failed sweep halves the width to 4.
+        scheduler.begin_tick(&[row_on(1, 0, 7, 3, time())], t0);
+        let old_session_id = scheduler.sessions[0].id;
+        let completion = fail_sweep(&mut scheduler, t0);
+        assert_eq!(completion.new_width, 4);
+
+        // Chain 2 resolves a chunk that covers the same block numbers as
+        // chain 1's whole coverage, so the chain filter is the only thing
+        // keeping chain 1's overlap from looking fully resolved.
+        let t1 = scheduler.sessions[0].next_due_at.unwrap();
+        scheduler.begin_tick(
+            &[row_on(1, 0, 7, 3, time()), row_on(2, 0, 7, 1, time())],
+            t1,
+        );
+        // Round-robin resumes after the last served id (chain 1's session), so
+        // the next chunk belongs to the chain 2 session.
+        let chain_two_chunk = scheduler.next_chunk(t1).unwrap();
+        assert_eq!(chain_two_chunk.chain_id, 2);
+        assert_eq!(chain_two_chunk.range, BlockRange { from: 0, to: 7 });
+        scheduler.report_outcome(chain_two_chunk, RetryChunkOutcome::Resolved, t1);
+
+        // A fresh chain 1 row over the same blocks must still find its parent:
+        // the chain 2 chunk is not a resolved chunk of chain 1.
+        scheduler.begin_tick(&[row_on(1, 0, 7, 3, time())], t1);
+
+        assert_eq!(scheduler.sessions.len(), 1);
+        let session = &scheduler.sessions[0];
+        assert_eq!(session.chain_id, 1);
+        assert_eq!(session.id, old_session_id);
+        assert_eq!(
+            session.width, 4,
+            "a chunk resolved on another chain must not drop chain 1's parent"
         );
     }
 

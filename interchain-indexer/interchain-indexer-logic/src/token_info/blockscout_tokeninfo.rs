@@ -138,6 +138,18 @@ impl BlockscoutTokenInfoClient {
         self.icon_cache.write().insert(key, result);
     }
 
+    /// Pre-fills the icon cache so tests can decide what the client "fetches"
+    /// without a network call. There is no production hook.
+    #[cfg(test)]
+    pub(crate) fn seed_icon_cache_for_tests(
+        &self,
+        chain_id: i64,
+        address: &[u8],
+        icon_url: Option<String>,
+    ) {
+        self.cache_icon_result((chain_id, address.to_vec()), icon_url);
+    }
+
     fn get_lock_for_key(&self, key: &TokenKey) -> Arc<Mutex<()>> {
         // If the lock already exists for the key, return it
         if let Some(lock) = self.per_key_locks.read().get(key) {

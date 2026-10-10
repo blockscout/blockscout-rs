@@ -61,6 +61,11 @@ run_migrations = true
 # chains_recalculation_period_secs = 3600
 # include_zero_chains = true
 
+# Placeholder for the env documentation only (not a valid digest): one variable
+# per key, `INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__<KEY_NAME>`.
+[write_api.keys_sha256]
+"<key_name>" = "<64-hex sha256 of the key>"
+
 [api]
 default_page_size = 50
 max_page_size = 100

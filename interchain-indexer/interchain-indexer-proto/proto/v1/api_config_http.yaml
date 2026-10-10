@@ -68,3 +68,17 @@ http:
 
     - selector: blockscout.interchainIndexer.v1.StatusService.GetIndexingProgress
       get: /api/v1/status/indexing
+
+    #################### Admin ####################
+
+    - selector: blockscout.interchainIndexer.v1.InterchainAdminService.SetStatsAssetIcon
+      post: /api/v1/admin/stats/assets:setIcon
+      body: "*"
+
+    - selector: blockscout.interchainIndexer.v1.InterchainAdminService.SetTokenIcon
+      post: /api/v1/admin/tokens:setIcon
+      body: "*"
+
+    - selector: blockscout.interchainIndexer.v1.InterchainAdminService.RescanBlockRanges
+      post: /api/v1/admin/indexing:rescanBlockRanges
+      body: "*"
