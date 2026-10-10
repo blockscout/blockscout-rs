@@ -161,6 +161,18 @@ check-envs:
 generate-envs:
     cargo run --bin check-envs
 
+# The service stores only the SHA-256 digest of a write API key. These recipes
+# print the ready env variable, so nobody hashes a key by hand. Procedure:
+# .memory-bank/runbooks/write-api.md, section "Keys".
+
+# generate a write API key and print it with the env variable that configures it
+write-api-key name:
+    @./scripts/write_api_key.sh new {{name}}
+
+# print the env variable for an existing key, read from stdin (hidden on a terminal)
+write-api-key-digest name:
+    @./scripts/write_api_key.sh digest {{name}}
+
 # graphify-out/ is gitignored (per-clone, local-only). Rebuild it after cloning or
 # whenever graphify-out/graph.json is missing - see .memory-bank/rules/graphify.mdc.
 # --code-only needs no LLM API key; it indexes Rust/code files via AST only.

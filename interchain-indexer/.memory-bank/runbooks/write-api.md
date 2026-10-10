@@ -16,33 +16,85 @@ admin paths carry the prefix.
 
 ## Keys
 
-- **Generate** a key and its digest. Use `printf %s`, not `echo`: `echo` appends
-  a newline, and the digest would not match the key you send.
+The service stores only the SHA-256 digest of a key, one env variable per key:
+`INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__<NAME>=<digest>`. `<NAME>`,
+lowercased (`ops_alice`), is the **actor** written to the audit log. Two `just`
+recipes, run from `interchain-indexer/`, print that variable ready to paste, so
+nobody hashes a key by hand.
 
-  ```sh
-  KEY=$(openssl rand -hex 32)
-  printf %s "$KEY" | sha256sum | cut -d' ' -f1   # the digest to configure
-  ```
+### Add A Key
 
-  The key can be any string; the digest is what the service stores.
-- **Configure** the digest, never the key, as one variable per key:
+1. **Generate** the key and its variable. Pick a name that says who uses the key:
+   letters, digits and single underscores (`ops_alice`, `ci_backfill`).
 
-  ```sh
-  INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__OPS_ALICE=<64-hex digest>
-  ```
+   ```sh
+   just write-api-key ops_alice
+   ```
 
-  The name after `KEYS_SHA256__` (lowercased by the env loader: `ops_alice`) is
-  the **actor** written to the audit log. Do not put `__` inside a name: it
-  becomes a nested key and the settings fail to deserialize.
+   The output has the key and the variable. The key is shown only once and stored
+   nowhere; if it is lost, generate a new one.
+2. **Hand the key to its owner** over a secret channel (a password manager or
+   secret store). Never commit it or paste it into a ticket or chat.
+3. **Add the variable** to the service's deployment env, next to its other
+   settings. It holds the digest, not the key.
+4. **Restart or redeploy** the service: keys are read at startup.
+5. **Check it.**
+   - The startup log lists the name: `write api keys loaded key_names=[..., "ops_alice"]`.
+   - The owner makes a call that authenticates but changes nothing (an asset that
+     does not exist), with `BASE` and `KEY` set as in
+     [Calling the API](#calling-the-api):
+
+     ```sh
+     curl -sS -X POST "$BASE/api/v1/admin/stats/assets:setIcon" \
+       -H 'content-type: application/json' -H "x-api-key: $KEY" \
+       -d '{"stats_asset_id":"9223372036854775807","clear":true,"reason":"key check"}'
+     ```
+
+     `404` (`stats asset … not found`) means the key works. `401` means it does
+     not: the variable is missing, the service was not restarted, or the key was
+     copied with extra characters.
+
+### Owner-Generated Key
+
+To keep the key away from whoever edits the deployment, the owner generates any
+key themselves and sends only the variable. The key is read from stdin, hidden on
+a terminal:
+
+```sh
+just write-api-key-digest ops_alice
+```
+
+The same recipe answers "which digest is this key?" when you need to match a
+configured variable to a key.
+
+### Without The Repository
+
+Generate a key and print its variable with `openssl` only. Hash with
+`printf %s`, not `echo`: `echo` appends a newline and the digest would not match
+the key you send.
+
+```sh
+KEY=$(openssl rand -hex 32); echo "key: $KEY"
+echo "INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__OPS_ALICE=$(printf %s "$KEY" | openssl dgst -sha256 -r | cut -d' ' -f1)"
+```
+
+### Rotate And Revoke
+
+- **Rotate**: add a key under a new name, deploy, move the callers to the new key,
+  then remove the old variable and deploy again.
+- **Revoke**: remove the variable and restart. The audit log keeps the old name
+  as the actor of its past changes.
+
+### Rules
+
 - **Never set the map variable itself**
   (`INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256=<value>`). The settings error that
   follows prints the value, and the value may be a key.
+- **No `__` inside a name**: it becomes a nested key and the settings fail to
+  deserialize. The recipes reject such names.
 - **Startup validation.** The service refuses to start on an empty name, a value
   that is not 64 hex characters (upper or lower case), or one digest under two
   names. The message names the key and never repeats the value.
-- **Rotate** by adding a new name, deploying, moving callers to the new key, then
-  removing the old name and deploying again. Keys are read at startup, so a
-  change needs a restart.
 - **Fail-closed.** With no keys configured the service starts, logs
   `write api has no keys configured; every write method will reject requests`,
   and answers every write request with 401.
