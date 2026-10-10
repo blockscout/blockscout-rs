@@ -31,8 +31,18 @@ nobody hashes a key by hand.
    just write-api-key ops_alice
    ```
 
-   The output has the key and the variable. The key is shown only once and stored
-   nowhere; if it is lost, generate a new one.
+   The key looks like `iiwk_` plus 32 letters and digits, so it cannot be
+   confused with its 64-hex digest. On a terminal the recipe shows the key on a
+   temporary screen. Press Enter after copying it: the screen closes, and the key
+   is not left on the screen or in the scrollback. The recipe then prints the
+   variable. Neither the recipe nor the service keeps the key; if it is lost,
+   generate a new one.
+
+   The key can still persist outside the recipe's control:
+   - when the output is piped or redirected, the recipe prints the key and the
+     variable as plain text;
+   - a terminal session recorder or logger keeps everything shown;
+   - the clipboard, and any clipboard history, keeps what you copied.
 2. **Hand the key to its owner** over a secret channel (a password manager or
    secret store). Never commit it or paste it into a ticket or chat.
 3. **Add the variable** to the service's deployment env, next to its other
@@ -69,14 +79,17 @@ configured variable to a key.
 
 ### Without The Repository
 
-Generate a key and print its variable with `openssl` only. Hash with
-`printf %s`, not `echo`: `echo` appends a newline and the digest would not match
-the key you send.
+Generate a key in the same format and print its variable with `openssl` only.
+Hash with `printf %s`, not `echo`: `echo` appends a newline and the digest would
+not match the key you send.
 
 ```sh
-KEY=$(openssl rand -hex 32); echo "key: $KEY"
+KEY="iiwk_$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-32)"; echo "key: $KEY"
 echo "INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__OPS_ALICE=$(printf %s "$KEY" | openssl dgst -sha256 -r | cut -d' ' -f1)"
 ```
+
+This prints the key on the terminal. After copying it, clear the terminal and its
+scrollback.
 
 ### Rotate And Revoke
 
@@ -101,7 +114,9 @@ echo "INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__OPS_ALICE=$(printf %s "$KEY" |
 
 ## Calling the API
 
-Set `BASE` to the service URL and `KEY` to the key (not the digest).
+Set `BASE` to the service URL and `KEY` to the key (not the digest). Read the
+key with `read -rs KEY` so that it is not echoed and stays out of the shell
+history.
 
 ```sh
 curl -sS -X POST "$BASE/api/v1/admin/stats/assets:setIcon" \
