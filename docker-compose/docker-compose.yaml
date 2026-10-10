@@ -1,0 +1,198 @@
+version: '3.9'
+
+services:
+  # =================
+  # POSTGRES DATABASE
+  # =================
+  database:
+    image: postgres:14
+    restart: on-failure:3
+    container_name: 'brs-database'
+    command: postgres  -c 'max_connections=200' -c 'client_connection_check_interval=60000'
+    environment:
+        POSTGRES_USER: 'postgres'
+        POSTGRES_PASSWORD: 'gpkkRgUcEUKUxDJzBKDutQmR'
+        POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+
+    ports:
+      - 9432:5432
+    volumes:
+      - ./brs-data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # =======================
+  # SMART-CONTRACT-VERIFIER
+  # =======================
+  smart-contract-verifier:
+    image: ghcr.io/blockscout/smart-contract-verifier:${SMART_CONTRACT_VERIFIER_DOCKER_TAG:-latest}
+    build: 
+      context: ../smart-contract-verifier
+      dockerfile: ../smart-contract-verifier/smart-contract-verifier-server/Dockerfile
+    ports: 
+      - 8050:8050
+      - 8051:8051
+    pull_policy: always
+    platform: linux/amd64
+    restart: on-failure:3
+    container_name: 'brs-smart-contract-verifier'
+    env_file:
+      -  ./envs/smart-contract-verifier.env
+
+  # ===============
+  # ETH-BYTECODE-DB
+  # ===============
+  eth-bytecode-db:
+    depends_on:
+      smart-contract-verifier:
+        condition: service_started
+      database:
+        restart: true
+        condition: service_healthy
+    image: ghcr.io/blockscout/eth-bytecode-db:${ETH_BYTECODE_DB_DOCKER_TAG:-latest}
+    build:
+      context: ../eth-bytecode-db
+      dockerfile: ../eth-bytecode-db/eth-bytecode-db-server/Dockerfile
+    ports:
+      - 8053:8050
+    pull_policy: always
+    platform: linux/amd64
+    restart: on-failure:3
+    container_name: 'brs-eth-bytecode-db'
+    env_file:
+      -  ./envs/eth-bytecode-db.env
+
+  # =====
+  # STATS
+  # =====
+  blockscout-init-db:
+    depends_on:
+      database:
+        restart: true
+        condition: service_healthy
+    image: blockscout/blockscout:${BLOCKSCOUT_DB_DOCKER_TAG:-5.3.3}
+    entrypoint: ["/bin/sh"]
+    command: 
+      - bin/blockscout
+      - eval
+      - Elixir.Explorer.ReleaseTasks.create_and_migrate()
+    env_file:
+      - ./envs/blockscout.env
+
+  stats:
+    depends_on:
+      blockscout-init-db:
+        condition: service_completed_successfully
+    image: ghcr.io/blockscout/stats:${STATS_DOCKER_TAG:-latest}
+    build:
+      context: ../stats
+      dockerfile: ../stats/Dockerfile
+    ports:
+      - 8054:8050
+    pull_policy: always
+    platform: linux/amd64
+    restart: on-failure:3
+    container_name: 'brs-stats'
+    env_file:
+      -  ./envs/stats.env
+  
+  # ==========
+  # VISUALIZER
+  # ==========
+  visualizer:
+    image: ghcr.io/blockscout/visualizer:${VISUALIZER_DOCKER_TAG:-latest}
+    build:
+      context: ../visualizer
+      dockerfile: ../visualizer/Dockerfile
+    ports:
+      - 8055:8050
+    pull_policy: always
+    platform: linux/amd64
+    restart: on-failure:3
+    container_name: 'brs-visualizer'
+    env_file:
+      -  ./envs/visualizer.env
+
+  # ============
+  # SIG-PROVIDER
+  # ============
+  sig-provider:
+    image: ghcr.io/blockscout/sig-provider:${SIG_PROVIDER_DOCKER_TAG:-latest}
+    build:
+      context: ../sig-provider
+      dockerfile: ../sig-provider/Dockerfile
+    pull_policy: always
+    platform: linux/amd64
+    restart: on-failure:3
+    container_name: 'brs-sig-provider'
+    env_file:
+      - ./envs/sig-provider.env
+
+  # ==============
+  # BLOCKSCOUT-ENS
+  # ==============
+  graph-node-db-init:
+    image: postgres:14
+    depends_on:
+      database:
+        restart: true
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - 'psql postgres://postgres:gpkkRgUcEUKUxDJzBKDutQmR@database:5432 -c "CREATE DATABASE graph_node;" || echo "WARNING: cannot create database graph_node"'
+  
+  ipfs:
+    container_name: brs-ipfs
+    image: ipfs/kubo:v0.14.0
+    ports:
+      - '5001:5001'
+    volumes:
+      - ./brs-data/ipfs:/data/ipfs
+
+  graph-node:
+    image: graphprotocol/graph-node
+    platform: linux/amd64
+    ports:
+      - '8000:8000'
+      - '8001:8001'
+      - '8020:8020'
+      - '8030:8030'
+      - '8040:8040'
+    container_name: brs-graph-node
+    depends_on:
+      graph-node-db-init:
+        condition: service_completed_successfully
+      ipfs:
+        condition: service_started
+    env_file:
+      - ./envs/blockscout-ens.env
+    healthcheck:
+      # we didn't find proper way to write healthcheck for graph-node.
+      # however we need it since graph-node requires several seconds to startup
+      # and `bens` service cannot start without database schema of graph-node
+      test: ["CMD", "echo", "ready"]
+      start_period: 10s
+
+  bens:
+    image: ghcr.io/blockscout/bens:${BENS_DOCKER_TAG:-latest}
+    build:
+      context: ../blockscout-ens
+      dockerfile: ../blockscout-ens/Dockerfile
+    depends_on:
+      database:
+        restart: true
+        condition: service_healthy
+      graph-node:
+        condition: service_healthy
+    ports:
+      - 8056:8050
+    pull_policy: always
+    platform: linux/amd64
+    restart: on-failure:3
+    container_name: 'brs-bens'
+    env_file:
+      -  ./envs/blockscout-ens.env
