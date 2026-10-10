@@ -3,6 +3,7 @@
 use std::time;
 
 use crate::{
+    beacon::settings::IndexerSettings as BeaconSettings,
     celestia::settings::IndexerSettings as CelestiaSettings,
     eigenda::settings::IndexerSettings as EigendaSettings,
 };
@@ -15,6 +16,8 @@ pub enum DASettings {
     Celestia(CelestiaSettings),
     #[serde(rename = "eigenda")]
     EigenDA(EigendaSettings),
+    #[serde(rename = "beacon")]
+    Beacon(BeaconSettings),
 }
 
 #[serde_as]
