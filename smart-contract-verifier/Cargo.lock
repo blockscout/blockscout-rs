@@ -1279,6 +1279,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 
 [[package]]
+name = "compiler-runner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bollard",
+ "bytes",
+ "chrono",
+ "futures",
+ "hex",
+ "libc",
+ "openssh",
+ "parking_lot 0.12.3",
+ "prometheus",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sha2",
+ "tar",
+ "tempfile",
+ "thiserror 1.0.63",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5226,9 +5255,9 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
- "bollard",
  "bytes",
  "chrono",
+ "compiler-runner",
  "cron",
  "era-compiler-common",
  "foundry-compilers",
@@ -5240,7 +5269,6 @@ dependencies = [
  "libc",
  "mismatch",
  "nonempty",
- "openssh",
  "parking_lot 0.12.3",
  "pretty_assertions",
  "primitive-types 0.14.0",
@@ -5259,14 +5287,11 @@ dependencies = [
  "solidity-metadata",
  "sourcify",
  "sscanf",
- "tar",
  "tempfile",
  "thiserror 1.0.63",
  "tokio",
- "tokio-util",
  "tracing",
  "url",
- "uuid",
  "verification-common",
  "vyper-cbor-auxdata",
  "wiremock",

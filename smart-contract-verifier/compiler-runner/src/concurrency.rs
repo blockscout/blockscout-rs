@@ -4,7 +4,7 @@ use super::{
     metrics as runner_metrics, CompilerExecutor, CompilerInvocation, ExecutionError,
     ExecutionOutput,
 };
-use crate::metrics::{self, GuardedGauge};
+use crate::collectors::{collectors, GuardedGauge};
 use async_trait::async_trait;
 use std::{num::NonZeroUsize, sync::Arc};
 use tokio::sync::Semaphore;
@@ -50,8 +50,8 @@ impl CompilerExecutor for ConcurrencyLimitedCompilerExecutor {
             runner_metrics::QUEUE,
             "process",
         );
-        let queue_gauge = metrics::COMPILATIONS_IN_QUEUE.guarded_inc();
-        let queue_timer = metrics::COMPILATION_QUEUE_TIME.start_timer();
+        let queue_gauge = collectors().compilations_in_queue.guarded_inc();
+        let queue_timer = collectors().compilation_queue_time.start_timer();
         let permit = self
             .permits
             .clone()
@@ -66,8 +66,8 @@ impl CompilerExecutor for ConcurrencyLimitedCompilerExecutor {
 
         invocation.set_admission_permit(permit);
         let _runner_active = runner_metrics::observe_job_state("running");
-        let _active = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
-        let _timer = metrics::COMPILE_TIME.start_timer();
+        let _active = collectors().compilations_in_flight.guarded_inc();
+        let _timer = collectors().compile_time.start_timer();
         self.inner.execute(invocation).await
     }
 
@@ -265,7 +265,8 @@ mod tests {
         });
         wait_for_started(&inner, 1).await;
 
-        let canceled_counter = crate::metrics::COMPILER_RUNNER_JOBS_TOTAL
+        let canceled_counter = collectors()
+            .jobs_total
             .with_label_values(&[runner_metrics::SHARED, "canceled"]);
         let before = canceled_counter.get();
         let queued = tokio::spawn({

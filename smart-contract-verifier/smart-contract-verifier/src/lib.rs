@@ -26,10 +26,10 @@ pub use common_types::{
     RequestParseError,
 };
 pub use compiler::{
-    CommandArgument, CompactVersion, CompilerExecutor, CompilerInvocation,
-    ConcurrencyLimitedCompilerExecutor, DetailedVersion, DockerCompilerExecutor,
-    DockerCompilerExecutorSettings, ExecutionError, ExecutionOutput, Fetcher, FileValidator,
-    JobFile, ListFetcher, NativeCompilerExecutor, S3Fetcher, Version,
+    set_compiler_runner_metrics_namespace, CommandArgument, CompactVersion, CompilerExecutor,
+    CompilerInvocation, ConcurrencyLimitedCompilerExecutor, DetailedVersion,
+    DockerCompilerExecutor, DockerCompilerExecutorSettings, ExecutionError, ExecutionOutput,
+    Fetcher, FileValidator, JobFile, ListFetcher, NativeCompilerExecutor, S3Fetcher, Version,
     DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS, DEFAULT_COMPILER_MAX_OUTPUT_BYTES,
 };
 pub use verify::{

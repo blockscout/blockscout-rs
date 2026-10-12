@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+mod collectors;
 mod concurrency;
 mod docker;
+mod file_hash;
 mod metrics;
 mod native;
 
@@ -17,8 +19,10 @@ use tokio::{
     sync::OwnedSemaphorePermit,
 };
 
+pub use collectors::{set_metrics_namespace, MetricsNamespaceError};
 pub use concurrency::ConcurrencyLimitedCompilerExecutor;
 pub use docker::{DockerCompilerExecutor, DockerCompilerExecutorSettings};
+pub use file_hash::{sha256_file, FileFingerprint};
 pub use native::NativeCompilerExecutor;
 
 pub const DEFAULT_EXECUTION_TIMEOUT_SECS: u64 = 600;
@@ -236,13 +240,11 @@ impl CompilerInvocation {
         Ok(())
     }
 
-    #[cfg(test)]
-    pub(crate) fn program_path(&self, root: &Path) -> Result<PathBuf, ExecutionError> {
+    pub fn program_path(&self, root: &Path) -> Result<PathBuf, ExecutionError> {
         self.file_path(root, &self.program_id, &HashMap::new())
     }
 
-    #[cfg(test)]
-    pub(crate) fn resolved_args(&self, root: &Path) -> Result<Vec<String>, ExecutionError> {
+    pub fn resolved_args(&self, root: &Path) -> Result<Vec<String>, ExecutionError> {
         self.args
             .iter()
             .map(|argument| match argument {
@@ -308,11 +310,11 @@ impl CompilerInvocation {
             .unwrap_or_else(|| root.join(&file.path)))
     }
 
-    pub(crate) fn files(&self) -> &[JobFile] {
+    pub fn files(&self) -> &[JobFile] {
         &self.files
     }
 
-    pub(crate) fn stdin(&self) -> &Bytes {
+    pub fn stdin(&self) -> &Bytes {
         &self.stdin
     }
 
