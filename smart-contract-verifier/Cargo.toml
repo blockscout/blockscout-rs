@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "compiler-runner",
     "smart-contract-verifier",
     "smart-contract-verifier-proto",
     "smart-contract-verifier-server",
@@ -8,6 +9,7 @@ members = [
 ]
 
 [workspace.dependencies]
+compiler-runner = { path = "compiler-runner" }
 smart-contract-verifier = { path = "smart-contract-verifier" }
 smart-contract-verifier-proto = { path = "smart-contract-verifier-proto" }
 smart-contract-verifier-server = { path = "smart-contract-verifier-server" }

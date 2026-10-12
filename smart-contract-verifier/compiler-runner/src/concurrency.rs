@@ -4,7 +4,7 @@ use super::{
     metrics as runner_metrics, CompilerExecutor, CompilerInvocation, ExecutionError,
     ExecutionOutput,
 };
-use crate::metrics::{self, GuardedGauge};
+use crate::collectors::{self as metrics, GuardedGauge};
 use async_trait::async_trait;
 use std::{num::NonZeroUsize, sync::Arc};
 use tokio::sync::Semaphore;
@@ -265,7 +265,7 @@ mod tests {
         });
         wait_for_started(&inner, 1).await;
 
-        let canceled_counter = crate::metrics::COMPILER_RUNNER_JOBS_TOTAL
+        let canceled_counter = crate::collectors::COMPILER_RUNNER_JOBS_TOTAL
             .with_label_values(&[runner_metrics::SHARED, "canceled"]);
         let before = canceled_counter.get();
         let queued = tokio::spawn({

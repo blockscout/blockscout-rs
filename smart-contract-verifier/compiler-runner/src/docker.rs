@@ -4,7 +4,7 @@ use super::{
     CompilerExecutor, CompilerInvocation, ExecutionError, ExecutionOutput, JobFileContent,
     DEFAULT_EXECUTION_TIMEOUT_SECS, DEFAULT_MAX_OUTPUT_BYTES, DEFAULT_MAX_UPLOAD_BYTES,
 };
-use crate::compiler::fetcher::{sha256_file, FileFingerprint};
+use crate::file_hash::{sha256_file, FileFingerprint};
 use anyhow::Context;
 use async_trait::async_trait;
 use bollard::{
@@ -2231,22 +2231,18 @@ fn build_archive(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{compiler::JobFile, CommandArgument, DetailedVersion, Fetcher, ListFetcher};
+    use crate::{CommandArgument, JobFile};
     use std::{
         future::Future,
         io::Read,
         marker::PhantomData,
         pin::Pin,
-        str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
         },
         task::{Context as TaskContext, Poll},
     };
-
-    const LINUX_AMD64_VYPER_COMPILER_LIST: &str =
-        "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json";
 
     struct PendingUntilDropped<T> {
         dropped: Arc<AtomicBool>,
@@ -3471,65 +3467,6 @@ mod tests {
             output.ensure_success("test compiler").unwrap();
             assert_eq!(output.stdout, Bytes::from_static(b"remote compiler input"));
             assert!(output.stderr.is_empty());
-        }
-    }
-
-    #[tokio::test]
-    #[ignore = "requires remote Docker test settings and network access"]
-    async fn ssh_docker_vyper_round_trip() {
-        let mut settings = settings();
-        settings.addr = std::env::var("SCV_TEST_DOCKER_ADDR").unwrap();
-        settings.key_path = std::env::var_os("SCV_TEST_DOCKER_KEY_PATH").map(PathBuf::from);
-        settings.runner_image = std::env::var("SCV_TEST_DOCKER_RUNNER_IMAGE").unwrap();
-        if let Ok(platform) = std::env::var("SCV_TEST_DOCKER_PLATFORM") {
-            settings.platform = platform;
-        }
-        assert_eq!(
-            settings.platform, "linux/amd64",
-            "the real-Vyper Docker test uses the Linux amd64 release manifest"
-        );
-
-        let compilers_dir = tempfile::tempdir().unwrap();
-        let fetcher = ListFetcher::<DetailedVersion>::new(
-            Url::parse(LINUX_AMD64_VYPER_COMPILER_LIST).unwrap(),
-            compilers_dir.path().to_path_buf(),
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        let version = DetailedVersion::from_str("0.4.3+commit.bff19ea2").unwrap();
-        let compiler = fetcher.fetch(&version).await.unwrap();
-
-        let executor = DockerCompilerExecutor::connect(settings).await.unwrap();
-        let input = serde_json::to_vec(&serde_json::json!({
-            "language": "Vyper",
-            "sources": {
-                "source.vy": {
-                    "content": "@external\ndef answer() -> uint256:\n    return 42\n"
-                }
-            },
-            "settings": {
-                "outputSelection": {
-                    "source.vy": ["abi", "evm.bytecode"]
-                }
-            }
-        }))
-        .unwrap();
-        let invocation = CompilerInvocation::new(
-            JobFile::executable("compiler", "bin/vyper", compiler).unwrap(),
-            vec![CommandArgument::literal("--standard-json")],
-            Bytes::from(input),
-        );
-
-        for _ in 0..2 {
-            let output = executor.execute(invocation.clone()).await.unwrap();
-            output.ensure_success("vyper").unwrap();
-            let output: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-            assert!(
-                output.pointer("/contracts/source.vy/source").is_some(),
-                "unexpected Vyper output: {output}"
-            );
         }
     }
 }

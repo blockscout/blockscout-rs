@@ -394,7 +394,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::runner::{CommandArgument, JobFile};
+    use crate::{CommandArgument, JobFile};
 
     #[cfg(unix)]
     #[tokio::test]
