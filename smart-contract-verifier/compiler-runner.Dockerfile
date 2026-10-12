@@ -1,5 +1,7 @@
 FROM ubuntu:24.04
 
+# tinyproxy is the filtering proxy of sandbox jobs that are allowed egress; compiler jobs never
+# start it.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -7,6 +9,7 @@ RUN apt-get update \
         libgcc-s1 \
         libssl3 \
         libstdc++6 \
+        tinyproxy \
         zlib1g \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 65532 compiler \

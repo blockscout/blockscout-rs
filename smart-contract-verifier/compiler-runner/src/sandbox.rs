@@ -35,6 +35,15 @@ pub struct SandboxMount {
     pub read_only: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SandboxNetwork {
+    #[default]
+    None,
+    /// Reaches the job's [`SandboxJob::egress_hosts`] on port 443 through a filtering proxy, and
+    /// nothing else: the step's only network has no route out.
+    Egress,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SandboxLimits {
     /// Covers the step's processes and everything it writes to volumes and `/tmp`.
@@ -55,6 +64,7 @@ pub struct SandboxStep {
     pub command: Vec<String>,
     pub env: Vec<(String, String)>,
     pub working_dir: String,
+    pub network: SandboxNetwork,
     pub mounts: Vec<SandboxMount>,
     pub limits: SandboxLimits,
 }
@@ -75,6 +85,8 @@ pub struct SandboxJob {
     pub volumes: Vec<SandboxVolume>,
     pub steps: Vec<SandboxStep>,
     pub outputs: Vec<SandboxOutput>,
+    /// Lowercase host names that steps with [`SandboxNetwork::Egress`] may connect to.
+    pub egress_hosts: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -114,6 +126,17 @@ impl SandboxJob {
             step.validate(&volumes)?;
         }
 
+        if self.uses_egress() == self.egress_hosts.is_empty() {
+            return Err(invalid(
+                "egress hosts must be listed exactly when a step uses the egress network",
+            ));
+        }
+        if let Some(host) = self.egress_hosts.iter().find(|host| !is_host_name(host)) {
+            return Err(invalid(format!(
+                "egress host must be a lowercase DNS name: {host:?}"
+            )));
+        }
+
         let mut outputs = HashSet::new();
         for output in &self.outputs {
             validate_name("output", &output.name)?;
@@ -137,6 +160,14 @@ impl SandboxJob {
             }
         }
         Ok(())
+    }
+}
+
+impl SandboxJob {
+    pub(crate) fn uses_egress(&self) -> bool {
+        self.steps
+            .iter()
+            .any(|step| step.network == SandboxNetwork::Egress)
     }
 }
 
@@ -239,6 +270,23 @@ pub(crate) fn is_pinned_image(image: &str) -> bool {
     })
 }
 
+/// The proxy filter is built from these names, so only what a DNS name can hold is accepted: no
+/// wildcards, ports, addresses or pattern characters.
+fn is_host_name(host: &str) -> bool {
+    host.len() <= 253
+        && host.contains('.')
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        })
+        && host.bytes().any(|byte| byte.is_ascii_lowercase())
+}
+
 fn is_normal_absolute_path(path: &str) -> bool {
     if path == "/" {
         return true;
@@ -294,6 +342,7 @@ pub(crate) mod tests {
                     command: vec!["fetch".to_string()],
                     env: vec![("HOME".to_string(), "/tmp".to_string())],
                     working_dir: "/source".to_string(),
+                    network: SandboxNetwork::Egress,
                     mounts: vec![SandboxMount {
                         volume: "source".to_string(),
                         path: "/source".to_string(),
@@ -307,6 +356,7 @@ pub(crate) mod tests {
                     command: vec!["build".to_string()],
                     env: vec![],
                     working_dir: "/source/project".to_string(),
+                    network: SandboxNetwork::None,
                     mounts: vec![
                         SandboxMount {
                             volume: "source".to_string(),
@@ -328,6 +378,7 @@ pub(crate) mod tests {
                 path: "out/artifact".to_string(),
                 max_bytes: 1024 * 1024,
             }],
+            egress_hosts: vec!["github.com".to_string(), "static.crates.io".to_string()],
         }
     }
 
@@ -403,6 +454,34 @@ pub(crate) mod tests {
         let mut undeclared = job();
         undeclared.outputs[0].volume = "other".to_string();
         assert!(rejected(&undeclared).contains("undeclared volume"));
+    }
+
+    #[test]
+    fn egress_hosts_are_plain_dns_names_listed_only_when_used() {
+        for host in [
+            "GitHub.com",
+            "github.com:443",
+            "*.github.com",
+            ".github.com",
+            "github..com",
+            "localhost",
+            "10.0.0.1",
+            "git hub.com",
+            "github.com$",
+            "-a.com",
+        ] {
+            let mut job = job();
+            job.egress_hosts = vec![host.to_string()];
+            assert!(job.validate().is_err(), "egress host {host:?} was accepted");
+        }
+
+        let mut unused = job();
+        unused.steps[0].network = SandboxNetwork::None;
+        assert!(rejected(&unused).contains("exactly when"));
+
+        let mut missing = job();
+        missing.egress_hosts.clear();
+        assert!(rejected(&missing).contains("exactly when"));
     }
 
     #[test]

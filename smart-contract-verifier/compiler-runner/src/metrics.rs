@@ -23,6 +23,7 @@ pub(super) enum ContainerFamily {
     CacheInitializer,
     SandboxStep,
     SandboxHolder,
+    SandboxProxy,
 }
 
 impl ContainerFamily {
@@ -33,6 +34,7 @@ impl ContainerFamily {
             Self::CacheInitializer => "cache_initializer",
             Self::SandboxStep => "sandbox_step",
             Self::SandboxHolder => "sandbox_holder",
+            Self::SandboxProxy => "sandbox_proxy",
         }
     }
 }

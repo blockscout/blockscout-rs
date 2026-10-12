@@ -26,8 +26,8 @@ pub use docker::{DockerCompilerExecutor, DockerCompilerExecutorSettings};
 pub use file_hash::{sha256_file, FileFingerprint};
 pub use native::NativeCompilerExecutor;
 pub use sandbox::{
-    SandboxFile, SandboxJob, SandboxJobOutput, SandboxLimits, SandboxMount, SandboxOutput,
-    SandboxStep, SandboxVolume,
+    SandboxFile, SandboxJob, SandboxJobOutput, SandboxLimits, SandboxMount, SandboxNetwork,
+    SandboxOutput, SandboxStep, SandboxVolume,
 };
 
 pub const DEFAULT_EXECUTION_TIMEOUT_SECS: u64 = 600;

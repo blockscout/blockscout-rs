@@ -1612,9 +1612,10 @@ impl Drop for ContainerCleanup {
 
 async fn reap_expired_containers(docker: &Docker, trigger: &'static str) -> anyhow::Result<()> {
     let containers = reap_expired_containers_inner(docker).await;
-    // Volumes go second, and even after a container error: most of them will be free by now.
+    // Volumes and networks go second, and even after a container error: most are free by now.
     let volumes = sandbox::reap_expired_volumes(docker).await;
-    let result = containers.and(volumes);
+    let networks = sandbox::reap_expired_networks(docker).await;
+    let result = containers.and(volumes).and(networks);
     metrics::count_orphan_sweep(trigger, result.is_ok());
     result
 }
@@ -1674,6 +1675,7 @@ fn observed_container_family(labels: Option<&HashMap<String, String>>) -> &'stat
         Some("cache_initializer") => ContainerFamily::CacheInitializer.as_str(),
         Some("sandbox_step") => ContainerFamily::SandboxStep.as_str(),
         Some("sandbox_holder") => ContainerFamily::SandboxHolder.as_str(),
+        Some("sandbox_proxy") => ContainerFamily::SandboxProxy.as_str(),
         _ => "unknown",
     }
 }

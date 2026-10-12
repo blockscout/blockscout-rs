@@ -4,6 +4,10 @@
 //!
 //! A job's volumes are in-memory and vanish once no container has them mounted, so a holder
 //! container keeps them mounted from before the first step until the outputs have been read.
+//!
+//! Steps with egress join a per-job network that has no route out. The only other member is a
+//! tinyproxy container, also attached to the default bridge, which tunnels `CONNECT` requests to
+//! port 443 of the job's listed hosts and refuses everything else.
 
 use super::{
     force_remove_container, retry_connect, unix_timestamp, ContainerLimits, DockerCompilerExecutor,
@@ -12,23 +16,26 @@ use super::{
 };
 use crate::{
     metrics::{self, ContainerFamily},
-    ExecutionError, SandboxFile, SandboxJob, SandboxJobOutput, SandboxOutput, SandboxStep,
-    SandboxVolume,
+    ExecutionError, SandboxFile, SandboxJob, SandboxJobOutput, SandboxNetwork, SandboxOutput,
+    SandboxStep, SandboxVolume,
 };
 use anyhow::Context;
 use bollard::{
+    exec::{CreateExecOptions, StartExecOptions, StartExecResults},
     models::{
-        ContainerCreateBody, HostConfig, Mount, MountType, MountVolumeOptions, VolumeCreateRequest,
+        ContainerCreateBody, EndpointSettings, HostConfig, Mount, MountType, MountVolumeOptions,
+        NetworkConnectRequest, NetworkCreateRequest, VolumeCreateRequest,
     },
     query_parameters::{
         CreateContainerOptionsBuilder, DownloadFromContainerOptionsBuilder,
-        ListVolumesOptionsBuilder, RemoveVolumeOptionsBuilder,
+        ListNetworksOptionsBuilder, ListVolumesOptionsBuilder, RemoveVolumeOptionsBuilder,
     },
     Docker,
 };
 use bytes::Bytes;
 use futures::StreamExt;
-use std::{collections::HashMap, io::Read};
+use std::{collections::HashMap, io::Read, time::Duration};
+use tokio::time::{sleep, timeout};
 use uuid::Uuid;
 
 const OBJECT_PREFIX: &str = "scv-sandbox-";
@@ -39,6 +46,17 @@ const HOLDER_LIMITS: ContainerLimits = ContainerLimits {
     nano_cpus: 100_000_000,
     pids_limit: 16,
 };
+/// Name the proxy answers to on the job's egress network.
+const PROXY_ALIAS: &str = "egress-proxy";
+const PROXY_PORT: u16 = 3128;
+const PROXY_LIMITS: ContainerLimits = ContainerLimits {
+    memory_bytes: 64 * 1024 * 1024,
+    nano_cpus: 500_000_000,
+    pids_limit: 64,
+};
+const PROXY_CONFIG_PATH: &str = "/tmp/tinyproxy.conf";
+const PROXY_FILTER_PATH: &str = "/tmp/tinyproxy-filter";
+const PROXY_READY_POLL: Duration = Duration::from_millis(100);
 
 impl DockerCompilerExecutor {
     /// Runs the job's steps in order and returns their output and the requested files.
@@ -53,7 +71,11 @@ impl DockerCompilerExecutor {
         let result = async {
             job.validate()?;
             self.ensure_initialized().await?;
-            let plan = JobPlan::new(&job, self.settings.request_timeout_seconds())?;
+            let plan = JobPlan::new(
+                &job,
+                self.settings.request_timeout_seconds(),
+                self.settings.api_timeout_seconds,
+            )?;
             let mut resources = SandboxResources::new(self.docker.clone());
             let result = self.run_planned_job(&job, &plan, &mut resources).await;
             if let Err(error) = resources.remove_all().await {
@@ -100,6 +122,10 @@ impl DockerCompilerExecutor {
         .await
         .context("start sandbox holder")
         .map_err(ExecutionError::Infrastructure)?;
+
+        if job.uses_egress() {
+            self.start_egress_proxy(job, plan, resources).await?;
+        }
 
         let mut steps = Vec::with_capacity(job.steps.len());
         for (index, step) in job.steps.iter().enumerate() {
@@ -204,16 +230,24 @@ impl DockerCompilerExecutor {
             nano_cpus: i64::try_from(step.limits.nano_cpus).unwrap_or(i64::MAX),
             pids_limit: i64::try_from(step.limits.pids_limit).unwrap_or(i64::MAX),
         };
-        let host_config = HostConfig {
+        let egress = step.network == SandboxNetwork::Egress;
+        let mut host_config = HostConfig {
             tmpfs: Some(HashMap::from([(
                 HOME_DIR.to_string(),
                 format!("rw,noexec,nosuid,nodev,size={HOME_TMPFS_SIZE_BYTES}"),
             )])),
             ..self.hardened_host_config(limits, 1024, mounts)
         };
-        let mut env = Vec::with_capacity(step.env.len() + 1);
+        let mut env = Vec::with_capacity(step.env.len() + 5);
         if !step.env.iter().any(|(name, _)| name == "HOME") {
             env.push(format!("HOME={HOME_DIR}"));
+        }
+        if egress {
+            host_config.network_mode = Some(plan.network_name());
+            let proxy = format!("http://{PROXY_ALIAS}:{PROXY_PORT}");
+            for name in ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"] {
+                env.push(format!("{name}={proxy}"));
+            }
         }
         env.extend(
             step.env
@@ -222,12 +256,142 @@ impl DockerCompilerExecutor {
         );
         ContainerCreateBody {
             image: Some(step.image.clone()),
+            network_disabled: Some(!egress),
             ..self.locked_down_container(
                 JOB_USER,
                 env,
                 step.command.clone(),
                 &step.working_dir,
                 plan.labels(ContainerFamily::SandboxStep),
+                host_config,
+            )
+        }
+    }
+
+    /// Creates the job's egress network and its proxy, and waits until the proxy accepts
+    /// connections, so the first step cannot race it.
+    async fn start_egress_proxy(
+        &self,
+        job: &SandboxJob,
+        plan: &JobPlan,
+        resources: &mut SandboxResources,
+    ) -> Result<(), ExecutionError> {
+        let network = plan.network_name();
+        let request = plan.network_request();
+        retry_connect(&self.docker, || self.docker.create_network(request.clone()))
+            .await
+            .context("create sandbox egress network")
+            .map_err(ExecutionError::Infrastructure)?;
+        resources.networks.push(network.clone());
+
+        let proxy_id = self
+            .create_sandbox_container(
+                plan.container_name("proxy"),
+                self.proxy_config(job, plan),
+                ContainerFamily::SandboxProxy,
+                resources,
+            )
+            .await?;
+        let connection = NetworkConnectRequest {
+            container: proxy_id.clone(),
+            endpoint_config: Some(EndpointSettings {
+                aliases: Some(vec![PROXY_ALIAS.to_string()]),
+                ..Default::default()
+            }),
+        };
+        retry_connect(&self.docker, || {
+            self.docker.connect_network(&network, connection.clone())
+        })
+        .await
+        .context("connect sandbox egress proxy")
+        .map_err(ExecutionError::Infrastructure)?;
+        retry_connect(&self.docker, || {
+            self.docker.start_container(&proxy_id, None)
+        })
+        .await
+        .context("start sandbox egress proxy")
+        .map_err(ExecutionError::Infrastructure)?;
+
+        timeout(self.api_timeout(), async {
+            while !self.proxy_accepts_connections(&proxy_id).await? {
+                sleep(PROXY_READY_POLL).await;
+            }
+            Ok::<(), ExecutionError>(())
+        })
+        .await
+        .map_err(|_| self.api_timeout_error("wait for the sandbox egress proxy"))?
+    }
+
+    /// Opens a TCP connection to the proxy from inside its own container.
+    async fn proxy_accepts_connections(&self, proxy_id: &str) -> Result<bool, ExecutionError> {
+        let probe = CreateExecOptions {
+            cmd: Some(vec![
+                "/bin/bash".to_string(),
+                "-c".to_string(),
+                format!("exec 3<>/dev/tcp/127.0.0.1/{PROXY_PORT}"),
+            ]),
+            attach_stdout: Some(true),
+            attach_stderr: Some(true),
+            ..Default::default()
+        };
+        let exec = retry_connect(&self.docker, || {
+            self.docker.create_exec(proxy_id, probe.clone())
+        })
+        .await
+        .context("create sandbox egress proxy probe")
+        .map_err(ExecutionError::Infrastructure)?;
+        let started = retry_connect(&self.docker, || {
+            self.docker.start_exec(&exec.id, None::<StartExecOptions>)
+        })
+        .await
+        .context("start sandbox egress proxy probe")
+        .map_err(ExecutionError::Infrastructure)?;
+        // The exit code is only final once the output stream has ended.
+        if let StartExecResults::Attached { mut output, .. } = started {
+            while output.next().await.is_some() {}
+        }
+        let inspected = retry_connect(&self.docker, || self.docker.inspect_exec(&exec.id))
+            .await
+            .context("inspect sandbox egress proxy probe")
+            .map_err(ExecutionError::Infrastructure)?;
+        Ok(inspected.exit_code == Some(0))
+    }
+
+    /// The only container of a job with a route out. It runs the runner image's tinyproxy with a
+    /// configuration built here; nothing from the job reaches it but TCP connections.
+    fn proxy_config(&self, job: &SandboxJob, plan: &JobPlan) -> ContainerCreateBody {
+        let host_config = HostConfig {
+            network_mode: Some("bridge".to_string()),
+            tmpfs: Some(HashMap::from([(
+                HOME_DIR.to_string(),
+                format!("rw,noexec,nosuid,nodev,size={HOME_TMPFS_SIZE_BYTES}"),
+            )])),
+            ..self.hardened_host_config(PROXY_LIMITS, 1024, Vec::new())
+        };
+        ContainerCreateBody {
+            attach_stdin: Some(false),
+            attach_stdout: Some(false),
+            attach_stderr: Some(false),
+            open_stdin: Some(false),
+            stdin_once: Some(false),
+            network_disabled: Some(false),
+            ..self.locked_down_container(
+                JOB_USER,
+                vec![
+                    format!("TINYPROXY_CONF={}", proxy_configuration()),
+                    format!("TINYPROXY_FILTER={}", proxy_filter(&job.egress_hosts)),
+                ],
+                vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    format!(
+                        "printf '%s' \"$TINYPROXY_CONF\" > {PROXY_CONFIG_PATH} \
+                         && printf '%s' \"$TINYPROXY_FILTER\" > {PROXY_FILTER_PATH} \
+                         && exec /usr/bin/tinyproxy -d -c {PROXY_CONFIG_PATH}"
+                    ),
+                ],
+                "/",
+                plan.labels(ContainerFamily::SandboxProxy),
                 host_config,
             )
         }
@@ -298,8 +462,13 @@ struct JobPlan {
 }
 
 impl JobPlan {
-    fn new(job: &SandboxJob, request_timeout_seconds: u64) -> Result<Self, ExecutionError> {
-        let lifetime_seconds = job_lifetime_seconds(job, request_timeout_seconds);
+    fn new(
+        job: &SandboxJob,
+        request_timeout_seconds: u64,
+        proxy_ready_timeout_seconds: u64,
+    ) -> Result<Self, ExecutionError> {
+        let lifetime_seconds =
+            job_lifetime_seconds(job, request_timeout_seconds, proxy_ready_timeout_seconds);
         Ok(Self {
             job_id: Uuid::new_v4(),
             lifetime_seconds,
@@ -315,6 +484,21 @@ impl JobPlan {
 
     fn container_name(&self, role: &str) -> String {
         format!("{OBJECT_PREFIX}{}-{role}", self.job_id)
+    }
+
+    fn network_name(&self) -> String {
+        format!("{OBJECT_PREFIX}{}-egress", self.job_id)
+    }
+
+    /// `internal` is what keeps steps off every other network: Docker gives it no gateway.
+    fn network_request(&self) -> NetworkCreateRequest {
+        NetworkCreateRequest {
+            name: self.network_name(),
+            driver: Some("bridge".to_string()),
+            internal: Some(true),
+            labels: Some(self.base_labels()),
+            ..Default::default()
+        }
     }
 
     /// The expiry lets the periodic sweep reclaim whatever a dead verifier process left behind.
@@ -372,18 +556,58 @@ impl JobPlan {
 
 /// Upper bound on how long a live owner needs the job's containers and volumes: every Docker
 /// request it makes, plus each step's own run time.
-fn job_lifetime_seconds(job: &SandboxJob, request_timeout_seconds: u64) -> u64 {
+fn job_lifetime_seconds(
+    job: &SandboxJob,
+    request_timeout_seconds: u64,
+    proxy_ready_timeout_seconds: u64,
+) -> u64 {
     let count = |items: usize| u64::try_from(items).unwrap_or(u64::MAX);
     // Create per volume; create and start the holder; create, attach, start, inspect and remove
     // per step; one download per output.
-    let requests = count(job.volumes.len())
+    let mut requests = count(job.volumes.len())
         .saturating_add(2)
         .saturating_add(count(job.steps.len()).saturating_mul(5))
         .saturating_add(count(job.outputs.len()));
+    let mut waits = 0;
+    if job.uses_egress() {
+        // Create the network; create, connect and start the proxy. Its readiness probes share
+        // one deadline.
+        requests = requests.saturating_add(4);
+        waits = proxy_ready_timeout_seconds;
+    }
     job.steps.iter().fold(
-        requests.saturating_mul(request_timeout_seconds),
+        requests
+            .saturating_mul(request_timeout_seconds)
+            .saturating_add(waits),
         |total, step| total.saturating_add(step.limits.timeout_seconds),
     )
+}
+
+/// One anchored pattern per host. Host names are validated to hold only letters, digits, dots and
+/// hyphens, so the dot is the only character that needs escaping.
+fn proxy_filter(hosts: &[String]) -> String {
+    hosts
+        .iter()
+        .map(|host| format!("^{}$\n", host.replace('.', "\\.")))
+        .collect()
+}
+
+/// Refuses every host the filter does not list and every `CONNECT` port but 443.
+fn proxy_configuration() -> String {
+    [
+        format!("Port {PROXY_PORT}"),
+        "Listen 0.0.0.0".to_string(),
+        "Timeout 600".to_string(),
+        "MaxClients 64".to_string(),
+        "DisableViaHeader Yes".to_string(),
+        "FilterDefaultDeny Yes".to_string(),
+        "FilterExtended On".to_string(),
+        "FilterURLs Off".to_string(),
+        format!("Filter \"{PROXY_FILTER_PATH}\""),
+        "ConnectPort 443".to_string(),
+        String::new(),
+    ]
+    .join("\n")
 }
 
 /// The regular files of a tar archive. Links, devices and directories are dropped: the archive
@@ -412,6 +636,7 @@ struct SandboxResources {
     docker: Docker,
     containers: Vec<(String, metrics::GaugeGuard)>,
     volumes: Vec<String>,
+    networks: Vec<String>,
 }
 
 impl SandboxResources {
@@ -420,6 +645,7 @@ impl SandboxResources {
             docker,
             containers: Vec::new(),
             volumes: Vec::new(),
+            networks: Vec::new(),
         }
     }
 
@@ -437,22 +663,24 @@ impl SandboxResources {
     async fn remove_all(&mut self) -> anyhow::Result<()> {
         let containers = std::mem::take(&mut self.containers);
         let volumes = std::mem::take(&mut self.volumes);
-        remove_resources(&self.docker, containers, volumes).await
+        let networks = std::mem::take(&mut self.networks);
+        remove_resources(&self.docker, containers, volumes, networks).await
     }
 }
 
 impl Drop for SandboxResources {
     /// Reached with resources left only when the job's future was dropped mid-run.
     fn drop(&mut self) {
-        if self.containers.is_empty() && self.volumes.is_empty() {
+        if self.containers.is_empty() && self.volumes.is_empty() && self.networks.is_empty() {
             return;
         }
         let docker = self.docker.clone();
         let containers = std::mem::take(&mut self.containers);
         let volumes = std::mem::take(&mut self.volumes);
+        let networks = std::mem::take(&mut self.networks);
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             handle.spawn(async move {
-                if let Err(error) = remove_resources(&docker, containers, volumes).await {
+                if let Err(error) = remove_resources(&docker, containers, volumes, networks).await {
                     tracing::error!(error = ?error, "failed to clean up a canceled sandbox job");
                 }
             });
@@ -466,9 +694,11 @@ async fn remove_resources(
     docker: &Docker,
     containers: Vec<(String, metrics::GaugeGuard)>,
     volumes: Vec<String>,
+    networks: Vec<String>,
 ) -> anyhow::Result<()> {
     let mut first_error = None;
-    // Steps before the holder they share volumes with.
+    // Steps before the holder and proxy they depend on; volumes and networks once nothing uses
+    // them.
     for (container_id, _active) in containers.into_iter().rev() {
         if let Err(error) = force_remove_container(docker, &container_id).await {
             first_error.get_or_insert(error.context(format!("remove container {container_id}")));
@@ -479,7 +709,22 @@ async fn remove_resources(
             first_error.get_or_insert(error.context(format!("remove volume {volume}")));
         }
     }
+    for network in networks {
+        if let Err(error) = remove_network(docker, &network).await {
+            first_error.get_or_insert(error.context(format!("remove network {network}")));
+        }
+    }
     first_error.map_or(Ok(()), Err)
+}
+
+async fn remove_network(docker: &Docker, name: &str) -> anyhow::Result<()> {
+    match retry_connect(docker, || docker.remove_network(name)).await {
+        Ok(())
+        | Err(bollard::errors::Error::DockerResponseServerError {
+            status_code: 404, ..
+        }) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn remove_volume(docker: &Docker, name: &str) -> anyhow::Result<()> {
@@ -529,6 +774,39 @@ pub(super) async fn reap_expired_volumes(docker: &Docker) -> anyhow::Result<()> 
     first_error.map_or(Ok(()), Err)
 }
 
+/// Removes expired sandbox egress networks whose owner did not.
+pub(super) async fn reap_expired_networks(docker: &Docker) -> anyhow::Result<()> {
+    let filters = HashMap::from([("label".to_string(), vec![JOB_LABEL.to_string()])]);
+    let options = ListNetworksOptionsBuilder::default()
+        .filters(&filters)
+        .build();
+    let now = unix_timestamp()?;
+    let networks = retry_connect(docker, || docker.list_networks(Some(options.clone()))).await?;
+    let mut first_error = None;
+    for network in networks {
+        let Some(name) = network.name.filter(|name| name.starts_with(OBJECT_PREFIX)) else {
+            continue;
+        };
+        let expired = network
+            .labels
+            .as_ref()
+            .and_then(|labels| labels.get(JOB_EXPIRY_LABEL))
+            .and_then(|expiry| expiry.parse::<u64>().ok())
+            .is_some_and(|expiry| expiry <= now);
+        if !expired {
+            continue;
+        }
+        match remove_network(docker, &name).await {
+            Ok(()) => tracing::warn!(network = name, "removed expired sandbox network"),
+            Err(error) => {
+                tracing::error!(network = name, error = ?error, "failed to remove expired sandbox network");
+                first_error.get_or_insert(error.context(format!("remove network {name}")));
+            }
+        }
+    }
+    first_error.map_or(Ok(()), Err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -553,6 +831,7 @@ mod tests {
             command: vec!["/bin/sh".to_string(), "-c".to_string(), script.to_string()],
             env: vec![("MODE".to_string(), "test".to_string())],
             working_dir: "/".to_string(),
+            network: SandboxNetwork::None,
             mounts,
             limits: limits(),
         }
@@ -588,6 +867,7 @@ mod tests {
                 ),
             ],
             outputs: Vec::new(),
+            egress_hosts: Vec::new(),
         }
     }
 
@@ -595,7 +875,7 @@ mod tests {
     fn step_container_is_locked_down_and_uses_the_step_image() {
         let executor = executor();
         let job = two_volume_job();
-        let plan = JobPlan::new(&job, 10).unwrap();
+        let plan = JobPlan::new(&job, 10, 10).unwrap();
         let config = executor.step_config(&job.steps[1], &plan);
 
         assert_eq!(config.image.as_deref(), Some(pinned("tools").as_str()));
@@ -649,10 +929,97 @@ mod tests {
     }
 
     #[test]
+    fn egress_step_joins_only_the_job_network_and_is_pointed_at_the_proxy() {
+        let executor = executor();
+        let mut job = two_volume_job();
+        job.steps[0].network = SandboxNetwork::Egress;
+        job.egress_hosts = vec!["github.com".to_string()];
+        let plan = JobPlan::new(&job, 10, 10).unwrap();
+
+        let config = executor.step_config(&job.steps[0], &plan);
+        assert_eq!(config.network_disabled, Some(false));
+        assert_eq!(
+            config.env.unwrap()[..5],
+            [
+                "HOME=/tmp",
+                "HTTPS_PROXY=http://egress-proxy:3128",
+                "https_proxy=http://egress-proxy:3128",
+                "HTTP_PROXY=http://egress-proxy:3128",
+                "http_proxy=http://egress-proxy:3128",
+            ]
+        );
+        let host = config.host_config.unwrap();
+        assert_eq!(host.network_mode, Some(plan.network_name()));
+        assert_eq!(host.readonly_rootfs, Some(true));
+        assert_eq!(host.cap_drop, Some(vec!["ALL".to_string()]));
+
+        let network = plan.network_request();
+        assert_eq!(network.name, plan.network_name());
+        assert!(network.name.starts_with(OBJECT_PREFIX));
+        assert_eq!(network.internal, Some(true));
+        assert!(network.labels.unwrap().contains_key(JOB_EXPIRY_LABEL));
+
+        // The other step of the same job keeps no network at all.
+        let offline = executor.step_config(&job.steps[1], &plan);
+        assert_eq!(offline.network_disabled, Some(true));
+        assert_eq!(
+            offline.host_config.unwrap().network_mode.as_deref(),
+            Some("none")
+        );
+    }
+
+    #[test]
+    fn proxy_allows_only_the_listed_hosts_on_port_443() {
+        let executor = executor();
+        let mut job = two_volume_job();
+        job.steps[0].network = SandboxNetwork::Egress;
+        job.egress_hosts = vec!["github.com".to_string(), "static.crates.io".to_string()];
+        let plan = JobPlan::new(&job, 10, 10).unwrap();
+
+        assert_eq!(
+            proxy_filter(&job.egress_hosts),
+            "^github\\.com$\n^static\\.crates\\.io$\n"
+        );
+        let configuration = proxy_configuration();
+        for line in [
+            "Port 3128",
+            "FilterDefaultDeny Yes",
+            "FilterExtended On",
+            "FilterURLs Off",
+            "Filter \"/tmp/tinyproxy-filter\"",
+            "ConnectPort 443",
+        ] {
+            assert!(
+                configuration.lines().any(|found| found == line),
+                "missing {line:?} in {configuration:?}"
+            );
+        }
+
+        let config = executor.proxy_config(&job, &plan);
+        assert_eq!(config.image, Some(settings().runner_image));
+        assert_eq!(config.user.as_deref(), Some("65532:65532"));
+        assert_eq!(config.network_disabled, Some(false));
+        assert_eq!(
+            config.labels.unwrap()[CONTAINER_FAMILY_LABEL],
+            "sandbox_proxy"
+        );
+        let env = config.env.unwrap();
+        assert!(env.contains(&format!(
+            "TINYPROXY_FILTER={}",
+            proxy_filter(&job.egress_hosts)
+        )));
+        let host = config.host_config.unwrap();
+        assert_eq!(host.network_mode.as_deref(), Some("bridge"));
+        assert_eq!(host.readonly_rootfs, Some(true));
+        assert_eq!(host.cap_drop, Some(vec!["ALL".to_string()]));
+        assert_eq!(host.mounts, Some(Vec::new()));
+    }
+
+    #[test]
     fn holder_mounts_every_volume_read_only_on_the_runner_image() {
         let executor = executor();
         let job = two_volume_job();
-        let plan = JobPlan::new(&job, 10).unwrap();
+        let plan = JobPlan::new(&job, 10, 10).unwrap();
         let config = executor.holder_config(&job, &plan);
 
         assert_eq!(config.image, Some(settings().runner_image));
@@ -689,7 +1056,7 @@ mod tests {
     #[test]
     fn volumes_are_capped_in_memory_and_owned_by_the_job_user() {
         let job = two_volume_job();
-        let plan = JobPlan::new(&job, 10).unwrap();
+        let plan = JobPlan::new(&job, 10, 10).unwrap();
         let request = plan.volume_request(&job.volumes[0]);
 
         assert_eq!(request.name, Some(plan.volume_name("data")));
@@ -714,7 +1081,12 @@ mod tests {
         });
         // 2 volumes + 2 holder requests + 2 steps * 5 + 1 output = 15 requests of 10 s, plus two
         // 30-second steps.
-        assert_eq!(job_lifetime_seconds(&job, 10), 15 * 10 + 2 * 30);
+        assert_eq!(job_lifetime_seconds(&job, 10, 7), 15 * 10 + 2 * 30);
+
+        // Egress adds four requests and one bounded wait for the proxy.
+        job.steps[0].network = SandboxNetwork::Egress;
+        job.egress_hosts = vec!["github.com".to_string()];
+        assert_eq!(job_lifetime_seconds(&job, 10, 7), 19 * 10 + 7 + 2 * 30);
     }
 
     #[test]
@@ -766,6 +1138,13 @@ mod tests {
         }
     }
 
+    /// Steps need a digest-pinned image with a shell; the runner image serves unless
+    /// `SCV_TEST_LOCAL_DOCKER_STEP_IMAGE` names another one.
+    fn step_image(runner_image: &str) -> String {
+        std::env::var("SCV_TEST_LOCAL_DOCKER_STEP_IMAGE")
+            .unwrap_or_else(|_| runner_image.to_string())
+    }
+
     async fn leftover_sandbox_objects(docker: &Docker) -> Vec<String> {
         let filters = HashMap::from([("name".to_string(), vec![OBJECT_PREFIX.to_string()])]);
         let containers = docker
@@ -791,15 +1170,92 @@ mod tests {
             .unwrap_or_default()
             .into_iter()
             .map(|volume| volume.name);
-        containers.chain(volumes).collect()
+        let networks = docker
+            .list_networks(Some(
+                ListNetworksOptionsBuilder::default()
+                    .filters(&filters)
+                    .build(),
+            ))
+            .await
+            .unwrap()
+            .into_iter()
+            .filter_map(|network| network.name);
+        containers.chain(volumes).chain(networks).collect()
+    }
+
+    /// Needs a runner image that ships tinyproxy, and reaches github.com.
+    #[tokio::test]
+    #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE and network access"]
+    async fn local_docker_sandbox_egress_is_limited_to_listed_hosts() {
+        let docker = Docker::connect_with_defaults().unwrap();
+        let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
+        let executor = local_executor(&docker, &runner_image);
+        let image = step_image(&runner_image);
+        let script = r#"
+            probe() {
+                exec 3<>/dev/tcp/egress-proxy/3128 || return 1
+                printf 'CONNECT %s:%s HTTP/1.1\r\nHost: %s:%s\r\n\r\n' "$1" "$2" "$1" "$2" >&3
+                read -r -t 20 line <&3
+                exec 3>&-
+                echo "$line" | cut -d' ' -f2
+            }
+            echo "listed=$(probe github.com 443)"
+            echo "unlisted=$(probe example.com 443)"
+            echo "lookalike=$(probe github.com.example.com 443)"
+            echo "other-port=$(probe github.com 22)"
+            if timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
+                echo direct=open
+            else
+                echo direct=closed
+            fi
+            echo "proxy=$HTTPS_PROXY"
+        "#;
+        let job = SandboxJob {
+            volumes: Vec::new(),
+            steps: vec![
+                SandboxStep {
+                    image: image.clone(),
+                    command: vec![
+                        "/bin/bash".to_string(),
+                        "-c".to_string(),
+                        script.to_string(),
+                    ],
+                    network: SandboxNetwork::Egress,
+                    ..step("online", "", Vec::new())
+                },
+                SandboxStep {
+                    image: image.clone(),
+                    ..step(
+                        "offline",
+                        "if [ -e /sys/class/net/eth0 ]; then echo online; else echo offline; fi",
+                        Vec::new(),
+                    )
+                },
+            ],
+            outputs: Vec::new(),
+            egress_hosts: vec!["github.com".to_string()],
+        };
+
+        let output = executor.run_sandbox_job(job).await.unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&output.steps[0].stdout),
+            "listed=200\nunlisted=403\nlookalike=403\nother-port=403\ndirect=closed\n\
+             proxy=http://egress-proxy:3128\n"
+        );
+        assert_eq!(output.steps[1].stdout, Bytes::from_static(b"offline\n"));
+        assert_eq!(
+            leftover_sandbox_objects(&docker).await,
+            Vec::<String>::new()
+        );
     }
 
     #[tokio::test]
     #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE"]
     async fn local_docker_sandbox_job_round_trip() {
         let docker = Docker::connect_with_defaults().unwrap();
-        let image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
-        let executor = local_executor(&docker, &image);
+        let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
+        let executor = local_executor(&docker, &runner_image);
+        let image = step_image(&runner_image);
         let step = |name: &str, script: &str, mounts| SandboxStep {
             image: image.clone(),
             ..step(name, script, mounts)
@@ -842,6 +1298,7 @@ mod tests {
                     max_bytes: 64 * 1024,
                 },
             ],
+            egress_hosts: Vec::new(),
         };
         let output = executor.run_sandbox_job(job.clone()).await.unwrap();
         assert_eq!(output.steps.len(), 2);
