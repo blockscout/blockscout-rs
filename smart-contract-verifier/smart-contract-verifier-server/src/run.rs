@@ -22,10 +22,12 @@ use crate::{
 };
 use blockscout_service_launcher::launcher::{self, ConfigSettings, LaunchSettings};
 use smart_contract_verifier::{
-    CompilerExecutor, ConcurrencyLimitedCompilerExecutor, DockerCompilerExecutor,
-    NativeCompilerExecutor,
+    set_compiler_runner_metrics_namespace, CompilerExecutor, ConcurrencyLimitedCompilerExecutor,
+    DockerCompilerExecutor, NativeCompilerExecutor,
 };
 use std::{sync::Arc, time::Duration};
+
+const METRICS_NAMESPACE: &str = "smart_contract_verifier";
 
 #[derive(Clone)]
 struct HttpRouter {
@@ -86,6 +88,9 @@ fn grpc_router(
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     // Programmatically built settings bypass `Settings::build`, so enforce the same checks here.
     ConfigSettings::validate(&settings)?;
+    // The runner registers its metrics on first use, so the prefix has to be set before any
+    // executor is built. Dashboards and alerts depend on these names.
+    set_compiler_runner_metrics_namespace(METRICS_NAMESPACE)?;
     let compiler_endpoints_enabled = settings.compiler_endpoints_enabled();
     let raw_compiler_executor: Arc<dyn CompilerExecutor> = match &settings.compilers.execution {
         // Validation rejects `Disabled` while any compiler-backed endpoint is enabled.

@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use super::{ExecutionError, ExecutionOutput};
-use crate::collectors::{
-    COMPILER_RUNNER_ACTIVE_CONTAINERS, COMPILER_RUNNER_DOCKER_CONNECT_FAILURES_TOTAL,
-    COMPILER_RUNNER_JOBS_CURRENT, COMPILER_RUNNER_JOBS_TOTAL, COMPILER_RUNNER_MAX_CONCURRENT_JOBS,
-    COMPILER_RUNNER_OPERATION_DURATION, COMPILER_RUNNER_ORPHAN_CLEANUP_CONTAINERS_TOTAL,
-    COMPILER_RUNNER_ORPHAN_CLEANUP_SWEEPS_TOTAL, COMPILER_RUNNER_TRANSFER_BYTES,
-};
+use crate::collectors::collectors;
 use prometheus::{HistogramTimer, IntGauge};
 
 pub(super) const NATIVE: &str = "native";
@@ -43,7 +38,8 @@ pub(super) fn start_operation(
     operation: &'static str,
     family: &'static str,
 ) -> HistogramTimer {
-    COMPILER_RUNNER_OPERATION_DURATION
+    collectors()
+        .operation_duration
         .with_label_values(&[executor, operation, family])
         .start_timer()
 }
@@ -54,23 +50,30 @@ pub(super) fn add_transfer_bytes(
     family: &'static str,
     bytes: usize,
 ) {
-    COMPILER_RUNNER_TRANSFER_BYTES
+    collectors()
+        .transfer_bytes
         .with_label_values(&[executor, direction, family])
         .inc_by(bytes as u64);
 }
 
 pub(super) fn observe_capacity(max_concurrent_jobs: usize) -> CapacityGuard {
-    let capacity = COMPILER_RUNNER_MAX_CONCURRENT_JOBS.with_label_values(&[SHARED]);
+    let capacity = collectors()
+        .max_concurrent_jobs
+        .with_label_values(&[SHARED]);
     let slots = i64::try_from(max_concurrent_jobs).unwrap_or(i64::MAX);
     for state in [QUEUE, "running"] {
-        COMPILER_RUNNER_JOBS_CURRENT.with_label_values(&[SHARED, state]);
+        collectors()
+            .jobs_current
+            .with_label_values(&[SHARED, state]);
     }
     for family in [
         ContainerFamily::Job,
         ContainerFamily::CacheProbe,
         ContainerFamily::CacheInitializer,
     ] {
-        COMPILER_RUNNER_ACTIVE_CONTAINERS.with_label_values(&[family.as_str()]);
+        collectors()
+            .active_containers
+            .with_label_values(&[family.as_str()]);
     }
     CapacityGuard::new(capacity, slots)
 }
@@ -111,11 +114,19 @@ impl Drop for GaugeGuard {
 }
 
 pub(super) fn observe_job_state(state: &'static str) -> GaugeGuard {
-    GaugeGuard::new(COMPILER_RUNNER_JOBS_CURRENT.with_label_values(&[SHARED, state]))
+    GaugeGuard::new(
+        collectors()
+            .jobs_current
+            .with_label_values(&[SHARED, state]),
+    )
 }
 
 pub(super) fn observe_container(family: ContainerFamily) -> GaugeGuard {
-    GaugeGuard::new(COMPILER_RUNNER_ACTIVE_CONTAINERS.with_label_values(&[family.as_str()]))
+    GaugeGuard::new(
+        collectors()
+            .active_containers
+            .with_label_values(&[family.as_str()]),
+    )
 }
 
 pub(super) struct JobObservation {
@@ -144,7 +155,8 @@ impl QueueCancellationObservation {
     /// Records a job that failed before admission, instead of counting it as canceled.
     pub(super) fn rejected(mut self, error: &ExecutionError) {
         self.admitted = true;
-        COMPILER_RUNNER_JOBS_TOTAL
+        collectors()
+            .jobs_total
             .with_label_values(&[self.executor, classify_error(error)])
             .inc();
     }
@@ -153,7 +165,8 @@ impl QueueCancellationObservation {
 impl Drop for QueueCancellationObservation {
     fn drop(&mut self) {
         if !self.admitted {
-            COMPILER_RUNNER_JOBS_TOTAL
+            collectors()
+                .jobs_total
                 .with_label_values(&[self.executor, "canceled"])
                 .inc();
         }
@@ -170,7 +183,8 @@ impl JobObservation {
     }
 
     pub(super) fn finish(mut self, result: &Result<ExecutionOutput, ExecutionError>) {
-        COMPILER_RUNNER_JOBS_TOTAL
+        collectors()
+            .jobs_total
             .with_label_values(&[self.executor, classify_outcome(result)])
             .inc();
         self.completed = true;
@@ -180,7 +194,8 @@ impl JobObservation {
 impl Drop for JobObservation {
     fn drop(&mut self) {
         if !self.completed {
-            COMPILER_RUNNER_JOBS_TOTAL
+            collectors()
+                .jobs_total
                 .with_label_values(&[self.executor, "canceled"])
                 .inc();
         }
@@ -211,19 +226,22 @@ fn classify_error(error: &ExecutionError) -> &'static str {
 }
 
 pub(super) fn count_orphan_sweep(trigger: &'static str, succeeded: bool) {
-    COMPILER_RUNNER_ORPHAN_CLEANUP_SWEEPS_TOTAL
+    collectors()
+        .orphan_cleanup_sweeps_total
         .with_label_values(&[trigger, if succeeded { "success" } else { "error" }])
         .inc();
 }
 
 pub(super) fn count_connect_failure(outcome: &'static str) {
-    COMPILER_RUNNER_DOCKER_CONNECT_FAILURES_TOTAL
+    collectors()
+        .docker_connect_failures_total
         .with_label_values(&[outcome])
         .inc();
 }
 
 pub(super) fn count_orphan_container(family: &str, outcome: &'static str) {
-    COMPILER_RUNNER_ORPHAN_CLEANUP_CONTAINERS_TOTAL
+    collectors()
+        .orphan_cleanup_containers_total
         .with_label_values(&[family, outcome])
         .inc();
 }
@@ -314,7 +332,9 @@ mod tests {
 
     #[test]
     fn job_observation_records_cancellation_once() {
-        let counter = COMPILER_RUNNER_JOBS_TOTAL.with_label_values(&["test", "canceled"]);
+        let counter = collectors()
+            .jobs_total
+            .with_label_values(&["test", "canceled"]);
         let before = counter.get();
         drop(JobObservation::new("test", "process"));
         assert_eq!(counter.get(), before + 1);
@@ -322,7 +342,9 @@ mod tests {
 
     #[test]
     fn queue_observation_only_records_pre_admission_cancellation() {
-        let counter = COMPILER_RUNNER_JOBS_TOTAL.with_label_values(&["test_queue", "canceled"]);
+        let counter = collectors()
+            .jobs_total
+            .with_label_values(&["test_queue", "canceled"]);
         let before = counter.get();
         drop(QueueCancellationObservation::new("test_queue"));
         assert_eq!(counter.get(), before + 1);
@@ -333,8 +355,9 @@ mod tests {
 
     #[test]
     fn operation_timer_observes_when_canceled() {
-        let histogram =
-            COMPILER_RUNNER_OPERATION_DURATION.with_label_values(&["test", "queue", "process"]);
+        let histogram = collectors()
+            .operation_duration
+            .with_label_values(&["test", "queue", "process"]);
         let before = histogram.get_sample_count();
         drop(start_operation("test", "queue", "process"));
         assert_eq!(histogram.get_sample_count(), before + 1);

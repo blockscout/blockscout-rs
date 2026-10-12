@@ -12,7 +12,8 @@ mod version_detailed;
 mod docker_executor_tests;
 
 pub use compiler_runner::{
-    CommandArgument, CompilerExecutor, CompilerInvocation, ConcurrencyLimitedCompilerExecutor,
+    set_metrics_namespace as set_compiler_runner_metrics_namespace, CommandArgument,
+    CompilerExecutor, CompilerInvocation, ConcurrencyLimitedCompilerExecutor,
     DockerCompilerExecutor, DockerCompilerExecutorSettings, ExecutionError, ExecutionOutput,
     JobFile, NativeCompilerExecutor,
     DEFAULT_EXECUTION_TIMEOUT_SECS as DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS,

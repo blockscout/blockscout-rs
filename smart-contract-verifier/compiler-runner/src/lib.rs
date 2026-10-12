@@ -19,6 +19,7 @@ use tokio::{
     sync::OwnedSemaphorePermit,
 };
 
+pub use collectors::{set_metrics_namespace, MetricsNamespaceError};
 pub use concurrency::ConcurrencyLimitedCompilerExecutor;
 pub use docker::{DockerCompilerExecutor, DockerCompilerExecutorSettings};
 pub use file_hash::{sha256_file, FileFingerprint};
