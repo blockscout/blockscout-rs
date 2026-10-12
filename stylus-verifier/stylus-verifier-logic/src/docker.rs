@@ -286,6 +286,9 @@ fn build_tar_with_dockerfile(content: &str) -> Result<Vec<u8>, anyhow::Error> {
 
 fn build_tar_from_directory(dir: &Path) -> Result<Vec<u8>, anyhow::Error> {
     let mut tar = tar::Builder::new(Vec::new());
+    // The directory is an untrusted repository. Following its symlinks would copy whatever local
+    // files they point at into the build container; archived as links, they resolve inside it.
+    tar.follow_symlinks(false);
     tar.append_dir_all("", dir)
         .context("appending files from directory")?;
     let uncompressed = tar
@@ -300,4 +303,46 @@ fn compress_archive(uncompressed: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
         .write_all(uncompressed)
         .context("write uncompressed data to encoder")?;
     encoder.finish().context("finish encoding")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+
+    #[test]
+    fn directory_archive_does_not_follow_symlinks() {
+        const SECRET: &str = "service-secret";
+        let root = tempfile::tempdir().unwrap();
+        let project = root.path().join("project");
+        let outside = root.path().join("outside");
+        std::fs::create_dir_all(project.join("src")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(project.join("src/lib.rs"), "pub fn f() {}").unwrap();
+        std::fs::write(outside.join("secret.txt"), SECRET).unwrap();
+        std::os::unix::fs::symlink(outside.join("secret.txt"), project.join("leak")).unwrap();
+        std::os::unix::fs::symlink(&outside, project.join("linked")).unwrap();
+
+        let compressed = build_tar_from_directory(&project).unwrap();
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(compressed.as_slice()));
+
+        let mut regular_files = Vec::new();
+        let mut links = Vec::new();
+        for entry in archive.entries().unwrap() {
+            let mut entry = entry.unwrap();
+            let path = entry.path().unwrap().to_string_lossy().to_string();
+            let mut content = String::new();
+            entry.read_to_string(&mut content).unwrap();
+            assert!(!content.contains(SECRET), "{path} carries the secret");
+            match entry.header().entry_type() {
+                tar::EntryType::Regular => regular_files.push(path),
+                tar::EntryType::Symlink => links.push(path),
+                _ => {}
+            }
+        }
+        regular_files.sort();
+        links.sort();
+        assert_eq!(regular_files, ["src/lib.rs"]);
+        assert_eq!(links, ["leak", "linked"]);
+    }
 }

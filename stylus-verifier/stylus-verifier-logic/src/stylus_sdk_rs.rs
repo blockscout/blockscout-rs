@@ -9,7 +9,7 @@ use git2::Repository;
 use semver::Version;
 use std::{
     collections::{BTreeMap, HashSet},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     str::Lines,
 };
 use tempfile::TempDir;
@@ -81,10 +81,7 @@ pub async fn verify_github_repository(
     let repo_directory =
         github_repository_clone_and_checkout(&request.repository_url, &request.commit).await?;
 
-    let project_path = repo_directory
-        .path()
-        .to_path_buf()
-        .join(&request.path_prefix);
+    let project_path = resolve_project_path(repo_directory.path(), &request.path_prefix)?;
 
     let toolchain_channel = extract_toolchain_channel(&project_path).await?;
     let toolchain = validate_toolchain_channel(&toolchain_channel)?;
@@ -185,13 +182,62 @@ async fn github_repository_clone_and_checkout(
     Ok(tempdir)
 }
 
+/// Resolves the project directory, which must stay inside the cloned repository. The prefix comes
+/// from the request and the repository may contain symlinks, so the path is checked both as
+/// written and after resolution.
+fn resolve_project_path(repo_root: &Path, path_prefix: &Path) -> Result<PathBuf, Error> {
+    let is_relative = path_prefix
+        .components()
+        .all(|component| matches!(component, Component::Normal(_) | Component::CurDir));
+    if !is_relative {
+        return Err(Error::BadRequest(
+            "path_prefix must be a relative path without parent directory components".into(),
+        ));
+    }
+
+    let repo_root = repo_root
+        .canonicalize()
+        .context("failed to resolve repository directory")?;
+    let project_path = match repo_root.join(path_prefix).canonicalize() {
+        Ok(project_path) => project_path,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return Err(Error::ToolchainNotFound);
+        }
+        Err(err) => Err(err).context("failed to resolve project directory")?,
+    };
+    if !project_path.starts_with(&repo_root) || !project_path.is_dir() {
+        return Err(Error::BadRequest(
+            "path_prefix must point to a directory inside the repository".into(),
+        ));
+    }
+
+    Ok(project_path)
+}
+
+/// Reads a project file that the verifier parses itself. The repository is untrusted, so a symlink
+/// in its place could point at any file the service is able to read.
+async fn read_regular_file(path: &Path) -> std::io::Result<String> {
+    if !fs::symlink_metadata(path).await?.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    fs::read_to_string(path).await
+}
+
 async fn extract_toolchain_channel(directory: &Path) -> Result<String, Error> {
     let toolchain_file_path = directory.join(TOOLCHAIN_FILE_NAME);
 
-    let toolchain_file_contents = match fs::read_to_string(toolchain_file_path).await {
+    let toolchain_file_contents = match read_regular_file(&toolchain_file_path).await {
         Ok(contents) => contents,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             return Err(Error::ToolchainNotFound);
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
+            return Err(Error::InvalidToolchain(
+                "rust-toolchain.toml must be a regular file".into(),
+            ));
         }
         Err(err) => Err(err).context("failed to read rust-toolchain.toml file")?,
     };
@@ -253,9 +299,15 @@ fn validate_toolchain_channel(channel: &str) -> Result<Version, Error> {
 async fn extract_package_name(directory: &Path) -> Result<String, Error> {
     let package_file_path = directory.join(PACKAGE_FILE_NAME);
 
-    let package_file_contents = fs::read_to_string(package_file_path)
-        .await
-        .context("failed to read package Cargo.toml file")?;
+    let package_file_contents = match read_regular_file(&package_file_path).await {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
+            return Err(Error::BadRequest(
+                "Cargo.toml must be a regular file".into(),
+            ));
+        }
+        Err(err) => Err(err).context("failed to read package Cargo.toml file")?,
+    };
 
     let cargo_toml: toml::Value =
         toml::from_str(&package_file_contents).context("failed to parse Cargo.toml file")?;
@@ -286,12 +338,19 @@ async fn retrieve_source_files(root_dir: &Path) -> Result<BTreeMap<String, Strin
         {
             let entry = entry.map_err(|e| anyhow!("failed to list entries in {dir:?}: {e}"))?;
             let path = entry.path();
+            // Unlike `Path::is_dir`, the entry's own type does not follow symlinks. Links are
+            // neither traversed nor read: one could point at any file the service can read.
+            let file_type = entry
+                .file_type()
+                .map_err(|e| anyhow!("failed to get file type of {path:?}: {e}"))?;
 
-            if path.is_dir() {
+            if file_type.is_dir() {
                 if path.ends_with("target") || path.ends_with(".git") {
                     continue; // Skip "target" and ".git" directories
                 }
                 directories.push(path);
+            } else if !file_type.is_file() {
+                continue;
             } else if path.file_name().is_some_and(|f| {
                 f == "rust-toolchain.toml"
                     || f == "Cargo.toml"
@@ -364,7 +423,108 @@ fn process_interface<'a>(lines: &mut Lines<'a>) -> Vec<&'a str> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use std::ffi::OsStr;
+    use std::{ffi::OsStr, os::unix::fs::symlink};
+
+    const SECRET: &str = "service-secret";
+
+    /// A cloned repository next to a directory that stands for the rest of the service's
+    /// filesystem; nothing under `outside` may be read through the repository.
+    fn repository_with_outside() -> (TempDir, PathBuf, PathBuf) {
+        let root = tempfile::tempdir().unwrap();
+        let repo = root.path().join("repo");
+        let outside = root.path().join("outside");
+        std::fs::create_dir_all(repo.join("contracts/token/src")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.txt"), SECRET).unwrap();
+        std::fs::write(outside.join("leak.rs"), SECRET).unwrap();
+        std::fs::write(
+            outside.join(TOOLCHAIN_FILE_NAME),
+            "[toolchain]\nchannel = \"1.80.0\"\n",
+        )
+        .unwrap();
+        (root, repo, outside)
+    }
+
+    #[test]
+    fn project_path_resolves_inside_the_repository() {
+        let (_root, repo, _outside) = repository_with_outside();
+        let repo_root = repo.canonicalize().unwrap();
+
+        for (prefix, expected) in [
+            ("", repo_root.clone()),
+            ("contracts/token", repo_root.join("contracts/token")),
+            ("./contracts/token/", repo_root.join("contracts/token")),
+        ] {
+            let project_path = resolve_project_path(&repo, Path::new(prefix))
+                .unwrap_or_else(|err| panic!("prefix {prefix:?} rejected: {err}"));
+            assert_eq!(project_path, expected, "prefix {prefix:?}");
+        }
+    }
+
+    #[test]
+    fn project_path_cannot_leave_the_repository() {
+        let (_root, repo, outside) = repository_with_outside();
+        symlink(&outside, repo.join("linked")).unwrap();
+        std::fs::write(repo.join("contracts/file"), "").unwrap();
+
+        let absolute = outside.to_string_lossy().to_string();
+        for prefix in [
+            "..",
+            "../outside",
+            "contracts/../../outside",
+            absolute.as_str(),
+            "linked",
+            "contracts/file",
+        ] {
+            let result = resolve_project_path(&repo, Path::new(prefix));
+            assert!(
+                matches!(result, Err(Error::BadRequest(_))),
+                "prefix {prefix:?} was not rejected: {result:?}",
+                result = result.map_err(|err| err.to_string()),
+            );
+        }
+
+        let missing = resolve_project_path(&repo, Path::new("contracts/missing"));
+        assert!(matches!(missing, Err(Error::ToolchainNotFound)));
+    }
+
+    #[tokio::test]
+    async fn symlinked_toolchain_file_is_not_read() {
+        let (_root, repo, outside) = repository_with_outside();
+        symlink(
+            outside.join(TOOLCHAIN_FILE_NAME),
+            repo.join(TOOLCHAIN_FILE_NAME),
+        )
+        .unwrap();
+
+        let err = extract_toolchain_channel(&repo).await.unwrap_err();
+        assert!(matches!(err, Error::InvalidToolchain(_)), "{err}");
+    }
+
+    #[tokio::test]
+    async fn symlinked_package_file_is_not_read() {
+        let (_root, repo, outside) = repository_with_outside();
+        symlink(outside.join("secret.txt"), repo.join(PACKAGE_FILE_NAME)).unwrap();
+
+        let err = extract_package_name(&repo).await.unwrap_err();
+        assert!(matches!(err, Error::BadRequest(_)), "{err}");
+        assert!(!err.to_string().contains(SECRET));
+    }
+
+    #[tokio::test]
+    async fn source_files_do_not_follow_symlinks() {
+        let (_root, repo, outside) = repository_with_outside();
+        let project = repo.join("contracts/token");
+        std::fs::write(project.join("src/lib.rs"), "pub fn f() {}").unwrap();
+        symlink(outside.join("secret.txt"), project.join("src/secret.rs")).unwrap();
+        symlink(&outside, project.join("linked")).unwrap();
+
+        let files = retrieve_source_files(&project).await.unwrap();
+        assert_eq!(
+            files,
+            BTreeMap::from([("src/lib.rs".to_string(), "pub fn f() {}".to_string())])
+        );
+    }
 
     #[tokio::test]
     async fn github_repository_clone_and_checkout_success() {
