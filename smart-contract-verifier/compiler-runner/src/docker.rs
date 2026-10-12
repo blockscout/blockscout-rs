@@ -43,6 +43,8 @@ use tokio_util::io::ReaderStream;
 use url::Url;
 use uuid::Uuid;
 
+mod sandbox;
+
 const JOB_ROOT: &str = "/job";
 const COMPILER_CACHE_ROOT: &str = "/compiler-cache";
 const COMPILER_CACHE_MOUNT: &str = "/cache";
@@ -610,15 +612,33 @@ impl DockerCompilerExecutor {
         ))
     }
 
-    /// Resource limits and isolation shared by every container this executor creates.
+    /// Resource limits and isolation shared by every compiler container this executor creates.
     fn locked_down_host_config(&self, nofile: i64, mounts: Vec<Mount>) -> HostConfig {
+        self.hardened_host_config(
+            ContainerLimits {
+                memory_bytes: self.settings.memory_limit_bytes,
+                nano_cpus: self.settings.nano_cpus,
+                pids_limit: self.settings.pids_limit,
+            },
+            nofile,
+            mounts,
+        )
+    }
+
+    /// Isolation of every container this executor creates, with the caller's resource limits.
+    fn hardened_host_config(
+        &self,
+        limits: ContainerLimits,
+        nofile: i64,
+        mounts: Vec<Mount>,
+    ) -> HostConfig {
         HostConfig {
-            memory: Some(self.settings.memory_limit_bytes),
-            memory_swap: Some(self.settings.memory_limit_bytes),
-            nano_cpus: Some(self.settings.nano_cpus),
+            memory: Some(limits.memory_bytes),
+            memory_swap: Some(limits.memory_bytes),
+            nano_cpus: Some(limits.nano_cpus),
             oom_kill_disable: Some(false),
             init: Some(true),
-            pids_limit: Some(self.settings.pids_limit),
+            pids_limit: Some(limits.pids_limit),
             ulimits: Some(vec![ResourcesUlimits {
                 name: Some("nofile".to_string()),
                 soft: Some(nofile),
@@ -1083,6 +1103,25 @@ impl DockerCompilerExecutor {
         stdin: Bytes,
         family: ContainerFamily,
     ) -> Result<ExecutionOutput, ExecutionError> {
+        self.run_created_container_within(
+            container_id,
+            stdin,
+            family,
+            RunLimits {
+                timeout_seconds: self.settings.execution_timeout_seconds,
+                max_output_bytes: self.settings.max_output_bytes,
+            },
+        )
+        .await
+    }
+
+    async fn run_created_container_within(
+        &self,
+        container_id: &str,
+        stdin: Bytes,
+        family: ContainerFamily,
+        limits: RunLimits,
+    ) -> Result<ExecutionOutput, ExecutionError> {
         let _timer = metrics::start_operation(metrics::DOCKER, metrics::EXECUTE, family.as_str());
         let attached = retry_connect(&self.docker, || {
             self.docker.attach_container(
@@ -1114,7 +1153,7 @@ impl DockerCompilerExecutor {
         let docker = self.docker.clone();
         let container_id = container_id.to_string();
         let wait_container_id = container_id.clone();
-        let max_output_bytes = self.settings.max_output_bytes;
+        let max_output_bytes = limits.max_output_bytes;
         let stdin_size = stdin.len();
 
         let run = async move {
@@ -1199,14 +1238,11 @@ impl DockerCompilerExecutor {
             finish_container_tasks(write_stdin, collect_output, wait).await
         };
 
-        let (stdout, stderr, exit_code) = timeout(
-            Duration::from_secs(self.settings.execution_timeout_seconds),
-            run,
-        )
-        .await
-        .map_err(|_| ExecutionError::Timeout {
-            seconds: self.settings.execution_timeout_seconds,
-        })??;
+        let (stdout, stderr, exit_code) = timeout(Duration::from_secs(limits.timeout_seconds), run)
+            .await
+            .map_err(|_| ExecutionError::Timeout {
+                seconds: limits.timeout_seconds,
+            })??;
 
         let inspected = retry_connect(&self.docker, || {
             self.docker.inspect_container(&container_id, None)
@@ -1460,6 +1496,21 @@ impl CompilerExecutor for DockerCompilerExecutor {
     }
 }
 
+/// Resource limits of one container.
+#[derive(Clone, Copy, Debug)]
+struct ContainerLimits {
+    memory_bytes: i64,
+    nano_cpus: i64,
+    pids_limit: i64,
+}
+
+/// Bounds of one attached container run.
+#[derive(Clone, Copy, Debug)]
+struct RunLimits {
+    timeout_seconds: u64,
+    max_output_bytes: usize,
+}
+
 struct ContainerCleanup {
     docker: Docker,
     container_id: Option<String>,
@@ -1560,7 +1611,10 @@ impl Drop for ContainerCleanup {
 }
 
 async fn reap_expired_containers(docker: &Docker, trigger: &'static str) -> anyhow::Result<()> {
-    let result = reap_expired_containers_inner(docker).await;
+    let containers = reap_expired_containers_inner(docker).await;
+    // Volumes go second, and even after a container error: most of them will be free by now.
+    let volumes = sandbox::reap_expired_volumes(docker).await;
+    let result = containers.and(volumes);
     metrics::count_orphan_sweep(trigger, result.is_ok());
     result
 }
@@ -1618,6 +1672,8 @@ fn observed_container_family(labels: Option<&HashMap<String, String>>) -> &'stat
         Some("job") => ContainerFamily::Job.as_str(),
         Some("cache_probe") => ContainerFamily::CacheProbe.as_str(),
         Some("cache_initializer") => ContainerFamily::CacheInitializer.as_str(),
+        Some("sandbox_step") => ContainerFamily::SandboxStep.as_str(),
+        Some("sandbox_holder") => ContainerFamily::SandboxHolder.as_str(),
         _ => "unknown",
     }
 }
@@ -1774,16 +1830,7 @@ fn validate_settings(settings: &DockerCompilerExecutorSettings) -> Result<(), Ex
                 .to_string(),
         ));
     }
-    let digest_is_pinned =
-        settings
-            .runner_image
-            .rsplit_once("@sha256:")
-            .is_some_and(|(name, digest)| {
-                !name.is_empty()
-                    && digest.len() == 64
-                    && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-            });
-    if !digest_is_pinned {
+    if !crate::sandbox::is_pinned_image(&settings.runner_image) {
         return Err(ExecutionError::InvalidInvocation(
             "compiler runner image must be pinned by sha256 digest".to_string(),
         ));
@@ -2272,7 +2319,7 @@ mod tests {
         }
     }
 
-    fn settings() -> DockerCompilerExecutorSettings {
+    pub(super) fn settings() -> DockerCompilerExecutorSettings {
         DockerCompilerExecutorSettings {
             addr: "ssh://docker@example.test".to_string(),
             key_path: None,

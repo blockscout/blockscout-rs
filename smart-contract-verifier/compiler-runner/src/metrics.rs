@@ -21,6 +21,8 @@ pub(super) enum ContainerFamily {
     Job,
     CacheProbe,
     CacheInitializer,
+    SandboxStep,
+    SandboxHolder,
 }
 
 impl ContainerFamily {
@@ -29,6 +31,8 @@ impl ContainerFamily {
             Self::Job => "job",
             Self::CacheProbe => "cache_probe",
             Self::CacheInitializer => "cache_initializer",
+            Self::SandboxStep => "sandbox_step",
+            Self::SandboxHolder => "sandbox_holder",
         }
     }
 }
@@ -186,6 +190,21 @@ impl JobObservation {
         collectors()
             .jobs_total
             .with_label_values(&[self.executor, classify_outcome(result)])
+            .inc();
+        self.completed = true;
+    }
+}
+
+impl JobObservation {
+    /// For jobs whose success is not one process's exit code, such as multi-step sandbox jobs.
+    pub(super) fn finish_result<T>(mut self, result: &Result<T, ExecutionError>) {
+        let outcome = match result {
+            Ok(_) => "success",
+            Err(error) => classify_error(error),
+        };
+        collectors()
+            .jobs_total
+            .with_label_values(&[self.executor, outcome])
             .inc();
         self.completed = true;
     }

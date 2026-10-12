@@ -6,6 +6,7 @@ mod docker;
 mod file_hash;
 mod metrics;
 mod native;
+mod sandbox;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -24,6 +25,10 @@ pub use concurrency::ConcurrencyLimitedCompilerExecutor;
 pub use docker::{DockerCompilerExecutor, DockerCompilerExecutorSettings};
 pub use file_hash::{sha256_file, FileFingerprint};
 pub use native::NativeCompilerExecutor;
+pub use sandbox::{
+    SandboxFile, SandboxJob, SandboxJobOutput, SandboxLimits, SandboxMount, SandboxOutput,
+    SandboxStep, SandboxVolume,
+};
 
 pub const DEFAULT_EXECUTION_TIMEOUT_SECS: u64 = 600;
 const DEFAULT_MAX_UPLOAD_BYTES: u64 = 256 * 1024 * 1024;
