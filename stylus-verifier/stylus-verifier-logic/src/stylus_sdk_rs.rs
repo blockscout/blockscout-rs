@@ -1,20 +1,27 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use crate::docker;
+use crate::{
+    deployment,
+    job::{clone_exit, JobSettings},
+};
 use alloy_json_abi::JsonAbi;
 use anyhow::{anyhow, Context};
-use blockscout_display_bytes::ToHex;
 use bytes::Bytes;
-use git2::Repository;
+use compiler_runner::{
+    DockerCompilerExecutor, ExecutionError, SandboxFile, SandboxOutput, SandboxSession,
+};
 use semver::Version;
+use serde::Deserialize;
+use serde_with::{json::JsonString, serde_as, PickFirst};
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
+    num::NonZeroUsize,
     path::{Component, Path, PathBuf},
     str::Lines,
+    time::Duration,
 };
-use tempfile::TempDir;
 use thiserror::Error;
-use tokio::fs;
+use tokio::sync::Semaphore;
 use url::Url;
 
 /// Name of the toolchain file used to specify the Rust toolchain version for a project.
@@ -23,12 +30,12 @@ pub const TOOLCHAIN_FILE_NAME: &str = "rust-toolchain.toml";
 /// Name of the file used to specify the package name for a project.
 pub const PACKAGE_FILE_NAME: &str = "Cargo.toml";
 
-/// The last line to be expected from the `cargo stylus verify` command when the contract is verified.
-pub const CONTRACT_VERIFIED_MESSAGE: &str = "contract matches local project's file hashes";
-
-/// The line to be expected from the `cargo stylus verify` command when the contract verification fails.
+/// Heads every failed verification.
 pub const VERIFICATION_FAILED_MESSAGE: &str =
     "contract deployment did not verify against local project's file hashes";
+
+/// How much of a failed build's output goes into the response.
+const MAX_FAILURE_DETAILS_BYTES: usize = 8 * 1024;
 
 pub struct VerifyGithubRepositoryRequest {
     pub deployment_transaction: Bytes,
@@ -70,179 +77,377 @@ pub enum Error {
     Internal(#[from] anyhow::Error),
 }
 
-pub type Docker = bollard::Docker;
+/// A pinned image holding one cargo-stylus version and one Rust toolchain, with the wasm target.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ToolImage {
+    pub cargo_stylus_version: Version,
+    pub toolchain: Version,
+    pub image: String,
+}
 
-pub use docker::connect as docker_connect;
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct VerifierSettings {
+    /// A cargo-stylus version is supported when at least one image carries it. An environment
+    /// variable can hold the list as a JSON string.
+    #[serde_as(as = "PickFirst<(_, JsonString)>")]
+    pub images: Vec<ToolImage>,
+    /// Builds are heavy; requests beyond this wait.
+    pub max_concurrent_verifications: NonZeroUsize,
+    /// For local chains in development. Leave off in production: the endpoint comes from the
+    /// request.
+    pub allow_private_rpc_endpoints: bool,
+    pub rpc_timeout_seconds: u64,
+    pub job: JobSettings,
+}
 
-pub async fn verify_github_repository(
-    docker: &Docker,
-    request: VerifyGithubRepositoryRequest,
-) -> Result<Success, Error> {
-    let repo_directory =
-        github_repository_clone_and_checkout(&request.repository_url, &request.commit).await?;
+impl Default for VerifierSettings {
+    fn default() -> Self {
+        Self {
+            images: Vec::new(),
+            max_concurrent_verifications: NonZeroUsize::new(2).expect("non-zero"),
+            allow_private_rpc_endpoints: false,
+            rpc_timeout_seconds: 15,
+            job: JobSettings::default(),
+        }
+    }
+}
 
-    let project_path = resolve_project_path(repo_directory.path(), &request.path_prefix)?;
+/// Verifies contracts by building them in a sandbox on the remote Docker host and comparing the
+/// result with the deployment transaction here, outside it.
+pub struct Verifier {
+    executor: DockerCompilerExecutor,
+    settings: VerifierSettings,
+    admission: Semaphore,
+}
 
-    let toolchain_channel = extract_toolchain_channel(&project_path).await?;
-    let toolchain = validate_toolchain_channel(&toolchain_channel)?;
+impl Verifier {
+    pub fn new(
+        executor: DockerCompilerExecutor,
+        settings: VerifierSettings,
+    ) -> Result<Self, anyhow::Error> {
+        settings
+            .job
+            .sandbox()
+            .validate()
+            .context("invalid sandbox settings")?;
+        Ok(Self {
+            admission: Semaphore::new(settings.max_concurrent_verifications.get()),
+            executor,
+            settings,
+        })
+    }
 
-    let verify_output = docker::run_reproducible(
-        docker,
-        &request.cargo_stylus_version,
-        &toolchain,
-        &project_path,
-        &[
-            "verify",
-            "--no-verify",
-            "--endpoint",
+    pub fn supported_cargo_stylus_versions(&self) -> Vec<Version> {
+        let versions: BTreeSet<_> = self
+            .settings
+            .images
+            .iter()
+            .map(|image| image.cargo_stylus_version.clone())
+            .collect();
+        versions.into_iter().collect()
+    }
+
+    pub async fn verify_github_repository(
+        &self,
+        request: VerifyGithubRepositoryRequest,
+    ) -> Result<Success, Error> {
+        let repository_url = validate_repository_url(&request.repository_url)?;
+        validate_commit(&request.commit)?;
+        let path_prefix = validate_path_prefix(&request.path_prefix)?;
+        let images: Vec<&ToolImage> = self
+            .settings
+            .images
+            .iter()
+            .filter(|image| image.cargo_stylus_version == request.cargo_stylus_version)
+            .collect();
+        if images.is_empty() {
+            return Err(Error::BadRequest(format!(
+                "cargo stylus version is not supported: {}",
+                request.cargo_stylus_version
+            )));
+        }
+
+        let _permit = self
+            .admission
+            .acquire()
+            .await
+            .context("verification admission is closed")?;
+        let deployment = deployment::fetch(
             &request.rpc_endpoint,
-            "--deployment-tx",
-            &ToHex::to_hex(&request.deployment_transaction),
-        ],
-    )
-    .await?;
-
-    // TODO: What if rust toolchain would be invalid (non-existent)?
-
-    match verify_output.lines().last().map(|v| v.trim()) {
-        Some(message)
-            if message.to_lowercase().contains("verified")
-                && message.contains(CONTRACT_VERIFIED_MESSAGE) => {}
-        _ => {
-            let fail_message_details = verify_output
-                .lines()
-                .skip_while(|&line| !line.contains(VERIFICATION_FAILED_MESSAGE))
-                .skip(1)
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            return Err(Error::VerificationFailed(fail_message_details));
-        }
-    }
-
-    let export_abi_output = docker::run_reproducible(
-        docker,
-        &request.cargo_stylus_version,
-        &toolchain,
-        &project_path,
-        &["export-abi"],
-    )
-    .await?;
-
-    let (contract_name, abi) = match process_export_abi_output(&export_abi_output)? {
-        Some((name, abi)) => (Some(name), Some(abi)),
-        None => (None, None),
-    };
-
-    let package_name = extract_package_name(&project_path).await?;
-    let files = retrieve_source_files(&project_path).await?;
-
-    Ok(Success {
-        abi,
-        contract_name,
-        files,
-        package_name,
-        cargo_stylus_version: request.cargo_stylus_version,
-        repository_url: request.repository_url,
-        commit: request.commit,
-        path_prefix: request.path_prefix,
-    })
-}
-
-async fn github_repository_clone_and_checkout(
-    repository_url: &Url,
-    commit: &str,
-) -> Result<TempDir, Error> {
-    if repository_url.scheme() != "https" || repository_url.host_str() != Some("github.com") {
-        return Err(Error::RepositoryIsNotGithub(repository_url.to_string()));
-    }
-
-    let tempdir = tempfile::tempdir().context("failed to create temporary directory")?;
-
-    let repo = match Repository::clone(repository_url.as_str(), tempdir.path()) {
-        Ok(repo) => repo,
-        Err(err) if err.code() == git2::ErrorCode::Auth => {
-            return Err(Error::RepositoryNotFound(repository_url.to_string()));
-        }
-        Err(err) => {
-            return Err(err).context("failed to clone repository")?;
-        }
-    };
-
-    let commit_object = match repo.revparse_single(commit) {
-        Ok(commit_object) => commit_object,
-        Err(err) if err.code() == git2::ErrorCode::NotFound => {
-            return Err(Error::CommitNotFound(commit.to_string()));
-        }
-        Err(err) => return Err(err).context("failed to parse commit hash")?,
-    };
-    repo.checkout_tree(&commit_object, None)
-        .context("failed to checkout commit object")?;
-
-    Ok(tempdir)
-}
-
-/// Resolves the project directory, which must stay inside the cloned repository. The prefix comes
-/// from the request and the repository may contain symlinks, so the path is checked both as
-/// written and after resolution.
-fn resolve_project_path(repo_root: &Path, path_prefix: &Path) -> Result<PathBuf, Error> {
-    let is_relative = path_prefix
-        .components()
-        .all(|component| matches!(component, Component::Normal(_) | Component::CurDir));
-    if !is_relative {
-        return Err(Error::BadRequest(
-            "path_prefix must be a relative path without parent directory components".into(),
-        ));
-    }
-
-    let repo_root = repo_root
-        .canonicalize()
-        .context("failed to resolve repository directory")?;
-    let project_path = match repo_root.join(path_prefix).canonicalize() {
-        Ok(project_path) => project_path,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            return Err(Error::ToolchainNotFound);
-        }
-        Err(err) => Err(err).context("failed to resolve project directory")?,
-    };
-    if !project_path.starts_with(&repo_root) || !project_path.is_dir() {
-        return Err(Error::BadRequest(
-            "path_prefix must point to a directory inside the repository".into(),
-        ));
-    }
-
-    Ok(project_path)
-}
-
-/// Reads a project file that the verifier parses itself. The repository is untrusted, so a symlink
-/// in its place could point at any file the service is able to read.
-async fn read_regular_file(path: &Path) -> std::io::Result<String> {
-    if !fs::symlink_metadata(path).await?.is_file() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "not a regular file",
-        ));
-    }
-    fs::read_to_string(path).await
-}
-
-async fn extract_toolchain_channel(directory: &Path) -> Result<String, Error> {
-    let toolchain_file_path = directory.join(TOOLCHAIN_FILE_NAME);
-
-    let toolchain_file_contents = match read_regular_file(&toolchain_file_path).await {
-        Ok(contents) => contents,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            return Err(Error::ToolchainNotFound);
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
-            return Err(Error::InvalidToolchain(
-                "rust-toolchain.toml must be a regular file".into(),
+            &request.deployment_transaction,
+            self.settings.allow_private_rpc_endpoints,
+            Duration::from_secs(self.settings.rpc_timeout_seconds),
+        )
+        .await?;
+        if !deployment.creates_contract {
+            return Err(Error::VerificationFailed(
+                "the deployment transaction does not create a contract".to_string(),
             ));
         }
-        Err(err) => Err(err).context("failed to read rust-toolchain.toml file")?,
-    };
 
-    let toolchain_toml: toml::Value = toml::from_str(&toolchain_file_contents).map_err(|err| {
+        let mut session = self
+            .executor
+            .start_sandbox(self.settings.job.sandbox())
+            .await
+            .map_err(internal)?;
+        let built = self
+            .build_in_sandbox(
+                &mut session,
+                &images,
+                &repository_url,
+                &request.commit,
+                &path_prefix,
+            )
+            .await;
+        session.finish().await;
+        let built = built?;
+
+        // The comparison happens here, on bytes the sandbox cannot influence after the fact.
+        if built.initcode != deployment.input {
+            return Err(Error::VerificationFailed(
+                "the contract built from the repository does not match the deployment transaction"
+                    .to_string(),
+            ));
+        }
+        Ok(Success {
+            abi: built.abi,
+            contract_name: built.contract_name,
+            files: built.files,
+            package_name: built.package_name,
+            cargo_stylus_version: request.cargo_stylus_version,
+            repository_url: request.repository_url,
+            commit: request.commit,
+            path_prefix: request.path_prefix,
+        })
+    }
+
+    async fn build_in_sandbox(
+        &self,
+        session: &mut SandboxSession,
+        images: &[&ToolImage],
+        repository_url: &str,
+        commit: &str,
+        path_prefix: &str,
+    ) -> Result<Built, Error> {
+        let job = &self.settings.job;
+        // Every image of the version has git; the toolchain is not known before the clone.
+        session
+            .run_step(&job.clone_step(&images[0].image, repository_url, commit, path_prefix))
+            .await
+            .map_err(|error| clone_error(error, repository_url, commit))?;
+
+        let toolchain_file = read_text(
+            session,
+            &job.manifest_output(path_prefix, TOOLCHAIN_FILE_NAME),
+        )
+        .await?;
+        let toolchain = validate_toolchain_channel(&parse_toolchain_channel(&toolchain_file)?)?;
+        let image = images
+            .iter()
+            .find(|image| image.toolchain == toolchain)
+            .ok_or_else(|| {
+                let available: Vec<_> = images
+                    .iter()
+                    .map(|image| image.toolchain.to_string())
+                    .collect();
+                Error::InvalidToolchain(format!(
+                    "toolchain {toolchain} is not available for cargo-stylus {}; available: {}",
+                    images[0].cargo_stylus_version,
+                    available.join(", ")
+                ))
+            })?;
+        let package_file = read_text(
+            session,
+            &job.manifest_output(path_prefix, PACKAGE_FILE_NAME),
+        )
+        .await?;
+        let package_name = parse_package_name(&package_file)?;
+
+        session
+            .run_step(&job.fetch_step(&image.image, path_prefix))
+            .await
+            .map_err(build_error)?;
+        session
+            .run_step(&job.build_step(&image.image, path_prefix))
+            .await
+            .map_err(build_error)?;
+        let initcode = read_text(session, &job.initcode_output()).await?;
+        let initcode = blockscout_display_bytes::decode_hex(initcode.trim())
+            .map_err(|error| anyhow!("the build wrote initcode that is not hex: {error}"))?;
+
+        // As before, a contract whose ABI cannot be exported is still verified.
+        let exported = match session
+            .run_step(&job.export_abi_step(&image.image, path_prefix))
+            .await
+        {
+            Ok(output) => process_export_abi_output(&String::from_utf8_lossy(&output.stdout))?,
+            Err(
+                ExecutionError::CompilerFailed { .. }
+                | ExecutionError::Timeout { .. }
+                | ExecutionError::OutputLimitExceeded { .. },
+            ) => None,
+            Err(error) => return Err(internal(error)),
+        };
+        let (contract_name, abi) = exported.unzip();
+
+        let sources = session
+            .read_output(&job.sources_output(path_prefix))
+            .await
+            .map_err(|error| match error {
+                ExecutionError::OutputLimitExceeded { limit } => {
+                    Error::BadRequest(format!("project directory exceeds the {limit}-byte limit"))
+                }
+                error => internal(error),
+            })?;
+
+        Ok(Built {
+            initcode: initcode.into(),
+            abi,
+            contract_name,
+            files: source_files(sources),
+            package_name,
+        })
+    }
+}
+
+struct Built {
+    initcode: Bytes,
+    abi: Option<serde_json::Value>,
+    contract_name: Option<String>,
+    files: BTreeMap<String, String>,
+    package_name: String,
+}
+
+fn internal(error: ExecutionError) -> Error {
+    Error::Internal(anyhow::Error::new(error))
+}
+
+/// The clone step runs no repository code, so its exit code says what went wrong.
+fn clone_error(error: ExecutionError, repository_url: &str, commit: &str) -> Error {
+    let ExecutionError::CompilerFailed { exit_code, .. } = &error else {
+        return internal(error);
+    };
+    match *exit_code {
+        clone_exit::TOOLCHAIN_NOT_FOUND => Error::ToolchainNotFound,
+        clone_exit::COMMIT_NOT_FOUND => Error::CommitNotFound(commit.to_string()),
+        clone_exit::REPOSITORY_NOT_FOUND => Error::RepositoryNotFound(repository_url.to_string()),
+        clone_exit::INVALID_PATH_PREFIX => Error::BadRequest(
+            "path_prefix must point to a directory inside the repository".to_string(),
+        ),
+        clone_exit::PACKAGE_NOT_FOUND => {
+            Error::BadRequest("Cargo.toml file not found in project directory".to_string())
+        }
+        clone_exit::INVALID_TARGET => {
+            Error::BadRequest("the project's target path must be a directory".to_string())
+        }
+        _ => internal(error),
+    }
+}
+
+/// Failures of the steps that run the project's own code are the project's failures.
+fn build_error(error: ExecutionError) -> Error {
+    match error {
+        ExecutionError::CompilerFailed {
+            oom_killed: true, ..
+        } => Error::VerificationFailed("the build ran out of memory".to_string()),
+        ExecutionError::CompilerFailed { stderr, .. } => {
+            Error::VerificationFailed(tail(&stderr, MAX_FAILURE_DETAILS_BYTES).to_string())
+        }
+        ExecutionError::Timeout { seconds } => Error::VerificationFailed(format!(
+            "the build exceeded its {seconds}-second time limit"
+        )),
+        ExecutionError::OutputLimitExceeded { .. } => {
+            Error::VerificationFailed("the build produced too much output".to_string())
+        }
+        error => internal(error),
+    }
+}
+
+fn tail(text: &str, max_bytes: usize) -> &str {
+    let mut start = text.len().saturating_sub(max_bytes);
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    &text[start..]
+}
+
+async fn read_text(session: &mut SandboxSession, output: &SandboxOutput) -> Result<String, Error> {
+    let files = session.read_output(output).await.map_err(internal)?;
+    let [file] = files.as_slice() else {
+        return Err(anyhow!("expected one regular file at {}", output.path).into());
+    };
+    String::from_utf8(file.content.to_vec())
+        .map_err(|_| Error::BadRequest(format!("{} is not valid UTF-8", output.path)))
+}
+
+/// Only github.com over https, and only the plain `owner/repository` form: the URL is handed to
+/// git inside the sandbox.
+fn validate_repository_url(url: &Url) -> Result<String, Error> {
+    let not_github = || Error::RepositoryIsNotGithub(url.to_string());
+    if url.scheme() != "https"
+        || url.host_str() != Some("github.com")
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(not_github());
+    }
+    let segments: Vec<&str> = url.path().trim_matches('/').split('/').collect();
+    let is_name = |segment: &&str| {
+        !segment.is_empty()
+            && !matches!(*segment, "." | "..")
+            && segment
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    };
+    match segments.as_slice() {
+        [owner, repository] if is_name(owner) && is_name(repository) => {
+            Ok(format!("https://github.com/{owner}/{repository}"))
+        }
+        _ => Err(not_github()),
+    }
+}
+
+fn validate_commit(commit: &str) -> Result<(), Error> {
+    if (7..=40).contains(&commit.len()) && commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        Ok(())
+    } else {
+        Err(Error::CommitNotFound(commit.to_string()))
+    }
+}
+
+/// A relative path with no parent components, in the form the sandbox steps expect: `a/b`, or
+/// empty for the repository root.
+fn validate_path_prefix(path_prefix: &Path) -> Result<String, Error> {
+    let invalid = || {
+        Error::BadRequest(
+            "path_prefix must be a relative path without parent directory components".to_string(),
+        )
+    };
+    let mut components = Vec::new();
+    for component in path_prefix.components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(name) => {
+                let name = name.to_str().ok_or_else(invalid)?;
+                if name.chars().any(char::is_control) {
+                    return Err(invalid());
+                }
+                components.push(name);
+            }
+            _ => return Err(invalid()),
+        }
+    }
+    Ok(components.join("/"))
+}
+
+fn parse_toolchain_channel(toolchain_file_contents: &str) -> Result<String, Error> {
+    let toolchain_toml: toml::Value = toml::from_str(toolchain_file_contents).map_err(|err| {
         Error::InvalidToolchain(format!("failed to parse rust-toolchain.toml; {err}"))
     })?;
 
@@ -296,21 +501,9 @@ fn validate_toolchain_channel(channel: &str) -> Result<Version, Error> {
     Ok(version)
 }
 
-async fn extract_package_name(directory: &Path) -> Result<String, Error> {
-    let package_file_path = directory.join(PACKAGE_FILE_NAME);
-
-    let package_file_contents = match read_regular_file(&package_file_path).await {
-        Ok(contents) => contents,
-        Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => {
-            return Err(Error::BadRequest(
-                "Cargo.toml must be a regular file".into(),
-            ));
-        }
-        Err(err) => Err(err).context("failed to read package Cargo.toml file")?,
-    };
-
+fn parse_package_name(package_file_contents: &str) -> Result<String, Error> {
     let cargo_toml: toml::Value =
-        toml::from_str(&package_file_contents).context("failed to parse Cargo.toml file")?;
+        toml::from_str(package_file_contents).context("failed to parse Cargo.toml file")?;
 
     // Extract the package name from the package section
     let Some(package) = cargo_toml.get("package") else {
@@ -327,49 +520,28 @@ async fn extract_package_name(directory: &Path) -> Result<String, Error> {
     Ok(package_name.to_string())
 }
 
-async fn retrieve_source_files(root_dir: &Path) -> Result<BTreeMap<String, String>, Error> {
-    let mut files = BTreeMap::new();
-    let mut directories = Vec::<PathBuf>::new();
-    directories.push(root_dir.to_path_buf()); // Using `from` directly
-
-    while let Some(dir) = directories.pop() {
-        for entry in
-            std::fs::read_dir(&dir).map_err(|e| anyhow!("failed to read directory {dir:?}: {e}"))?
-        {
-            let entry = entry.map_err(|e| anyhow!("failed to list entries in {dir:?}: {e}"))?;
-            let path = entry.path();
-            // Unlike `Path::is_dir`, the entry's own type does not follow symlinks. Links are
-            // neither traversed nor read: one could point at any file the service can read.
-            let file_type = entry
-                .file_type()
-                .map_err(|e| anyhow!("failed to get file type of {path:?}: {e}"))?;
-
-            if file_type.is_dir() {
-                if path.ends_with("target") || path.ends_with(".git") {
-                    continue; // Skip "target" and ".git" directories
-                }
-                directories.push(path);
-            } else if !file_type.is_file() {
-                continue;
-            } else if path.file_name().is_some_and(|f| {
-                f == "rust-toolchain.toml"
-                    || f == "Cargo.toml"
-                    || f == "Cargo.lock"
-                    || f.to_string_lossy().ends_with(".rs")
-            }) {
-                let file_path = path
-                    .strip_prefix(root_dir)
-                    .expect("path got as a result of 'root_dir' iterating")
-                    .to_string_lossy()
-                    .to_string();
-                let content = fs::read_to_string(&path)
-                    .await
-                    .map_err(|e| anyhow!("failed to read file {path:?}: {e}"))?;
-                files.insert(file_path, content);
-            }
-        }
-    }
-    Ok(files)
+/// The project's manifests and Rust sources, keyed by their path inside the project.
+fn source_files(files: Vec<SandboxFile>) -> BTreeMap<String, String> {
+    files
+        .into_iter()
+        .filter_map(|file| {
+            // The archive names entries `<directory>/<path>`; the directory is the project root.
+            let (_, path) = file.path.split_once('/')?;
+            let mut components: Vec<&str> = path.split('/').collect();
+            let name = components.pop()?;
+            let in_skipped_directory = components
+                .iter()
+                .any(|directory| matches!(*directory, "target" | ".git"));
+            let wanted = matches!(name, "rust-toolchain.toml" | "Cargo.toml" | "Cargo.lock")
+                || name.ends_with(".rs");
+            (wanted && !in_skipped_directory).then(|| {
+                (
+                    path.to_string(),
+                    String::from_utf8_lossy(&file.content).into_owned(),
+                )
+            })
+        })
+        .collect()
 }
 
 fn process_export_abi_output(output: &str) -> Result<Option<(String, serde_json::Value)>, Error> {
@@ -423,213 +595,212 @@ fn process_interface<'a>(lines: &mut Lines<'a>) -> Vec<&'a str> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use std::{ffi::OsStr, os::unix::fs::symlink};
 
-    const SECRET: &str = "service-secret";
-
-    /// A cloned repository next to a directory that stands for the rest of the service's
-    /// filesystem; nothing under `outside` may be read through the repository.
-    fn repository_with_outside() -> (TempDir, PathBuf, PathBuf) {
-        let root = tempfile::tempdir().unwrap();
-        let repo = root.path().join("repo");
-        let outside = root.path().join("outside");
-        std::fs::create_dir_all(repo.join("contracts/token/src")).unwrap();
-        std::fs::create_dir_all(&outside).unwrap();
-        std::fs::write(outside.join("secret.txt"), SECRET).unwrap();
-        std::fs::write(outside.join("leak.rs"), SECRET).unwrap();
-        std::fs::write(
-            outside.join(TOOLCHAIN_FILE_NAME),
-            "[toolchain]\nchannel = \"1.80.0\"\n",
-        )
-        .unwrap();
-        (root, repo, outside)
-    }
-
-    #[test]
-    fn project_path_resolves_inside_the_repository() {
-        let (_root, repo, _outside) = repository_with_outside();
-        let repo_root = repo.canonicalize().unwrap();
-
-        for (prefix, expected) in [
-            ("", repo_root.clone()),
-            ("contracts/token", repo_root.join("contracts/token")),
-            ("./contracts/token/", repo_root.join("contracts/token")),
-        ] {
-            let project_path = resolve_project_path(&repo, Path::new(prefix))
-                .unwrap_or_else(|err| panic!("prefix {prefix:?} rejected: {err}"));
-            assert_eq!(project_path, expected, "prefix {prefix:?}");
+    fn file(path: &str, content: &str) -> SandboxFile {
+        SandboxFile {
+            path: path.to_string(),
+            content: Bytes::copy_from_slice(content.as_bytes()),
         }
     }
 
     #[test]
-    fn project_path_cannot_leave_the_repository() {
-        let (_root, repo, outside) = repository_with_outside();
-        symlink(&outside, repo.join("linked")).unwrap();
-        std::fs::write(repo.join("contracts/file"), "").unwrap();
-
-        let absolute = outside.to_string_lossy().to_string();
-        for prefix in [
-            "..",
-            "../outside",
-            "contracts/../../outside",
-            absolute.as_str(),
-            "linked",
-            "contracts/file",
+    fn repository_url_must_be_a_plain_github_repository() {
+        for (url, expected) in [
+            (
+                "https://github.com/blockscout/.github",
+                Some("https://github.com/blockscout/.github"),
+            ),
+            (
+                "https://github.com/OffchainLabs/stylus-hello-world",
+                Some("https://github.com/OffchainLabs/stylus-hello-world"),
+            ),
+            (
+                "https://github.com/a_b/c.d-e/",
+                Some("https://github.com/a_b/c.d-e"),
+            ),
+            ("http://github.com/a/b", None),
+            ("https://gitlab.com/a/b", None),
+            ("https://github.com.example.org/a/b", None),
+            ("https://user:token@github.com/a/b", None),
+            ("https://github.com:8443/a/b", None),
+            ("https://github.com/a/b?x=1", None),
+            ("https://github.com/a/b#x", None),
+            ("https://github.com/a", None),
+            ("https://github.com/a/b/c", None),
+            ("https://github.com/a/..", None),
+            ("https://github.com/a/b%20c", None),
+            ("https://github.com/a/b/", Some("https://github.com/a/b")),
         ] {
-            let result = resolve_project_path(&repo, Path::new(prefix));
-            assert!(
-                matches!(result, Err(Error::BadRequest(_))),
-                "prefix {prefix:?} was not rejected: {result:?}",
-                result = result.map_err(|err| err.to_string()),
-            );
-        }
-
-        let missing = resolve_project_path(&repo, Path::new("contracts/missing"));
-        assert!(matches!(missing, Err(Error::ToolchainNotFound)));
-    }
-
-    #[tokio::test]
-    async fn symlinked_toolchain_file_is_not_read() {
-        let (_root, repo, outside) = repository_with_outside();
-        symlink(
-            outside.join(TOOLCHAIN_FILE_NAME),
-            repo.join(TOOLCHAIN_FILE_NAME),
-        )
-        .unwrap();
-
-        let err = extract_toolchain_channel(&repo).await.unwrap_err();
-        assert!(matches!(err, Error::InvalidToolchain(_)), "{err}");
-    }
-
-    #[tokio::test]
-    async fn symlinked_package_file_is_not_read() {
-        let (_root, repo, outside) = repository_with_outside();
-        symlink(outside.join("secret.txt"), repo.join(PACKAGE_FILE_NAME)).unwrap();
-
-        let err = extract_package_name(&repo).await.unwrap_err();
-        assert!(matches!(err, Error::BadRequest(_)), "{err}");
-        assert!(!err.to_string().contains(SECRET));
-    }
-
-    #[tokio::test]
-    async fn source_files_do_not_follow_symlinks() {
-        let (_root, repo, outside) = repository_with_outside();
-        let project = repo.join("contracts/token");
-        std::fs::write(project.join("src/lib.rs"), "pub fn f() {}").unwrap();
-        symlink(outside.join("secret.txt"), project.join("src/secret.rs")).unwrap();
-        symlink(&outside, project.join("linked")).unwrap();
-
-        let files = retrieve_source_files(&project).await.unwrap();
-        assert_eq!(
-            files,
-            BTreeMap::from([("src/lib.rs".to_string(), "pub fn f() {}".to_string())])
-        );
-    }
-
-    #[tokio::test]
-    async fn github_repository_clone_and_checkout_success() {
-        let repository_url = Url::parse("https://github.com/blockscout/.github").unwrap();
-        let commit = "703f8e1";
-        let directory = github_repository_clone_and_checkout(&repository_url, commit)
-            .await
-            .expect("failed to clone repository");
-
-        // there should be only `README.md file` and `.git` directory
-        let mut count = 0;
-        for entry in directory
-            .path()
-            .read_dir()
-            .expect("failed to read directory")
-        {
-            let entry = entry.expect("failed to read entry");
-            let path = entry.path();
-            match path.file_name() {
-                Some(name) if name == OsStr::new("README.md") && path.is_file() => {
-                    let content = fs::read_to_string(path)
-                        .await
-                        .expect("failed to read README.md content");
-                    assert_eq!(content, "# .github", "invalid README.md file content");
-                }
-                Some(name) if name == OsStr::new(".git") && path.is_dir() => {}
-                _ => panic!(
-                    "unexpected entry (is_directory={}): {path:?}",
-                    path.is_dir()
+            let result = validate_repository_url(&Url::parse(url).unwrap());
+            match expected {
+                Some(expected) => assert_eq!(result.unwrap(), expected, "{url}"),
+                None => assert!(
+                    matches!(result, Err(Error::RepositoryIsNotGithub(_))),
+                    "{url} was accepted"
                 ),
             }
-            count += 1;
         }
-        assert_eq!(count, 2, "invalid number of entries");
     }
 
-    #[tokio::test]
-    async fn invalid_commit_hash() {
-        let repository_url = Url::parse("https://github.com/blockscout/.github").unwrap();
+    #[test]
+    fn commit_must_be_a_hash() {
+        for commit in [
+            "af5029f",
+            "af5029f822815e32def0015bf8e591e769c62f34",
+            "ABCDEF0",
+        ] {
+            validate_commit(commit).unwrap();
+        }
+        for commit in [
+            "",
+            "abc",
+            "qwertyu",
+            "--help",
+            "main",
+            "af5029f822815e32def0015bf8e591e769c62f34a",
+        ] {
+            assert!(
+                matches!(validate_commit(commit), Err(Error::CommitNotFound(_))),
+                "{commit:?} was accepted"
+            );
+        }
+    }
 
-        // Non-existent commit hash
-        let commit = "0000000";
-        let err = github_repository_clone_and_checkout(&repository_url, commit)
-            .await
-            .expect_err("(non-existent) error expected");
-        assert!(
-            matches!(err, Error::CommitNotFound(_)),
-            "(non-existent) invalid error: {err}"
+    #[test]
+    fn path_prefix_stays_inside_the_repository() {
+        for (prefix, expected) in [
+            ("", ""),
+            ("examples/single_call", "examples/single_call"),
+            ("./examples/single_call/", "examples/single_call"),
+            ("with space/x", "with space/x"),
+        ] {
+            assert_eq!(validate_path_prefix(Path::new(prefix)).unwrap(), expected);
+        }
+        for prefix in ["..", "../outside", "a/../../b", "/etc", "a/\nb"] {
+            assert!(
+                matches!(
+                    validate_path_prefix(Path::new(prefix)),
+                    Err(Error::BadRequest(_))
+                ),
+                "{prefix:?} was accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn toolchain_channel_is_read_from_the_manifest() {
+        assert_eq!(
+            parse_toolchain_channel("[toolchain]\nchannel = \"1.80.0\"\n").unwrap(),
+            "1.80.0"
         );
-
-        // invalid hex value commit hash
-        let commit = "qwerty";
-        let err = github_repository_clone_and_checkout(&repository_url, commit)
-            .await
-            .expect_err("(invalid hex) error expected");
-        assert!(
-            matches!(err, Error::CommitNotFound(_)),
-            "(invalid hex) invalid error: {err}"
-        );
-
-        // too long value commit hash (21 bytes)
-        let commit = "0123456789012345678901234567890123456789ab";
-        let err = github_repository_clone_and_checkout(&repository_url, commit)
-            .await
-            .expect_err("(too long) error expected");
-        assert!(
-            matches!(err, Error::CommitNotFound(_)),
-            "(too long) invalid error: {err}"
+        for contents in [
+            "",
+            "[toolchain]\n",
+            "not toml [",
+            "[toolchain]\nchannel = \"stable\"\n",
+        ] {
+            assert!(
+                matches!(
+                    parse_toolchain_channel(contents),
+                    Err(Error::InvalidToolchain(_))
+                ),
+                "{contents:?} was accepted"
+            );
+        }
+        assert!(matches!(
+            validate_toolchain_channel("nightly-2024-01-01"),
+            Err(Error::InvalidToolchain(_))
+        ));
+        assert_eq!(
+            validate_toolchain_channel("1.80.0").unwrap(),
+            Version::new(1, 80, 0)
         );
     }
 
-    #[tokio::test]
-    async fn invalid_repository_url() {
-        // Non-existent repository inside organization
-        let repository_url = Url::parse("https://github.com/blockscout/nonexistentrepo").unwrap();
-        let commit = "703f8e1";
-        let err = github_repository_clone_and_checkout(&repository_url, commit)
-            .await
-            .expect_err("(non-existent repository) error expected");
-        assert!(
-            matches!(err, Error::RepositoryNotFound(_)),
-            "(non-existent repository) invalid error: {err}"
+    #[test]
+    fn package_name_is_read_from_the_manifest() {
+        assert_eq!(
+            parse_package_name("[package]\nname = \"stylus-single-call\"\n").unwrap(),
+            "stylus-single-call"
         );
+        assert!(parse_package_name("[workspace]\n").is_err());
+    }
 
-        // Non-existent organization
-        let repository_url = Url::parse("https://github.com/nonexistentorg/.github").unwrap();
-        let commit = "703f8e1";
-        let err = github_repository_clone_and_checkout(&repository_url, commit)
-            .await
-            .expect_err("(non-existent organization) error expected");
-        assert!(
-            matches!(err, Error::RepositoryNotFound(_)),
-            "(non-existent commit organization) invalid error: {err}"
+    #[test]
+    fn response_holds_manifests_and_rust_sources_of_the_project_only() {
+        let files = source_files(vec![
+            file("single_call/Cargo.toml", "[package]"),
+            file("single_call/Cargo.lock", "lock"),
+            file("single_call/rust-toolchain.toml", "[toolchain]"),
+            file("single_call/src/lib.rs", "pub fn f() {}"),
+            file("single_call/README.md", "readme"),
+            file("single_call/scripts/main.js", "js"),
+            file("single_call/target/debug/build/out.rs", "generated"),
+            file("single_call/.git/hooks/x.rs", "hook"),
+            file("single_call", "a file where the directory should be"),
+        ]);
+        assert_eq!(
+            files.keys().collect::<Vec<_>>(),
+            [
+                "Cargo.lock",
+                "Cargo.toml",
+                "rust-toolchain.toml",
+                "src/lib.rs"
+            ]
         );
+        assert_eq!(files["src/lib.rs"], "pub fn f() {}");
+    }
 
-        // Not github url
-        let repository_url = Url::parse("https://notgithub.com/blockscout/.github").unwrap();
-        let commit = "703f8e1";
-        let err = github_repository_clone_and_checkout(&repository_url, commit)
-            .await
-            .expect_err("(not github url) error expected");
-        assert!(
-            matches!(err, Error::RepositoryIsNotGithub(_)),
-            "(not github url) invalid error: {err}"
+    #[test]
+    fn clone_exit_codes_become_request_errors() {
+        let failed = |exit_code| ExecutionError::CompilerFailed {
+            compiler: "clone".to_string(),
+            exit_code,
+            stderr: String::new(),
+            oom_killed: false,
+        };
+        let error = |exit_code| clone_error(failed(exit_code), "https://github.com/a/b", "abcdef0");
+        assert!(matches!(error(64), Error::ToolchainNotFound));
+        assert!(matches!(error(65), Error::CommitNotFound(commit) if commit == "abcdef0"));
+        assert!(matches!(error(66), Error::RepositoryNotFound(_)));
+        assert!(matches!(error(67), Error::BadRequest(_)));
+        assert!(matches!(error(68), Error::BadRequest(_)));
+        assert!(matches!(error(69), Error::BadRequest(_)));
+        assert!(matches!(error(1), Error::Internal(_)));
+        assert!(matches!(
+            clone_error(ExecutionError::Timeout { seconds: 5 }, "u", "c"),
+            Error::Internal(_)
+        ));
+    }
+
+    #[test]
+    fn build_failures_are_verification_failures_with_the_end_of_the_output() {
+        let stderr = format!(
+            "{}error: could not compile",
+            "x".repeat(MAX_FAILURE_DETAILS_BYTES)
         );
+        let error = build_error(ExecutionError::CompilerFailed {
+            compiler: "build".to_string(),
+            exit_code: 101,
+            stderr,
+            oom_killed: false,
+        });
+        match error {
+            Error::VerificationFailed(details) => {
+                assert!(details.ends_with("error: could not compile"));
+                assert_eq!(details.len(), MAX_FAILURE_DETAILS_BYTES);
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+        assert!(matches!(
+            build_error(ExecutionError::Timeout { seconds: 900 }),
+            Error::VerificationFailed(_)
+        ));
+        assert!(matches!(
+            build_error(ExecutionError::InvalidInvocation("x".to_string())),
+            Error::Internal(_)
+        ));
+        assert_eq!(tail("aé", 1), "");
     }
 
     #[test]
